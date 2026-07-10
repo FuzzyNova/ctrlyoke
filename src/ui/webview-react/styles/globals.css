@@ -533,6 +533,17 @@ button .codicon {
     outline-offset: -1px;
   }
 
+  /* Mobile WebKit can resolve a touched row inside the workflow dropdown to the
+     full scrollport width while untouched rows use the content width minus the
+     vertical scrollbar gutter. Lock these rows to one measured width so the
+     metadata columns do not jump sideways on pointerdown. */
+  .workflow-dropdown-menu .workflow-menu-item,
+  .workflow-dropdown-menu .running-workflow-item {
+    width: calc(100% - var(--workflow-row-scrollbar-gutter, 0px));
+    max-width: calc(100% - var(--workflow-row-scrollbar-gutter, 0px));
+    box-sizing: border-box;
+  }
+
   /* ── File / SCM / commit list rows ──────────────────────────────────────────
      Shared selection + hover affordance for the workspace explorer, source-
      control file list, and commit history. The hover outline is a dashed

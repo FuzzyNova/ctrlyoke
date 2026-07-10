@@ -41,6 +41,8 @@ interface WorkflowStatusProps {
 
 const ALL_WORKFLOW_STATES = Object.values(EXECUTION_STATES);
 const ALL_WORKFLOW_HARNESSES = Object.values(HARNESS_IDS);
+const WORKFLOW_ROW_SELECTOR = ".running-workflow-item, .workflow-menu-item";
+const WORKFLOW_ROW_GUTTER_CSS_VAR = "--workflow-row-scrollbar-gutter";
 
 const WORKFLOW_STATE_OPTIONS = ALL_WORKFLOW_STATES.map((state) => ({
   value: state,
@@ -71,6 +73,10 @@ const DATE_INPUT_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
   day: "2-digit",
 });
+
+function roundMetric(value: number): number {
+  return Math.round(value * 10) / 10;
+}
 
 function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
   return [...workflows].sort((a, b) => {
@@ -298,6 +304,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const mergedContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -335,6 +342,34 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setDropdownWidth(alignedDropdownWidth);
   }, [isMobile]);
 
+  // Mobile WebKit resolves touched rows against the full scrollport while
+  // untouched rows subtract the vertical scrollbar gutter. Measure that gutter
+  // on open and lock row width via CSS so metadata columns cannot jump sideways.
+  const syncWorkflowRowWidthLock = useCallback(() => {
+    const dropdown = dropdownRef.current;
+    const scrollContainer = dropdown?.querySelector(".workflow-menu-items");
+    if (!dropdown || !scrollContainer) {
+      return;
+    }
+
+    dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+
+    const scrollWidth = scrollContainer.getBoundingClientRect().width;
+    const naturalRows = Array.from(
+      scrollContainer.querySelectorAll(WORKFLOW_ROW_SELECTOR)
+    )
+      .map((row) => row.getBoundingClientRect().width)
+      .filter((width) => width > 0);
+
+    if (naturalRows.length === 0) {
+      return;
+    }
+
+    const naturalRowWidth = Math.min(...naturalRows);
+    const gutter = roundMetric(Math.max(0, scrollWidth - naturalRowWidth));
+    dropdown.style.setProperty(WORKFLOW_ROW_GUTTER_CSS_VAR, `${gutter}px`);
+  }, []);
+
   // Position tracking (ResizeObserver + window resize/scroll) is only meaningful while the
   // dropdown is actually open — the popup is `position: fixed` and invisible otherwise, so
   // there's nothing to keep in sync. Scoping to `isDropdownOpen` means a closed WorkflowStatus
@@ -364,6 +399,50 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       window.removeEventListener("scroll", updateDropdownTop, true);
     };
   }, [isDropdownOpen, updateDropdownTop]);
+
+  useEffect(() => {
+    const dropdown = dropdownRef.current;
+    if (!isDropdownOpen || !dropdown) {
+      return;
+    }
+
+    const animationFrameIds: number[] = [];
+
+    const scheduleWidthLock = () => {
+      const frameId = window.requestAnimationFrame(() => {
+        syncWorkflowRowWidthLock();
+      });
+      animationFrameIds.push(frameId);
+    };
+
+    const mutationObserver = new MutationObserver((mutations) => {
+      if (mutations.some((mutation) => mutation.type === "childList")) {
+        scheduleWidthLock();
+      }
+    });
+    mutationObserver.observe(dropdown, {
+      childList: true,
+      subtree: true,
+    });
+
+    const handleResize = () => {
+      dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+      scheduleWidthLock();
+    };
+
+    dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+    scheduleWidthLock();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      mutationObserver.disconnect();
+      window.removeEventListener("resize", handleResize);
+      animationFrameIds.forEach((frameId) =>
+        window.cancelAnimationFrame(frameId)
+      );
+      dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+    };
+  }, [isDropdownOpen, syncWorkflowRowWidthLock]);
 
   const closeDropdown = useCallback(() => {
     setIsDropdownOpen(false);
@@ -993,6 +1072,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
       {/* Dropdown Menu */}
       <div
+        ref={dropdownRef}
         className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,

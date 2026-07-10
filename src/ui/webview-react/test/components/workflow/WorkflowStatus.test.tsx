@@ -244,7 +244,7 @@ describe("WorkflowStatus — loaded state", () => {
     );
     const workflowARow = screen
       .getByText("Workflow A")
-      .closest('[role="button"]');
+      .closest(".workflow-menu-item");
     expect(workflowARow).not.toBeNull();
     await user.click(
       within(workflowARow as HTMLElement).getByRole("button", {

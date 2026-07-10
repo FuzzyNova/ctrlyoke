@@ -103,6 +103,9 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
           workflows.map((workflow) => {
             const isCurrent = workflow.filePath === currentFilePath;
             const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
+            const showStepCount =
+              typeof workflow.totalSteps === "number" &&
+              workflow.totalSteps > 0;
             const timeAgo = formatRelativeTimeVerbose(
               workflow.lastModifiedAt || workflow.startedAt
             );
@@ -110,81 +113,93 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
             return (
               <div
                 key={workflow.filePath}
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelect(workflow.filePath)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && onSelect(workflow.filePath)
-                }
                 title={workflow.filePath}
-                className={`workflow-menu-item group w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors cursor-pointer gap-2 ${
+                className={`workflow-menu-item group flex items-center px-3 py-2 text-left text-sm transition-colors gap-2 ${
                   isCurrent
                     ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
                     : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
                 }`}
               >
-                {/* Harness icon */}
-                {workflow.harness && (
+                <button
+                  type="button"
+                  onClick={() => onSelect(workflow.filePath)}
+                  className={`grid min-w-0 flex-1 appearance-none items-center gap-x-1 overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${isNarrow ? "grid-cols-[14px_minmax(0,1fr)_auto_16px_28px_80px]" : "grid-cols-[14px_minmax(0,1fr)_auto_16px_76px_80px]"}`}
+                >
+                  {/* Harness icon */}
                   <span
-                    className="flex-shrink-0 flex items-center"
+                    className="col-start-1 flex w-[14px] items-center justify-center"
                     title={
-                      HARNESS_INFO[workflow.harness]?.name ?? workflow.harness
+                      workflow.harness
+                        ? (HARNESS_INFO[workflow.harness]?.name ??
+                          workflow.harness)
+                        : undefined
                     }
                   >
-                    <HarnessIcon harnessId={workflow.harness} size={14} />
-                  </span>
-                )}
-
-                {/* Workflow Name */}
-                <span className="workflow-menu-item-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                  {workflow.workflowName}
-                </span>
-
-                {/* Step count */}
-                {typeof workflow.totalSteps === "number" &&
-                  workflow.totalSteps > 0 && (
-                    <span
-                      className="flex-shrink-0 text-xs text-description-fg font-mono"
-                      title={`${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`}
-                    >
-                      {isNarrow
-                        ? `${workflow.totalSteps}`
-                        : `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`}
-                    </span>
-                  )}
-
-                {showTerminalIcon && (
-                  <span
-                    className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
-                    title="Terminal session is still running"
-                    aria-label="Terminal session is still running"
-                  >
-                    <i className="codicon codicon-terminal" />
-                  </span>
-                )}
-
-                {/* Execution State Badge — fixed-width column so badges align across rows */}
-                <span
-                  className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}
-                >
-                  <span
-                    className={`workflow-menu-item-state inline-flex items-center text-xs px-1.5 py-px rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
-                    title={isNarrow ? workflow.executionState : undefined}
-                  >
-                    {isNarrow ? (
-                      <i
-                        className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`}
-                      />
-                    ) : (
-                      workflow.executionState
+                    {workflow.harness && (
+                      <HarnessIcon harnessId={workflow.harness} size={14} />
                     )}
                   </span>
-                </span>
 
-                {/* Time — fixed-width column so timestamps align across rows */}
-                <span className="workflow-menu-item-time text-xs text-description-fg flex-shrink-0 w-[80px] text-right">
-                  {timeAgo || ""}
-                </span>
+                  {/* Workflow Name */}
+                  <span className="workflow-menu-item-name col-start-2 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {workflow.workflowName}
+                  </span>
+
+                  {/* Step count */}
+                  <span
+                    className="col-start-3 text-xs text-description-fg font-mono"
+                    title={
+                      showStepCount
+                        ? `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
+                        : undefined
+                    }
+                  >
+                    {showStepCount
+                      ? isNarrow
+                        ? `${workflow.totalSteps}`
+                        : `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
+                      : ""}
+                  </span>
+
+                  <span
+                    className="col-start-4 w-4 flex items-center justify-center text-description-fg"
+                    title={
+                      showTerminalIcon
+                        ? "Terminal session is still running"
+                        : undefined
+                    }
+                    aria-label={
+                      showTerminalIcon
+                        ? "Terminal session is still running"
+                        : undefined
+                    }
+                  >
+                    {showTerminalIcon && (
+                      <i className="codicon codicon-terminal" />
+                    )}
+                  </span>
+
+                  {/* Execution State Badge — fixed-width column so badges align across rows */}
+                  <span className="col-start-5 flex justify-center">
+                    <span
+                      className={`workflow-menu-item-state inline-flex items-center text-xs px-1.5 py-px rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+                      title={isNarrow ? workflow.executionState : undefined}
+                    >
+                      {isNarrow ? (
+                        <i
+                          className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`}
+                        />
+                      ) : (
+                        workflow.executionState
+                      )}
+                    </span>
+                  </span>
+
+                  {/* Time — fixed-width column so timestamps align across rows */}
+                  <span className="workflow-menu-item-time col-start-6 text-xs text-description-fg w-[80px] text-right">
+                    {timeAgo || ""}
+                  </span>
+                </button>
 
                 {onToggleFavorite && (
                   <button
