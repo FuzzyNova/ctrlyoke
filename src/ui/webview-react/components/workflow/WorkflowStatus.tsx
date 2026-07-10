@@ -42,7 +42,7 @@ interface WorkflowStatusProps {
 const ALL_WORKFLOW_STATES = Object.values(EXECUTION_STATES);
 const ALL_WORKFLOW_HARNESSES = Object.values(HARNESS_IDS);
 const WORKFLOW_ROW_SELECTOR = ".running-workflow-item, .workflow-menu-item";
-const WORKFLOW_ROW_GUTTER_CSS_VAR = "--workflow-row-scrollbar-gutter";
+const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
 
 const WORKFLOW_STATE_OPTIONS = ALL_WORKFLOW_STATES.map((state) => ({
   value: state,
@@ -342,9 +342,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setDropdownWidth(alignedDropdownWidth);
   }, [isMobile]);
 
-  // Mobile WebKit resolves touched rows against the full scrollport while
-  // untouched rows subtract the vertical scrollbar gutter. Measure that gutter
-  // on open and lock row width via CSS so metadata columns cannot jump sideways.
+  // Some engines resolve untouched rows inside vertical scrollers against the
+  // usable content box while touch/hover resolves them under the scrollbar.
+  // Measure the natural usable row width and lock every row to it so outlines
+  // stay visible and metadata columns cannot jump sideways.
   const syncWorkflowRowWidthLock = useCallback(() => {
     const dropdown = dropdownRef.current;
     const scrollContainer = dropdown?.querySelector(".workflow-menu-items");
@@ -352,9 +353,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return;
     }
 
-    dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+    dropdown.style.removeProperty(WORKFLOW_ROW_WIDTH_CSS_VAR);
 
-    const scrollWidth = scrollContainer.getBoundingClientRect().width;
     const naturalRows = Array.from(
       scrollContainer.querySelectorAll(WORKFLOW_ROW_SELECTOR)
     )
@@ -365,9 +365,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return;
     }
 
-    const naturalRowWidth = Math.min(...naturalRows);
-    const gutter = roundMetric(Math.max(0, scrollWidth - naturalRowWidth));
-    dropdown.style.setProperty(WORKFLOW_ROW_GUTTER_CSS_VAR, `${gutter}px`);
+    const usableWidth = Math.min(...naturalRows);
+    dropdown.style.setProperty(
+      WORKFLOW_ROW_WIDTH_CSS_VAR,
+      `${roundMetric(usableWidth)}px`
+    );
   }, []);
 
   // Position tracking (ResizeObserver + window resize/scroll) is only meaningful while the
@@ -407,6 +409,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
 
     const animationFrameIds: number[] = [];
+    const timeoutIds: number[] = [];
 
     const scheduleWidthLock = () => {
       const frameId = window.requestAnimationFrame(() => {
@@ -425,22 +428,34 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       subtree: true,
     });
 
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleWidthLock();
+    });
+    resizeObserver.observe(dropdown);
+    const scrollContainer = dropdown.querySelector(".workflow-menu-items");
+    if (scrollContainer) {
+      resizeObserver.observe(scrollContainer);
+    }
+
     const handleResize = () => {
-      dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+      dropdown.style.removeProperty(WORKFLOW_ROW_WIDTH_CSS_VAR);
       scheduleWidthLock();
     };
 
-    dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+    dropdown.style.removeProperty(WORKFLOW_ROW_WIDTH_CSS_VAR);
     scheduleWidthLock();
+    timeoutIds.push(window.setTimeout(scheduleWidthLock, 50));
     window.addEventListener("resize", handleResize);
 
     return () => {
       mutationObserver.disconnect();
+      resizeObserver.disconnect();
       window.removeEventListener("resize", handleResize);
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
       animationFrameIds.forEach((frameId) =>
         window.cancelAnimationFrame(frameId)
       );
-      dropdown.style.removeProperty(WORKFLOW_ROW_GUTTER_CSS_VAR);
+      dropdown.style.removeProperty(WORKFLOW_ROW_WIDTH_CSS_VAR);
     };
   }, [isDropdownOpen, syncWorkflowRowWidthLock]);
 

@@ -533,15 +533,37 @@ button .codicon {
     outline-offset: -1px;
   }
 
-  /* Mobile WebKit can resolve a touched row inside the workflow dropdown to the
-     full scrollport width while untouched rows use the content width minus the
-     vertical scrollbar gutter. Lock these rows to one measured width so the
-     metadata columns do not jump sideways on pointerdown. */
+  /* Browsers disagree about whether rows inside a vertical scroller resolve
+     width against the usable content box or under the scrollbar. WorkflowStatus
+     measures the usable row width once the dropdown opens so high-contrast
+     outlines stay visible and metadata columns do not jump on touch/hover. */
   .workflow-dropdown-menu .workflow-menu-item,
   .workflow-dropdown-menu .running-workflow-item {
-    width: calc(100% - var(--workflow-row-scrollbar-gutter, 0px));
-    max-width: calc(100% - var(--workflow-row-scrollbar-gutter, 0px));
+    width: var(--workflow-row-usable-width, 100%);
+    max-width: var(--workflow-row-usable-width, 100%);
     box-sizing: border-box;
+  }
+
+  .workflow-row-primary {
+    display: grid;
+    grid-template-columns:
+      14px minmax(0, 1fr) max-content 16px
+      var(--workflow-row-state-col, 76px)
+      var(--workflow-row-time-col);
+    column-gap: 0.25rem;
+    align-items: center;
+  }
+
+  .workflow-row-primary-recent {
+    --workflow-row-time-col: 80px;
+  }
+
+  .workflow-row-primary-running {
+    --workflow-row-time-col: 36px;
+  }
+
+  .workflow-row-primary-narrow {
+    --workflow-row-state-col: 28px;
   }
 
   /* ── File / SCM / commit list rows ──────────────────────────────────────────

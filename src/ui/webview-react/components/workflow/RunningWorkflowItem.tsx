@@ -85,7 +85,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
 
   return (
     <div
-      className={`running-workflow-item flex items-center px-3 py-2 text-sm transition-colors gap-2 ${
+      className={`running-workflow-item flex items-center pl-3 pr-5 py-2 text-sm transition-colors gap-2 ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
@@ -95,7 +95,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       <button
         type="button"
         onClick={onClick}
-        className={`grid min-w-0 flex-1 appearance-none items-center gap-x-1 overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${isNarrow ? "grid-cols-[14px_minmax(0,1fr)_auto_16px_28px_36px]" : "grid-cols-[14px_minmax(0,1fr)_auto_16px_76px_36px]"}`}
+        className={`workflow-row-primary workflow-row-primary-running min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${isNarrow ? "workflow-row-primary-narrow" : ""}`}
       >
         {/* Harness icon */}
         <span
