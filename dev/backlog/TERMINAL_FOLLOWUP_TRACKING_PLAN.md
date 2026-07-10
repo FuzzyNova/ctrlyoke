@@ -1,307 +1,355 @@
-# Terminal Follow-up Tracking Plan
+# Terminal Follow-up / Session-Resume Tracking Plan
 
-## Overview
+## Why this is now a priority
 
-When ctrlyoke completes a prompt in interactive mode, the CLI TUI often stays open.
-Users can then type directly into that terminal, or the harness can auto-continue later
-after an async subagent completes. Today both cases are largely invisible to ctrlyoke:
-the original prompt completes, the per-prompt monitor shuts down, and any later activity
-in the still-live session is no longer tracked.
+Every interactive harness ctrlyoke drives (Claude, Copilot, Codex, Qwen, Antigravity,
+OpenCode) has converged on the same behavior: **"I'll run this task in the background and
+wait for it to finish"** as the first move of a long workflow. The harness kicks off the
+background task, ends its top-level turn, and **fires the Stop hook**. ctrlyoke treats that
+Stop as the end of the prompt, marks the step completed, tears down the per-prompt monitor,
+and stops tailing the log. When the background task finishes, the harness **auto-resumes the
+same live session** and produces more output — tool calls, reasoning, a real final answer —
+and ctrlyoke captures **none of it**: no output-window streaming, no history entry, no token
+stats.
 
-This plan changes the design from "keep the prompt monitor alive longer" to a
-**session-level watcher** that attaches to the live interactive session after prompt
-completion and keeps observing that session until the PTY actually ends or ctrlyoke
-reclaims it.
+ctrlyoke's entire value proposition is being the standard capture-and-organize layer over AI
+harnesses (search, undo/redo, full-fidelity history browsing). That promise breaks the moment
+backgrounding becomes routine, which it now has. **Fixing session-resume tracking is the
+priority feature.** Capturing genuine _user_ typed input in the TUI is a real but **secondary**
+benefit and comes later.
 
-See also: `CONTINUATION_MODE_PLAN.md`. That plan is still the right answer for
-ctrlyoke-originated follow-up prompts. This plan covers activity that ctrlyoke
-does not dispatch itself:
+### Primary scenario to fix
 
-- the user typing directly into the TUI
-- the harness auto-continuing after an async subagent completes
+> The AI backgrounds a task, ends its turn (Stop hook fires), ctrlyoke marks the step
+> completed, then the AI auto-resumes the same session when the background task completes.
+> **Assume the AI is still working on the step we prematurely marked complete.**
 
----
+### Secondary scenario — user steers in the TUI (now in scope as capture-only)
 
-## Problems To Solve
-
-### 1. Manual terminal follow-ups are untracked
-
-Current behavior:
-
-1. ctrlyoke sends prompt N
-2. Completion detected for prompt N
-3. Prompt-scoped log monitoring stops
-4. Terminal remains open
-5. User types another prompt directly in the TUI
-6. Harness responds
-7. **ctrlyoke sees none of it**
-
-Missing features:
-
-- no output capture
-- no history entry
-- no token stats
-- no dashboard visibility
-
-### 2. Copilot CLI can appear to "finish" and then continue later
-
-This is a different but related bug. In interactive mode, Copilot CLI can end its top-level
-turn, fire a completion-like hook, then later resume automatically when a subagent finishes.
-From ctrlyoke's perspective the session looked done, but the TUI was actually still alive
-and still capable of producing more output.
-
-Copilot's hook surface is richer than Claude's here:
-
-- `SessionStart`
-- `UserPromptSubmit`
-- `PreToolUse`
-- `PostToolUse`
-- `PreCompact`
-- `SubagentStart`
-- `SubagentStop`
-- `Stop`
-
-That means the fix is not just "track manual follow-ups". We also need to determine which
-hooks actually fire in the async-subagent resume path so ctrlyoke stops treating the first
-top-level stop as definitive session death.
+- User types directly into the still-open TUI (either mid-step or after a workflow finishes).
+  This is captured and displayed as a **"user steer" event** in the ctrlyoke output/history.
+  It is **display-only and never modifies workflow state** — no new queue step, no revert.
+  Promoting a steer into an _editable queue step_ with undo/redo remains deferred; capture +
+  display is in scope. See "User steer events" below.
 
 ---
 
-## Core Design Shift: Session-Level Watcher
+## Decisions locked in
 
-Do **not** try to stretch the existing prompt-scoped `CliLogMonitor` past prompt completion.
-That monitor is intentionally terminal: it resolves the prompt, drains, closes the watcher,
-and fires `onResponseComplete`.
+These were worked through and are settled; the rest of the plan builds on them.
 
-Instead, add a separate **session-level watcher** with these properties:
+1. **Two layers, not one.**
+   - **Layer 1 — universal output capture (Tier 1):** every harness gets a post-completion
+     session watcher that keeps tailing the live session log and captures any resumed output
+     into the step's output window + history. **Stop detection is unchanged.** This is the
+     safety net — output is never lost, regardless of what the signal investigation finds.
+   - **Layer 2 — deterministic signal-gated completion (per-harness):** for harnesses where
+     the session log carries a clear "a background task is still pending" marker, use it to
+     **hold completion** — don't fire completion at a Stop when we can see the agent will
+     auto-resume. Where no usable signal exists for a harness, it stays Layer-1-only.
 
-- starts after a prompt completes while the PTY is still alive
-- owns a session log path plus current read offset / cursor
-- watches for new turns in the same live session
-- can outlive any single prompt execution
-- stops when:
-  - the PTY exits
-  - ctrlyoke starts a new run that takes ownership of the session
-  - the terminal is explicitly closed
-  - an inactivity timeout expires, if we choose to add one
+2. **No reverting a completed workflow.** We do **not** un-finalize a workflow back to running.
+   The correct fix is _better idle detection_ — don't optimistically commit in the first place
+   when a resume is coming. The deterministic signal is what makes this possible without a
+   revert. (Layer 1 may still flicker a step's status while capturing on harnesses that have
+   no signal; that's cosmetic and does not touch workflow control flow.)
 
-This watcher should be attached to the integration / interactive session state,
-not to a queue step.
+3. **The idle signal gates _everything_ downstream of a step**, not just end conditions:
+   end-condition evaluation, next-step dispatch/inject, and workflow finalization all wait for
+   confirmed idle. All three assume "Stop == work done"; the signal is what makes that
+   assumption true.
 
----
+4. **Human input in the TUI is captured as a display-only "user steer" event, never a step.**
+   A genuine user prompt typed into the live TUI — mid-step or after completion — is surfaced
+   in the ctrlyoke output/history as a "user steer" event and never changes workflow state (no
+   new queue step, no revert). This closes a current gap where `user` events in the session log
+   are ignored, so mid-step steering was invisible. See "User steer events" below.
 
-## Proposed Tracking Model
+5. **No blind waits, no fixed settle delay.** We do not guess idle or add latency when there's
+   nothing pending. The default path (no pending background task) commits **immediately**, exactly
+   like today. We only hold when the log gives positive evidence of a pending task — and a
+   **bounded backstop** caps the hold so a never-completing background task (e.g. a dev server)
+   or an abandoned task can't deadlock the workflow.
 
-### Trigger path
+### Why gate-on-idle instead of settle-window or revert
 
-Use hook events as the primary trigger and the log as the source of truth for content.
-
-- Hook events tell us that something happened in the live session
-- Log tailing tells us what prompt text and response content actually occurred
-
-For manual terminal follow-ups, the best trigger is `userPromptSubmit` when available.
-
-For async auto-resume behavior, the interesting trigger set depends on harness:
-
-- Copilot: investigate `SubagentStart`, `SubagentStop`, `UserPromptSubmit`, and `Stop`
-- Claude: likely still infer from session log + PTY liveness because the hook surface is narrower
-
-### Tracking target
-
-Do **not** start by synthesizing queue steps.
-
-Queue steps are executor-owned and assume `WorkflowExecutor.sendPrompt()` initiated them.
-Manual terminal activity does not fit that lifecycle cleanly.
-
-Initial target:
-
-- create observed session-turn records outside the dispatch queue
-- surface them in output history / dashboard as tracked session activity
-- record prompt text, response text, timestamps, token stats, and session ID
-- visually distinguish them from ctrlyoke-dispatched prompts
-
-Queue/editor integration can be considered later if replay / undo / re-run becomes necessary.
+The only true signal that the AI is "done" is that it _stays_ idle — you can't tell "done"
+from "waiting on a background task" from the Stop hook alone (same hook, same live PTY). A
+fixed settle window trades latency against correctness on _every_ completion and still misses
+long background tasks. Reverting a finalized workflow is the messiest possible code path
+(completion notifications already fired, history finalized, a next prompt possibly already
+injected). A **deterministic per-harness "is a task pending?" read** dominates both: zero
+latency when nothing is pending, a precise hold when something is, and no revert.
 
 ---
 
-## Implementation Sketch
+## Root cause, in code
 
-### 1. Session watcher lifecycle
+1. **Stop hook is authoritative and terminal.** In `CliLogMonitor.monitor()`
+   (`src/core/harness/CliLogMonitor.ts`), when a `notificationMonitor` exists (all CLI
+   harnesses) log-based `parser.isComplete()` is deliberately ignored — completion comes only
+   from the Stop hook via `NotificationMonitorBase.monitorForCompletion()` →
+   `handleCompletion("Stop hook")`. The code comment there even anticipates the
+   "waiting for a background agent" case but assumes the Stop hook _won't_ fire then.
+   **It now does fire.**
 
-After an interactive prompt completes successfully:
+2. **`handleCompletion` is one-shot and tears everything down** — closes the `fs.watch`
+   watcher, clears timers, fires `onResponseComplete`, resolves the monitor promise
+   (`CliLogMonitor.ts` ~lines 201–322). Nothing watches the log afterward.
 
-- if the PTY is still alive, register or resume a session-level watcher
-- seed it with:
-  - `sessionId`
-  - `logPath`
-  - last processed log offset / timestamp
-  - harness ID
-  - workflow / terminal identity
+3. **The session is still alive and the re-attach seed survives.** In interactive inject mode
+   the PTY is kept alive between prompts and `CliExecutionRunner.lastInteractiveContext`
+   retains `{ logPath, sessionId, spawnedWith, spawnedWithSessionId }`
+   (`src/core/harness/shared/CliExecutionRunner.ts` ~line 597). Across runs the whole
+   integration is parked in `WorkflowInstance.liveInjectIntegrations` when `canReuseForInject()`
+   is true. The harness keeps appending to the same session log — we simply stop reading past
+   the Stop offset.
 
-The existing prompt monitor remains unchanged and still resolves the prompt normally.
-The new watcher begins only after that.
-
-### 2. Hook-driven wake-up
-
-Use hook events to wake or steer the session watcher.
-
-For follow-up tracking:
-
-- `userPromptSubmit` means a new user-originated turn likely started
-
-For Copilot async-subagent investigation:
-
-- `SubagentStart` means the top-level agent delegated work
-- `SubagentStop` may be the signal that the parent session is about to continue
-- a second `Stop` after `SubagentStop` may represent the true terminal idle point
-- `SessionStart` should be observed too in case Copilot internally starts a fresh nested session
-
-Important: this must not depend on browser/desktop notification settings. Internal tracking
-hooks should be enabled by tracking logic itself, not only when notification toggles are on.
-
-### 3. Distinguish real user prompts from tool traffic
-
-For Claude-style logs, not every `user` event is a human prompt. Tool results also arrive
-as `user` events. Filter using content blocks:
-
-```typescript
-function isHumanPrompt(event: ClaudeProviderEvent): boolean {
-  if (event.type !== "user") return false;
-  const content = event.message?.content ?? [];
-  return content.some(
-    (block: any) => block.type === "text" && block.text?.trim()
-  );
-}
-```
-
-Additional guards:
-
-- only consider events after the watcher's current offset / timestamp
-- suppress prompts ctrlyoke injected itself in continuation inject mode
-- require the watcher to correlate a prompt boundary with subsequent assistant output
-
-### 4. Capture the observed turn
-
-When the session watcher detects a new turn:
-
-- extract prompt text from the log
-- begin buffering subsequent assistant/tool events
-- close the observed turn when the harness reaches the next stable completion point
-- persist:
-  - prompt text
-  - response text
-  - structured events
-  - tokens / context window stats
-  - session ID
-  - timestamps
-  - origin marker like `terminal-followup` or `session-auto-continue`
-
-### 5. History / dashboard presentation
-
-Show observed turns in history/output with an explicit visual distinction:
-
-- terminal follow-up
-- auto-continued session activity
-
-The key requirement is visibility and replay of output, not queue mutability.
+Completion propagates `onResponseComplete` → `HarnessIntegration.responseCompleteEmitter` →
+`WorkflowExecutor.waitForResponseComplete()` (~line 1688), which resolves and runs end
+conditions + advances in the same breath. Layer 2 has to split that: resolve
+streaming/UI-completion on the Stop, but gate the end-condition/advance/finalize on the
+idle signal.
 
 ---
 
-## Copilot Async-Subagent Investigation Plan
+## Harness signal investigation
 
-Before implementing Copilot-specific completion fixes, verify the actual hook sequence in the
-problem case:
+The signal is **per-harness and empirical.** Method: take a contrastive pair per harness — a
+session that hit the background-wait bug vs. a clean completion — and diff the log around the
+Stop boundary to find a structural (not text-based) "task still pending" marker. For each
+harness, confirm three things:
 
-1. Start a Copilot interactive session that delegates to a subagent
-2. Observe which hooks fire when the top-level agent appears to stop
-3. Observe which hooks fire when the subagent completes
-4. Observe whether the parent session emits:
-   - `SubagentStop`
-   - another `UserPromptSubmit`
-   - another `Stop`
-   - `SessionStart`
-   - none of the above
+1. **A pending-task marker exists** in the log and is present/flushed by the time the Stop
+   hook fires.
+2. **The harness auto-resumes** the same session on its own when the task completes (vs.
+   sitting idle waiting for a human poke — if it needs a poke, it can't be gated and stays
+   Layer-1-only).
+3. **A completion/resume marker** correlates back to the launch, so a hold ends promptly on
+   the real event rather than on a timer.
 
-Questions to answer:
+### Claude Code — CONFIRMED ✅
 
-- Does `Stop` fire before the session is truly idle?
-- Is `SubagentStop` the best signal that the parent may resume?
-- Is there a second definitive `Stop` after the resumed parent turn?
-- Does Copilot ever create a new session boundary for the resumed activity?
+Investigated `~/.claude/projects/c--dev-ctrlyoke/c612a5c6-…jsonl` (a session that backgrounded
+coverage runs and waited) against a clean session (`5be6f6f5-…jsonl`). Findings:
 
-Possible outcomes:
+- **Every `end_turn` fires the Stop hook**, including the "I'll wait for the background run"
+  pauses (each produces a `system` event `subtype: "stop_hook_summary"`). So the Stop hook
+  alone cannot distinguish a pause from a real end — confirming the root cause directly.
+- **Launch marker:** assistant `tool_use`, `name: "Bash"`, `input.run_in_background === true`.
+  Its `tool_use` `id` (e.g. `toolu_…L21fwach`) is the correlation key. (Note: the immediate
+  `tool_result` after a background launch is only the launch _ack_ — it is **not** completion.)
+- **Completion / resume marker:** a `user` message whose content contains
+  `<task-notification>…<tool-use-id>toolu_…</tool-use-id>…`. This injected message is what
+  **wakes Claude and drives the auto-resume** (answering point 2 — Claude self-resumes). It
+  also carries an `<output-file>` for the task's captured output.
+- **The rule that separated all 8 stops correctly in real data:**
+  **at a Stop, is the _most-recent_ background launch still un-notified?** If yes → the agent
+  will auto-resume → hold. If no → commit now.
+  - The 5 "waiting" stops (L75, L307/308, L337, L452, L700) each had the most-recent launch
+    un-notified; each was followed by a `<task-notification>` and a resume.
+  - The 3 real final stops (L461, L573, L723) each had their most-recent launch already
+    notified → commit.
+  - Two early "zombie" launches (`3FgYNP7o`, `w8Ft3zd8`) were superseded and **never
+    notified**. A naive "any outstanding background task" rule would treat the real final
+    stops as pending and **deadlock**. The **most-recent-launch** rule is immune: a newer
+    launch always displaces a zombie, and the newest launch always notifies before the true
+    final summary.
+  - Structural > textual: L307 had empty assistant text yet was a genuine wait; parsing the
+    "I'll wait…" sentence would have missed it. Use the launch/notification structure, not the
+    prose.
+- **Backstop still required:** a background process that never completes (dev server) or a
+  genuinely abandoned task leaves "most-recent un-notified" true forever. Cap the hold with a
+  generous bound; because we only hold on positive evidence, the backstop rarely fires.
 
-- If `SubagentStop` consistently precedes resumed parent output, keep the session watcher alive
-  through that boundary and do not treat the first `Stop` as final session idleness.
-- If a second `Stop` always fires after resumed output, use the first as prompt completion and
-  the second as session-level idle confirmation.
-- If no useful hook fires, fall back to PTY liveness + log activity for Copilot.
+Implementation shape for Claude: `ClaudeLogParser` tracks the most-recent background `Bash`
+launch id and clears it when a matching `<task-notification>` arrives, exposing something like
+`hasPendingBackgroundWork(): boolean` on the parser. `<task-notification>` is a `user` event —
+make sure it is **not** misclassified as a human follow-up prompt by the Layer-1 watcher's
+`isHumanPrompt` filter.
+
+### Copilot CLI — CONFIRMED ✅
+
+Investigated `~/.copilot/session-state/4402ccc7-…/events.jsonl` (backgrounded a 60s async
+PowerShell job and waited) against a clean session (`fa0319d7-…`). Copilot's markers are
+**fully structured — no text parsing needed**, cleaner than Claude's:
+
+- **Every `assistant.turn_end` fires the Stop hook** (`hook.start`/`hook.end` follow it),
+  including the "Ending turn — will resume when the job completes" pause. Same root cause.
+- **Launch marker:** `tool.execution_complete` whose `data.toolTelemetry.properties.executionMode
+  === "async"`, with the shell id in `data.result.content`
+  (`"<command started in background with shellId: 0>"`). The launching tool args also carry
+  `mode: "async"` (e.g. `powershell`/`bash` tools). Correlation key = **shellId** (small, stable).
+- **Completion / resume marker:** a first-class `system.notification` event with
+  `data.kind.type === "shell_completed"` (or `"shell_failed"`), `data.kind.shellId`,
+  `data.kind.exitCode`. This wakes Copilot, which **self-resumes** (a `turn_start` fires
+  immediately after) — so it is gate-able. No regex needed; key off `kind.type`/`kind.shellId`.
+- **Rule that separated all stops in real data: at a Stop, is any async shell still without a
+  matching `shell_completed`/`shell_failed`?** The waiting stop (L24) showed pending shellId
+  `0`; the resumed work and real final showed none; the clean log had zero `system.notification`
+  and every stop pending-free (commits immediately, today's behavior).
+- **No zombie problem (unlike Claude):** a terminating command _always_ emits
+  `shell_completed`/`shell_failed`, so "any pending shellId" is safe here. Only a
+  never-terminating shell (dev server) stays pending → that is exactly the backstop case.
+
+So the _detection rule is legitimately per-harness_ even though both fit the same
+`hasPendingBackgroundWork()` parser abstraction: Claude = "most-recent launch un-notified"
+(dodges superseded-never-notify tasks); Copilot = "any async shellId without a completion
+notification" (structured completion is guaranteed for terminating commands).
+
+Verify markers against a fresh log when Copilot bumps CLI versions (see the 1.0.x
+event-drop caveats in `harness-cli-providers.instructions.md`).
+
+### Codex / Qwen / Antigravity / OpenCode — TODO
+
+Investigate on demand as each is observed to background-and-wait. Any harness without a clean
+marker stays Layer-1-only (capture, no gating).
 
 ---
 
-## Edge Cases & Challenges
+## Layer 1 — Session Activity Watcher (universal)
 
-### Race: terminal follow-up vs ctrlyoke-dispatched prompt
+Do **not** stretch the per-prompt `CliLogMonitor` past its Stop — it is intentionally terminal.
+Add a distinct, longer-lived **`SessionActivityWatcher`**.
 
-If the user types in the terminal while ctrlyoke is about to resume or restart the session:
+- **Owner:** `CliIntegration` (owns `lastInteractiveContext`, PTY liveness, and is the object
+  parked in `liveInjectIntegrations`).
+- **Start:** after a prompt's interactive execution resolves with the PTY still alive. Seed
+  from the finished monitor / `lastInteractiveContext`: `logPath`, `sessionId`, harness id,
+  workflow identity (`instanceId`, `workingFilePath`, `promptIndex`), and the **byte/line
+  offset the completion drained to** (extend `CliLogMonitor` to return its final offset).
+- **One reader at a time:** suspend the watcher while any `sendPrompt`/`CliLogMonitor` is
+  active on the same log (the next dispatched prompt is the authoritative reader); resume it on
+  completion if the PTY is still alive. This cleanly handles the mid-workflow case.
+- **Stop when:** the PTY exits (`onPtySessionEnded`/`getPtyTermination`), the integration is
+  disposed/reclaimed, or the terminal is closed.
+- **What it does:** tail from the seeded offset with the harness `ILogParser`; classify new
+  content (resumed AI activity vs. a real human prompt via `isHumanPrompt`, suppressing
+  ctrlyoke's own injected prompts); stream resumed events through the existing
+  `onStreamingEvents` / `onContextWindowUpdate` callbacks; append to the step's output +
+  history record (append, don't replace, so pre-Stop and post-resume content coexist), visually
+  marked as "session resumed / auto-continued."
 
-- the session log remains authoritative
-- snapshot the session watcher's last processed offset before ctrlyoke reclaims the PTY
-- drain any intervening events before shutdown / restart
+Reuse the event-processing core of `CliLogMonitor` (offset-filtered read → push →
+`extractStructuredEventsFromEvent` → stream → context-window update → `isComplete`) rather than
+duplicating it (DRY).
 
-### Session reuse with `--resume`
+### User steer events (display-only, both contexts)
 
-If the same session log keeps growing across resumed runs:
+A genuine human `user` message in the session log becomes a **"user steer" event** — a new
+output/history event type that is rendered in the ctrlyoke output and **never changes workflow
+state** (no queue step, no revert, no status change beyond display). This lives in the shared
+tail/stream core (Phase 1), so it fires in **both** contexts with one implementation:
 
-- offset-based tracking still works
-- the watcher must persist its last consumed position, not just session ID
+- **Mid-step steering:** the active `CliLogMonitor` sees the user's `user` event while a prompt
+  runs. Today these are ignored (the monitor only surfaces the assistant response) — this closes
+  that gap so mid-step steering is visible.
+- **Post-completion follow-up:** the `SessionActivityWatcher` sees it after the step/workflow
+  finished, renders the steer, and captures the assistant output that follows — no revert.
 
-### Inject mode overlap
+A `user` event in the log is one of four things; only the last is a steer:
 
-Injected ctrlyoke prompts can look like manual terminal prompts in the log.
+1. **tool result / tool-only content** → ignore (not a prompt).
+2. **a ctrlyoke-injected prompt** → attribute to dispatch, not a steer. Requires the pending-inject
+   correlation marker, or we would mislabel our own injected prompts as user steers.
+3. **a harness resume signal that is itself a `user` event** → Claude's `<task-notification>` is a
+   `user` message and must render as a resume signal, not a steer. (Copilot's completion is a
+   `system.notification`, so it is naturally exempt.)
+4. **genuine human text** (via the existing `isHumanPrompt` non-empty-text-block filter) →
+   **"user steer" event.**
 
-Mitigation:
+---
 
-- maintain a short-lived "pending inject" correlation marker
-- when the matching user/log event appears, attribute it to ctrlyoke dispatch, not manual follow-up
+## Layer 2 — Signal-gated completion (per-harness, where a signal exists)
 
-### finalStep interaction
+Split `WorkflowExecutor.waitForResponseComplete` into two concerns:
 
-If a workflow has a `finalStep`, prompt completion and session-idle semantics may diverge.
-The session watcher should attach to the live terminal session, not to "queue empty" alone.
+- **UI/streaming completion** fires on the raw Stop (optimistic; step shows output as done).
+- **Control-flow commitment** (end condition → advance / retry / stop / finalize) waits for
+  **confirmed idle**, defined by the harness signal: at a Stop, ask the parser
+  `hasPendingBackgroundWork()`.
+  - **Not pending → commit immediately** (today's behavior, zero latency).
+  - **Pending → hold:** keep the step running, keep the watcher capturing, and wait for the
+    harness resume marker (Claude: `<task-notification>`) → resumed work → next Stop →
+    re-check. End the hold on that real event, or on the bounded backstop, whichever first.
 
-### False positives from programmatic user-role events
+Because control flow only commits from a genuinely idle session, the retry cases stop being
+racy: `resumeSessionOnRetry: true` injects into an idle live session (no interleaving);
+`resumeSessionOnRetry: false` kills + respawns a settled session (no in-flight work abandoned).
+**This is why the "1 TerminalInstance per session" change is _not_ needed** and is explicitly
+rejected here — it would trade a solvable timing problem for an unsolvable
+two-sessions-editing-the-same-tree consistency problem
+(`src/ui/webview-react/components/output/TerminalInstance.tsx` + the harness-keyed
+`liveInjectIntegrations`/`executionIntegrations` maps). Concurrent same-harness sessions are a
+separate future feature that would need worktree isolation, not a retry side effect.
 
-Some harnesses may emit user-role messages that are not real user prompts.
-The tracker should require both:
+---
 
-- a plausible prompt boundary
-- subsequent assistant activity attributable to that boundary
+## Edge cases & races
+
+- **Mid-workflow next-step dispatch:** the one-reader rule keeps the watcher parked while step
+  N+1's `CliLogMonitor` owns the log. With Layer 2, next-step dispatch itself waits for idle,
+  so N+1 isn't injected into an about-to-resume session.
+- **Offset correctness across `--resume`:** the session log grows monotonically; the watcher
+  must persist and hand off its byte/line offset, not just the session id, so the watcher and
+  the next prompt monitor never double-count or skip.
+- **Inject correlation:** an injected ctrlyoke prompt appears as a `user` event; keep a
+  short-lived pending-inject marker so the matching `user` event is attributed to dispatch, not
+  a manual follow-up. Distinct from Claude's `<task-notification>` `user` events, which are
+  resume signals, not prompts.
+- **Double completion:** guard re-completion with a `completed`-style flag as
+  `CliLogMonitor.handleCompletion` already does.
+- **PTY dies during a resumed turn / a hold:** treat like the existing `isPtyTerminated` path —
+  flush buffered events, persist partial output, stop the watcher, release any hold.
+- **Backstop expiry:** if a hold hits the bound with no resume, commit and log it; Layer 1 has
+  still captured anything that did arrive.
+
+---
+
+## Implementation phases
+
+**Phase 0 — signal investigation.** Claude ✅ and Copilot ✅ confirmed (above). Codex / Qwen /
+Antigravity / OpenCode on demand. Each harness that lacks a clean marker stays Layer-1-only.
+
+**Phase 1 — shared tail/stream loop.** Extract the event-processing core of `CliLogMonitor`
+into a unit shared by `CliLogMonitor` and `SessionActivityWatcher`. Add **user-steer event
+emission** here (classify human `user` events per the four-way rule) so mid-step steering and
+post-completion follow-ups are both captured from one place.
+
+**Phase 2 — `SessionActivityWatcher` + capture (Layer 1, universal).** Implement the watcher,
+own it in `CliIntegration`, seed from `lastInteractiveContext` + final offset, enforce the
+one-reader rule. Add an `onSessionActivityResumed` emitter and wire resumed streaming/append +
+status + user-steer events into `WorkflowInstance`/dashboard. Ships the "output is never lost"
+and "user steer is captured" guarantees.
+
+**Phase 3 — signal-gated completion (Layer 2, Claude first).** Add `hasPendingBackgroundWork()`
+to `ILogParser`/`ClaudeLogParser`. Split UI-completion from control-flow commitment in
+`WorkflowExecutor`; gate end-condition/dispatch/finalize on the signal with the bounded
+backstop. Extend to Copilot and others as their signals are confirmed.
+
+**Phase 4 — presentation polish & optional gating setting.**
+
+**Phase 5 (later) — promote user steers / observed turns into editable queue steps, undo/redo,
+executor first-class observed steps.** (Capture + display of user steers ships in Phase 1–2;
+only step-promotion is deferred here.)
 
 ---
 
 ## Relationship to Continuation Mode
 
-|                           | Session-Level Follow-up Tracking           | Continuation Mode (inject)          |
-| ------------------------- | ------------------------------------------ | ----------------------------------- |
-| **Who sends the prompt**  | User or harness, outside ctrlyoke          | ctrlyoke                            |
-| **Ownership of the turn** | Observed after the fact                    | Fully owned by ctrlyoke             |
-| **Tracking fidelity**     | Best-effort, session-level observation     | Full                                |
-| **Best for**              | Manual TUI use, async harness continuation | Workflow-driven follow-up execution |
-
-The two features are complementary:
-
-- user types in terminal → tracked by session watcher
-- harness auto-continues later → tracked by session watcher
-- ctrlyoke sends next prompt via inject mode → tracked as a normal dispatched prompt
+Complementary. AI backgrounds a task and auto-resumes → session watcher (+ Layer 2 hold).
+User types in the terminal → session watcher (secondary). ctrlyoke sends the next prompt via
+inject → normal dispatched prompt.
 
 ---
 
-## Open Questions
+## Open questions
 
-1. Should session watchers time out after inactivity?
-2. Should observed turns be stored only in history/timeline at first, or also projected into
-   the visible step list?
-3. Should the feature be always-on for live interactive sessions, or gated by a setting?
-4. For Copilot specifically, what exact hook sequence occurs around `SubagentStop` and resumed
-   parent output?
+1. Backstop bound for the Layer-2 hold: fixed generous duration, or "pending AND no log
+   activity for N seconds"? (Leaning: the latter — a live-but-slow task keeps the hold, a truly
+   dead one releases it.)
+2. Layer-1 mid-workflow attribution: folding resumed step-N output into step N+1's monitor —
+   acceptable long-term, or must the watcher own the log even with a next prompt queued?
+3. Always-on for live interactive sessions, or gated by a setting?
+4. Remaining harness signals (Codex / Qwen / Antigravity / OpenCode) — investigate on demand;
+   any without a clean marker stay Layer-1-only. (Claude ✅ and Copilot ✅ confirmed.)
