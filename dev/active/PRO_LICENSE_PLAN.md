@@ -220,10 +220,14 @@ Add **"ctrlyoke: Deactivate Pro License"** and a Free/Pro status surface (status
 
 > **Gating philosophy: gate by _reach_, not by _limits_.** No step caps, no workflow-count caps, no concurrency caps — usage limits feel punitive, are trivially circumvented (split the workflow), and generate bad launch reviews. The entire **local** product is free and fully functional. Pro unlocks the one capability with the highest willingness-to-pay and the highest support cost: **using ctrlyoke remotely / on the go.**
 
+> **The governing test for any gate: _does it only matter once you leave `127.0.0.1`?_** If it works on pure localhost, it is Free. If its whole purpose is reaching the server from a phone / LAN / the internet, it is Pro. Pro is **one feature — "code from anywhere" — not a grab-bag**; every gate should be a facet of that single story (which also means a single trial/entitlement flag flips the entire remote surface). Two deliberate exceptions are thematically tethered to the same on-the-go story rather than the localhost test: the custom icon (most visible as your installed-PWA home-screen icon) and air-gapped activation (mechanically Pro-only — it exists only to activate Pro). Resist adding _new_ gate categories: the risk is not under-monetizing, it is diluting a crisp message into "nickel-and-diming."
+
 **The key split — the hosted dashboard server, gated by reach:**
 
-- **Free — localhost only (`127.0.0.1`):** anyone can open the browser dashboard on the same machine and experience it for real.
-- **Pro — remote / LAN / on-the-go:** binding to `0.0.0.0`, the LAN IP selector, QR-to-phone, and HTTPS-for-mobile-push in `ServerSection.tsx`. This is the "code from anywhere" magic — the part that costs the most to support and is hardest to replicate.
+- **Free — localhost only (`127.0.0.1`):** anyone can open the browser dashboard on the same machine and experience it for real. The localhost essentials on the server page stay free: start/stop, port, copy URL, regenerate token.
+- **Pro — remote / LAN / on-the-go:** everything on the server page that only matters once you leave localhost — binding to `0.0.0.0`, the LAN IP selector, QR-to-phone, HTTPS/self-signed-cert generation, and mobile push notifications in `ServerSection.tsx`. This is the "code from anywhere" magic — the part that costs the most to support and is hardest to replicate. HTTPS in particular is _pointless_ on localhost (browsers already treat `localhost` as a secure context, so PWA install / service workers / push all work over plain HTTP there); the cert only starts mattering once a phone or LAN device reaches the server, so it is a remote enabler, not a standalone TLS feature.
+
+> **Custom hooks are Free, deliberately.** User-defined hooks are _local execution_ — they work on pure localhost, so they fail the governing test. More importantly, gating them would gate **compatibility, not a premium capability**: ctrlyoke runs its own start/stop-detection hooks, and the custom-hook interface exists so a user's real hooks coexist with (rather than get clobbered by) ctrlyoke's. Paywalling that reads as ransom and generates bad reviews. Table stakes, not Pro.
 
 | Capability                                                                                          | Free     | Pro |
 | --------------------------------------------------------------------------------------------------- | -------- | --- |
@@ -236,11 +240,14 @@ Add **"ctrlyoke: Deactivate Pro License"** and a Free/Pro status surface (status
 | Agent & Skills manager                                                                              | ✅       | ✅  |
 | AI commit message generation                                                                        | ✅       | ✅  |
 | CLI binary, templates, output history                                                               | ✅       | ✅  |
+| **Custom hooks** (user-defined pre/post execution — local, = compatibility not premium)             | ✅       | ✅  |
+| Server page — localhost essentials (start/stop, port, copy URL, regenerate token)                   | ✅       | ✅  |
 | **Hosted dashboard — localhost (`127.0.0.1`)**                                                      | ✅       | ✅  |
-| **Hosted dashboard — remote / LAN / on-the-go** (`0.0.0.0`, LAN IP, QR-to-phone, mobile-push HTTPS) | ⏱️ trial | ✅  |
-| **Custom hooks** (user-defined pre/post execution)                                                  | ❌       | ✅  |
-| **Air-gapped / offline activation** (enterprise)                                                    | ❌       | ✅  |
-| Custom icon color (cosmetic "thank-you" perk)                                                       | ❌       | ✅  |
+| **Hosted dashboard — remote / LAN / on-the-go** (`0.0.0.0` bind, LAN IP selector, QR-to-phone)      | ⏱️ trial | ✅  |
+| **HTTPS / self-signed cert generation** (only matters off-localhost)                                | ⏱️ trial | ✅  |
+| **Mobile push notifications** (push-to-phone — the on-the-go payoff)                                 | ⏱️ trial | ✅  |
+| **Air-gapped / offline activation** (enterprise; mechanically Pro-only)                             | ❌       | ✅  |
+| Custom icon color (personalize your installed-PWA home-screen icon; "thank-you" perk)               | ❌       | ✅  |
 | All future Pro features                                                                             | ❌       | ✅  |
 
 **Remote-access trial.** New users get a **14-day, full-featured trial of remote access** — no card, no account — so they can taste coding on the go before deciding. When it lapses, the server keeps running on **localhost for free**; remote binding shows a friendly upsell. The trial start timestamp lives in `globalState`; it flows through the same `LicenseService`, so an activated license simply supersedes the trial.
@@ -271,12 +278,29 @@ Design goal: **a one-person company must not be answering enterprise sales email
 Gate each Pro capability through `await licenseService.isPro(context)` (or a feature/trial check). The server is gated **by bind reach, not by startup** — localhost always works free. Known sites (verify exact class names during implementation):
 
 - **Remote bind** — `src/server/**`: allow `127.0.0.1`/loopback unconditionally; gate `bindAddress: "0.0.0.0"` (and any non-loopback bind) behind Pro/trial. When unlicensed, fall back to localhost and surface an upsell rather than failing.
-- **Remote-only UI affordances** in `ServerSection.tsx`: LAN IP selector, QR-to-phone, mobile-push/HTTPS-for-remote flows — disabled with upsell when not Pro/trial.
-- **Custom hooks** — the user-defined `ExecutionProperties.hooks` execution path (harness command building). ctrlyoke's own internal completion/notification hooks are **not** affected.
+- **Remote-only UI affordances** in `ServerSection.tsx`: LAN IP selector, QR-to-phone — disabled with upsell when not Pro/trial.
+- **HTTPS / self-signed cert generation** — the `GENERATE_SERVER_CERT` flow and the whole HTTPS/TLS section in `ServerSection.tsx`. Gate as remote-tier: it is a reach enabler (mobile push + secure non-loopback origins), pointless on localhost. Disabled with upsell when not Pro/trial.
+- **Mobile push notifications** — `WebPushService` subscription/dispatch (push-to-phone). Remote-tier; the on-the-go payoff. Localhost still gets in-page/desktop notifications free.
 - **Air-gapped activation command** — offline activation is itself a Pro capability.
-- **Custom icon color** — `server.iconBgColor` / `server.iconFgColor` writes in `ServerSection.tsx` — Pro perk.
+- **Custom icon color** — `server.iconBgColor` / `server.iconFgColor` writes in `ServerSection.tsx` — Pro perk (personalizes the installed-PWA home-screen icon).
 
-Each blocked gate shows a friendly upsell linking to `ctrlyoke.dev/pricing/` — never a silent failure. **Free stays genuinely free:** notifications, the MCP manager + integration, the agent/skills manager, AI commit messages, the CLI, and the entire local dashboard are never gated.
+> **Custom hooks are NOT a gate site.** The user-defined `ExecutionProperties.hooks` execution path stays free — it is local execution and, more importantly, gating it would gate compatibility with ctrlyoke's own start/stop-detection hooks (see §1.6). Do not add an `isPro()` check here.
+
+Each blocked gate shows a friendly upsell linking to `ctrlyoke.dev/pricing/` — never a silent failure. **Free stays genuinely free:** notifications, custom hooks, the MCP manager + integration, the agent/skills manager, AI commit messages, the CLI, and the entire local dashboard are never gated.
+
+#### Enforce the bind gate at `listen()`, not the dropdown
+
+`server.bindAddress` is a plain, user-editable settings value, so a disabled dropdown in `ServerSection.tsx` is **not** the enforcement point — a user can set `bindAddress: "0.0.0.0"` by hand in `settings.json`. Put the actual gate at the **bind site** (`CtrlYokeHostedServer.listen()` / the extension.ts wiring that constructs the server): when the entitlement is not Pro/trial, coerce any non-loopback `bindAddress` back to `127.0.0.1` and surface the upsell. The dropdown state is UX; `listen()` is enforcement. This closes the only **zero-effort** bypass (editing the JSON) while everything else stays free-and-working.
+
+#### Circumvention / threat model (proxies are out of scope by design)
+
+The bind gate is an **honor gate**, not a tamper-proof control, and that is intentional — consistent with [What Not To Build Yet](#what-not-to-build-yet) (no server-side enforcement of local gates; threat model is honest paying users, not determined crackers).
+
+- **The gate cannot be made proxy-proof, and we will not try.** The hosted server is a plain HTTP(S) server with query-string token auth. Once it listens on loopback, any external relay exposes it with zero interaction with ctrlyoke and no way for the extension to detect it: `socat TCP-LISTEN:PORT,fork,bind=0.0.0.0 TCP:127.0.0.1:PORT`, `ngrok`, Cloudflare Tunnel, Tailscale Funnel, `ssh -R`, Caddy/nginx `reverse_proxy`, Windows `netsh portproxy`, Linux DNAT. A proxied request arrives on the loopback socket indistinguishable from a genuine local one (`req.socket.remoteAddress` is `127.0.0.1` either way); `Host`/`X-Forwarded-For` are attacker-controlled at the proxy. There is no server-side signal that separates "reached me because I bound `0.0.0.0`" from "a proxy forwarded to my loopback socket."
+- **We actively do _not_ want to fight proxies.** A reverse proxy (Caddy/Cloudflare with a real cert) is a **legitimate Pro deployment**. Any anti-proxy heuristic — e.g. rejecting non-loopback `Host` headers — would break real Pro users and violate the fail-open principle. Keep `isSafeRequestHost()` / CSP accepting arbitrary hosts.
+- **Why this is fine.** What Pro sells is not "bytes reaching loopback from outside" — it is the integrated, zero-config remote experience in `ServerSection.tsx` (auto-detected LAN IPs, connect-via IP selector, QR-to-phone, self-signed cert generation with the LAN IP in the SANs for mobile HTTPS/push). A DIY-proxy user gets a raw `IP:port/?token=…` and none of that; they were never a sale and they self-support. The EULA's anti-circumvention clause is the backstop, not code.
+
+**Net:** gate the UI **and** the bind (defeats the only zero-effort bypass); treat proxying as an accepted, unenforced gap covered by the EULA.
 
 ### 1.9 Website / docs coupling
 
