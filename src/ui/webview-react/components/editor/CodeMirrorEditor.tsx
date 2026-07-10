@@ -14,6 +14,7 @@ import { minimalSetup } from "codemirror";
 import {
   autocompletion,
   completionKeymap,
+  startCompletion,
   type Completion,
   type CompletionContext,
   type CompletionResult,
@@ -303,6 +304,13 @@ export function buildCodeMirrorCompletionResult(
   return result;
 }
 
+// Cache key for a progressive completion's full result. The trigger is always a
+// single leading character, so different triggers can never collide regardless
+// of the query that follows.
+function completionCacheKey(trigger: CompletionTrigger, query: string): string {
+  return `${trigger} ${query}`;
+}
+
 export function buildPromptReferenceInsertion(
   docText: string,
   request: PromptEditorInsertRequest,
@@ -393,6 +401,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const pendingCompletionRequestRef = useRef<PendingCompletionRequest | null>(
     null
   );
+  // Cache for a full completion result that arrived after its (already-resolved)
+  // partial response — see the progressive `#` completion flow. Keyed by
+  // trigger+query so the re-triggered completion source can serve it
+  // synchronously without a second round trip to the extension host.
+  const completionCacheRef = useRef<{
+    key: string;
+    result: CompletionResult;
+  } | null>(null);
   const completionSeqRef = useRef(0);
   const validationSeqRef = useRef(0);
   const pendingValidationRequestsRef = useRef<
@@ -580,27 +596,63 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     initTypoChecker();
   }, [affUri, dicUri]);
 
-  // Handle completion response from extension
+  // Handle completion response from extension.
+  //
+  // Some triggers (currently `#`) answer progressively: a `partial` response
+  // arrives first with the instant items (e.g. the current editor selection),
+  // then a final response with the full list once the slow part (workspace
+  // symbols) resolves. The partial resolves the pending CodeMirror completion
+  // promise so the dropdown appears immediately; the final response — arriving
+  // after that promise is already settled — is cached and applied by
+  // re-triggering the completion source, which serves it synchronously.
   const handleCompletionResponse = useCallback(
-    (items: ExtensionCompletionItem[], from: number, seq?: number) => {
+    (
+      items: ExtensionCompletionItem[],
+      from: number,
+      seq?: number,
+      partial?: boolean
+    ) => {
       // Discard stale responses from earlier requests
       if (seq !== undefined && seq !== completionSeqRef.current) {
         return;
       }
-      if (!pendingCompletionResolveRef.current) {
+
+      const request = pendingCompletionRequestRef.current;
+      const result = buildCodeMirrorCompletionResult(items, from, request);
+
+      if (partial) {
+        // Deliver the instant items now, but keep the request context so the
+        // forthcoming full response can be keyed and re-applied.
+        if (pendingCompletionResolveRef.current) {
+          pendingCompletionResolveRef.current(result);
+          pendingCompletionResolveRef.current = null;
+        }
         return;
       }
 
-      pendingCompletionResolveRef.current(
-        buildCodeMirrorCompletionResult(
-          items,
-          from,
-          pendingCompletionRequestRef.current
-        )
-      );
+      // Final response. If the promise is still pending (no partial was sent,
+      // e.g. there was no selection), resolve it directly.
+      if (pendingCompletionResolveRef.current) {
+        pendingCompletionResolveRef.current(result);
+        pendingCompletionResolveRef.current = null;
+        pendingCompletionRequestRef.current = null;
+        return;
+      }
 
-      pendingCompletionResolveRef.current = null;
+      // A partial already resolved the promise and the dropdown is open. Cache
+      // the full result and re-trigger completion so the source can serve it
+      // from cache without another round trip.
       pendingCompletionRequestRef.current = null;
+      if (request) {
+        completionCacheRef.current = {
+          key: completionCacheKey(request.trigger, request.query),
+          result,
+        };
+        const view = viewRef.current;
+        if (view) {
+          startCompletion(view);
+        }
+      }
     },
     []
   );
@@ -761,7 +813,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         handleCompletionResponse(
           message.items || [],
           message.from,
-          message.seq
+          message.seq,
+          message.partial
         );
       } else if (message.type === MESSAGE_TYPES.CONTEXT_REFS_VALIDATION) {
         const resolve = pendingValidationRequestsRef.current.get(message.seq);
@@ -784,7 +837,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   // Custom completions source
   const customCompletions = useCallback(
-    (context: any): Promise<CompletionResult | null> | null => {
+    (context: any): CompletionResult | Promise<CompletionResult | null> | null => {
       // Use lastIndexOf to find the rightmost trigger character, mirroring
       // PromptCompletionProvider's approach. Using matchBefore with @"[^"]* was
       // buggy: when the prompt contained a literal "@" (e.g. `"@"`), the pattern
@@ -843,10 +896,28 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
       const from = lineObj.from + maxIndex; // absolute position of trigger char
 
+      // Serve a full result cached by a progressive (partial→full) response for
+      // this exact trigger+query synchronously — no second round trip. Checked
+      // before the empty-query guard so it also applies when only the trigger
+      // char has been typed (e.g. `#` with an active selection).
+      const cacheKey = completionCacheKey(
+        trigger as CompletionTrigger,
+        afterTrigger
+      );
+      if (completionCacheRef.current?.key === cacheKey) {
+        const cached = completionCacheRef.current.result;
+        completionCacheRef.current = null;
+        return cached;
+      }
+
       if (from === context.pos && !context.explicit) return null;
 
       // Assign a sequence number so stale responses can be discarded
       const seq = ++completionSeqRef.current;
+
+      // A fresh request invalidates any lingering progressive cache (e.g. a
+      // stale selection snapshot from a prior dropdown that was dismissed).
+      completionCacheRef.current = null;
 
       // Request completions from extension host
       return new Promise<CompletionResult | null>((resolve) => {

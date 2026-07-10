@@ -46,6 +46,8 @@ Model completions are JSON/JSONC-only and replace the entire quoted model value 
 `ctrlyoke.respectGitignoreForCompletions=true` switches file discovery to `git ls-files --cached --others --exclude-standard`; do not try to emulate gitignore with `findFiles()`.
 
 `getPromptFileCompletions()` is webview-only for lone prompt-file paths like `./foo.prompt.md`; VS Code `@/#/~/$` completion does not use it.
+
+**Progressive `#` completion (webview/CodeMirror only):** `#` mixes instant editor selections with the potentially slow `vscode.executeWorkspaceSymbolProvider` query. `getHashSelectionCompletions()` returns just the selection items (synchronous) with the same `0_` sortText prefix `getHashCompletions()` applies, so the two share one source. `WebviewMessageRouter.handleCompletionRequest` emits selections first as a `COMPLETIONS_RESPONSE` with `partial: true`, then the full selections+symbols list with `partial: false` (same `seq`). `CodeMirrorEditor` resolves the CodeMirror completion promise on the partial (dropdown appears immediately), then — since the promise is already settled — caches the full result keyed by trigger+query and calls `startCompletion(view)` to re-trigger; `customCompletions` serves the cache synchronously with no second round trip. The `seq` guard discards a stale full response if the user kept typing. VS Code's `PromptCompletionProvider` cannot do this within a single `provideCompletionItems` call, so it still awaits the full `getHashCompletions()`.
 </completionHelpers>
 
 <yamlWorkflowKeys>

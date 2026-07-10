@@ -29,9 +29,11 @@ import { Log } from "../utils/Log";
 import {
   getFileCompletions,
   getHashCompletions,
+  getHashSelectionCompletions,
   getGitChangeCompletions,
   getPromptFileCompletions,
   getPriorContextCompletions,
+  type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
 import { getStashList } from "../utils/GitUtils";
 import { execFile } from "child_process";
@@ -1767,35 +1769,54 @@ export class WebviewMessageRouter {
     seq?: number
   ): Promise<void> {
     try {
+      // Progressive `#` completion: emit the current editor selection(s)
+      // immediately so the dropdown populates instantly, then follow up with
+      // the full list once the (potentially slow, on large codebases)
+      // workspace-symbol query resolves. Marked `partial` so the editor knows
+      // a second, authoritative response is still coming.
+      if (trigger === "#") {
+        const selectionItems = getHashSelectionCompletions();
+        if (selectionItems.length > 0) {
+          this.emitCompletionsResponse(selectionItems, position, seq, true);
+        }
+        const fullItems = await getHashCompletions(prefix.substring(1));
+        this.emitCompletionsResponse(fullItems, position, seq, false);
+        return;
+      }
+
       const items = await this.getCompletionItems(trigger, prefix);
-
-      Log.trace(
-        `[Dashboard] Completion: trigger="${trigger}", prefix="${prefix}", position=${position} → ${items.length} items`
-      );
-
-      this.emitMessage({
-        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
-        items: items.map((item) => ({
-          label: item.label,
-          kind: item.kind,
-          insertText: item.insertText,
-          detail: item.detail,
-          documentation: item.documentation,
-          sortText: item.sortText,
-          filterText: item.filterText,
-        })),
-        from: position,
-        seq,
-      });
+      this.emitCompletionsResponse(items, position, seq, false);
     } catch (error) {
       Log.error("Failed to get completions:", error);
-      this.emitMessage({
-        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
-        items: [],
-        from: position,
-        seq,
-      });
+      this.emitCompletionsResponse([], position, seq, false);
     }
+  }
+
+  private emitCompletionsResponse(
+    items: PlainCompletionItem[],
+    position: number,
+    seq: number | undefined,
+    partial: boolean
+  ): void {
+    Log.trace(
+      `[Dashboard] Completion response: position=${position}, partial=${partial} → ${items.length} items`
+    );
+
+    this.emitMessage({
+      type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+      items: items.map((item) => ({
+        label: item.label,
+        kind: item.kind,
+        insertText: item.insertText,
+        detail: item.detail,
+        documentation: item.documentation,
+        sortText: item.sortText,
+        filterText: item.filterText,
+      })),
+      from: position,
+      seq,
+      partial,
+    });
   }
 
   /**

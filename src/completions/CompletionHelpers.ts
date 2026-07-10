@@ -645,6 +645,25 @@ function getSelectionCompletions(): PlainCompletionItem[] {
 }
 
 /**
+ * Get the selection completions for the # trigger, prefixed with the same
+ * sortText the full {@link getHashCompletions} result uses so they bubble to
+ * the top consistently.
+ *
+ * This is synchronous and instant. It is split out from {@link getHashCompletions}
+ * so callers can populate the dropdown with the current selection immediately,
+ * before the (potentially slow, on large codebases) workspace-symbol query
+ * resolves. See the progressive `#` completion flow in the webview router and
+ * CodeMirror editor.
+ */
+export function getHashSelectionCompletions(): PlainCompletionItem[] {
+  const selectionItems = getSelectionCompletions();
+  selectionItems.forEach((item) => {
+    item.sortText = `0_${item.sortText || item.label}`;
+  });
+  return selectionItems;
+}
+
+/**
  * Get all completions for # trigger (selections + symbols)
  */
 export async function getHashCompletions(
@@ -653,11 +672,7 @@ export async function getHashCompletions(
   const items: PlainCompletionItem[] = [];
 
   // 1. Add selection completions FIRST (bubbled to top with sortText)
-  const selectionItems = getSelectionCompletions();
-  selectionItems.forEach((item) => {
-    item.sortText = `0_${item.sortText || item.label}`;
-  });
-  items.push(...selectionItems);
+  items.push(...getHashSelectionCompletions());
 
   // 2. Add workspace symbols
   const symbolItems = await getSymbolCompletions(filterText, 500);
