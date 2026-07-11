@@ -300,6 +300,38 @@ Open Question 1. See `ChatSessionParser.hasPendingBackgroundWork()` and the
 "Copilot Chat background-task auto-resume (end to end)" test suite in
 `src/test/chatSessionParser.test.ts`.
 
+**User-steer capture + post-completion tailing (Layer 1) — now implemented.** The note above
+("no separate watcher needed") only ever covered the *in-flight hold* — the outer
+`sendPrompt()` call staying alive until a resume lands. It left two real gaps: (1) a human typing
+directly into the still-open chat (mid-hold, or after the step/workflow already finished) was
+invisible — no user-steer event, nothing added to output/history; (2) `extractSessionOutput()`
+only ever extracted the *last* request (index `-1`), so a step that held through a
+background-task resume silently dropped the launch request's own text (e.g. "Starting the
+background task..."), keeping only the resume's final answer. Both are fixed:
+
+- `ChatSessionParser.collectFollowUpActivity(sessionFilePath, fromResponseIndexExclusive, steerSeenThroughIndex)`
+  is the single shared walk: it classifies each newly-appeared request as a genuine human steer
+  (no `isSystemInitiated`) or a harness auto-resume, and extracts every already-complete request's
+  content in order — not just the last one. Note that a request's own `hasPendingBackgroundWork`
+  no longer blocks extracting *that request's* content; it only ever meant "expect a further
+  request," never "this one isn't readable yet."
+- `CopilotChatIntegration.extractSessionOutput()` now calls `collectFollowUpActivity()` from
+  `ChatSessionMonitor.getSendStartRequestCount()` (a stable pre-submit baseline — deliberately
+  *not* the mutable `requestCountBeforeSend`, which `setSessionFile()` later overwrites to a
+  post-submit value) through the end, fixing the dropped-launch-text gap.
+- `ChatSessionActivityWatcher` (`src/core/harness/chat/ChatSessionActivityWatcher.ts`) is Chat's
+  Layer-1 equivalent of the CLI harnesses' `SessionActivityWatcher`: poll-based (matches
+  `ChatSessionMonitor`'s own all-polling design), reusing the same `collectFollowUpActivity()`
+  walk. `CopilotChatIntegration` pauses it at the top of `sendPrompt()` (one-reader rule) and
+  (re)activates it after every successful send, seeded at that send's own final index.
+- Chat has no PTY, so `HarnessIntegration.canReuseForInject()` (CLI/PTY-specific) always returns
+  false for it — meaning the integration, and its watcher, would be disposed the instant a run
+  ends, defeating "post-completion" entirely. `HarnessIntegration.shouldPersistForSessionActivity()`
+  is a new, separately-named hook (kept distinct from `canReuseForInject()` so its name doesn't
+  imply PTY semantics) that `CopilotChatIntegration` overrides to `true`, reusing the exact same
+  `liveInjectIntegrations` keep-alive/dispose lifecycle `WorkflowInstance` already had in place for
+  CLI harnesses.
+
 ### Codex, Qwen & OpenCode — no background-wait (Layer-1-only)
 
 Confirmed these three **do not** support the background-task → end-turn →
@@ -421,9 +453,12 @@ lacks a clean marker stays Layer-1-only.
 see `src/core/harness/SessionActivityWatcher.ts` and the `hasPendingBackgroundWork` overrides in
 each CLI `ILogParser`. Copilot Chat's Layer-2 equivalent has also **shipped** — see
 `ChatSessionParser.hasPendingBackgroundWork()` / `ChatSessionMonitor.isLastRequestComplete()`
-(Copilot Chat section above). Chat has no Layer-1-equivalent watcher because it doesn't need one:
-`ChatSessionMonitor` already re-reads the full session file on every poll, so once the pending
-resume lands it's simply the new "last request" on the next check.
+(Copilot Chat section above). Copilot Chat's Layer-1 equivalent has **also shipped** — see
+`ChatSessionActivityWatcher.ts` and `ChatSessionParser.collectFollowUpActivity()` (Copilot Chat
+section above). Poll-based rather than a raw-log tail (matching `ChatSessionMonitor`'s own
+all-polling design), and kept alive across workflow runs via the new
+`HarnessIntegration.shouldPersistForSessionActivity()` hook — Chat has no PTY, so
+`canReuseForInject()` alone would dispose it the instant a run ends.
 
 **Phase 1 — shared tail/stream loop.** Extract the event-processing core of `CliLogMonitor`
 into a unit shared by `CliLogMonitor` and `SessionActivityWatcher`. Add **user-steer event
@@ -434,7 +469,10 @@ post-completion follow-ups are both captured from one place.
 own it in `CliIntegration`, seed from `lastInteractiveContext` + final offset, enforce the
 one-reader rule. Add an `onSessionActivityResumed` emitter and wire resumed streaming/append +
 status + user-steer events into `WorkflowInstance`/dashboard. Ships the "output is never lost"
-and "user steer is captured" guarantees.
+and "user steer is captured" guarantees. **Shipped for all gate-able harnesses**, including
+Copilot Chat's own poll-based `ChatSessionActivityWatcher` equivalent — `onSessionActivityResumed`
+and the `WorkflowInstance` merge/dashboard wiring were already harness-agnostic, so Chat needed no
+changes on that side, only its own watcher + the `shouldPersistForSessionActivity` keep-alive hook.
 
 **Phase 3 — signal-gated completion (Layer 2, Claude first).** Add `hasPendingBackgroundWork()`
 to `ILogParser`/`ClaudeLogParser`. Split UI-completion from control-flow commitment in

@@ -261,7 +261,7 @@ const UserSteerOutput: React.FC<{
 }> = ({ text, findQuery, findCaseSensitive, highlightActiveIndex }) => (
   <div className="my-2">
     <div className="text-[length:var(--fp-output-font-size-xs)] text-indicator-info mb-1">
-      ● Typed into terminal
+      ● User message
     </div>
     <div className="text-editor-fg pl-3 border-l border-indicator-info/50 whitespace-pre-wrap [overflow-wrap:anywhere]">
       <MarkdownText

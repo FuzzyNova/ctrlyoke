@@ -853,4 +853,160 @@ suite("ChatSessionParser Tests", () => {
       );
     });
   });
+
+  suite("collectFollowUpActivity", () => {
+    function completeRequest(text: string, extra: Record<string, any> = {}) {
+      return {
+        requestId: `req-${text}`,
+        message: { text },
+        response: [{ value: `Reply to: ${text}` }],
+        modelId: "copilot/claude-sonnet-4.5",
+        modelState: { value: RESPONSE_MODEL_STATE.COMPLETE },
+        result: { timings: { totalElapsed: 1000 } },
+        ...extra,
+      };
+    }
+
+    function incompleteRequest(text: string) {
+      return {
+        requestId: `req-${text}`,
+        message: { text },
+        response: [],
+        modelId: "copilot/claude-sonnet-4.5",
+      };
+    }
+
+    function asyncLaunchExtra() {
+      return {
+        result: {
+          timings: { totalElapsed: 1000 },
+          metadata: {
+            toolCallRounds: [
+              {
+                response: "",
+                toolCalls: [
+                  {
+                    name: "run_in_terminal",
+                    arguments: JSON.stringify({
+                      command: "Start-Sleep -Seconds 60",
+                      mode: "async",
+                    }),
+                    id: "call-1",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      };
+    }
+
+    test("merges the launch request and its isSystemInitiated resume, no steer", () => {
+      const sessionFile = createMockSessionFile("test-collect-resume", [
+        completeRequest("Follow instructions in background-test.prompt.md", asyncLaunchExtra()),
+        { ...completeRequest("[Terminal notification: completed.]"), isSystemInitiated: true },
+      ]);
+
+      const result = parser.collectFollowUpActivity(sessionFile, -1, 0);
+
+      const texts = result.events.map((e) => (e.data as any).text);
+      assert.deepStrictEqual(texts, [
+        "Reply to: Follow instructions in background-test.prompt.md",
+        "Reply to: [Terminal notification: completed.]",
+      ]);
+      assert.ok(
+        !result.events.some((e) => e.type === CLI_EVENT_TYPES.USER_STEER)
+      );
+      assert.strictEqual(result.lastResponseIndex, 1);
+      assert.strictEqual(result.steerSeenThroughIndex, 0);
+    });
+
+    test("emits a user-steer event for a genuine non-isSystemInitiated follow-up, then its response", () => {
+      const sessionFile = createMockSessionFile("test-collect-steer", [
+        completeRequest("Follow instructions in prompt.md"),
+        completeRequest("please also check the login flow"),
+      ]);
+
+      const result = parser.collectFollowUpActivity(sessionFile, -1, 0);
+
+      assert.strictEqual(result.events.length, 3);
+      assert.strictEqual(
+        (result.events[0].data as any).text,
+        "Reply to: Follow instructions in prompt.md"
+      );
+      assert.strictEqual(result.events[1].type, CLI_EVENT_TYPES.USER_STEER);
+      assert.strictEqual(
+        (result.events[1].data as any).text,
+        "please also check the login flow"
+      );
+      assert.strictEqual(
+        (result.events[2].data as any).text,
+        "Reply to: please also check the login flow"
+      );
+      assert.strictEqual(result.lastResponseIndex, 1);
+      assert.strictEqual(result.steerSeenThroughIndex, 1);
+    });
+
+    test("surfaces a steer immediately even while its response is still in progress, without re-emitting it later", () => {
+      const sessionFile = createMockSessionFile("test-collect-steer-pending", [
+        completeRequest("Follow instructions in prompt.md"),
+        incompleteRequest("one more thing before you finish"),
+      ]);
+
+      const first = parser.collectFollowUpActivity(sessionFile, -1, 0);
+      assert.strictEqual(first.events.length, 2); // req0 response + steer, no req1 response yet
+      assert.strictEqual(first.events[1].type, CLI_EVENT_TYPES.USER_STEER);
+      assert.strictEqual(first.lastResponseIndex, 0);
+      assert.strictEqual(first.steerSeenThroughIndex, 1);
+
+      // Re-poll with the same cursors while still incomplete — no duplicate steer.
+      const second = parser.collectFollowUpActivity(
+        sessionFile,
+        first.lastResponseIndex,
+        first.steerSeenThroughIndex
+      );
+      assert.strictEqual(second.events.length, 0);
+      assert.strictEqual(second.lastResponseIndex, 0);
+      assert.strictEqual(second.steerSeenThroughIndex, 1);
+    });
+
+    test("extracts a request's own content even when it itself has pending background work, and keeps walking to a further resume", () => {
+      const sessionFile = createMockSessionFile("test-collect-chained", [
+        completeRequest("Follow instructions in prompt.md", asyncLaunchExtra()),
+        {
+          ...completeRequest("[Terminal notification: first task completed.]", asyncLaunchExtra()),
+          isSystemInitiated: true,
+        },
+        {
+          ...completeRequest("[Terminal notification: second task completed.]"),
+          isSystemInitiated: true,
+        },
+      ]);
+
+      const result = parser.collectFollowUpActivity(sessionFile, -1, 0);
+
+      const texts = result.events.map((e) => (e.data as any).text);
+      assert.deepStrictEqual(texts, [
+        "Reply to: Follow instructions in prompt.md",
+        "Reply to: [Terminal notification: first task completed.]",
+        "Reply to: [Terminal notification: second task completed.]",
+      ]);
+      assert.strictEqual(result.lastResponseIndex, 2);
+    });
+
+    test("skips a whitespace-only follow-up message without emitting a steer event", () => {
+      const sessionFile = createMockSessionFile("test-collect-empty-steer", [
+        completeRequest("Follow instructions in prompt.md"),
+        completeRequest("   "),
+      ]);
+
+      const result = parser.collectFollowUpActivity(sessionFile, -1, 0);
+
+      assert.ok(
+        !result.events.some((e) => e.type === CLI_EVENT_TYPES.USER_STEER)
+      );
+      assert.strictEqual(result.steerSeenThroughIndex, 1);
+      assert.strictEqual(result.lastResponseIndex, 1);
+    });
+  });
 });

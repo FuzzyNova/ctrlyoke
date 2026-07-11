@@ -2727,12 +2727,17 @@ export class WorkflowInstance {
               Log.warn("Failed to clean up workflow artifacts:", err)
             );
         }
-        if (execIntegration.canReuseForInject()) {
-          // PTY still alive and inject context set — keep the integration alive
-          // for the next run rather than destroying it. Store under the same map key
-          // so the restore code can insert it where createIntegrationForMode looks.
-          // Register a one-shot exit callback so we dispose it if the terminal is
-          // killed between runs.
+        if (
+          execIntegration.canReuseForInject() ||
+          execIntegration.shouldPersistForSessionActivity()
+        ) {
+          // Either the PTY is still alive with inject context set (CLI), or the
+          // integration wants to stay alive for its own post-completion session
+          // watcher (Copilot Chat, no PTY). Keep it alive for the next run rather
+          // than destroying it. Store under the same map key so the restore code
+          // can insert it where createIntegrationForMode looks. Register a
+          // one-shot exit callback so we dispose it if the terminal is killed
+          // between runs (no-op for non-PTY harnesses).
           this.liveInjectIntegrations.set(harnessKey, execIntegration);
           execIntegration.onPtySessionEnded(() => {
             this.liveInjectIntegrations.delete(harnessKey);

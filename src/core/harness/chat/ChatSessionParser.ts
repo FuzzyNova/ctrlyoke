@@ -8,6 +8,7 @@ import {
   FileReadData,
   BashCommandData,
   FileDeleteData,
+  UserSteerData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -60,6 +61,18 @@ export interface ChatRequest {
     value: number;
     completedAt?: number;
   };
+  /**
+   * True when VS Code auto-generated this request to resume a session after a
+   * backgrounded async tool call finished (see hasPendingBackgroundWork).
+   * Absent on a genuine human-typed follow-up request — this is the field
+   * that distinguishes a harness auto-resume from a real user steer.
+   */
+  isSystemInitiated?: boolean;
+  /**
+   * Human-readable label VS Code attaches to an isSystemInitiated resume
+   * (e.g. the finished command). Informational only — not used by ctrlyoke logic.
+   */
+  systemInitiatedLabel?: string;
   result: {
     timings: { totalElapsed: number; firstProgress?: number };
     metadata?: {
@@ -347,6 +360,78 @@ export class ChatSessionParser {
         },
       };
     }
+  }
+
+  /**
+   * Walk `requests(fromResponseIndexExclusive, end]`, classifying each new
+   * request as a genuine human steer (no `isSystemInitiated`) or a harness
+   * auto-resume, and extracting the response of each request that has
+   * reached a terminal state (regardless of whether *it itself* also holds
+   * pending background work — that only means a *further* request may still
+   * be coming, not that this request's own content isn't ready to read). A
+   * request still being written stops the walk — the caller's next call
+   * picks up where this one left off; the natural array-length bound already
+   * stops the walk at whatever currently exists, so there is nothing further
+   * to gate on.
+   *
+   * Shared by the in-flight extraction in `CopilotChatIntegration.extractSessionOutput`
+   * (so a step that holds through a background-task auto-resume captures every
+   * request's content, not just the last) and by `ChatSessionActivityWatcher`
+   * (post-completion tailing). Single source of truth for the steer-vs-resume
+   * classification.
+   *
+   * `steerSeenThroughIndex` is tracked separately from `lastResponseIndex` so
+   * a steer already surfaced isn't re-emitted once its (later-completing)
+   * response is finally extracted. Callers walking through their *own* just-
+   * dispatched request (never a steer) should seed `steerSeenThroughIndex` at
+   * that request's own index, not one before it.
+   */
+  collectFollowUpActivity(
+    sessionFilePath: string,
+    fromResponseIndexExclusive: number,
+    steerSeenThroughIndex: number
+  ): {
+    events: CliEvent[];
+    lastResponseIndex: number;
+    steerSeenThroughIndex: number;
+  } {
+    const events: CliEvent[] = [];
+    let lastResponseIndex = fromResponseIndexExclusive;
+    let steerThrough = steerSeenThroughIndex;
+
+    const session = ChatSessionParser.parseSessionFile(sessionFilePath);
+    if (!session?.requests) {
+      return {
+        events,
+        lastResponseIndex,
+        steerSeenThroughIndex: steerThrough,
+      };
+    }
+
+    for (let i = fromResponseIndexExclusive + 1; i < session.requests.length; i++) {
+      const request = session.requests[i];
+
+      if (!request.isSystemInitiated && i > steerThrough) {
+        const steerText = request.message?.text?.trim();
+        if (steerText) {
+          events.push({
+            type: CLI_EVENT_TYPES.USER_STEER,
+            timestamp: Date.now(),
+            data: { text: steerText } satisfies UserSteerData,
+          });
+        }
+        steerThrough = i;
+      }
+
+      if (!ChatSessionParser.isSessionComplete(sessionFilePath, i)) {
+        break;
+      }
+
+      events.push(...this.extractResponse(sessionFilePath, i).events);
+      lastResponseIndex = i;
+    }
+
+    return { events, lastResponseIndex, steerSeenThroughIndex: steerThrough };
   }
 
   /**

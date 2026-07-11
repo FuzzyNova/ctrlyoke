@@ -62,6 +62,15 @@ export class ChatSessionMonitor {
   private promptText: string = ""; // Store prompt text for session matching
   private sessionsBeforeSend: Set<string> = new Set(); // Track session files that existed before sending
 
+  // Request count at the true moment recordPositionBeforeSend() runs, before
+  // any submission has happened. Unlike requestCountBeforeSend (which
+  // setSessionFile() later overwrites to whatever the count is when submit
+  // verification *finds* the new request already in the file), this is never
+  // mutated again after being set — it's the stable baseline
+  // CopilotChatIntegration.extractSessionOutput() needs to know exactly where
+  // this send's own new requests start.
+  private sendStartRequestCount: number = 0;
+
   // Session cache: tracks completed request indices in each session file
   // PERSISTS across workflows for performance (only parse files once per VS Code session)
   private sessionCache: Map<string, SessionSnapshot> = new Map();
@@ -78,6 +87,17 @@ export class ChatSessionMonitor {
    */
   getSessionFile(): string | undefined {
     return this.sessionFilePath || undefined;
+  }
+
+  /**
+   * Index this send's own first new request landed at — i.e. the stable
+   * pre-submit request count captured by `recordPositionBeforeSend()`. Used
+   * by `CopilotChatIntegration.extractSessionOutput()` to walk every request
+   * this send produced (not just the last), so a step that holds through a
+   * background-task auto-resume captures all of it.
+   */
+  getSendStartRequestCount(): number {
+    return this.sendStartRequestCount;
   }
 
   /**
@@ -643,6 +663,7 @@ export class ChatSessionMonitor {
         this.requestCountBeforeSend = this.getRequestCount(
           this.sessionFilePath
         );
+        this.sendStartRequestCount = this.requestCountBeforeSend;
         Log.info(
           `📍 Resume session: ${path.basename(this.sessionFilePath)}, requests: ${this.requestCountBeforeSend}`
         );
@@ -655,6 +676,7 @@ export class ChatSessionMonitor {
     // If no cached session, will search for it after submit
     if (!this.sessionFilePath) {
       this.requestCountBeforeSend = 0;
+      this.sendStartRequestCount = 0;
       Log.info("📍 New session - will search for session file after submit");
     }
   }

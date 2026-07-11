@@ -304,6 +304,23 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Returns true if this integration should be kept alive across workflow
+   * runs so its own session-activity watcher can keep tailing for
+   * post-completion follow-ups (a harness auto-resuming a backgrounded task,
+   * or a human typing directly into a still-open chat) rather than being
+   * disposed the moment a run ends.
+   *
+   * Distinct from `canReuseForInject()`, which is specifically about resuming
+   * a live PTY session for the *next prompt's* inject-mode dispatch — this is
+   * about keeping a non-PTY integration's own long-lived watcher alive.
+   *
+   * Default: false. Overridden by `CopilotChatIntegration`.
+   */
+  shouldPersistForSessionActivity(): boolean {
+    return false;
+  }
+
+  /**
    * Reset per-run mutable state so the integration can be handed to a new workflow
    * execution without side-effects from the previous run.
    * Called by WorkflowInstance when reusing a live integration via liveInjectIntegration.

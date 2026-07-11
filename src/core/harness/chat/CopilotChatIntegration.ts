@@ -12,6 +12,7 @@ import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { ChatSessionMonitor } from "./ChatSessionMonitor";
 import { ChatSessionParser } from "./ChatSessionParser";
+import { ChatSessionActivityWatcher } from "./ChatSessionActivityWatcher";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../../utils/Log";
 import {
@@ -49,6 +50,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
   private sessionParser: ChatSessionParser;
   private attachmentHandler: NativeAttachmentHandler;
 
+  /** Layer 1 safety net: tails the chat session file after sendPrompt() resolves,
+   *  so resumed background-task output and human chat follow-ups aren't lost. */
+  private readonly chatActivityWatcher: ChatSessionActivityWatcher;
+
   // Track if last failure was due to user cancellation in chat UI
   private lastFailureWasUserCancellation: boolean = false;
 
@@ -73,6 +78,11 @@ export class CopilotChatIntegration extends HarnessIntegration {
     this.attachmentHandler = new NativeAttachmentHandler((path) =>
       this.resolveWorkspacePath(path)
     );
+    this.chatActivityWatcher = new ChatSessionActivityWatcher({
+      parser: this.sessionParser,
+      onResumedEvents: (events) =>
+        this.sessionActivityResumedEmitter.fire({ events }),
+    });
   }
 
   /**
@@ -269,7 +279,30 @@ export class CopilotChatIntegration extends HarnessIntegration {
       clearTimeout(this.pollingTimer);
       this.pollingTimer = undefined;
     }
+    this.chatActivityWatcher.stop();
     super.dispose();
+  }
+
+  /**
+   * Keep this integration alive across workflow runs so `chatActivityWatcher`
+   * can keep tailing for post-completion follow-ups (background-task resumes,
+   * human chat steers) instead of being disposed the moment a run ends. Chat
+   * has no PTY, so `canReuseForInject()` (CLI-specific) always returns false —
+   * this is the Chat-appropriate equivalent.
+   */
+  override shouldPersistForSessionActivity(): boolean {
+    return true;
+  }
+
+  /**
+   * Reset per-run mutable state before this integration is reused for a new
+   * workflow run (see shouldPersistForSessionActivity). Mirrors
+   * CliIntegration.resetForNewRun()'s pattern of clearing extra instance
+   * fields the base reset doesn't know about.
+   */
+  override resetForNewRun(): void {
+    super.resetForNewRun();
+    this.lastFailureWasUserCancellation = false;
   }
 
   /** Initialize with background polling (5s intervals, 30s max) */
@@ -428,6 +461,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
     needsCompletionDetection?: boolean,
     workflowContext?: WorkflowContext
   ): Promise<boolean> {
+    // One-reader rule: this send's own ChatSessionMonitor becomes the
+    // authoritative reader — see ChatSessionActivityWatcher for the rationale.
+    this.chatActivityWatcher.pause();
     try {
       // Reset cancellation flag for new prompt
       this.resetCancellationFlag();
@@ -574,6 +610,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
             const responseText = await this.extractSessionOutput();
             this.responseCompleteEmitter.fire(responseText);
             await this.cleanupTempFiles();
+            this.activateChatActivityWatcherAfterSend();
             return true;
           }
 
@@ -591,6 +628,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       }
 
       await this.cleanupTempFiles();
+      this.activateChatActivityWatcherAfterSend();
       return true;
     } catch (error) {
       Log.error("❌ Failed to send prompt:", error);
@@ -606,6 +644,21 @@ export class CopilotChatIntegration extends HarnessIntegration {
       await this.cleanupTempFiles();
       return false;
     }
+  }
+
+  /**
+   * (Re)activate `chatActivityWatcher` after a successful send, seeded from
+   * this send's own final request index so it only ever observes activity
+   * that lands *after* what this send already accounted for. No-op if no
+   * session file was ever found (e.g. an unusual early-failure path).
+   */
+  private activateChatActivityWatcherAfterSend(): void {
+    const sessionFile = this.sessionMonitor.getSessionFile();
+    if (!sessionFile) {
+      return;
+    }
+    const lastIndex = ChatSessionParser.getRequestCount(sessionFile) - 1;
+    this.chatActivityWatcher.activate(sessionFile, lastIndex);
   }
 
   /**
@@ -629,6 +682,27 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
       // Parse session file for structured output
       const output = this.sessionParser.extractResponse(sessionFile);
+
+      // Walk every request this send produced (not just the last) so a step
+      // that holds through a background-task auto-resume captures all of it —
+      // e.g. the launch request's own "Starting the background task..." text,
+      // not just the isSystemInitiated resume's final answer. Shares the same
+      // classification/extraction walk used by chatActivityWatcher.
+      // steerSeenThroughIndex is seeded at sendStartIndex itself (not one
+      // before it) so this send's own dispatched request is never
+      // misclassified as a human steer — only requests after it can be.
+      const sendStartIndex = this.sessionMonitor.getSendStartRequestCount();
+      const { events: mergedEvents } = this.sessionParser.collectFollowUpActivity(
+        sessionFile,
+        sendStartIndex - 1,
+        sendStartIndex
+      );
+      // Fall back to the plain last-request extraction above if the merge walk
+      // came back empty (e.g. a parse error already surfaced there as an
+      // error-text event) so that failure information isn't silently dropped.
+      if (mergedEvents.length > 0) {
+        output.events = mergedEvents;
+      }
 
       if (output.events.length === 0) {
         Log.warn("⚠️ Session file has no response events");
@@ -687,7 +761,13 @@ export class CopilotChatIntegration extends HarnessIntegration {
     // One-time guarded recovery: if nothing shows up after this grace period the
     // first submit was likely dropped (focus/timing). We re-paste before that
     // resubmit so it can never send a blank message.
-    const RESUBMIT_AFTER_MS = 6000;
+    // NOTE: with large workspaceStorage histories (1000+ session files),
+    // VS Code can take 15-20+ seconds just to flush and let us find the new
+    // session file via linear scan — 6s was firing this recovery resubmit
+    // well before the real submit had a chance to show up, causing the
+    // "sends the prompt twice" bug almost every time. 30s gives real submits
+    // enough room while still recovering from genuinely dropped ones.
+    const RESUBMIT_AFTER_MS = 30000;
     const startTime = Date.now();
     let didRecoverySubmit = false;
 
