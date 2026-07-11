@@ -2495,6 +2495,14 @@ export class WorkflowInstance {
     integration.onNotificationEvent((event) =>
       this.dashboardSink?.notifyNotificationEvent?.(event)
     );
+    // Wired once at creation (not per-run) so `SessionActivityWatcher` activity
+    // captured between step completions — not just after the whole workflow
+    // finishes — reaches the dashboard/history. The integration instance
+    // persists across runs when parked in `liveInjectIntegrations`, so this
+    // subscription persists with it.
+    integration.onSessionActivityResumed((payload) => {
+      void this.handleSessionActivityResumed(payload.events);
+    });
     this.executionIntegrations.set(harness, integration);
     return integration;
   }
@@ -2647,9 +2655,6 @@ export class WorkflowInstance {
           execIntegration.onPtySessionEnded(() => {
             this.liveInjectIntegrations.delete(harnessKey);
             execIntegration.dispose();
-          });
-          execIntegration.onSessionActivityResumed((payload) => {
-            void this.handleSessionActivityResumed(payload.events);
           });
         } else {
           // Normal path: terminal closed or inject mode not active — dispose now

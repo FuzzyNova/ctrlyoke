@@ -253,6 +253,86 @@ suite("WorkflowInstance finalStep replay", () => {
   });
 });
 
+suite("WorkflowInstance session activity forwarding", () => {
+  test("forwards SessionActivityWatcher events as soon as the integration is created, not only after the run finalizes", () => {
+    const platform = new MockPlatform();
+    const streamingEventsCalls: Array<{
+      stepIndex: number;
+      events: unknown[];
+      attemptIndex: number;
+      runIndex: number;
+    }> = [];
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: (
+        stepIndex: number,
+        events: unknown[],
+        attemptIndex: number,
+        runIndex: number
+      ) => {
+        streamingEventsCalls.push({ stepIndex, events, attemptIndex, runIndex });
+      },
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    // Simulate a step that already completed mid-run (this is how
+    // WorkflowInstance normally records where resumed activity attributes to).
+    (instance as any).lastCompletedActivityTarget = {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+    };
+
+    // createIntegrationForMode() is what every step dispatch uses to obtain its
+    // integration — this must wire onSessionActivityResumed immediately so
+    // activity captured by SessionActivityWatcher between step completions (long
+    // before this run's startWorkflowExecution() finally block runs) isn't lost.
+    const integration = (instance as any).createIntegrationForMode(
+      HARNESS_IDS.COPILOT_CLI
+    ) as HarnessIntegration;
+
+    (integration as any).sessionActivityResumedEmitter.fire({
+      events: [
+        { type: "userSteer", timestamp: Date.now(), data: { text: "hello" } },
+      ],
+    });
+
+    assert.strictEqual(streamingEventsCalls.length, 1);
+    assert.strictEqual(streamingEventsCalls[0].stepIndex, 0);
+    assert.strictEqual(streamingEventsCalls[0].events.length, 1);
+  });
+});
+
 suite("WorkflowInstance runtime transitions", () => {
   test("loading a stale running working file restores it as stopped without starting execution", async () => {
     const platform = new MockPlatform();
