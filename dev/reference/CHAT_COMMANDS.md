@@ -1,12 +1,10 @@
 # Available Chat Commands
 
-**Generated:** 2026-06-19T18:39:48.634Z  
-**Total Commands:** 426
+**Generated:** 2026-07-11T21:55:46.229Z  
+**Total Commands:** 419
 
 ---
 
-- `agentSessions.filter.toggleExclude:copilot-cloud-agent.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:copilotcli.agentsessionsviewerfiltersubmenu`
 - `agents.github.copilot.cli.deleteSessions`
 - `chat.installRecommendation.github.copilot-chat.cli`
 - `chat.installRecommendation.github.copilot-chat.cloud`
@@ -16,7 +14,7 @@
 - `copilot.claude.agents`
 - `copilot.claude.hooks`
 - `copilot.claude.memory`
-- `flightpath.test.copilotAutomation`
+- `ctrlyoke.test.copilotAutomation`
 - `github.copilot.acceptCursorPanelSolution`
 - `github.copilot.buildRemoteWorkspaceIndex`
 - `github.copilot.chat.applyCopilotCLIAgentSessionChanges`
@@ -26,6 +24,7 @@
 - `github.copilot.chat.checkoutPullRequestReroute`
 - `github.copilot.chat.cloudSessions.clearCaches`
 - `github.copilot.chat.cloudSessions.createPullRequestForTask`
+- `github.copilot.chat.cloudSessions.openPullRequestForTask`
 - `github.copilot.chat.cloudSessions.openRepository`
 - `github.copilot.chat.codeReview.run`
 - `github.copilot.chat.compact`
@@ -71,6 +70,7 @@
 - `github.copilot.chat.otel.exportAgentTracesDB`
 - `github.copilot.chat.otel.flush`
 - `github.copilot.chat.otel.openSettings`
+- `github.copilot.chat.otel.statusActive`
 - `github.copilot.chat.rerunWithCopilotDebug`
 - `github.copilot.chat.review`
 - `github.copilot.chat.review.apply`
@@ -215,6 +215,7 @@
 - `workbench.action.chat.clearHistory`
 - `workbench.action.chat.clearInputHistory`
 - `workbench.action.chat.clearRecentlyUsedLanguageModels`
+- `workbench.action.chat.compactAgentHostConversation`
 - `workbench.action.chat.configure.customagents`
 - `workbench.action.chat.configure.customagents.disabled`
 - `workbench.action.chat.configure.hooks`
@@ -274,6 +275,7 @@
 - `workbench.action.chat.inspectChatModel`
 - `workbench.action.chat.inspectChatModelReferences`
 - `workbench.action.chat.installPluginFromSource`
+- `workbench.action.chat.learnMoreAboutCreditUsage`
 - `workbench.action.chat.logChatIndex`
 - `workbench.action.chat.logInputHistory`
 - `workbench.action.chat.manage`
@@ -303,7 +305,7 @@
 - `workbench.action.chat.openAgentHostFolderPicker`
 - `workbench.action.chat.openAgentHostModePicker`
 - `workbench.action.chat.openAgentHostPermissionModePicker`
-- `workbench.action.chat.openAsk`
+- `workbench.action.chat.openAutomationsWorkspacePicker`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
 - `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
@@ -314,6 +316,7 @@
 - `workbench.action.chat.openInSidebar`
 - `workbench.action.chat.openModePicker`
 - `workbench.action.chat.openModelPicker`
+- `workbench.action.chat.openNewChatSessionExternal.openai-codex`
 - `workbench.action.chat.openNewChatSessionInPlace.claude-code`
 - `workbench.action.chat.openNewChatSessionInPlace.copilot-cloud-agent`
 - `workbench.action.chat.openNewChatSessionInPlace.copilotcli`
@@ -328,9 +331,7 @@
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
-- `workbench.action.chat.openPlan`
 - `workbench.action.chat.openQuotaExceededDialog`
-- `workbench.action.chat.openSenior Developer`
 - `workbench.action.chat.openSessionInAgentsWindow`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
@@ -343,17 +344,7 @@
 - `workbench.action.chat.openWorkspacePicker`
 - `workbench.action.chat.openagent`
 - `workbench.action.chat.openask`
-- `workbench.action.chat.opencode-reviewer`
-- `workbench.action.chat.opencopilot-beast`
-- `workbench.action.chat.opencopilot-prompt`
-- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
-- `workbench.action.chat.openflightpath-orchestrator`
-- `workbench.action.chat.opentest-agent`
-- `workbench.action.chat.opentest-agent-alpha`
-- `workbench.action.chat.opentest-agent-beta`
-- `workbench.action.chat.opentest-agent-user`
-- `workbench.action.chat.pickAgentSession`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`
@@ -361,6 +352,7 @@
 - `workbench.action.chat.previousQuestion`
 - `workbench.action.chat.previousTip`
 - `workbench.action.chat.previousUserPrompt`
+- `workbench.action.chat.profileAgentHost`
 - `workbench.action.chat.queueMessage`
 - `workbench.action.chat.quickVoiceChat`
 - `workbench.action.chat.readChatResponseAloud`
@@ -397,6 +389,7 @@
 - `workbench.action.chat.startParameterizedPrompt`
 - `workbench.action.chat.startVoiceChat`
 - `workbench.action.chat.steerWithMessage`
+- `workbench.action.chat.stopAgentHostProfile`
 - `workbench.action.chat.stopListening`
 - `workbench.action.chat.stopListeningAndSubmit`
 - `workbench.action.chat.stopReadChatItemAloud`

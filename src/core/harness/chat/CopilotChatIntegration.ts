@@ -92,7 +92,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
       },
       new: {
         chatPanel: "workbench.action.chat.newLocalChat",
-        newTab: "workbench.action.chat.newChat",
+        // `newChat` creates a session in the current chat view, which can
+        // briefly switch a panel-hosted ctrlyoke dashboard to Copilot before
+        // `openInEditor` moves it to a tab. Create the editor session directly.
+        newTab: "workbench.action.chatEditor.newChat",
         newWindow: "workbench.action.chat.openInNewWindow",
       },
     };
@@ -108,7 +111,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   }
 
   /** Start a new chat session. Mode/agent inherited from previous session. */
-  private async startNewChatSession(): Promise<void> {
+  private async startNewChatSession(): Promise<boolean> {
     const command = this.getChatCommand("new");
 
     try {
@@ -116,9 +119,11 @@ export class CopilotChatIntegration extends HarnessIntegration {
       Log.debug(
         `✨ New chat session: ${ConfigurationUtils.getChatWindowLocation()}`
       );
+      return true;
     } catch (error) {
       Log.error("❌ Failed to start new chat:", error);
-      // Don't throw - we'll still try to send the prompt to existing chat
+      // Let direct automation open/focus an existing chat as a recovery path.
+      return false;
     }
   }
 
@@ -453,19 +458,19 @@ export class CopilotChatIntegration extends HarnessIntegration {
         prompt.resumeSession ??
         false
       );
+      let chatInputReady = false;
       if (shouldStartNewSession) {
         Log.info("🆕 Starting new chat session");
 
         // When using native attachments and an agent is selected, open the
         // agent-specific chat window (e.g., workbench.action.chat.openctrlyoke-workflow-composer)
         // so Copilot automatically applies that agent's instructions.
-        let openedAgentChat = false;
         if (useNativeAttachments && resolvedAgent) {
-          openedAgentChat = await this.openAgentSpecificChat(resolvedAgent);
+          chatInputReady = await this.openAgentSpecificChat(resolvedAgent);
         }
 
-        if (!openedAgentChat) {
-          await this.startNewChatSession();
+        if (!chatInputReady) {
+          chatInputReady = await this.startNewChatSession();
         }
 
         // Clear session tracking so we search for the new session
@@ -530,7 +535,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       const sent = await this.sendPromptWithDirectAutomation(
         chatPrompt,
         sessionSearchText,
-        shouldStartNewSession
+        chatInputReady
       );
 
       if (!sent) {
@@ -751,25 +756,29 @@ export class CopilotChatIntegration extends HarnessIntegration {
   }
 
   /**
-   * Execute direct automation: focus, clear, type, submit. Timing validated.
+   * Execute direct automation: focus when necessary, clear, paste, submit.
    *
    * @param chatPrompt Full prompt with XML tags to type into chat
    * @param rawPromptText Raw user prompt without XML (for session file verification)
-   * @param isNewChatSession Whether this is a new chat session
+   * @param chatInputReady Whether session creation already opened the target chat input
    */
   private async sendPromptWithDirectAutomation(
     chatPrompt: string,
     rawPromptText: string,
-    _isNewChatSession: boolean = true
+    chatInputReady: boolean = false
   ): Promise<boolean> {
     try {
-      // Step 1: Open/Focus Copilot Chat using configured location
-      const chatCommand = this.getChatWindowCommand();
-      try {
-        await vscode.commands.executeCommand(chatCommand);
-      } catch (focusError) {
-        Log.error("❌ Could not open Copilot Chat:", focusError);
-        throw new Error(`Failed to open Copilot Chat: ${focusError}`);
+      // A fresh session command has already opened the configured target. Do
+      // not issue another focus command: for new tabs/windows it causes an
+      // unnecessary panel switch or opens a second target before pasting.
+      if (!chatInputReady) {
+        const chatCommand = this.getChatWindowCommand();
+        try {
+          await vscode.commands.executeCommand(chatCommand);
+        } catch (focusError) {
+          Log.error("❌ Could not open Copilot Chat:", focusError);
+          throw new Error(`Failed to open Copilot Chat: ${focusError}`);
+        }
       }
 
       // Use longer delay for newWindow and newTab as they may need more setup time

@@ -1,7 +1,7 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-06-19T18:40:02.897Z  
-**Total Commands:** 3859
+**Generated:** 2026-07-11T21:55:58.702Z  
+**Total Commands:** 3843
 
 ---
 
@@ -34,30 +34,21 @@
 - `agentSessionSection.collapseAll`
 - `agentSessionSection.markRead`
 - `agentSessionSection.unarchive`
-- `agentSessions.filter.resetExcludes.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.sortByCreated.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.sortByUpdated.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:claude-code.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:copilot-cloud-agent.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:copilotcli.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:local.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:openai-codex.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeArchived.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeRead.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:0.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:1.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:2.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:3.agentsessionsviewerfiltersubmenu`
 - `agentSessions.hideAgentSessionsSidebar`
 - `agentSessions.showAgentSessionsSidebar`
 - `agentSessions.toggleAgentSessionsSidebar`
 - `agentSessionsViewer.find`
 - `agentSessionsViewer.refresh`
 - `agents.github.copilot.cli.deleteSessions`
+- `agentsVoice.connecting`
+- `agentsVoice.disconnect`
+- `agentsVoice.pttStopInChat`
 - `agentsVoice.pushToTalk`
 - `agentsVoice.resetOnboarding`
+- `agentsVoice.selectMicrophone`
 - `agentsVoice.showTranscripts`
-- `agentsVoice.toggleWindow`
+- `agentsVoice.simulateConnection`
+- `agentsVoice.startVoiceInChat`
 - `aiCustomization.generateDebugReport`
 - `aiCustomization.openManagementEditor`
 - `aiCustomization.openMarketplace`
@@ -347,6 +338,59 @@
 - `createCursor`
 - `cspell-info.showHelloWorld`
 - `cspell.showActionsMenu`
+- `ctrlyoke.addDirectoryToPromptEditor`
+- `ctrlyoke.addFileToPromptEditor`
+- `ctrlyoke.addScmResourcesToPromptEditor`
+- `ctrlyoke.addSelectionToPromptEditor`
+- `ctrlyoke.addSymbolToPromptEditor`
+- `ctrlyoke.addTimelineCommitToPromptEditor`
+- `ctrlyoke.appendFromDashboard`
+- `ctrlyoke.cancelCommitMessageGeneration`
+- `ctrlyoke.clearWorkflow`
+- `ctrlyoke.createDraftPrompt`
+- `ctrlyoke.createEndConditionScript`
+- `ctrlyoke.createNewTemplate`
+- `ctrlyoke.createPromptFile`
+- `ctrlyoke.dashboard.focus`
+- `ctrlyoke.dashboard.open`
+- `ctrlyoke.dashboard.removeView`
+- `ctrlyoke.dashboard.resetViewLocation`
+- `ctrlyoke.dashboard.toggleVisibility`
+- `ctrlyoke.dev.sendTestNotification`
+- `ctrlyoke.devMenu`
+- `ctrlyoke.disableServer`
+- `ctrlyoke.dumpCssVars`
+- `ctrlyoke.editCurrentPromptFile`
+- `ctrlyoke.enableServer`
+- `ctrlyoke.exportDiscoveredModels`
+- `ctrlyoke.generateCommitMessage`
+- `ctrlyoke.importAgents`
+- `ctrlyoke.importWorkflowTemplates`
+- `ctrlyoke.initWorkspace`
+- `ctrlyoke.listAllCommands`
+- `ctrlyoke.listChatCommands`
+- `ctrlyoke.loadFromContext`
+- `ctrlyoke.newWorkflow`
+- `ctrlyoke.openFileWithSelection`
+- `ctrlyoke.openGitChange`
+- `ctrlyoke.openPanel`
+- `ctrlyoke.pause`
+- `ctrlyoke.queueFromContext`
+- `ctrlyoke.queueNextFromContext`
+- `ctrlyoke.regenerateServerToken`
+- `ctrlyoke.resume`
+- `ctrlyoke.resumeSession`
+- `ctrlyoke.run`
+- `ctrlyoke.runFromContext`
+- `ctrlyoke.searchHistory`
+- `ctrlyoke.selectPromptFile`
+- `ctrlyoke.showLanguageId`
+- `ctrlyoke.showOutputPanel`
+- `ctrlyoke.stop`
+- `ctrlyoke.test.chatAgentSelection`
+- `ctrlyoke.test.chatModelSelection`
+- `ctrlyoke.test.copilotAutomation`
+- `ctrlyoke.test.fileAttachment`
 - `cursorBottom`
 - `cursorBottomSelect`
 - `cursorColumnSelectDown`
@@ -911,59 +955,6 @@
 - `filesExplorer.openFilePreserveFocus`
 - `filesExplorer.paste`
 - `firstCompressedFolder`
-- `flightpath.addDirectoryToPromptEditor`
-- `flightpath.addFileToPromptEditor`
-- `flightpath.addScmResourcesToPromptEditor`
-- `flightpath.addSelectionToPromptEditor`
-- `flightpath.addSymbolToPromptEditor`
-- `flightpath.addTimelineCommitToPromptEditor`
-- `flightpath.appendFromDashboard`
-- `flightpath.cancelCommitMessageGeneration`
-- `flightpath.clearWorkflow`
-- `flightpath.createDraftPrompt`
-- `flightpath.createEndConditionScript`
-- `flightpath.createNewTemplate`
-- `flightpath.createPromptFile`
-- `flightpath.dashboard.focus`
-- `flightpath.dashboard.open`
-- `flightpath.dashboard.removeView`
-- `flightpath.dashboard.resetViewLocation`
-- `flightpath.dashboard.toggleVisibility`
-- `flightpath.dev.sendTestNotification`
-- `flightpath.devMenu`
-- `flightpath.disableServer`
-- `flightpath.dumpCssVars`
-- `flightpath.editCurrentPromptFile`
-- `flightpath.enableServer`
-- `flightpath.exportDiscoveredModels`
-- `flightpath.generateCommitMessage`
-- `flightpath.importAgents`
-- `flightpath.importWorkflowTemplates`
-- `flightpath.initWorkspace`
-- `flightpath.listAllCommands`
-- `flightpath.listChatCommands`
-- `flightpath.loadFromContext`
-- `flightpath.newWorkflow`
-- `flightpath.openFileWithSelection`
-- `flightpath.openGitChange`
-- `flightpath.openPanel`
-- `flightpath.pause`
-- `flightpath.queueFromContext`
-- `flightpath.queueNextFromContext`
-- `flightpath.regenerateServerToken`
-- `flightpath.resume`
-- `flightpath.resumeSession`
-- `flightpath.run`
-- `flightpath.runFromContext`
-- `flightpath.searchHistory`
-- `flightpath.selectPromptFile`
-- `flightpath.showLanguageId`
-- `flightpath.showOutputPanel`
-- `flightpath.stop`
-- `flightpath.test.chatAgentSelection`
-- `flightpath.test.chatModelSelection`
-- `flightpath.test.copilotAutomation`
-- `flightpath.test.fileAttachment`
 - `focusAndAcceptSuggestion`
 - `focusNextRenameSuggestion`
 - `focusPreviousRenameSuggestion`
@@ -1166,6 +1157,7 @@
 - `github.copilot.chat.checkoutPullRequestReroute`
 - `github.copilot.chat.cloudSessions.clearCaches`
 - `github.copilot.chat.cloudSessions.createPullRequestForTask`
+- `github.copilot.chat.cloudSessions.openPullRequestForTask`
 - `github.copilot.chat.cloudSessions.openRepository`
 - `github.copilot.chat.codeReview.run`
 - `github.copilot.chat.compact`
@@ -1211,6 +1203,7 @@
 - `github.copilot.chat.otel.exportAgentTracesDB`
 - `github.copilot.chat.otel.flush`
 - `github.copilot.chat.otel.openSettings`
+- `github.copilot.chat.otel.statusActive`
 - `github.copilot.chat.rerunWithCopilotDebug`
 - `github.copilot.chat.review`
 - `github.copilot.chat.review.apply`
@@ -1386,9 +1379,6 @@
 - `interactiveEditor.start`
 - `javascript.goToProjectConfig`
 - `javascript.reloadProjects`
-- `javascript.removeUnusedImports`
-- `javascript.sortImports`
-- `js.projectStatus.command`
 - `jsBrowserBreakpoints.focus`
 - `jsBrowserBreakpoints.open`
 - `jsBrowserBreakpoints.resetViewLocation`
@@ -1726,7 +1716,6 @@
 - `notifications.toggleDoNotDisturbMode`
 - `notifications.toggleDoNotDisturbModeBySource`
 - `notifications.toggleList`
-- `npm-intellisense.import`
 - `npm.debugScript`
 - `npm.debugScriptFromHover`
 - `npm.focus`
@@ -2010,17 +1999,22 @@
 - `selectPrevCodeAction`
 - `selectPrevPageSuggestion`
 - `selectPrevSuggestion`
+- `sessions.tunnelHost.showOutput`
+- `sessions.tunnelHost.toggleSharing`
 - `setRootFolder`
 - `setSelection`
 - `settings.action.clearSearchResults`
 - `settings.action.focusLevelUp`
+- `settings.action.focusSearchFromSettings`
 - `settings.action.focusSettingControl`
 - `settings.action.focusSettingsFile`
 - `settings.action.focusSettingsFromSearch`
+- `settings.action.focusSettingsFromSearchOnEnter`
 - `settings.action.focusSettingsList`
 - `settings.action.focusTOC`
 - `settings.action.search`
 - `settings.action.showContextMenu`
+- `settings.action.showPreviousSearch`
 - `settings.action.toggleAiSearch`
 - `settings.filterByOnline`
 - `settings.filterByTelemetry`
@@ -2031,8 +2025,6 @@
 - `showNextParameterHint`
 - `showPrevParameterHint`
 - `signals.sounds.help`
-- `simpleBrowser.api.open`
-- `simpleBrowser.show`
 - `suggestWidgetCopy`
 - `tab`
 - `tailwindCSS.showOutput`
@@ -2173,17 +2165,14 @@
 - `type`
 - `typescript.experimental.disableTsgo`
 - `typescript.experimental.enableTsgo`
-- `typescript.findAllFileReferences`
 - `typescript.goToProjectConfig`
-- `typescript.goToSourceDefinition`
 - `typescript.openTsServerLog`
 - `typescript.reloadProjects`
-- `typescript.removeUnusedImports`
 - `typescript.restartTsServer`
 - `typescript.selectTypeScriptVersion`
-- `typescript.sortImports`
 - `typescript.tsserverRequest`
 - `undo`
+- `update.cancelling`
 - `update.check`
 - `update.checkForUpdate`
 - `update.checking`
@@ -2321,6 +2310,7 @@
 - `workbench.action.browser.goForward`
 - `workbench.action.browser.hardReload`
 - `workbench.action.browser.hideFind`
+- `workbench.action.browser.managePermissions`
 - `workbench.action.browser.newTab`
 - `workbench.action.browser.open`
 - `workbench.action.browser.openExternal`
@@ -2363,6 +2353,7 @@
 - `workbench.action.chat.clearHistory`
 - `workbench.action.chat.clearInputHistory`
 - `workbench.action.chat.clearRecentlyUsedLanguageModels`
+- `workbench.action.chat.compactAgentHostConversation`
 - `workbench.action.chat.configure.customagents`
 - `workbench.action.chat.configure.customagents.disabled`
 - `workbench.action.chat.configure.hooks`
@@ -2422,6 +2413,7 @@
 - `workbench.action.chat.inspectChatModel`
 - `workbench.action.chat.inspectChatModelReferences`
 - `workbench.action.chat.installPluginFromSource`
+- `workbench.action.chat.learnMoreAboutCreditUsage`
 - `workbench.action.chat.logChatIndex`
 - `workbench.action.chat.logInputHistory`
 - `workbench.action.chat.manage`
@@ -2451,7 +2443,7 @@
 - `workbench.action.chat.openAgentHostFolderPicker`
 - `workbench.action.chat.openAgentHostModePicker`
 - `workbench.action.chat.openAgentHostPermissionModePicker`
-- `workbench.action.chat.openAsk`
+- `workbench.action.chat.openAutomationsWorkspacePicker`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
 - `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
@@ -2462,6 +2454,7 @@
 - `workbench.action.chat.openInSidebar`
 - `workbench.action.chat.openModePicker`
 - `workbench.action.chat.openModelPicker`
+- `workbench.action.chat.openNewChatSessionExternal.openai-codex`
 - `workbench.action.chat.openNewChatSessionInPlace.claude-code`
 - `workbench.action.chat.openNewChatSessionInPlace.copilot-cloud-agent`
 - `workbench.action.chat.openNewChatSessionInPlace.copilotcli`
@@ -2476,9 +2469,7 @@
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
-- `workbench.action.chat.openPlan`
 - `workbench.action.chat.openQuotaExceededDialog`
-- `workbench.action.chat.openSenior Developer`
 - `workbench.action.chat.openSessionInAgentsWindow`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
@@ -2491,17 +2482,7 @@
 - `workbench.action.chat.openWorkspacePicker`
 - `workbench.action.chat.openagent`
 - `workbench.action.chat.openask`
-- `workbench.action.chat.opencode-reviewer`
-- `workbench.action.chat.opencopilot-beast`
-- `workbench.action.chat.opencopilot-prompt`
-- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
-- `workbench.action.chat.openflightpath-orchestrator`
-- `workbench.action.chat.opentest-agent`
-- `workbench.action.chat.opentest-agent-alpha`
-- `workbench.action.chat.opentest-agent-beta`
-- `workbench.action.chat.opentest-agent-user`
-- `workbench.action.chat.pickAgentSession`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`
@@ -2509,6 +2490,7 @@
 - `workbench.action.chat.previousQuestion`
 - `workbench.action.chat.previousTip`
 - `workbench.action.chat.previousUserPrompt`
+- `workbench.action.chat.profileAgentHost`
 - `workbench.action.chat.queueMessage`
 - `workbench.action.chat.quickVoiceChat`
 - `workbench.action.chat.readChatResponseAloud`
@@ -2545,6 +2527,7 @@
 - `workbench.action.chat.startParameterizedPrompt`
 - `workbench.action.chat.startVoiceChat`
 - `workbench.action.chat.steerWithMessage`
+- `workbench.action.chat.stopAgentHostProfile`
 - `workbench.action.chat.stopListening`
 - `workbench.action.chat.stopListeningAndSubmit`
 - `workbench.action.chat.stopReadChatItemAloud`
@@ -2747,6 +2730,7 @@
 - `workbench.action.focusStatusBar`
 - `workbench.action.focusThirdEditorGroup`
 - `workbench.action.focusTitleBar`
+- `workbench.action.focusWindow`
 - `workbench.action.generateColorTheme`
 - `workbench.action.getStartedWithAccessibilityFeatures`
 - `workbench.action.gotoLine`
@@ -2855,6 +2839,7 @@
 - `workbench.action.nextEditorInGroup`
 - `workbench.action.nextPanelView`
 - `workbench.action.nextSideBarView`
+- `workbench.action.onboarding.resetShownState`
 - `workbench.action.openAccessibilitySettings`
 - `workbench.action.openActiveLogOutputFile`
 - `workbench.action.openActiveLogOutputFileInNewWindow`
@@ -2910,6 +2895,7 @@
 - `workbench.action.openSettings2`
 - `workbench.action.openSettingsJson`
 - `workbench.action.openSnippets`
+- `workbench.action.openSurvey`
 - `workbench.action.openTipsAndTricksUrl`
 - `workbench.action.openVideoTutorialsUrl`
 - `workbench.action.openView`
@@ -2939,8 +2925,8 @@
 - `workbench.action.output.show.extension-output-GitHub.copilot-chat-#1-GitHub Copilot Log (Code References)`
 - `workbench.action.output.show.extension-output-bradlc.vscode-tailwindcss-#1-Tailwind CSS IntelliSense`
 - `workbench.action.output.show.extension-output-esbenp.prettier-vscode-#1-Prettier`
+- `workbench.action.output.show.extension-output-fuzzynova.ctrlyoke-#1-ctrlyoke`
 - `workbench.action.output.show.extension-output-ms-dotnettools.vscode-dotnet-runtime-#1-.NET Install Tool`
-- `workbench.action.output.show.extension-output-nhickster.flightpath-#1-FlightPath`
 - `workbench.action.output.show.extension-output-saoudrizwan.claude-dev-#1-Cline`
 - `workbench.action.output.show.extension-output-streetsidesoftware.code-spell-checker-#1-Code Spell Checker Server`
 - `workbench.action.output.show.extension-output-vscode.markdown-language-features-#1-Markdown Language Server`
@@ -2958,14 +2944,12 @@
 - `workbench.action.output.show.textModelChanges`
 - `workbench.action.output.show.tunnelHostService`
 - `workbench.action.output.show.userDataSync`
-- `workbench.action.output.show.vscode.css-language-features.CSS Language Server.log`
 - `workbench.action.output.show.vscode.git.Git.log`
 - `workbench.action.output.show.vscode.github-authentication.GitHub Authentication.log`
 - `workbench.action.output.show.vscode.github.GitHub.log`
 - `workbench.action.output.show.vscode.json-language-features.JSON Language Server.log`
 - `workbench.action.output.show.vscode.markdown-language-features.Markdown.log`
 - `workbench.action.output.show.vscode.microsoft-authentication.Microsoft Authentication.log`
-- `workbench.action.output.show.vscode.typescript-language-features.TypeScript.log`
 - `workbench.action.output.toggleOutput`
 - `workbench.action.pauseSocketWriting`
 - `workbench.action.pinEditor`
@@ -3084,6 +3068,7 @@
 - `workbench.action.splitEditorToPreviousGroup`
 - `workbench.action.splitEditorToRightGroup`
 - `workbench.action.splitEditorUp`
+- `workbench.action.startHeapTracing`
 - `workbench.action.startTracing`
 - `workbench.action.stopTracing`
 - `workbench.action.switchToMainWindow`
@@ -3635,7 +3620,6 @@
 - `workbench.scm.action.setTreeViewModeNavigation`
 - `workbench.scm.action.toggleQuickDiffVisibility.git.quickDiffProvider`
 - `workbench.scm.action.toggleQuickDiffVisibility.git.secondaryQuickDiffProvider`
-- `workbench.scm.action.toggleRepositoryVisibility.scm0`
 - `workbench.scm.focus`
 - `workbench.scm.history.focus`
 - `workbench.scm.history.open`
@@ -3704,8 +3688,8 @@
 - `workbench.view.extension.cspell-regexp-explorer.resetViewContainerLocation`
 - `workbench.view.extension.cspellPanel`
 - `workbench.view.extension.cspellPanel.resetViewContainerLocation`
-- `workbench.view.extension.flightpath`
-- `workbench.view.extension.flightpath.resetViewContainerLocation`
+- `workbench.view.extension.ctrlyoke`
+- `workbench.view.extension.ctrlyoke.resetViewContainerLocation`
 - `workbench.view.extension.python`
 - `workbench.view.extension.python.resetViewContainerLocation`
 - `workbench.view.extension.references-view`

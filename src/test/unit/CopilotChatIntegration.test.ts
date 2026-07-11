@@ -6,6 +6,32 @@ import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("CopilotChatIntegration", () => {
+  test("should create new tab sessions directly in a chat editor", () => {
+    const integration = new CopilotChatIntegration(
+      {} as vscode.ExtensionContext,
+      false
+    );
+    const originalGetChatWindowLocation =
+      ConfigurationUtils.getChatWindowLocation;
+
+    try {
+      (ConfigurationUtils as any).getChatWindowLocation = () => "newTab";
+
+      assert.strictEqual(
+        (integration as any).getChatCommand("new"),
+        "workbench.action.chatEditor.newChat"
+      );
+      assert.strictEqual(
+        (integration as any).getChatCommand("focus"),
+        "workbench.action.chat.openInEditor"
+      );
+    } finally {
+      (ConfigurationUtils as any).getChatWindowLocation =
+        originalGetChatWindowLocation;
+      integration.dispose();
+    }
+  });
+
   test("should read finalStep prior context from the workflow callback", async () => {
     const integration = new CopilotChatIntegration(
       {} as vscode.ExtensionContext,
