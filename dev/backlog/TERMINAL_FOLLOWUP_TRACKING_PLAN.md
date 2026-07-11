@@ -2,9 +2,10 @@
 
 ## Why this is now a priority
 
-Every interactive harness ctrlyoke drives (Claude, Copilot, Codex, Qwen, Antigravity,
-OpenCode) has converged on the same behavior: **"I'll run this task in the background and
-wait for it to finish"** as the first move of a long workflow. The harness kicks off the
+Several interactive harnesses ctrlyoke drives (Claude, Copilot, Antigravity) have converged on
+the same behavior: **"I'll run this task in the background and
+wait for it to finish"** as the first move of a long workflow. (Codex, Qwen, and OpenCode do
+**not** background-and-auto-resume; see the signal investigation.) The harness kicks off the
 background task, ends its top-level turn, and **fires the Stop hook**. ctrlyoke treats that
 Stop as the end of the prompt, marks the step completed, tears down the per-prompt monitor,
 and stops tailing the log. When the background task finishes, the harness **auto-resumes the
@@ -200,10 +201,56 @@ notification" (structured completion is guaranteed for terminating commands).
 Verify markers against a fresh log when Copilot bumps CLI versions (see the 1.0.x
 event-drop caveats in `harness-cli-providers.instructions.md`).
 
-### Codex / Qwen / Antigravity / OpenCode — TODO
+### Antigravity CLI — CONFIRMED ✅
 
-Investigate on demand as each is observed to background-and-wait. Any harness without a clean
-marker stays Layer-1-only (capture, no gating).
+Investigated the brain session `~/.gemini/antigravity-cli/brain/a5393a1f-…` (backgrounded a
+`Start-Sleep -Seconds 60` task and waited) against a clean session (`16f07ab0-…`, "just say
+hi"). Antigravity's markers are structured, but the key twist is **where they live**:
+
+- **The markers live in the transcript, not the tailed cli log.** Launch/completion markers are
+  transcript entries (`<brain>/<sessionId>/.system_generated/logs/transcript_full.jsonl`),
+  **not** the `~/.gemini/antigravity-cli/log/cli-*.log` that `AntigravityLogParser` tails live.
+  The cli log is the Go server log — it carries the ctrlyoke hook invocations (the
+  `jsonhook__…_Stop_0_0` line is the Stop) but **none** of the task markers. So Antigravity's
+  `hasPendingBackgroundWork()` must read the **transcript**, keyed by session id
+  (`AntigravityLogParser` already resolves it via `getTranscriptPath(sessionId)`), not the cli
+  log. The launch marker is flushed to the transcript before the Stop hook fires (launch entry
+  at 14:36:10, Stop hook at 14:36:12).
+- **Stop fires on the pause:** the cli log shows exactly one `…_Stop_0_0` hook right after the
+  "I will now end my turn and wait for the task to complete" response, then a resume
+  `streamGenerateContent` ~60s later when the task finished. Same root cause — the Stop hook
+  can't tell a pause from a real end.
+- **Launch marker:** transcript entry `source: "MODEL"`, `type: "RUN_COMMAND"`,
+  `status: "RUNNING"` whose `content` contains
+  `Tool is running as a background task with task id: <sessionId>/task-N`. Correlation key = the
+  full **`<sessionId>/task-N`** id. Note the RUN_COMMAND entry **stays `RUNNING`** in the
+  transcript even after the task finishes — do **not** wait for it to flip to `DONE`; key off
+  the completion message below.
+- **Completion / resume marker:** transcript entry `source: "SYSTEM"`, `type: "SYSTEM_MESSAGE"`
+  whose `content` carries `sender=<sessionId>/task-N … content=Task id "<sessionId>/task-N"
+  finished with result:`. This wakes Antigravity, which **self-resumes** (next
+  `MODEL`/`PLANNER_RESPONSE` — e.g. "task completed" — plus a fresh `streamGenerateContent`) →
+  gate-able. Match on `finished with result` + the sender task-id so success and failure both
+  count as completion.
+- **Rule (Copilot-style, not Claude-style): at a Stop, is any RUN_COMMAND background task-id
+  still without a matching completion `SYSTEM_MESSAGE`?** yes → hold, no → commit. Each
+  background task gets a monotonic `task-N` id and (for any terminating command) a completion
+  message, so — like Copilot's shellId — "any pending task-id" is safe; only a never-terminating
+  task (dev server) stays pending, which is exactly the backstop case. (Sample had a single
+  background task; if a superseded-never-notified "zombie" ever surfaces, fall back to Claude's
+  most-recent-launch rule.)
+- **User-steer exemption is free:** the completion notification is a `SYSTEM` `SYSTEM_MESSAGE`,
+  while a genuine human steer is `source: "USER_EXPLICIT"`, `type: "USER_INPUT"` — so the resume
+  signal is naturally exempt from the user-steer filter (like Copilot's `system.notification`,
+  unlike Claude's `user`-typed `<task-notification>`).
+
+### Codex, Qwen & OpenCode — no background-wait (Layer-1-only)
+
+Confirmed these three **do not** support the background-task → end-turn →
+auto-resume-on-completion pattern, so the primary background-wait scenario **does not apply** and
+they need **no Layer-2 signal**. They still get the universal Layer-1 session watcher — purely to
+capture genuine user steers typed into the live TUI (and any post-completion output) — but there
+is nothing to gate.
 
 ---
 
@@ -308,8 +355,10 @@ separate future feature that would need worktree isolation, not a retry side eff
 
 ## Implementation phases
 
-**Phase 0 — signal investigation.** Claude ✅ and Copilot ✅ confirmed (above). Codex / Qwen /
-Antigravity / OpenCode on demand. Each harness that lacks a clean marker stays Layer-1-only.
+**Phase 0 — signal investigation.** Claude ✅, Copilot ✅, and Antigravity ✅ confirmed (above).
+Codex, Qwen, and OpenCode confirmed to **not** background-and-resume (Layer-1-only, no gating).
+Signal investigation is complete for every harness. Each harness that lacks a clean marker stays
+Layer-1-only.
 
 **Phase 1 — shared tail/stream loop.** Extract the event-processing core of `CliLogMonitor`
 into a unit shared by `CliLogMonitor` and `SessionActivityWatcher`. Add **user-steer event
@@ -351,5 +400,6 @@ inject → normal dispatched prompt.
 2. Layer-1 mid-workflow attribution: folding resumed step-N output into step N+1's monitor —
    acceptable long-term, or must the watcher own the log even with a next prompt queued?
 3. Always-on for live interactive sessions, or gated by a setting?
-4. Remaining harness signals (Codex / Qwen / Antigravity / OpenCode) — investigate on demand;
-   any without a clean marker stay Layer-1-only. (Claude ✅ and Copilot ✅ confirmed.)
+4. Harness signals — **all investigated, none left open.** Claude ✅, Copilot ✅, Antigravity ✅
+   gate-able for Layer 2; Codex, Qwen, and OpenCode confirmed to not background-and-resume
+   (Layer-1-only, no gating).
