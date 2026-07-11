@@ -60,7 +60,7 @@ function wrapDiff(label: string, diff: string): string {
 }
 
 export function extractTextFromEvents(
-  output: UniversalCliOutput,
+  output: Pick<UniversalCliOutput, "events">,
   options: ResponseTextExtractionOptions = {}
 ): string {
   const includeFullDiffs =

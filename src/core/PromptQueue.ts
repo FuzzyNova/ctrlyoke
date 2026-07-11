@@ -834,6 +834,36 @@ export class PromptQueue {
   }
 
   /**
+   * Append follow-up text to a queue step's stored `responseText`.
+   *
+   * Used by `SessionActivityWatcher` attribution: when a harness auto-resumes a
+   * backgrounded task after the step's own dispatch already committed its
+   * response, the resumed output must be folded into the same `_runtime.responseText`
+   * so priorContext injection and output copy include it (not just the pre-resume
+   * portion). Concatenates directly — mirroring how `extractTextFromEvents` joins
+   * text parts within a single response — so the merged value reads as one response.
+   *
+   * @param promptIndex 0-based prompt index
+   * @param additionalText Extracted text from the resumed follow-up events
+   */
+  async appendPromptResponseText(
+    promptIndex: number,
+    additionalText: string
+  ): Promise<void> {
+    if (!additionalText) {
+      return;
+    }
+    const prompt = this.state.steps[promptIndex];
+    if (!prompt) {
+      return;
+    }
+    const existing = prompt._runtime?.responseText ?? "";
+    await this.persistRuntimeMetadata(promptIndex, {
+      responseText: existing + additionalText,
+    });
+  }
+
+  /**
    * Reload and merge queue from working file (for Dynamic Queue feature)
    * This method reads the working file, identifies new prompts, and appends them
    * @param parser PromptFileParser instance (no longer needed, kept for compatibility)
@@ -1328,6 +1358,27 @@ export class PromptQueue {
     responseTexts[loopIndex] = text;
     this.finalStepRuntime = { ...this.finalStepRuntime, responseTexts };
     await this.updateWorkingFile();
+  }
+
+  /**
+   * Append follow-up text to a finalStep loop's stored response text.
+   *
+   * finalStep counterpart to `appendPromptResponseText` — folds resumed
+   * `SessionActivityWatcher` output into the same `responseTexts[loopIndex]` slot
+   * so `finalStepAll` / `finalStepPrevious` priorContext and output copy include it.
+   *
+   * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
+   * @param additionalText Extracted text from the resumed follow-up events
+   */
+  public async appendFinalStepResponseText(
+    loopIndex: number,
+    additionalText: string
+  ): Promise<void> {
+    if (!additionalText || !this.finalStepRuntime) {
+      return;
+    }
+    const existing = this.finalStepRuntime.responseTexts?.[loopIndex] ?? "";
+    await this.storeFinalStepResponseText(loopIndex, existing + additionalText);
   }
 
   /**

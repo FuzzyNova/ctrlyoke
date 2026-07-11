@@ -8,11 +8,13 @@ import {
   shortenPath,
   formatTimeHMS,
   extractKeyParameters,
+  extractCliOutputText,
   generateDiffLines,
   normalizeStructuredPatch,
   isStructuredPatchMalformed,
   countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
+import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
@@ -39,6 +41,66 @@ describe("shortenPath", () => {
   it("does not shorten if only 2 path segments", () => {
     const path = "parent/file.ts"; // 14 chars, less than default 50
     expect(shortenPath(path, 10)).toBe(path); // can't shorten a 2-segment path
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// extractCliOutputText
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("extractCliOutputText", () => {
+  it("returns the plain response when there is no follow-up", () => {
+    expect(
+      extractCliOutputText({ response: "hello", isStreaming: false } as any)
+    ).toBe("hello");
+  });
+
+  it("appends post-divider follow-up TEXT to the response so copy includes resumed output", () => {
+    const output = {
+      response: "before.",
+      isStreaming: false,
+      structured: {
+        events: [
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: "before." } },
+          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: {} },
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: " and after." } },
+        ],
+        metadata: {},
+      },
+    };
+    expect(extractCliOutputText(output as any)).toBe("before. and after.");
+  });
+
+  it("ignores non-TEXT follow-up events (e.g. user steers) when appending", () => {
+    const output = {
+      response: "before.",
+      isStreaming: false,
+      structured: {
+        events: [
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: "before." } },
+          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: {} },
+          { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "do this next" } },
+        ],
+        metadata: {},
+      },
+    };
+    expect(extractCliOutputText(output as any)).toBe("before.");
+  });
+
+  it("falls back to structured TEXT (already including follow-up) when response is empty", () => {
+    const output = {
+      response: "",
+      isStreaming: false,
+      structured: {
+        events: [
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: "base" } },
+          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: {} },
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: "+resumed" } },
+        ],
+        metadata: {},
+      },
+    };
+    expect(extractCliOutputText(output as any)).toBe("base+resumed");
   });
 });
 

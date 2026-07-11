@@ -1,7 +1,55 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { SHELL_KINDS } from "../../types/DashboardConstants";
-import { resolveShellKind } from "../../core/harness/PtyProcessManager";
+import {
+  PtyProcessManager,
+  resolveShellKind,
+  type PtyDimensionsPersistence,
+} from "../../core/harness/PtyProcessManager";
+
+suite("PtyProcessManager spawn dimensions", () => {
+  test("defaults to 220x50 when no size has been persisted or observed", () => {
+    const manager = new PtyProcessManager();
+    assert.deepStrictEqual(manager.getSpawnDimensions(), {
+      cols: 220,
+      rows: 50,
+    });
+  });
+
+  test("applies a persisted controller size as the spawn size", () => {
+    const persistence: PtyDimensionsPersistence = {
+      loadDimensions: () => ({ cols: 56, rows: 29 }),
+      saveDimensions: () => {},
+    };
+    const manager = new PtyProcessManager();
+    manager.setDimensionsPersistence(persistence);
+    assert.deepStrictEqual(manager.getSpawnDimensions(), {
+      cols: 56,
+      rows: 29,
+    });
+  });
+
+  test("ignores absent or non-positive persisted dimensions", () => {
+    const manager = new PtyProcessManager();
+    manager.setDimensionsPersistence({
+      loadDimensions: () => undefined,
+      saveDimensions: () => {},
+    });
+    assert.deepStrictEqual(manager.getSpawnDimensions(), {
+      cols: 220,
+      rows: 50,
+    });
+
+    manager.setDimensionsPersistence({
+      loadDimensions: () => ({ cols: 0, rows: 0 }),
+      saveDimensions: () => {},
+    });
+    assert.deepStrictEqual(manager.getSpawnDimensions(), {
+      cols: 220,
+      rows: 50,
+    });
+  });
+});
 
 suite("PtyProcessManager", () => {
   test("should classify common shell executables", () => {

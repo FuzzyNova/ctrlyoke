@@ -87,6 +87,7 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
+import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -2092,6 +2093,41 @@ export class WorkflowInstance {
       );
     }
 
+    // CONTEXT_WINDOW_SYNC is an invisible marker (see CliIntegration.
+    // resumeSessionActivityWatcher) — pull its data out for the tokens/footer
+    // refresh below rather than merging it into the visible event stream.
+    const contentEvents = events.filter(
+      (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
+    );
+
+    // Fold the resumed output into the step's persisted `responseText` so
+    // priorContext injection references the full response, not just the pre-resume
+    // portion. (Output copy is fixed separately in the UI's extractCliOutputText,
+    // which reads the merged structured events, not this field.) Independent of the
+    // history persistence below — a step can be referenced via priorContext even
+    // when history capture is unavailable.
+    const followUpText = extractTextFromEvents({ events: contentEvents });
+    if (followUpText) {
+      try {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          await this.promptQueue.appendPromptResponseText(
+            target.stepIndex,
+            followUpText
+          );
+        } else {
+          await this.promptQueue.appendFinalStepResponseText(
+            target.loopIndex,
+            followUpText
+          );
+        }
+      } catch (error) {
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to append resumed activity to responseText:`,
+          error
+        );
+      }
+    }
+
     const historyFilePath = this.activeHistoryFilePath;
     if (!historyFilePath) {
       return;
@@ -2111,12 +2147,6 @@ export class WorkflowInstance {
         return;
       }
 
-      // CONTEXT_WINDOW_SYNC is an invisible marker (see CliIntegration.
-      // resumeSessionActivityWatcher) — pull its data out for the tokens/footer
-      // refresh below rather than merging it into the visible event stream.
-      const contentEvents = events.filter(
-        (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
-      );
       const latestContextWindowSync = [...events]
         .reverse()
         .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)

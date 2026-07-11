@@ -423,6 +423,16 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
               );
               const cols = fitResult?.cols ?? entry.term.cols;
               const rows = fitResult?.rows ?? entry.term.rows;
+              // Correlates with PtyProcessManager.resizeSession's PTY-side log:
+              // this is the width xterm actually rendered to at the moment we tell
+              // the harness. If the harness first-render wrapped wrong, compare this
+              // cols against the PTY's spawn width (DEFAULT_COLS) and the elapsed ms.
+              WebviewLog.debug(
+                `[TerminalInstance] controller → TERMINAL_RESIZE wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+                  `container=${container.offsetWidth}x${container.offsetHeight}px ` +
+                  `proposed=${fitResult?.proposedCols ?? "none"}x${fitResult?.proposedRows ?? "none"} ` +
+                  `xtermRendered=${entry.term.cols}x${entry.term.rows} sending=${cols}x${rows}`
+              );
               sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
                 workflowId,
                 sessionId,

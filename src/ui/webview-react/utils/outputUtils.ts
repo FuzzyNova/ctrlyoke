@@ -95,15 +95,38 @@ export function buildDiffAnchorPrefix(
  * Extracts the plain-text response from a CLI output — checks `response`
  * first, then falls back to concatenating TEXT events from structured output.
  * Returns undefined when there is no text content.
+ *
+ * Post-completion follow-up activity (a harness auto-resuming a backgrounded
+ * task — see `mergeResumedActivityIntoOutput` / `handleSessionActivityResumed`)
+ * only ever lands in `structured.events`, appended after a `FOLLOW_UP_RESUMED`
+ * divider; the persisted `response` field is never updated. So when a divider is
+ * present, fold the follow-up TEXT back onto `response` — otherwise copy would
+ * silently drop everything the AI produced after resuming.
  */
 export function extractCliOutputText(
   output: CliOutputType
 ): string | undefined {
+  const events = output.structured?.events;
+  const dividerIndex = events
+    ? events.findIndex((e) => e.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED)
+    : -1;
+  const followUpText =
+    dividerIndex >= 0
+      ? events!
+          .slice(dividerIndex + 1)
+          .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
+          .map((e) => (e.data as TextData).text)
+          .filter(Boolean)
+          .join("")
+      : "";
+
   if (typeof output.response === "string" && output.response.trim()) {
-    return output.response;
+    return output.response + followUpText;
   }
-  if (output.structured?.events?.length) {
-    const parts = output.structured.events
+  // Fallback path already includes follow-up TEXT (all TEXT events, both before
+  // and after the divider), so no separate follow-up append is needed here.
+  if (events?.length) {
+    const parts = events
       .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
       .map((e) => (e.data as TextData).text)
       .filter(Boolean);

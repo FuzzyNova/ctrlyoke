@@ -444,6 +444,89 @@ suite("WorkflowInstance session activity forwarding", () => {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }
   });
+
+  test("appends resumed assistant text to the step's stored responseText (priorContext/copy source)", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "queue-1" }] });
+    (instance.promptQueue as any).state.steps[0]._runtime = {
+      startedAt: Date.now(),
+      responseText: "before.",
+    };
+    (instance as any).lastCompletedActivityTarget = {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+    };
+
+    // A backgrounded task auto-resuming produces genuine assistant TEXT events —
+    // these must be folded into responseText so priorContext/copy see the full
+    // response. (A USER_STEER, by contrast, is not assistant output and is not
+    // appended — covered by the history-merge test above.)
+    await (instance as any).handleSessionActivityResumed([
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: " and after." },
+      },
+    ]);
+
+    assert.strictEqual(
+      (instance.promptQueue as any).state.steps[0]._runtime.responseText,
+      "before. and after."
+    );
+  });
+
+  test("appends resumed assistant text to the finalStep loop responseText", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "queue-1" }],
+      finalStep: { prompt: "final-loop" },
+    });
+    await instance.promptQueue.setFinalStepRuntime({
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: 0,
+      status: STEP_STATUS.RUNNING,
+      startedAt: Date.now(),
+    });
+    await instance.promptQueue.storeFinalStepResponseText(0, "loop-before.");
+    (instance as any).lastCompletedActivityTarget = {
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+    };
+
+    await (instance as any).handleSessionActivityResumed([
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: " loop-after." },
+      },
+    ]);
+
+    assert.deepStrictEqual(instance.promptQueue.getFinalStepResponseTexts(), [
+      "loop-before. loop-after.",
+    ]);
+  });
 });
 
 suite("WorkflowInstance runtime transitions", () => {
