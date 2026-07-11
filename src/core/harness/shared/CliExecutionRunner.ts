@@ -644,7 +644,8 @@ export class CliExecutionRunner {
       logPath,
       params.sessionId,
       params.startTime,
-      session.resolvedProperties?.model ?? ""
+      session.resolvedProperties?.model ?? "",
+      session.promptArgument
     );
 
     if (result.parsedOutput) {

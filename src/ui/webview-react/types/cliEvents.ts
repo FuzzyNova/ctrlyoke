@@ -38,6 +38,7 @@ export {
   type McpToolCallData,
   type WebSearchData,
   type CompactionData,
+  type UserSteerData,
   type UnifiedDiffHunk,
   type UniversalCliOutput,
 

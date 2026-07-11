@@ -17,6 +17,29 @@ export interface BaseCliEvent {
 }
 
 /**
+ * How a single `user`-role log event should be treated when tailing a session.
+ *
+ * Most harnesses' resume/completion markers are never `user`-typed events (Copilot's
+ * `system.notification`, Antigravity's `SYSTEM` `SYSTEM_MESSAGE`), so this classification
+ * only matters for harnesses whose log uses a `user` role for multiple distinct purposes
+ * (Claude: tool results, injected prompts, resume signals, and genuine human follow-ups
+ * all arrive as `user` events).
+ *
+ * - `"tool-result"` — not a prompt at all (tool_result content block).
+ * - `"injected-prompt"` — ctrlyoke's own dispatched prompt echoed back in the log.
+ * - `"resume-signal"` — a harness-internal wake-up message (e.g. Claude's
+ *   `<task-notification>`), not something a human typed.
+ * - `"human-steer"` — genuine human text typed directly into the live TUI.
+ * - `"other"` — none of the above (default for harnesses with no ambiguity).
+ */
+export type UserEventClassification =
+  | "tool-result"
+  | "injected-prompt"
+  | "resume-signal"
+  | "human-steer"
+  | "other";
+
+/**
  * Interface for CLI harness log parsers
  *
  * Defines the contract for parsing harness-specific log files to extract
@@ -333,4 +356,60 @@ export interface ILogParser {
    * Stored as the fallback model when log events do not embed the model name.
    */
   setCurrentModel?(model: string): void;
+
+  /**
+   * Extract a log entry's timestamp, for filtering entries older than a run's start time.
+   *
+   * @param entry - Parsed log entry
+   * @returns Entry timestamp, or null if not found
+   */
+  extractTimestamp?(entry: BaseCliEvent): Date | null;
+
+  /**
+   * Classify a single log event to decide whether it represents genuine human input
+   * typed into the live TUI (a "user steer"), as opposed to a tool result, ctrlyoke's
+   * own injected prompt being echoed back, or a harness-internal resume signal.
+   *
+   * Called by `CliLogEventPump` for every event as it streams in. The default
+   * (`BaseLogParser`) always returns `"other"` — safe for harnesses whose resume/
+   * completion signal is never a `user`-typed event.
+   *
+   * @param event - Single parsed log event
+   * @param ctx.dispatchedPromptText - The prompt text ctrlyoke just sent, when a
+   *   prompt is actively being dispatched (undefined when tailing outside an active
+   *   dispatch, e.g. `SessionActivityWatcher` after a step has already completed).
+   * @returns The event's classification
+   */
+  classifyUserEvent?(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification;
+
+  /**
+   * Incrementally update background-task tracking state from a single log event.
+   * Called by `CliLogEventPump` for every event as it streams in (both the
+   * per-prompt `CliLogMonitor` and the longer-lived `SessionActivityWatcher`
+   * call through the same pump), so state is current by the time either asks
+   * `hasPendingBackgroundWork()`.
+   *
+   * Default (`BaseLogParser`) is a no-op. Harnesses confirmed to background a
+   * task and auto-resume the same session (Claude, Copilot, Antigravity)
+   * override this to track their own launch/completion markers — see each
+   * harness's implementation for its specific rule.
+   *
+   * @param event - Single parsed log event
+   */
+  trackBackgroundWorkState?(event: BaseCliEvent): void;
+
+  /**
+   * Is a background task still pending as of the most recently tracked event?
+   *
+   * Used to gate `WorkflowExecutor` control-flow commitment (end-condition
+   * eval / advance / finalize) at a Stop: when true, the harness is expected
+   * to auto-resume the same session, so committing now would prematurely
+   * treat an in-progress step as done. Default (`BaseLogParser`) always
+   * returns false — harnesses with no confirmed background-resume signal
+   * stay gate-free (today's zero-latency behavior, unchanged).
+   */
+  hasPendingBackgroundWork?(): boolean;
 }

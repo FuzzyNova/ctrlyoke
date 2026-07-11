@@ -47,13 +47,23 @@ export type CliEventData =
   | FileDeleteData
   | McpToolCallData
   | WebSearchData
-  | CompactionData;
+  | CompactionData
+  | UserSteerData;
 
 /**
  * Data for a text event (AI response text).
  */
 export interface TextData {
   /** The text content */
+  text: string;
+}
+
+/**
+ * Data for a user-steer event — genuine human text typed directly into a live TUI,
+ * mid-step or after a step/workflow has already completed. Display-only.
+ */
+export interface UserSteerData {
+  /** The text the human typed */
   text: string;
 }
 

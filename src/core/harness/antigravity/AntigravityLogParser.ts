@@ -284,6 +284,91 @@ export class AntigravityLogParser
     return parts.join(" | ");
   }
 
+  /**
+   * Antigravy's background-task markers live in the **transcript**
+   * (`getTranscriptPath`), not the tailed cli log that
+   * `trackBackgroundWorkState(event)` would otherwise see — so unlike
+   * Claude/Copilot this reads the transcript directly on demand instead of
+   * tracking incremental cli-log state. See
+   * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Antigravity CLI — CONFIRMED".
+   *
+   * Rule: pending iff any `RUN_COMMAND` background-task launch (`Tool is
+   * running as a background task with task id: <sessionId>/task-N`) lacks a
+   * matching completion `SYSTEM_MESSAGE` (`Task id "<sessionId>/task-N"
+   * finished with result:`). Safe as "any launched, not just most-recent" —
+   * each background task gets its own monotonic task-N id and (for any
+   * terminating command) its own completion message, so there is no
+   * superseded/"zombie" case observed in the investigated sample. If one
+   * ever surfaces, fall back to Claude's most-recent-launch rule instead.
+   */
+  override hasPendingBackgroundWork(): boolean {
+    const sessionId =
+      this.cachedSessionId ?? this.cachedLastConversationsSessionId;
+    if (!sessionId) {
+      return false;
+    }
+    return (
+      this.hasPendingTaskInTranscript(this.getTranscriptPath(sessionId, true)) ||
+      this.hasPendingTaskInTranscript(this.getTranscriptPath(sessionId, false))
+    );
+  }
+
+  private hasPendingTaskInTranscript(transcriptPath: string): boolean {
+    try {
+      if (!fs.existsSync(transcriptPath)) {
+        return false;
+      }
+
+      const launchedTaskIds = new Set<string>();
+      const finishedTaskIds = new Set<string>();
+      const content = fs.readFileSync(transcriptPath, "utf8");
+
+      for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) {
+          continue;
+        }
+
+        let entry: AntigravityTranscriptEntry;
+        try {
+          entry = JSON.parse(line) as AntigravityTranscriptEntry;
+        } catch {
+          continue;
+        }
+        if (typeof entry.content !== "string") {
+          continue;
+        }
+
+        if (entry.source === "MODEL" && entry.type === "RUN_COMMAND") {
+          const match = entry.content.match(
+            /background task with task id:\s*(\S+?)[.\s]*$/m
+          );
+          if (match) {
+            launchedTaskIds.add(match[1]);
+          }
+        }
+
+        if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
+          const match = entry.content.match(
+            /Task id "([^"]+)" finished with result/
+          );
+          if (match) {
+            finishedTaskIds.add(match[1]);
+          }
+        }
+      }
+
+      for (const taskId of launchedTaskIds) {
+        if (!finishedTaskIds.has(taskId)) {
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   async readSessionIdFromLastConversations(
     workspaceRoot: string
   ): Promise<string | undefined> {

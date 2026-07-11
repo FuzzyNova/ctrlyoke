@@ -566,6 +566,55 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   /**
+   * shellId → still-pending async shells launched via `tool.execution_complete`
+   * with `data.toolTelemetry.properties.executionMode === "async"`. Cleared by
+   * a matching `system.notification` with `data.kind.type ===
+   * "shell_completed" | "shell_failed"`. Unlike Claude, "any pending shellId"
+   * is safe here — every terminating command emits a completion notification,
+   * so there is no superseded/"zombie" case to guard against (see
+   * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Copilot CLI — CONFIRMED").
+   */
+  private pendingAsyncShellIds = new Set<string>();
+
+  override trackBackgroundWorkState(event: BaseCliEvent): void {
+    const e = event as CopilotProviderEvent;
+
+    if (e.type === "tool.execution_complete" && e.data) {
+      const executionMode = e.data.toolTelemetry?.properties?.executionMode;
+      if (executionMode === "async") {
+        const shellId = this.extractShellId(e.data.result?.content);
+        if (shellId) {
+          this.pendingAsyncShellIds.add(shellId);
+        }
+      }
+      return;
+    }
+
+    if (e.type === "system.notification" && e.data?.kind) {
+      const kind = e.data.kind;
+      if (
+        (kind.type === "shell_completed" || kind.type === "shell_failed") &&
+        kind.shellId !== undefined
+      ) {
+        this.pendingAsyncShellIds.delete(String(kind.shellId));
+      }
+    }
+  }
+
+  override hasPendingBackgroundWork(): boolean {
+    return this.pendingAsyncShellIds.size > 0;
+  }
+
+  /** Extracts the shellId from a launch ack like `"<command started in background with shellId: 0>"`. */
+  private extractShellId(content: unknown): string | undefined {
+    if (typeof content !== "string") {
+      return undefined;
+    }
+    const match = content.match(/shellId:\s*(\S+?)>/);
+    return match ? match[1] : undefined;
+  }
+
+  /**
    * Discover session log file for a prompt
    *
    * Searches `~/.copilot/session-state/` for the log file corresponding to

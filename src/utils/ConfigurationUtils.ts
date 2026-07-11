@@ -478,6 +478,20 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Idle-based backstop (ms) for a Layer-2 signal-gated completion hold
+   * (see `CliLogMonitor`'s background-work hold and
+   * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`). A hold releases early
+   * whenever the harness confirms genuine idle; this bound only protects
+   * against a background task that never reports completion (an abandoned
+   * task, a long-lived dev server). Fixed default for now, not a user
+   * setting — the hold is rare enough in practice that surfacing it in
+   * settings would be premature.
+   */
+  getBackgroundWorkIdleBackstopMs(): number {
+    return 10 * 60 * 1000; // 10 minutes
+  },
+
+  /**
    * Check if all paths should be allowed for Copilot CLI
    */
   shouldAllowAllPaths(): boolean {

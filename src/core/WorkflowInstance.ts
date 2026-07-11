@@ -69,6 +69,7 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
+  OrderedCliHistoryEntry,
   OutputExecutionTarget,
   UndoExecutionTarget,
 } from "../types/OutputHistoryTypes";
@@ -169,6 +170,18 @@ export class WorkflowInstance {
 
   /** Manages all output capture Maps and replay logic for background workflows. */
   private readonly outputCaptureBuffer: OutputCaptureBuffer;
+
+  /**
+   * Target/attempt of the most recently completed step's CliOutput — set every
+   * time `captureCompletedOutput`/`captureFinalStepCompletedOutput` fires.
+   * `SessionActivityWatcher`'s resumed activity has no target of its own (it
+   * fires outside any active dispatch), so it is attributed here instead.
+   */
+  private lastCompletedActivityTarget?: {
+    target: OutputExecutionTarget;
+    runIndex: number;
+    attemptIndex: number;
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -2032,6 +2045,85 @@ export class WorkflowInstance {
       : `final:${target.loopIndex}`;
   }
 
+  /**
+   * Handle activity observed by `SessionActivityWatcher` after a step's own
+   * dispatch already completed — a harness auto-resuming a backgrounded task,
+   * or a human typing directly into the live TUI. Display-only: forwards to
+   * the live dashboard immediately, then merges into the already-persisted
+   * history entry for the most recently completed step/attempt. Never touches
+   * workflow/queue state.
+   */
+  private async handleSessionActivityResumed(
+    events: CliEvent[]
+  ): Promise<void> {
+    if (events.length === 0) {
+      return;
+    }
+    const activityTarget = this.lastCompletedActivityTarget;
+    if (!activityTarget) {
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] Session activity resumed with no known step target — dropping`
+      );
+      return;
+    }
+    const { target, runIndex, attemptIndex } = activityTarget;
+
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.dashboardSink?.updateCliStreamingEvents(
+        target.stepIndex,
+        events,
+        attemptIndex,
+        runIndex,
+        this.id
+      );
+    } else {
+      this.dashboardSink?.updateFinalStepStreamingEvents(
+        target.loopIndex,
+        events,
+        attemptIndex,
+        runIndex,
+        this.id
+      );
+    }
+
+    const historyFilePath = this.activeHistoryFilePath;
+    if (!historyFilePath) {
+      return;
+    }
+    try {
+      const history =
+        await this.outputHistoryManager.loadHistory(historyFilePath);
+      const targetKey = this.getExecutionTargetRunKey(target);
+      const existing = history.orderedEntries.find(
+        (entry): entry is OrderedCliHistoryEntry =>
+          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          (entry.runIndex ?? 0) === runIndex &&
+          entry.attemptIndex === attemptIndex &&
+          this.getExecutionTargetRunKey(entry.target) === targetKey
+      );
+      if (!existing) {
+        return;
+      }
+      const merged: CliOutput = {
+        ...existing.cliOutput,
+        structured: existing.cliOutput.structured
+          ? {
+              ...existing.cliOutput.structured,
+              events: [...existing.cliOutput.structured.events, ...events],
+            }
+          : undefined,
+      };
+      await this.outputHistoryManager.saveExecutionOutput(historyFilePath, target, [
+        merged,
+      ]);
+    } catch (error) {
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity to history:`,
+        error
+      );
+    }
+  }
+
   private async computeTargetRunIndices(
     historyFilePath: string,
     options: {
@@ -2195,6 +2287,11 @@ export class WorkflowInstance {
       },
       captureCompletedOutput: (stepIndex, output) => {
         this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
+        this.lastCompletedActivityTarget = {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+          runIndex: output.runIndex ?? 0,
+          attemptIndex: output.attemptIndex ?? 0,
+        };
       },
       captureFinalStepOutputInit: (
         loopIndex,
@@ -2233,6 +2330,11 @@ export class WorkflowInstance {
           loopIndex,
           output
         );
+        this.lastCompletedActivityTarget = {
+          target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+          runIndex: output.runIndex ?? 0,
+          attemptIndex: output.attemptIndex ?? 0,
+        };
       },
       onFinalStepStatusMessage: (loopIndex, message, severity) => {
         this.outputCaptureBuffer.onFinalStepStatusMessage(
@@ -2545,6 +2647,9 @@ export class WorkflowInstance {
           execIntegration.onPtySessionEnded(() => {
             this.liveInjectIntegrations.delete(harnessKey);
             execIntegration.dispose();
+          });
+          execIntegration.onSessionActivityResumed((payload) => {
+            void this.handleSessionActivityResumed(payload.events);
           });
         } else {
           // Normal path: terminal closed or inject mode not active — dispose now

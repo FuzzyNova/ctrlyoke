@@ -34,6 +34,7 @@ import {
   type CliExecutionSessionSnapshot,
 } from "./shared/CliExecutionSession";
 import { CliExecutionRunner } from "./shared/CliExecutionRunner";
+import { SessionActivityWatcher } from "./SessionActivityWatcher";
 import { CliInteractiveStartupCoordinator } from "./shared/CliInteractiveStartupCoordinator";
 import { CliPromptPreparer } from "./shared/CliPromptPreparer";
 import { CliPromptRuntimeCoordinator } from "./shared/CliPromptRuntimeCoordinator";
@@ -133,6 +134,10 @@ export class CliIntegration extends HarnessIntegration {
 
   /** One-shot callback registered by WorkflowInstance to dispose this integration when the PTY exits. */
   private ptySessionEndedCallback?: () => void;
+
+  /** Layer 1 safety net: tails the live session log after a prompt's CliLogMonitor
+   *  resolves, so resumed background-task output and human TUI steers aren't lost. */
+  private sessionActivityWatcher?: SessionActivityWatcher;
 
   /** PTY session intentionally killed for a mode handoff; its exit is not a step failure. */
   private suppressPtyExitSessionId?: string;
@@ -543,6 +548,43 @@ export class CliIntegration extends HarnessIntegration {
     this.responseCompleteEmitter.fire(response);
   }
 
+  private emitSessionActivityResumed(events: CliEvent[]): void {
+    this.sessionActivityResumedEmitter.fire({ events });
+  }
+
+  /**
+   * Start (or resume) the Layer 1 session-activity watcher after an interactive
+   * prompt has finished and the PTY is still alive. Reuses the same `ILogParser`
+   * instance the prompt's `CliLogMonitor` just used, so no read-offset hand-off
+   * is needed — see `SessionActivityWatcher` for the one-reader rationale.
+   */
+  private resumeSessionActivityWatcher(model: string): void {
+    if (this.getExecutionMode() !== CLI_EXECUTION_MODE.INTERACTIVE) {
+      return;
+    }
+    if (!this.transportCoordinator.hasLivePtySession()) {
+      return;
+    }
+    const ctx = this.executionRunner.getLastInteractiveContext();
+    if (!ctx) {
+      return;
+    }
+
+    if (this.sessionActivityWatcher) {
+      this.sessionActivityWatcher.resume();
+      return;
+    }
+
+    this.sessionActivityWatcher = new SessionActivityWatcher({
+      parser: this.provider.logParser!,
+      model,
+      onResumedEvents: (events) => this.emitSessionActivityResumed(events),
+      onContextWindowUpdate: (used, size) =>
+        this.emitContextWindowUpdate(used, size),
+    });
+    this.sessionActivityWatcher.start(ctx.logPath);
+  }
+
   private handleBeforeInteractiveStart(
     _workflowContext?: WorkflowContext
   ): void {}
@@ -568,6 +610,9 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private handlePtyExit(session: PtySession, exitCode: number): void {
+    this.sessionActivityWatcher?.stop();
+    this.sessionActivityWatcher = undefined;
+
     if (this.suppressPtyExitSessionId === session.id) {
       this.suppressPtyExitSessionId = undefined;
       Log.info(
@@ -1440,6 +1485,8 @@ export class CliIntegration extends HarnessIntegration {
    */
   dispose(): void {
     super.dispose();
+    this.sessionActivityWatcher?.stop();
+    this.sessionActivityWatcher = undefined;
     this.transportCoordinator.dispose(
       ConfigurationUtils.shouldCloseTerminalWhenPromptCompletes()
     );
@@ -1569,6 +1616,9 @@ export class CliIntegration extends HarnessIntegration {
     workflowContext?: WorkflowContext
   ): Promise<boolean> {
     let executionSession: CliExecutionSession | undefined;
+    // One-reader rule: the watcher must not read the log while this prompt's own
+    // CliLogMonitor owns it — see SessionActivityWatcher for the rationale.
+    this.sessionActivityWatcher?.pause();
 
     try {
       this.resetCancellationFlag();
@@ -1608,6 +1658,9 @@ export class CliIntegration extends HarnessIntegration {
     } finally {
       if (executionSession) {
         this.applyExecutionSession(executionSession);
+        this.resumeSessionActivityWatcher(
+          executionSession.resolvedProperties?.model ?? ""
+        );
       }
       this.activeSession = undefined;
     }

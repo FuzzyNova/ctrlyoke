@@ -9,6 +9,7 @@ import type { FailureKind } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";
+import { CliLogEventPump } from "./shared/CliLogEventPump";
 import type { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "./shared/interfaces/INotificationMonitor";
 
@@ -117,11 +118,19 @@ export class CliLogMonitor {
     logPath: string,
     sessionId: string | null,
     startTime: Date,
-    model: string
+    model: string,
+    dispatchedPromptText?: string
   ): Promise<LogMonitorResult> {
     const parser = this.deps.logParser;
     parser.setCurrentModel?.(model);
     const events: BaseCliEvent[] = [];
+    const pump = new CliLogEventPump({
+      parser,
+      model,
+      onStreamingEvents: this.deps.hostCallbacks.onStreamingEvents,
+      onContextWindowUpdate: this.deps.hostCallbacks.onContextWindowUpdate,
+      dispatchedPromptText,
+    });
     // undefined means unlimited (-1 setting) — no timeout will be set
     const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
 
@@ -139,6 +148,10 @@ export class CliLogMonitor {
         timedOut?: boolean;
         sessionIdOverride?: string;
       }) => {
+        // Marks the monitor settled so a background-work hold in progress
+        // (see runBackgroundWorkHold) sees it on its next poll and releases
+        // instead of racing this resolve() with its own later one.
+        completed = true;
         if (cancellationInterval) {
           clearInterval(cancellationInterval);
         }
@@ -193,18 +206,13 @@ export class CliLogMonitor {
 
       // Delegate timestamp extraction to BaseLogParser via the parser instance
       const getEntryTimestamp = (entry: BaseCliEvent): Date | null =>
-        (parser as any).extractTimestamp?.(entry) ?? null;
+        parser.extractTimestamp?.(entry) ?? null;
 
       // ──────────────────────────────────────────────────────
-      // Completion handler — single source of truth
+      // Completion finalization — single source of truth once genuinely done
       // ──────────────────────────────────────────────────────
-      const handleCompletion = async (source: string) => {
-        if (completed) {
-          return;
-        }
+      const finalizeCompletion = async () => {
         completed = true;
-
-        Log.info(`✅ Completion detected via ${source}`);
 
         // Drain any remaining log entries before final extraction (race-safe for fast prompts)
         await drainLogEvents();
@@ -322,26 +330,153 @@ export class CliLogMonitor {
       };
 
       // ──────────────────────────────────────────────────────
+      // Background-work hold (Layer 2 signal-gated completion) — see
+      // ILogParser.hasPendingBackgroundWork. Keeps the log watcher and
+      // notification monitor active past the first Stop and re-checks at
+      // each subsequent Stop, so control flow never commits while the
+      // harness is expected to auto-resume the same session. The still-active
+      // log watcher (never closed during a hold) keeps trackBackgroundWorkState
+      // current and keeps streaming resumed output live the whole time — no
+      // separate "optimistic done" signal is needed. Bounded by an idle
+      // backstop so a background task that never reports completion (an
+      // abandoned task, a long-lived dev server) can't hold a workflow forever.
+      // ──────────────────────────────────────────────────────
+      let holdingForBackgroundWork = false;
+
+      const runBackgroundWorkHold = async (): Promise<void> => {
+        holdingForBackgroundWork = true;
+        Log.info(
+          "⏸️ Background task still pending — holding completion until the harness auto-resumes and truly finishes"
+        );
+
+        const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+        const backstopMs = ConfigurationUtils.getBackgroundWorkIdleBackstopMs();
+        const holdStarted = Date.now();
+
+        while (!completed && parser.hasPendingBackgroundWork!()) {
+          if (!this.deps.notificationMonitor || !workspaceRoot) {
+            // No hook to wait on for a re-check — shouldn't happen for a gated
+            // harness (they all have notification monitors), but release
+            // rather than hold forever with nothing to wait for.
+            break;
+          }
+
+          const remaining = backstopMs - (Date.now() - holdStarted);
+          if (remaining <= 0) {
+            Log.warn(
+              `⏱️ Background-work hold backstop (${backstopMs}ms) elapsed with no confirmed idle — committing anyway`
+            );
+            break;
+          }
+
+          const notifyDir =
+            this.deps.notificationMonitor.getNotificationDirectory(
+              workspaceRoot
+            );
+          const monitoringSessionId = this.deps.notificationMonitor
+            .supportsSessionIdInFilename
+            ? (sessionId ?? undefined)
+            : undefined;
+
+          const result =
+            await this.deps.notificationMonitor.monitorForCompletion(
+              { directory: notifyDir, timeoutMs: remaining, pollMs: 100 },
+              monitoringSessionId,
+              new Date(),
+              () =>
+                this.deps.runtimeState.isCancelling() ||
+                !!this.deps.runtimeState.isPtyTerminated?.() ||
+                completed
+            );
+
+          if (
+            this.deps.notificationMonitor.cleanupNotificationFiles &&
+            sessionId
+          ) {
+            await this.deps.notificationMonitor.cleanupNotificationFiles(
+              sessionId,
+              notifyDir
+            );
+          }
+
+          if (!result.completed) {
+            // Timed out, cancelled, or errored mid-hold. Do not loop forever —
+            // release so the normal cancellation/timeout/exit paths (already
+            // in flight if that's what triggered this) or the finalize below
+            // can settle the monitor.
+            break;
+          }
+
+          // Catch up before re-checking, same rationale as handleCompletion's
+          // catch-up read — closes the race between the Stop file appearing
+          // and the still-active fs.watch callback processing the log content
+          // that precedes it.
+          try {
+            const catchUpEntries = await pump.readNewEntriesSince(
+              logPath,
+              startTime
+            );
+            for (const entry of catchUpEntries) {
+              processEvent(entry, "background-work hold (catch-up)");
+            }
+          } catch (error) {
+            Log.debug(
+              `⚠️ Catch-up read during background-work hold failed: ${error}`
+            );
+          }
+          // Loop again — the while condition re-checks hasPendingBackgroundWork().
+        }
+
+        holdingForBackgroundWork = false;
+        if (!completed) {
+          await finalizeCompletion();
+        }
+      };
+
+      // ──────────────────────────────────────────────────────
+      // Completion handler — entry point for both log-based and hook-based
+      // signals. Finalizes immediately unless the harness reports a pending
+      // background task, in which case it hands off to the hold above.
+      // ──────────────────────────────────────────────────────
+      const handleCompletion = async (source: string) => {
+        if (completed || holdingForBackgroundWork) {
+          return;
+        }
+
+        Log.info(`✅ Completion detected via ${source}`);
+
+        // Catch up on any log content written just before this signal arrived,
+        // so hasPendingBackgroundWork() below reflects the latest launch/notify
+        // state (a lightweight one-off read, distinct from the one-shot
+        // drainLogEvents() below that finalizeCompletion still owns).
+        try {
+          const catchUpEntries = await pump.readNewEntriesSince(
+            logPath,
+            startTime
+          );
+          for (const entry of catchUpEntries) {
+            processEvent(entry, `${source} (catch-up)`);
+          }
+        } catch (error) {
+          Log.debug(
+            `⚠️ Catch-up read before completion check failed: ${error}`
+          );
+        }
+
+        if (parser.hasPendingBackgroundWork?.()) {
+          void runBackgroundWorkHold();
+          return;
+        }
+
+        await finalizeCompletion();
+      };
+
+      // ──────────────────────────────────────────────────────
       // Event processor — pushes events and streams content
       // ──────────────────────────────────────────────────────
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
-
-        const streamingEvents = parser.extractStructuredEventsFromEvent(event);
-        if (streamingEvents.length > 0) {
-          this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
-        }
-
-        // Extract live context window data if available
-        if (
-          this.deps.hostCallbacks.onContextWindowUpdate &&
-          parser.extractLiveContextWindow
-        ) {
-          const ctx = parser.extractLiveContextWindow(event, model);
-          if (ctx) {
-            this.deps.hostCallbacks.onContextWindowUpdate(ctx.used, ctx.size);
-          }
-        }
+        pump.processEvent(event);
 
         // Check completion via log file — only for harnesses without a notification monitor.
         // When a notification monitor (Stop hook) is active, the hook is authoritative.
@@ -368,7 +503,10 @@ export class CliLogMonitor {
 
         const deadline = Date.now() + CliLogMonitor.DRAIN_DEADLINE_MS;
         while (Date.now() < deadline) {
-          const newEntries = await parser.readNewLines(logPath);
+          const newEntries = await pump.readNewEntriesSince(
+            logPath,
+            startTime
+          );
           if (newEntries.length === 0) {
             await new Promise((r) =>
               setTimeout(r, CliLogMonitor.DRAIN_POLL_INTERVAL_MS)
@@ -377,10 +515,6 @@ export class CliLogMonitor {
           }
 
           for (const entry of newEntries) {
-            const entryTime = getEntryTimestamp(entry);
-            if (entryTime && entryTime < startTime) {
-              continue;
-            }
             processEvent(entry, "log file (drain)");
           }
         }
@@ -389,21 +523,16 @@ export class CliLogMonitor {
       // ──────────────────────────────────────────────────────
       // Start log file watcher for streaming content
       // ──────────────────────────────────────────────────────
-      watcher = parser.watchLogFile(
-        logPath,
-        (event) => {
-          processEvent(event, "log file");
-        },
-        startTime
-      );
+      watcher = pump.watch(logPath, startTime, (event) => {
+        processEvent(event, "log file");
+      });
 
       try {
-        const initialEntries = await parser.readNewLines(logPath);
+        const initialEntries = await pump.readNewEntriesSince(
+          logPath,
+          startTime
+        );
         for (const entry of initialEntries) {
-          const entryTime = getEntryTimestamp(entry);
-          if (entryTime && entryTime < startTime) {
-            continue;
-          }
           processEvent(entry, "log file (initial)");
         }
       } catch (error) {
@@ -540,6 +669,8 @@ export class CliLogMonitor {
 
         if (this.deps.runtimeState.isCancelling()) {
           Log.info("⏹️ Log monitoring cancelled by user");
+          // Same as resolveFailure — unblocks a background-work hold in progress.
+          completed = true;
           if (cancellationInterval) {
             clearInterval(cancellationInterval);
           }
@@ -551,12 +682,11 @@ export class CliLogMonitor {
           // stopped step shows what the AI had produced up to cancellation.
           void (async () => {
             try {
-              const newEntries = await parser.readNewLines(logPath);
+              const newEntries = await pump.readNewEntriesSince(
+                logPath,
+                startTime
+              );
               for (const entry of newEntries) {
-                const entryTime = getEntryTimestamp(entry);
-                if (entryTime && entryTime < startTime) {
-                  continue;
-                }
                 events.push(entry);
               }
             } catch {

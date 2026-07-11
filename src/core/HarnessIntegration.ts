@@ -230,6 +230,19 @@ export abstract class HarnessIntegration {
     new TypedEmitter<CtrlYokeNotificationEvent>();
   public readonly onNotificationEvent = this.notificationEventEmitter.event;
 
+  /**
+   * Event emitter for session activity observed *after* a prompt's per-prompt
+   * monitor has already resolved — a harness auto-resuming a backgrounded task,
+   * or a human typing directly into the live TUI. Fired by `SessionActivityWatcher`
+   * (via `CliIntegration`); no-op source for non-PTY harnesses. Display-only:
+   * consumers append to existing output/history, never mutate workflow state.
+   */
+  protected sessionActivityResumedEmitter = new TypedEmitter<{
+    events: CliEvent[];
+  }>();
+  public readonly onSessionActivityResumed =
+    this.sessionActivityResumedEmitter.event;
+
   constructor(
     context: SubscriptionContainer | undefined,
     registerWithContext: boolean = true
@@ -247,6 +260,7 @@ export abstract class HarnessIntegration {
       context.subscriptions.push(this.contextWindowUpdateEmitter);
       context.subscriptions.push(this.promptReadyEmitter);
       context.subscriptions.push(this.notificationEventEmitter);
+      context.subscriptions.push(this.sessionActivityResumedEmitter);
     }
   }
 
@@ -263,6 +277,7 @@ export abstract class HarnessIntegration {
     this.contextWindowUpdateEmitter.dispose();
     this.promptReadyEmitter.dispose();
     this.notificationEventEmitter.dispose();
+    this.sessionActivityResumedEmitter.dispose();
   }
 
   /**

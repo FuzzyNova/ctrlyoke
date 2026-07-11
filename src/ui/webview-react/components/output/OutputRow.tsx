@@ -32,6 +32,7 @@ import type {
   ThinkingBlock,
   ToolCall,
   ToolResultData,
+  UserSteerData,
   WebSearchData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, HARNESS_INFO } from "../../types/messages";
@@ -251,6 +252,28 @@ const ThinkingOutput: React.FC<{
   );
 };
 
+const UserSteerOutput: React.FC<{
+  text: string;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
+  highlightActiveIndex?: number;
+}> = ({ text, findQuery, findCaseSensitive, highlightActiveIndex }) => (
+  <div className="my-2">
+    <div className="text-[length:var(--fp-output-font-size-xs)] text-indicator-info mb-1">
+      ● Typed into terminal
+    </div>
+    <div className="text-editor-fg pl-3 border-l border-indicator-info/50 whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <MarkdownText
+        highlightQuery={findQuery}
+        highlightCaseSensitive={findCaseSensitive}
+        highlightActiveIndex={highlightActiveIndex}
+      >
+        {text}
+      </MarkdownText>
+    </div>
+  </div>
+);
+
 const ToolResultOutput: React.FC<{
   result: { success: boolean; output?: string; error?: string };
   content?: React.ReactNode;
@@ -443,6 +466,18 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <ThinkingOutput
             text={data.text}
             label={data.label}
+            findQuery={findQuery}
+            findCaseSensitive={findCaseSensitive}
+            highlightActiveIndex={getActiveMatchIndex("response")}
+          />
+        );
+      }
+      case CLI_EVENT_TYPES.USER_STEER: {
+        const data = event.data as UserSteerData;
+        if (!data.text) return null;
+        return (
+          <UserSteerOutput
+            text={data.text}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}

@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  ILogParser,
+  UserEventClassification,
+} from "./interfaces/ILogParser";
 import {
   CliEvent,
   TextData,
@@ -196,6 +200,34 @@ export abstract class BaseLogParser implements ILogParser {
     _modelId: string
   ): { used: number; size: number } | null {
     return null;
+  }
+
+  /**
+   * Default no-op implementation — every event is `"other"`.
+   * Harnesses whose log uses a `user` role for multiple distinct purposes
+   * (tool results, injected prompts, resume signals, genuine human follow-ups)
+   * should override this. See `UserEventClassification` for details.
+   */
+  classifyUserEvent(
+    _event: BaseCliEvent,
+    _ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    return "other";
+  }
+
+  /**
+   * Default no-op — most harnesses have no background-task auto-resume signal
+   * to track. Overridden by Claude/Copilot/Antigravity parsers.
+   */
+  trackBackgroundWorkState(_event: BaseCliEvent): void {
+    // no-op by default
+  }
+
+  /**
+   * Default: never pending — see `trackBackgroundWorkState`.
+   */
+  hasPendingBackgroundWork(): boolean {
+    return false;
   }
 
   /**
@@ -602,7 +634,7 @@ export abstract class BaseLogParser implements ILogParser {
    *
    * Harnesses can override to handle their specific format.
    */
-  protected extractTimestamp(entry: BaseCliEvent): Date | null {
+  extractTimestamp(entry: BaseCliEvent): Date | null {
     // Check common timestamp fields
     if (entry.timestamp) {
       return new Date(entry.timestamp);

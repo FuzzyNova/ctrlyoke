@@ -2,7 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { BaseCliEvent, ILogParser } from "../shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  ILogParser,
+  UserEventClassification,
+} from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
@@ -91,6 +95,15 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
   /** Maps tool_use id → tool name for associating streaming tool results with their calls. */
   private pendingStreamingToolUses = new Map<string, string>();
+
+  /**
+   * The `tool_use` id of the most recent `run_in_background: true` Bash launch
+   * that has not yet been notified, or undefined when no background task is
+   * pending. "Most recent" (not "any outstanding") is deliberate: a newer
+   * launch always displaces an older, superseded one that will never be
+   * notified — see `hasPendingBackgroundWork` for the empirical rationale.
+   */
+  private mostRecentBackgroundLaunchId?: string;
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -411,6 +424,106 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return used > 0 && size ? { used, size } : null;
     }
     return null;
+  }
+
+  /**
+   * Classify a `user` log event per the four-way rule (see `UserEventClassification`):
+   * Claude's log uses the `user` role for tool results, ctrlyoke's own injected
+   * prompts echoed back, its own `<task-notification>` resume signal, and genuine
+   * human follow-ups typed into the live TUI — only the last is a "user steer".
+   *
+   * Non-`user` events and events with no text content are always `"other"`.
+   */
+  override classifyUserEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    const e = event as ClaudeProviderEvent;
+    if (e.type !== "user" || !Array.isArray(e.message?.content)) {
+      return "other";
+    }
+
+    const blocks = e.message.content as Array<Record<string, any>>;
+    if (blocks.some((block) => block.type === "tool_result")) {
+      return "tool-result";
+    }
+
+    const text = blocks
+      .filter((block) => block.type === "text" && typeof block.text === "string")
+      .map((block) => block.text as string)
+      .join("")
+      .trim();
+
+    if (!text) {
+      return "other";
+    }
+
+    if (text.includes("<task-notification>")) {
+      return "resume-signal";
+    }
+
+    if (ctx.dispatchedPromptText) {
+      const normalizedDispatched = this.normalizePromptForMatching(
+        ctx.dispatchedPromptText.substring(0, 100)
+      );
+      const normalizedLogged = this.normalizePromptForMatching(
+        text.substring(0, 100)
+      );
+      if (normalizedDispatched === normalizedLogged) {
+        return "injected-prompt";
+      }
+    }
+
+    return "human-steer";
+  }
+
+  /**
+   * Track background-task launch/notification markers per the empirically
+   * confirmed rule (see `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
+   * "Claude Code — CONFIRMED"):
+   * - **Launch:** an `assistant` `tool_use` block, `name: "Bash"`,
+   *   `input.run_in_background === true`. Its id becomes the new
+   *   "most recent" launch, superseding any prior one (a superseded launch
+   *   is a "zombie" that will never be notified — see class doc).
+   * - **Notification:** a `user` event whose content contains
+   *   `<task-notification>…<tool-use-id>{id}</tool-use-id>…`. Clears the
+   *   tracked id only when it matches the most-recent launch.
+   */
+  override trackBackgroundWorkState(event: BaseCliEvent): void {
+    const e = event as ClaudeProviderEvent;
+
+    if (e.type === "assistant" && Array.isArray(e.message?.content)) {
+      for (const block of e.message.content as Array<Record<string, any>>) {
+        if (
+          block.type === "tool_use" &&
+          block.name === "Bash" &&
+          block.input?.run_in_background === true &&
+          typeof block.id === "string"
+        ) {
+          this.mostRecentBackgroundLaunchId = block.id;
+        }
+      }
+      return;
+    }
+
+    if (
+      this.mostRecentBackgroundLaunchId &&
+      e.type === "user" &&
+      Array.isArray(e.message?.content)
+    ) {
+      const text = (e.message.content as Array<Record<string, any>>)
+        .filter((block) => block.type === "text" && typeof block.text === "string")
+        .map((block) => block.text as string)
+        .join("");
+      const match = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
+      if (match && match[1] === this.mostRecentBackgroundLaunchId) {
+        this.mostRecentBackgroundLaunchId = undefined;
+      }
+    }
+  }
+
+  override hasPendingBackgroundWork(): boolean {
+    return this.mostRecentBackgroundLaunchId !== undefined;
   }
 
   /**

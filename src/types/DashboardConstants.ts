@@ -1147,6 +1147,10 @@ export const CLI_EVENT_TYPES = {
 
   /** Conversation compaction checkpoint — shown when the AI auto-compacts the context window */
   COMPACTION: "compaction",
+
+  /** Genuine human text typed directly into a live TUI, mid-step or after completion.
+   *  Display-only — never changes workflow/queue state. See UserEventClassification. */
+  USER_STEER: "userSteer",
 } as const;
 
 /**
