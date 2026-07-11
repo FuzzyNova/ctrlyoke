@@ -105,10 +105,12 @@ suite("Antigravity MCP", () => {
   suite("tracker writes .agents/mcp_config.json", () => {
     let tmpDir: string;
     let configPath: string;
+    let gitignorePath: string;
 
     setup(async () => {
       tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "agy-mcp-test-"));
       configPath = path.join(tmpDir, ".agents", "mcp_config.json");
+      gitignorePath = path.join(tmpDir, ".agents", ".gitignore");
       SettingsJsonMcpTracker.resetAll();
     });
 
@@ -144,6 +146,83 @@ suite("Antigravity MCP", () => {
       });
       await tracker.unregisterWorkflow("wf-1", tmpDir);
       await assert.rejects(fs.access(configPath), /ENOENT/);
+      await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+    });
+
+    test("creates a self-ignoring .gitignore for a fresh config", async () => {
+      const tracker = agyTracker();
+      await tracker.registerServers("wf-1", tmpDir, {
+        ctrlyoke: { command: "node", args: ["server.js"] },
+      });
+
+      const content = await fs.readFile(gitignorePath, "utf-8");
+      assert.strictEqual(
+        content,
+        [
+          "# ctrlyoke temp files (auto-managed, do not commit)",
+          "mcp_config.json",
+          ".gitignore",
+          "",
+        ].join("\n")
+      );
+    });
+
+    test("preserves a user-owned .gitignore", async () => {
+      const userGitignore = "# user rules\n*.log\n";
+      await fs.mkdir(path.dirname(gitignorePath), { recursive: true });
+      await fs.writeFile(gitignorePath, userGitignore, "utf-8");
+
+      const tracker = agyTracker();
+      await tracker.registerServers("wf-1", tmpDir, {
+        ctrlyoke: { command: "node", args: ["server.js"] },
+      });
+      await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+      assert.strictEqual(
+        await fs.readFile(gitignorePath, "utf-8"),
+        userGitignore
+      );
+    });
+
+    test("removes a server registered by each step of the same workflow", async () => {
+      const tracker = agyTracker();
+      const servers = {
+        ctrlyoke: { command: "node", args: ["server.js"] },
+      };
+
+      await tracker.registerServers("wf-1", tmpDir, servers);
+      await tracker.registerServers("wf-1", tmpDir, servers);
+      await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+      await assert.rejects(fs.access(configPath), /ENOENT/);
+    });
+
+    test("preserves existing MCP servers while removing ctrlyoke's server", async () => {
+      const userConfig = {
+        mcpServers: {
+          existing: { command: "node", args: ["existing-server.js"] },
+        },
+      };
+      await fs.mkdir(path.dirname(configPath), { recursive: true });
+      await fs.writeFile(configPath, JSON.stringify(userConfig), "utf-8");
+
+      const tracker = agyTracker();
+      await tracker.registerServers("wf-1", tmpDir, {
+        ctrlyoke: { command: "node", args: ["server.js"] },
+      });
+
+      const merged = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      assert.deepStrictEqual(merged, {
+        mcpServers: {
+          ...userConfig.mcpServers,
+          ctrlyoke: { command: "node", args: ["server.js"] },
+        },
+      });
+
+      await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+      const restored = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      assert.deepStrictEqual(restored, userConfig);
     });
   });
 });

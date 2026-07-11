@@ -138,6 +138,9 @@ export class SettingsJsonMcpTracker {
   /** Whether the project settings.json originally had an mcpServers property. */
   private baselineProjectHadMcpServers = false;
 
+  /** Path to the temporary .gitignore written for a newly-created config file. */
+  private gitignorePath: string | undefined;
+
   /** Reference count per ctrlyoke-managed server name. */
   private refCounts = new Map<string, number>();
 
@@ -238,7 +241,7 @@ export class SettingsJsonMcpTracker {
   /**
    * Register MCP servers for a workflow and merge them into settings.json.
    *
-   * - Increments ref counts for each server.
+   * - Increments ref counts only when this workflow first registers a server.
    * - Only writes new entries to settings.json (skips existing ones).
    * - Tracks which servers belong to this workflow for cleanup.
    *
@@ -259,14 +262,22 @@ export class SettingsJsonMcpTracker {
       return [];
     }
 
-    // Track per-workflow
+    // A provider builds CLI args once per prompt, so a multi-step workflow can
+    // register the same MCP server repeatedly. Count each server at most once
+    // per workflow; cleanup likewise unregisters each workflow/server pair
+    // once. Without this, a completed multi-step workflow leaves stale MCP
+    // entries behind because its ref count is incremented per step but
+    // decremented only once during workflow cleanup.
     const existing = this.workflowServers.get(workflowKey) ?? [];
+    const newServerNames = serverNames.filter(
+      (name) => !existing.includes(name)
+    );
     this.workflowServers.set(workflowKey, [
       ...new Set([...existing, ...serverNames]),
     ]);
 
-    // Increment ref counts
-    for (const name of serverNames) {
+    // Increment ref counts only for newly associated workflow/server pairs.
+    for (const name of newServerNames) {
       this.refCounts.set(name, (this.refCounts.get(name) ?? 0) + 1);
     }
 
@@ -305,6 +316,10 @@ export class SettingsJsonMcpTracker {
         Log.debug(
           `🔧 ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
         );
+
+        if (!this.baselineProjectSettingsFileExisted) {
+          await this.writeGitignore(settingsPath);
+        }
       } else {
         Log.debug(
           `♻️ ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
@@ -401,6 +416,56 @@ export class SettingsJsonMcpTracker {
       } finally {
         this.mutex.release();
       }
+    }
+
+    if (this.refCounts.size === 0 && !this.baselineProjectSettingsFileExisted) {
+      await this.deleteCtrlYokeGitignore();
+    }
+  }
+
+  /**
+   * Hide a config file created by ctrlyoke from Git while it is needed by an
+   * active workflow. The file ignores itself as well, and user-owned
+   * .gitignore files are never modified.
+   */
+  private async writeGitignore(settingsPath: string): Promise<void> {
+    if (this.gitignorePath) {
+      return;
+    }
+
+    const gitignorePath = path.join(path.dirname(settingsPath), ".gitignore");
+    try {
+      await fs.access(gitignorePath);
+      return;
+    } catch {
+      // File doesn't exist — write a temporary ctrlyoke-owned one.
+    }
+
+    const content = [
+      "# ctrlyoke temp files (auto-managed, do not commit)",
+      path.basename(settingsPath),
+      ".gitignore",
+      "",
+    ].join("\n");
+    await fs.writeFile(gitignorePath, content, "utf-8").catch(() => {});
+    this.gitignorePath = gitignorePath;
+  }
+
+  /** Delete the temporary .gitignore only when it still has ctrlyoke's marker. */
+  private async deleteCtrlYokeGitignore(): Promise<void> {
+    const gitignorePath = this.gitignorePath;
+    this.gitignorePath = undefined;
+    if (!gitignorePath) {
+      return;
+    }
+
+    try {
+      const content = await fs.readFile(gitignorePath, "utf-8");
+      if (content.startsWith("# ctrlyoke temp files")) {
+        await fs.unlink(gitignorePath).catch(() => {});
+      }
+    } catch {
+      // File doesn't exist or is unreadable — nothing to clean up.
     }
   }
 
