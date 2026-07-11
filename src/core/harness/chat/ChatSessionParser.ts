@@ -17,6 +17,20 @@ import {
 import { Log } from "../../../utils/Log";
 
 /**
+ * Mirrors VS Code's internal ResponseModelState enum
+ * (src/vs/workbench/contrib/chat/common/chatService/chatService.ts).
+ * Exported so ChatSessionMonitor can key off the same terminal-state values
+ * instead of re-deriving them from result.errorDetails text.
+ */
+export const RESPONSE_MODEL_STATE = {
+  PENDING: 0,
+  COMPLETE: 1,
+  CANCELLED: 2,
+  FAILED: 3,
+  NEEDS_INPUT: 4,
+} as const;
+
+/**
  * Chat session file structure (top-level)
  */
 export interface ChatSessionFile {
@@ -35,6 +49,17 @@ export interface ChatRequest {
   message: { text: string };
   response: ChatResponseItem[];
   modelId: string;
+  /**
+   * VS Code's authoritative completion/cancellation signal (added when chat
+   * sessions moved to the append-log format). Mirrors the internal
+   * ResponseModelState enum: Pending=0, Complete=1, Cancelled=2, Failed=3,
+   * NeedsInput=4. Older flat `.json` sessions won't have this — fall back to
+   * `result.timings.totalElapsed` for those.
+   */
+  modelState?: {
+    value: number;
+    completedAt?: number;
+  };
   result: {
     timings: { totalElapsed: number; firstProgress?: number };
     metadata?: {
@@ -111,14 +136,23 @@ export class ChatSessionParser {
    * Parse a session file in either JSON (.json) or JSONL (.jsonl) format.
    *
    * JSONL format (VS Code switched ~Feb 2026) is a delta/patch log:
-   *   kind 0  — base snapshot: {"kind":0,"v":{...session without result/response...}}
-   *   kind 1  — set:    {"kind":1,"k":["requests",0,"result"],"v":{...}}
-   *   kind 2  — append: {"kind":2,"k":["requests",0,"response"],"v":[...items...],"i":N}
+   *   kind 0  — initial snapshot: {"kind":0,"v":{...full session state...}}
+   *   kind 1  — set:    {"kind":1,"k":["requests",0,"modelState"],"v":{...}}
+   *   kind 2  — push:   {"kind":2,"k":["requests",0,"response"],"v":[...items...],"i":N}
+   *   kind 3  — delete: {"kind":3,"k":["requests",0,"followups"]}
    *
    * All lines are replayed in order to reconstruct the full session state.
-   */
-  /**
-   * Parse a session file in either JSON (.json) or JSONL (.jsonl) format.
+   *
+   * IMPORTANT: the log is not guaranteed to start with a kind:0 entry. VS
+   * Code trims persisted sessions (ChatSessionStore.trimEntries, cap 50) by
+   * deleting a session's backing file, but a still-live in-memory ChatModel
+   * keeps its diff serializer's baseline. If that model writes again, it has
+   * no on-disk state to diff against and recreates the file starting directly
+   * with Set/Push entries — a real, otherwise-valid (often complete) session
+   * with no Initial line. Treating that as unparseable silently drops
+   * completed responses, so replay always starts from an empty base state
+   * instead of requiring line 0 to be kind 0.
+   *
    * Static so ChatSessionMonitor can reuse without duplicating JSONL logic.
    */
   static parseSessionFile(filePath: string): ChatSessionFile | null {
@@ -138,32 +172,41 @@ export class ChatSessionParser {
     if (!lines.length) {
       return null;
     }
-    const first = JSON.parse(lines[0]) as { kind: number; v: any };
-    if (first.kind !== 0 || !first.v) {
-      return null;
-    }
-    const state: any = first.v;
-    if (!state.requests) {
-      state.requests = [];
-    }
-    for (const req of state.requests) {
-      if (!req.response) {
-        req.response = [];
-      }
-    }
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) {
+
+    // Default base state — used as-is when the log doesn't start with a
+    // kind:0 Initial entry (see method doc comment above).
+    let state: any = { requests: [] };
+
+    for (const line of lines) {
+      let patch: {
+        kind: number;
+        k?: (string | number)[];
+        v?: any;
+        i?: number;
+      };
+      try {
+        patch = JSON.parse(line);
+      } catch {
         continue;
       }
-      const patch = JSON.parse(lines[i]) as {
-        kind: number;
-        k: (string | number)[];
-        v: any;
-      };
-      if (patch.kind === 1) {
+
+      if (patch.kind === 0) {
+        state = patch.v ?? state;
+        if (!state.requests) {
+          state.requests = [];
+        }
+      } else if (patch.kind === 1 && patch.k) {
         ChatSessionParser.jsonlSetAtPath(state, patch.k, patch.v);
-      } else if (patch.kind === 2) {
-        ChatSessionParser.jsonlAppendAtPath(state, patch.k, patch.v);
+      } else if (patch.kind === 2 && patch.k) {
+        ChatSessionParser.jsonlAppendAtPath(state, patch.k, patch.v, patch.i);
+      } else if (patch.kind === 3 && patch.k) {
+        ChatSessionParser.jsonlDeleteAtPath(state, patch.k);
+      }
+    }
+
+    for (const req of state.requests ?? []) {
+      if (!req.response) {
+        req.response = [];
       }
     }
 
@@ -196,12 +239,18 @@ export class ChatSessionParser {
     current[keyPath[keyPath.length - 1]] = value;
   }
 
+  /**
+   * Applies a "push" patch: appends items to an array, and/or truncates it
+   * first when `startIndex` is set (VS Code emits a truncation-only push,
+   * with no `items`, when an array shrinks — e.g. `{"kind":2,"k":[...],"i":N}`).
+   */
   private static jsonlAppendAtPath(
     obj: any,
     keyPath: (string | number)[],
-    items: unknown[]
+    items: unknown[] | undefined,
+    startIndex?: number
   ): void {
-    if (!keyPath?.length || !Array.isArray(items)) {
+    if (!keyPath?.length) {
       return;
     }
     let current: any = obj;
@@ -211,7 +260,13 @@ export class ChatSessionParser {
         if (!Array.isArray(current[key])) {
           current[key] = [];
         }
-        current[key].push(...items);
+        const arr = current[key];
+        if (startIndex !== undefined) {
+          arr.length = startIndex;
+        }
+        if (Array.isArray(items) && items.length > 0) {
+          arr.push(...items);
+        }
       } else {
         if (current[key] == null) {
           current[key] = typeof keyPath[i + 1] === "number" ? [] : {};
@@ -219,6 +274,25 @@ export class ChatSessionParser {
         current = current[key];
       }
     }
+  }
+
+  /** Applies a "delete" patch: removes a property at the given path. */
+  private static jsonlDeleteAtPath(
+    obj: any,
+    keyPath: (string | number)[]
+  ): void {
+    if (!keyPath?.length) {
+      return;
+    }
+    let current: any = obj;
+    for (let i = 0; i < keyPath.length - 1; i++) {
+      const key = keyPath[i];
+      if (current[key] == null) {
+        return;
+      }
+      current = current[key];
+    }
+    delete current[keyPath[keyPath.length - 1]];
   }
 
   /**
@@ -639,6 +713,18 @@ export class ChatSessionParser {
         requestIndex === -1 ? session.requests.length - 1 : requestIndex;
       const request = session.requests[actualIndex];
 
+      // modelState is authoritative when present (Complete/Cancelled/Failed
+      // are all terminal states — see ChatRequest.modelState doc comment).
+      // Older flat .json sessions predate modelState, so fall back to the
+      // legacy totalElapsed heuristic for those.
+      if (request?.modelState) {
+        return (
+          request.modelState.value === RESPONSE_MODEL_STATE.COMPLETE ||
+          request.modelState.value === RESPONSE_MODEL_STATE.CANCELLED ||
+          request.modelState.value === RESPONSE_MODEL_STATE.FAILED
+        );
+      }
+
       return request?.result?.timings?.totalElapsed > 0;
     } catch (error) {
       Log.warn(
@@ -659,6 +745,31 @@ export class ChatSessionParser {
     } catch {
       return 0;
     }
+  }
+
+  /**
+   * True when a request ended its turn while its most recent tool-call round
+   * launched an async background task (e.g. `run_in_terminal` with
+   * `mode: "async"`). VS Code will auto-resume the session with a new
+   * `isSystemInitiated: true` request once that task finishes, so a
+   * terminal `modelState` here does not mean the turn is truly done —
+   * callers should keep watching the session file instead of committing.
+   * See dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md.
+   */
+  static hasPendingBackgroundWork(request: ChatRequest): boolean {
+    const rounds = request.result?.metadata?.toolCallRounds;
+    if (!rounds?.length) {
+      return false;
+    }
+    const lastRound = rounds[rounds.length - 1];
+    return lastRound.toolCalls.some((toolCall) => {
+      try {
+        const args = JSON.parse(toolCall.arguments || "{}");
+        return args?.mode === "async";
+      } catch {
+        return false;
+      }
+    });
   }
 
   /**

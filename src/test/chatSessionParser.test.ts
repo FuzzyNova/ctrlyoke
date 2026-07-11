@@ -2,7 +2,10 @@ import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { ChatSessionParser } from "../core/harness/chat/ChatSessionParser";
+import {
+  ChatSessionParser,
+  RESPONSE_MODEL_STATE,
+} from "../core/harness/chat/ChatSessionParser";
 import { CLI_EVENT_TYPES } from "../types/DashboardConstants";
 
 suite("ChatSessionParser Tests", () => {
@@ -478,6 +481,376 @@ suite("ChatSessionParser Tests", () => {
 
       const output = parser.extractResponse(sessionFile);
       assert.strictEqual(output.metadata.model, "gpt-5");
+    });
+  });
+
+  suite("JSONL replay", () => {
+    /** Writes raw patch-log lines (each already an object) as a .jsonl session file. */
+    function createMockJsonlFile(sessionId: string, patches: any[]): string {
+      const filePath = path.join(tempDir, `${sessionId}.jsonl`);
+      fs.writeFileSync(
+        filePath,
+        patches.map((p) => JSON.stringify(p)).join("\n") + "\n"
+      );
+      return filePath;
+    }
+
+    test("should replay a well-formed log starting with a kind:0 Initial entry", () => {
+      const sessionFile = createMockJsonlFile("test-jsonl-basic", [
+        { kind: 0, v: { version: 3, sessionId: "test-jsonl-basic", requests: [] } },
+        {
+          kind: 2,
+          k: ["requests"],
+          v: [
+            {
+              requestId: "req-1",
+              message: { text: "Hello" },
+              response: [{ value: "Hi there!" }],
+              modelId: "copilot/claude-sonnet-4.5",
+              result: { timings: { totalElapsed: 1000 } },
+            },
+          ],
+        },
+      ]);
+
+      const output = parser.extractResponse(sessionFile);
+
+      assert.strictEqual(output.events.length, 1);
+      assert.deepStrictEqual(output.events[0].data, { text: "Hi there!" });
+    });
+
+    test("should replay a log missing its Initial entry (session trimmed out from under a live ChatModel)", () => {
+      // Real-world case: VS Code's session trimming deletes the backing file
+      // while an in-memory ChatModel still holds a diff baseline, so the next
+      // write recreates the file starting directly with Set/Push entries and
+      // no kind:0 line. This must still parse instead of returning null.
+      const sessionFile = createMockJsonlFile("test-jsonl-no-initial", [
+        { kind: 1, k: ["customTitle"], v: "Follow instructions in prompt file" },
+        {
+          kind: 2,
+          k: ["requests"],
+          v: [
+            {
+              requestId: "req-1",
+              message: {
+                text: "Follow instructions in background-test-1.prompt.md",
+              },
+              response: [{ value: "Done." }],
+              modelId: "copilot/claude-sonnet-4.5",
+              modelState: { value: RESPONSE_MODEL_STATE.COMPLETE },
+              result: { timings: { totalElapsed: 500 } },
+            },
+          ],
+        },
+      ]);
+
+      const session = ChatSessionParser.parseSessionFile(sessionFile);
+      assert.ok(session, "session should parse even without an Initial entry");
+      assert.strictEqual(session!.requests.length, 1);
+      assert.strictEqual(
+        session!.requests[0].message.text,
+        "Follow instructions in background-test-1.prompt.md"
+      );
+
+      const output = parser.extractResponse(sessionFile);
+      assert.strictEqual(output.events.length, 1);
+      assert.deepStrictEqual(output.events[0].data, { text: "Done." });
+
+      assert.strictEqual(ChatSessionParser.isSessionComplete(sessionFile), true);
+    });
+
+    test("should apply a delete (kind:3) patch", () => {
+      const sessionFile = createMockJsonlFile("test-jsonl-delete", [
+        {
+          kind: 0,
+          v: {
+            version: 3,
+            sessionId: "test-jsonl-delete",
+            requests: [
+              {
+                requestId: "req-1",
+                message: { text: "Test" },
+                response: [{ value: "Response" }],
+                modelId: "copilot/claude-sonnet-4.5",
+                followups: [{ message: "stale followup" }],
+                result: { timings: { totalElapsed: 1000 } },
+              },
+            ],
+          },
+        },
+        { kind: 3, k: ["requests", 0, "followups"] },
+      ]);
+
+      const session = ChatSessionParser.parseSessionFile(sessionFile);
+      assert.ok(session);
+      assert.strictEqual((session!.requests[0] as any).followups, undefined);
+    });
+
+    test("isSessionComplete should use modelState when present, without requiring totalElapsed", () => {
+      const cancelled = createMockJsonlFile("test-jsonl-cancelled", [
+        {
+          kind: 0,
+          v: {
+            version: 3,
+            sessionId: "test-jsonl-cancelled",
+            requests: [
+              {
+                requestId: "req-1",
+                message: { text: "Test" },
+                response: [{ value: "Partial..." }],
+                modelId: "copilot/claude-sonnet-4.5",
+                modelState: { value: RESPONSE_MODEL_STATE.CANCELLED },
+                result: { timings: { totalElapsed: 0 } },
+              },
+            ],
+          },
+        },
+      ]);
+
+      assert.strictEqual(ChatSessionParser.isSessionComplete(cancelled), true);
+
+      const pending = createMockJsonlFile("test-jsonl-pending", [
+        {
+          kind: 0,
+          v: {
+            version: 3,
+            sessionId: "test-jsonl-pending",
+            requests: [
+              {
+                requestId: "req-1",
+                message: { text: "Test" },
+                response: [],
+                modelId: "copilot/claude-sonnet-4.5",
+                modelState: { value: RESPONSE_MODEL_STATE.PENDING },
+                result: { timings: { totalElapsed: 0 } },
+              },
+            ],
+          },
+        },
+      ]);
+
+      assert.strictEqual(ChatSessionParser.isSessionComplete(pending), false);
+    });
+  });
+
+  suite("hasPendingBackgroundWork", () => {
+    function makeRequest(toolCallRounds: any[]): any {
+      return {
+        requestId: "req-1",
+        message: { text: "Test" },
+        response: [],
+        modelId: "copilot/claude-sonnet-4.5",
+        modelState: { value: RESPONSE_MODEL_STATE.COMPLETE },
+        result: {
+          timings: { totalElapsed: 1000 },
+          metadata: { toolCallRounds },
+        },
+      };
+    }
+
+    test("should return true when the last tool-call round launched an async task", () => {
+      const request = makeRequest([
+        {
+          response: "",
+          toolCalls: [
+            {
+              name: "run_in_terminal",
+              arguments: JSON.stringify({
+                command: "Start-Sleep -Seconds 60",
+                mode: "async",
+              }),
+              id: "call-1",
+            },
+          ],
+        },
+      ]);
+
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(request),
+        true
+      );
+    });
+
+    test("should return false when the last tool-call round has no async launch", () => {
+      const request = makeRequest([
+        {
+          response: "",
+          toolCalls: [
+            {
+              name: "run_in_terminal",
+              arguments: JSON.stringify({
+                command: "echo hi",
+                mode: "sync",
+              }),
+              id: "call-1",
+            },
+          ],
+        },
+      ]);
+
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(request),
+        false
+      );
+    });
+
+    test("should return false when there are no tool-call rounds", () => {
+      const request = makeRequest([]);
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(request),
+        false
+      );
+    });
+
+    test("should return false when only an earlier round launched async work (already superseded)", () => {
+      const request = makeRequest([
+        {
+          response: "",
+          toolCalls: [
+            {
+              name: "run_in_terminal",
+              arguments: JSON.stringify({ command: "sleep 60", mode: "async" }),
+              id: "call-1",
+            },
+          ],
+        },
+        {
+          response: "",
+          toolCalls: [
+            {
+              name: "read_file",
+              arguments: JSON.stringify({ filePath: "a.ts" }),
+              id: "call-2",
+            },
+          ],
+        },
+      ]);
+
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(request),
+        false
+      );
+    });
+
+    test("should ignore malformed tool call arguments instead of throwing", () => {
+      const request = makeRequest([
+        {
+          response: "",
+          toolCalls: [
+            { name: "run_in_terminal", arguments: "{not json", id: "call-1" },
+          ],
+        },
+      ]);
+
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(request),
+        false
+      );
+    });
+  });
+
+  suite("Copilot Chat background-task auto-resume (end to end)", () => {
+    /**
+     * Reproduces the real "background-test-1" session shape (verified against a
+     * live VS Code session on disk): request[0] launches an async terminal task
+     * and ends its turn before the task finishes; request[1] is VS Code's
+     * auto-resumed `isSystemInitiated` follow-up once the task completes.
+     */
+    function createBackgroundResumeSession(
+      sessionId: string,
+      includeResumeRequest: boolean
+    ): string {
+      const requests: any[] = [
+        {
+          requestId: "req-0",
+          message: {
+            text: "Follow instructions in background-test-1.prompt.md",
+          },
+          response: [{ value: "Starting the background task..." }],
+          modelId: "copilot/claude-sonnet-4.5",
+          modelState: { value: RESPONSE_MODEL_STATE.COMPLETE },
+          result: {
+            timings: { totalElapsed: 45312, firstProgress: 22106 },
+            metadata: {
+              toolCallRounds: [
+                {
+                  response: "",
+                  toolCalls: [
+                    {
+                      name: "run_in_terminal",
+                      arguments: JSON.stringify({
+                        command: "Start-Sleep -Seconds 60",
+                        mode: "async",
+                      }),
+                      id: "call-1",
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ];
+
+      if (includeResumeRequest) {
+        requests.push({
+          requestId: "req-1",
+          isSystemInitiated: true,
+          systemInitiatedLabel: "`Start-Sleep -Seconds 60` completed",
+          message: {
+            text: "[Terminal notification: command completed.]",
+          },
+          response: [{ value: "Task completed." }],
+          modelId: "copilot/claude-sonnet-4.5",
+          modelState: { value: RESPONSE_MODEL_STATE.COMPLETE },
+          result: { timings: { totalElapsed: 10400 } },
+        });
+      }
+
+      return createMockSessionFile(sessionId, requests);
+    }
+
+    test("isSessionComplete alone is fooled by the turn-ending pause (documents why the monitor needs hasPendingBackgroundWork too)", () => {
+      const sessionFile = createBackgroundResumeSession(
+        "test-bg-only-launch",
+        false
+      );
+      // The launch request itself is legitimately "complete" by timings/modelState —
+      // this is exactly why ChatSessionMonitor layers hasPendingBackgroundWork on
+      // top instead of trusting isSessionComplete alone.
+      assert.strictEqual(ChatSessionParser.isSessionComplete(sessionFile), true);
+    });
+
+    test("hasPendingBackgroundWork flags the launch request before the resume arrives", () => {
+      const sessionFile = createBackgroundResumeSession(
+        "test-bg-pending",
+        false
+      );
+      const session = ChatSessionParser.parseSessionFile(sessionFile)!;
+      const lastRequest = session.requests[session.requests.length - 1];
+
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(lastRequest),
+        true
+      );
+    });
+
+    test("hasPendingBackgroundWork clears once the isSystemInitiated resume request lands", () => {
+      const sessionFile = createBackgroundResumeSession(
+        "test-bg-resumed",
+        true
+      );
+      const session = ChatSessionParser.parseSessionFile(sessionFile)!;
+
+      assert.strictEqual(session.requests.length, 2);
+      assert.strictEqual((session.requests[1] as any).isSystemInitiated, true);
+
+      const lastRequest = session.requests[session.requests.length - 1];
+      assert.strictEqual(ChatSessionParser.isSessionComplete(sessionFile), true);
+      assert.strictEqual(
+        ChatSessionParser.hasPendingBackgroundWork(lastRequest),
+        false
+      );
     });
   });
 });

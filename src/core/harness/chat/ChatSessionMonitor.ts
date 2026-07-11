@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../utils/Log";
-import { ChatSessionParser } from "./ChatSessionParser";
+import { ChatSessionParser, RESPONSE_MODEL_STATE } from "./ChatSessionParser";
 import {
   getVSCodeVariant,
   isWSL,
@@ -490,7 +490,20 @@ export class ChatSessionMonitor {
   /**
    * Check if the last request in the session is complete.
    * Delegates to ChatSessionParser.isSessionComplete() for core completion logic,
-   * and adds cancellation detection and optional debug logging on top.
+   * and adds cancellation detection, background-task-hold detection, and
+   * optional debug logging on top.
+   *
+   * A request that reached a terminal `modelState` can still be an
+   * "I'll wait for this background task" pause rather than a true final
+   * answer — VS Code auto-resumes the session with a new
+   * `isSystemInitiated: true` request once the task completes. Reporting
+   * complete=true here would let the caller commit ~seconds before the real
+   * work is done and silently miss the resumed turn (see
+   * dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md, "Copilot Chat" section).
+   * So a terminal request with a still-pending async launch is reported as
+   * not-yet-complete; the caller's normal polling (and its existing
+   * inactivity timeout) doubles as the bounded backstop for a resume that
+   * never arrives.
    */
   private isLastRequestComplete(
     sessionFilePath: string,
@@ -498,6 +511,7 @@ export class ChatSessionMonitor {
   ): {
     complete: boolean;
     cancelled?: boolean;
+    pendingBackgroundWork?: boolean;
   } {
     try {
       const session = ChatSessionParser.parseSessionFile(sessionFilePath);
@@ -519,8 +533,17 @@ export class ChatSessionMonitor {
         );
       }
 
-      // Check for cancellation first (not covered by isSessionComplete)
-      if (
+      // Check for cancellation first (not covered by isSessionComplete).
+      // modelState is authoritative when present — VS Code's cancel() path
+      // sets modelState to Cancelled without necessarily touching
+      // errorDetails, so the old text-sniffing check is unreliable on its
+      // own. Keep it as a fallback for older flat .json sessions that
+      // predate modelState.
+      if (lastRequest.modelState) {
+        if (lastRequest.modelState.value === RESPONSE_MODEL_STATE.CANCELLED) {
+          return { complete: true, cancelled: true };
+        }
+      } else if (
         typeof lastRequest.result?.errorDetails?.message === "string" &&
         lastRequest.result.errorDetails.message.includes("cancel")
       ) {
@@ -529,8 +552,20 @@ export class ChatSessionMonitor {
 
       // Delegate core completion check to ChatSessionParser
       const isComplete = ChatSessionParser.isSessionComplete(sessionFilePath);
+      if (!isComplete) {
+        return { complete: false };
+      }
 
-      return { complete: isComplete, cancelled: false };
+      if (ChatSessionParser.hasPendingBackgroundWork(lastRequest)) {
+        if (debug) {
+          Log.debug(
+            "      ⏸️ Last request is terminal but launched an async background task — holding for a possible auto-resume"
+          );
+        }
+        return { complete: false, pendingBackgroundWork: true };
+      }
+
+      return { complete: true, cancelled: false };
     } catch (err) {
       if (debug) {
         Log.warn(`      ⚠️ Error reading session file: ${err}`);
@@ -791,14 +826,12 @@ export class ChatSessionMonitor {
         // Debug logging on first poll or every 10 seconds
         const shouldDebug = pollCount === 1 || totalSec % 10 < 1;
 
-        const { complete, cancelled } = this.isLastRequestComplete(
-          this.sessionFilePath!,
-          shouldDebug
-        );
+        const { complete, cancelled, pendingBackgroundWork } =
+          this.isLastRequestComplete(this.sessionFilePath!, shouldDebug);
 
         if (shouldDebug) {
           Log.debug(
-            `   🔎 Completion check result: complete=${complete}, cancelled=${cancelled}`
+            `   🔎 Completion check result: complete=${complete}, cancelled=${cancelled}, pendingBackgroundWork=${pendingBackgroundWork ?? false}`
           );
         }
 

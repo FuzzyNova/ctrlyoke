@@ -244,6 +244,62 @@ hi"). Antigravity's markers are structured, but the key twist is **where they li
   signal is naturally exempt from the user-steer filter (like Copilot's `system.notification`,
   unlike Claude's `user`-typed `<task-notification>`).
 
+### Copilot Chat (VS Code UI) — CONFIRMED ✅
+
+Investigated a real session, `chatSessions/b2e73a50-….jsonl` (backgrounded a 60s PowerShell
+`Start-Sleep` and waited), captured while chasing an unrelated JSONL-parsing bug (see
+`chat.instructions.md`). Same root cause as the CLI harnesses, but the resume shows up as a
+**new top-level `requests[]` entry**, not more output appended to the same request — the whole
+signal lives in fields `ChatSessionParser`/`ChatSessionMonitor` already parse, no raw-log
+tailing needed:
+
+- **Turn N ends while the task is still running.** `requests[0]` launched `run_in_terminal` with
+  `mode: "async"` (`Start-Sleep -Seconds 60`) and reached a terminal `modelState`
+  (`value: Complete`) **~26s before the sleep actually finished** — Copilot ended its turn to
+  wait, same as Claude/Copilot CLI/Antigravity.
+- **Launch marker:** a `toolInvocationSerialized` response item (e.g. `run_in_terminal`) whose
+  matching `result.metadata.toolCallRounds[].toolCalls[].arguments` has `"mode":"async"`.
+- **Completion / resume marker:** the **next entry in `requests[]`** has **`isSystemInitiated:
+  true`**, with a human-readable `systemInitiatedLabel` naming the finished command (e.g.
+  `` `Start-Sleep -Seconds 60` completed ``) and `message.text` set to the raw terminal
+  notification. This wakes Copilot Chat, which **self-resumes** (a fresh request with its own
+  `response`/`modelState`) — gate-able, and structurally unambiguous: no text parsing needed,
+  cleaner than Claude's `<task-notification>` (a `user`-role message) and on par with Copilot
+  CLI's `shell_completed` event.
+- **Rule: at "last request is terminal," check whether that request's response contains an
+  async-mode tool launch.** If yes → don't commit yet; keep watching the *same* session file for
+  a new `isSystemInitiated: true` request to appear, then re-run the check against it (it can
+  itself launch another background task). If no async launch → commit now (today's behavior for
+  the common case, zero latency).
+- **User-steer exemption is free**, same shape as Copilot CLI/Antigravity: the resume is
+  `isSystemInitiated: true`, a genuine human follow-up typed into the chat box is not — so the
+  two are already distinguishable by a single boolean field.
+
+**Confirmed bug in current code:** `ChatSessionMonitor.waitForCompletion()` resolves as soon as
+`session.requests[requests.length - 1]` (i.e. `requests[0]`) hits a terminal `modelState`, with
+no knowledge of the pending async launch. `CopilotChatIntegration.sendPromptWithDirectAutomation`
+then calls `extractSessionOutput()` (still index `-1` → `requests[0]`), fires
+`responseCompleteEmitter`, and returns — the step is marked complete ~26s before the real work is
+done. The auto-resumed `requests[1]` (42s later, full extra turn) is never streamed, never added
+to history, and never observed by anything.
+
+**Implemented (Layer 2 equivalent, no separate watcher needed).** `SessionActivityWatcher` and
+`ILogParser.hasPendingBackgroundWork()` (Layer 1/2 below) ship for Claude/Copilot CLI/Antigravity
+on the separate `ILogParser`/`CliLogMonitor`/`CliIntegration` path; Copilot Chat needed its own
+equivalent since it runs on `ChatSessionMonitor`/`ChatSessionParser` instead. Shipped as:
+`ChatSessionParser.hasPendingBackgroundWork(request)` — true when a request's *last* tool-call
+round launched a `mode: "async"` tool call — layered into
+`ChatSessionMonitor.isLastRequestComplete()` after the existing `isSessionComplete()` check. A
+terminal request with pending background work is reported as `complete: false`, so
+`waitForCompletion()`'s normal polling (and its existing session-file-mtime inactivity timeout)
+keeps running — no raw-log tailing needed, since `ChatSessionMonitor` already re-reads the whole
+session file on every poll and the next `isSystemInitiated` request simply becomes the new "last
+request" on the following check. The inactivity timeout doubles as the bounded backstop for a
+resume that never arrives, matching the "no log activity for N seconds" backstop shape favored in
+Open Question 1. See `ChatSessionParser.hasPendingBackgroundWork()` and the
+"Copilot Chat background-task auto-resume (end to end)" test suite in
+`src/test/chatSessionParser.test.ts`.
+
 ### Codex, Qwen & OpenCode — no background-wait (Layer-1-only)
 
 Confirmed these three **do not** support the background-task → end-turn →
@@ -355,10 +411,19 @@ separate future feature that would need worktree isolation, not a retry side eff
 
 ## Implementation phases
 
-**Phase 0 — signal investigation.** Claude ✅, Copilot ✅, and Antigravity ✅ confirmed (above).
-Codex, Qwen, and OpenCode confirmed to **not** background-and-resume (Layer-1-only, no gating).
-Signal investigation is complete for every harness. Each harness that lacks a clean marker stays
-Layer-1-only.
+**Phase 0 — signal investigation.** Claude ✅, Copilot CLI ✅, Antigravity ✅, and Copilot Chat ✅
+confirmed (above). Codex, Qwen, and OpenCode confirmed to **not** background-and-resume
+(Layer-1-only, no gating). Signal investigation is complete for every harness. Each harness that
+lacks a clean marker stays Layer-1-only.
+
+**Note on implementation status:** Phases 1–3 below (as `SessionActivityWatcher` +
+`ILogParser.hasPendingBackgroundWork()`) have **shipped for Claude/Copilot CLI/Antigravity** —
+see `src/core/harness/SessionActivityWatcher.ts` and the `hasPendingBackgroundWork` overrides in
+each CLI `ILogParser`. Copilot Chat's Layer-2 equivalent has also **shipped** — see
+`ChatSessionParser.hasPendingBackgroundWork()` / `ChatSessionMonitor.isLastRequestComplete()`
+(Copilot Chat section above). Chat has no Layer-1-equivalent watcher because it doesn't need one:
+`ChatSessionMonitor` already re-reads the full session file on every poll, so once the pending
+resume lands it's simply the new "last request" on the next check.
 
 **Phase 1 — shared tail/stream loop.** Extract the event-processing core of `CliLogMonitor`
 into a unit shared by `CliLogMonitor` and `SessionActivityWatcher`. Add **user-steer event
@@ -400,6 +465,9 @@ inject → normal dispatched prompt.
 2. Layer-1 mid-workflow attribution: folding resumed step-N output into step N+1's monitor —
    acceptable long-term, or must the watcher own the log even with a next prompt queued?
 3. Always-on for live interactive sessions, or gated by a setting?
-4. Harness signals — **all investigated, none left open.** Claude ✅, Copilot ✅, Antigravity ✅
-   gate-able for Layer 2; Codex, Qwen, and OpenCode confirmed to not background-and-resume
-   (Layer-1-only, no gating).
+4. Harness signals — Claude ✅, Copilot CLI ✅, Antigravity ✅, and Copilot Chat ✅ all gate-able
+   for Layer 2; Codex, Qwen, and OpenCode confirmed to not background-and-resume
+   (Layer-1-only, no gating). All four gate-able harnesses now have their Layer-2 hold
+   implemented — CLI harnesses via `SessionActivityWatcher`/`ILogParser.hasPendingBackgroundWork()`,
+   Copilot Chat via `ChatSessionParser.hasPendingBackgroundWork()` on its own
+   `ChatSessionMonitor` code path.
