@@ -1,108 +1,97 @@
 # Workflow Scheduling Plan
 
-> **Status:** Not yet implemented — design exploration. This doc resolves the UX
-> question raised in the brief, but its main job is to surface the decision that
-> actually gates the feature: **what process is alive to fire a schedule?**
-> Nothing here is built yet.
+> **Status:** Not yet implemented — design accepted in principle. The execution
+> substrate is **decided** (see below): schedules fire only while a long-lived
+> ctrlyoke host is running, and that is an accepted limitation, not a problem to
+> engineer around. Nothing here is built yet.
 
 ## TL;DR
 
-- The interesting decision is **not** the UX — it's the **execution substrate**.
-  A schedule is worthless if nothing is running when the fire time arrives, and
-  ctrlyoke has **no always-on process today** (see "The real problem" below).
-- The **"Wait until time/date" step** idea is a fine _general_ step primitive but
-  the **wrong mechanism for scheduling** — it needs a live process for the whole
-  wait, doesn't survive restarts, crowds the workflow, and can't express
-  recurrence. Keep it out of scope for scheduling; consider it separately.
-- Recommended shape: **schedule is a per-workflow property**, authored from a
-  compact drawer on the workflow row (the brief's option A), surfaced back as a
-  **"Scheduled" section** in the same dropdown (management), _not_ a whole
-  separate page — at least not first. A dedicated page only earns its keep once
-  users routinely juggle many schedules.
-- Ship in phases by substrate: **Phase 1 = extension-host timer** (fires while
-  the dashboard/VS Code is open — honest, cheap, immediately useful for
-  "kick this off in 5 hours while I'm at lunch"). **Phase 2 = OS-scheduler
-  delegation** via `ctrlyoke run` (the only option that fires with the app
-  closed — real "set and forget").
+- **Substrate decided (per product owner):** a schedule fires **only while a
+  ctrlyoke host with a live `WorkflowOrchestrator` is running** — i.e. VS Code
+  is open (with or without the hosted server), or, once it ships, the standalone
+  `ctrlyoke server`. **No OS scheduler, no background daemon, no "runs while the
+  app is closed."** "You can schedule a workflow, but ctrlyoke has to be running"
+  is an accepted, clearly-communicated constraint. This is a reasonable call —
+  see "Why this is the right call." Power users who need runs while everything is
+  closed use the existing escape hatch: **point cron / CI at `ctrlyoke run`.**
+- **The scheduler is owned inside `WorkflowOrchestrator`** (one service, not
+  per-host wiring). Bound to the orchestrator's lifetime, it works in the
+  extension today and in the standalone server **for free** when that lands — and
+  it correctly does **not** activate for the transient one-shot `ctrlyoke run`
+  (which never constructs a `WorkflowOrchestrator`).
+- **Storage:** the `schedule` block lives on the **working file** (like
+  `isFavorite`), so the scheduler loads it from the recent-workflows enumeration
+  the host already runs on startup — no separate discovery pass.
+- **Grammar:** 5-field cron for recurrence + a one-shot `at`. RRULE and the
+  "Wait until time/date" step idea are both **scrapped**.
+- **Timezone:** interpret times in the **host machine's local timezone**; no
+  timezone field in v1 (an explicit field can follow post-release).
+- **A fire = the Run / re-run action:** the scheduler dispatches `RUN_WORKFLOW`
+  for the workflow (same path as the Run button), reusing the same working file
+  and restarting from the beginning.
+- **UX:** schedule is a per-workflow property, authored from a compact drawer on
+  the workflow row (the brief's option A), surfaced back as a **"Scheduled"
+  section** in the same dropdown for management — _not_ a whole separate page,
+  at least not first.
 
 ---
 
-## The real problem: what fires the trigger?
+## Execution substrate (decided)
 
-Everything else is downstream of this. A scheduling UI that can't reliably run a
-workflow at 5pm tomorrow is a toy. Today ctrlyoke has three runtime hosts and
-**none is a guaranteed always-on daemon**:
+A schedule needs a live process to fire it. ctrlyoke's runtime hosts:
 
-| Host | Alive when… | Executes workflows? |
-| --- | --- | --- |
-| **Extension host** (`WorkflowOrchestrator`) | VS Code is open with the extension active | Yes — this is the primary executor |
-| **Hosted server** (`CtrlYokeHostedServer`) | The extension boots it (it's handed the extension's `WorkflowOrchestrator`) | No independent engine — it's a **front-end transport over the extension host**, so it dies with VS Code too |
-| **CLI** (`ctrlyoke run`) | Only for the duration of one invocation | Yes — independent one-shot executor |
+| Host | Alive when… | Owns a `WorkflowOrchestrator`? | Fires schedules? |
+| --- | --- | --- | --- |
+| **Extension host** | VS Code open with the extension active | Yes | **Yes** |
+| **Hosted server** (`CtrlYokeHostedServer`) | The extension boots it | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
+| **Standalone `ctrlyoke server`** (future — `STANDALONE_SERVER_PLAN.md`, not started) | The user runs `ctrlyoke server` | Yes — constructs its own via `StandaloneServerAdapter` | **Yes**, once it ships |
+| **CLI** (`ctrlyoke run`) | One invocation only | No — uses `WorkflowInstance`/`IntegrationFactory` directly | **No** (by design — one-shot, not a scheduling host) |
 
-Consequence: the hosted server does **not** give us an always-on scheduler for
-free (it rides on the extension host). The only thing that can fire a workflow
-while VS Code is closed is **something the OS keeps alive**. That leaves a small
-set of real options:
+The decisive simplification: **the hosted server is not a separate substrate** —
+it rides on the extension's orchestrator, so "VS Code open" and "hosted server
+running" are the _same_ host. That collapses the whole question to a single rule:
 
-### Substrate options
+> **The scheduler lives wherever a `WorkflowOrchestrator` lives.** Own it inside
+> (or alongside) the orchestrator, and both long-lived hosts inherit it with
+> zero per-host code — matching the project's DRY / single-source principle.
+> `ctrlyoke run` is excluded automatically because it never builds an
+> orchestrator.
 
-1. **Extension-host timer (in-process scan).** On activation, load schedules and
-   arm `setTimeout`/an interval scan; fire by starting the workflow through the
-   existing orchestrator path. **Fires only while VS Code is open.**
-   - Pros: no new process, no packaging, reuses the entire execution path,
-     trivial to build, great for near-term "start in N hours / at a time today"
-     while the machine stays on.
-   - Cons: closed editor = missed run. Needs explicit **missed-run/catch-up**
-     semantics on next activation (see below).
-2. **OS-scheduler delegation.** ctrlyoke becomes a schedule _author_: it writes a
-   Windows **Task Scheduler** task / **cron** entry / **launchd** plist that runs
-   `ctrlyoke run <file> --harness … [flags]` at the scheduled time. The OS owns
-   the clock.
-   - Pros: the **only** option that fires with the app closed; survives reboots;
-     zero ctrlyoke process required at fire time.
-   - Cons: cross-platform generators (three backends); CLI must be installed and
-     resolvable; **harness auth must be non-interactive** (see constraints);
-     workspace/cwd + working-file resolution must be baked into the command;
-     partially outside ctrlyoke's observability (a run started by cron won't show
-     live in a closed dashboard — it reconciles from history/queue on next open).
-3. **`ctrlyoke daemon` (new long-running process).** A lightweight Node process
-   that owns the schedule store and fires `run`, installed as an autostart entry.
-   - Pros: cross-platform single codebase; full ctrlyoke observability.
-   - Cons: we'd be **reinventing cron**; install/keep-alive/update story; the
-     autostart entry is itself an OS-integration problem, so we pay option 2's
-     cost _plus_ a daemon. **Not recommended** unless a strong always-on
-     multi-workflow story emerges later.
+### Why this is the right call
 
-**Recommendation:** Phase 1 = option 1 (extension-host timer). Phase 2 = option 2
-(OS delegation) for true set-and-forget. Skip option 3.
+The product owner already keeps VS Code open all day to host the server, and any
+user running ctrlyoke for remote/agentic coding does the same. For that audience,
+"fires while ctrlyoke is running" covers the real use cases (kick off in N hours,
+run nightly while the machine and editor stay on) without dragging in:
 
-> Design the schedule **data model once** (Phase 1) so Phase 2 is "add a firing
-> backend," not "re-model schedules." The store and next-run math are
-> substrate-independent.
+- three OS-specific scheduler backends (Task Scheduler / cron / launchd),
+- a non-interactive-harness-auth audit for unattended runs at 3am,
+- a `ctrlyoke daemon` that reinvents cron plus its own autostart/keep-alive story.
+
+All of that is **explicitly out of scope and rejected** — recorded here so a
+future reader knows it was considered, not overlooked. The one obligation this
+choice creates is on the **UX**: the limitation must be legible (the schedule
+editor should say, in plain words, that runs only happen while ctrlyoke/VS Code
+or the server is running), and missed runs should be surfaced rather than
+silently dropped (see "Missed runs").
+
+> Because the scheduler is orchestrator-bound, the standalone server gets
+> scheduling **the day it ships** with no scheduling-specific work — it already
+> reuses `WorkflowOrchestrator` unchanged. There is no "Phase 2 firing backend"
+> to build; there is one firing backend, and it is portable.
 
 ---
 
-## Why not the "Wait until time/date" step
+## Rejected: a "Wait until time/date" step
 
-The brief floats extending `STEP_TYPES` (`prompt` / `script` → add `function`,
-with a "Wait until 5pm" function as step 1). As a scheduling mechanism this is
-the weakest option, and the brief already senses it:
-
-- **Requires a live process for the entire wait.** A "wait 5 hours" step means
-  the orchestrator (or a PTY) must stay alive burning that whole window —
-  strictly worse than a timer that arms and sleeps, and it evaporates on restart.
-- **No recurrence.** "Every weekday at 9am" can't be a single leading step.
-- **Crowds the workflow.** Scheduling is metadata _about_ a workflow, not a step
-  _of_ it. Baking it into the queue muddies step semantics, history, retries, and
-  `priorContext` indices.
-- **Restart-fragility.** A scheduled run must survive an editor restart; an
-  in-queue wait does not.
-
-A `function` step type (or a general **"wait/delay"** step) may still be worth
-building for _in-workflow_ pacing (e.g. "wait 30s for a deploy to settle between
-steps") — but track that in its own backlog item, not as the scheduler. Most of
-that space (notify, email, wait-for-condition) is already reachable via `script`
-steps, which is the DRY answer for arbitrary side effects.
+The brief floated a `function` step type whose first step waits until a time.
+**Scrapped as a scheduling mechanism** — scheduling is metadata _about_ a workflow,
+not a step _of_ it. An in-queue wait needs a live process burning the whole window,
+can't express recurrence, doesn't survive a restart, and crowds step
+semantics/history/`priorContext` indices. (A general in-workflow "wait/delay"
+between steps could still be its own future backlog item, but most of that space —
+notify, wait-for-condition — is already reachable via `script` steps.)
 
 ---
 
@@ -159,77 +148,117 @@ section for management. Not option B first. Not option C at all (for scheduling)
 
 ## Data model
 
-### Where the schedule lives
+### Where the schedule lives — the working file (like favorites)
 
-Favorites (`isFavorite`) currently live on the **working file**
-(`.ctrlyoke/.queue/<name>.ctrlyoke.json`, see `WorkflowSerializer.handleToggleFavorite`).
-A schedule is different in kind: it must be **resolvable without the working file
-existing** (e.g. an OS-scheduled cron run recreates the working copy from the
-**source prompt file**). So:
+Store `schedule` on the **working file**
+(`.ctrlyoke/.queue/<name>.ctrlyoke.json`), exactly like `isFavorite` already is
+(see `WorkflowSerializer.handleToggleFavorite`). This is the right home because:
 
-- **Source of truth = the source prompt file** (`*.ctrlyoke.yaml/json`,
-  `*.prompt.md`) — a top-level `schedule` block, schema-validated in
-  `schemas/workflow-schema.json`. This makes schedules **portable, diffable, and
-  committable**, and available to `ctrlyoke run` directly.
-- The working file may **cache** next-run/last-run for cheap dashboard display,
-  but the definition is authored on the source file.
+- The working file exists as soon as a workflow diverges from defaults, and
+  anything a user would schedule is already in the recent-workflows list — i.e.
+  it already _has_ a working file. There is no "never-yet-run, no working file"
+  case to solve (an earlier draft over-worried this).
+- **The scheduler bootstraps off work the host already does.** On startup the
+  host enumerates every working file in `.ctrlyoke/.queue/`
+  (`WorkflowSerializer.handleGetRecentWorkflows` → `fs.readdir` + read each
+  `.ctrlyoke.json`). The scheduler hooks that same pass: **any working file whose
+  `schedule` is present and `enabled` gets armed.** No separate discovery glob —
+  the recent-working-file load _is_ the schedule load.
+
+`nextRunAt`/`lastRunAt` live on the same working file so the dashboard can show
+them without recomputation.
+
+> **Survive-VS-Code-close is out of scope by design** (the built-in scheduler
+> only fires while a ctrlyoke host is running — see "Execution substrate").
+> Power users who need runs while everything is closed should point **cron / a CI
+> job / any real scheduler at `ctrlyoke run <file>`** — that path already works
+> and is the sanctioned answer, not a gap. The built-in scheduler is for
+> developers who keep VS Code open or a `ctrlyoke server` running and accept that
+> its features are only available while it is.
 
 ### Shape (sketch — validate against schema conventions before building)
+
+**Grammar decided: 5-field cron for recurrence + a one-shot `at`** (RRULE
+rejected — cron is terser and familiar, and "last weekday of month" edge cases
+aren't worth the RRULE dependency for a coding tool).
 
 ```jsonc
 "schedule": {
   "enabled": true,
   "trigger": {
     // exactly one of:
-    "at": "2026-07-15T17:00:00",     // one-shot local datetime
-    "cron": "0 9 * * 1-5",           // recurring (5-field), OR
-    "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR;BYHOUR=9"
+    "at": "2026-07-15T17:00:00",     // one-shot local datetime, OR
+    "cron": "0 9 * * 1-5"            // recurring (5-field)
   },
-  "timezone": "America/New_York",    // REQUIRED for recurrence — see below
-  "until": "2026-12-31T00:00:00",    // optional end for recurrence
-  "onMissed": "runOnce",             // runOnce | skip  (catch-up policy)
-  "onOverlap": "skip"                // skip | queue | replace
+  "until": "2026-12-31T00:00:00"     // optional end for recurrence
 }
 ```
 
-Pick **one** recurrence grammar and stick to it (don't ship both `cron` and
-`rrule`). Cron is terser and everyone half-knows it; RRULE handles "last weekday
-of month" style rules cron can't. For a coding-workflow tool, **cron (5-field)
-plus a one-shot `at`** is the pragmatic default; expose the cron string only
-behind "Custom," driving it from the friendly Daily/Weekly/Monthly pickers.
+The `cron` string is the advanced/"Custom" escape hatch; the friendly
+Daily/Weekly/Monthly pickers in the editor generate it, so most users never type
+cron directly.
+
+**No `onMissed` / `onOverlap` fields in v1 (decided).** Both are fixed behaviors,
+not user options (see "Missed runs" and "Overlapping runs" below): a missed
+occurrence is **always skipped**, and an overlapping fire is **always skipped**.
+They can become configurable later if a real need appears; for now the schema
+stays minimal.
+
+**No `timezone` field in v1 (decided).** Times are interpreted in the **host
+machine's local timezone** — the machine ctrlyoke is running on. An explicit
+per-schedule timezone can be added post-release if users ask; it slots in as an
+optional field with the machine zone as the default, so no migration.
 
 ### Semantics to pin down (these are the sharp edges)
 
-- **Timezone / DST.** Store an IANA tz, not a raw offset, or "9am" drifts across
-  DST. Next-run math must be tz-aware. Do **not** compute in UTC-only.
-- **Missed runs (`onMissed`).** Phase-1 (extension timer) _will_ miss runs while
-  closed. On activation, for each schedule whose fire time passed while we were
-  down: `runOnce` (fire a single catch-up now) or `skip` (wait for next
-  occurrence). Never fire N backlogged occurrences in a burst.
-- **Overlap (`onOverlap`).** If the target workflow is already running when the
-  schedule fires: `skip` (default, safest for AI runs), `queue` (run after), or
-  `replace` (stop + restart). AI runs are expensive and stateful — default to
-  `skip`, make anything else explicit.
-- **Next-run reconciliation.** Both the extension timer and any OS-fired run must
-  update `lastRunAt`/`nextRunAt` in a single source so the UI and the firing
-  backend never disagree.
+- **Timezone / DST.** Compute next-run in the **host machine's local timezone**
+  (v1 has no timezone field — see data model). Use local-time date math, not a
+  fixed UTC offset, so a "9am" schedule stays 9am across a DST change rather than
+  drifting an hour.
+- **How a fire actually runs.** Firing is exactly the dashboard **Run / re-run**
+  action, just triggered by the timer instead of a click: the scheduler dispatches
+  the equivalent of `RUN_WORKFLOW` for the workflow's `workflowId`
+  (`Header.tsx`'s `handleRun`), which **reuses the same working file and restarts
+  from the beginning** (the `isRerun` "Restart from beginning" case). No fresh
+  working copy, so run identity and history grouping match a manual re-run.
+- **Missed runs — always skip (v1).** A "missed" run is one whose scheduled time
+  passed while no ctrlyoke host was running (VS Code closed, machine asleep). v1
+  **does not run these** — no catch-up, ever. Opening VS Code after several days
+  must **not** kick off every schedule whose time elapsed; the scheduler simply
+  re-arms each schedule for its *next future* occurrence. (This is intentionally
+  the opposite of a cron-style catch-up; a catch-up policy could be added later,
+  off by default.) A schedule with a one-shot `at` in the past is just inert.
+  Optionally surface a quiet "last occurrence missed while offline" hint on the
+  row so the skip is visible rather than mysterious — but never auto-run.
+- **Overlapping runs — always skip (v1).** "Overlap" is when the scheduled time
+  arrives but *this same workflow is still running* — e.g. a daily 9am run that
+  occasionally takes >24h, or the user manually started it and it's mid-run at
+  9am. v1 **skips the new fire** rather than launching a second concurrent copy
+  (AI runs are expensive and stateful, so double-running is the wrong default).
+  Alternatives — queue-after or stop-and-restart — are deferred, not in v1.
+- **Next-run reconciliation.** The scheduler is the single writer of
+  `lastRunAt`/`nextRunAt`; the UI reads them. One source, so the timer and the
+  dashboard never disagree.
 
 ---
 
-## Harness auth constraint (blocks Phase 2 for some harnesses)
+## Harness auth constraint (still applies — the run is unattended)
 
-A scheduled run is **unattended**: it must start with **no interactive prompt**.
-`ctrlyoke run` already drives CLI harnesses, but any harness that needs an
-interactive login/approval at start (device-code auth, first-run trust prompts,
-per-run permission confirmation) **cannot be scheduled unattended** until it has a
-non-interactive path. Before Phase 2:
+A scheduled run starts with **no user present**, even though ctrlyoke itself is
+running. So the start path must not block on an interactive prompt. A harness that
+needs an interactive login/approval at start (device-code auth, first-run trust
+prompt, per-run permission confirmation) will **hang the scheduled run**.
 
-- Audit each CLI harness for a non-interactive/pre-authed run mode and
-  a non-interactive permission mode (there is already a `PERMISSION_MODES`
-  concept in the CLI).
-- In the schedule editor, **disable/annotate** harnesses that can't run
-  unattended, with a clear reason — don't let users schedule a run that will
-  silently hang on an auth prompt at 3am.
+- The scheduler should start workflows through the same in-process orchestrator
+  path the dashboard uses, honoring the workflow's own harness + permission mode
+  (there is already a `PERMISSION_MODES` concept). A run that would prompt should
+  fail fast / mark the run as blocked, not hang indefinitely.
+- In the schedule editor, **annotate** harnesses/permission modes that can't run
+  unattended so a user doesn't schedule something that will silently stall.
+
+This is a smaller problem than under an OS-scheduler design (the host is already
+authenticated and warm — this is just the dashboard's own start path fired by a
+timer instead of a click), but it still needs a "won't prompt" guarantee.
 
 ---
 
@@ -237,23 +266,26 @@ non-interactive path. Before Phase 2:
 
 **Phase 0 — Model + validation (no firing).**
 Schema `schedule` block, TypeScript types (`CtrlYokeTypes`), schema round-trip in
-`PromptFileParser`, next-run computation util (tz-aware), unit tests. Nothing
-fires yet; you can author and persist a schedule.
+`PromptFileParser`, a tz-aware next-run computation util, unit tests. Nothing
+fires yet; you can author, validate, and persist a schedule.
 
-**Phase 1 — Extension-host timer + UI.**
-Arm timers on activation; fire via the existing orchestrator start path;
-missed-run catch-up on activation; row schedule icon + editor popover; "Scheduled"
-dropdown section; message types + serializer handlers to get/set schedules;
-Zustand store wiring. Ships real value for machine-stays-on scheduling.
+**Phase 1 — Orchestrator-bound scheduler + UI.**
+A `WorkflowScheduler` owned by / constructed alongside `WorkflowOrchestrator`:
+loads schedules from the working files the host **already enumerates on startup**
+(the `handleGetRecentWorkflows` pass over `.ctrlyoke/.queue/`), arms a timer for
+each `enabled` one, fires via the existing orchestrator start path, and runs
+missed-run catch-up on startup. Plus the UI: row schedule icon + editor popover, the
+"Scheduled" dropdown section, message types + serializer handlers to get/set
+schedules, and Zustand wiring. This is the whole feature for the extension host —
+**and the standalone `ctrlyoke server` inherits it unchanged** because it
+constructs the same orchestrator.
 
-**Phase 2 — OS-scheduler delegation.**
-Per-OS generators (Task Scheduler / cron / launchd) that emit a `ctrlyoke run`
-command; install/remove on schedule save/delete; harness non-interactive audit;
-reconcile OS-fired runs back into history/dashboard. This is the true
-set-and-forget milestone.
+**Phase 2 (optional) — Dedicated scheduling page** with agenda/calendar view and
+scheduled-run history, _if_ usage shows users juggling many schedules.
 
-**Phase 3 (optional) — Dedicated scheduling page** with agenda/calendar view and
-scheduled-run history, _if_ usage warrants it.
+> Deliberately **not** phased by substrate. There is one firing mechanism (the
+> orchestrator-bound timer) and it is portable across hosts by construction; there
+> is no separate OS/daemon backend to build later.
 
 ---
 
@@ -262,38 +294,57 @@ scheduled-run history, _if_ usage warrants it.
 Per the project's "keep shared contracts synchronized" rule, a schedule change
 ripples across:
 
-- `schemas/workflow-schema.json` — `schedule` definition (source of truth).
-- `src/types/CtrlYokeTypes.ts` — `Schedule` type on the prompt/working file
-  contracts; `src/types/DashboardConstants.ts` — any new state/constant.
+- `schemas/workflow-schema.json` — `schedule` definition (schema source of truth).
+- `src/types/CtrlYokeTypes.ts` — `Schedule` type on the working-file contract
+  (`WorkingFile`, alongside `isFavorite`/`nextRunAt`);
+  `src/types/DashboardConstants.ts` — any new state/constant.
 - `src/core/orchestration/PromptFileLoader.ts` / `PromptFileParser` — parse +
   validate the block; a tz-aware **next-run util** (new, in `src/utils/`).
+- `src/core/WorkflowOrchestrator.ts` — **owns** the `WorkflowScheduler`
+  (new, `src/core/` or `src/core/orchestration/`) so both the extension and the
+  future standalone server inherit it; wire startup schedule-load + missed-run
+  catch-up into the orchestrator's init/dispose lifecycle, and have the scheduler
+  fire through the **same run entrypoint the dashboard's Run button hits**
+  (`RUN_WORKFLOW` → reuse working file, restart from beginning). **Do not** wire
+  the scheduler in `extension.ts` or the hosted/standalone servers individually —
+  that would defeat the single-source point.
 - `src/ui/WorkflowSerializer.ts` — get/set-schedule handlers (mirror the
   favorite/`handleToggleFavorite` pattern) + include `schedule`/`nextRunAt` in
   `handleGetRecentWorkflows` payload.
 - `src/types/WebviewMessageTypes.ts` + `DashboardConstants` `MESSAGE_TYPES` —
-  `GET_SCHEDULE` / `SET_SCHEDULE` / `CLEAR_SCHEDULE` message pair.
+  `GET_SCHEDULE` / `SET_SCHEDULE` / `CLEAR_SCHEDULE` message pair (works over
+  both the VS Code webview and the hosted-server WebSocket transport unchanged).
 - `src/ui/webview-react/store/uiStore.ts` — extend `RecentWorkflow`
   (`schedule?`, `nextRunAt?`) and store actions.
 - `src/ui/webview-react/components/workflow/` — `RecentWorkflows.tsx` +
   `RunningWorkflowItem.tsx` (row icon), a new `ScheduleEditor` popover, and the
-  "Scheduled" section in `WorkflowStatus.tsx`.
-- `src/cli.ts` — ensure `run` accepts everything an OS-fired command needs
-  (explicit workspace/cwd, harness, permission mode) for Phase 2.
-- Tests: core/orchestration + next-run util in `src/test/**`; UI in
+  "Scheduled" section in `WorkflowStatus.tsx`. Include a plain-language note in
+  the editor that runs only fire while ctrlyoke/VS Code (or the server) is
+  running.
+- Tests: scheduler + next-run util in `src/test/**`; UI in
   `src/ui/webview-react/test/**`.
 
 ---
 
-## Open questions
+## Decisions & remaining defaults
 
-1. **Substrate ambition:** is "fires while VS Code is open" (Phase 1) acceptable
-   as a first release, or is set-and-forget (Phase 2) table-stakes for the first
-   ship? This decides whether Phase 1 ships alone.
-2. **Recurrence grammar:** cron-5 + one-shot `at` (recommended), or RRULE?
-3. **Timezone UX:** infer machine tz silently, or make it an explicit field?
-4. **Does a scheduled run reuse the last working file or always re-derive from the
-   source prompt file?** (Affects Phase 2's `ctrlyoke run` target and history.)
-5. **Multi-repo / hosted:** if the hosted server is someone's always-on box, is a
-   "server-hosted scheduler" a real Phase-2 alternative to OS delegation, or out
-   of scope? (It would make the hosted server a genuine executor, which it isn't
-   today.)
+All major questions are **decided** — the plan is ready to implement:
+
+- Substrate: orchestrator-bound; fires only while a ctrlyoke host runs.
+- Scheduler owned **inside `WorkflowOrchestrator`** (max reuse; standalone server
+  inherits it for free).
+- Wait-step idea: **scrapped.**
+- Storage: on the **working file**, loaded via the recent-workflows startup pass.
+- Grammar: **cron-5 + one-shot `at`** (RRULE rejected).
+- Timezone: **machine local time**, no timezone field in v1 (explicit field is a
+  possible post-release add).
+- Firing: equivalent to the dashboard **Run / re-run** — `RUN_WORKFLOW` reusing
+  the same working file, restart from beginning.
+- Missed runs (host was offline at the scheduled time): **always skipped** in v1,
+  no catch-up — opening VS Code after days off never triggers a backlog. Not a
+  user option.
+- Overlapping runs (same workflow still running when the next fire is due):
+  **always skipped** in v1 — never a second concurrent copy. Not a user option.
+- Survive-close: out of scope; power users point **cron / CI at `ctrlyoke run`**.
+
+No remaining blockers — the plan is fully specified for a v1 implementation.
