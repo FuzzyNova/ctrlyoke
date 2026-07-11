@@ -2,7 +2,7 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
-import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
+import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 import { UniversalCliOutput, CliEvent } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -205,10 +205,13 @@ export class CodexResponseParser
       });
     }
 
+    const model = this.resolvedModel || undefined;
+
     return {
       events,
       metadata: {
         sessionId,
+        model,
         usage: usage
           ? {
               inputTokens: usage.input_tokens,
@@ -219,7 +222,7 @@ export class CodexResponseParser
               // For Codex, context window input = non-cached + cached portions
               contextWindowUsedTokens:
                 usage.input_tokens + (usage.cached_input_tokens ?? 0),
-              contextWindowSize: CODEX_CLI_CONTEXT_WINDOW_SIZE,
+              contextWindowSize: getCodexContextWindowSize(model),
             }
           : undefined,
         harness: HARNESS_IDS.CODEX_CLI,

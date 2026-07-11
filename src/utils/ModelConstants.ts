@@ -117,12 +117,22 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  *
  * See: https://docs.openai.com/codex
  */
-export const CODEX_CLI_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"] as const;
+export const CODEX_CLI_MODELS = [
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+] as const;
 
 /**
  * Codex CLI model display names
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-5.6-sol": "GPT 5.6 Sol",
+  "gpt-5.6-terra": "GPT 5.6 Terra",
+  "gpt-5.6-luna": "GPT 5.6 Luna",
   "gpt-5.5": "GPT 5.5",
   "gpt-5.4": "GPT 5.4",
   "gpt-5.4-mini": "GPT 5.4 Mini",
@@ -218,10 +228,25 @@ export function getCopilotContextWindowSize(
 }
 
 /**
- * Context window size (in tokens) for the Codex CLI.
- * Current Codex CLI models (gpt-5.4, gpt-5.4-mini, gpt-5.5) use a 400k token context window.
+ * Default/fallback context window size (in tokens) for the Codex CLI.
+ * GPT 5.4 / 5.5 stay on 400k; GPT 5.6 variants override below.
  */
 export const CODEX_CLI_CONTEXT_WINDOW_SIZE = 400_000;
+
+const CODEX_CLI_CONTEXT_WINDOW_SIZES: Record<string, number> = {
+  "gpt-5.6-sol": 1_050_000,
+  "gpt-5.6-terra": 1_050_000,
+  "gpt-5.6-luna": 1_050_000,
+};
+
+export function getCodexContextWindowSize(
+  modelId: string | undefined
+): number {
+  if (modelId && modelId in CODEX_CLI_CONTEXT_WINDOW_SIZES) {
+    return CODEX_CLI_CONTEXT_WINDOW_SIZES[modelId];
+  }
+  return CODEX_CLI_CONTEXT_WINDOW_SIZE;
+}
 
 // ============================================================================
 // OPENCODE CLI FALLBACK MODELS

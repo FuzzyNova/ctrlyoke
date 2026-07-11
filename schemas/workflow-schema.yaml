@@ -73,6 +73,14 @@ definitions:
           Bedrock model strings passed via additionalArgs). Optional - defaults to the active
           harness model setting.
         examples:
+          - Claude Opus 4.6 (Thinking)
+          - Claude Sonnet 4.6 (Thinking)
+          - GPT-OSS 120B (Medium)
+          - Gemini 3.1 Pro (High)
+          - Gemini 3.1 Pro (Low)
+          - Gemini 3.5 Flash (High)
+          - Gemini 3.5 Flash (Low)
+          - Gemini 3.5 Flash (Medium)
           - auto
           - claude-fable-5
           - claude-haiku-4.5
@@ -87,6 +95,8 @@ definitions:
           - copilot-utility
           - copilot-utility-small
           - fable
+          - gemini-2.5-pro
+          - gemini-3-flash-preview
           - gemini-3.1-pro-preview
           - gemini-3.5-flash
           - gpt-4o-mini
@@ -95,6 +105,9 @@ definitions:
           - gpt-5.4
           - gpt-5.4-mini
           - gpt-5.5
+          - gpt-5.6-luna
+          - gpt-5.6-sol
+          - gpt-5.6-terra
           - haiku
           - mai-code-1-flash-picker
           - none

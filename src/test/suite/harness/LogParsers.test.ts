@@ -532,7 +532,6 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.isComplete(event), false);
     });
   });
-
   suite("extractSessionId", () => {
     test("should extract session ID from events", () => {
       const events = [
@@ -1933,6 +1932,41 @@ suite("CodexLogParser", () => {
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 5032192);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 6001);
     });
+    test("should fall back to the Codex 5.6 context window when token_count omits it", () => {
+      const events = [
+        {
+          type: "session_meta",
+          payload: {
+            id: "thread_5_6",
+            model: "gpt-5.6-terra",
+            cli_version: "1.0.0",
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 4000,
+                cached_input_tokens: 3000,
+                output_tokens: 200,
+                reasoning_output_tokens: 50,
+              },
+              last_token_usage: {
+                total_tokens: 3200,
+              },
+            },
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      assert.strictEqual(response.metadata.usage?.contextWindowSize, 1_050_000);
+    });
 
     test("should emit one file edit per file for multi-file apply_patch calls", () => {
       const patchInput = [
@@ -2124,6 +2158,69 @@ suite("CodexLogParser", () => {
         assert.strictEqual(parser.isComplete(event), false);
       }
     });
+  });
+
+  suite("extractLiveContextWindow", () => {
+    test("should fall back to the resolved Codex 5.6 context window", () => {
+      const event = {
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              total_tokens: 98765,
+            },
+          },
+        },
+      } as unknown as BaseCliEvent;
+
+      const result = parser.extractLiveContextWindow(event, "gpt-5.6-luna");
+
+      assert.deepStrictEqual(result, { used: 98765, size: 1_050_000 });
+    });
+  });
+
+  test("should derive Codex log token context window size from a 5.6 session model", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-codex-log-"));
+    const logPath = path.join(tempDir, "rollout-test.jsonl");
+
+    try {
+      const lines = [
+        JSON.stringify({
+          type: "session_meta",
+          payload: {
+            id: "thread_5_6",
+            model: "gpt-5.6-sol",
+          },
+        }),
+        JSON.stringify({
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 1200,
+                cached_input_tokens: 200,
+                output_tokens: 80,
+                reasoning_output_tokens: 10,
+              },
+              last_token_usage: {
+                total_tokens: 900,
+              },
+            },
+          },
+        }),
+      ].join("\n");
+
+      fs.writeFileSync(logPath, lines, "utf8");
+
+      const usage = CodexLogParser.extractTokenUsageFromLogFile(logPath);
+
+      assert.strictEqual(usage?.contextWindowSize, 1_050_000);
+      assert.strictEqual(usage?.contextWindowUsedTokens, 900);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   suite("extractSessionId", () => {

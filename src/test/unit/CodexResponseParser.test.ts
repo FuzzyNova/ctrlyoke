@@ -82,4 +82,28 @@ suite("CodexResponseParser", () => {
 
     assert.deepStrictEqual(textEvents, ["duplicate candidate"]);
   });
+  test("should use the resolved Codex 5.6 model for context window fallback", () => {
+    const parser = new CodexResponseParser();
+    parser.setCurrentModel?.("gpt-5.6-sol");
+
+    const stdout = [
+      JSON.stringify({
+        type: "thread.started",
+        thread_id: "thread_5_6",
+      }),
+      JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+        },
+      }),
+    ].join("\n");
+
+    const output = parser.parse(stdout, "", 0);
+
+    assert.strictEqual(output.metadata.model, "gpt-5.6-sol");
+    assert.strictEqual(output.metadata.usage?.contextWindowSize, 1_050_000);
+  });
+
 });

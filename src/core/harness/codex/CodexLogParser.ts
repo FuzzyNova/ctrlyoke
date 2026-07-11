@@ -25,7 +25,7 @@ import {
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
-import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
+import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -522,7 +522,7 @@ export class CodexLogParser extends BaseLogParser {
 
     // Fallback: if model_context_window wasn't in the token_count event, use known size
     if (modelContextWindow === undefined) {
-      modelContextWindow = CODEX_CLI_CONTEXT_WINDOW_SIZE;
+      modelContextWindow = getCodexContextWindowSize(model);
     }
 
     // Build token usage object if we have any token data
@@ -589,7 +589,7 @@ export class CodexLogParser extends BaseLogParser {
 
   override extractLiveContextWindow(
     event: BaseCliEvent,
-    _modelId: string
+    modelId: string
   ): { used: number; size: number } | null {
     const e = event as any;
     if (e.type === "event_msg" && e.payload?.type === "token_count") {
@@ -600,7 +600,8 @@ export class CodexLogParser extends BaseLogParser {
           ? last.total_tokens
           : (last.input_tokens ?? 0) + (last.output_tokens ?? 0);
       const size =
-        e.payload.info?.model_context_window ?? CODEX_CLI_CONTEXT_WINDOW_SIZE;
+        e.payload.info?.model_context_window ??
+        getCodexContextWindowSize(modelId);
       return used > 0 && size ? { used, size } : null;
     }
     return null;
@@ -1306,6 +1307,7 @@ export class CodexLogParser extends BaseLogParser {
       const lines = content.split("\n");
 
       let result: CodexLogTokenUsage | undefined;
+      let model: string | undefined;
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -1315,6 +1317,15 @@ export class CodexLogParser extends BaseLogParser {
 
         try {
           const event = JSON.parse(trimmed) as CodexProviderEvent;
+
+          if (event.type === "session_meta" && event.payload?.model) {
+            model = event.payload.model as string;
+          }
+
+          if (event.type === "turn_context" && event.payload?.model && !model) {
+            model = event.payload.model as string;
+          }
+
           if (
             event.type === "event_msg" &&
             event.payload?.type === "token_count"
@@ -1357,7 +1368,7 @@ export class CodexLogParser extends BaseLogParser {
               reasoningOutputTokens,
               contextWindowUsedTokens,
               contextWindowSize:
-                info.model_context_window ?? CODEX_CLI_CONTEXT_WINDOW_SIZE,
+                info.model_context_window ?? getCodexContextWindowSize(model),
             };
           }
         } catch {
