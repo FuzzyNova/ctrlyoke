@@ -107,7 +107,7 @@ export class CliLogEventPump {
       return undefined;
     }
 
-    const text = this.extractSteerText(event);
+    const text = this.deps.parser.extractUserSteerText?.(event);
     if (!text) {
       return undefined;
     }
@@ -117,21 +117,5 @@ export class CliLogEventPump {
       timestamp: event.timestamp ?? Date.now(),
       data: { text } as UserSteerData,
     };
-  }
-
-  private extractSteerText(event: BaseCliEvent): string | undefined {
-    const message = (event as { message?: { content?: unknown } }).message;
-    const content = message?.content;
-    if (!Array.isArray(content)) {
-      return undefined;
-    }
-    return content
-      .filter(
-        (block): block is { type: string; text: string } =>
-          block?.type === "text" && typeof block.text === "string"
-      )
-      .map((block) => block.text)
-      .join("")
-      .trim();
   }
 }

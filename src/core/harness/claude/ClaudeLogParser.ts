@@ -448,12 +448,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return "tool-result";
     }
 
-    const text = blocks
-      .filter((block) => block.type === "text" && typeof block.text === "string")
-      .map((block) => block.text as string)
-      .join("")
-      .trim();
-
+    const text = this.extractUserMessageText(e);
     if (!text) {
       return "other";
     }
@@ -475,6 +470,32 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     return "human-steer";
+  }
+
+  /**
+   * Extract the display text for an event already classified as `"human-steer"`
+   * by `classifyUserEvent`. Reuses the same block-text extraction so the two
+   * stay in sync — see `extractUserMessageText`.
+   */
+  override extractUserSteerText(event: BaseCliEvent): string | undefined {
+    const e = event as ClaudeProviderEvent;
+    if (e.type !== "user" || !Array.isArray(e.message?.content)) {
+      return undefined;
+    }
+    const text = this.extractUserMessageText(e);
+    return text || undefined;
+  }
+
+  /** Concatenates all `text` content blocks in a `user` event's message. */
+  private extractUserMessageText(e: ClaudeProviderEvent): string {
+    if (!Array.isArray(e.message?.content)) {
+      return "";
+    }
+    return (e.message.content as Array<Record<string, any>>)
+      .filter((block) => block.type === "text" && typeof block.text === "string")
+      .map((block) => block.text as string)
+      .join("")
+      .trim();
   }
 
   /**

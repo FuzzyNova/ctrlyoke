@@ -2,7 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  UserEventClassification,
+} from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CodexToolBuilder } from "./CodexToolBuilder";
@@ -601,6 +604,70 @@ export class CodexLogParser extends BaseLogParser {
       return used > 0 && size ? { used, size } : null;
     }
     return null;
+  }
+
+  /**
+   * Classify a user-authored log event. Codex represents user text two ways —
+   * `response_item:role=user` (the persisted rollout entry) and
+   * `event_msg:user_message` (a live echo) — mirroring how `event_msg:agent_message`
+   * duplicates `response_item:role=assistant` on the assistant side (see the
+   * comment in `extractResponse`). To avoid emitting the same steer twice, only
+   * `response_item:role=user` is classified here, matching the established
+   * pattern of preferring `response_item` over its `event_msg` echo.
+   */
+  override classifyUserEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    const e = event as CodexProviderEvent;
+    if (e.type !== "response_item" || e.payload?.role !== "user") {
+      return "other";
+    }
+
+    const text = this.extractUserMessageText(e);
+    if (!text) {
+      return "other";
+    }
+
+    if (ctx.dispatchedPromptText) {
+      const normalizedDispatched = this.normalizePromptForMatching(
+        ctx.dispatchedPromptText.substring(0, 100)
+      );
+      const normalizedLogged = this.normalizePromptForMatching(
+        text.substring(0, 100)
+      );
+      if (normalizedLogged.includes(normalizedDispatched)) {
+        return "injected-prompt";
+      }
+    }
+
+    return "human-steer";
+  }
+
+  override extractUserSteerText(event: BaseCliEvent): string | undefined {
+    const e = event as CodexProviderEvent;
+    if (e.type !== "response_item" || e.payload?.role !== "user") {
+      return undefined;
+    }
+    const text = this.extractUserMessageText(e);
+    return text || undefined;
+  }
+
+  /** Concatenates text content items in a Codex `response_item:role=user` event. */
+  private extractUserMessageText(e: CodexProviderEvent): string {
+    const content = e.payload?.content;
+    if (!Array.isArray(content)) {
+      return "";
+    }
+    return content
+      .filter(
+        (item: any) =>
+          (item.type === "input_text" || item.type === "output_text") &&
+          typeof item.text === "string"
+      )
+      .map((item: any) => item.text as string)
+      .join("")
+      .trim();
   }
 
   /**

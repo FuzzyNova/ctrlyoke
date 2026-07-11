@@ -386,6 +386,21 @@ export interface ILogParser {
   ): UserEventClassification;
 
   /**
+   * Extract the display text for a log event already classified as
+   * `"human-steer"` by `classifyUserEvent`. Each harness owns its own event
+   * shape (Claude's `message.content` blocks, Copilot's `data.content`
+   * string, Qwen's `message.parts[].text`, etc.), so text extraction is
+   * parser-owned rather than assumed generically by the caller.
+   *
+   * Called by `CliLogEventPump` only after `classifyUserEvent` has already
+   * returned `"human-steer"` for the same event.
+   *
+   * @param event - Single parsed log event
+   * @returns The text the human typed, or undefined if it can't be extracted
+   */
+  extractUserSteerText?(event: BaseCliEvent): string | undefined;
+
+  /**
    * Incrementally update background-task tracking state from a single log event.
    * Called by `CliLogEventPump` for every event as it streams in (both the
    * per-prompt `CliLogMonitor` and the longer-lived `SessionActivityWatcher`

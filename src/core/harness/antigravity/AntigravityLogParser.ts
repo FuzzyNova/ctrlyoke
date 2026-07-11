@@ -2,7 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { BaseCliEvent, ILogParser } from "../shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  ILogParser,
+  UserEventClassification,
+} from "../shared/interfaces/ILogParser";
 import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
@@ -20,7 +24,8 @@ interface AntigravityLogEvent extends BaseCliEvent {
     | "session.created"
     | "response.completed"
     | "log.line"
-    | "response.text";
+    | "response.text"
+    | "user_input";
   line: string;
   sessionId?: string;
   timestamp?: number;
@@ -51,9 +56,14 @@ export class AntigravityLogParser
   private cachedLastConversationsSessionId?: string;
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
+    // Independent of the Go server log below (may have nothing new to report
+    // this poll even when the user just typed a follow-up) — read first so
+    // every path (including the early-return / catch below) still surfaces it.
+    const userSteerEvents = this.readNewUserSteerEvents();
+
     try {
       if (!fs.existsSync(filePath)) {
-        return [];
+        return userSteerEvents;
       }
 
       const stats = fs.statSync(filePath);
@@ -62,7 +72,7 @@ export class AntigravityLogParser
         this.lastReadPosition = 0;
       }
       if (currentSize === this.lastReadPosition) {
-        return [];
+        return userSteerEvents;
       }
 
       const buffer = Buffer.alloc(currentSize - this.lastReadPosition);
@@ -116,9 +126,9 @@ export class AntigravityLogParser
         });
       }
 
-      return events;
+      return [...events, ...userSteerEvents];
     } catch {
-      return [];
+      return userSteerEvents;
     }
   }
 
@@ -282,6 +292,149 @@ export class AntigravityLogParser
   formatStatistics(metadata: BaseCliEvent): string {
     const parts = this.buildCommonStatisticsParts(metadata, 8, "...");
     return parts.join(" | ");
+  }
+
+  /** Transcript file mtime (ms) last scanned for user-steer entries — skips a re-read when unchanged. */
+  private lastUserSteerScanMtimeMs = new Map<string, number>();
+  /** Transcript line indices already emitted as `user_input` events, per transcript path. */
+  private seenUserInputLineIndices = new Map<string, Set<number>>();
+
+  /**
+   * Genuine human follow-ups typed into the live TUI also land in the
+   * **transcript** (never the tailed cli log — see `hasPendingBackgroundWork`
+   * above), as `source: "USER_EXPLICIT"`, `type: "USER_INPUT"` entries. Scanned
+   * incrementally (by line index, mtime-gated) so repeated polls of the same
+   * unchanged transcript don't re-read or re-emit already-seen entries.
+   *
+   * Only reached when `readNewLines` runs, which is itself only triggered by
+   * `fs.watch` activity on the tailed cli log (see class doc — this parser
+   * does not override `watchLogFile`). A steer typed while the cli log is
+   * otherwise quiet is picked up on the next cli-log write rather than
+   * instantly; a dedicated transcript poll would close that gap but hasn't
+   * been needed for the confirmed background-task-hold scenario.
+   */
+  private readNewUserSteerEvents(): AntigravityLogEvent[] {
+    const sessionId =
+      this.cachedSessionId ?? this.cachedLastConversationsSessionId;
+    if (!sessionId) {
+      return [];
+    }
+    return [
+      ...this.readNewUserSteerEventsFromTranscript(
+        this.getTranscriptPath(sessionId, true),
+        sessionId
+      ),
+      ...this.readNewUserSteerEventsFromTranscript(
+        this.getTranscriptPath(sessionId, false),
+        sessionId
+      ),
+    ];
+  }
+
+  private readNewUserSteerEventsFromTranscript(
+    transcriptPath: string,
+    sessionId: string
+  ): AntigravityLogEvent[] {
+    try {
+      if (!fs.existsSync(transcriptPath)) {
+        return [];
+      }
+      const mtimeMs = fs.statSync(transcriptPath).mtimeMs;
+      if (this.lastUserSteerScanMtimeMs.get(transcriptPath) === mtimeMs) {
+        return [];
+      }
+      this.lastUserSteerScanMtimeMs.set(transcriptPath, mtimeMs);
+
+      const seen =
+        this.seenUserInputLineIndices.get(transcriptPath) ?? new Set<number>();
+      const lines = fs.readFileSync(transcriptPath, "utf8").split(/\r?\n/);
+      const events: AntigravityLogEvent[] = [];
+
+      lines.forEach((rawLine, index) => {
+        if (seen.has(index)) {
+          return;
+        }
+        const line = rawLine.trim();
+        if (!line) {
+          return;
+        }
+        seen.add(index);
+
+        let entry: AntigravityTranscriptEntry;
+        try {
+          entry = JSON.parse(line) as AntigravityTranscriptEntry;
+        } catch {
+          return;
+        }
+        if (
+          entry.source !== "USER_EXPLICIT" ||
+          entry.type !== "USER_INPUT" ||
+          typeof entry.content !== "string"
+        ) {
+          return;
+        }
+        const text = entry.content.trim();
+        if (!text) {
+          return;
+        }
+        events.push({
+          type: "user_input",
+          line: text,
+          sessionId,
+          timestamp: entry.created_at
+            ? new Date(entry.created_at).getTime()
+            : Date.now(),
+        });
+      });
+
+      this.seenUserInputLineIndices.set(transcriptPath, seen);
+      return events;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Classify a synthetic `user_input` event (see `readNewUserSteerEventsFromTranscript`).
+   * The transcript's completion/resume marker is a `SYSTEM`/`SYSTEM_MESSAGE`
+   * entry (see `hasPendingBackgroundWork`), never `USER_EXPLICIT`/`USER_INPUT`,
+   * so the only distinction needed here is against ctrlyoke's own injected prompt.
+   */
+  override classifyUserEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    const e = event as AntigravityLogEvent;
+    if (e.type !== "user_input") {
+      return "other";
+    }
+    const text = e.line?.trim();
+    if (!text) {
+      return "other";
+    }
+
+    if (ctx.dispatchedPromptText) {
+      const normalizedDispatched = this.normalizePromptForMatching(
+        ctx.dispatchedPromptText.substring(0, 100)
+      );
+      const normalizedLogged = this.normalizePromptForMatching(
+        text.substring(0, 100)
+      );
+      if (normalizedLogged.includes(normalizedDispatched)) {
+        return "injected-prompt";
+      }
+    }
+
+    return "human-steer";
+  }
+
+  override extractUserSteerText(event: BaseCliEvent): string | undefined {
+    const e = event as AntigravityLogEvent;
+    if (e.type !== "user_input") {
+      return undefined;
+    }
+    const text = e.line?.trim();
+    return text || undefined;
   }
 
   /**

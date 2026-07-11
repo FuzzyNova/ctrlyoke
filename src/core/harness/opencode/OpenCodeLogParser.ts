@@ -5,7 +5,10 @@ import { promisify } from "util";
 import { EventEmitter } from "events";
 import type * as fs from "fs";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  UserEventClassification,
+} from "../shared/interfaces/ILogParser";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -224,6 +227,49 @@ export class OpenCodeLogParser extends BaseLogParser {
       }
     }
     return null;
+  }
+
+  /**
+   * Classify a synthetic `user_text` event (see `extractNewEventsFromExport`,
+   * which emits these for `user`-role message text parts — a shape OpenCode's
+   * export never mixes with tool results or resume signals, so the only
+   * distinction needed is against ctrlyoke's own injected prompt).
+   */
+  override classifyUserEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    if (event.type !== "user_text") {
+      return "other";
+    }
+    const text = ((event as Record<string, any>).text as string | undefined)
+      ?.trim();
+    if (!text) {
+      return "other";
+    }
+
+    if (ctx.dispatchedPromptText) {
+      const normalizedDispatched = this.normalizePromptForMatching(
+        ctx.dispatchedPromptText.substring(0, 100)
+      );
+      const normalizedLogged = this.normalizePromptForMatching(
+        text.substring(0, 100)
+      );
+      if (normalizedLogged.includes(normalizedDispatched)) {
+        return "injected-prompt";
+      }
+    }
+
+    return "human-steer";
+  }
+
+  override extractUserSteerText(event: BaseCliEvent): string | undefined {
+    if (event.type !== "user_text") {
+      return undefined;
+    }
+    const text = ((event as Record<string, any>).text as string | undefined)
+      ?.trim();
+    return text || undefined;
   }
 
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
@@ -505,12 +551,36 @@ export class OpenCodeLogParser extends BaseLogParser {
     const newEvents: BaseCliEvent[] = [];
 
     for (const message of exportData.messages) {
-      // Only assistant messages contain displayable events
-      if (message.info.role !== "assistant") {
+      const messageTimestamp = message.info.time?.created ?? Date.now();
+
+      // User messages carry no displayable AI output, but their `text` parts
+      // are candidate user-steer events (ctrlyoke's own injected prompt, or a
+      // genuine follow-up typed into the live TUI) — see classifyUserEvent.
+      // Unlike assistant parts, user text is already final the moment it
+      // appears in the export, so isPartCompleted's streaming check doesn't apply.
+      if (message.info.role === "user") {
+        for (const part of message.parts) {
+          if (this.seenPartIds.has(part.id) || part.type !== "text") {
+            continue;
+          }
+          this.seenPartIds.add(part.id);
+          const text = (part as any).text as string | undefined;
+          if (text && text.trim()) {
+            newEvents.push({
+              type: "user_text",
+              sessionID: part.sessionID,
+              timestamp: (part as any).time?.start ?? messageTimestamp,
+              text: text.trim(),
+            });
+          }
+        }
         continue;
       }
 
-      const messageTimestamp = message.info.time?.created ?? Date.now();
+      // Only assistant messages contain displayable AI-output events
+      if (message.info.role !== "assistant") {
+        continue;
+      }
 
       for (const part of message.parts) {
         if (this.seenPartIds.has(part.id)) {

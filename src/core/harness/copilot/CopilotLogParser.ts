@@ -2,7 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  UserEventClassification,
+} from "../shared/interfaces/ILogParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
@@ -603,6 +606,55 @@ export class CopilotLogParser extends BaseLogParser {
 
   override hasPendingBackgroundWork(): boolean {
     return this.pendingAsyncShellIds.size > 0;
+  }
+
+  /**
+   * Classify a `user.message` log event. Unlike Claude, Copilot never reuses
+   * this event type for tool results or resume signals (those are
+   * `tool.execution_complete` and `system.notification` respectively — see
+   * `hasPendingBackgroundWork`), so the only two possibilities are ctrlyoke's
+   * own injected prompt echoed back, or genuine text typed into the live TUI.
+   */
+  override classifyUserEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    const e = event as CopilotProviderEvent;
+    if (e.type !== "user.message") {
+      return "other";
+    }
+
+    const text =
+      typeof e.data?.content === "string" ? e.data.content.trim() : "";
+    if (!text) {
+      return "other";
+    }
+
+    if (ctx.dispatchedPromptText) {
+      const normalizedDispatched = this.normalizePromptForMatching(
+        ctx.dispatchedPromptText.substring(0, 100)
+      );
+      const normalizedLogged = this.normalizePromptForMatching(
+        text.substring(0, 100)
+      );
+      // Copilot may append file-attachment metadata after the prompt text, so
+      // match by prefix containment rather than exact equality (mirrors
+      // discoverSessionLog's own matching strategy above).
+      if (normalizedLogged.includes(normalizedDispatched)) {
+        return "injected-prompt";
+      }
+    }
+
+    return "human-steer";
+  }
+
+  override extractUserSteerText(event: BaseCliEvent): string | undefined {
+    const e = event as CopilotProviderEvent;
+    if (e.type !== "user.message") {
+      return undefined;
+    }
+    const text = typeof e.data?.content === "string" ? e.data.content.trim() : "";
+    return text || undefined;
   }
 
   /** Extracts the shellId from a launch ack like `"<command started in background with shellId: 0>"`. */

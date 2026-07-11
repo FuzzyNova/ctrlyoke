@@ -216,6 +216,16 @@ export abstract class BaseLogParser implements ILogParser {
   }
 
   /**
+   * Default no-op — pairs with `classifyUserEvent`'s default of always
+   * returning `"other"`, so this is never actually called unless a subclass
+   * overrides `classifyUserEvent` to return `"human-steer"` (in which case it
+   * must also override this).
+   */
+  extractUserSteerText(_event: BaseCliEvent): string | undefined {
+    return undefined;
+  }
+
+  /**
    * Default no-op — most harnesses have no background-task auto-resume signal
    * to track. Overridden by Claude/Copilot/Antigravity parsers.
    */

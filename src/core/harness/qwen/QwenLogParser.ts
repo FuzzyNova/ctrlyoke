@@ -2,7 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  UserEventClassification,
+} from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
@@ -385,6 +388,62 @@ export class QwenLogParser extends BaseLogParser {
       return used > 0 && size ? { used, size } : null;
     }
     return null;
+  }
+
+  /**
+   * Classify a `user` log event. Qwen's `user` type is only ever the initial
+   * prompt or a genuine follow-up typed into the live TUI (tool results arrive
+   * as a separate `tool_result` event type — see `extractResponse`), so the
+   * only distinction needed is against ctrlyoke's own injected prompt.
+   */
+  override classifyUserEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): UserEventClassification {
+    const e = event as QwenProviderEvent;
+    if (e.type !== "user") {
+      return "other";
+    }
+
+    const text = this.extractUserMessageText(e);
+    if (!text) {
+      return "other";
+    }
+
+    if (ctx.dispatchedPromptText) {
+      const normalizedDispatched = this.normalizePromptForMatching(
+        ctx.dispatchedPromptText.substring(0, 100)
+      );
+      const normalizedLogged = this.normalizePromptForMatching(
+        text.substring(0, 100)
+      );
+      if (normalizedDispatched === normalizedLogged) {
+        return "injected-prompt";
+      }
+    }
+
+    return "human-steer";
+  }
+
+  override extractUserSteerText(event: BaseCliEvent): string | undefined {
+    const e = event as QwenProviderEvent;
+    if (e.type !== "user") {
+      return undefined;
+    }
+    const text = this.extractUserMessageText(e);
+    return text || undefined;
+  }
+
+  /** Concatenates all text parts in a Qwen `user` event's message (Gemini-style parts, not Claude content blocks). */
+  private extractUserMessageText(e: QwenProviderEvent): string {
+    if (!Array.isArray(e.message?.parts)) {
+      return "";
+    }
+    return e.message.parts
+      .filter((part) => typeof part.text === "string")
+      .map((part) => part.text as string)
+      .join("")
+      .trim();
   }
 
   /**
