@@ -565,6 +565,107 @@ suite("ClaudeLogParser", () => {
     });
   });
 
+  suite("background work tracking", () => {
+    test("should clear pending background work from string task notifications", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_background_1",
+              name: "Bash",
+              input: {
+                command: "sleep 60",
+                run_in_background: true,
+              },
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification>\n" +
+            "<task-id>abc123</task-id>\n" +
+            "<tool-use-id>toolu_background_1</tool-use-id>\n" +
+            "<status>completed</status>\n" +
+            "</task-notification>",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("should keep pending background work for unmatched notifications", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_background_2",
+              name: "Bash",
+              input: { run_in_background: true },
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification><tool-use-id>toolu_other</tool-use-id></task-notification>",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+    });
+  });
+
+  suite("classifyUserEvent", () => {
+    test("should classify string task notifications as resume signals", () => {
+      const classification = parser.classifyUserEvent(
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content:
+              "<task-notification><tool-use-id>toolu_1</tool-use-id></task-notification>",
+          },
+        },
+        {}
+      );
+
+      assert.strictEqual(classification, "resume-signal");
+    });
+
+    test("should classify string dispatched prompts as injected prompts", () => {
+      const classification = parser.classifyUserEvent(
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content: "Use these file references @C:\\dev\\ctrlyoke\\file.ts",
+          },
+        },
+        {
+          dispatchedPromptText:
+            "Use these file references @C:\\dev\\ctrlyoke\\file.ts",
+        }
+      );
+
+      assert.strictEqual(classification, "injected-prompt");
+    });
+  });
+
   suite("readNewLines", () => {
     test("should read and parse JSONL file incrementally", async () => {
       const events = [

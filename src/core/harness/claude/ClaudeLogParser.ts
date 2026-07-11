@@ -439,12 +439,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     const e = event as ClaudeProviderEvent;
-    if (e.type !== "user" || !Array.isArray(e.message?.content)) {
+    if (e.type !== "user") {
       return "other";
     }
 
-    const blocks = e.message.content as Array<Record<string, any>>;
-    if (blocks.some((block) => block.type === "tool_result")) {
+    if (this.hasToolResultBlock(e)) {
       return "tool-result";
     }
 
@@ -479,20 +478,42 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    */
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as ClaudeProviderEvent;
-    if (e.type !== "user" || !Array.isArray(e.message?.content)) {
+    if (e.type !== "user") {
       return undefined;
     }
     const text = this.extractUserMessageText(e);
     return text || undefined;
   }
 
-  /** Concatenates all `text` content blocks in a `user` event's message. */
+  /** Returns true when a `user` event is only carrying tool results. */
+  private hasToolResultBlock(e: ClaudeProviderEvent): boolean {
+    return (
+      Array.isArray(e.message?.content) &&
+      (e.message.content as Array<Record<string, any>>).some(
+        (block) => block.type === "tool_result"
+      )
+    );
+  }
+
+  /**
+   * Extracts text from a Claude `user` event.
+   *
+   * Claude logs user-originated content in both historical block-array form
+   * and current string form. Task notifications use the string shape, so
+   * background-work tracking must normalize both.
+   */
   private extractUserMessageText(e: ClaudeProviderEvent): string {
-    if (!Array.isArray(e.message?.content)) {
+    const content = e.message?.content;
+    if (typeof content === "string") {
+      return content.trim();
+    }
+    if (!Array.isArray(content)) {
       return "";
     }
-    return (e.message.content as Array<Record<string, any>>)
-      .filter((block) => block.type === "text" && typeof block.text === "string")
+    return (content as Array<Record<string, any>>)
+      .filter(
+        (block) => block.type === "text" && typeof block.text === "string"
+      )
       .map((block) => block.text as string)
       .join("")
       .trim();
@@ -527,15 +548,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return;
     }
 
-    if (
-      this.mostRecentBackgroundLaunchId &&
-      e.type === "user" &&
-      Array.isArray(e.message?.content)
-    ) {
-      const text = (e.message.content as Array<Record<string, any>>)
-        .filter((block) => block.type === "text" && typeof block.text === "string")
-        .map((block) => block.text as string)
-        .join("");
+    if (this.mostRecentBackgroundLaunchId && e.type === "user") {
+      const text = this.extractUserMessageText(e);
       const match = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
       if (match && match[1] === this.mostRecentBackgroundLaunchId) {
         this.mostRecentBackgroundLaunchId = undefined;
@@ -685,18 +699,17 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
           // Look for user event with matching prompt text
           for (const event of events as ClaudeProviderEvent[]) {
-            if (event.type === "user" && event.message?.content) {
-              for (const contentBlock of event.message.content) {
-                if (contentBlock.type === "text" && contentBlock.text) {
-                  const logPromptPrefix = this.normalizePromptForMatching(
-                    contentBlock.text.substring(0, 100)
+            if (event.type === "user") {
+              const text = this.extractUserMessageText(event);
+              if (text) {
+                const logPromptPrefix = this.normalizePromptForMatching(
+                  text.substring(0, 100)
+                );
+                if (logPromptPrefix === promptPrefix) {
+                  Log.debug(
+                    `[ClaudeLogParser] Found matching session log: ${candidatePath}`
                   );
-                  if (logPromptPrefix === promptPrefix) {
-                    Log.debug(
-                      `[ClaudeLogParser] Found matching session log: ${candidatePath}`
-                    );
-                    return candidatePath;
-                  }
+                  return candidatePath;
                 }
               }
             }
