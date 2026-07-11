@@ -574,12 +574,12 @@ export class WorkflowInstance {
 
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
-    const firstAiStepHarness = state.steps.find(
-      (s): s is PromptStep => !isScriptStep(s)
-    )?.harness;
+    const workflowHarness =
+      this.currentPromptFile?.promptFile?.harness ??
+      this.promptQueue.getWorkflowFile().harness;
     const harness = PropertyResolver.resolveHarnessValue(
-      firstAiStepHarness,
-      this.currentPromptFile?.promptFile?.harness
+      undefined,
+      workflowHarness
     );
     return {
       id: this.id,

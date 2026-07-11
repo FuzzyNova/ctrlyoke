@@ -334,6 +334,58 @@ suite("WorkflowInstance session activity forwarding", () => {
 });
 
 suite("WorkflowInstance runtime transitions", () => {
+  test("getSummary reports the workflow-level harness instead of a step override", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      {
+        updateFileSelected: async () => {},
+        updateSessionRestored: async () => {},
+        updateExecutionStarted: () => {},
+        notifyRunHistoryUpdated: () => {},
+        updateProgress: () => {},
+        updateExecutionState: () => {},
+        updateStepStatus: () => {},
+        updateRetryAttempt: () => {},
+        updateCliOutput: () => {},
+        updateCliStreamingChunk: () => {},
+        updateCliStreamingEvents: () => {},
+        updateStepsExtended: () => {},
+        updatePromptDeleted: () => {},
+        updateFinalStep: () => {},
+        updateFinalStepStatus: () => {},
+        updateFinalStepOutput: () => {},
+        updateFinalStepStreamingChunk: () => {},
+        updateFinalStepStreamingEvents: () => {},
+        updateStatusMessage: () => {},
+        notifyWorkflowStateReset: () => {},
+        notifyStartPositionSet: () => {},
+        notifyPromptsReordered: () => {},
+      } as any,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    const promptFile = {
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      steps: [
+        { prompt: "step-1" },
+        { prompt: "step-2", harness: HARNESS_IDS.CODEX_CLI },
+      ],
+    };
+
+    instance.promptQueue.loadPrompts(promptFile);
+    instance.setCurrentPromptFile("/workspace/example.ctrlyoke.yaml", promptFile);
+    (instance.promptQueue as any).state.currentIndex = 1;
+
+    const summary = instance.getSummary();
+
+    assert.strictEqual(summary.harness, HARNESS_IDS.CLAUDE_CLI);
+  });
+
   test("loading a stale running working file restores it as stopped without starting execution", async () => {
     const platform = new MockPlatform();
     const tempDir = await fs.mkdtemp(
