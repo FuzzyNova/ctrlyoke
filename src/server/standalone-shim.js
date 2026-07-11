@@ -119,7 +119,16 @@
   function getWebSocketUrl() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const token = new URLSearchParams(location.search).get("token") ?? "";
-    return `${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`;
+    // Send our persistent tabId as the client identity. tabId is stable across a
+    // close/reopen of the same tab or PWA (reused from localStorage once the old
+    // instance goes stale) yet distinct for genuinely-simultaneous tabs. The server
+    // adopts it as the clientId so a reopened PWA is recognized as the SAME client —
+    // keeping controller status and its keyed terminal viewport size — instead of
+    // getting a fresh id every connection.
+    return (
+      `${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}` +
+      `&clientId=${encodeURIComponent(tabId)}`
+    );
   }
 
   function sendNow(socket, msg) {

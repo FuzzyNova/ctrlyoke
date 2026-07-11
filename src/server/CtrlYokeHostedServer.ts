@@ -85,6 +85,20 @@ export function sanitizeThemeVars(
   return safe;
 }
 
+/**
+ * Sanitize a client-supplied stable clientId (the browser's persisted tabId) before
+ * it is adopted as a server-side client identity. The id is used as a map key and
+ * broadcast to every connected client, so it is restricted to a conservative
+ * charset and length. Returns null when nothing usable remains (caller then mints a
+ * per-connection fallback id).
+ */
+export function sanitizeBrowserClientId(supplied: string | null): string | null {
+  const sanitized = supplied
+    ? supplied.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64)
+    : "";
+  return sanitized || null;
+}
+
 export class CtrlYokeHostedServer
   implements IDashboardProvider, IDashboardSink
 {
@@ -107,6 +121,13 @@ export class CtrlYokeHostedServer
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
   private readonly socketLiveness = new WeakMap<WebSocket, boolean>();
+  /**
+   * Per-socket clientId (the stable browser tag). Multiple sockets can briefly
+   * share a tag when a reopened PWA/tab reconnects before the stale socket's close
+   * is detected; this lets the close handler tell "last socket for this client
+   * left" from "a stale duplicate closed while the client is still connected".
+   */
+  private readonly socketClientTags = new WeakMap<WebSocket, string>();
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   private readonly workflowSummaries = new Map<string, WorkflowSummary>();
   private readonly notifiedEventIds = new Set<string>();
@@ -1375,9 +1396,16 @@ export class CtrlYokeHostedServer
         ws.close(4401, "Unauthorized");
         return;
       }
+      const clientTag = this.resolveClientTag(url);
       this.connections.add(ws);
       this.socketLiveness.set(ws, true);
-      const clientTag = `${BROWSER_CLIENT_PREFIX}${this.nextConnectionId++}`;
+      this.socketClientTags.set(ws, clientTag);
+      // A reopened PWA/tab presents the same stable id while a stale socket for it
+      // may still linger (iOS often never reports the old close). Terminate that
+      // stale socket so identity and controller status transfer cleanly to this
+      // connection; its close handler is id-aware and won't release the controller
+      // we're inheriting. Register this socket first so that check sees it.
+      this.takeoverStaleSocketsForTag(clientTag, ws);
       // A new connection is the moment we most need to know whether previously
       // recorded clients (e.g. a phone tab that was just closed) are actually
       // still alive — so the new tab can take over an orphaned controller slot
@@ -1420,10 +1448,19 @@ export class CtrlYokeHostedServer
       ws.on("close", (code, reason) => {
         this.connections.delete(ws);
         this.socketLiveness.delete(ws);
+        this.socketClientTags.delete(ws);
+        // Only unregister the client (releasing its controller slot + remembered
+        // terminal viewport) if no OTHER live socket still holds this id. With
+        // stable ids a reopened tab briefly overlaps the stale socket, so the late
+        // close of that stale socket must not strip control from the socket that
+        // just inherited it.
+        const clientStillConnected = this.hasLiveSocketForTag(clientTag);
         Log.debug(
-          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} remainingCount=${this.connections.size}`
+          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} remainingCount=${this.connections.size} clientStillConnected=${clientStillConnected}`
         );
-        this.webviewProvider.unregisterBrowserClient(clientTag);
+        if (!clientStillConnected) {
+          this.webviewProvider.unregisterBrowserClient(clientTag);
+        }
       });
       ws.on("error", (error) => {
         Log.warn(
@@ -1431,6 +1468,55 @@ export class CtrlYokeHostedServer
         );
       });
     });
+  }
+
+  /**
+   * Resolve the clientId for a new WebSocket from its `clientId` query param — the
+   * client's stable, persisted tabId. Sanitized (identity is used as a map key and
+   * broadcast to all clients) and namespaced with BROWSER_CLIENT_PREFIX so it can
+   * never collide with the panel id. Falls back to a per-connection counter when
+   * absent (older clients / stripped param) so the id is at least unique.
+   */
+  private resolveClientTag(url: URL): string {
+    const id = sanitizeBrowserClientId(url.searchParams.get("clientId"));
+    return id
+      ? `${BROWSER_CLIENT_PREFIX}${id}`
+      : `${BROWSER_CLIENT_PREFIX}${this.nextConnectionId++}`;
+  }
+
+  /**
+   * Terminate any already-registered socket that shares `tag` with a just-connected
+   * socket (`keep`). This is the reconnect path: the same logical client returned,
+   * so the stale socket is abandoned. The stale socket's id-aware close handler
+   * sees `keep` and skips unregister, so the controller slot survives the handoff.
+   */
+  private takeoverStaleSocketsForTag(tag: string, keep: WebSocket): void {
+    for (const ws of this.connections) {
+      if (ws === keep) continue;
+      if (this.socketClientTags.get(ws) !== tag) continue;
+      Log.debug(
+        `[hosted-server] reconnect takeover: terminating stale socket for ${tag}`
+      );
+      try {
+        ws.terminate();
+      } catch {
+        // Best-effort; the close handler owns the rest of cleanup.
+      }
+    }
+  }
+
+  /** True if any still-connected socket carries `tag` (see id-aware close). */
+  private hasLiveSocketForTag(tag: string): boolean {
+    for (const ws of this.connections) {
+      if (
+        ws.readyState !== WebSocket.OPEN &&
+        ws.readyState !== WebSocket.CONNECTING
+      ) {
+        continue;
+      }
+      if (this.socketClientTags.get(ws) === tag) return true;
+    }
+    return false;
   }
 
   /**
