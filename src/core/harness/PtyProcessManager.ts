@@ -282,7 +282,7 @@ export class PtyProcessManager {
   private workflowRunControllers = new Map<string, string>();
 
   /**
-   * Best-known controller viewport size, used as the *spawn* size for new PTYs.
+   * Per-client terminal viewport size, used as the *spawn* size for new PTYs.
    *
    * PTYs used to always start at DEFAULT_COLS×DEFAULT_ROWS (220×50). The webview
    * only reports the real size via TERMINAL_RESIZE once its TerminalInstance has
@@ -293,15 +293,32 @@ export class PtyProcessManager {
    * true fit/transport mismatch — the diagnostic logging confirmed xterm renders
    * and reports the same size the PTY receives — so the fix is simply to start the
    * PTY near the real width. We can't measure it at spawn time (no terminal is
-   * mounted yet), so we remember the last controller resize and reuse it, and
-   * persist it across sessions so even the first run after a restart is close.
+   * mounted yet), so we remember each client's last controller viewport (via
+   * TERMINAL_VIEWPORT_HINT) and spawn at the *controlling* client's size.
+   *
+   * Keyed by clientId — NOT a single global — so that with multiple connected
+   * tabs (a thin phone controlling workflow A, a wide desktop controlling B) each
+   * workflow spawns at its own controller's width. spawnPty resolves the
+   * controller clientId first and reads only that client's entry, so a viewer's
+   * or another controller's size can never leak into an unrelated spawn.
    */
-  private spawnCols = DEFAULT_COLS;
-  private spawnRows = DEFAULT_ROWS;
+  private clientSpawnDimensions = new Map<
+    string,
+    { cols: number; rows: number }
+  >();
+  /**
+   * Cross-session cold-start fallback: the most recent viewport size any client
+   * reported, persisted to globalState. Used when the controller clientId is
+   * unknown or has no recorded viewport yet (e.g. the first run after a restart,
+   * before any hint arrives). Client IDs are ephemeral per-connection, so only
+   * this single size — not the per-client map — is worth persisting.
+   */
+  private fallbackCols = DEFAULT_COLS;
+  private fallbackRows = DEFAULT_ROWS;
   private dimensionsPersistence: PtyDimensionsPersistence | undefined;
 
   /**
-   * Wire a persistence backend (extension globalState) so the remembered spawn
+   * Wire a persistence backend (extension globalState) so the cold-start fallback
    * size survives restarts. Loads any saved size immediately. Optional — the CLI
    * binary path never calls this and simply falls back to DEFAULT_COLS×ROWS.
    */
@@ -309,8 +326,8 @@ export class PtyProcessManager {
     this.dimensionsPersistence = persistence;
     const saved = persistence.loadDimensions();
     if (saved && saved.cols > 0 && saved.rows > 0) {
-      this.spawnCols = saved.cols;
-      this.spawnRows = saved.rows;
+      this.fallbackCols = saved.cols;
+      this.fallbackRows = saved.rows;
       Log.debug(
         `🖥️ Restored terminal spawn size ${saved.cols}x${saved.rows} from persisted state`
       );
@@ -318,24 +335,35 @@ export class PtyProcessManager {
   }
 
   /**
-   * The size new PTYs will spawn at (last-known controller viewport, or the
-   * DEFAULT_COLS×DEFAULT_ROWS fallback). Exposed for diagnostics and tests.
+   * Resolve the size a new PTY should spawn at for a given controller client:
+   * that client's last reported viewport, else the persisted cold-start fallback.
+   * Pass no clientId (or an unknown one) to get the fallback. For diagnostics/tests.
    */
-  getSpawnDimensions(): { cols: number; rows: number } {
-    return { cols: this.spawnCols, rows: this.spawnRows };
+  getSpawnDimensions(clientId?: string): { cols: number; rows: number } {
+    if (clientId) {
+      const dims = this.clientSpawnDimensions.get(clientId);
+      if (dims) return { ...dims };
+    }
+    return { cols: this.fallbackCols, rows: this.fallbackRows };
   }
 
   /**
-   * Record the controller's latest viewport size as the spawn size for future
-   * PTYs. Called from resizeSession (the only controller-gated resize path).
-   * Persists only on an actual change so window drags don't spam globalState.
+   * Record a client's current terminal viewport as the spawn size for future PTYs
+   * it controls. Driven by TERMINAL_VIEWPORT_HINT, which the controlling webview
+   * sends on every fit — including while its terminal is frozen/ended, so a drag
+   * *between* runs is captured. Also refreshes the persisted cold-start fallback.
+   * Both updates are change-gated so drags don't spam globalState.
    */
-  private rememberSpawnDimensions(cols: number, rows: number): void {
+  setSpawnDimensions(clientId: string, cols: number, rows: number): void {
     if (cols <= 0 || rows <= 0) return;
-    if (cols === this.spawnCols && rows === this.spawnRows) return;
-    this.spawnCols = cols;
-    this.spawnRows = rows;
-    this.dimensionsPersistence?.saveDimensions({ cols, rows });
+    const existing = this.clientSpawnDimensions.get(clientId);
+    if (existing && existing.cols === cols && existing.rows === rows) return;
+    this.clientSpawnDimensions.set(clientId, { cols, rows });
+    if (cols !== this.fallbackCols || rows !== this.fallbackRows) {
+      this.fallbackCols = cols;
+      this.fallbackRows = rows;
+      this.dimensionsPersistence?.saveDimensions({ cols, rows });
+    }
   }
 
   /**
@@ -400,15 +428,20 @@ export class PtyProcessManager {
         affected.push(session);
       }
     }
+    // Drop the disconnected client's remembered viewport so the map doesn't grow
+    // unbounded across reconnects. The persisted cold-start fallback is separate
+    // and survives, so a reconnecting client still spawns near its last size.
+    this.clientSpawnDimensions.delete(clientId);
     return affected;
   }
 
   /**
    * Spawn a new PTY session.
-   * PTYs start at the last-known controller viewport size (spawnCols×spawnRows,
-   * seeded from persisted state and DEFAULT_COLS×DEFAULT_ROWS on first run) so the
-   * harness paints its first frame near the real xterm width; the webview
-   * ResizeObserver still sends an authoritative resize on mount.
+   * PTYs start at the controlling client's last-known viewport size (resolved via
+   * getSpawnDimensions(controllerClientId), falling back to the persisted
+   * cold-start size and DEFAULT_COLS×DEFAULT_ROWS) so the harness paints its first
+   * frame near the real xterm width; the webview ResizeObserver still sends an
+   * authoritative resize on mount.
    */
   spawnPty(options: SpawnPtyOptions): PtySession {
     const nodePty = tryLoadNodePty();
@@ -416,8 +449,19 @@ export class PtyProcessManager {
       options.sessionId ??
       `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const spawnCols = this.spawnCols;
-    const spawnRows = this.spawnRows;
+    // Resolve controller FIRST so we can spawn at that client's viewport: consume
+    // any one-shot pending override (set by RUN_WORKFLOW or an ephemeral-prompt
+    // auto-start), then fall back to the persistent run controller so that steps
+    // 2+ in a multi-step workflow inherit the same owner as step 1.
+    const pendingClientId = this.consumePendingController(options.workflowId);
+    const controllerClientId =
+      pendingClientId ?? this.workflowRunControllers.get(options.workflowId);
+
+    const hasClientViewport =
+      controllerClientId !== undefined &&
+      this.clientSpawnDimensions.has(controllerClientId);
+    const { cols: spawnCols, rows: spawnRows } =
+      this.getSpawnDimensions(controllerClientId);
     const ptyInstance = nodePty.spawn(options.command, options.args, {
       name: "xterm-256color",
       cols: spawnCols,
@@ -448,12 +492,6 @@ export class PtyProcessManager {
     // shows a truthful before→after diff.
     session.lastReportedCols = spawnCols;
     session.lastReportedRows = spawnRows;
-    // Resolve controller: consume any one-shot pending override (set by RUN_WORKFLOW or
-    // an ephemeral-prompt auto-start), then fall back to the persistent run controller
-    // so that steps 2+ in a multi-step workflow inherit the same owner as step 1.
-    const pendingClientId = this.consumePendingController(options.workflowId);
-    const controllerClientId =
-      pendingClientId ?? this.workflowRunControllers.get(options.workflowId);
     session.controllerClientId = controllerClientId;
     if (controllerClientId) {
       this.workflowRunControllers.set(options.workflowId, controllerClientId);
@@ -478,13 +516,15 @@ export class PtyProcessManager {
       );
     });
 
-    const usingDefaultSize =
-      spawnCols === DEFAULT_COLS && spawnRows === DEFAULT_ROWS;
+    const sizeSource = hasClientViewport
+      ? `controller ${controllerClientId?.slice(0, 12)} viewport`
+      : spawnCols === DEFAULT_COLS && spawnRows === DEFAULT_ROWS
+        ? "default — no viewport seen yet"
+        : "cold-start fallback";
     Log.debug(
       `🖥️ Spawned PTY session ${sessionId} (${options.kind}): ${options.command} ` +
         `— initial size ${spawnCols}x${spawnRows} ` +
-        `(${usingDefaultSize ? "default — no controller size seen yet" : "last-known controller size"}; ` +
-        `harness first-render width until webview resize arrives)`
+        `(${sizeSource}; harness first-render width until webview resize arrives)`
     );
     return session;
   }
@@ -553,10 +593,10 @@ export class PtyProcessManager {
       session.pty.resize(cols, rows);
       session.lastReportedCols = cols;
       session.lastReportedRows = rows;
-      // Remember this controller viewport as the spawn size for future PTYs.
-      // resizeSession is only reached for the controller (router-gated), so this
-      // always reflects a real, visible terminal.
-      this.rememberSpawnDimensions(cols, rows);
+      // Note: the *spawn* size for future PTYs is driven by TERMINAL_VIEWPORT_HINT
+      // (see setSpawnDimensions), not by this live-resize path — the hint also
+      // fires while a terminal is frozen, so it captures drags between runs that
+      // resizeSession never sees.
     }
   }
 

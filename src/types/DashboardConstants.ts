@@ -286,6 +286,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_CONTROLLER_CHANGED: "terminalControllerChanged", // broadcast: { workflowId, sessionId, controllerClientId: string | undefined }
   TERMINAL_CLAIM_CONTROL: "terminalClaimControl", // webview → extension: { workflowId, sessionId }
   TERMINAL_SIZE_CHANGED: "terminalSizeChanged", // extension → all: { workflowId, sessionId, cols, rows } — controller's PTY dimensions for viewer sync
+  TERMINAL_VIEWPORT_HINT: "terminalViewportHint", // webview → extension: { workflowId, sessionId, cols, rows } — controller's current viewport size (incl. while frozen/ended), used as the spawn size for the NEXT PTY so a harness paints its first frame at the real width. Change-gated on the webview.
   ACTIVE_TERMINAL_WORKFLOWS: "activeTerminalWorkflows", // extension → all: { workflows: { workflowId, workingFilePath? }[] } — global set of workflows with ≥1 running PTY, so every client can show the dropdown terminal icon regardless of which workflow it is currently viewing
 
   // Client identity — Extension → Webview once per connection

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -47,6 +47,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const resizeObserverDisconnectRef = useRef<(() => void) | null>(null);
   const previousIsControllerRef = useRef<boolean | null>(null);
+  // Last viewport size reported to the extension via TERMINAL_VIEWPORT_HINT, so we
+  // only re-send when the fitted cols/rows actually change (columns tick every
+  // ~8px of drag, so this collapses a pixel-drag to a handful of tiny messages).
+  const lastSentHintRef = useRef<{ cols: number; rows: number } | null>(null);
 
   // Subscribe to controller status and controller cols — re-evaluate on every change
   const sessions = useTerminalStore(
@@ -56,6 +60,26 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const isController = session?.isController ?? true;
   const controllerCols = session?.controllerCols;
   const controllerRows = session?.controllerRows;
+
+  // Report this (controller) client's current viewport as the spawn size for the
+  // NEXT PTY. Change-gated. Fires from every controller fit — including while the
+  // terminal is frozen/ended — so a drag between runs updates the next spawn's
+  // width. Only the controller's size matters, so callers gate on isController.
+  const sendViewportHint = useCallback(
+    (cols: number, rows: number) => {
+      if (cols <= 0 || rows <= 0) return;
+      const last = lastSentHintRef.current;
+      if (last && last.cols === cols && last.rows === rows) return;
+      lastSentHintRef.current = { cols, rows };
+      sendMessage(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, {
+        workflowId,
+        sessionId,
+        cols,
+        rows,
+      });
+    },
+    [workflowId, sessionId]
+  );
 
   useEffect(() => {
     WebviewLog.debug(
@@ -439,6 +463,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
                 cols,
                 rows,
               });
+              // Also record this viewport as the spawn size for the next PTY.
+              sendViewportHint(cols, rows);
             } else if (entry.controllerCols != null) {
               // Viewer: keep cols fixed at controller's width, let rows adapt to
               // the local container height so the terminal fills vertically.
@@ -497,7 +523,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       touchEl?.removeEventListener("touchend", handleTouchEnd);
       touchEl?.removeEventListener("touchcancel", handleTouchCancel);
     };
-  }, [workflowId, sessionId]);
+  }, [workflowId, sessionId, sendViewportHint]);
 
   // When isController changes from false→true (viewer claiming control), re-register onData
   // and restore fit-to-container sizing.
@@ -541,12 +567,15 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
             cols,
             rows,
           });
+          // A viewer taking control may fit to a different width than the old
+          // controller — record it as the next spawn size too.
+          sendViewportHint(cols, rows);
         } catch {
           // Ignore — terminal may not be visible
         }
       });
     }
-  }, [controllerCols, isController, workflowId, sessionId]);
+  }, [controllerCols, isController, workflowId, sessionId, sendViewportHint]);
 
   // When isController changes from true→false (control claimed by another client),
   // dispose onData and apply the controller's known column width.
@@ -615,14 +644,19 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       }
 
       try {
+        const isViewerFit =
+          activeEntry.controllerCols != null && isController === false;
         const fitResult = terminalRegistry.fitSessionToContainer(
           workflowId,
           sessionId,
-          activeEntry.controllerCols != null && isController === false
-            ? "viewer"
-            : "controller"
+          isViewerFit ? "viewer" : "controller"
         );
         activeEntry.term.refresh(0, Math.max(0, activeEntry.term.rows - 1));
+        // On show, a controller may find the panel was resized while hidden —
+        // record the fitted size as the next spawn size.
+        if (!isViewerFit) {
+          sendViewportHint(activeEntry.term.cols, activeEntry.term.rows);
+        }
         WebviewLog.debug(
           `[TerminalInstance] visible refresh ${phase} wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `containerSize=${activeContainer.offsetWidth}x${activeContainer.offsetHeight} ` +
@@ -658,6 +692,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     isVisible,
     workflowId,
     sessionId,
+    sendViewportHint,
   ]);
 
   return (

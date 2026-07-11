@@ -381,9 +381,9 @@ export async function activate(context: vscode.ExtensionContext) {
     Log.debug("ctrlyoke: React webview provider registered");
 
     // Initialize PTY process manager (must be after webviewProvider is created).
-    // The globalState-backed persistence lets new PTYs spawn at the last controller
-    // viewport size (instead of the 220-col default) so harness TUIs paint their
-    // first frame near the real xterm width — see PtyProcessManager.spawnCols.
+    // The globalState-backed persistence seeds the cold-start fallback size so new
+    // PTYs spawn near the real xterm width (instead of the 220-col default) even on
+    // the first run after a restart — see PtyProcessManager.clientSpawnDimensions.
     const TERMINAL_SPAWN_DIMENSIONS_KEY = "ctrlyoke.terminalSpawnDimensions";
     const ptyManager = initPtyProcessManager(
       (msg) => webviewProvider.postMessagePublic(msg),

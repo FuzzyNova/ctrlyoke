@@ -1464,6 +1464,19 @@ export class WebviewMessageRouter {
       });
     });
 
+    table.set(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, (msg) => {
+      const ptyManager = getPtyProcessManager();
+      if (!ptyManager || !msg.cols || !msg.rows) return;
+      // Store the viewport under THIS client's id. spawnPty reads only the
+      // resolved controller's entry, so a viewer's (or another controller's) hint
+      // can never affect a spawn controlled by a different client — no gate needed.
+      ptyManager.setSpawnDimensions(
+        this.clientId,
+        msg.cols as number,
+        msg.rows as number
+      );
+    });
+
     table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.workflowId) return;
