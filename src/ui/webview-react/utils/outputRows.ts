@@ -970,6 +970,14 @@ function estimateStructuredTextHeight(
         18
       );
     }
+    case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
+      return estimateTerminalSummaryHeight(
+        "Follow-up",
+        outputContentWidth,
+        outputFontSize,
+        18
+      );
+    }
     default:
       return 64;
   }

@@ -1151,6 +1151,17 @@ export const CLI_EVENT_TYPES = {
   /** Genuine human text typed directly into a live TUI, mid-step or after completion.
    *  Display-only — never changes workflow/queue state. See UserEventClassification. */
   USER_STEER: "userSteer",
+
+  /** Divider marking where post-completion follow-up activity (a harness auto-resume
+   *  or a human TUI steer) begins within an already-completed step's output. Inserted
+   *  at most once per step/attempt/run — see WorkflowInstance.handleSessionActivityResumed
+   *  and workflowStore's streaming-event merge. */
+  FOLLOW_UP_RESUMED: "followUpResumed",
+
+  /** Invisible marker carrying updated context-window usage discovered during
+   *  post-completion follow-up activity. Never rendered — consumed by the merge
+   *  logic that refreshes a completed step's stats footer (tokens/contextWindow). */
+  CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
 
 /**

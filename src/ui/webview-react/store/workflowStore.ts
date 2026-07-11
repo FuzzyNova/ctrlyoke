@@ -81,6 +81,76 @@ function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
 }
 
 /**
+ * Merge an incoming batch of streamed events into an existing CliOutput.
+ *
+ * When `existing` is already complete (`isStreaming: false`), the batch is
+ * post-completion follow-up activity — a harness auto-resuming a backgrounded
+ * task, or a human typing into the still-open terminal (see
+ * `SessionActivityWatcher` / `WorkflowInstance.handleSessionActivityResumed`).
+ * In that case: insert a one-time "follow-up" divider before the new content
+ * (so later batches from the same follow-up burst just append past it), and
+ * refresh the stats footer (elapsed/context window) so it doesn't go stale
+ * while resumed activity streams in. `CONTEXT_WINDOW_SYNC` is an invisible
+ * marker consumed here, never rendered as a row.
+ *
+ * When `existing` is still mid-flight (`isStreaming: true`), this is an
+ * ordinary incremental append — no divider, no footer refresh (those only
+ * apply once the step is actually done).
+ */
+function mergeResumedActivityIntoOutput(
+  existing: CliOutput,
+  incomingEvents: any[]
+): CliOutput {
+  const isFollowUp = existing.isStreaming === false;
+  const contentEvents = incomingEvents.filter(
+    (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
+  );
+  const latestContextWindowSync = [...incomingEvents]
+    .reverse()
+    .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
+    ?.data as { used: number; size: number } | undefined;
+
+  const existingStructured = existing.structured as any;
+  const existingEvents = existingStructured?.events || [];
+  const hasFollowUpDivider = existingEvents.some(
+    (event: any) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+  );
+
+  const eventsToMerge =
+    isFollowUp && contentEvents.length > 0 && !hasFollowUpDivider
+      ? [
+          {
+            type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+            timestamp: Date.now(),
+            data: { resumedAt: Date.now() },
+          },
+          ...contentEvents,
+        ]
+      : contentEvents;
+
+  return {
+    ...existing,
+    structured: {
+      ...existingStructured,
+      events: mergeStreamingEvents(existingEvents, eventsToMerge),
+      metadata: existingStructured?.metadata || {},
+    },
+    tokens:
+      isFollowUp && latestContextWindowSync && existing.tokens
+        ? {
+            ...existing.tokens,
+            contextWindowUsed: latestContextWindowSync.used,
+            contextWindowSize: latestContextWindowSync.size,
+          }
+        : existing.tokens,
+    elapsed:
+      isFollowUp && existing.timestampMs != null
+        ? (Date.now() - existing.timestampMs) / 1000
+        : existing.elapsed,
+  };
+}
+
+/**
  * Workflow state - Core workflow execution data
  */
 interface WorkflowState {
@@ -481,25 +551,16 @@ export const useWorkflowStore = create<
                   }
                 ).stepIndex === stepIndex &&
                 getCliEntryRunIndex(e as OrderedCliHistoryEntry) === runIndex &&
-                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex &&
-                (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
+                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex
             );
             if (existingIdx >= 0) {
               const existing = state.liveOrderedEntries[
                 existingIdx
               ] as OrderedCliHistoryEntry;
-              const existingStructured = existing.cliOutput.structured as any;
-              const updatedOutput: CliOutput = {
-                ...existing.cliOutput,
-                structured: {
-                  ...existingStructured,
-                  events: mergeStreamingEvents(
-                    existingStructured?.events || [],
-                    events
-                  ),
-                  metadata: existingStructured?.metadata || {},
-                },
-              };
+              const updatedOutput = mergeResumedActivityIntoOutput(
+                existing.cliOutput,
+                events
+              );
               const newEntries = [...state.liveOrderedEntries];
               newEntries[existingIdx] = {
                 ...existing,
@@ -572,25 +633,16 @@ export const useWorkflowStore = create<
                   }
                 ).loopIndex === loopIndex &&
                 getCliEntryRunIndex(e as OrderedCliHistoryEntry) === runIndex &&
-                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex &&
-                (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
+                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex
             );
             if (existingIdx >= 0) {
               const existing = state.liveOrderedEntries[
                 existingIdx
               ] as OrderedCliHistoryEntry;
-              const existingStructured = existing.cliOutput.structured as any;
-              const updatedOutput: CliOutput = {
-                ...existing.cliOutput,
-                structured: {
-                  ...existingStructured,
-                  events: mergeStreamingEvents(
-                    existingStructured?.events || [],
-                    events
-                  ),
-                  metadata: existingStructured?.metadata || {},
-                },
-              };
+              const updatedOutput = mergeResumedActivityIntoOutput(
+                existing.cliOutput,
+                events
+              );
               const newEntries = [...state.liveOrderedEntries];
               newEntries[existingIdx] = {
                 ...existing,

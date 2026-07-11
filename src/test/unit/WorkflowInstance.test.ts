@@ -12,8 +12,10 @@ import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
+  CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
   STEP_STATUS,
   HARNESS_IDS,
   type HarnessId,
@@ -330,6 +332,117 @@ suite("WorkflowInstance session activity forwarding", () => {
     assert.strictEqual(streamingEventsCalls.length, 1);
     assert.strictEqual(streamingEventsCalls[0].stepIndex, 0);
     assert.strictEqual(streamingEventsCalls[0].events.length, 1);
+  });
+
+  test("merges follow-up activity into the persisted history entry with a one-time divider and refreshed tokens/elapsed", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-session-activity-history-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const platform = new MockPlatform();
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      const historyInit = await instance.outputHistoryManager.initializeRun(
+        "wf-session-activity"
+      );
+      (instance as any).activeHistoryFilePath = historyInit.filePath;
+
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const startedAt = Date.now() - 5000;
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target,
+        [
+          {
+            prompt: "do the thing",
+            response: "done",
+            structured: {
+              events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
+              metadata: {},
+            },
+            elapsed: 5,
+            tokens: { prompt: 10, completion: 5 },
+            isStreaming: false,
+            timestampMs: startedAt,
+            attemptIndex: 0,
+            runIndex: 0,
+          } as any,
+        ]
+      );
+
+      (instance as any).lastCompletedActivityTarget = {
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+      };
+
+      await (instance as any).handleSessionActivityResumed([
+        {
+          type: CLI_EVENT_TYPES.USER_STEER,
+          timestamp: Date.now(),
+          data: { text: "one more thing" },
+        },
+        {
+          type: CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC,
+          timestamp: Date.now(),
+          data: { used: 4000, size: 200000 },
+        },
+      ]);
+      // Second follow-up batch — must not insert a second divider.
+      await (instance as any).handleSessionActivityResumed([
+        {
+          type: CLI_EVENT_TYPES.USER_STEER,
+          timestamp: Date.now(),
+          data: { text: "and another" },
+        },
+      ]);
+
+      const history = await instance.outputHistoryManager.loadHistory(
+        historyInit.filePath
+      );
+      const entry = history.orderedEntries.find(
+        (e: any) =>
+          e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          "target" in e &&
+          e.target.kind === FINAL_STEP_PHASES.QUEUE &&
+          e.target.stepIndex === 0
+      ) as any;
+      assert.ok(entry, "expected a persisted CLI history entry for step 0");
+
+      const events = entry.cliOutput.structured?.events ?? [];
+      assert.deepStrictEqual(
+        events.map((e: any) => e.type),
+        [
+          CLI_EVENT_TYPES.TEXT,
+          CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+          CLI_EVENT_TYPES.USER_STEER,
+          CLI_EVENT_TYPES.USER_STEER,
+        ]
+      );
+      assert.deepStrictEqual(entry.cliOutput.tokens, {
+        prompt: 10,
+        completion: 5,
+        contextWindowUsed: 4000,
+        contextWindowSize: 200000,
+      });
+      assert.ok(
+        entry.cliOutput.elapsed >= 5,
+        `expected elapsed to be refreshed to at least the original 5s, got ${entry.cliOutput.elapsed}`
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
   });
 });
 

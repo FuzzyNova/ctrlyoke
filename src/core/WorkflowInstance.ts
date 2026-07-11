@@ -37,6 +37,7 @@ import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
+  CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
   OUTPUT_HISTORY_KINDS,
@@ -53,7 +54,12 @@ import {
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
-import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
+import type {
+  CliEvent,
+  CliOutput,
+  ContextWindowSyncData,
+  FollowUpResumedData,
+} from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -2104,14 +2110,60 @@ export class WorkflowInstance {
       if (!existing) {
         return;
       }
+
+      // CONTEXT_WINDOW_SYNC is an invisible marker (see CliIntegration.
+      // resumeSessionActivityWatcher) — pull its data out for the tokens/footer
+      // refresh below rather than merging it into the visible event stream.
+      const contentEvents = events.filter(
+        (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
+      );
+      const latestContextWindowSync = [...events]
+        .reverse()
+        .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
+        ?.data as ContextWindowSyncData | undefined;
+
+      const existingEvents = existing.cliOutput.structured?.events ?? [];
+      const hasFollowUpDivider = existingEvents.some(
+        (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+      );
+      // Insert the divider at most once per step/attempt/run — it marks the
+      // boundary between the step's original output and its follow-up activity,
+      // so later batches from the same follow-up burst just append past it.
+      const eventsToAppend: CliEvent[] =
+        contentEvents.length > 0 && !hasFollowUpDivider
+          ? [
+              {
+                type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+                timestamp: Date.now(),
+                data: { resumedAt: Date.now() } as FollowUpResumedData,
+              },
+              ...contentEvents,
+            ]
+          : contentEvents;
+
       const merged: CliOutput = {
         ...existing.cliOutput,
         structured: existing.cliOutput.structured
           ? {
               ...existing.cliOutput.structured,
-              events: [...existing.cliOutput.structured.events, ...events],
+              events: [...existingEvents, ...eventsToAppend],
             }
           : undefined,
+        tokens:
+          latestContextWindowSync && existing.cliOutput.tokens
+            ? {
+                ...existing.cliOutput.tokens,
+                contextWindowUsed: latestContextWindowSync.used,
+                contextWindowSize: latestContextWindowSync.size,
+              }
+            : existing.cliOutput.tokens,
+        // timestampMs is the attempt's *start* time (see WorkflowExecutor's
+        // finalization), so re-deriving elapsed from it naturally folds in
+        // follow-up time without needing a separately tracked baseline.
+        elapsed:
+          existing.cliOutput.timestampMs != null
+            ? (Date.now() - existing.cliOutput.timestampMs) / 1000
+            : existing.cliOutput.elapsed,
       };
       await this.outputHistoryManager.saveExecutionOutput(historyFilePath, target, [
         merged,

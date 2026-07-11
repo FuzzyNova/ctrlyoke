@@ -216,6 +216,8 @@ export type {
   ToolResultData,
   CompactionData,
   UserSteerData,
+  FollowUpResumedData,
+  ContextWindowSyncData,
   UniversalCliOutput,
   UnifiedDiffHunk,
 } from "./CliOutputTypes";

@@ -16,6 +16,7 @@ import type { PromptStep, CliOutput } from "@/types/messages";
 import type {
   WorkflowOutputHistory,
   OrderedHistoryEntry,
+  OrderedCliHistoryEntry,
 } from "@root/types/OutputHistoryTypes";
 
 // ---------------------------------------------------------------------------
@@ -331,6 +332,157 @@ describe("appendStreamingEvents", () => {
       { runIndex: 0, attemptIndex: 0 },
       { runIndex: 1, attemptIndex: 0 },
     ]);
+  });
+
+  it("merges post-completion follow-up activity into the completed entry instead of creating a new one", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    const completedEntry: OrderedCliHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
+          metadata: {},
+        },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    };
+    store().appendLiveEntry(completedEntry);
+
+    // Simulate SessionActivityWatcher forwarding a follow-up typed after completion.
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "one more thing" } },
+    ]);
+
+    const matches = store().liveOrderedEntries.filter(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    );
+    expect(matches).toHaveLength(1);
+
+    const events = (matches[0] as OrderedCliHistoryEntry).cliOutput.structured
+      ?.events;
+    expect(events?.map((e) => e.type)).toEqual([
+      CLI_EVENT_TYPES.TEXT,
+      CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+      CLI_EVENT_TYPES.USER_STEER,
+    ]);
+  });
+
+  it("inserts the follow-up divider only once across multiple resumed batches", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        structured: { events: [], metadata: {} },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    });
+
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "first" } },
+    ]);
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "second" } },
+    ]);
+
+    const entry = store().liveOrderedEntries.find(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    ) as OrderedCliHistoryEntry;
+
+    const dividerCount = entry.cliOutput.structured?.events.filter(
+      (e) => e.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+    ).length;
+    expect(dividerCount).toBe(1);
+  });
+
+  it("refreshes tokens from a CONTEXT_WINDOW_SYNC marker without rendering it as a row", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        tokens: { prompt: 10, completion: 5 },
+        structured: { events: [], metadata: {} },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    });
+
+    store().appendStreamingEvents(0, [
+      {
+        type: CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC,
+        data: { used: 4000, size: 200000 },
+      },
+    ]);
+
+    const entry = store().liveOrderedEntries.find(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    ) as OrderedCliHistoryEntry;
+
+    expect(entry.cliOutput.tokens).toMatchObject({
+      prompt: 10,
+      completion: 5,
+      contextWindowUsed: 4000,
+      contextWindowSize: 200000,
+    });
+    expect(entry.cliOutput.structured?.events).toHaveLength(0);
+  });
+
+  it("refreshes elapsed time when follow-up activity is merged into a completed entry", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    const startedAt = Date.now() - 5000;
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        elapsed: 5,
+        timestampMs: startedAt,
+        structured: { events: [], metadata: {} },
+      }),
+      timestampMs: startedAt,
+      sequence: 0,
+    });
+
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "still here?" } },
+    ]);
+
+    const entry = store().liveOrderedEntries.find(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    ) as OrderedCliHistoryEntry;
+
+    expect(entry.cliOutput.elapsed).toBeGreaterThanOrEqual(5);
   });
 });
 

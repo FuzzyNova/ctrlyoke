@@ -48,7 +48,9 @@ export type CliEventData =
   | McpToolCallData
   | WebSearchData
   | CompactionData
-  | UserSteerData;
+  | UserSteerData
+  | FollowUpResumedData
+  | ContextWindowSyncData;
 
 /**
  * Data for a text event (AI response text).
@@ -65,6 +67,30 @@ export interface TextData {
 export interface UserSteerData {
   /** The text the human typed */
   text: string;
+}
+
+/**
+ * Data for a follow-up-resumed event — a divider marking where post-completion
+ * follow-up activity (a harness auto-resume or a human TUI steer) begins within
+ * an already-completed step's output. Display-only; inserted at most once per
+ * step/attempt/run by the merge logic that appends resumed activity.
+ */
+export interface FollowUpResumedData {
+  /** When the follow-up activity was first observed (ms since epoch) */
+  resumedAt: number;
+}
+
+/**
+ * Data for a context-window-sync event — an invisible marker carrying updated
+ * context-window usage discovered during post-completion follow-up activity.
+ * Never rendered as a visible row; consumed by the merge logic that refreshes
+ * an already-completed step's stats footer.
+ */
+export interface ContextWindowSyncData {
+  /** Tokens currently occupying the context window */
+  used: number;
+  /** Model's total context window capacity in tokens */
+  size: number;
 }
 
 /**

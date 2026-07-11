@@ -9,6 +9,7 @@ import {
 import {
   CliEvent,
   CliResult,
+  ContextWindowSyncData,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
 import { PromptStep, McpServerConfig } from "../../types/CtrlYokeTypes";
@@ -19,6 +20,7 @@ import { CliProcessManager } from "../../utils/CliProcessManager";
 import type { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
 import {
+  CLI_EVENT_TYPES,
   EXECUTION_MODES,
   PERMISSION_MODES,
   type ExecutionMode,
@@ -579,8 +581,20 @@ export class CliIntegration extends HarnessIntegration {
       parser: this.provider.logParser!,
       model,
       onResumedEvents: (events) => this.emitSessionActivityResumed(events),
+      // Unlike the per-step CliLogMonitor pathway (which feeds the live
+      // running-step gauge via emitContextWindowUpdate — a listener that's
+      // disposed the moment the step's dispatch resolves), this fires *after*
+      // the step is already done. Route it through the same session-activity
+      // channel as resumed events instead, as an invisible marker event, so
+      // WorkflowInstance can refresh the completed step's stats footer.
       onContextWindowUpdate: (used, size) =>
-        this.emitContextWindowUpdate(used, size),
+        this.emitSessionActivityResumed([
+          {
+            type: CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC,
+            timestamp: Date.now(),
+            data: { used, size } satisfies ContextWindowSyncData,
+          },
+        ]),
     });
     this.sessionActivityWatcher.start(ctx.logPath);
   }

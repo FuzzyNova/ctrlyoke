@@ -27,6 +27,7 @@ import type {
   FileEditData,
   FileReadData,
   FileWriteData,
+  FollowUpResumedData,
   McpToolCallData,
   TextData,
   ThinkingBlock,
@@ -735,6 +736,24 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               <i className="codicon codicon-fold text-xxs" />
               <span>
                 Conversation compacted ({trigger}){tokenInfo}
+              </span>
+            </span>
+            <div className="flex-1 h-px bg-panel-border" />
+          </div>
+        );
+      }
+      case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
+        const data = event.data as FollowUpResumedData;
+        const resumedAtLabel = data.resumedAt
+          ? formatTime(data.resumedAt)
+          : "";
+        return (
+          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]">
+            <div className="flex-1 h-px bg-panel-border" />
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
+              <i className="codicon codicon-debug-continue text-xxs" />
+              <span>
+                Follow-up{resumedAtLabel ? ` — ${resumedAtLabel}` : ""}
               </span>
             </span>
             <div className="flex-1 h-px bg-panel-border" />

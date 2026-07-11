@@ -39,6 +39,8 @@ export {
   type WebSearchData,
   type CompactionData,
   type UserSteerData,
+  type FollowUpResumedData,
+  type ContextWindowSyncData,
   type UnifiedDiffHunk,
   type UniversalCliOutput,
 
