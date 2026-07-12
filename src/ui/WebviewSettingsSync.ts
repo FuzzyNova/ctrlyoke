@@ -162,11 +162,6 @@ export class WebviewSettingsSync {
    */
   async discoverAgents(): Promise<void> {
     try {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders || workspaceFolders.length === 0) {
-        return;
-      }
-
       this.availableAgents = await AgentDiscovery.discoverAgents(
         getVsCodeWorkspaceFolder()
       );

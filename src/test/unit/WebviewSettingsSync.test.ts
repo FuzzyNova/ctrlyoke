@@ -118,6 +118,43 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
+  suite("discoverAgents", () => {
+    test("should expose bundled agents when no workspace is open", async () => {
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const messages: any[] = [];
+
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: undefined,
+          configurable: true,
+        });
+        const sync = new WebviewSettingsSync(
+          (message) => messages.push(message),
+          () => undefined
+        );
+
+        await sync.discoverAgents();
+
+        const update = messages.find(
+          (message) => message.type === MESSAGE_TYPES.AGENTS_UPDATE
+        );
+        assert.ok(update, "agent discovery should notify the dashboard");
+        assert.ok(
+          update.data.availableAgents.some(
+            (agent: { name: string }) =>
+              agent.name === "ctrlyoke-workflow-composer"
+          ),
+          "the bundled workflow composer should be available without a workspace"
+        );
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+      }
+    });
+  });
+
   suite("handleGenerateServerCert", () => {
     function hideGlobalNavigator(): void {
       Object.defineProperty(globalThis, "navigator", {
