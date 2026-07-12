@@ -202,4 +202,29 @@ suite("TemplateManager variable metadata", () => {
       );
     });
   });
+
+  suite("custom template ID scope encoding", () => {
+    test("buildCustomTemplateId round-trips through parseCustomTemplateId", () => {
+      const tm = makeManager();
+      const workspaceId = tm.buildCustomTemplateId("workspace", "my-template");
+      assert.strictEqual(workspaceId, "custom:workspace:my-template");
+      assert.deepStrictEqual(tm.parseCustomTemplateId(workspaceId), {
+        scope: "workspace",
+        name: "my-template",
+      });
+
+      const userId = tm.buildCustomTemplateId("user", "shared-template");
+      assert.strictEqual(userId, "custom:user:shared-template");
+      assert.deepStrictEqual(tm.parseCustomTemplateId(userId), {
+        scope: "user",
+        name: "shared-template",
+      });
+    });
+
+    test("throws on malformed or unscoped custom template IDs", () => {
+      const tm = makeManager();
+      assert.throws(() => tm.parseCustomTemplateId("custom:no-scope-here"));
+      assert.throws(() => tm.parseCustomTemplateId("custom:bogus-scope:name"));
+    });
+  });
 });

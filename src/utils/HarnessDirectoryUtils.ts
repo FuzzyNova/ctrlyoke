@@ -171,6 +171,17 @@ export function getCtrlYokeUserSkillDir(): string {
   );
 }
 
+/**
+ * Returns the user-level ctrlyoke template directory (~/.ctrlyoke/templates).
+ */
+export function getCtrlYokeUserTemplateDir(): string {
+  return path.join(
+    os.homedir(),
+    PATH_CONSTANTS.CTRLYOKE_DIR,
+    PATH_CONSTANTS.TEMPLATES_DIR
+  );
+}
+
 // ============================================================================
 // Generic "Agents" directory (~/.agents / .agents)
 // ============================================================================

@@ -9,9 +9,17 @@ import {
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
-import { RETRY_PROMPT_PLACEHOLDERS } from "../types/DashboardConstants";
+import { getCtrlYokeUserTemplateDir } from "../utils/HarnessDirectoryUtils";
+import {
+  RETRY_PROMPT_PLACEHOLDERS,
+  DISCOVERY_SOURCES,
+  type DiscoverySource,
+} from "../types/DashboardConstants";
 import { PromptFileParser } from "./PromptFileParser";
 import type { PromptFile } from "../types/CtrlYokeTypes";
+
+/** Scope for a custom (non-built-in) template: where it's stored and read from. */
+export type TemplateScope = "user" | "workspace";
 
 /**
  * A single template variable — name plus optional UI metadata.
@@ -72,6 +80,8 @@ export interface TemplateInfo {
   path: string | null;
   variables: TemplateVariable[];
   isBuiltIn: boolean;
+  /** Where a custom template was discovered; undefined for built-ins. */
+  source?: Exclude<DiscoverySource, typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE>;
 }
 
 /** Parsed shape of a `_templateMeta` block in a template file */
@@ -258,6 +268,50 @@ export class TemplateManager {
   }
 
   /**
+   * Get the user-level (machine-wide) custom templates directory (~/.ctrlyoke/templates).
+   */
+  private getUserTemplatesPath(): string {
+    return getCtrlYokeUserTemplateDir();
+  }
+
+  /**
+   * Resolve the templates directory for a given scope. Returns null for
+   * "workspace" scope when no workspace folder is open.
+   */
+  private getTemplatesPathForScope(scope: TemplateScope): string | null {
+    return scope === "user"
+      ? this.getUserTemplatesPath()
+      : this.getCustomTemplatesPath();
+  }
+
+  /** Build a custom template ID: `custom:<scope>:<name>`. */
+  private buildCustomTemplateId(scope: TemplateScope, name: string): string {
+    return `custom:${scope}:${name}`;
+  }
+
+  /**
+   * Parse a custom template ID of the form `custom:<scope>:<name>`.
+   * Template names can't contain `:` (rejected at creation time), so
+   * splitting on the first colon after the "custom:" prefix is unambiguous.
+   */
+  private parseCustomTemplateId(templateId: string): {
+    scope: TemplateScope;
+    name: string;
+  } {
+    const rest = templateId.substring("custom:".length);
+    const separatorIndex = rest.indexOf(":");
+    if (separatorIndex === -1) {
+      throw new Error(`Malformed custom template ID: ${templateId}`);
+    }
+    const scope = rest.substring(0, separatorIndex);
+    const name = rest.substring(separatorIndex + 1);
+    if (scope !== "user" && scope !== "workspace") {
+      throw new Error(`Malformed custom template ID: ${templateId}`);
+    }
+    return { scope, name };
+  }
+
+  /**
    * Get all available templates (built-in + custom + action).
    *
    * Built-in templates are self-describing: name, description, and variable enrichment
@@ -322,12 +376,12 @@ export class TemplateManager {
 
     // Check if it's a custom template (starts with "custom:")
     if (templateId.startsWith("custom:")) {
-      const customPath = this.getCustomTemplatesPath();
+      const { scope, name } = this.parseCustomTemplateId(templateId);
+      const customPath = this.getTemplatesPathForScope(scope);
       if (!customPath) {
         throw new Error("No workspace folder available");
       }
-      const filename = templateId.substring(7); // Remove "custom:" prefix
-      const templatePath = path.join(customPath, `${filename}.ctrlyoke.json`);
+      const templatePath = path.join(customPath, `${name}.ctrlyoke.json`);
       return await fs.promises.readFile(templatePath, "utf-8");
     }
 
@@ -475,10 +529,15 @@ export class TemplateManager {
    * every variable-metadata field in context.
    *
    * @param templateName Name for the new template
+   * @param scope Where to store the template: "workspace" (.ctrlyoke/templates)
+   *   or "user" (~/.ctrlyoke/templates, machine-wide)
    * @returns Path to created template file
    */
-  async createCustomTemplate(templateName: string): Promise<string> {
-    const customPath = this.getCustomTemplatesPath();
+  async createCustomTemplate(
+    templateName: string,
+    scope: TemplateScope = "workspace"
+  ): Promise<string> {
+    const customPath = this.getTemplatesPathForScope(scope);
     if (!customPath) {
       throw new Error("No workspace folder available");
     }
@@ -536,21 +595,44 @@ export class TemplateManager {
   }
 
   /**
-   * Discover custom templates from .ctrlyoke/templates/
+   * Discover custom templates from both the workspace (.ctrlyoke/templates/)
+   * and user (~/.ctrlyoke/templates/) directories.
    */
   private async discoverCustomTemplates(): Promise<TemplateInfo[]> {
-    const customPath = this.getCustomTemplatesPath();
-    if (!customPath || !(await this.pathExists(customPath))) {
+    const [workspaceTemplates, userTemplates] = await Promise.all([
+      this.discoverTemplatesInDir(
+        this.getCustomTemplatesPath(),
+        DISCOVERY_SOURCES.WORKSPACE
+      ),
+      this.discoverTemplatesInDir(
+        this.getUserTemplatesPath(),
+        DISCOVERY_SOURCES.USER
+      ),
+    ]);
+
+    return [...workspaceTemplates, ...userTemplates];
+  }
+
+  /**
+   * Discover all `*.ctrlyoke.json` custom templates in a single directory.
+   * @param dirPath Directory to scan (null = skip silently, e.g. no workspace open)
+   * @param source Scope label attached to each discovered template
+   */
+  private async discoverTemplatesInDir(
+    dirPath: string | null,
+    source: TemplateScope
+  ): Promise<TemplateInfo[]> {
+    if (!dirPath || !(await this.pathExists(dirPath))) {
       return [];
     }
 
     const templates: TemplateInfo[] = [];
 
     try {
-      const files = await fs.promises.readdir(customPath);
+      const files = await fs.promises.readdir(dirPath);
       for (const file of files) {
         if (file.endsWith(".ctrlyoke.json")) {
-          const fullPath = path.join(customPath, file);
+          const fullPath = path.join(dirPath, file);
           const name = file.replace(".ctrlyoke.json", "");
 
           try {
@@ -564,12 +646,13 @@ export class TemplateManager {
             );
 
             templates.push({
-              id: `custom:${name}`,
+              id: this.buildCustomTemplateId(source, name),
               name: meta.name ?? name,
               description: meta.description ?? "Custom template",
               path: fullPath,
               variables,
               isBuiltIn: false,
+              source,
             });
           } catch (error) {
             Log.warn(`Failed to read custom template: ${file}`, error);
@@ -577,7 +660,7 @@ export class TemplateManager {
         }
       }
     } catch (error) {
-      Log.warn("Failed to discover custom templates:", error);
+      Log.warn(`Failed to discover custom templates in ${dirPath}:`, error);
     }
 
     return templates;

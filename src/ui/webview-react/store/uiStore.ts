@@ -34,6 +34,8 @@ export interface TemplateInfo {
   description: string;
   variables?: TemplateVariable[];
   isBuiltIn: boolean;
+  /** Where a custom template was discovered; undefined for built-ins. */
+  source?: "user" | "workspace";
 }
 
 /**

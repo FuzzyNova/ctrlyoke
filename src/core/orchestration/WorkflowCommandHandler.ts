@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { EndConditionEvaluator } from "../EndConditionEvaluator";
-import { TemplateManager } from "../TemplateManager";
+import { TemplateManager, type TemplateScope } from "../TemplateManager";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -339,6 +339,30 @@ export class WorkflowCommandHandler {
    */
   async createNewTemplate(): Promise<void> {
     try {
+      let scope: TemplateScope = "user";
+      if (this.currentWorkspaceFolder) {
+        const scopePick = await vscode.window.showQuickPick(
+          [
+            {
+              label: "Workspace",
+              description: ".ctrlyoke/templates — this project only",
+              scope: "workspace" as const,
+            },
+            {
+              label: "User",
+              description: "~/.ctrlyoke/templates — available in every workspace",
+              scope: "user" as const,
+            },
+          ],
+          { placeHolder: "Where should this template be stored?" }
+        );
+
+        if (!scopePick) {
+          return;
+        }
+        scope = scopePick.scope;
+      }
+
       const templateName = await vscode.window.showInputBox({
         prompt: "Enter a name for your custom template",
         placeHolder: "my-custom-template",
@@ -358,7 +382,8 @@ export class WorkflowCommandHandler {
       }
 
       const templatePath = await this.templateManager.createCustomTemplate(
-        templateName.trim()
+        templateName.trim(),
+        scope
       );
 
       const doc = await vscode.workspace.openTextDocument(templatePath);

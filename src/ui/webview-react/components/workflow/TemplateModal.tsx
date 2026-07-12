@@ -247,7 +247,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
   // Group templates for display
   const builtInTemplates = templates.filter((t) => t.isBuiltIn);
-  const customTemplates = templates.filter((t) => !t.isBuiltIn);
+  const workspaceTemplates = templates.filter(
+    (t) => !t.isBuiltIn && t.source !== "user"
+  );
+  const userTemplates = templates.filter(
+    (t) => !t.isBuiltIn && t.source === "user"
+  );
 
   return (
     <Modal
@@ -327,9 +332,19 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 </optgroup>
               )}
 
-              {customTemplates.length > 0 && (
-                <optgroup label="Custom Templates">
-                  {customTemplates.map((template) => (
+              {workspaceTemplates.length > 0 && (
+                <optgroup label="Custom Templates (Workspace)">
+                  {workspaceTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {userTemplates.length > 0 && (
+                <optgroup label="Custom Templates (User)">
+                  {userTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.name}
                     </option>

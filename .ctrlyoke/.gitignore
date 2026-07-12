@@ -1,6 +1,5 @@
 # ctrlyoke runtime directories — generated at runtime, do not commit...unless you really want to
 .history/
-.queue/
 logs/
 temp/
 .diagnostic-logs
@@ -10,3 +9,4 @@ certs/
 notifications/
 settings.json
 .search-index/
+.working/

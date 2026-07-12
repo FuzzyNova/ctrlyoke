@@ -381,6 +381,7 @@ export class WorkflowSerializer {
           description: t.description,
           variables: t.variables,
           isBuiltIn: t.isBuiltIn,
+          source: t.source,
         })),
         defaultTemplateId,
       });
