@@ -30,6 +30,7 @@ import {
   type WorkingFile,
 } from "../types/CtrlYokeTypes";
 import { PropertyResolver } from "../utils/PropertyResolver";
+import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 
 /**
  * WorkflowSerializer
@@ -599,6 +600,29 @@ export class WorkflowSerializer {
     }
   }
 
+  /**
+   * Resolve a `showOpenDialog` result into a workspace-relative,
+   * forward-slash-normalized path (portable across platforms and valid in
+   * prompt file @path references). Returns undefined when the dialog was
+   * cancelled. Shared by `handleBrowseTemplateFile` and
+   * `handleBrowseSaveLocation` so the two native dialogs normalize identically.
+   */
+  private resolveDialogSelection(
+    uris: vscode.Uri[] | undefined,
+    workspaceRoot: string | undefined
+  ): string | undefined {
+    if (!uris || uris.length === 0) {
+      return undefined;
+    }
+    let selectedPath = uris[0].fsPath;
+    if (workspaceRoot && selectedPath.startsWith(workspaceRoot)) {
+      selectedPath = selectedPath
+        .slice(workspaceRoot.length)
+        .replace(/^[\\/]/, "");
+    }
+    return selectedPath.replace(/\\/g, "/");
+  }
+
   async handleBrowseTemplateFile(
     variable: string,
     fileFilter?: string[],
@@ -612,10 +636,7 @@ export class WorkflowSerializer {
     const filters: Record<string, string[]> = {};
 
     if (!selectFolder && fileFilter && fileFilter.length > 0) {
-      // Extract extensions from glob patterns like **/*.md → md
-      const exts = fileFilter
-        .map((p) => p.replace(/^\*\*\/\*\./, ""))
-        .filter((e) => !e.includes("*"));
+      const exts = extractExtensionsFromGlobs(fileFilter);
       if (exts.length > 0) {
         filters["Spec / Design Files"] = exts;
       }
@@ -635,24 +656,54 @@ export class WorkflowSerializer {
         : `Select file for {${variable}}`,
     });
 
-    if (uris && uris.length > 0) {
-      // Return a workspace-relative path when possible so workflows are portable
-      let filePath = uris[0].fsPath;
-      if (workspaceRoot) {
-        const wsPath = workspaceRoot;
-        if (filePath.startsWith(wsPath)) {
-          filePath = filePath.slice(wsPath.length).replace(/^[\\/]/, "");
-        }
-      }
-
-      // Normalize backslashes to forward slashes so paths work across platforms
-      // and are valid in prompt file @path references
-      filePath = filePath.replace(/\\/g, "/");
-
+    const filePath = this.resolveDialogSelection(uris, workspaceRoot);
+    if (filePath !== undefined) {
       pm({
         type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,
         variable,
         path: filePath,
+      });
+    }
+  }
+
+  /**
+   * Handle BROWSE_SAVE_LOCATION from the webview (VS Code panel only — the
+   * hosted browser client opens the web FileBrowserModal instead, since a
+   * native dialog would open invisibly on the host's screen).
+   */
+  async handleBrowseSaveLocation(
+    postMessage?: PostMessageFn,
+    defaultDir?: string
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+
+    let defaultUri: vscode.Uri | undefined;
+    if (defaultDir) {
+      const absoluteDir =
+        path.isAbsolute(defaultDir) || !workspaceRoot
+          ? defaultDir
+          : path.join(workspaceRoot, defaultDir);
+      defaultUri = vscode.Uri.file(absoluteDir);
+    } else if (workspaceRoot) {
+      defaultUri = vscode.Uri.file(workspaceRoot);
+    }
+
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      canSelectFolders: true,
+      canSelectFiles: false,
+      defaultUri,
+      title: "Select Save Location",
+    });
+
+    const dirPath = this.resolveDialogSelection(uris, workspaceRoot);
+    if (dirPath !== undefined) {
+      pm({
+        type: MESSAGE_TYPES.SAVE_LOCATION_SELECTED,
+        path: dirPath,
       });
     }
   }

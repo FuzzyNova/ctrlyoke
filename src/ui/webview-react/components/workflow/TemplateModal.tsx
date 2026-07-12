@@ -3,7 +3,7 @@ import { Modal, Button, AnimatedSection, ScopeToggle, HarnessDropdown } from "..
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, HARNESS_IDS } from "../../types/messages";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { validateSafeName } from "@utils/string";
@@ -77,6 +77,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
   const hideDropdownOption = useUiStore((s) => s.hideDropdownOption);
   const unhideDropdownOption = useUiStore((s) => s.unhideDropdownOption);
+  const fileBrowserState = useUiStore((s) => s.fileBrowserState);
+  const openFileBrowser = useUiStore((s) => s.openFileBrowser);
   const harnessStatus = useSettingsStore((s) => s.harnessStatus);
 
   // Local form state
@@ -127,34 +129,39 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
   }, [isOpen]);
 
+  // Apply a picked file/directory path to a variable field, auto-filling the
+  // workflow filename when the variable declares autoFillFilename: true.
+  // Shared by both the native OS picker (TEMPLATE_FILE_SELECTED, below) and
+  // the web FileBrowserModal's onSelect (handleBrowseFile) so the two paths
+  // can't drift.
+  const applyPickedPath = useCallback(
+    (variable: string, path: string) => {
+      setVariables((prev) => ({ ...prev, [variable]: path }));
+
+      const meta = currentTemplate?.variables?.find(
+        (v) => v.name === variable
+      );
+      if (meta?.autoFillFilename && !filename) {
+        // Extract basename without extension: "path/to/my-spec.md" → "my-spec"
+        const base = path.split(/[\\/]/).pop() ?? path;
+        const withoutExt = base.replace(/\.[^.]+$/, "");
+        if (withoutExt) {
+          setFilename(withoutExt);
+          setFilenameError(null);
+        }
+      }
+    },
+    [currentTemplate, filename]
+  );
+
   // Consume file selection from OS picker (sent back via TEMPLATE_FILE_SELECTED)
   useEffect(() => {
     if (!templateFileSelection) return;
     const { variable, path } = templateFileSelection;
-
-    // Apply selected path to the variable field
-    setVariables((prev) => ({ ...prev, [variable]: path }));
-
-    // Auto-fill workflow filename if this variable has autoFillFilename: true
-    const meta = currentTemplate?.variables?.find((v) => v.name === variable);
-    if (meta?.autoFillFilename && !filename) {
-      // Extract basename without extension: "path/to/my-spec.md" → "my-spec"
-      const base = path.split(/[\\/]/).pop() ?? path;
-      const withoutExt = base.replace(/\.[^.]+$/, "");
-      if (withoutExt) {
-        setFilename(withoutExt);
-        setFilenameError(null);
-      }
-    }
-
+    applyPickedPath(variable, path);
     // Clear so the effect doesn't re-fire
     setTemplateFileSelection(null);
-  }, [
-    templateFileSelection,
-    currentTemplate,
-    filename,
-    setTemplateFileSelection,
-  ]);
+  }, [templateFileSelection, applyPickedPath, setTemplateFileSelection]);
 
   // Handle template selection change
   const handleTemplateChange = useCallback(
@@ -227,9 +234,20 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     []
   );
 
-  // Open OS picker for a file- or directory-type variable
+  // Open a file/directory picker for a file- or directory-type variable.
+  // VS Code panel → native OS dialog (same machine as the extension host).
+  // Hosted browser → the web-native FileBrowserModal, since a native dialog
+  // would open invisibly on the host's screen (see MODAL_FILE_BROWSER_PLAN.md).
   const handleBrowseFile = useCallback(
     (variable: string, meta?: TemplateVariable) => {
+      if (isStandalone) {
+        openFileBrowser({
+          mode: meta?.type === "directory" ? "directory" : "file",
+          fileFilter: meta?.fileFilter,
+          onSelect: (path) => applyPickedPath(variable, path),
+        });
+        return;
+      }
       vscode.postMessage({
         type: MESSAGE_TYPES.BROWSE_TEMPLATE_FILE,
         variable,
@@ -237,7 +255,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         selectFolder: meta?.type === "directory",
       });
     },
-    [vscode]
+    [vscode, openFileBrowser, applyPickedPath]
   );
 
   // Validate filename
@@ -316,7 +334,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
   return (
     <Modal
-      isOpen={isOpen}
+      isOpen={isOpen && !fileBrowserState}
       onClose={onClose}
       title="Create Workflow from Template"
       size="lg"

@@ -1355,6 +1355,14 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // SAVE_LOCATION_SELECTED - OS folder picker result for Save As location
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SAVE_LOCATION_SELECTED] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.setSaveLocationSelection({ path: message.path });
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOW_CREATED - New workflow file was created
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_CREATED] = (message) => {

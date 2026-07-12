@@ -10,6 +10,7 @@ import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
+import { FileBrowserModal } from "../workflow/FileBrowserModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { HEADER_BUTTON_SIZES } from "../../constants";
@@ -512,6 +513,10 @@ export const Header: React.FC<{
           isOpen={newWorkflowModalOpen}
           onClose={closeNewWorkflowModal}
         />
+
+        {/* File Browser Modal — controlled by uiStore.fileBrowserState; one
+            canonical instance shared by every standalone-mode caller. */}
+        <FileBrowserModal />
 
         {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
             move into the shared center lane so they can negotiate width together. */}

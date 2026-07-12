@@ -47,6 +47,22 @@ export interface SaveWorkflowDialogData {
 }
 
 /**
+ * A request to open the web-native FileBrowserModal. Only used in standalone
+ * (hosted browser) mode — see MODAL_FILE_BROWSER_PLAN.md. `onSelect` is a
+ * plain in-memory callback: the web path never round-trips through the
+ * extension host, unlike `templateFileSelection` below.
+ */
+export interface FileBrowserRequest {
+  mode: "file" | "directory";
+  /** Globs; file mode only. Folders always stay navigable regardless of filter. */
+  fileFilter?: string[];
+  /** Workspace-relative; defaults to "" (workspace root). */
+  initialPath?: string;
+  title?: string;
+  onSelect: (path: string) => void;
+}
+
+/**
  * Recent workflow entry
  */
 export interface RecentWorkflow {
@@ -174,6 +190,12 @@ interface UiState {
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;
   saveWorkflowDialogData: SaveWorkflowDialogData | null;
+
+  // Web-native file/directory picker modal (standalone/hosted mode only) —
+  // one canonical instance shared by every caller. Transient, not persisted.
+  fileBrowserState: FileBrowserRequest | null;
+  /** Last folder selected via the native OS picker for Save As location; cleared after SaveWorkflowDialog consumes it */
+  saveLocationSelection: { path: string } | null;
 
   // New workflow modal state
   newWorkflowModalOpen: boolean;
@@ -335,6 +357,11 @@ interface UiActions {
   openSaveWorkflowDialog: (data: SaveWorkflowDialogData) => void;
   closeSaveWorkflowDialog: () => void;
 
+  // File browser modal (standalone/hosted mode)
+  openFileBrowser: (request: FileBrowserRequest) => void;
+  closeFileBrowser: () => void;
+  setSaveLocationSelection: (selection: { path: string } | null) => void;
+
   // New workflow modal
   openNewWorkflowModal: (data: {
     templates: TemplateInfo[];
@@ -467,6 +494,8 @@ const initialState: UiState = {
   hiddenDropdownOptions: {},
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
+  fileBrowserState: null,
+  saveLocationSelection: null,
   stepsCollapsed: false,
   finalStepFooterExpanded: false,
   outputCollapsed: false,
@@ -739,6 +768,17 @@ export const useUiStore = create<UiState & UiActions>()(
 
       closeSaveWorkflowDialog: () =>
         set({ saveWorkflowDialogOpen: false, saveWorkflowDialogData: null }),
+
+      // ============================================================================
+      // FILE BROWSER MODAL
+      // ============================================================================
+
+      openFileBrowser: (request) => set({ fileBrowserState: request }),
+
+      closeFileBrowser: () => set({ fileBrowserState: null }),
+
+      setSaveLocationSelection: (selection) =>
+        set({ saveLocationSelection: selection }),
 
       // ============================================================================
       // NEW WORKFLOW MODAL
@@ -1021,6 +1061,7 @@ export const useUiStore = create<UiState & UiActions>()(
           // Reset non-persisted state
           saveWorkflowDialogOpen: false,
           saveWorkflowDialogData: null,
+          fileBrowserState: null,
           propertiesDrawerOpen: false,
           selectedOutputStep: null,
           newWorkflowModalOpen: false,

@@ -1038,6 +1038,13 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.BROWSE_SAVE_LOCATION, (message) => {
+      this.serializer.handleBrowseSaveLocation(
+        this.getCurrentPostMessage(),
+        message.defaultDir
+      );
+    });
+
     // ── Dashboard — Workflow Status ──────────────────────────────────────
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, async (message) => {
       const orchestrator = this.getOrchestrator();

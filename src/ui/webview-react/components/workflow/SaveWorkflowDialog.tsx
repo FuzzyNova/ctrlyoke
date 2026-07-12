@@ -1,10 +1,35 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, ScopeToggle, SettingToggleRow } from "../shared";
 import { useUiStore } from "@store/uiStore";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
+
+/**
+ * Split a full save path into its directory (`location`) and basename
+ * without the `.ctrlyoke.<format>` extension (`name`). Handles both forward-
+ * and back-slash separators (the extension may send an OS-native path).
+ */
+function splitSavePath(fullPath: string): { location: string; name: string } {
+  const normalized = fullPath.replace(/\\/g, "/");
+  const lastSlash = normalized.lastIndexOf("/");
+  const location = lastSlash >= 0 ? normalized.slice(0, lastSlash) : "";
+  const base = lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+  const name = base.replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "");
+  return { location, name };
+}
+
+/** Rejoin a location + name + format into the full save path SAVE_WORKFLOW expects. */
+function joinSavePath(
+  location: string,
+  name: string,
+  format: "yaml" | "json"
+): string {
+  const trimmedLocation = location.replace(/\/$/, "");
+  const fileName = `${name}.ctrlyoke.${format}`;
+  return trimmedLocation ? `${trimmedLocation}/${fileName}` : fileName;
+}
 
 /**
  * SaveWorkflowDialog
@@ -17,35 +42,40 @@ import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
  *   User clicks Save button
  *   → extension receives SAVE_WORKFLOW_REQUEST, reads working file, replies with SAVE_WORKFLOW_DIALOG_DATA
  *   → useMessageHandler opens this dialog (openSaveWorkflowDialog)
- *   → user edits path / format, clicks Save
+ *   → user edits location / name / format, clicks Save
  *   → extension receives SAVE_WORKFLOW, writes file, replies with WORKFLOW_SAVED or WORKFLOW_SAVE_FAILED
  *   → useMessageHandler closes dialog (on success) or shows toast error (on failure)
  *
- * Toggling "Save as Template" swaps the path/format fields for a template
- * name + scope picker and posts SAVE_WORKFLOW_AS_TEMPLATE instead — the
- * extension snapshots the current values (no {placeholder} conversion) into
- * a new custom template and replies with WORKFLOW_SAVED_AS_TEMPLATE or
+ * Toggling "Save as Template" swaps the location/name/format fields for a
+ * template name + scope picker and posts SAVE_WORKFLOW_AS_TEMPLATE instead —
+ * the extension snapshots the current values (no {placeholder} conversion)
+ * into a new custom template and replies with WORKFLOW_SAVED_AS_TEMPLATE or
  * (reused) WORKFLOW_SAVE_FAILED.
+ *
+ * Location's Browse button branches on isStandalone like TemplateModal's
+ * variable pickers: VS Code panel → native OS folder dialog
+ * (BROWSE_SAVE_LOCATION / SAVE_LOCATION_SELECTED); hosted browser → the
+ * shared web FileBrowserModal (uiStore.openFileBrowser), since a native
+ * dialog would open invisibly on the host's screen.
  */
 export const SaveWorkflowDialog: React.FC = () => {
   const vscode = useVsCodeApi();
   const saveWorkflowDialogOpen = useUiStore((s) => s.saveWorkflowDialogOpen);
   const saveWorkflowDialogData = useUiStore((s) => s.saveWorkflowDialogData);
   const closeSaveWorkflowDialog = useUiStore((s) => s.closeSaveWorkflowDialog);
+  const fileBrowserState = useUiStore((s) => s.fileBrowserState);
+  const openFileBrowser = useUiStore((s) => s.openFileBrowser);
+  const saveLocationSelection = useUiStore((s) => s.saveLocationSelection);
+  const setSaveLocationSelection = useUiStore(
+    (s) => s.setSaveLocationSelection
+  );
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Normalize a file path to use the given format extension.
-  function applyFormat(p: string, fmt: "yaml" | "json"): string {
-    const target = `.ctrlyoke.${fmt}`;
-    return p
-      .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, target)
-      .replace(/\.(yaml|yml|json)$/i, target);
-  }
-
-  const [filePath, setFilePath] = useState("");
+  const [location, setLocation] = useState("");
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
   const [format, setFormat] = useState<"yaml" | "json">("yaml");
-  const [pathError, setPathError] = useState<string | null>(null);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateNameError, setTemplateNameError] = useState<string | null>(
@@ -57,10 +87,13 @@ export const SaveWorkflowDialog: React.FC = () => {
   // Reset local state whenever the dialog is opened with new data.
   useEffect(() => {
     if (saveWorkflowDialogOpen && saveWorkflowDialogData) {
-      const fmt = saveWorkflowDialogData.defaultFormat;
-      setFormat(fmt);
-      setFilePath(saveWorkflowDialogData.defaultPath);
-      setPathError(null);
+      const { location: loc, name: baseName } = splitSavePath(
+        saveWorkflowDialogData.defaultPath
+      );
+      setFormat(saveWorkflowDialogData.defaultFormat);
+      setLocation(loc);
+      setName(baseName);
+      setNameError(null);
       setSaveAsTemplate(false);
       setTemplateName("");
       setTemplateNameError(null);
@@ -75,26 +108,37 @@ export const SaveWorkflowDialog: React.FC = () => {
     }
   }, [saveWorkflowDialogOpen]);
 
-  const handleFormatChange = useCallback((fmt: "yaml" | "json") => {
-    setFormat(fmt);
-    setFilePath((prev) => applyFormat(prev, fmt));
-  }, []);
+  // Consume a location picked via the native OS folder dialog (VS Code panel).
+  useEffect(() => {
+    if (!saveLocationSelection) return;
+    setLocation(saveLocationSelection.path);
+    setSaveLocationSelection(null);
+  }, [saveLocationSelection, setSaveLocationSelection]);
 
-  const validate = useCallback((p: string): string | null => {
-    if (!p.trim()) return "File path cannot be empty.";
-    if (!p.match(/\.(ctrlyoke\.(yaml|yml|json)|prompt\.md)$/i)) {
-      return "Path must end with .ctrlyoke.yaml, .ctrlyoke.yml, or .ctrlyoke.json.";
+  const handleBrowseLocation = useCallback(() => {
+    if (isStandalone) {
+      openFileBrowser({
+        mode: "directory",
+        initialPath: location,
+        onSelect: setLocation,
+      });
+      return;
     }
-    return null;
-  }, []);
+    vscode.postMessage({
+      type: MESSAGE_TYPES.BROWSE_SAVE_LOCATION,
+      defaultDir: location,
+    });
+  }, [vscode, openFileBrowser, location]);
 
-  const handlePathChange = useCallback(
+  const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
-      setFilePath(val);
-      setPathError(validate(val));
+      setName(val);
+      setNameError(
+        val ? validateSafeName(val, "Workflow name is required") : null
+      );
     },
-    [validate]
+    []
   );
 
   const handleTemplateNameChange = useCallback(
@@ -123,21 +167,21 @@ export const SaveWorkflowDialog: React.FC = () => {
       return;
     }
 
-    const err = validate(filePath);
+    const err = validateSafeName(name, "Workflow name is required");
     if (err) {
-      setPathError(err);
+      setNameError(err);
       return;
     }
     vscode.postMessage({
       type: MESSAGE_TYPES.SAVE_WORKFLOW,
-      filePath: filePath.trim(),
+      filePath: joinSavePath(location, name.trim(), format),
       format,
     });
   }, [
     vscode,
-    filePath,
+    location,
+    name,
     format,
-    validate,
     saveAsTemplate,
     templateName,
     templateScope,
@@ -145,7 +189,15 @@ export const SaveWorkflowDialog: React.FC = () => {
 
   const canSave = saveAsTemplate
     ? !!templateName.trim() && !templateNameError
-    : !!filePath.trim() && !pathError;
+    : !!name.trim() && !nameError;
+
+  // Preview of the final file path, shown at the bottom of the dialog so
+  // the user can see exactly what will be written before hitting Save.
+  const templateDirPreview =
+    templateScope === "user" ? "~/.ctrlyoke/templates" : ".ctrlyoke/templates";
+  const previewPath = saveAsTemplate
+    ? `${templateDirPreview}/${templateName.trim() || "…"}.ctrlyoke.json`
+    : joinSavePath(location, name.trim() || "…", format);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -158,7 +210,7 @@ export const SaveWorkflowDialog: React.FC = () => {
 
   return (
     <Modal
-      isOpen={saveWorkflowDialogOpen}
+      isOpen={saveWorkflowDialogOpen && !fileBrowserState}
       onClose={closeSaveWorkflowDialog}
       title="Save Workflow As..."
       size="md"
@@ -215,7 +267,7 @@ export const SaveWorkflowDialog: React.FC = () => {
                       ? "bg-btn-bg text-btn-fg"
                       : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                   }`}
-                  onClick={() => handleFormatChange(fmt)}
+                  onClick={() => setFormat(fmt)}
                 >
                   {fmt.toUpperCase()}
                 </button>
@@ -263,36 +315,69 @@ export const SaveWorkflowDialog: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="form-group">
-            <label
-              htmlFor="save-workflow-path"
-              className="block text-sm font-medium text-foreground"
-            >
-              <span className="block mb-1">Save Path</span>
-              <input
-                ref={inputRef}
-                id="save-workflow-path"
-                type="text"
-                aria-label="Save Path"
-                value={filePath}
-                onChange={handlePathChange}
-                onKeyDown={handleKeyDown}
-                spellCheck={false}
-                className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
-                  pathError
-                    ? "border-input-error-border"
-                    : "border-input-border focus:border-focus-border"
-                }`}
-              />
-            </label>
-            {pathError && (
-              <p className="mt-1 text-xs text-error-fg">{pathError}</p>
-            )}
-            <p className="mt-1 text-xs text-description-fg">
-              Absolute path or path relative to the workspace root.
-            </p>
-          </div>
+          <>
+            <div className="form-group">
+              <span className="block mb-1 text-sm font-medium text-foreground">
+                Location
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="flex-1 min-w-0 truncate px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border font-mono text-xs"
+                  title={location || "(workspace root)"}
+                >
+                  {location || "(workspace root)"}
+                </span>
+                <Button
+                  variant="secondary"
+                  onClick={handleBrowseLocation}
+                  title="Browse for save location"
+                >
+                  Browse…
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-description-fg">
+                Absolute path or path relative to the workspace root.
+              </p>
+            </div>
+
+            <div className="form-group">
+              <label
+                htmlFor="save-workflow-name"
+                className="block text-sm font-medium text-foreground"
+              >
+                <span className="block mb-1">Name</span>
+                <input
+                  ref={inputRef}
+                  id="save-workflow-name"
+                  type="text"
+                  aria-label="Name"
+                  value={name}
+                  onChange={handleNameChange}
+                  onKeyDown={handleKeyDown}
+                  spellCheck={false}
+                  placeholder="my-workflow"
+                  className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
+                    nameError
+                      ? "border-input-error-border"
+                      : "border-input-border focus:border-focus-border"
+                  }`}
+                />
+              </label>
+              {nameError && (
+                <p className="mt-1 text-xs text-error-fg">{nameError}</p>
+              )}
+            </div>
+          </>
         )}
+
+        <div className="pt-3 border-t border-panel-border">
+          <p className="text-xs text-description-fg">
+            Will save to{" "}
+            <span className="font-mono text-foreground break-all">
+              {previewPath}
+            </span>
+          </p>
+        </div>
       </div>
     </Modal>
   );
