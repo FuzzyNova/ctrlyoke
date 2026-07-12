@@ -8,7 +8,10 @@ import {
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
+import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { RETRY_PROMPT_PLACEHOLDERS } from "../types/DashboardConstants";
+import { PromptFileParser } from "./PromptFileParser";
+import type { PromptFile } from "../types/CtrlYokeTypes";
 
 /**
  * A single template variable — name plus optional UI metadata.
@@ -86,6 +89,7 @@ interface ParsedTemplateMeta {
  */
 export class TemplateManager {
   private context: vscode.ExtensionContext;
+  private readonly promptFileParser: PromptFileParser;
 
   // Ordered list of built-in template IDs. "blank" is special-cased (generated, no file).
   // All others are self-describing via _templateMeta in their YAML files.
@@ -99,6 +103,7 @@ export class TemplateManager {
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+    this.promptFileParser = new PromptFileParser(new VsCodeAdapter(context));
   }
 
   /**
@@ -404,20 +409,19 @@ export class TemplateManager {
   }
 
   /**
-   * Create a workflow file from a template
+   * Instantiate a template into a PromptFile: substitute variables, strip
+   * `_templateMeta`, then validate/normalize the result the same way a real
+   * workflow file would be. Writes nothing to disk — callers are responsible
+   * for creating a working file from the returned steps (the working file is
+   * the only artifact a workflow-creation path produces; see WORKING_FILE_MODEL_PLAN).
    * @param templateId Template ID to use
    * @param variables Variable values to substitute
-   * @param filename Workflow filename (without extension)
-   * @param workflowsDir Directory to save workflow (relative to workspace)
-   * @returns Path to created workflow file
+   * @returns Normalized PromptFile (steps + any workflow-level properties)
    */
   async createWorkflow(
     templateId: string,
-    variables: Record<string, string>,
-    filename: string,
-    workflowsDir: string,
-    format: "yaml" | "json" = "yaml"
-  ): Promise<string> {
+    variables: Record<string, string>
+  ): Promise<PromptFile> {
     const workspaceFolder = this.getWorkspaceFolder();
     if (!workspaceFolder) {
       throw new Error("No workspace folder available");
@@ -448,37 +452,20 @@ export class TemplateManager {
     // Replace variables in raw template string
     const substituted = this.replaceVariables(templateContent, withDefaults);
 
-    // Parse (yaml.load handles both YAML and JSON) then re-serialize to desired format.
+    // Parse (yaml.load handles both YAML and JSON).
     // Strip _templateMeta — it's template-authoring metadata, not a workflow execution field.
     const parsed = jsYaml.load(substituted) as Record<string, unknown>;
     delete parsed["_templateMeta"];
-    let workflowContent: string;
-    const ext = format === "json" ? ".ctrlyoke.json" : ".ctrlyoke.yaml";
 
-    if (format === "json") {
-      workflowContent = JSON.stringify(parsed, null, 2);
-    } else {
-      workflowContent = jsYaml.dump(parsed, { lineWidth: -1, noRefs: true });
-    }
-
-    // Build full path
-    const fullDir = path.join(workspaceFolder.uri.fsPath, workflowsDir);
-    const fullPath = path.join(fullDir, `${filename}${ext}`);
-
-    // Ensure directory exists
-    if (!(await this.pathExists(fullDir))) {
-      await fs.promises.mkdir(fullDir, { recursive: true });
-    }
-
-    // Check if file already exists
-    if (await this.pathExists(fullPath)) {
-      throw new Error(`File already exists: ${filename}${ext}`);
-    }
-
-    // Write file
-    await fs.promises.writeFile(fullPath, workflowContent, "utf-8");
-
-    return fullPath;
+    // Validate/normalize with the same schema and step-building logic a
+    // real workflow file goes through. contentPath only needs to resolve
+    // relative `@file` references to the workspace root — there is no real
+    // source file for a template-created workflow.
+    const contentPath = path.join(
+      workspaceFolder.uri.fsPath,
+      "template-workflow.ctrlyoke.json"
+    );
+    return this.promptFileParser.validateAndNormalize(parsed, contentPath);
   }
 
   /**

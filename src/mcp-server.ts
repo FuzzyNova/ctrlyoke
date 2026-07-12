@@ -40,7 +40,7 @@ import { withFileLock } from "./utils/FileLockUtils";
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const CTRLYOKE_DIR = ".ctrlyoke";
 const LOGS_DIR = "logs";
-const QUEUE_DIR = ".queue";
+const WORKING_DIR = ".working";
 const CAPABILITIES_FILE = "capabilities.json";
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
@@ -119,7 +119,8 @@ class CtrlYokeMCPServer {
     log("Environment variables:", {
       CTRLYOKE_WORKSPACE: process.env.CTRLYOKE_WORKSPACE,
       CTRLYOKE_WORKING_FILE:
-        process.env.CTRLYOKE_WORKING_FILE || "(not set — will scan queue dir)",
+        process.env.CTRLYOKE_WORKING_FILE ||
+        "(not set — will scan working dir)",
       CTRLYOKE_MAX_QUEUE_SIZE:
         process.env.CTRLYOKE_MAX_QUEUE_SIZE || "(not set — default 100)",
       CTRLYOKE_UNLIMITED_MODE:
@@ -814,17 +815,17 @@ class CtrlYokeMCPServer {
    * errors caused by sibling workflows.
    */
   private async handleGlobalStatus() {
-    const queueDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, QUEUE_DIR);
-    log("Scanning queue directory for all workflows:", queueDir);
+    const workingDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, WORKING_DIR);
+    log("Scanning working file directory for all workflows:", workingDir);
 
     try {
-      const files = await fs.readdir(queueDir);
-      const queueFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
-      log("Found queue files:", queueFiles.length);
+      const files = await fs.readdir(workingDir);
+      const workingFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
+      log("Found working files:", workingFiles.length);
 
       const workflows = await Promise.all(
-        queueFiles.map(async (f) => {
-          const filePath = path.join(queueDir, f);
+        workingFiles.map(async (f) => {
+          const filePath = path.join(workingDir, f);
           try {
             const content = await fs.readFile(filePath, "utf8");
             const data: WorkingFile = JSON.parse(content);
@@ -934,7 +935,7 @@ class CtrlYokeMCPServer {
    * Lookup order:
    * 1. CTRLYOKE_WORKING_FILE env var — set per-workflow by the MCP config generator
    *    so each AI session targets exactly its own queue file (multi-workflow safe).
-   * 2. Fallback: scan .ctrlyoke/.queue/ and prefer files with executionState=running,
+   * 2. Fallback: scan .ctrlyoke/.working/ and prefer files with executionState=running,
    *    then most recently modified (single-workflow fallback).
    */
   private async findActiveWorkingFile(): Promise<string | null> {
@@ -953,25 +954,25 @@ class CtrlYokeMCPServer {
       }
     }
 
-    // 2. Scan the queue directory
-    const queueDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, QUEUE_DIR);
-    log("Searching for working files in:", queueDir);
+    // 2. Scan the working file directory
+    const workingDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, WORKING_DIR);
+    log("Searching for working files in:", workingDir);
 
     try {
-      const files = await fs.readdir(queueDir);
+      const files = await fs.readdir(workingDir);
       log("Files found:", files.length);
-      const queueFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
-      log("Queue files found:", queueFiles.length, queueFiles);
+      const workingFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
+      log("Working files found:", workingFiles.length, workingFiles);
 
-      if (queueFiles.length === 0) {
+      if (workingFiles.length === 0) {
         log("No active working files found");
         return null;
       }
 
       // Read each file's executionState so we can prefer RUNNING ones
       const fileInfos = await Promise.all(
-        queueFiles.map(async (f) => {
-          const filePath = path.join(queueDir, f);
+        workingFiles.map(async (f) => {
+          const filePath = path.join(workingDir, f);
           try {
             const [content, stats] = await Promise.all([
               fs.readFile(filePath, "utf8"),

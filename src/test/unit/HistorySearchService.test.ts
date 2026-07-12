@@ -32,7 +32,7 @@ suite("HistorySearchService", () => {
       path.join(
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
+        PATH_CONSTANTS.WORKING_DIR
       ),
       { recursive: true }
     );
@@ -93,7 +93,7 @@ suite("HistorySearchService", () => {
       path.join(
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR,
+        PATH_CONSTANTS.WORKING_DIR,
         `${workflowId}.ctrlyoke.json`
       )
     );
@@ -292,7 +292,7 @@ suite("HistorySearchService", () => {
       path.join(
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR,
+        PATH_CONSTANTS.WORKING_DIR,
         `${workflowId}.ctrlyoke.json`
       ),
       JSON.stringify({ ...workingFile, ...overrides }, null, 2),

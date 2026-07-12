@@ -304,7 +304,7 @@ export interface WorkflowAttemptTransition {
 
 /**
  * Working file format - same schema as PromptFile with optional runtime metadata
- * Stored in .ctrlyoke/.queue/ directory
+ * Stored in .ctrlyoke/.working/ directory
  */
 export interface WorkingFile extends PromptFile {
   originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)

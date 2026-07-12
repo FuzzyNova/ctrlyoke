@@ -38,6 +38,9 @@ import { PropertyResolver } from "../utils/PropertyResolver";
  * - Run history (load, clear)
  * - Workflow name updates
  */
+/** workspaceState key for the last directory a durable workflow was exported to (Save As). */
+const LAST_EXPORT_DIR_KEY = "ctrlyoke.lastWorkflowExportDir";
+
 export class WorkflowSerializer {
   constructor(
     private readonly postMessage: PostMessageFn,
@@ -45,7 +48,8 @@ export class WorkflowSerializer {
     private readonly getManager: () => WorkflowOrchestrator | undefined,
     private readonly getOutputHistoryManager: () =>
       | OutputHistoryManager
-      | undefined
+      | undefined,
+    private readonly workspaceState: vscode.Memento
   ) {}
 
   // ============================================================================
@@ -82,13 +86,14 @@ export class WorkflowSerializer {
       return;
     }
 
-    const workflowsDir = vscode.workspace.workspaceFolders?.length
-      ? path.join(
-          getVsCodeWorkspaceRoot(),
-          PATH_CONSTANTS.CTRLYOKE_DIR,
-          PATH_CONSTANTS.WORKFLOWS_DIR
-        )
-      : path.join(PATH_CONSTANTS.CTRLYOKE_DIR, PATH_CONSTANTS.WORKFLOWS_DIR);
+    // Unsaved workflows default to the last directory the user exported a
+    // durable workflow to, then to the repo root on the very first export —
+    // ctrlyoke doesn't own a durable "workflows" folder; the user decides.
+    const repoRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : "";
+    const defaultDir =
+      this.workspaceState.get<string>(LAST_EXPORT_DIR_KEY) || repoRoot;
 
     try {
       const rawContent = await fs.readFile(workingFilePath, "utf-8");
@@ -108,7 +113,7 @@ export class WorkflowSerializer {
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-+|-+$/g, "") || "workflow";
-        defaultPath = path.join(workflowsDir, `${name}.ctrlyoke.yaml`);
+        defaultPath = path.join(defaultDir, `${name}.ctrlyoke.yaml`);
       }
 
       const defaultFormat: "yaml" | "json" = defaultPath
@@ -121,7 +126,6 @@ export class WorkflowSerializer {
         type: MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA,
         defaultPath,
         defaultFormat,
-        workflowsDir,
       });
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -280,6 +284,13 @@ export class WorkflowSerializer {
 
       Log.debug(`Saved workflow to: ${absolutePath}`);
 
+      // Remember this directory so the next unsaved workflow's Save As
+      // defaults here instead of the repo root.
+      await this.workspaceState.update(
+        LAST_EXPORT_DIR_KEY,
+        path.dirname(absolutePath)
+      );
+
       pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVED,
         filePath: absolutePath,
@@ -360,10 +371,6 @@ export class WorkflowSerializer {
     const pm = postMessage ?? this.postMessage;
     try {
       const templates = await this.templateManager.getAvailableTemplates();
-      const workflowsDir = path.join(
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKFLOWS_DIR
-      );
       const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
 
       pm({
@@ -375,7 +382,6 @@ export class WorkflowSerializer {
           variables: t.variables,
           isBuiltIn: t.isBuiltIn,
         })),
-        workflowsDir,
         defaultTemplateId,
       });
     } catch (error) {
@@ -419,39 +425,38 @@ export class WorkflowSerializer {
 
   async handleCreateWorkflow(
     message: any,
-    postMessage?: PostMessageFn,
-    loadFn?: (filePath: string) => Promise<void>
+    clientId: string,
+    postMessage?: PostMessageFn
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
-    const { templateId, variables, filename, workflowsDir, runAfter, format } =
-      message;
+    const { templateId, variables, filename, runAfter } = message;
 
     try {
-      const filePath = await this.templateManager.createWorkflow(
+      const promptFile = await this.templateManager.createWorkflow(
         templateId,
-        variables || {},
+        variables || {}
+      );
+
+      const orchestrator = this.getManager();
+      if (!orchestrator) {
+        throw new Error("No active workspace");
+      }
+
+      const instance = await orchestrator.createWorkflowFromTemplateForClient(
+        promptFile,
         filename,
-        workflowsDir,
-        format === "json" ? "json" : "yaml"
+        pm,
+        clientId
       );
 
       pm({
         type: MESSAGE_TYPES.WORKFLOW_CREATED,
-        filePath,
+        filePath: instance.getSummary().workingFilePath,
       });
 
-      const load =
-        loadFn ??
-        (async (fp: string) => {
-          const manager = this.getManager();
-          if (manager) {
-            await manager.loadPromptFile(fp);
-            if (runAfter) {
-              vscode.commands.executeCommand("ctrlyoke.run");
-            }
-          }
-        });
-      await load(filePath);
+      if (runAfter) {
+        await orchestrator.executeWorkflow(instance.id);
+      }
     } catch (error) {
       const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);
@@ -564,14 +569,14 @@ export class WorkflowSerializer {
         return;
       }
 
-      const queueDir = path.join(
+      const workingDir = path.join(
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
+        PATH_CONSTANTS.WORKING_DIR
       );
 
       try {
-        await fs.access(queueDir);
+        await fs.access(workingDir);
       } catch {
         pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
@@ -580,7 +585,7 @@ export class WorkflowSerializer {
         return;
       }
 
-      const files = await fs.readdir(queueDir);
+      const files = await fs.readdir(workingDir);
       const workflowFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
 
       // Build a fast lookup set of working file paths that are currently active
@@ -600,7 +605,7 @@ export class WorkflowSerializer {
 
       const workflows = await Promise.all(
         workflowFiles.map(async (file) => {
-          const filePath = path.join(queueDir, file);
+          const filePath = path.join(workingDir, file);
 
           try {
             const workingFile = (await readJsonFile(filePath)) as WorkingFile;
@@ -724,7 +729,7 @@ export class WorkflowSerializer {
   ): Promise<boolean> {
     const pm = postMessage ?? this.postMessage;
     const confirm = await vscode.window.showWarningMessage(
-      "Delete all workflow history files from .ctrlyoke/.queue?",
+      "Delete all workflow history files from .ctrlyoke/.working?",
       { modal: true },
       "Delete All"
     );
@@ -741,10 +746,10 @@ export class WorkflowSerializer {
         return false;
       }
 
-      const queueDir = path.join(
+      const workingDir = path.join(
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
+        PATH_CONSTANTS.WORKING_DIR
       );
       const historyDir = path.join(
         workspaceRoot,
@@ -753,11 +758,11 @@ export class WorkflowSerializer {
       );
 
       try {
-        const files = await fs.readdir(queueDir);
+        const files = await fs.readdir(workingDir);
         const workflowFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
 
         for (const file of workflowFiles) {
-          await fs.unlink(path.join(queueDir, file));
+          await fs.unlink(path.join(workingDir, file));
         }
 
         try {
@@ -800,10 +805,10 @@ export class WorkflowSerializer {
         return;
       }
 
-      const queueDir = path.join(
+      const workingDir = path.join(
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
+        PATH_CONSTANTS.WORKING_DIR
       );
       const historyBaseDir = path.join(
         workspaceRoot,
@@ -817,7 +822,7 @@ export class WorkflowSerializer {
         .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "")
         .replace(/\.(yaml|yml|json)$/i, "");
 
-      const files = await fs.readdir(queueDir).catch(() => [] as string[]);
+      const files = await fs.readdir(workingDir).catch(() => [] as string[]);
       const candidates = files.filter(
         (f) =>
           (f === `${stem}.ctrlyoke.json` || f.startsWith(`${stem}.`)) &&
@@ -826,7 +831,7 @@ export class WorkflowSerializer {
 
       for (const candidate of candidates) {
         await fs
-          .unlink(path.join(queueDir, candidate))
+          .unlink(path.join(workingDir, candidate))
           .catch((err) =>
             Log.warn(
               `handleRemoveWorkflowHistory: failed to delete ${candidate}:`,

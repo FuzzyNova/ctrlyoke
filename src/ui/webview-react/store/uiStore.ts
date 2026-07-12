@@ -42,7 +42,6 @@ export interface TemplateInfo {
 export interface SaveWorkflowDialogData {
   defaultPath: string;
   defaultFormat: "yaml" | "json";
-  workflowsDir: string;
 }
 
 /**
@@ -178,7 +177,6 @@ interface UiState {
   newWorkflowModalOpen: boolean;
   templates: TemplateInfo[];
   currentTemplate: TemplateInfo | null;
-  workflowsDir: string;
   defaultTemplateId: string;
   /** Last file selected via OS file picker for a template variable; cleared after TemplateModal consumes it */
   templateFileSelection: { variable: string; path: string } | null;
@@ -332,7 +330,6 @@ interface UiActions {
   // New workflow modal
   openNewWorkflowModal: (data: {
     templates: TemplateInfo[];
-    workflowsDir: string;
     defaultTemplateId?: string;
   }) => void;
   closeNewWorkflowModal: () => void;
@@ -481,7 +478,6 @@ const initialState: UiState = {
   newWorkflowModalOpen: false,
   templates: [],
   currentTemplate: null,
-  workflowsDir: ".ctrlyoke/workflows",
   defaultTemplateId: "blank",
   templateFileSelection: null,
   recentWorkflows: [],
@@ -731,11 +727,10 @@ export const useUiStore = create<UiState & UiActions>()(
       // NEW WORKFLOW MODAL
       // ============================================================================
 
-      openNewWorkflowModal: ({ templates, workflowsDir, defaultTemplateId }) =>
+      openNewWorkflowModal: ({ templates, defaultTemplateId }) =>
         set({
           newWorkflowModalOpen: true,
           templates,
-          workflowsDir,
           defaultTemplateId: defaultTemplateId ?? "blank",
           currentTemplate:
             templates.find((t) => t.id === (defaultTemplateId ?? "blank")) ??

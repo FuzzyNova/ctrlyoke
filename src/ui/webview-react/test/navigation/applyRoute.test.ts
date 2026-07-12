@@ -117,12 +117,12 @@ describe("applyRoute — workflow", () => {
     useUiStore.getState().setLoadedWorkflows([
       {
         id: "w1",
-        workingFilePath: "c:\\dev\\proj\\.ctrlyoke\\.queue\\m.ctrlyoke.json",
+        workingFilePath: "c:\\dev\\proj\\.ctrlyoke\\.working\\m.ctrlyoke.json",
       } as unknown as WorkflowSummary,
     ]);
     const api = fakeVsCode();
     applyRoute(
-      { workflow: "c:/dev/proj/.ctrlyoke/.queue/m.ctrlyoke.json" },
+      { workflow: "c:/dev/proj/.ctrlyoke/.working/m.ctrlyoke.json" },
       api
     );
     expect(api.postMessage).toHaveBeenCalledWith({

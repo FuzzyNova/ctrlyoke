@@ -12,16 +12,16 @@ suite("WorkspaceSessionManager", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-workspace-session-manager-")
     );
-    const queueDir = path.join(
+    const workingDir = path.join(
       workspaceRoot,
       PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.QUEUE_DIR
+      PATH_CONSTANTS.WORKING_DIR
     );
-    await fs.mkdir(queueDir, { recursive: true });
+    await fs.mkdir(workingDir, { recursive: true });
 
     try {
       await fs.writeFile(
-        path.join(queueDir, "older-name.ctrlyoke.json"),
+        path.join(workingDir, "older-name.ctrlyoke.json"),
         JSON.stringify({
           workflowName: "older-name",
           startedAt: 100,
@@ -30,7 +30,7 @@ suite("WorkspaceSessionManager", () => {
         })
       );
       await fs.writeFile(
-        path.join(queueDir, "newer-name.ctrlyoke.json"),
+        path.join(workingDir, "newer-name.ctrlyoke.json"),
         JSON.stringify({
           workflowName: "newer-name",
           startedAt: 200,
@@ -50,7 +50,7 @@ suite("WorkspaceSessionManager", () => {
 
       assert.strictEqual(
         mostRecentPath,
-        path.join(queueDir, "older-name.ctrlyoke.json")
+        path.join(workingDir, "older-name.ctrlyoke.json")
       );
       assert.strictEqual(sessions[0]?.label, "⏸ older-name");
       assert.strictEqual(sessions[1]?.label, "⏸ newer-name");

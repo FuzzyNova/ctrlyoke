@@ -69,7 +69,7 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 - The first four tools mirror the LM tools from `extension.ts`; `ctrlyoke_global_status` and `ctrlyoke_submit_commit_message` are MCP-only.
 - Active working file resolution is a two-step contract:
   1. prefer `CTRLYOKE_WORKING_FILE` so a harness session targets its exact workflow
-  2. otherwise scan `.ctrlyoke/.queue/` and prefer running / recent files as a fallback
+  2. otherwise scan `.ctrlyoke/.working/` and prefer running / recent files as a fallback
 - Queue appends are protected twice on purpose:
   - `operationQueue` serializes append requests within this process
   - `withFileLock(...)` protects the working file across processes

@@ -7,7 +7,7 @@ const GITIGNORE_CONTENT = [
   "# ctrlyoke runtime directories — generated at runtime, do not commit...unless you really want to",
   `${PATH_CONSTANTS.HISTORY_DIR}/`,
   `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`,
-  `${PATH_CONSTANTS.QUEUE_DIR}/`,
+  `${PATH_CONSTANTS.WORKING_DIR}/`,
   `${PATH_CONSTANTS.LOGS_DIR}/`,
   `${PATH_CONSTANTS.TEMP_DIR}/`,
   `${PATH_CONSTANTS.CERTS_DIR}/`,
@@ -19,7 +19,6 @@ const GITIGNORE_CONTENT = [
 
 /** User-facing directories created on first init */
 const USER_DIRECTORIES = [
-  PATH_CONSTANTS.WORKFLOWS_DIR,
   PATH_CONSTANTS.PROMPTS_DIR,
   PATH_CONSTANTS.SCRIPTS_DIR,
   PATH_CONSTANTS.AGENTS_DIR,

@@ -133,7 +133,8 @@ export class CtrlYokeWebviewProvider
       postMessage,
       templateManager,
       getOrchestrator,
-      getOutputHistoryManager
+      getOutputHistoryManager,
+      context.workspaceState
     );
     this.router = new WebviewMessageRouter(
       postMessage,

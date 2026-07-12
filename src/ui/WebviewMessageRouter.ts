@@ -999,26 +999,12 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.CREATE_WORKFLOW, (message) => {
-      if (this.clientId !== PANEL_CLIENT_ID) {
-        // External browser client — create file then load without changing panel's viewed workflow
-        const send = this.scopedPostMessage;
-        const orchestrator = this.getOrchestrator();
-        if (orchestrator) {
-          this.serializer
-            .handleCreateWorkflow(message, send, (fp) =>
-              orchestrator.loadWorkflowForClient(fp, send, this.clientId)
-            )
-            .catch((err) =>
-              Log.warn(`CREATE_WORKFLOW per-client load failed: ${err}`)
-            );
-          return;
-        }
-      }
-      // VS Code sidebar path — global load (updates panel viewer registry)
-      this.serializer.handleCreateWorkflow(
-        message,
-        this.getCurrentPostMessage()
-      );
+      // createWorkflowFromTemplateForClient scopes the new instance to clientId,
+      // so panel and browser clients share this path without touching each
+      // other's viewed workflow.
+      this.serializer
+        .handleCreateWorkflow(message, this.clientId, this.getCurrentPostMessage())
+        .catch((err) => Log.warn(`CREATE_WORKFLOW failed: ${err}`));
     });
 
     table.set(MESSAGE_TYPES.CREATE_NEW_TEMPLATE, () => {

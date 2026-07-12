@@ -128,6 +128,11 @@ export const SaveWorkflowDialog: React.FC = () => {
       }
     >
       <div className="space-y-4">
+        <p className="text-sm text-description-fg">
+          This workflow is auto-saved to your working area as you edit. Use
+          Save As to export a clean, shareable copy without runtime state.
+        </p>
+
         {/* Format selector */}
         <div className="form-group">
           <p

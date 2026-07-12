@@ -697,6 +697,33 @@ export class WorkflowInstance {
   }
 
   /**
+   * Load an already-substituted template workflow into the dashboard without
+   * executing. There is no source file on disk — the working file created
+   * here is the only artifact, with `originalFile` left undefined so Save As
+   * is the only way to export a durable copy.
+   */
+  async loadFromTemplate(
+    promptFile: PromptFile,
+    displayName: string
+  ): Promise<void> {
+    this.promptQueue.clearQueue();
+    this.filePath = displayName;
+
+    const workingFilePath = await this.promptFileLoader.loadFromMemory(
+      promptFile,
+      displayName,
+      this.workspaceFolderPath
+    );
+
+    if (workingFilePath) {
+      this.currentPromptFile = { filePath: displayName, promptFile };
+      this.setupPromptFileWatcher(workingFilePath);
+    }
+
+    this.propagateWorkflowNameToIntegrations();
+  }
+
+  /**
    * Load an inline prompt string into the queue without a file.
    * Behaves like loading a single-prompt .prompt.md file.
    */

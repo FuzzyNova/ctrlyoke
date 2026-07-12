@@ -13,7 +13,7 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
  * RESPONSIBILITY: Session Persistence & Recovery
  *
  * Handles session management including:
- * - Auto-loading most recent session from .ctrlyoke/.queue/
+ * - Auto-loading most recent session from .ctrlyoke/.working/
  * - Discovering prompt files in workspace
  * - Finding and sorting working files by timestamp
  * - Session continuity after VS Code restart or crash
@@ -25,7 +25,7 @@ export class WorkspaceSessionManager {
   ) {}
 
   /**
-   * Auto-load the most recent workflow session from .ctrlyoke/.queue/
+   * Auto-load the most recent workflow session from .ctrlyoke/.working/
    * This enables seamless resume after VS Code restarts or crashes
    *
    * @param workspaceFolder Current workspace folder
@@ -66,7 +66,7 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Resolve the current most-recent working file from .ctrlyoke/.queue/.
+   * Resolve the current most-recent working file from .ctrlyoke/.working/.
    * Reads queue metadata from disk each time so reconnecting clients always
    * use fresh recency data rather than a startup snapshot.
    */
@@ -74,12 +74,12 @@ export class WorkspaceSessionManager {
     workspaceFolderPath: string
   ): Promise<string | undefined> {
     try {
-      const queueDir = path.join(
+      const workingDir = path.join(
         workspaceFolderPath,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
+        PATH_CONSTANTS.WORKING_DIR
       );
-      const workingFiles = await this.listWorkingFilesByRecency(queueDir);
+      const workingFiles = await this.listWorkingFilesByRecency(workingDir);
       return workingFiles[0]?.filePath;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -115,9 +115,9 @@ export class WorkspaceSessionManager {
    * Read all working files in the queue directory, sorted by recency.
    * Uses lastModifiedAt when available, falling back to startedAt.
    *
-   * @param queueDir Path to .ctrlyoke/.queue/ directory
+   * @param workingDir Path to .ctrlyoke/.working/ directory
    */
-  private async listWorkingFilesByRecency(queueDir: string): Promise<
+  private async listWorkingFilesByRecency(workingDir: string): Promise<
     Array<{
       filename: string;
       filePath: string;
@@ -126,10 +126,10 @@ export class WorkspaceSessionManager {
     }>
   > {
     try {
-      await fs.stat(queueDir);
+      await fs.stat(workingDir);
 
       // Read directory contents
-      const entries = await fs.readdir(queueDir, { withFileTypes: true });
+      const entries = await fs.readdir(workingDir, { withFileTypes: true });
 
       // Filter to .ctrlyoke.json files
       const workingFiles = entries
@@ -145,7 +145,7 @@ export class WorkspaceSessionManager {
       // Read each file to get lastModifiedAt timestamp
       const filesWithTimestamps = await Promise.all(
         workingFiles.map(async (filename) => {
-          const filePath = path.join(queueDir, filename);
+          const filePath = path.join(workingDir, filename);
           try {
             const content = await fs.readFile(filePath, "utf8");
             const workingFile = JSON.parse(content) as WorkingFile;
@@ -198,7 +198,7 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Discover all available sessions in .ctrlyoke/.queue
+   * Discover all available sessions in .ctrlyoke/.working
    * Returns session metadata for UI display
    *
    * @param workspaceFolder Current workspace folder
@@ -213,20 +213,20 @@ export class WorkspaceSessionManager {
     }>
   > {
     try {
-      const queueDir = path.join(
+      const workingDir = path.join(
         workspaceFolderPath,
         PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
+        PATH_CONSTANTS.WORKING_DIR
       );
 
-      // Check if queue directory exists
+      // Check if working directory exists
       try {
-        await fs.stat(queueDir);
+        await fs.stat(workingDir);
       } catch {
-        return []; // No queue directory
+        return []; // No working directory
       }
 
-      const workingFiles = await this.listWorkingFilesByRecency(queueDir);
+      const workingFiles = await this.listWorkingFilesByRecency(workingDir);
 
       if (workingFiles.length === 0) {
         return [];

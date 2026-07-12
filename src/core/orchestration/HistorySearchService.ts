@@ -221,15 +221,15 @@ export class HistorySearchService {
     workspaceFolderPath: string,
     workflowId: string
   ): Promise<WorkflowMetadata> {
-    const queueFilePath = path.join(
+    const workingFilePath = path.join(
       workspaceFolderPath,
       PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.QUEUE_DIR,
+      PATH_CONSTANTS.WORKING_DIR,
       `${workflowId}.ctrlyoke.json`
     );
 
     try {
-      const content = await fs.promises.readFile(queueFilePath, "utf8");
+      const content = await fs.promises.readFile(workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as WorkingFile;
       return {
         workflowName:
@@ -237,11 +237,11 @@ export class HistorySearchService {
           workingFile.workflowName.trim().length > 0
             ? workingFile.workflowName
             : this.deriveWorkflowName(workflowId),
-        // LOAD_WORKFLOW expects the working/queue file path, not the original
-        // source file. The queue file is what we just read, so it's known to
-        // exist regardless of whether originalFile is set (e.g. dashboard-
+        // LOAD_WORKFLOW expects the working file path, not the original
+        // source file. The working file is what we just read, so it's known
+        // to exist regardless of whether originalFile is set (e.g. dashboard-
         // created workflows have no original prompt file).
-        workflowFilePath: queueFilePath,
+        workflowFilePath: workingFilePath,
       };
     } catch {
       return {

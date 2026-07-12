@@ -51,7 +51,7 @@ export interface IWorkingFileQueueAccess {
 }
 
 /**
- * Manages working file (.ctrlyoke/.queue/*.ctrlyoke.json) persistence.
+ * Manages working file (.ctrlyoke/.working/*.ctrlyoke.json) persistence.
  *
  * Extracted from PromptQueue to separate file I/O concerns from queue state management.
  * All serialized operations go through an internal operation queue to prevent races.
@@ -68,7 +68,7 @@ export class WorkingFileManager {
   // ==================== Pure File Operations ====================
 
   /**
-   * Generate working file path in .ctrlyoke/.queue/ directory
+   * Generate working file path in .ctrlyoke/.working/ directory
    */
   private async generateWorkingFilePath(
     originalFilePath: string,
@@ -82,14 +82,14 @@ export class WorkingFileManager {
       .toISOString()
       .replace(/[:.]/g, "-")
       .substring(0, 19);
-    const queueDir = path.join(
+    const workingDir = path.join(
       workspaceFolderPath,
       PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.QUEUE_DIR
+      PATH_CONSTANTS.WORKING_DIR
     );
 
     // Ensure directory exists
-    await fs.mkdir(queueDir, { recursive: true });
+    await fs.mkdir(workingDir, { recursive: true });
 
     // Sanitize filename to avoid spaces/special chars in generated working file path
     const sanitizedFileName =
@@ -98,7 +98,7 @@ export class WorkingFileManager {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "") || "workflow";
     return path.join(
-      queueDir,
+      workingDir,
       `${sanitizedFileName}-${timestamp}.ctrlyoke.json`
     );
   }

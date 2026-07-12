@@ -104,15 +104,7 @@ export class PromptFileParser {
         );
       }
 
-      // Validate against schema (same for both JSON and YAML)
-      if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
-        const errors = this.ajv.errors
-          ?.map((err) => `${err.instancePath}: ${err.message}`)
-          .join(", ");
-        throw new Error(`Validation failed: ${errors}`);
-      }
-
-      return await this.normalizePromptFile(parsed, filePath);
+      return await this.validateAndNormalize(parsed, filePath);
     } catch (error) {
       Log.error(`Failed to parse file ${filePath}:`, error);
       if (this.platform) {
@@ -126,6 +118,28 @@ export class PromptFileParser {
       }
       return null;
     }
+  }
+
+  /**
+   * Validate an already-parsed object against the schema and normalize it into
+   * a PromptFile. Shared by parsePromptFile (disk-backed) and callers that
+   * already have a parsed object in memory (e.g. template variable substitution)
+   * and only need the same schema/normalization guarantees applied.
+   * @param parsed Raw parsed YAML/JSON object (no `_templateMeta` or other authoring-only keys)
+   * @param contentPath Path used to resolve relative `@file` prompt references; does not need to exist on disk
+   */
+  async validateAndNormalize(
+    parsed: any,
+    contentPath: string
+  ): Promise<PromptFile> {
+    if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
+      const errors = this.ajv.errors
+        ?.map((err) => `${err.instancePath}: ${err.message}`)
+        .join(", ");
+      throw new Error(`Validation failed: ${errors}`);
+    }
+
+    return await this.normalizePromptFile(parsed, contentPath);
   }
 
   /**

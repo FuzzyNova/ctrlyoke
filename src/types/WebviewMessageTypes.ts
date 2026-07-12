@@ -749,7 +749,6 @@ export interface OpenNewWorkflowModalMessage {
     variables?: Record<string, any>;
     isBuiltIn: boolean;
   }>;
-  workflowsDir: string;
   defaultTemplateId?: string;
 }
 
@@ -800,7 +799,6 @@ export interface SaveWorkflowDialogDataMessage {
   type: typeof MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA;
   defaultPath: string;
   defaultFormat: "yaml" | "json";
-  workflowsDir: string;
 }
 
 /**

@@ -57,4 +57,4 @@ finalStep:
 
 ## After the first run
 
-Open the working file under `.ctrlyoke/.queue/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.
+Open the working file under `.ctrlyoke/.working/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.

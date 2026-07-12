@@ -8,6 +8,18 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
 
+/** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
+function fakeWorkspaceState(): any {
+  const store = new Map<string, unknown>();
+  return {
+    get: (key: string, defaultValue?: unknown) =>
+      store.has(key) ? store.get(key) : defaultValue,
+    update: async (key: string, value: unknown) => {
+      store.set(key, value);
+    },
+  };
+}
+
 suite("WorkflowSerializer", () => {
   suite("handleSetDefaultTemplate", () => {
     test("should write general.defaultTemplate and notify the webview", async () => {
@@ -25,7 +37,8 @@ suite("WorkflowSerializer", () => {
           (message) => messages.push(message),
           {} as any,
           () => undefined,
-          () => undefined
+          () => undefined,
+          fakeWorkspaceState()
         );
 
         await serializer.handleSetDefaultTemplate("blank");
@@ -92,7 +105,8 @@ suite("WorkflowSerializer", () => {
             ({
               getQueueState: () => ({ workingFilePath }),
             }) as any,
-          () => undefined
+          () => undefined,
+          fakeWorkspaceState()
         );
 
         await serializer.handleSaveWorkflow(outputPath, "json");

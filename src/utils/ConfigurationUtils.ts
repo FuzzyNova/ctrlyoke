@@ -81,8 +81,8 @@ export const PATH_CONSTANTS = {
   /** Root ctrlyoke directory name (default: ".ctrlyoke") */
   CTRLYOKE_DIR: ".ctrlyoke",
 
-  /** Queue directory name (subdirectory of CTRLYOKE_DIR) */
-  QUEUE_DIR: ".queue",
+  /** Working file directory name (subdirectory of CTRLYOKE_DIR) */
+  WORKING_DIR: ".working",
 
   /** Scripts directory name (subdirectory of CTRLYOKE_DIR) */
   SCRIPTS_DIR: "scripts",
@@ -92,9 +92,6 @@ export const PATH_CONSTANTS = {
 
   /** Templates directory name (subdirectory of CTRLYOKE_DIR) */
   TEMPLATES_DIR: "templates",
-
-  /** Workflows directory name (subdirectory of CTRLYOKE_DIR) */
-  WORKFLOWS_DIR: "workflows",
 
   /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",

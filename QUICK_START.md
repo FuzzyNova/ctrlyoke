@@ -229,11 +229,11 @@ Settings follow three-tier precedence: prompt-level overrides > workflow-level d
 
 **Workflow stuck after a crash**
 
-Delete the stale runner file at `.ctrlyoke/.queue/<name>.runner.json` if the PID it references is no longer alive. ctrlyoke checks for stale locks on startup but does not auto-clean mid-session.
+Delete the stale runner file at `.ctrlyoke/.working/<name>.runner.json` if the PID it references is no longer alive. ctrlyoke checks for stale locks on startup but does not auto-clean mid-session.
 
 **Output is missing or incomplete**
 
-Open `.ctrlyoke/.queue/<name>.ctrlyoke.json` — this is the live working copy of the workflow. Each step's `_runtime` block contains `sessionId`, `startedAt`, `completedAt`, and `responseText` for diagnosis.
+Open `.ctrlyoke/.working/<name>.ctrlyoke.json` — this is the live working copy of the workflow. Each step's `_runtime` block contains `sessionId`, `startedAt`, `completedAt`, and `responseText` for diagnosis.
 
 ---
 

@@ -563,7 +563,7 @@ suite("WebviewSettingsSync", () => {
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath: "/workspace/.ctrlyoke/.queue/my-workflow.ctrlyoke.json",
+        filePath: "/workspace/.ctrlyoke/.working/my-workflow.ctrlyoke.json",
       });
 
       assert.ok(
@@ -598,7 +598,7 @@ suite("WebviewSettingsSync", () => {
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath: "/workspace/.ctrlyoke/.queue/my-workflow.ctrlyoke.json",
+        filePath: "/workspace/.ctrlyoke/.working/my-workflow.ctrlyoke.json",
       });
 
       assert.strictEqual(

@@ -87,7 +87,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     };
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () =>
-        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.queue\\recent.ctrlyoke.json",
+        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.working\\recent.ctrlyoke.json",
     };
 
     let loaded: { filePath: string; clientId: string } | undefined;
@@ -104,7 +104,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     await orchestrator.handleClientReady("browser:1", (msg) => sent.push(msg));
 
     assert.deepStrictEqual(loaded, {
-      filePath: "C:\\dev\\ctrlyoke\\.ctrlyoke\\.queue\\recent.ctrlyoke.json",
+      filePath: "C:\\dev\\ctrlyoke\\.ctrlyoke\\.working\\recent.ctrlyoke.json",
       clientId: "browser:1",
     });
     assert.deepStrictEqual(sent, [
@@ -237,8 +237,8 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
 
-    const nativePath = "c:\\dev\\ctrlyoke\\.ctrlyoke\\.queue\\wf.ctrlyoke.json";
-    const routePath = "c:/dev/ctrlyoke/.ctrlyoke/.queue/wf.ctrlyoke.json";
+    const nativePath = "c:\\dev\\ctrlyoke\\.ctrlyoke\\.working\\wf.ctrlyoke.json";
+    const routePath = "c:/dev/ctrlyoke/.ctrlyoke/.working/wf.ctrlyoke.json";
 
     const liveInstance = {
       id: "live-1",

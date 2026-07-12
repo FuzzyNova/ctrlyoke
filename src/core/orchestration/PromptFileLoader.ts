@@ -57,8 +57,6 @@ export class PromptFileLoader {
     try {
       Log.debug(`Loading prompt file: ${filePath}`);
 
-      const fileName = path.basename(filePath);
-
       // Parse prompt file (parser handles all formats including .prompt.md)
       const promptFile = await this.promptFileParser.parsePromptFile(filePath);
 
@@ -67,96 +65,149 @@ export class PromptFileLoader {
         return undefined;
       }
 
-      // Validate prompts
-      const validation = this.promptFileParser.validateWorkflowSteps(
-        promptFile.steps
+      return await this.loadParsedPromptFile(
+        promptFile,
+        path.basename(filePath),
+        workspaceFolderPath,
+        filePath // real source file path — stored as originalFile
       );
-      if (!validation.valid) {
-        const errors = validation.errors.join("\n");
-        vscode.window.showErrorMessage(
-          `ctrlyoke: Validation failed:\n${errors}`
-        );
-        return undefined;
-      }
-
-      // Create working file in .ctrlyoke/.queue/ directory
-      let workingFilePath: string | undefined;
-      if (workspaceFolderPath) {
-        try {
-          workingFilePath = await this.promptQueue.createWorkingFile(
-            filePath,
-            promptFile.steps,
-            workspaceFolderPath,
-            filePath // real source file path — stored as originalFile
-          );
-
-          // Copy workflow-level properties from loaded file to working file
-          // This ensures file properties take precedence over pending/global settings
-          if (workingFilePath) {
-            const updates = this.extractWorkflowProperties(promptFile);
-
-            if (Object.keys(updates).length > 0) {
-              const result =
-                await this.promptQueue.updateWorkingFileProperties(updates);
-
-              if (result?.appliedKeys.length) {
-                for (const key of result.appliedKeys) {
-                  Log.debug(
-                    `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
-                  );
-                }
-                Log.debug(
-                  "Persisted workflow-level properties from loaded file to working file"
-                );
-              }
-            }
-
-            // Step 2: Populate defaults from VS Code/CLI settings for any properties
-            // not explicitly specified in the source file. Apply to both the on-disk
-            // working file AND the in-memory promptFile so getWorkflowFile() reflects
-            // the full resolved configuration (e.g. toolPermissions from --headless).
-            const defaults = PromptFileLoader.populateSettingsDefaults(updates);
-
-            if (Object.keys(defaults).length > 0) {
-              await this.promptQueue.updateWorkingFileProperties(defaults);
-              Object.assign(promptFile, defaults);
-              Log.debug(
-                `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
-              );
-            }
-          }
-        } catch (error) {
-          Log.error("Failed to create working file:", error);
-          // Continue without working file (fallback to in-memory queue)
-        }
-      } else {
-        Log.warn("No workspace folder, skipping working file creation");
-      }
-
-      // Load prompts into queue with working file path
-      this.promptQueue.loadPrompts(promptFile, workingFilePath);
-
-      // Notify dashboard about file selection
-      const dashboard = this.getDashboard();
-      if (dashboard) {
-        // Send full prompt objects with all properties
-        dashboard.updateFileSelected(
-          fileName,
-          promptFile.steps,
-          undefined,
-          promptFile.finalStep ?? null,
-          this.promptQueue.getFinalStepRuntime()
-        );
-      }
-
-      Log.debug(`Loaded ${promptFile.steps.length} prompt(s) from ${fileName}`);
-
-      return workingFilePath;
     } catch (error) {
       Log.error("Failed to load prompt file:", error);
       vscode.window.showErrorMessage(`ctrlyoke: Failed to load file: ${error}`);
       return undefined;
     }
+  }
+
+  /**
+   * Load an already-parsed/normalized PromptFile into the queue without executing.
+   * Used for workflows created from a template: steps are substituted and
+   * normalized in memory (there is no source file on disk), so `originalFile`
+   * stays undefined and Save As is the only way to export a durable copy.
+   * @param promptFile Normalized PromptFile (steps + any workflow-level properties)
+   * @param displayName Display name used to derive the working file's basename
+   * @param workspaceFolderPath Path to workspace folder root for working file creation
+   * @returns Working file path if created, undefined otherwise
+   */
+  async loadFromMemory(
+    promptFile: PromptFile,
+    displayName: string,
+    workspaceFolderPath?: string
+  ): Promise<string | undefined> {
+    try {
+      return await this.loadParsedPromptFile(
+        promptFile,
+        displayName,
+        workspaceFolderPath,
+        undefined // no source file — Save As is the only export path
+      );
+    } catch (error) {
+      Log.error("Failed to load workflow from template:", error);
+      vscode.window.showErrorMessage(
+        `ctrlyoke: Failed to create workflow: ${error}`
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Shared tail of loadPromptFile/loadFromMemory: validate steps, create the
+   * working file, copy/backfill workflow-level properties, load the queue,
+   * and notify the dashboard.
+   */
+  private async loadParsedPromptFile(
+    promptFile: PromptFile,
+    displayName: string,
+    workspaceFolderPath: string | undefined,
+    originalFilePath: string | undefined
+  ): Promise<string | undefined> {
+    if (!promptFile.steps) {
+      vscode.window.showErrorMessage("ctrlyoke: Failed to parse prompt file");
+      return undefined;
+    }
+
+    // Validate prompts
+    const validation = this.promptFileParser.validateWorkflowSteps(
+      promptFile.steps
+    );
+    if (!validation.valid) {
+      const errors = validation.errors.join("\n");
+      vscode.window.showErrorMessage(`ctrlyoke: Validation failed:\n${errors}`);
+      return undefined;
+    }
+
+    // Create working file in .ctrlyoke/.working/ directory
+    let workingFilePath: string | undefined;
+    if (workspaceFolderPath) {
+      try {
+        workingFilePath = await this.promptQueue.createWorkingFile(
+          displayName,
+          promptFile.steps,
+          workspaceFolderPath,
+          originalFilePath
+        );
+
+        // Copy workflow-level properties from loaded file to working file
+        // This ensures file properties take precedence over pending/global settings
+        if (workingFilePath) {
+          const updates = this.extractWorkflowProperties(promptFile);
+
+          if (Object.keys(updates).length > 0) {
+            const result =
+              await this.promptQueue.updateWorkingFileProperties(updates);
+
+            if (result?.appliedKeys.length) {
+              for (const key of result.appliedKeys) {
+                Log.debug(
+                  `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
+                );
+              }
+              Log.debug(
+                "Persisted workflow-level properties from loaded file to working file"
+              );
+            }
+          }
+
+          // Step 2: Populate defaults from VS Code/CLI settings for any properties
+          // not explicitly specified in the source file. Apply to both the on-disk
+          // working file AND the in-memory promptFile so getWorkflowFile() reflects
+          // the full resolved configuration (e.g. toolPermissions from --headless).
+          const defaults = PromptFileLoader.populateSettingsDefaults(updates);
+
+          if (Object.keys(defaults).length > 0) {
+            await this.promptQueue.updateWorkingFileProperties(defaults);
+            Object.assign(promptFile, defaults);
+            Log.debug(
+              `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
+            );
+          }
+        }
+      } catch (error) {
+        Log.error("Failed to create working file:", error);
+        // Continue without working file (fallback to in-memory queue)
+      }
+    } else {
+      Log.warn("No workspace folder, skipping working file creation");
+    }
+
+    // Load prompts into queue with working file path
+    this.promptQueue.loadPrompts(promptFile, workingFilePath);
+
+    // Notify dashboard about file selection
+    const dashboard = this.getDashboard();
+    if (dashboard) {
+      // Send full prompt objects with all properties
+      dashboard.updateFileSelected(
+        displayName,
+        promptFile.steps,
+        undefined,
+        promptFile.finalStep ?? null,
+        this.promptQueue.getFinalStepRuntime()
+      );
+    }
+
+    Log.debug(`Loaded ${promptFile.steps.length} prompt(s) from ${displayName}`);
+
+    return workingFilePath;
   }
 
   /**

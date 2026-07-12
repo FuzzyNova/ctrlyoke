@@ -189,7 +189,6 @@ describe("save workflow dialog", () => {
     store().openSaveWorkflowDialog({
       defaultPath: "/workspace/wf.ctrlyoke.yaml",
       defaultFormat: "yaml",
-      workflowsDir: ".ctrlyoke/workflows",
     });
     expect(store().saveWorkflowDialogOpen).toBe(true);
     expect(store().saveWorkflowDialogData?.defaultFormat).toBe("yaml");
@@ -213,7 +212,6 @@ describe("new workflow modal", () => {
   it("opens with templates and selects default", () => {
     store().openNewWorkflowModal({
       templates,
-      workflowsDir: ".ctrlyoke/workflows",
       defaultTemplateId: "starter",
     });
     expect(store().newWorkflowModalOpen).toBe(true);
@@ -222,14 +220,14 @@ describe("new workflow modal", () => {
   });
 
   it("closes and clears currentTemplate", () => {
-    store().openNewWorkflowModal({ templates, workflowsDir: "" });
+    store().openNewWorkflowModal({ templates });
     store().closeNewWorkflowModal();
     expect(store().newWorkflowModalOpen).toBe(false);
     expect(store().currentTemplate).toBeNull();
   });
 
   it("setCurrentTemplate updates selected template", () => {
-    store().openNewWorkflowModal({ templates, workflowsDir: "" });
+    store().openNewWorkflowModal({ templates });
     store().setCurrentTemplate(templates[1]);
     expect(store().currentTemplate?.id).toBe("starter");
   });
@@ -385,7 +383,6 @@ describe("resetUi", () => {
     store().openSaveWorkflowDialog({
       defaultPath: "/wf.yaml",
       defaultFormat: "yaml",
-      workflowsDir: "",
     });
     store().setLoading(true, "Loading...");
     store().showToast("Hello");

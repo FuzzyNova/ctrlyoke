@@ -17,7 +17,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 - `ctrlyoke-<timestamp>.log` — session log; state transitions, orchestration flow, session ID resolution. Start here for unexpected stops or state issues.
 - `ctrlyoke-<harness>-hook-debug.log` (e.g. `ctrlyoke-copilot-hook-debug.log`) — every hook/notify invocation and result. Start here when completion never fires or session IDs don't match.
 
-**Working files** (in `.ctrlyoke/.queue/`):
+**Working files** (in `.ctrlyoke/.working/`):
 
 - `<name>.ctrlyoke.json` — live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
 - `<name>.runner.json` — runner lock; a stale file with a dead PID can cause false "already running" errors — safe to delete.

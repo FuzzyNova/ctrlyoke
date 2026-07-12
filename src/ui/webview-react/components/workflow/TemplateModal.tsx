@@ -34,14 +34,13 @@ function seedVariableDefaults(
  *   2. Template list and default template already in uiStore.templates / uiStore.defaultTemplateId
  *   3. uiStore.currentTemplate holds the selected template (with variables list)
  *   4. On template change, modal updates uiStore.currentTemplate directly from the local list
- *   5. On submit, sends CREATE_WORKFLOW → extension creates file, loads it, sends WORKFLOW_CREATED
+ *   5. On submit, sends CREATE_WORKFLOW → extension creates a working file, loads it, sends WORKFLOW_CREATED
  *   6. WORKFLOW_CREATED → useMessageHandler closes modal
  *
  * Features:
  * - Template dropdown (Built-in / Custom / Actions groups)
  * - Dynamic variable inputs based on selected template
  * - Filename input with validation
- * - Save location path preview
  * - Set as Default link
  * - Create and Create & Run buttons
  */
@@ -54,7 +53,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
   // Data from uiStore (populated by useMessageHandler on OPEN_NEW_WORKFLOW_MODAL)
   const templates = useUiStore((s) => s.templates);
-  const workflowsDir = useUiStore((s) => s.workflowsDir);
   const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);
   const currentTemplate = useUiStore((s) => s.currentTemplate);
   const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
@@ -70,7 +68,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
   const [defaultConfirmation, setDefaultConfirmation] = useState(false);
-  const [format, setFormat] = useState<"yaml" | "json">("yaml");
 
   // Initialize form state when modal opens
   const prevIsOpenRef = useRef(false);
@@ -228,20 +225,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         templateId: selectedTemplateId,
         variables,
         filename: filename.trim(),
-        workflowsDir,
-        format,
         runAfter,
       });
     },
-    [
-      vscode,
-      selectedTemplateId,
-      variables,
-      filename,
-      workflowsDir,
-      format,
-      validateFilename,
-    ]
+    [vscode, selectedTemplateId, variables, filename, validateFilename]
   );
 
   // Keyboard handling
@@ -261,12 +248,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Group templates for display
   const builtInTemplates = templates.filter((t) => t.isBuiltIn);
   const customTemplates = templates.filter((t) => !t.isBuiltIn);
-
-  // Path preview
-  const fileExt = format === "json" ? ".ctrlyoke.json" : ".ctrlyoke.yaml";
-  const pathPreview = filename.trim()
-    ? `${workflowsDir}/${filename.trim()}${fileExt}`
-    : `${workflowsDir}/`;
 
   return (
     <Modal
@@ -505,44 +486,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           {filenameError && (
             <p className="mt-1 text-xs text-error-fg">{filenameError}</p>
           )}
-        </div>
-
-        {/* Format Selection */}
-        <div className="form-group">
-          <p className="block text-sm font-medium mb-1 text-foreground">
-            Format
-          </p>
-          <div className="flex gap-3">
-            {(["yaml", "json"] as const).map((f) => (
-              <label
-                key={f}
-                htmlFor={`format-${f}`}
-                className="flex items-center gap-1.5 cursor-pointer text-sm text-foreground"
-              >
-                <input
-                  type="radio"
-                  aria-label={f.toUpperCase()}
-                  id={`format-${f}`}
-                  name="workflow-format"
-                  value={f}
-                  checked={format === f}
-                  onChange={() => setFormat(f)}
-                  className="accent-button-primary-bg"
-                />
-                {f.toUpperCase()}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Path Preview */}
-        <div className="form-group">
-          <span className="block text-sm mb-1 text-description-fg">
-            Save Location
-          </span>
-          <p className="text-xs text-description-fg font-mono bg-editor-bg px-2 py-1 rounded">
-            {pathPreview}
-          </p>
         </div>
       </form>
     </Modal>

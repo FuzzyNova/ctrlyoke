@@ -14,6 +14,7 @@ import {
   WorkflowSummary,
   WorkflowRunnerLock,
   EXECUTION_STATES,
+  type PromptFile,
   type PromptStep,
   type WorkflowStep,
   workflowDisplayStep,
@@ -1503,10 +1504,34 @@ export class WorkflowOrchestrator {
     send: (msg: unknown) => void,
     clientId: string
   ): Promise<void> {
+    const instance = this.registerNewInstance(clientId);
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
+  }
+
+  /**
+   * Create a fresh workflow instance seeded from an already-substituted
+   * template, for either the panel or a browser client. There is no durable
+   * source file — the working file created here is the only artifact, with
+   * `originalFile` left undefined so Save As is the only way to export a copy.
+   */
+  async createWorkflowFromTemplateForClient(
+    promptFile: PromptFile,
+    displayName: string,
+    send: (msg: unknown) => void,
+    clientId: string
+  ): Promise<WorkflowInstance> {
+    const instance = this.registerNewInstance(clientId);
+    await instance.loadFromTemplate(promptFile, displayName);
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
+    return instance;
+  }
+
+  /** Build a fresh workflow instance, register it, and make it the client's viewed workflow. */
+  private registerNewInstance(clientId: string): WorkflowInstance {
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     this.setViewedWorkflowId(clientId, instance.id);
-    await this.replayWorkflowStateTo(instance.id, send, clientId);
+    return instance;
   }
 
   /**
@@ -2355,16 +2380,16 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const queueDir = path.join(
+    const workingDir = path.join(
       workspaceFolderPath,
       PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.QUEUE_DIR
+      PATH_CONSTANTS.WORKING_DIR
     );
 
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
     try {
-      activeCliPaths = await WorkflowLockManager.normalizeStaleLocks(queueDir);
+      activeCliPaths = await WorkflowLockManager.normalizeStaleLocks(workingDir);
     } catch (err) {
       Log.warn(
         "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",
@@ -2379,7 +2404,7 @@ export class WorkflowOrchestrator {
     }
 
     // Entry Point 3: Watch for new *.runner.json files created while VS Code is open
-    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, queueDir);
+    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, workingDir);
   }
 
   /**
@@ -2388,10 +2413,10 @@ export class WorkflowOrchestrator {
    */
   private setupRunnerJsonCreateWatcher(
     workspaceFolderPath: string,
-    queueDir: string
+    workingDir: string
   ): void {
     const queueRelative = path
-      .relative(workspaceFolderPath, queueDir)
+      .relative(workspaceFolderPath, workingDir)
       .replace(/\\/g, "/");
     const pattern = new vscode.RelativePattern(
       workspaceFolderPath,

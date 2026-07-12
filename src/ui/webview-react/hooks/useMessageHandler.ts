@@ -1311,7 +1311,6 @@ function createMessageHandlers(): MessageHandlerMap {
     const uiStore = useUiStore.getState();
     uiStore.openNewWorkflowModal({
       templates: message.templates || [],
-      workflowsDir: message.workflowsDir || ".ctrlyoke/workflows",
       defaultTemplateId: message.defaultTemplateId,
     });
   };
@@ -1831,7 +1830,6 @@ function createMessageHandlers(): MessageHandlerMap {
     uiStore.openSaveWorkflowDialog({
       defaultPath: message.defaultPath,
       defaultFormat: message.defaultFormat,
-      workflowsDir: message.workflowsDir,
     });
   };
 

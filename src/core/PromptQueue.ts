@@ -314,7 +314,7 @@ export class PromptQueue {
 
   /**
    * Restore queue state from a working file (including runtime state)
-   * This is used when resuming a previous session from .ctrlyoke/.queue
+   * This is used when resuming a previous session from .ctrlyoke/.working
    * @param workingFilePath Path to the working file
    */
   async restoreFromWorkingFile(
