@@ -24,6 +24,7 @@ import {
   McpManagerSection,
   CommitSection,
 } from "../settings";
+import { ScopeToggle } from "../shared";
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
@@ -148,33 +149,26 @@ export function GlobalSettingsDrawer() {
           </span>
 
           {/* Scope toggle */}
-          <div
-            className="fp-mode-switch ml-2"
-            role="group"
-            aria-label="Settings scope"
-          >
-            <button
-              type="button"
-              onClick={() => setActiveScope(SETTING_SCOPES.USER)}
-              className={`fp-mode-switch-btn ${activeScope === SETTING_SCOPES.USER ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-              title="Edit user-scoped settings"
-            >
-              <i className="codicon codicon-person" />
-              User
-            </button>
-            <div className="fp-mode-switch-divider">
-              <div className="w-px h-full bg-current opacity-40" />
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveScope(SETTING_SCOPES.WORKSPACE)}
-              className={`fp-mode-switch-btn ${activeScope === SETTING_SCOPES.WORKSPACE ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-              title="Edit workspace-scoped settings"
-            >
-              <i className="codicon codicon-project" />
-              Workspace
-            </button>
-          </div>
+          <ScopeToggle
+            className="ml-2"
+            ariaLabel="Settings scope"
+            value={activeScope}
+            onChange={setActiveScope}
+            options={[
+              {
+                value: SETTING_SCOPES.USER,
+                label: "User",
+                icon: "codicon-person",
+                title: "Edit user-scoped settings",
+              },
+              {
+                value: SETTING_SCOPES.WORKSPACE,
+                label: "Workspace",
+                icon: "codicon-project",
+                title: "Edit workspace-scoped settings",
+              },
+            ]}
+          />
         </div>
 
         <button

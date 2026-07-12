@@ -124,11 +124,12 @@ export const MESSAGE_TYPES = {
   TEMPLATE_SELECTED: "templateSelected",
   SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
   CREATE_WORKFLOW: "createWorkflow",
-  CREATE_NEW_TEMPLATE: "createNewTemplate",
+  CREATE_CUSTOM_TEMPLATE: "createCustomTemplate", // { name, scope } — fully webview-driven, no native VS Code UI
   BROWSE_TEMPLATE_FILE: "browseTemplateFile", // Request OS file picker for a template variable
 
   // New Workflow Modal - Extension -> Webview
   TEMPLATE_FILE_SELECTED: "templateFileSelected", // OS file picker result for a template variable
+  CUSTOM_TEMPLATE_CREATED: "customTemplateCreated", // { templates, templateId } on success, or { error }
 
   // CodeMirror editor - Webview <-> Extension
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions

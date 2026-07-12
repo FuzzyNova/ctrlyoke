@@ -523,6 +523,23 @@ export class TemplateManager {
   }
 
   /**
+   * Validate a custom template name — same rules regardless of which entry
+   * point (Command Palette InputBox or the webview's create-template form)
+   * supplied it, since the webview path has no native validateInput hook.
+   */
+  private validateTemplateName(templateName: string): void {
+    if (!templateName || !templateName.trim()) {
+      throw new Error("Template name is required");
+    }
+    if (/[<>:"/\\|?*\x00-\x1f]/.test(templateName)) {
+      throw new Error("Invalid characters in template name");
+    }
+    if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(templateName)) {
+      throw new Error("Reserved filename");
+    }
+  }
+
+  /**
    * Create a new custom template with a feature-demonstrating starter.
    * The starter includes _templateMeta, a file-type variable with autoFillFilename,
    * and a multiline text variable with a default and description, so users can see
@@ -537,6 +554,8 @@ export class TemplateManager {
     templateName: string,
     scope: TemplateScope = "workspace"
   ): Promise<string> {
+    this.validateTemplateName(templateName);
+
     const customPath = this.getTemplatesPathForScope(scope);
     if (!customPath) {
       throw new Error("No workspace folder available");

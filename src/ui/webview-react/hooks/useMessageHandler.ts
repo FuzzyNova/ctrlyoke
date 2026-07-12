@@ -1332,6 +1332,18 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // CUSTOM_TEMPLATE_CREATED - Result of creating a template from the webview form
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.CUSTOM_TEMPLATE_CREATED] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.setCustomTemplateCreated({
+      templates: message.templates || [],
+      templateId: message.templateId,
+      error: message.error,
+    });
+  };
+
+  // --------------------------------------------------------------------------
   // TEMPLATE_FILE_SELECTED - OS file picker result for a template variable
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TEMPLATE_FILE_SELECTED] = (message) => {

@@ -182,6 +182,12 @@ interface UiState {
   defaultTemplateId: string;
   /** Last file selected via OS file picker for a template variable; cleared after TemplateModal consumes it */
   templateFileSelection: { variable: string; path: string } | null;
+  /** Result of the last CREATE_CUSTOM_TEMPLATE request; cleared after TemplateModal consumes it */
+  customTemplateCreated: {
+    templates: TemplateInfo[];
+    templateId?: string;
+    error?: string;
+  } | null;
 
   // Recent workflows dropdown
   recentWorkflows: RecentWorkflow[];
@@ -337,8 +343,16 @@ interface UiActions {
   closeNewWorkflowModal: () => void;
   setCurrentTemplate: (template: TemplateInfo | null) => void;
   setDefaultTemplateId: (id: string) => void;
+  setTemplates: (templates: TemplateInfo[]) => void;
   setTemplateFileSelection: (
     selection: { variable: string; path: string } | null
+  ) => void;
+  setCustomTemplateCreated: (
+    result: {
+      templates: TemplateInfo[];
+      templateId?: string;
+      error?: string;
+    } | null
   ) => void;
 
   // Recent workflows
@@ -482,6 +496,7 @@ const initialState: UiState = {
   currentTemplate: null,
   defaultTemplateId: "blank",
   templateFileSelection: null,
+  customTemplateCreated: null,
   recentWorkflows: [],
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
@@ -749,8 +764,13 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setDefaultTemplateId: (id) => set({ defaultTemplateId: id }),
 
+      setTemplates: (templates) => set({ templates }),
+
       setTemplateFileSelection: (selection) =>
         set({ templateFileSelection: selection }),
+
+      setCustomTemplateCreated: (result) =>
+        set({ customTemplateCreated: result }),
 
       // ============================================================================
       // RECENT WORKFLOWS

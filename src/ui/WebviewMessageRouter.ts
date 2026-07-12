@@ -1007,8 +1007,14 @@ export class WebviewMessageRouter {
         .catch((err) => Log.warn(`CREATE_WORKFLOW failed: ${err}`));
     });
 
-    table.set(MESSAGE_TYPES.CREATE_NEW_TEMPLATE, () => {
-      this.serializer.handleCreateNewTemplate();
+    table.set(MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE, (message) => {
+      this.serializer
+        .handleCreateCustomTemplate(
+          message.name,
+          message.scope,
+          this.getCurrentPostMessage()
+        )
+        .catch((err) => Log.warn(`CREATE_CUSTOM_TEMPLATE failed: ${err}`));
     });
 
     table.set(MESSAGE_TYPES.BROWSE_TEMPLATE_FILE, (message) => {

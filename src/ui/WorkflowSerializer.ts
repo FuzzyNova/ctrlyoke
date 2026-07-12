@@ -16,7 +16,11 @@ import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import type { TemplateManager } from "../core/TemplateManager";
+import type {
+  TemplateManager,
+  TemplateInfo,
+  TemplateScope,
+} from "../core/TemplateManager";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import type { PostMessageFn } from "./WebviewSettingsSync";
@@ -367,6 +371,18 @@ export class WorkflowSerializer {
   // New Workflow / Template Modal
   // ============================================================================
 
+  /** Wire shape sent to the webview for each template — shared by every message that lists templates. */
+  private toWireTemplates(templates: TemplateInfo[]) {
+    return templates.map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      variables: t.variables,
+      isBuiltIn: t.isBuiltIn,
+      source: t.source,
+    }));
+  }
+
   async handleNewWorkflow(postMessage?: PostMessageFn): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     try {
@@ -375,14 +391,7 @@ export class WorkflowSerializer {
 
       pm({
         type: MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL,
-        templates: templates.map((t) => ({
-          id: t.id,
-          name: t.name,
-          description: t.description,
-          variables: t.variables,
-          isBuiltIn: t.isBuiltIn,
-          source: t.source,
-        })),
+        templates: this.toWireTemplates(templates),
         defaultTemplateId,
       });
     } catch (error) {
@@ -468,8 +477,49 @@ export class WorkflowSerializer {
     }
   }
 
-  handleCreateNewTemplate(): void {
-    vscode.commands.executeCommand("ctrlyoke.createNewTemplate");
+  /**
+   * Create a custom template entirely from webview-supplied input — no native VS
+   * Code dialogs. This is what the "New template..." accordion in TemplateModal
+   * posts; it must work identically for the VS Code webview and hosted browser
+   * clients, unlike the Command Palette's `ctrlyoke.createNewTemplate` command
+   * (which still uses QuickPick/InputBox — that command is desktop-only anyway).
+   */
+  async handleCreateCustomTemplate(
+    name: string,
+    scope: TemplateScope,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    try {
+      const templatePath = await this.templateManager.createCustomTemplate(
+        name,
+        scope
+      );
+
+      // Best-effort editor convenience for desktop VS Code users; irrelevant to
+      // (and safely ignored by) hosted browser clients.
+      try {
+        const doc = await vscode.workspace.openTextDocument(templatePath);
+        await vscode.window.showTextDocument(doc);
+      } catch (openError) {
+        Log.warn(`Failed to open newly created template: ${openError}`);
+      }
+
+      const templates = await this.templateManager.getAvailableTemplates();
+      const created = templates.find((t) => t.path === templatePath);
+
+      pm({
+        type: MESSAGE_TYPES.CUSTOM_TEMPLATE_CREATED,
+        templates: this.toWireTemplates(templates),
+        templateId: created?.id,
+      });
+    } catch (error) {
+      const errorMsg = getErrorMessage(error);
+      pm({
+        type: MESSAGE_TYPES.CUSTOM_TEMPLATE_CREATED,
+        error: errorMsg,
+      });
+    }
   }
 
   async handleBrowseTemplateFile(

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Modal, Button } from "../shared";
+import { Modal, Button, AnimatedSection, ScopeToggle } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -9,6 +9,8 @@ interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+type TemplateScope = "user" | "workspace";
 
 /** Build the initial variable values for a template, pre-filling declared defaults. */
 function seedVariableDefaults(
@@ -24,6 +26,23 @@ function seedVariableDefaults(
     }
   }
   return seed;
+}
+
+/** Same "safe filename" rule used for both the workflow name and template name fields. */
+function validateSafeName(
+  name: string,
+  requiredMessage = "Name is required"
+): string | null {
+  if (!name.trim()) {
+    return requiredMessage;
+  }
+  if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) {
+    return "Invalid characters in name";
+  }
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(name)) {
+    return "Reserved filename";
+  }
+  return null;
 }
 
 /**
@@ -61,6 +80,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const setTemplateFileSelection = useUiStore(
     (s) => s.setTemplateFileSelection
   );
+  const customTemplateCreated = useUiStore((s) => s.customTemplateCreated);
+  const setCustomTemplateCreated = useUiStore(
+    (s) => s.setCustomTemplateCreated
+  );
+  const setTemplates = useUiStore((s) => s.setTemplates);
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -68,6 +92,16 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
   const [defaultConfirmation, setDefaultConfirmation] = useState(false);
+
+  // "New template..." inline accordion state
+  const [showCreateTemplateForm, setShowCreateTemplateForm] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateNameError, setNewTemplateNameError] = useState<
+    string | null
+  >(null);
+  const [newTemplateScope, setNewTemplateScope] =
+    useState<TemplateScope>("workspace");
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
   // Initialize form state when modal opens
   const prevIsOpenRef = useRef(false);
@@ -78,6 +112,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setFilename("");
       setFilenameError(null);
       setDefaultConfirmation(false);
+      setShowCreateTemplateForm(false);
+      setNewTemplateName("");
+      setNewTemplateNameError(null);
+      setNewTemplateScope("workspace");
+      setIsCreatingTemplate(false);
 
       // Sync currentTemplate to match the default selection and seed its defaults
       const template = templates.find((t) => t.id === initId) ?? null;
@@ -137,11 +176,55 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     [templates, setCurrentTemplate]
   );
 
-  // Open the Create New Template flow
-  const handleCreateNewTemplate = useCallback(() => {
-    onClose();
-    vscode.postMessage({ type: MESSAGE_TYPES.CREATE_NEW_TEMPLATE });
-  }, [vscode, onClose]);
+  // Toggle the inline "New template..." accordion
+  const handleToggleCreateTemplateForm = useCallback(() => {
+    setShowCreateTemplateForm((prev) => !prev);
+    setNewTemplateName("");
+    setNewTemplateNameError(null);
+  }, []);
+
+  // Submit the inline create-template form — fully webview-driven, no native VS Code UI
+  // (see WorkflowSerializer.handleCreateCustomTemplate for why this matters for browser clients).
+  const handleCreateTemplateSubmit = useCallback(() => {
+    const error = validateSafeName(newTemplateName, "Template name is required");
+    if (error) {
+      setNewTemplateNameError(error);
+      return;
+    }
+    setNewTemplateNameError(null);
+    setIsCreatingTemplate(true);
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE,
+      name: newTemplateName.trim(),
+      scope: newTemplateScope,
+    });
+  }, [vscode, newTemplateName, newTemplateScope]);
+
+  // Consume the result of CREATE_CUSTOM_TEMPLATE (sent back via CUSTOM_TEMPLATE_CREATED)
+  useEffect(() => {
+    if (!customTemplateCreated) return;
+    setIsCreatingTemplate(false);
+
+    if (customTemplateCreated.error) {
+      setNewTemplateNameError(customTemplateCreated.error);
+    } else {
+      setTemplates(customTemplateCreated.templates);
+      if (customTemplateCreated.templateId) {
+        const created =
+          customTemplateCreated.templates.find(
+            (t) => t.id === customTemplateCreated.templateId
+          ) ?? null;
+        setSelectedTemplateId(customTemplateCreated.templateId);
+        setVariables(seedVariableDefaults(created));
+        setCurrentTemplate(created);
+      }
+      setShowCreateTemplateForm(false);
+      setNewTemplateName("");
+      setNewTemplateNameError(null);
+    }
+
+    setCustomTemplateCreated(null);
+  }, [customTemplateCreated, setTemplates, setCurrentTemplate, setCustomTemplateCreated]);
 
   // Handle variable change
   const handleVariableChange = useCallback(
@@ -166,25 +249,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
   // Validate filename
   const validateFilename = useCallback((name: string): boolean => {
-    if (!name.trim()) {
-      setFilenameError("Workflow name is required");
-      return false;
-    }
-
-    const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
-    if (invalidChars.test(name)) {
-      setFilenameError("Invalid characters in filename");
-      return false;
-    }
-
-    const reserved = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
-    if (reserved.test(name)) {
-      setFilenameError("Reserved filename");
-      return false;
-    }
-
-    setFilenameError(null);
-    return true;
+    const error = validateSafeName(name, "Workflow name is required");
+    setFilenameError(error);
+    return !error;
   }, []);
 
   // Handle filename change
@@ -355,12 +422,88 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           </label>
           <button
             type="button"
-            onClick={handleCreateNewTemplate}
+            onClick={handleToggleCreateTemplateForm}
             className="mt-1.5 group flex items-center gap-1 text-sm text-link-fg cursor-pointer w-fit bg-transparent border-0 p-0 font-inherit"
           >
-            <i className="codicon codicon-add" />
+            <i
+              className={`codicon ${showCreateTemplateForm ? "codicon-chevron-down" : "codicon-add"}`}
+            />
             <span className="group-hover:underline">New template...</span>
           </button>
+
+          <AnimatedSection visible={showCreateTemplateForm} className="mt-2">
+            <div className="space-y-2 p-3 rounded border border-panel-border bg-panel-bg">
+              <div className="form-group">
+                <label
+                  htmlFor="new-template-name"
+                  className="block text-sm text-foreground"
+                >
+                  <span className="block mb-1">Template Name</span>
+                  <input
+                    type="text"
+                    id="new-template-name"
+                    aria-label="Template Name"
+                    value={newTemplateName}
+                    onChange={(e) => {
+                      setNewTemplateName(e.target.value);
+                      if (newTemplateNameError) setNewTemplateNameError(null);
+                    }}
+                    placeholder="my-custom-template"
+                    className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
+                      newTemplateNameError
+                        ? "border-input-error-border"
+                        : "border-input-border focus:border-focus-border"
+                    }`}
+                  />
+                </label>
+                {newTemplateNameError && (
+                  <p className="mt-1 text-xs text-error-fg">
+                    {newTemplateNameError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-foreground">Location</span>
+                <ScopeToggle
+                  ariaLabel="Template location"
+                  value={newTemplateScope}
+                  onChange={setNewTemplateScope}
+                  options={[
+                    {
+                      value: "workspace",
+                      label: "Workspace",
+                      icon: "codicon-project",
+                      title: ".ctrlyoke/templates — this project only",
+                    },
+                    {
+                      value: "user",
+                      label: "User",
+                      icon: "codicon-person",
+                      title: "~/.ctrlyoke/templates — available in every workspace",
+                    },
+                  ]}
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <Button
+                  variant="secondary"
+                  onClick={handleToggleCreateTemplateForm}
+                  disabled={isCreatingTemplate}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleCreateTemplateSubmit}
+                  disabled={isCreatingTemplate || !newTemplateName.trim()}
+                >
+                  {isCreatingTemplate ? "Creating…" : "Create Template"}
+                </Button>
+              </div>
+            </div>
+          </AnimatedSection>
         </div>
 
         {/* Template Description */}
