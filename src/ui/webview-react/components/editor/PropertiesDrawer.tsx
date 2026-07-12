@@ -25,6 +25,8 @@ import {
 import { SESSION_ID_SENTINELS } from "../../types/messages";
 import {
   CustomSelect,
+  getAgentDisplayName,
+  toAgentSelectOption,
   DrawerRow,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
@@ -131,9 +133,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       : workflowProperties.agent;
   const resolvedAgentName = !resolvedAgent
     ? "None"
-    : (availableAgents.find(
-        (a) => a.path === resolvedAgent || a.name === resolvedAgent
-      )?.name ?? resolvedAgent);
+    : (() => {
+        const agent = availableAgents.find(
+          (a) => a.path === resolvedAgent || a.name === resolvedAgent
+        );
+        return agent ? getAgentDisplayName(agent) : resolvedAgent;
+      })();
   const defaultAgentLabel = `Inherit (${resolvedAgentName})`;
 
   const resolvedSkills =
@@ -532,10 +537,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   options={[
                     { value: "default", label: defaultAgentLabel },
                     { value: "none", label: "None" },
-                    ...availableAgents.map((agent) => ({
-                      value: agent.path,
-                      label: agent.name,
-                    })),
+                    ...availableAgents.map((agent) =>
+                      toAgentSelectOption(agent, agent.path)
+                    ),
                   ]}
                   namespace={DROPDOWN_NAMESPACES.AGENT}
                   hiddenValues={

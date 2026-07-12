@@ -1,5 +1,10 @@
 export { Button } from "./Button";
 export { CustomSelect, type SelectOption } from "./CustomSelect";
+export {
+  getAgentDisplayName,
+  toAgentSelectOption,
+  type AgentSelectEntry,
+} from "./agentSelectOptions";
 export { Modal } from "./Modal";
 export {
   SplitButton,

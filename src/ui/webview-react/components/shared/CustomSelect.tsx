@@ -8,7 +8,18 @@ import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 export interface SelectOption {
   value: string;
   label: string;
+  /** Optional muted secondary text rendered below the label in the menu. */
+  description?: string;
   disabled?: boolean;
+}
+
+const OPTION_DESCRIPTION_MAX_LENGTH = 120;
+
+function truncateOptionDescription(description: string): string {
+  if (description.length <= OPTION_DESCRIPTION_MAX_LENGTH) {
+    return description;
+  }
+  return `${description.slice(0, OPTION_DESCRIPTION_MAX_LENGTH - 3).trimEnd()}...`;
 }
 
 /**
@@ -160,7 +171,17 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               disabled={option.disabled}
               className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
             >
-              {option.label}
+              <span className="flex flex-col min-w-0">
+                <span className="truncate">{option.label}</span>
+                {option.description && (
+                  <span
+                    title={option.description}
+                    className="text-xxs text-description-fg truncate"
+                  >
+                    {truncateOptionDescription(option.description)}
+                  </span>
+                )}
+              </span>
             </button>
             {/* Eye-closed hide button — hover-only, excluded on selected/non-hideable/disabled */}
             {canHide(option) && (
@@ -209,7 +230,17 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 onClick={() => handleSelectHidden(option.value)}
                 className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
               >
-                {option.label}
+                <span className="flex flex-col min-w-0">
+                  <span className="truncate">{option.label}</span>
+                  {option.description && (
+                    <span
+                      title={option.description}
+                      className="text-xxs truncate"
+                    >
+                      {truncateOptionDescription(option.description)}
+                    </span>
+                  )}
+                </span>
               </button>
             </div>
           ))}

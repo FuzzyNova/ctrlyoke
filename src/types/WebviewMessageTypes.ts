@@ -358,7 +358,12 @@ export interface InitMessageData {
     string,
     { available: boolean; status: string; message?: string }
   >;
-  availableAgents: Array<{ name: string; path: string; description?: string }>;
+  availableAgents: Array<{
+    name: string;
+    displayName?: string;
+    path: string;
+    description?: string;
+  }>;
   dev?: DevStatus;
 }
 
@@ -709,6 +714,7 @@ export interface AgentsUpdateMessage {
   data: {
     availableAgents: Array<{
       name: string;
+      displayName?: string;
       path: string;
       description?: string;
     }>;

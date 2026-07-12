@@ -4,7 +4,11 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { FOOTER_PICKERS } from "../../types/messages";
-import { CustomSelect } from "../shared";
+import {
+  CustomSelect,
+  getAgentDisplayName,
+  toAgentSelectOption,
+} from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 
 interface AgentQuickPickerProps {
@@ -35,11 +39,14 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
     workflowProperties.agent === undefined
       ? globalSettings.agent
       : workflowProperties.agent;
+  const resolvedAgentOption = availableAgents.find(
+    (agent) => agent.path === resolvedAgent || agent.name === resolvedAgent
+  );
   const resolvedAgentName = !resolvedAgent
     ? "None"
-    : (availableAgents.find(
-        (a) => a.path === resolvedAgent || a.name === resolvedAgent
-      )?.name ?? resolvedAgent);
+    : resolvedAgentOption
+      ? getAgentDisplayName(resolvedAgentOption)
+      : resolvedAgent;
   const defaultAgentLabel = `Inherit (${resolvedAgentName})`;
 
   const valueLabel =
@@ -47,9 +54,12 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       ? resolvedAgentName
       : properties.agent === null
         ? "None"
-        : (availableAgents.find(
-            (a) => a.path === properties.agent || a.name === properties.agent
-          )?.name ?? properties.agent);
+        : (() => {
+            const agent = availableAgents.find(
+              (a) => a.path === properties.agent || a.name === properties.agent
+            );
+            return agent ? getAgentDisplayName(agent) : properties.agent;
+          })();
 
   return (
     <FooterQuickPicker
@@ -91,10 +101,9 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
         options={[
           { value: "default", label: defaultAgentLabel },
           { value: "none", label: "None" },
-          ...availableAgents.map((agent) => ({
-            value: agent.path,
-            label: agent.name,
-          })),
+          ...availableAgents.map((agent) =>
+            toAgentSelectOption(agent, agent.path)
+          ),
         ]}
         namespace={DROPDOWN_NAMESPACES.AGENT}
         hiddenValues={hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []}

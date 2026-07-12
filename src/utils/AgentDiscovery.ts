@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import * as jsYaml from "js-yaml";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import {
@@ -30,16 +31,54 @@ export interface AgentInfo {
   path: string;
   /** Source location of the agent */
   source: DiscoverySource;
-  /** Optional human-readable description from a built-in manifest. */
+  /** Optional human-readable description from agent frontmatter. */
   description?: string;
 }
 
-interface BuiltInAgentManifest {
-  agents?: Array<{
-    file?: unknown;
-    label?: unknown;
-    description?: unknown;
-  }>;
+interface AgentFrontmatter {
+  name?: string;
+  description?: string;
+}
+
+/** Parse the supported display metadata from an agent's YAML frontmatter. */
+export function parseAgentFrontmatter(content: string): AgentFrontmatter {
+  if (!content.startsWith("---")) {
+    return {};
+  }
+
+  const closingIdx = content.indexOf("---", 3);
+  if (closingIdx === -1) {
+    return {};
+  }
+
+  try {
+    const parsed = jsYaml.load(content.slice(3, closingIdx));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const frontmatter = parsed as Record<string, unknown>;
+    return {
+      ...(typeof frontmatter.name === "string"
+        ? { name: frontmatter.name }
+        : {}),
+      ...(typeof frontmatter.description === "string"
+        ? { description: frontmatter.description }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Candidate locations for bundled agents across source, test, and esbuild layouts. */
+export function getBuiltInAgentsDirectoryCandidates(
+  moduleDirectory: string
+): string[] {
+  return [
+    path.join(moduleDirectory, "templates", "agents"),
+    path.join(moduleDirectory, "..", "templates", "agents"),
+  ];
 }
 
 /**
@@ -131,60 +170,19 @@ export class AgentDiscovery {
   }
 
   /**
-   * Return the curated built-in agents from the bundled manifest. The path is
-   * relative to this module so it resolves to src/templates in tests and to
-   * out/templates in packaged extension/CLI builds.
+   * Return the bundled agents from their .agent.md frontmatter. esbuild
+   * bundles this module into out/extension.js, while tests retain out/utils/,
+   * so support both output layouts as well as the TypeScript source layout.
    */
   static async discoverBuiltInAgents(): Promise<AgentInfo[]> {
-    const builtInDir = path.join(__dirname, "..", "templates", "agents");
-    const manifestPath = path.join(builtInDir, "manifest.json");
-
-    try {
-      const manifest = JSON.parse(
-        await fs.promises.readFile(manifestPath, "utf8")
-      ) as BuiltInAgentManifest;
-      if (!Array.isArray(manifest.agents)) {
-        throw new Error("manifest is missing its agents array");
-      }
-
-      const agents: AgentInfo[] = [];
-      for (const entry of manifest.agents) {
-        if (
-          typeof entry.file !== "string" ||
-          !entry.file.endsWith(".agent.md")
-        ) {
-          Log.warn(
-            `Ignoring invalid built-in agent manifest entry: ${entry.file}`
-          );
-          continue;
-        }
-
-        const agentPath = path.join(builtInDir, entry.file);
-        if (!(await this.isAccessibleFile(agentPath))) {
-          Log.warn(`Built-in agent file is missing: ${agentPath}`);
-          continue;
-        }
-
-        const name = entry.file.slice(0, -".agent.md".length);
-        agents.push({
-          name,
-          displayName:
-            typeof entry.label === "string"
-              ? entry.label
-              : formatDisplayName(name),
-          path: agentPath,
-          source: DISCOVERY_SOURCES.BUILT_IN,
-          ...(typeof entry.description === "string"
-            ? { description: entry.description }
-            : {}),
-        });
-      }
-
-      return agents;
-    } catch (error) {
-      Log.error("Unable to discover built-in agents:", error);
+    const builtInDir = await this.findBuiltInAgentsDirectory();
+    if (!builtInDir) {
       return [];
     }
+    return this.discoverAgentsInDirectory(
+      builtInDir,
+      DISCOVERY_SOURCES.BUILT_IN
+    );
   }
 
   /**
@@ -218,8 +216,8 @@ export class AgentDiscovery {
    * Discover agent files in a directory.
    * Includes all *.agent.md files unconditionally and any plain *.md files
    * that contain a valid agent header (YAML frontmatter with a `name:` or
-   * `description:` field).  This handles harnesses like Claude CLI whose
-   * native agent files are plain *.md, not *.agent.md.
+   * `description:` field). It also reads that metadata for every discovered
+   * file so the UI can use the author-provided display name and description.
    * @param directoryPath Path to search
    * @param source Source location identifier
    */
@@ -239,11 +237,11 @@ export class AgentDiscovery {
 
       for (const file of mdFiles) {
         const filePath = path.join(directoryPath, file);
+        const frontmatter = await AgentDiscovery.readAgentFrontmatter(filePath);
 
         // Always accept *.agent.md; for plain *.md require an agent header
         if (!file.endsWith(".agent.md")) {
-          const hasHeader = await AgentDiscovery.hasAgentHeader(filePath);
-          if (!hasHeader) {
+          if (!frontmatter.name && !frontmatter.description) {
             continue;
           }
         }
@@ -255,9 +253,12 @@ export class AgentDiscovery {
 
         agents.push({
           name,
-          displayName: formatDisplayName(name),
+          displayName: formatDisplayName(frontmatter.name ?? name),
           path: filePath,
           source,
+          ...(frontmatter.description
+            ? { description: frontmatter.description }
+            : {}),
         });
       }
 
@@ -275,46 +276,34 @@ export class AgentDiscovery {
   }
 
   /**
-   * Check if a .md file has a valid agent header (YAML frontmatter).
-   * Reads only the first 512 bytes for performance.
-   * A valid header starts with "---" and contains a `name:` or `description:`
-   * field before the closing "---" delimiter.
+   * Read supported metadata from an agent's YAML frontmatter. A malformed or
+   * absent header produces an empty object so *.agent.md files remain valid.
    */
-  private static async hasAgentHeader(filePath: string): Promise<boolean> {
+  private static async readAgentFrontmatter(
+    filePath: string
+  ): Promise<AgentFrontmatter> {
     try {
-      const fd = await fs.promises.open(filePath, "r");
-      const buffer = Buffer.alloc(512);
-      const { bytesRead } = await fd.read(buffer, 0, 512, 0);
-      await fd.close();
-
-      const content = buffer.slice(0, bytesRead).toString("utf8");
-
-      if (!content.startsWith("---")) {
-        return false;
-      }
-
-      const closingIdx = content.indexOf("---", 3);
-      if (closingIdx === -1) {
-        return false;
-      }
-
-      const frontmatter = content.slice(3, closingIdx);
-      return (
-        /^\s*name\s*:/m.test(frontmatter) ||
-        /^\s*description\s*:/m.test(frontmatter)
+      return parseAgentFrontmatter(
+        await fs.promises.readFile(filePath, "utf8")
       );
     } catch {
-      return false;
+      return {};
     }
   }
 
-  private static async isAccessibleFile(filePath: string): Promise<boolean> {
-    try {
-      const stat = await fs.promises.stat(filePath);
-      return stat.isFile();
-    } catch {
-      return false;
+  private static async findBuiltInAgentsDirectory(): Promise<string | null> {
+    const candidateDirectories = getBuiltInAgentsDirectoryCandidates(__dirname);
+
+    for (const directory of candidateDirectories) {
+      if (await isAccessibleDirectory(directory)) {
+        return directory;
+      }
     }
+
+    Log.error(
+      `Unable to locate built-in agents directory. Checked: ${candidateDirectories.join(", ")}`
+    );
+    return null;
   }
 
   /**

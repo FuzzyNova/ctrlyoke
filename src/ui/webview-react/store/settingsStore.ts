@@ -39,6 +39,8 @@ export interface ModelOption {
  */
 export interface AgentOption {
   name: string;
+  /** User-facing name from agent metadata, or a formatted filename fallback. */
+  displayName?: string;
   path: string;
   description?: string;
 }

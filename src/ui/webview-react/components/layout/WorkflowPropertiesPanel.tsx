@@ -29,6 +29,7 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
 import {
   PanelBar,
   CustomSelect,
+  toAgentSelectOption,
   MultiCheckboxDropdown,
   HarnessDropdown,
   harnessCategory,
@@ -1032,10 +1033,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     onChange={handleAgentChange}
                     options={[
                       { value: "", label: "None" },
-                      ...availableAgents.map((agent) => ({
-                        value: agent.name || agent.path,
-                        label: `${agent.name || "Unknown Agent"}${agent.description ? ` - ${agent.description}` : ""}`,
-                      })),
+                      ...availableAgents.map((agent) =>
+                        toAgentSelectOption(agent, agent.name || agent.path)
+                      ),
                     ]}
                     namespace={DROPDOWN_NAMESPACES.AGENT}
                     hiddenValues={

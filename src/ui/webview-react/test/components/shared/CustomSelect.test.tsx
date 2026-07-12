@@ -50,6 +50,28 @@ describe("CustomSelect — basic behavior", () => {
     expect(onChange).toHaveBeenCalledWith("b");
   });
 
+  it("renders a muted, length-truncated option description", async () => {
+    const user = userEvent.setup();
+    const description = "A".repeat(130);
+    render(
+      <CustomSelect
+        value="a"
+        onChange={vi.fn()}
+        options={[
+          ...OPTIONS,
+          { value: "described", label: "Described", description },
+        ]}
+      />
+    );
+
+    await user.click(getTrigger());
+
+    expect(screen.getByText(`${"A".repeat(117)}...`)).toHaveClass(
+      "text-description-fg"
+    );
+    expect(screen.getByTitle(description)).toBeInTheDocument();
+  });
+
   it("dropdown options are not rendered when closed", () => {
     render(<CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />);
     // The dropdown is portal-based and not in the DOM when closed
