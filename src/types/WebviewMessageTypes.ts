@@ -818,6 +818,31 @@ export interface WorkflowSaveFailedMessage {
 }
 
 /**
+ * Save workflow as template message (webview -> extension)
+ */
+export interface SaveWorkflowAsTemplateMessage {
+  type: typeof MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE;
+  name: string;
+  scope: "user" | "workspace";
+}
+
+/**
+ * Workflow saved as template message (extension -> webview).
+ * Failure reuses WorkflowSaveFailedMessage rather than a dedicated failure message.
+ */
+export interface WorkflowSavedAsTemplateMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_SAVED_AS_TEMPLATE;
+  templates: Array<{
+    id: string;
+    name: string;
+    description: string;
+    variables?: Record<string, any>;
+    isBuiltIn: boolean;
+  }>;
+  templateId?: string;
+}
+
+/**
  * Workflows list message (extension -> webview, multi-workflow coordination)
  */
 export interface WorkflowsListMessage {
@@ -1525,6 +1550,7 @@ export type IncomingMessage =
   | SaveWorkflowDialogDataMessage
   | WorkflowSavedMessage
   | WorkflowSaveFailedMessage
+  | WorkflowSavedAsTemplateMessage
   | WorkflowsListMessage
   | WorkflowAddedMessage
   | WorkflowDismissedMessage

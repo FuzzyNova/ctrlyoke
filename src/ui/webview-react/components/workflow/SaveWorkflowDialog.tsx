@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Modal, Button } from "../shared";
+import { Modal, Button, ScopeToggle, SettingToggleRow } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
+import { validateSafeName } from "@utils/string";
+import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 
 /**
  * SaveWorkflowDialog
@@ -18,6 +20,12 @@ import { MESSAGE_TYPES } from "../../types/messages";
  *   → user edits path / format, clicks Save
  *   → extension receives SAVE_WORKFLOW, writes file, replies with WORKFLOW_SAVED or WORKFLOW_SAVE_FAILED
  *   → useMessageHandler closes dialog (on success) or shows toast error (on failure)
+ *
+ * Toggling "Save as Template" swaps the path/format fields for a template
+ * name + scope picker and posts SAVE_WORKFLOW_AS_TEMPLATE instead — the
+ * extension snapshots the current values (no {placeholder} conversion) into
+ * a new custom template and replies with WORKFLOW_SAVED_AS_TEMPLATE or
+ * (reused) WORKFLOW_SAVE_FAILED.
  */
 export const SaveWorkflowDialog: React.FC = () => {
   const vscode = useVsCodeApi();
@@ -38,6 +46,13 @@ export const SaveWorkflowDialog: React.FC = () => {
   const [filePath, setFilePath] = useState("");
   const [format, setFormat] = useState<"yaml" | "json">("yaml");
   const [pathError, setPathError] = useState<string | null>(null);
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateNameError, setTemplateNameError] = useState<string | null>(
+    null
+  );
+  const [templateScope, setTemplateScope] =
+    useState<TemplateScope>("workspace");
 
   // Reset local state whenever the dialog is opened with new data.
   useEffect(() => {
@@ -46,6 +61,10 @@ export const SaveWorkflowDialog: React.FC = () => {
       setFormat(fmt);
       setFilePath(saveWorkflowDialogData.defaultPath);
       setPathError(null);
+      setSaveAsTemplate(false);
+      setTemplateName("");
+      setTemplateNameError(null);
+      setTemplateScope("workspace");
     }
   }, [saveWorkflowDialogOpen, saveWorkflowDialogData]);
 
@@ -78,7 +97,32 @@ export const SaveWorkflowDialog: React.FC = () => {
     [validate]
   );
 
+  const handleTemplateNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setTemplateName(val);
+      setTemplateNameError(
+        val ? validateSafeName(val, "Template name is required") : null
+      );
+    },
+    []
+  );
+
   const handleSave = useCallback(() => {
+    if (saveAsTemplate) {
+      const err = validateSafeName(templateName, "Template name is required");
+      if (err) {
+        setTemplateNameError(err);
+        return;
+      }
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE,
+        name: templateName.trim(),
+        scope: templateScope,
+      });
+      return;
+    }
+
     const err = validate(filePath);
     if (err) {
       setPathError(err);
@@ -89,15 +133,27 @@ export const SaveWorkflowDialog: React.FC = () => {
       filePath: filePath.trim(),
       format,
     });
-  }, [vscode, filePath, format, validate]);
+  }, [
+    vscode,
+    filePath,
+    format,
+    validate,
+    saveAsTemplate,
+    templateName,
+    templateScope,
+  ]);
+
+  const canSave = saveAsTemplate
+    ? !!templateName.trim() && !templateNameError
+    : !!filePath.trim() && !pathError;
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !pathError && filePath.trim()) {
+      if (e.key === "Enter" && canSave) {
         handleSave();
       }
     },
-    [handleSave, pathError, filePath]
+    [handleSave, canSave]
   );
 
   return (
@@ -115,11 +171,7 @@ export const SaveWorkflowDialog: React.FC = () => {
             <Button variant="secondary" onClick={closeSaveWorkflowDialog}>
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={!filePath.trim() || !!pathError}
-            >
+            <Button variant="primary" onClick={handleSave} disabled={!canSave}>
               <i className="codicon codicon-save mr-1.5" />
               Save
             </Button>
@@ -133,66 +185,114 @@ export const SaveWorkflowDialog: React.FC = () => {
           Save As to export a clean, shareable copy without runtime state.
         </p>
 
-        {/* Format selector */}
-        <div className="form-group">
-          <p
-            id="format-label"
-            className="block text-sm font-medium mb-2 text-foreground"
-          >
-            Format
-          </p>
-          <div
-            role="group"
-            aria-labelledby="format-label"
-            className="inline-flex rounded border border-btn-border overflow-hidden"
-          >
-            {(["yaml", "json"] as const).map((fmt) => (
-              <button
-                key={fmt}
-                type="button"
-                className={`px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none ${
-                  format === fmt
-                    ? "bg-btn-bg text-btn-fg"
-                    : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                }`}
-                onClick={() => handleFormatChange(fmt)}
-              >
-                {fmt.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SettingToggleRow
+          label="Save as Template"
+          description="Save this workflow's current values as a reusable template instead of a workflow file."
+          checked={saveAsTemplate}
+          onChange={setSaveAsTemplate}
+        />
 
-        {/* File path input */}
-        <div className="form-group">
-          <label
-            htmlFor="save-workflow-path"
-            className="block text-sm font-medium text-foreground"
-          >
-            <span className="block mb-1">Save Path</span>
-            <input
-              ref={inputRef}
-              id="save-workflow-path"
-              type="text"
-              aria-label="Save Path"
-              value={filePath}
-              onChange={handlePathChange}
-              onKeyDown={handleKeyDown}
-              spellCheck={false}
-              className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
-                pathError
-                  ? "border-input-error-border"
-                  : "border-input-border focus:border-focus-border"
-              }`}
-            />
-          </label>
-          {pathError && (
-            <p className="mt-1 text-xs text-error-fg">{pathError}</p>
-          )}
-          <p className="mt-1 text-xs text-description-fg">
-            Absolute path or path relative to the workspace root.
-          </p>
-        </div>
+        {/* Format selector */}
+        {!saveAsTemplate && (
+          <div className="form-group">
+            <p
+              id="format-label"
+              className="block text-sm font-medium mb-2 text-foreground"
+            >
+              Format
+            </p>
+            <div
+              role="group"
+              aria-labelledby="format-label"
+              className="inline-flex rounded border border-btn-border overflow-hidden"
+            >
+              {(["yaml", "json"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  className={`px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none ${
+                    format === fmt
+                      ? "bg-btn-bg text-btn-fg"
+                      : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  }`}
+                  onClick={() => handleFormatChange(fmt)}
+                >
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {saveAsTemplate ? (
+          <div className="form-group">
+            <label
+              htmlFor="save-template-name"
+              className="block text-sm font-medium text-foreground"
+            >
+              <span className="block mb-1">Template Name</span>
+              <input
+                ref={inputRef}
+                id="save-template-name"
+                type="text"
+                aria-label="Template Name"
+                value={templateName}
+                onChange={handleTemplateNameChange}
+                onKeyDown={handleKeyDown}
+                placeholder="my-custom-template"
+                className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
+                  templateNameError
+                    ? "border-input-error-border"
+                    : "border-input-border focus:border-focus-border"
+                }`}
+              />
+            </label>
+            {templateNameError && (
+              <p className="mt-1 text-xs text-error-fg">
+                {templateNameError}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-sm text-foreground">Location</span>
+              <ScopeToggle
+                ariaLabel="Template location"
+                value={templateScope}
+                onChange={setTemplateScope}
+                options={TEMPLATE_SCOPE_OPTIONS}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label
+              htmlFor="save-workflow-path"
+              className="block text-sm font-medium text-foreground"
+            >
+              <span className="block mb-1">Save Path</span>
+              <input
+                ref={inputRef}
+                id="save-workflow-path"
+                type="text"
+                aria-label="Save Path"
+                value={filePath}
+                onChange={handlePathChange}
+                onKeyDown={handleKeyDown}
+                spellCheck={false}
+                className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
+                  pathError
+                    ? "border-input-error-border"
+                    : "border-input-border focus:border-focus-border"
+                }`}
+              />
+            </label>
+            {pathError && (
+              <p className="mt-1 text-xs text-error-fg">{pathError}</p>
+            )}
+            <p className="mt-1 text-xs text-description-fg">
+              Absolute path or path relative to the workspace root.
+            </p>
+          </div>
+        )}
       </div>
     </Modal>
   );

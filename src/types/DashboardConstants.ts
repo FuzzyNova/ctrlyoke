@@ -175,6 +175,8 @@ export const MESSAGE_TYPES = {
   SAVE_WORKFLOW: "saveWorkflow", // Webview -> Extension: { filePath, format } confirmed by user
   WORKFLOW_SAVED: "workflowSaved", // Extension -> Webview: { filePath } success
   WORKFLOW_SAVE_FAILED: "workflowSaveFailed", // Extension -> Webview: { error } failure
+  SAVE_WORKFLOW_AS_TEMPLATE: "saveWorkflowAsTemplate", // Webview -> Extension: { name, scope } — snapshot current workflow as a custom template
+  WORKFLOW_SAVED_AS_TEMPLATE: "workflowSavedAsTemplate", // Extension -> Webview: { templates, templateId } success (failure reuses WORKFLOW_SAVE_FAILED)
 
   // Multi-workflow coordination — Extension → Webview
   WORKFLOWS_LIST: "workflowsList", // Full list of loaded WorkflowSummary[]

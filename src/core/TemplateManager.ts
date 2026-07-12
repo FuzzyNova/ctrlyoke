@@ -34,7 +34,7 @@ export type TemplateScope = "user" | "workspace";
  *   _templateMeta:
  *     variables:
  *       specFile:                    # matches {specFile} / {file:specFile} in the body
- *         type: file                 # 'file'/'directory' (Browse), 'select' (dropdown), 'text' (default)
+ *         type: file                 # 'file'/'directory' (Browse), 'select' (dropdown), 'harness' (dropdown), 'text' (default)
  *         fileFilter: ["**\/*.md"]   # file-picker globs (type: file only)
  *         autoFillFilename: true     # seed the workflow name from the picked file/folder
  *       outputDir:
@@ -43,6 +43,9 @@ export type TemplateScope = "user" | "workspace";
  *         type: select               # dropdown; options required
  *         options: [debug, info, warn, error]
  *         default: info
+ *       harness:
+ *         type: harness              # renders the real harness picker (same control as workflow properties);
+ *         default: claude-cli        # no `options` needed — the choices are the fixed HarnessId set
  *       testCommand:
  *         type: text
  *         default: npm test          # pre-filled in the UI; substituted if left blank
@@ -54,8 +57,8 @@ export type TemplateScope = "user" | "workspace";
 export interface TemplateVariable {
   /** Matches the {placeholder} in the template content */
   name: string;
-  /** 'file'/'directory' show a Browse button; 'select' shows a dropdown; 'text' (default) is a plain input */
-  type?: "text" | "file" | "directory" | "select";
+  /** 'file'/'directory' show a Browse button; 'select'/'harness' show a dropdown; 'text' (default) is a plain input */
+  type?: "text" | "file" | "directory" | "select" | "harness";
   /** Glob patterns for the file picker filter. Only used when type = 'file' */
   fileFilter?: string[];
   /** Choices for the dropdown. Required (non-empty) when type = 'select' */
@@ -152,7 +155,8 @@ export class TemplateManager {
             vm["type"] === "file" ||
             vm["type"] === "text" ||
             vm["type"] === "directory" ||
-            vm["type"] === "select"
+            vm["type"] === "select" ||
+            vm["type"] === "harness"
           )
             entry.type = vm["type"];
           if (
@@ -540,10 +544,39 @@ export class TemplateManager {
   }
 
   /**
+   * Resolve the destination path for a new custom template, ensuring the
+   * scope's templates directory exists and the name isn't already taken.
+   * Shared by `createCustomTemplate` and `saveWorkflowAsTemplate`.
+   */
+  private async prepareCustomTemplatePath(
+    templateName: string,
+    scope: TemplateScope
+  ): Promise<string> {
+    this.validateTemplateName(templateName);
+
+    const customPath = this.getTemplatesPathForScope(scope);
+    if (!customPath) {
+      throw new Error("No workspace folder available");
+    }
+
+    if (!(await this.pathExists(customPath))) {
+      await fs.promises.mkdir(customPath, { recursive: true });
+    }
+
+    const fullPath = path.join(customPath, `${templateName}.ctrlyoke.json`);
+
+    if (await this.pathExists(fullPath)) {
+      throw new Error(`Template already exists: ${templateName}`);
+    }
+
+    return fullPath;
+  }
+
+  /**
    * Create a new custom template with a feature-demonstrating starter.
-   * The starter includes _templateMeta, a file-type variable with autoFillFilename,
-   * and a multiline text variable with a default and description, so users can see
-   * every variable-metadata field in context.
+   * The starter declares one variable of every type (file, text, select,
+   * directory, harness) so users can see every variable-metadata field,
+   * and every UI control it renders to, in context.
    *
    * @param templateName Name for the new template
    * @param scope Where to store the template: "workspace" (.ctrlyoke/templates)
@@ -554,23 +587,7 @@ export class TemplateManager {
     templateName: string,
     scope: TemplateScope = "workspace"
   ): Promise<string> {
-    this.validateTemplateName(templateName);
-
-    const customPath = this.getTemplatesPathForScope(scope);
-    if (!customPath) {
-      throw new Error("No workspace folder available");
-    }
-
-    // Ensure templates directory exists
-    if (!(await this.pathExists(customPath))) {
-      await fs.promises.mkdir(customPath, { recursive: true });
-    }
-
-    const fullPath = path.join(customPath, `${templateName}.ctrlyoke.json`);
-
-    if (await this.pathExists(fullPath)) {
-      throw new Error(`Template already exists: ${templateName}`);
-    }
+    const fullPath = await this.prepareCustomTemplatePath(templateName, scope);
 
     const starter = {
       _templateMeta: {
@@ -588,18 +605,34 @@ export class TemplateManager {
             description: "Extra guidance applied while planning and implementing.",
             multiline: true,
           },
+          reviewDepth: {
+            type: "select",
+            options: ["quick", "thorough"],
+            default: "thorough",
+            description: "How much detail to put into the plan.",
+          },
+          outputDir: {
+            type: "directory",
+            description: "Where implementation artifacts should be written (optional).",
+          },
+          harness: {
+            type: "harness",
+            default: "claude-cli",
+            description: "Which harness runs the implementation step.",
+          },
         },
       },
       steps: [
         {
           name: "plan",
           prompt:
-            "Review the following spec and create a detailed implementation plan:\n@{file:specFile}\n\nConstraints: {text:constraints}",
+            "Review the following spec and create a {reviewDepth} implementation plan:\n@{file:specFile}\n\nConstraints: {text:constraints}\n\nIf useful, write any plan artifacts under {outputDir}.",
         },
         {
           name: "implement",
           prompt: "Implement the plan you just created.",
           resumeSession: true,
+          harness: "{harness}",
         },
       ],
     };
@@ -607,6 +640,44 @@ export class TemplateManager {
     await fs.promises.writeFile(
       fullPath,
       JSON.stringify(starter, null, 2),
+      "utf-8"
+    );
+
+    return fullPath;
+  }
+
+  /**
+   * Save a workflow's current values as a new custom template — a literal
+   * snapshot, not a parameterized starter. The caller (WorkflowSerializer)
+   * supplies the already-cleaned workflow content (runtime fields stripped,
+   * same allowlist used when saving a plain workflow file); the user hand-edits
+   * the result afterward to swap in {placeholder} variables, same as any
+   * other custom template.
+   *
+   * @param templateName Name for the new template
+   * @param scope Where to store the template: "workspace" (.ctrlyoke/templates)
+   *   or "user" (~/.ctrlyoke/templates, machine-wide)
+   * @param workflowContent Cleaned workflow object (steps/finalStep/vars/etc.)
+   * @returns Path to created template file
+   */
+  async saveWorkflowAsTemplate(
+    templateName: string,
+    scope: TemplateScope,
+    workflowContent: Record<string, unknown>
+  ): Promise<string> {
+    const fullPath = await this.prepareCustomTemplatePath(templateName, scope);
+
+    const template = {
+      _templateMeta: {
+        name: templateName,
+        description: "",
+      },
+      ...workflowContent,
+    };
+
+    await fs.promises.writeFile(
+      fullPath,
+      JSON.stringify(template, null, 2),
       "utf-8"
     );
 

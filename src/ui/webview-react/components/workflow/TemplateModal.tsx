@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Modal, Button, AnimatedSection, ScopeToggle } from "../shared";
+import { Modal, Button, AnimatedSection, ScopeToggle, HarnessDropdown } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { MESSAGE_TYPES, HARNESS_IDS } from "../../types/messages";
+import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
+import { validateSafeName } from "@utils/string";
+import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 
 interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-type TemplateScope = "user" | "workspace";
 
 /** Build the initial variable values for a template, pre-filling declared defaults. */
 function seedVariableDefaults(
@@ -23,26 +25,13 @@ function seedVariableDefaults(
     } else if (variable.type === "select" && variable.options?.length) {
       // A dropdown with no explicit default pre-selects its first option.
       seed[variable.name] = variable.options[0];
+    } else if (variable.type === "harness") {
+      // No "unselected" state for a harness variable — it must always
+      // substitute a valid HarnessId, so fall back to the first known one.
+      seed[variable.name] = HARNESS_IDS.CLAUDE_CLI;
     }
   }
   return seed;
-}
-
-/** Same "safe filename" rule used for both the workflow name and template name fields. */
-function validateSafeName(
-  name: string,
-  requiredMessage = "Name is required"
-): string | null {
-  if (!name.trim()) {
-    return requiredMessage;
-  }
-  if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) {
-    return "Invalid characters in name";
-  }
-  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(name)) {
-    return "Reserved filename";
-  }
-  return null;
 }
 
 /**
@@ -85,6 +74,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (s) => s.setCustomTemplateCreated
   );
   const setTemplates = useUiStore((s) => s.setTemplates);
+  const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
+  const hideDropdownOption = useUiStore((s) => s.hideDropdownOption);
+  const unhideDropdownOption = useUiStore((s) => s.unhideDropdownOption);
+  const harnessStatus = useSettingsStore((s) => s.harnessStatus);
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -469,20 +462,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                   ariaLabel="Template location"
                   value={newTemplateScope}
                   onChange={setNewTemplateScope}
-                  options={[
-                    {
-                      value: "workspace",
-                      label: "Workspace",
-                      icon: "codicon-project",
-                      title: ".ctrlyoke/templates — this project only",
-                    },
-                    {
-                      value: "user",
-                      label: "User",
-                      icon: "codicon-person",
-                      title: "~/.ctrlyoke/templates — available in every workspace",
-                    },
-                  ]}
+                  options={TEMPLATE_SCOPE_OPTIONS}
                 />
               </div>
 
@@ -522,8 +502,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               const isDirectory = variable.type === "directory";
               const isPicker = isFile || isDirectory;
               const isSelect = variable.type === "select";
+              const isHarness = variable.type === "harness";
               const isMultiline =
-                !!variable.multiline && !isPicker && !isSelect;
+                !!variable.multiline && !isPicker && !isSelect && !isHarness;
               const inputClass =
                 "flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs";
               const selectClass =
@@ -559,6 +540,29 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                             </option>
                           ))}
                         </select>
+                      ) : isHarness ? (
+                        <HarnessDropdown
+                          id={`var-${variable.name}`}
+                          value={variables[variable.name] ?? ""}
+                          onChange={(v) =>
+                            handleVariableChange(variable.name, v)
+                          }
+                          harnessStatus={harnessStatus}
+                          hiddenValues={
+                            hiddenDropdownOptions[
+                              DROPDOWN_NAMESPACES.HARNESS
+                            ] ?? []
+                          }
+                          onHideOption={(v) =>
+                            hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                          }
+                          onUnhideOption={(v) =>
+                            unhideDropdownOption(
+                              DROPDOWN_NAMESPACES.HARNESS,
+                              v
+                            )
+                          }
+                        />
                       ) : isMultiline ? (
                         <textarea
                           aria-label={variable.name}

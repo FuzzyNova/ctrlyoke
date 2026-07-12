@@ -1229,6 +1229,15 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE, async (message) => {
+      await this.serializer.handleSaveWorkflowAsTemplate(
+        message.name,
+        message.scope,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
+    });
+
     // ── Multi-workflow coordination ──────────────────────────────────────
     table.set(MESSAGE_TYPES.GET_WORKFLOWS_LIST, () => {
       const orchestrator = this.getOrchestrator();

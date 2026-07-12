@@ -140,6 +140,108 @@ export class WorkflowSerializer {
     }
   }
 
+  // WORKFLOW_FIELDS: top-level properties to preserve when stripping a working
+  // file down to a durable workflow (excludes originalFile, workflowName,
+  // startedAt, _runtime, and other working-file-only fields).
+  private static readonly WORKFLOW_FIELDS = [
+    PROMPT_PROPERTIES.PROMPT,
+    PROMPT_PROPERTIES.STEPS,
+    PROMPT_PROPERTIES.FINAL_STEP,
+    PROMPT_PROPERTIES.VARS,
+    PROMPT_PROPERTIES.HARNESS,
+    PROMPT_PROPERTIES.MODEL,
+    PROMPT_PROPERTIES.AGENT,
+    PROMPT_PROPERTIES.SKILLS,
+    PROMPT_PROPERTIES.RESUME_SESSION,
+    PROMPT_PROPERTIES.MCP_SERVERS,
+    PROMPT_PROPERTIES.HOOKS,
+    PROMPT_PROPERTIES.SESSION_ID,
+    PROMPT_PROPERTIES.END_CONDITION,
+    PROMPT_PROPERTIES.PRE_CONDITION,
+    PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+    PROMPT_PROPERTIES.PRIOR_CONTEXT,
+    PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+    PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+  ] as const;
+
+  // PROMPT_FIELDS: per-step properties to preserve (covers both prompt steps
+  // and script steps; fields absent from a step are silently skipped).
+  private static readonly PROMPT_FIELDS = [
+    PROMPT_PROPERTIES.NAME,
+    PROMPT_PROPERTIES.ENABLED,
+    PROMPT_PROPERTIES.STEP_TYPE,
+    PROMPT_PROPERTIES.PROMPT,
+    PROMPT_PROPERTIES.SCRIPT,
+    PROMPT_PROPERTIES.TIMEOUT,
+    PROMPT_PROPERTIES.ON_PASS,
+    PROMPT_PROPERTIES.ON_FAIL,
+    PROMPT_PROPERTIES.COMPARE_SOURCE,
+    PROMPT_PROPERTIES.RETURNS,
+    PROMPT_PROPERTIES.HARNESS,
+    PROMPT_PROPERTIES.MODEL,
+    PROMPT_PROPERTIES.AGENT,
+    PROMPT_PROPERTIES.SKILLS,
+    PROMPT_PROPERTIES.RESUME_SESSION,
+    PROMPT_PROPERTIES.MCP_SERVERS,
+    PROMPT_PROPERTIES.HOOKS,
+    PROMPT_PROPERTIES.SESSION_ID,
+    PROMPT_PROPERTIES.END_CONDITION,
+    PROMPT_PROPERTIES.PRE_CONDITION,
+    PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+    PROMPT_PROPERTIES.PRIOR_CONTEXT,
+    PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+    PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+  ] as const;
+
+  /**
+   * Strip a working file down to a durable workflow shape: only real
+   * workflow/prompt fields survive (WORKFLOW_FIELDS/PROMPT_FIELDS), so
+   * `_runtime`, `originalFile`, `workflowName`, `startedAt`, and other
+   * working-file-only fields are dropped. Shared by `handleSaveWorkflow`
+   * and `handleSaveWorkflowAsTemplate`.
+   */
+  private buildCleanWorkflow(
+    workingFile: Record<string, any>
+  ): Record<string, unknown> {
+    const clean: Record<string, unknown> = {};
+
+    for (const field of WorkflowSerializer.WORKFLOW_FIELDS) {
+      if (
+        field in workingFile &&
+        field !== PROMPT_PROPERTIES.STEPS &&
+        field !== PROMPT_PROPERTIES.FINAL_STEP
+      ) {
+        clean[field] = workingFile[field];
+      }
+    }
+
+    if (workingFile.finalStep && typeof workingFile.finalStep === "object") {
+      const cleanFinalStep: Record<string, unknown> = {};
+      for (const field of WorkflowSerializer.PROMPT_FIELDS) {
+        if (field in workingFile.finalStep) {
+          cleanFinalStep[field] = workingFile.finalStep[field];
+        }
+      }
+      clean.finalStep = cleanFinalStep;
+    }
+
+    if (Array.isArray(workingFile.steps)) {
+      clean.steps = workingFile.steps.map((p: Record<string, unknown>) => {
+        const cleanPrompt: Record<string, unknown> = {};
+        for (const field of WorkflowSerializer.PROMPT_FIELDS) {
+          if (field in p) {
+            cleanPrompt[field] = p[field];
+          }
+        }
+        return cleanPrompt;
+      });
+    } else if (workingFile.prompt !== undefined) {
+      clean.prompt = workingFile.prompt;
+    }
+
+    return clean;
+  }
+
   /**
    * Handle SAVE_WORKFLOW from the webview.
    * Strips runtime metadata from the working file and serializes it to the
@@ -174,95 +276,7 @@ export class WorkflowSerializer {
 
     try {
       const workingFile = await readJsonFile(workingFilePath);
-
-      // Build clean PromptFile — strip all working-file-only and runtime fields.
-      // WORKFLOW_FIELDS: top-level properties to preserve (excludes originalFile,
-      // workflowName, startedAt, _runtime, and other working-file-only fields).
-      const WORKFLOW_FIELDS = [
-        PROMPT_PROPERTIES.PROMPT,
-        PROMPT_PROPERTIES.STEPS,
-        PROMPT_PROPERTIES.FINAL_STEP,
-        PROMPT_PROPERTIES.VARS,
-        PROMPT_PROPERTIES.HARNESS,
-        PROMPT_PROPERTIES.MODEL,
-        PROMPT_PROPERTIES.AGENT,
-        PROMPT_PROPERTIES.SKILLS,
-        PROMPT_PROPERTIES.RESUME_SESSION,
-        PROMPT_PROPERTIES.MCP_SERVERS,
-        PROMPT_PROPERTIES.HOOKS,
-        PROMPT_PROPERTIES.SESSION_ID,
-        PROMPT_PROPERTIES.END_CONDITION,
-        PROMPT_PROPERTIES.PRE_CONDITION,
-        PROMPT_PROPERTIES.ERROR_BEHAVIOR,
-        PROMPT_PROPERTIES.PRIOR_CONTEXT,
-        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
-        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-      ] as const;
-
-      // PROMPT_FIELDS: per-step properties to preserve (covers both prompt steps
-      // and script steps; fields absent from a step are silently skipped).
-      const PROMPT_FIELDS = [
-        PROMPT_PROPERTIES.NAME,
-        PROMPT_PROPERTIES.ENABLED,
-        PROMPT_PROPERTIES.STEP_TYPE,
-        PROMPT_PROPERTIES.PROMPT,
-        PROMPT_PROPERTIES.SCRIPT,
-        PROMPT_PROPERTIES.TIMEOUT,
-        PROMPT_PROPERTIES.ON_PASS,
-        PROMPT_PROPERTIES.ON_FAIL,
-        PROMPT_PROPERTIES.COMPARE_SOURCE,
-        PROMPT_PROPERTIES.RETURNS,
-        PROMPT_PROPERTIES.HARNESS,
-        PROMPT_PROPERTIES.MODEL,
-        PROMPT_PROPERTIES.AGENT,
-        PROMPT_PROPERTIES.SKILLS,
-        PROMPT_PROPERTIES.RESUME_SESSION,
-        PROMPT_PROPERTIES.MCP_SERVERS,
-        PROMPT_PROPERTIES.HOOKS,
-        PROMPT_PROPERTIES.SESSION_ID,
-        PROMPT_PROPERTIES.END_CONDITION,
-        PROMPT_PROPERTIES.PRE_CONDITION,
-        PROMPT_PROPERTIES.ERROR_BEHAVIOR,
-        PROMPT_PROPERTIES.PRIOR_CONTEXT,
-        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
-        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-      ] as const;
-
-      const clean: Record<string, unknown> = {};
-
-      for (const field of WORKFLOW_FIELDS) {
-        if (
-          field in workingFile &&
-          field !== PROMPT_PROPERTIES.STEPS &&
-          field !== PROMPT_PROPERTIES.FINAL_STEP
-        ) {
-          clean[field] = workingFile[field];
-        }
-      }
-
-      if (workingFile.finalStep && typeof workingFile.finalStep === "object") {
-        const cleanFinalStep: Record<string, unknown> = {};
-        for (const field of PROMPT_FIELDS) {
-          if (field in workingFile.finalStep) {
-            cleanFinalStep[field] = workingFile.finalStep[field];
-          }
-        }
-        clean.finalStep = cleanFinalStep;
-      }
-
-      if (Array.isArray(workingFile.steps)) {
-        clean.steps = workingFile.steps.map((p: Record<string, unknown>) => {
-          const cleanPrompt: Record<string, unknown> = {};
-          for (const field of PROMPT_FIELDS) {
-            if (field in p) {
-              cleanPrompt[field] = p[field];
-            }
-          }
-          return cleanPrompt;
-        });
-      } else if (workingFile.prompt !== undefined) {
-        clean.prompt = workingFile.prompt;
-      }
+      const clean = this.buildCleanWorkflow(workingFile);
 
       let absolutePath = filePath;
       if (!path.isAbsolute(filePath)) {
@@ -302,6 +316,66 @@ export class WorkflowSerializer {
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.error("Failed to save workflow:", error);
+      pm({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: msg,
+      });
+    }
+  }
+
+  /**
+   * Handle SAVE_WORKFLOW_AS_TEMPLATE from the webview.
+   * Snapshots the current working file's values (same field allowlist as
+   * `handleSaveWorkflow`) into a new custom template.
+   */
+  async handleSaveWorkflowAsTemplate(
+    name: string,
+    scope: TemplateScope,
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    const manager = this.getManager();
+    if (!manager) {
+      pm({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: "No workflow manager available.",
+      });
+      return;
+    }
+
+    const queueState = manager.getQueueState(clientId);
+    const workingFilePath = queueState.workingFilePath;
+
+    if (!workingFilePath) {
+      pm({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: "No workflow loaded.",
+      });
+      return;
+    }
+
+    try {
+      const workingFile = await readJsonFile(workingFilePath);
+      const clean = this.buildCleanWorkflow(workingFile);
+
+      const templatePath = await this.templateManager.saveWorkflowAsTemplate(
+        name,
+        scope,
+        clean
+      );
+
+      const templates = await this.templateManager.getAvailableTemplates();
+      const created = templates.find((t) => t.path === templatePath);
+
+      pm({
+        type: MESSAGE_TYPES.WORKFLOW_SAVED_AS_TEMPLATE,
+        templates: this.toWireTemplates(templates),
+        templateId: created?.id,
+      });
+    } catch (error) {
+      const msg = getErrorMessage(error);
+      Log.error("Failed to save workflow as template:", error);
       pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: msg,

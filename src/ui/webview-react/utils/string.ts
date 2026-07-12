@@ -87,6 +87,31 @@ export function toTitleCase(str: string): string {
 }
 
 /**
+ * Validate a name intended for use as a filename (workflow name, template
+ * name) — same "safe filename" rule enforced on the extension side by
+ * `TemplateManager.validateTemplateName`.
+ *
+ * @param name - Candidate name
+ * @param requiredMessage - Error text when the name is empty
+ * @returns Error message, or null if valid
+ */
+export function validateSafeName(
+  name: string,
+  requiredMessage = "Name is required"
+): string | null {
+  if (!name.trim()) {
+    return requiredMessage;
+  }
+  if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) {
+    return "Invalid characters in name";
+  }
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(name)) {
+    return "Reserved filename";
+  }
+  return null;
+}
+
+/**
  * Generate a unique ID string.
  *
  * Prefers `crypto.randomUUID()` when available (modern browsers).

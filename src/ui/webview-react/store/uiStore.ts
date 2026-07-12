@@ -16,7 +16,7 @@ import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
  */
 export interface TemplateVariable {
   name: string;
-  type?: "text" | "file" | "directory" | "select";
+  type?: "text" | "file" | "directory" | "select" | "harness";
   fileFilter?: string[];
   options?: string[];
   autoFillFilename?: boolean;

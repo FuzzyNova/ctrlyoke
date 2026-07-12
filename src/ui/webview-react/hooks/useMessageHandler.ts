@@ -1866,6 +1866,18 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // WORKFLOW_SAVED_AS_TEMPLATE - "Save as Template" succeeded; close dialog,
+  // refresh the template list so a subsequently opened TemplateModal already
+  // shows it, and toast.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_SAVED_AS_TEMPLATE] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.closeSaveWorkflowDialog();
+    uiStore.setTemplates(message.templates || []);
+    uiStore.showToast("Saved as template", "success");
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOWS_LIST - Full list of loaded workflow summaries
   // Only track active workflows in the frontend loadedWorkflows array;
   // COMPLETED/ERROR/STOPPED appear in the output history section instead.
