@@ -646,6 +646,68 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
+  suite("WebviewMessageRouter — CREATE_WORKFLOW handler", () => {
+    test("should sync seeded properties after creating a workflow from a template", async () => {
+      let sendPropsCalled = false;
+
+      const mockSettingsSync = {
+        sendWorkflowPropertiesToSettings: async (
+          _postMessage: any,
+          _clientId: string
+        ) => {
+          sendPropsCalled = true;
+        },
+      } as any;
+
+      const mockSerializer = {
+        handleCreateWorkflow: async () => true,
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        mockSerializer,
+        () => undefined,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+
+      await router.route({ type: MESSAGE_TYPES.CREATE_WORKFLOW });
+
+      assert.ok(
+        sendPropsCalled,
+        "sendWorkflowPropertiesToSettings must be called after CREATE_WORKFLOW so WorkflowPropertiesPanel receives the new workflow's seeded defaults"
+      );
+    });
+
+    test("should not sync properties when workflow creation fails", async () => {
+      let sendPropsCalled = false;
+
+      const mockSettingsSync = {
+        sendWorkflowPropertiesToSettings: async () => {
+          sendPropsCalled = true;
+        },
+      } as any;
+
+      const mockSerializer = {
+        handleCreateWorkflow: async () => false,
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        mockSerializer,
+        () => undefined,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+
+      await router.route({ type: MESSAGE_TYPES.CREATE_WORKFLOW });
+
+      assert.strictEqual(sendPropsCalled, false);
+    });
+  });
+
   suite("WebviewMessageRouter — THEME_VARS_CAPTURED handler", () => {
     function makeRouter() {
       return new WebviewMessageRouter(

@@ -998,13 +998,25 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.CREATE_WORKFLOW, (message) => {
+    table.set(MESSAGE_TYPES.CREATE_WORKFLOW, async (message) => {
       // createWorkflowFromTemplateForClient scopes the new instance to clientId,
       // so panel and browser clients share this path without touching each
       // other's viewed workflow.
-      this.serializer
-        .handleCreateWorkflow(message, this.clientId, this.getCurrentPostMessage())
-        .catch((err) => Log.warn(`CREATE_WORKFLOW failed: ${err}`));
+      const created = await this.serializer.handleCreateWorkflow(
+        message,
+        this.clientId,
+        this.getCurrentPostMessage()
+      );
+
+      if (created) {
+        // The template path replays workflow state, which clears or retains the
+        // previous workflow properties in the webview. Send the newly-created
+        // working file's seeded defaults so the properties panel reflects it.
+        await this.settingsSync.sendWorkflowPropertiesToSettings(
+          this.getCurrentPostMessage(),
+          this.clientId
+        );
+      }
     });
 
     table.set(MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE, (message) => {

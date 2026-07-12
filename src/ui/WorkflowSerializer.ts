@@ -511,7 +511,7 @@ export class WorkflowSerializer {
     message: any,
     clientId: string,
     postMessage?: PostMessageFn
-  ): Promise<void> {
+  ): Promise<boolean> {
     const pm = postMessage ?? this.postMessage;
     const { templateId, variables, filename, runAfter } = message;
 
@@ -541,6 +541,8 @@ export class WorkflowSerializer {
       if (runAfter) {
         await orchestrator.executeWorkflow(instance.id);
       }
+
+      return true;
     } catch (error) {
       const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);
@@ -548,6 +550,7 @@ export class WorkflowSerializer {
         type: MESSAGE_TYPES.WORKFLOW_CREATED,
         error: errorMsg,
       });
+      return false;
     }
   }
 
