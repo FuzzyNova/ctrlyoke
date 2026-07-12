@@ -601,6 +601,56 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
+    test("should clear pending background work from queue-operation notifications", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_background_queue",
+              name: "Bash",
+              input: { run_in_background: true },
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "queue-operation",
+        content:
+          "<task-notification><tool-use-id>toolu_background_queue</tool-use-id></task-notification>",
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("should clear pending background work from attachment notifications", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_background_attachment",
+              name: "Bash",
+              input: { run_in_background: true },
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "attachment",
+        attachment: {
+          prompt:
+            "<task-notification><tool-use-id>toolu_background_attachment</tool-use-id></task-notification>",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
     test("should keep pending background work for unmatched notifications", () => {
       parser.trackBackgroundWorkState({
         type: "assistant",
@@ -1058,7 +1108,10 @@ suite("CopilotLogParser", () => {
         data: { content: "hello" },
       } as unknown as BaseCliEvent;
 
-      assert.strictEqual(parser.extractLiveContextWindow(event, "gpt-5.4"), null);
+      assert.strictEqual(
+        parser.extractLiveContextWindow(event, "gpt-5.4"),
+        null
+      );
     });
   });
 
@@ -1143,7 +1196,10 @@ suite("CopilotLogParser", () => {
         {
           type: "span",
           name: "chat gpt-5.4",
-          attributes: { "gen_ai.usage.input_tokens": 1000, "gen_ai.usage.output_tokens": 10 },
+          attributes: {
+            "gen_ai.usage.input_tokens": 1000,
+            "gen_ai.usage.output_tokens": 10,
+          },
         },
       ]);
 
@@ -1164,7 +1220,10 @@ suite("CopilotLogParser", () => {
         {
           type: "span",
           name: "chat gpt-5.4",
-          attributes: { "gen_ai.usage.input_tokens": 5000, "gen_ai.usage.output_tokens": 20 },
+          attributes: {
+            "gen_ai.usage.input_tokens": 5000,
+            "gen_ai.usage.output_tokens": 20,
+          },
         },
       ]);
 
@@ -2181,7 +2240,9 @@ suite("CodexLogParser", () => {
   });
 
   test("should derive Codex log token context window size from a 5.6 session model", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-codex-log-"));
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-codex-log-")
+    );
     const logPath = path.join(tempDir, "rollout-test.jsonl");
 
     try {

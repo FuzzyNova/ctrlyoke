@@ -83,6 +83,10 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   durationMs?: number;
   toolUseResult?: Record<string, any>;
   data?: Record<string, any>;
+  content?: string;
+  attachment?: {
+    prompt?: string;
+  };
 }
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
@@ -520,6 +524,26 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
+   * Extract a background-task notification from every encoding Claude has
+   * written in session JSONL. Older versions surface it as a `user` message;
+   * current versions first write a `queue-operation` and later an `attachment`
+   * with the same XML payload. These records are control signals, not display
+   * content, but all must clear the matching pending background launch.
+   */
+  private extractTaskNotificationText(e: ClaudeProviderEvent): string {
+    if (e.type === "user") {
+      return this.extractUserMessageText(e);
+    }
+    if (e.type === "queue-operation" && typeof e.content === "string") {
+      return e.content;
+    }
+    if (e.type === "attachment" && typeof e.attachment?.prompt === "string") {
+      return e.attachment.prompt;
+    }
+    return "";
+  }
+
+  /**
    * Track background-task launch/notification markers per the empirically
    * confirmed rule (see `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
    * "Claude Code — CONFIRMED"):
@@ -527,7 +551,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *   `input.run_in_background === true`. Its id becomes the new
    *   "most recent" launch, superseding any prior one (a superseded launch
    *   is a "zombie" that will never be notified — see class doc).
-   * - **Notification:** a `user` event whose content contains
+   * - **Notification:** a `user`, `queue-operation`, or `attachment` event
+   *   whose payload contains
    *   `<task-notification>…<tool-use-id>{id}</tool-use-id>…`. Clears the
    *   tracked id only when it matches the most-recent launch.
    */
@@ -548,8 +573,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return;
     }
 
-    if (this.mostRecentBackgroundLaunchId && e.type === "user") {
-      const text = this.extractUserMessageText(e);
+    if (this.mostRecentBackgroundLaunchId) {
+      const text = this.extractTaskNotificationText(e);
       const match = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
       if (match && match[1] === this.mostRecentBackgroundLaunchId) {
         this.mostRecentBackgroundLaunchId = undefined;
