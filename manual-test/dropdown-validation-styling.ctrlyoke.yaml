@@ -1,0 +1,37 @@
+# Dropdown Validation Styling Manual Test
+#
+# Load this file in the dashboard to inspect the yellow validation warnings.
+# All stale values below are schema-valid so the workflow loads normally.
+#
+# Expected dashboard checks:
+# 1. Open Workflow Properties → Harness:
+#    - Model, Agent, and Skills each show a yellow warning.
+# 2. Select the "prompt-level-warnings" step and open its Properties drawer:
+#    - Model, Agent, and Skills each show a yellow warning.
+# 3. In that drawer, set Prior Context to Custom (it starts with "1,3"), then
+#    change the range to "1-" to inspect the red range-syntax error styling.
+
+# These models are valid schema values but are not Codex CLI models.
+harness: codex-cli
+model: claude-opus-4.8
+agent: missing-workflow-agent
+skills:
+  - missing-workflow-skill
+  - another-missing-workflow-skill
+
+steps:
+  - name: workflow-level-warnings
+    prompt: |
+      This step inherits the deliberately stale workflow-level values.
+      Do not run this workflow; it exists only for dashboard styling checks.
+
+  - name: prompt-level-warnings
+    prompt: |
+      This step overrides the workflow values with different stale values.
+      Open this step in the prompt Properties drawer to inspect its warnings.
+    model: gemini-3.5-flash
+    agent: missing-prompt-agent
+    skills:
+      - missing-prompt-skill
+      - another-missing-prompt-skill
+    priorContext: [1, 3]
