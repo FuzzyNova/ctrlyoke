@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   workspaceCommit,
@@ -48,6 +48,20 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
 
   const generateAbortControllerRef = useRef<AbortController | null>(null);
+  const [generationDotCount, setGenerationDotCount] = useState(0);
+
+  useEffect(() => {
+    if (!generatingCommitMessage) {
+      setGenerationDotCount(0);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setGenerationDotCount((count) => (count + 1) % 4);
+    }, 500);
+
+    return () => window.clearInterval(interval);
+  }, [generatingCommitMessage]);
 
   const handleGenerate = useCallback(async () => {
     if (generatingCommitMessage) return;
@@ -208,13 +222,34 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       </div>
 
       <div className="flex gap-1 items-start">
-        <textarea
-          value={commitMessage}
-          onChange={(e) => setCommitMessage(e.target.value)}
-          placeholder="Commit message..."
-          rows={3}
-          className="flex-1 min-w-0 resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
-        />
+        <div className="relative flex-1 min-w-0">
+          <textarea
+            value={generatingCommitMessage ? "" : commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            placeholder={
+              generatingCommitMessage
+                ? `Generating commit message${".".repeat(generationDotCount)}`
+                : "Commit message..."
+            }
+            rows={3}
+            disabled={generatingCommitMessage}
+            aria-label="Commit message"
+            aria-describedby={
+              generatingCommitMessage ? "commit-message-generating" : undefined
+            }
+            className="w-full resize-none rounded border border-panel-border bg-input-bg px-2 py-1.5 text-xs text-editor-fg placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border disabled:cursor-wait disabled:opacity-50"
+          />
+          {generatingCommitMessage && (
+            <span
+              id="commit-message-generating"
+              className="sr-only"
+              role="status"
+            >
+              Generating commit message. Editing is disabled until generation is
+              finished or canceled.
+            </span>
+          )}
+        </div>
         <button
           onClick={
             generatingCommitMessage ? handleCancelGenerate : handleGenerate

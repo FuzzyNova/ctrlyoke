@@ -121,7 +121,7 @@ describe("WorkspaceCommitArea", () => {
       });
     });
 
-    it("shows the stop icon while generating and keeps the button enabled", async () => {
+    it("disables the commit message input while generating and keeps the stop button enabled", async () => {
       const user = userEvent.setup();
       // Return a promise that never resolves to keep the loading state active.
       vi.mocked(workspaceGenerateCommitMessage).mockReturnValue(
@@ -135,9 +135,42 @@ describe("WorkspaceCommitArea", () => {
       await waitFor(() => {
         expect(generateButton).not.toBeDisabled();
         expect(
+          screen.getByRole("textbox", { name: "Commit message" })
+        ).toBeDisabled();
+        expect(
+          screen.getByPlaceholderText("Generating commit message")
+        ).toBeInTheDocument();
+        expect(
           generateButton.querySelector(".codicon-stop-circle")
         ).not.toBeNull();
       });
+    });
+
+    it("re-enables the commit message input when generation is canceled", async () => {
+      const user = userEvent.setup();
+      vi.mocked(workspaceGenerateCommitMessage).mockImplementation(
+        (_instructions, signal) =>
+          new Promise<never>((_resolve, reject) => {
+            signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true }
+            );
+          })
+      );
+      renderCommitArea();
+
+      const generateButton = screen.getByTestId("generate-commit-message-btn");
+      const commitMessageInput = screen.getByRole("textbox", {
+        name: "Commit message",
+      });
+      await user.click(generateButton);
+
+      await waitFor(() => expect(commitMessageInput).toBeDisabled());
+      await user.click(generateButton);
+
+      await waitFor(() => expect(commitMessageInput).not.toBeDisabled());
+      expect(commitMessageInput).toHaveValue("Ship it");
     });
 
     it("does not crash when workspaceGenerateCommitMessage rejects", async () => {
