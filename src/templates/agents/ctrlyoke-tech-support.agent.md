@@ -162,7 +162,7 @@ In the dashboard editor, completions are triggered by `@`, `#`, and `~`. They re
 
 <agentsSkillsMcp>
 Agents:
-- Agent files are `.agent.md` instruction files. ctrlyoke discovers/imports them and can inject an agent into prompts regardless of harness.
+- Agent files are `.agent.md` instruction files. ctrlyoke discovers them and can inject an agent into prompts regardless of harness.
 - The workflow properties Harness tab has an Agent selector and Skills selector.
 - Global defaults are managed under Global Settings -> Workflow Defaults and Agent & Skills Manager.
 

@@ -671,14 +671,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Import ctrlyoke Agents command
-  const importAgentsCommand = vscode.commands.registerCommand(
-    "ctrlyoke.importAgents",
-    async () => {
-      await workflowOrchestrator.importAgents();
-    }
-  );
-
   // Import Workflow Templates command
   const importWorkflowTemplatesCommand = vscode.commands.registerCommand(
     "ctrlyoke.importWorkflowTemplates",
@@ -1219,7 +1211,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     resumeCommand,
     stopCommand,
     createEndConditionScriptCommand,
-    importAgentsCommand,
     importWorkflowTemplatesCommand,
     newWorkflowCommand,
     createNewTemplateCommand,

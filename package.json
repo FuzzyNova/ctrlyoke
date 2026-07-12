@@ -110,12 +110,6 @@
         "icon": "$(new-file)"
       },
       {
-        "command": "ctrlyoke.importAgents",
-        "title": "Import ctrlyoke Agents",
-        "category": "ctrlyoke",
-        "icon": "$(hubot)"
-      },
-      {
         "command": "ctrlyoke.importWorkflowTemplates",
         "title": "Import Workflow Templates",
         "category": "ctrlyoke",
@@ -309,9 +303,6 @@
         },
         {
           "command": "ctrlyoke.createEndConditionScript"
-        },
-        {
-          "command": "ctrlyoke.importAgents"
         },
         {
           "command": "ctrlyoke.importWorkflowTemplates"

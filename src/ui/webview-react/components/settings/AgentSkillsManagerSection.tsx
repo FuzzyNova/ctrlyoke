@@ -85,8 +85,8 @@ function getLocationFolderPath(
     : getParentFolderPath(location.path);
 }
 
-// Primary source location: prefer ctrlyoke workspace, then ctrlyoke user, then first
-function getPrimaryLocation(file: ManagedFile): ManagedFileLocation {
+// Primary editable location: prefer ctrlyoke workspace, then ctrlyoke user, then first.
+function getPrimaryLocation(file: ManagedFile): ManagedFileLocation | undefined {
   return (
     file.locations.find(
       (l) =>
@@ -102,9 +102,19 @@ function getPrimaryLocation(file: ManagedFile): ManagedFileLocation {
   );
 }
 
+function getSourcePath(file: ManagedFile): string {
+  const editableLocation = getPrimaryLocation(file);
+  if (editableLocation) return editableLocation.path;
+  if (file.builtInSourcePath) return file.builtInSourcePath;
+  throw new Error(`No source path is available for ${file.name}`);
+}
+
 // Path to open for "Edit": the .agent.md / .md file directly, or SKILL.md inside the skill folder
 function getEditFilePath(file: ManagedFile): string {
   const primaryLoc = getPrimaryLocation(file);
+  if (!primaryLoc) {
+    throw new Error(`No editable copy is available for ${file.name}`);
+  }
   return file.type === HARNESS_FILE_TYPES.SKILL
     ? `${primaryLoc.path}/SKILL.md`
     : primaryLoc.path;
@@ -279,7 +289,7 @@ function FileRow({
     file.locations.map((l) => encodeTarget(l.harnessId, l.scope))
   );
 
-  const primaryLoc = getPrimaryLocation(file);
+  const sourcePath = getSourcePath(file);
 
   const deleteItems: ActionDropdownItem[] = file.locations.map(
     (loc, index) => ({
@@ -314,7 +324,7 @@ function FileRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {!isStandalone && (
+          {!isStandalone && file.locations.length > 0 && (
             <button
               type="button"
               onClick={() => onEdit(file)}
@@ -351,6 +361,11 @@ function FileRow({
               scope={loc.scope}
             />
           ))}
+          {file.builtInSourcePath && (
+            <span className="inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none bg-badge-bg text-badge-fg">
+              Built-in
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
@@ -364,20 +379,22 @@ function FileRow({
             )}
             onSelect={(encoded) => {
               const { id, scope } = decodeTarget(encoded);
-              onSave(primaryLoc.path, id, scope);
+              onSave(sourcePath, id, scope);
             }}
           />
 
-          <ActionDropdown
-            label="Delete"
-            icon="trash"
-            items={deleteItems}
-            onSelect={(encoded) => {
-              const { id, scope } = decodeTarget(encoded);
-              onDelete(file.name, id, scope);
-            }}
-            className="text-error-fg"
-          />
+          {file.locations.length > 0 && (
+            <ActionDropdown
+              label="Delete"
+              icon="trash"
+              items={deleteItems}
+              onSelect={(encoded) => {
+                const { id, scope } = decodeTarget(encoded);
+                onDelete(file.name, id, scope);
+              }}
+              className="text-error-fg"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -554,7 +571,7 @@ export function AgentSkillsManagerSection({
   const handleSaveAll = useCallback(
     (id: AnyTargetId, scope: SettingWriteScope) => {
       const files = selectedFiles.map((f) => ({
-        sourcePath: getPrimaryLocation(f).path,
+        sourcePath: getSourcePath(f),
         name: f.name,
       }));
       syncAll(files, id, activeType, scope);
@@ -621,7 +638,7 @@ export function AgentSkillsManagerSection({
 
   const getContextDescription = (): string => {
     if (activeType === HARNESS_FILE_TYPES.AGENT) {
-      return "Save agents to a harness directory to enable native subagent spawning from that harness.";
+      return "Built-in ctrlyoke agents are always available to workflows. Save a copy to ctrlyoke to customize one, or to a harness directory to enable native subagent spawning.";
     }
     return "Save skills to a harness directory to make that skill always available for that harness, regardless of what ctrlyoke attaches.";
   };

@@ -26,6 +26,7 @@ import {
   HARNESS_AGENT_EXTENSION,
 } from "./HarnessDirectoryUtils";
 import { isAccessibleDirectory, formatDisplayName } from "./DiscoveryUtils";
+import { AgentDiscovery } from "./AgentDiscovery";
 
 // ============================================================================
 // Public Types
@@ -43,6 +44,8 @@ export interface ManagedFile {
   displayName: string;
   type: "agent" | "skill";
   locations: ManagedFileLocation[];
+  /** Immutable bundled source available for export when no editable copy exists. */
+  builtInSourcePath?: string;
 }
 
 export interface ManagedTargetDirectory {
@@ -353,9 +356,27 @@ export class HarnessFileManager {
     type: "agent" | "skill"
   ): Promise<ManagedFile[]> {
     try {
-      return type === "agent"
-        ? collectAgentLocations(workspaceRoot)
-        : collectSkillLocations(workspaceRoot);
+      if (type === "skill") {
+        return collectSkillLocations(workspaceRoot);
+      }
+
+      const files = await collectAgentLocations(workspaceRoot);
+      const filesByName = new Map(files.map((file) => [file.name, file]));
+      for (const agent of await AgentDiscovery.discoverBuiltInAgents()) {
+        const existing = filesByName.get(agent.name);
+        if (existing) {
+          existing.builtInSourcePath = agent.path;
+          continue;
+        }
+        files.push({
+          name: agent.name,
+          displayName: agent.displayName,
+          type: "agent",
+          locations: [],
+          builtInSourcePath: agent.path,
+        });
+      }
+      return files;
     } catch (error) {
       Log.error("HarnessFileManager.resolveAllLocations:", error);
       return [];

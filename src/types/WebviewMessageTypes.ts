@@ -1375,6 +1375,8 @@ export interface ManagedFile {
   displayName: string;
   type: "agent" | "skill";
   locations: ManagedFileLocation[];
+  /** Immutable bundled source available for export when no editable copy exists. */
+  builtInSourcePath?: string;
 }
 
 /** A target directory shown in the Agent/Skills manager UI */

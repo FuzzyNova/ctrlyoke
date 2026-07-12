@@ -2000,10 +2000,6 @@ export class WorkflowOrchestrator {
     await this.workflowCommandHandler.createEndConditionScript();
   }
 
-  async importAgents(): Promise<void> {
-    await this.templateImporter.importAgents();
-  }
-
   async importWorkflowTemplates(): Promise<void> {
     await this.templateImporter.importWorkflowTemplates();
   }

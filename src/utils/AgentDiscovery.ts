@@ -6,6 +6,7 @@ import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import {
   getHarnessAgentDirs,
   getCtrlYokeAgentDir,
+  getCtrlYokeUserAgentDir,
   getVSCodeUserAgentDirs,
   getVSCodeVariant,
   isWSL,
@@ -29,18 +30,27 @@ export interface AgentInfo {
   path: string;
   /** Source location of the agent */
   source: DiscoverySource;
+  /** Optional human-readable description from a built-in manifest. */
+  description?: string;
+}
+
+interface BuiltInAgentManifest {
+  agents?: Array<{
+    file?: unknown;
+    label?: unknown;
+    description?: unknown;
+  }>;
 }
 
 /**
  * AgentDiscovery
  *
- * RESPONSIBILITY: Discover custom agent files from multiple locations
+ * RESPONSIBILITY: Discover bundled and custom agent files from multiple locations
  *
- * Agent discovery locations:
- * 1. User prompts directory: %APPDATA%\Code\User\prompts\ (Windows), ~/Library/Application Support/Code/User/prompts/ (macOS), or $XDG_CONFIG_HOME/Code/User/prompts/ (Linux)
- * 2. Workspace .github/agents/ (Copilot-style agents)
- * 3. Workspace .claude/agents/ (Claude-style agents)
- * 4. Workspace .ctrlyoke/agents/ (ctrlyoke-exclusive agents — not scraped by any harness)
+ * Agent discovery locations, in precedence order:
+ * 1. User ~/.ctrlyoke/agents/ overrides
+ * 2. VS Code user prompts directory and workspace harness directories
+ * 3. Bundled ctrlyoke agents (immutable fallback)
  *
  * AGENT COMPATIBILITY: ✅ ALL PROVIDERS SUPPORTED
  * - Agents now work with ALL harnesses (Copilot CLI, Claude CLI, Codex CLI, Chat)
@@ -62,11 +72,19 @@ export class AgentDiscovery {
     const agents: AgentInfo[] = [];
 
     try {
-      // 1. Discover from user prompts directory
+      // 1. User ctrlyoke agents are explicit portable overrides.
+      agents.push(
+        ...(await this.discoverAgentsInDirectory(
+          getCtrlYokeUserAgentDir(),
+          DISCOVERY_SOURCES.USER
+        ))
+      );
+
+      // 2. Discover from VS Code's user prompts directory.
       const userAgents = await this.discoverUserAgents();
       agents.push(...userAgents);
 
-      // 2-3. Discover from workspace harness agent dirs (Claude, Copilot, Codex, etc.)
+      // 3. Discover from workspace harness agent dirs (Claude, Copilot, Codex, etc.)
       if (workspaceFolder) {
         const workspaceRoot = workspaceFolder.uri.fsPath;
         const scanned = new Set<string>();
@@ -84,7 +102,7 @@ export class AgentDiscovery {
           }
         }
 
-        // 4. Discover from workspace .ctrlyoke/agents/ (ctrlyoke-exclusive agents)
+        // Discover from workspace .ctrlyoke/agents/ (ctrlyoke-exclusive agents)
         // Agents placed here are only discovered by ctrlyoke — no harness scrapes this
         // directory, preventing duplicate context injection when using harness-native dirs.
         const fpDir = getCtrlYokeAgentDir(workspaceRoot);
@@ -95,12 +113,73 @@ export class AgentDiscovery {
         agents.push(...fpAgents);
       }
 
-      Log.debug(`Discovered ${agents.length} custom agents`);
+      // Bundled agents are immutable fallbacks. A same-named user or workspace
+      // agent deliberately shadows the bundled version, so customization survives
+      // extension updates without ever copying files during activation.
+      const discoveredNames = new Set(agents.map((agent) => agent.name));
+      const builtInAgents = await this.discoverBuiltInAgents();
+      agents.push(
+        ...builtInAgents.filter((agent) => !discoveredNames.has(agent.name))
+      );
+
+      Log.debug(`Discovered ${agents.length} agents`);
     } catch (error) {
       Log.error("Error discovering agents:", error);
     }
 
     return agents;
+  }
+
+  /**
+   * Return the curated built-in agents from the bundled manifest. The path is
+   * relative to this module so it resolves to src/templates in tests and to
+   * out/templates in packaged extension/CLI builds.
+   */
+  static async discoverBuiltInAgents(): Promise<AgentInfo[]> {
+    const builtInDir = path.join(__dirname, "..", "templates", "agents");
+    const manifestPath = path.join(builtInDir, "manifest.json");
+
+    try {
+      const manifest = JSON.parse(
+        await fs.promises.readFile(manifestPath, "utf8")
+      ) as BuiltInAgentManifest;
+      if (!Array.isArray(manifest.agents)) {
+        throw new Error("manifest is missing its agents array");
+      }
+
+      const agents: AgentInfo[] = [];
+      for (const entry of manifest.agents) {
+        if (typeof entry.file !== "string" || !entry.file.endsWith(".agent.md")) {
+          Log.warn(`Ignoring invalid built-in agent manifest entry: ${entry.file}`);
+          continue;
+        }
+
+        const agentPath = path.join(builtInDir, entry.file);
+        if (!(await this.isAccessibleFile(agentPath))) {
+          Log.warn(`Built-in agent file is missing: ${agentPath}`);
+          continue;
+        }
+
+        const name = entry.file.slice(0, -".agent.md".length);
+        agents.push({
+          name,
+          displayName:
+            typeof entry.label === "string"
+              ? entry.label
+              : formatDisplayName(name),
+          path: agentPath,
+          source: DISCOVERY_SOURCES.BUILT_IN,
+          ...(typeof entry.description === "string"
+            ? { description: entry.description }
+            : {}),
+        });
+      }
+
+      return agents;
+    } catch (error) {
+      Log.error("Unable to discover built-in agents:", error);
+      return [];
+    }
   }
 
   /**
@@ -219,6 +298,15 @@ export class AgentDiscovery {
         /^\s*name\s*:/m.test(frontmatter) ||
         /^\s*description\s*:/m.test(frontmatter)
       );
+    } catch {
+      return false;
+    }
+  }
+
+  private static async isAccessibleFile(filePath: string): Promise<boolean> {
+    try {
+      const stat = await fs.promises.stat(filePath);
+      return stat.isFile();
     } catch {
       return false;
     }

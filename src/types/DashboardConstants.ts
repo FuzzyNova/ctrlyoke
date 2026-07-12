@@ -1327,6 +1327,8 @@ export type SettingWriteScope = Exclude<
 // not which settings tier owns it.
 // ============================================================================
 export const DISCOVERY_SOURCES = {
+  /** Immutable agents included with the ctrlyoke installation. */
+  BUILT_IN: "built-in",
   USER: "user",
   WORKSPACE: "workspace",
   /** Files found in the .ctrlyoke/agents/ dir — ctrlyoke-exclusive, not scraped by harnesses */

@@ -3,13 +3,14 @@ applyTo: "src/templates/**"
 ---
 
 <purpose>
-Bundled source assets for workflow templates, importable agents, and starter end-condition scripts.
+Bundled source assets for workflow templates, built-in agents, and starter end-condition scripts.
 Runtime code reads the built copies from `out/templates/`, never `src/templates/` directly.
 </purpose>
 
 <entryPoints>
 - `src/core/TemplateManager.ts` owns built-in workflow IDs, `_templateMeta` parsing, placeholder extraction/replacement, and workflow creation.
-- `src/core/orchestration/TemplateImporter.ts` uses `agents/manifest.json` and `workflows/manifest.json` to populate the import UI and copy files into a workspace.
+- `src/core/orchestration/TemplateImporter.ts` uses `workflows/manifest.json` to populate the workflow-template import UI and copy files into a workspace.
+- `src/utils/AgentDiscovery.ts` uses `agents/manifest.json` as the curated built-in-agent registry; it exposes the bundled files as immutable fallbacks, while `AgentSkillsManagerSection` exports copies for customization or native harness use.
 </entryPoints>
 
 <workflowTemplates>
@@ -27,12 +28,12 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 </templateVariables>
 
 <manifests>
-- Keep each manifest in sync with the actual files it exposes; `TemplateImporter` trusts `file` names from the manifest when copying.
-- Manifest entries are the curated import surface. Adding a file here is not enough for built-in workflow creation; adding/removing a built-in workflow also requires updating `TemplateManager.BUILT_IN_TEMPLATE_IDS`.
+- Keep each manifest in sync with the actual files it exposes. `TemplateImporter` trusts workflow `file` names when copying, and `AgentDiscovery` trusts agent `file` names when exposing built-ins.
+- Manifest entries are the curated runtime surface. Adding an agent manifest entry makes it available as a built-in; adding/removing a built-in workflow also requires updating `TemplateManager.BUILT_IN_TEMPLATE_IDS`.
 </manifests>
 
 <agentsAndScripts>
-- `.agent.md` files are copied verbatim into `.github/agents/`; frontmatter and body style are consumed by downstream agent tooling, not normalized during import.
+- Built-in `.agent.md` files are read directly from the extension bundle. The Agent & Skills Manager can copy them verbatim into `.ctrlyoke/agents/` for customization or into harness directories for native subagent use; frontmatter and body style are never normalized during copying.
 - `check_condition.*` files are starter examples for `endCondition.script`. Keep them portable, simple, and aligned with the runtime contract: compare output deterministically and return `"true"` on success.
 </agentsAndScripts>
 

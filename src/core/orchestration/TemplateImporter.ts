@@ -4,20 +4,6 @@ import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 /**
- * Manifest structure for agents
- */
-interface AgentManifest {
-  agents: Array<{
-    id: string;
-    label: string;
-    description: string;
-    file: string;
-    tags?: string[];
-    icon?: string;
-  }>;
-}
-
-/**
  * Manifest structure for workflows
  */
 interface WorkflowManifest {
@@ -37,7 +23,6 @@ interface WorkflowManifest {
  * RESPONSIBILITY: Template & Agent Import Operations
  *
  * Handles import operations including:
- * - Importing agents to .github/agents/
  * - Importing workflow templates to .ctrlyoke/templates/
  * - Loading and parsing manifests
  * - File copying with overwrite confirmation
@@ -56,90 +41,6 @@ export class TemplateImporter {
     workspaceFolder: vscode.WorkspaceFolder | undefined
   ): void {
     this.currentWorkspaceFolder = workspaceFolder;
-  }
-
-  /**
-   * Import ctrlyoke custom agents to the workspace's .github/agents folder
-   */
-  async importAgents(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("ctrlyoke: No workspace folder open");
-        return;
-      }
-
-      // Load agent manifest
-      const manifest = await this.loadManifest<AgentManifest>("agents");
-
-      if (!manifest) {
-        return; // Error already shown
-      }
-
-      if (!manifest.agents || manifest.agents.length === 0) {
-        vscode.window.showInformationMessage(
-          "ctrlyoke: No agents available to import"
-        );
-        return;
-      }
-
-      // Show QuickPick with available agents
-      const selectedAgents = await vscode.window.showQuickPick(
-        manifest.agents.map((agent) => ({
-          label: `${agent.icon || "$(hubot)"} ${agent.label}`,
-          description: agent.description,
-          detail: agent.tags?.join(", "),
-          picked: true,
-          agent,
-        })),
-        {
-          placeHolder: "Select agents to import to .github/agents/",
-          title: "ctrlyoke: Import Custom Agents",
-          canPickMany: true,
-        }
-      );
-
-      if (!selectedAgents || selectedAgents.length === 0) {
-        return; // User cancelled
-      }
-
-      // Create .github/agents directory
-      const agentsDir = path.join(
-        this.currentWorkspaceFolder.uri.fsPath,
-        ".github",
-        "agents"
-      );
-
-      try {
-        await vscode.workspace.fs.createDirectory(vscode.Uri.file(agentsDir));
-      } catch {
-        // Directory might already exist
-      }
-
-      // Copy selected agents
-      const templatesPath = path.join(
-        this.context.extensionPath,
-        "out",
-        "templates",
-        "agents"
-      );
-
-      const { importedItems, failedItems } = await this.copyTemplateFiles(
-        selectedAgents.map((s) => s.agent),
-        templatesPath,
-        agentsDir
-      );
-
-      // Show result
-      await this.showImportResult(
-        importedItems,
-        failedItems,
-        agentsDir,
-        selectedAgents[0]?.agent.file
-      );
-    } catch (error) {
-      Log.error("ctrlyoke: Error importing agents:", error);
-      vscode.window.showErrorMessage(`❌ Failed to import agents: ${error}`);
-    }
   }
 
   /**
@@ -236,9 +137,7 @@ export class TemplateImporter {
    * @param type Type of manifest ("agents" or "workflows")
    * @returns Parsed manifest or undefined if failed
    */
-  private async loadManifest<T>(
-    type: "agents" | "workflows"
-  ): Promise<T | undefined> {
+  private async loadManifest<T>(type: "workflows"): Promise<T | undefined> {
     const manifestPath = path.join(
       this.context.extensionPath,
       "out",
