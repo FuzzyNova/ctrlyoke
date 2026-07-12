@@ -141,6 +141,22 @@ describe("CustomSelect — basic behavior", () => {
     );
     expect(container.firstChild).toHaveClass("my-custom");
   });
+
+  it("renders a warning below the trigger and applies the warning border", () => {
+    render(
+      <CustomSelect
+        value="missing"
+        onChange={vi.fn()}
+        options={OPTIONS}
+        warning={'Agent "missing" is not available in this workspace.'}
+      />
+    );
+
+    expect(getTrigger()).toHaveClass("border-warning-fg");
+    expect(
+      screen.getByText('Agent "missing" is not available in this workspace.')
+    ).toHaveClass("text-warning-fg");
+  });
 });
 
 describe("CustomSelect — hide/unhide feature", () => {

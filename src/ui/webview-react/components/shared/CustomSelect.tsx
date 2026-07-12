@@ -4,6 +4,10 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
 import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
+import {
+  dropdownBorderClass,
+  dropdownWarningClass,
+} from "@utils/dropdownValidation";
 
 export interface SelectOption {
   value: string;
@@ -55,6 +59,8 @@ interface CustomSelectProps extends HideableProps {
   dropdownMaxHeight?: string;
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
   inline?: boolean;
+  /** Soft validation message for a value unavailable in the current workspace. */
+  warning?: string;
 }
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -87,6 +93,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   nonHideableValues,
   dropdownMaxHeight = "60vh",
   inline = false,
+  warning,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -281,13 +288,20 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
         title={triggerTitle}
-        className="fp-select-trigger fp-dropdown-row"
+        className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <i
           className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
         />
       </button>
+      {warning && (
+        <span
+          className={`text-xxs mt-0.5 block ${dropdownWarningClass(warning)}`}
+        >
+          {warning}
+        </span>
+      )}
 
       {!disabled && (
         <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>

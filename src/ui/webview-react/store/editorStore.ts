@@ -57,7 +57,7 @@ export interface EndConditionConfig {
 export interface PropertyValues {
   harness: Inheritable<string>; // undefined = inherit, string = harness ID
   model: Inheritable<string>; // undefined = inherit, string = model ID
-  agent: Disableable<string>; // undefined = inherit, null = none, string = path
+  agent: Disableable<string>; // undefined = inherit, null = none, string = agent filename slug
   skills: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
   resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   sessionId: string; // "" or session ID or prompt number reference

@@ -50,6 +50,11 @@ import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
+import {
+  agentWarning,
+  modelWarning,
+  skillsWarning,
+} from "@utils/dropdownValidation";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
@@ -253,6 +258,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // Get models for current harness
   const currentHarnessModels = getModelsForHarness(effectiveHarness);
+  const modelWarn = modelWarning(
+    workflowProperties.model,
+    effectiveHarness,
+    currentHarnessModels
+  );
+  const agentWarn = agentWarning(workflowProperties.agent, availableAgents);
+  const skillsWarn = skillsWarning(workflowProperties.skills, availableSkills);
 
   // Check if workflow value differs from global setting
   const isDifferentFromGlobal = useCallback(
@@ -1007,6 +1019,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       unhideDropdownOption(modelNamespace, v)
                     }
                     nonHideableValues={["default", ""]}
+                    warning={modelWarn ?? undefined}
                   />
                 </FormField>
               </DrawerRow>
@@ -1048,6 +1061,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                     }
                     nonHideableValues={[]}
+                    warning={agentWarn ?? undefined}
                   />
                 </FormField>
 
@@ -1085,6 +1099,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     onUnhideOption={(v) =>
                       unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
                     }
+                    warning={skillsWarn ?? undefined}
                   />
                   {effectiveSkills.length > 0 && (
                     <p className="text-xxs text-description-fg mt-0.5">

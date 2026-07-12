@@ -4,6 +4,10 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
 import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
+import {
+  dropdownBorderClass,
+  dropdownWarningClass,
+} from "@utils/dropdownValidation";
 import type { HideableProps } from "./CustomSelect";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -18,6 +22,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   className?: string;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
+  /** Soft validation message for values unavailable in the current workspace. */
+  warning?: string;
 }
 
 /**
@@ -44,6 +50,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   onUnhideOption,
   nonHideableValues,
   dropdownMaxHeight = "60vh",
+  warning,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -134,7 +141,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             return !prev;
           })
         }
-        className="fp-select-trigger fp-dropdown-row"
+        className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">
           {visibleSelected.length === 0 ? (
@@ -147,6 +154,13 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
         />
       </button>
+      {warning && (
+        <span
+          className={`text-xxs mt-0.5 block ${dropdownWarningClass(warning)}`}
+        >
+          {warning}
+        </span>
+      )}
 
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
         {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}

@@ -4,9 +4,11 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
+import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
+import { CustomSelect } from "../../shared/CustomSelect";
+import { toAgentSelectOption } from "../../shared/agentSelectOptions";
 import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
-import { LocalTextInput } from "../../shared/LocalInputs";
 import { HarnessesSection } from "../HarnessesSection";
 
 interface Props {
@@ -24,8 +26,11 @@ export function DefaultsHarnessPage({
 }: Props) {
   const sources = settings.sources as Record<string, SettingSource>;
   const wf = settings.settings.defaults;
+  const availableAgents = useSettingsStore((s) => s.availableAgents);
   const availableSkills = useSettingsStore((s) => s.availableSkills);
   const rowProps = { sources, onReset, activeScope };
+  const agentWarn = agentWarning(wf.agent, availableAgents);
+  const skillsWarn = skillsWarning(wf.skills, availableSkills);
 
   return (
     <div className="space-y-4">
@@ -46,12 +51,17 @@ export function DefaultsHarnessPage({
           path="defaults.agent"
           {...rowProps}
         >
-          <LocalTextInput
+          <CustomSelect
             id="defaults-agent"
-            value={wf.agent}
-            onCommit={(v) => onUpdate("defaults.agent", v)}
-            placeholder="None"
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            value={wf.agent || ""}
+            onChange={(v) => onUpdate("defaults.agent", v)}
+            options={[
+              { value: "", label: "None" },
+              ...availableAgents.map((agent) =>
+                toAgentSelectOption(agent, agent.name)
+              ),
+            ]}
+            warning={agentWarn ?? undefined}
           />
         </SettingInputRow>
         <SettingInputRow
@@ -71,6 +81,7 @@ export function DefaultsHarnessPage({
               description: skill.description,
             }))}
             placeholder="No skills selected"
+            warning={skillsWarn ?? undefined}
           />
         </SettingInputRow>
       </div>

@@ -9,6 +9,22 @@ const SKILLS = [
 ];
 
 describe("SkillsSelect", () => {
+  it("renders a warning below the trigger and applies the warning border", () => {
+    render(
+      <SkillsSelect
+        value={["missing"]}
+        onChange={vi.fn()}
+        availableSkills={SKILLS}
+        warning={'1 skill not found: "missing".'}
+      />
+    );
+
+    expect(screen.getByRole("button")).toHaveClass("border-warning-fg");
+    expect(screen.getByText('1 skill not found: "missing".')).toHaveClass(
+      "text-warning-fg"
+    );
+  });
+
   it("shows the hidden toggle in inline mode when a namespace is provided", () => {
     const { container } = render(
       <SkillsSelect

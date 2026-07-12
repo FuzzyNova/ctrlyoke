@@ -102,7 +102,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
           { value: "default", label: defaultAgentLabel },
           { value: "none", label: "None" },
           ...availableAgents.map((agent) =>
-            toAgentSelectOption(agent, agent.path)
+            toAgentSelectOption(agent, agent.name)
           ),
         ]}
         namespace={DROPDOWN_NAMESPACES.AGENT}

@@ -47,6 +47,11 @@ import {
   AutoResumeStatusRow,
 } from "../shared";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
+import {
+  agentWarning,
+  modelWarning,
+  skillsWarning,
+} from "@utils/dropdownValidation";
 import { HooksEditor } from "./HooksEditor";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -283,6 +288,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     globalSettings.harness) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
+  const modelWarn = modelWarning(properties.model, currentHarness, models);
+  const agentWarn = agentWarning(properties.agent, availableAgents);
+  const skillsWarn = skillsWarning(properties.skills, availableSkills);
 
   // Preview of what auto-resume would do for this prompt, shown when the
   // Session ID field is blank (see showAutoResumeHint above).
@@ -502,6 +510,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     unhideDropdownOption(modelNamespace, v)
                   }
                   nonHideableValues={["default", ""]}
+                  warning={modelWarn ?? undefined}
                 />
               </div>
             </DrawerRow>
@@ -538,7 +547,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     { value: "default", label: defaultAgentLabel },
                     { value: "none", label: "None" },
                     ...availableAgents.map((agent) =>
-                      toAgentSelectOption(agent, agent.path)
+                      toAgentSelectOption(agent, agent.name)
                     ),
                   ]}
                   namespace={DROPDOWN_NAMESPACES.AGENT}
@@ -552,6 +561,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                   }
                   nonHideableValues={["default"]}
+                  warning={agentWarn ?? undefined}
                 />
               </div>
 
@@ -571,6 +581,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     description: s.description || undefined,
                   }))}
                   defaultLabel={defaultSkillsLabel}
+                  warning={skillsWarn ?? undefined}
                 />
               </div>
             </DrawerRow>
@@ -986,7 +997,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           : effectivePermHarness === HARNESS_IDS.OPENCODE_CLI
                             ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
                             : effectivePermHarness ===
-                                  HARNESS_IDS.ANTIGRAVITY_CLI
+                                HARNESS_IDS.ANTIGRAVITY_CLI
                               ? "ℹ️ Antigravity CLI uses permission modes only. Tool pattern lists are ignored."
                               : "ℹ️ This harness uses permission modes only. Tool pattern lists are ignored."}
                       </p>
