@@ -2,22 +2,37 @@
 
 ## Problem
 
-When a workflow YAML is loaded with values that no longer match the current environment — a model not valid for the selected harness, a skill name that doesn't exist, an agent path that isn't found — the relevant dropdowns silently show the raw invalid value. There is no visual feedback to help users spot stale or incorrect workflow configurations.
+When a workflow YAML is loaded with values that no longer match the current environment — a model not valid for the selected harness, a skill name that doesn't exist, or an agent filename slug that is no longer discovered — the relevant dropdown must preserve the raw value while making the stale configuration visible.
 
-The new `PriorContextSelect` introduced a local `customError` state + red-border pattern for its range-input validation. This plan describes how to generalise that approach into a shared utility that can be applied consistently across all dropdowns in `SettingsDrawer.tsx` and `PropertiesDrawer.tsx` with minimal duplication.
+The new `PriorContextSelect` introduced a local `customError` state + red-border pattern for its range-input validation. This plan describes the shared utility used consistently by `WorkflowPropertiesPanel.tsx`, `PropertiesDrawer.tsx`, and the dashboard's workflow defaults page.
+
+## Implementation Status
+
+Completed:
+
+- Shared pure validation functions and warning/error style helpers live in `src/ui/webview-react/utils/dropdownValidation.ts` with focused unit coverage; agent and skill references use their canonical discovered names.
+- `CustomSelect`, `MultiCheckboxDropdown`, and `SkillsSelect` accept `warning?: string` and render the shared yellow warning border and message.
+- Workflow-level and prompt-level model, agent, and skills overrides are validated locally; inherited values are intentionally not warned.
+- The dashboard default agent picker persists the canonical agent filename slug. Stale values remain visible and receive a warning; they are not blocked.
+- `PriorContextSelect` now uses the shared border helper while retaining its red syntax-error treatment.
+- `border-warning-fg` is already generated from the existing `warning-fg` Tailwind color token; no separate Tailwind configuration entry was needed.
+
+Deferred:
+
+- Parallel-group `sessionId` conflict warnings remain deferred until the parallel-steps feature supplies workflow-level group context.
 
 ---
 
 ## Affected Dropdowns
 
-| Dropdown                    | Location         | Validation scenario                                                            |
-| --------------------------- | ---------------- | ------------------------------------------------------------------------------ |
-| Model                       | Both drawers     | Loaded model ID not in `getModelsForHarness(harness)` list                     |
-| Agent                       | Both drawers     | Loaded agent path not found in `availableAgents`                               |
-| Skills                      | Both drawers     | One or more loaded skills not found in `availableSkills`                       |
-| Prior Context (range input) | Both drawers     | Invalid range notation while in custom mode _(already implemented)_            |
-| Harness                     | Both drawers     | Not a known harness ID _(edge case; `HarnessDropdown` always has all options)_ |
-| Session ID (parallel group) | PropertiesDrawer | Two or more steps in the same parallel group share the same `sessionId` value  |
+| Dropdown                    | Location                             | Validation scenario                                                               |
+| --------------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| Model                       | Workflow + prompt drawers            | Explicit model ID not in `getModelsForHarness(harness)` after discovery completes |
+| Agent                       | Workflow + prompt drawers + defaults | Explicit agent filename slug not found in `availableAgents`                       |
+| Skills                      | Workflow + prompt drawers + defaults | One or more explicit skills not found in `availableSkills`                        |
+| Prior Context (range input) | Both drawers                         | Invalid range notation while in custom mode _(already implemented)_               |
+| Harness                     | Both drawers                         | Not a known harness ID _(edge case; `HarnessDropdown` always has all options)_    |
+| Session ID (parallel group) | PropertiesDrawer                     | Two or more steps in the same parallel group share the same `sessionId` value     |
 
 > **Note on `sessionId` conflict detection:** This is a parallel-group-specific validation — it
 > requires cross-step context (knowing which other steps share the same group) that is not
@@ -38,9 +53,9 @@ A single file containing pure functions that check whether a property value is c
 ```typescript
 // Returns a warning message if invalid, null if valid.
 export function modelWarning(
-  model: string | undefined,
+  model: string | null | undefined,
   harness: HarnessId,
-  modelOptions: Record<HarnessId, ModelOption[]>
+  modelOptions: ModelOption[]
 ): string | null;
 
 export function agentWarning(
@@ -73,13 +88,14 @@ For skills the return value can mention how many are unrecognised: `"1 skill not
  * Pass null/undefined for no warning state (normal border).
  */
 export function dropdownBorderClass(
-  warning: string | null | undefined
+  validation: string | boolean | null | undefined,
+  severity?: "warning" | "error"
 ): string {
-  return warning ? "border-input-error-border" : "border-dropdown-border";
+  // warning → yellow dropdown border; error → red input border
 }
 ```
 
-This is intentionally tiny — it exists to make the intent clear in call sites and to ensure both drawers use the same token (avoiding one using `border-input-error-border` and the other `border-warning-fg` by accident).
+This remains intentionally small while allowing `PriorContextSelect` to preserve its red syntax-error border and environment checks to use yellow warning borders.
 
 ---
 
@@ -97,7 +113,7 @@ interface CustomSelectProps extends HideableProps {
 Internal changes:
 
 - The trigger `<button>` replaces its current fixed `border-dropdown-border` with `dropdownBorderClass(warning)`.
-- A `<span>` with `text-[10px] text-error-fg` is rendered below the button when `warning` is set (same pattern as `PriorContextSelect`'s error message).
+- A `<span>` with `text-xxs text-warning-fg` is rendered below the button when `warning` is set.
 
 No other changes to CustomSelect are needed.
 
@@ -127,7 +143,7 @@ The range-input validation is already implemented as a local state inside `Prior
 
 Warning strings are computed locally in each drawer component rather than in the store. This keeps the stores free of UI-display logic.
 
-### SettingsDrawer.tsx
+### WorkflowPropertiesPanel.tsx
 
 ```typescript
 // Near existing "effective value" derivations:
@@ -140,7 +156,7 @@ const agentWarn = agentWarning(workflowProperties.agent, availableAgents);
 const skillsWarn = skillsWarning(workflowProperties.skills, availableSkills);
 ```
 
-Only the _explicit_ workflow-level override is validated, not the _effective_ resolved value. If the workflow overrides the model and the override is bad, that's a warning. If the model comes entirely from global settings, the warning shows on the global settings UI (VS Code settings, not this panel).
+Only the _explicit_ workflow-level override is validated, not the _effective_ resolved value. If the workflow overrides the model and the override is bad, that's a warning. Dashboard workflow defaults are validated separately in `DefaultsHarnessPage.tsx`.
 
 ### PropertiesDrawer.tsx
 
@@ -167,28 +183,25 @@ The Tailwind token table in `tailwind.config.js` already includes:
 
 - `warning-fg` → `--vscode-editorWarning-foreground`
 
-A `border-warning-fg` utility should be added to the config if not already present, following the same pattern as `border-input-error-border`.
+Tailwind generates `border-warning-fg` from the existing `warning-fg` color token.
 
 ---
 
 ## Implementation Steps
 
-1. **Add `border-warning-fg`** to `tailwind.config.js` (the border variant of the existing `warning-fg` token).
+1. **Complete** — `border-warning-fg` is generated by the existing `warning-fg` Tailwind color token.
 
-2. **Create `src/ui/webview-react/utils/dropdownValidation.ts`** with:
-   - `modelWarning()`, `agentWarning()`, `skillsWarning()`
-   - `dropdownBorderClass(warning)` — returns border class for warning or normal state
-   - `dropdownWarningClass(warning)` — returns text-color class for warning message text
+2. **Complete** — add `src/ui/webview-react/utils/dropdownValidation.ts` with pure model, agent, and skills warnings plus shared warning/error border and message helpers.
 
-3. **Update `CustomSelect`**: add `warning?: string` prop, apply `dropdownBorderClass()` to trigger border, render message below.
+3. **Complete** — update `CustomSelect`: add `warning?: string`, apply the shared warning border, and render the message below the trigger.
 
-4. **Update `MultiCheckboxDropdown` / `SkillsSelect`**: thread `warning?: string` through, apply same pattern.
+4. **Complete** — update `MultiCheckboxDropdown` and `SkillsSelect` with the same warning prop and visual treatment.
 
-5. **Update `PriorContextSelect`**: swap its hardcoded `border-input-error-border` to use `dropdownBorderClass()` from the new utility (retaining `text-error-fg` for the range-parse error since that's a hard syntax error, not a soft warning).
+5. **Complete** — update `PriorContextSelect` to use the shared border helper with its hard-error severity, retaining `text-error-fg`.
 
-6. **Update `SettingsDrawer.tsx`**: compute `modelWarn`, `agentWarn`, `skillsWarn`; pass to respective components.
+6. **Complete** — update `WorkflowPropertiesPanel.tsx` and `DefaultsHarnessPage.tsx` to compute and pass the applicable explicit-value warnings.
 
-7. **Update `PropertiesDrawer.tsx`**: same.
+7. **Complete** — update `PropertiesDrawer.tsx` with the same explicit-value warnings.
 
 ---
 
@@ -210,7 +223,7 @@ The rendering is intentionally not abstracted into a wrapper component. Each dro
 ## Non-Goals
 
 - Blocking save/run when warnings are present — warnings are purely informational.
-- Validating global VS Code settings values — those are the user's responsibility in the settings UI.
+- Validating settings outside the dashboard; the dashboard workflow defaults page is covered because it is the direct authoring surface for these values.
 - Validating values that are `undefined` (inherited) — those carry no explicit user choice at this level.
 - Validating `sessionId` or `additionalArgs` free-text fields — content is too open-ended to validate statically.
 

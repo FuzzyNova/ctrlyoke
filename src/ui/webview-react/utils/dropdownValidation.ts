@@ -5,13 +5,11 @@ import type {
 } from "@store/settingsStore";
 import type { HarnessId } from "../types/messages";
 
-function isKnownValue(
+function isKnownName(
   value: string,
-  options: ReadonlyArray<{ name: string; path: string }>
+  options: ReadonlyArray<{ name: string }>
 ): boolean {
-  return options.some(
-    (option) => option.name === value || option.path === value
-  );
+  return options.some((option) => option.name === value);
 }
 
 /** Returns a warning when an explicit model is unavailable for its harness. */
@@ -20,7 +18,13 @@ export function modelWarning(
   harness: HarnessId,
   modelOptions: ReadonlyArray<ModelOption>
 ): string | null {
-  if (!model || modelOptions.some((option) => option.value === model)) {
+  // An empty list represents a pending discovery result, not proof that a
+  // configured model is invalid.
+  if (
+    !model ||
+    modelOptions.length === 0 ||
+    modelOptions.some((option) => option.value === model)
+  ) {
     return null;
   }
 
@@ -49,7 +53,7 @@ export function skillsWarning(
   }
 
   const missingSkills = skills.filter(
-    (skill) => !isKnownValue(skill, availableSkills)
+    (skill) => !isKnownName(skill, availableSkills)
   );
   if (missingSkills.length === 0) {
     return null;
@@ -61,11 +65,21 @@ export function skillsWarning(
     .join(", ")}.`;
 }
 
-/** Returns the consistent border token for a soft dropdown warning. */
+export type ValidationSeverity = "warning" | "error";
+
+/**
+ * Returns the consistent border token for a dropdown warning or input error.
+ * The error variant preserves PriorContextSelect's hard syntax-validation UI.
+ */
 export function dropdownBorderClass(
-  warning: string | null | undefined
+  validation: string | boolean | null | undefined,
+  severity: ValidationSeverity = "warning"
 ): string {
-  return warning ? "border-warning-fg" : "border-dropdown-border";
+  if (severity === "error") {
+    return validation ? "border-input-error-border" : "border-input-border";
+  }
+
+  return validation ? "border-warning-fg" : "border-dropdown-border";
 }
 
 /** Returns the consistent text token for a soft dropdown warning. */

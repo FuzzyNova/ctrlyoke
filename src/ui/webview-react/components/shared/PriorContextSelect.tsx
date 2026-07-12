@@ -4,6 +4,7 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
 import type { PriorContext } from "@/types/messages";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
+import { dropdownBorderClass } from "@utils/dropdownValidation";
 
 interface PriorContextSelectProps {
   id?: string;
@@ -250,9 +251,10 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           disabled={!showCustomInput}
           placeholder="e.g. 1,2,4-10"
           aria-label="Custom step range (e.g. 1,2,4-10)"
-          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${
-            customError ? "border-input-error-border" : "border-input-border"
-          }`}
+          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${dropdownBorderClass(
+            customError,
+            "error"
+          )}`}
         />
         {customError && (
           <span className="text-xxs text-error-fg mt-0.5 block">
