@@ -148,6 +148,20 @@ function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
   );
 }
 
+function TruncatedServerText({
+  value,
+  className = "",
+}: {
+  value: string;
+  className?: string;
+}) {
+  return (
+    <span className={`min-w-0 truncate ${className}`.trim()} title={value}>
+      {value}
+    </span>
+  );
+}
+
 function ServerDetails({ server }: { server: ListedServer }) {
   const detailRows: Array<{ label: string; value: string | null }> = [
     { label: "id", value: server.config.id },
@@ -190,13 +204,18 @@ function ServerDetails({ server }: { server: ListedServer }) {
 
   return (
     <div className="space-y-2 border-t border-panel-border px-3 pb-3 pt-2">
-      <div className="grid gap-1 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-1 sm:grid-cols-2">
         {detailRows
           .filter((row) => row.value)
           .map((row) => (
-            <div key={row.label} className="text-xs text-description-fg">
-              <span className="font-mono text-foreground">{row.label}:</span>{" "}
-              {row.value}
+            <div
+              key={row.label}
+              className="flex min-w-0 items-baseline gap-1 text-xs text-description-fg"
+            >
+              <span className="flex-shrink-0 font-mono text-foreground">
+                {row.label}:
+              </span>
+              <TruncatedServerText value={row.value!} className="flex-1" />
             </div>
           ))}
       </div>
@@ -260,7 +279,7 @@ function McpServersPanel({
 
   return (
     <div
-      className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
+      className={`flex min-w-0 flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
     >
       <div className="flex flex-col gap-1">
         <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
@@ -430,13 +449,15 @@ function McpServersPanel({
                           isExpanded ? "down" : "right"
                         } flex-shrink-0 text-xxs text-description-fg`}
                       />
-                      <span className="truncate text-xs font-medium text-foreground">
-                        {displayName}
-                      </span>
+                      <TruncatedServerText
+                        value={displayName}
+                        className="flex-1 text-xs font-medium text-foreground"
+                      />
                       {displayName !== server.config.id && (
-                        <span className="truncate font-mono text-xxs text-description-fg">
-                          {server.config.id}
-                        </span>
+                        <TruncatedServerText
+                          value={server.config.id}
+                          className="max-w-[40%] font-mono text-xxs text-description-fg"
+                        />
                       )}
                       {uniqueScopes.length > 0 && (
                         <div className="ml-auto flex flex-wrap gap-1">
@@ -449,10 +470,15 @@ function McpServersPanel({
                   </div>
 
                   {!isExpanded && (
-                    <div className="px-3 pb-2 text-xxs text-description-fg">
-                      {server.isLegacy
-                        ? "Not installed in MCP Manager"
-                        : getServerSummary(server.config)}
+                    <div className="min-w-0 px-3 pb-2 text-xxs text-description-fg">
+                      <TruncatedServerText
+                        value={
+                          server.isLegacy
+                            ? "Not installed in MCP Manager"
+                            : getServerSummary(server.config)
+                        }
+                        className="block"
+                      />
                     </div>
                   )}
 
@@ -652,7 +678,7 @@ export const McpServersEditor: React.FC<{
 
   return (
     <div
-      className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
+      className={`flex min-w-0 flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
     >
       {showDefault && (
         <div className="flex gap-1">

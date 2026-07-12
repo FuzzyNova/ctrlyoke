@@ -839,7 +839,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const permMode =
     toolPerms === null
       ? PERMISSION_MODES.NONE
-      : (toolPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
+      : (toolPerms?.mode ??
+        globalSettings.toolPermissions.mode ??
+        PERMISSION_MODES.ALLOW_ALL);
   const effectiveErrorBehavior = workflowProperties.errorBehavior ??
     globalSettings.defaultErrorBehavior ?? { onError: "stop" as const };
   // Fall back to global settings when workflow doesn't have lists yet

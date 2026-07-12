@@ -29,7 +29,9 @@ export function useDrawerTabOverrides(
     const wfPermMode =
       wfPerms === null
         ? PERMISSION_MODES.NONE
-        : (wfPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
+        : (wfPerms?.mode ??
+          globalSettings.toolPermissions.mode ??
+          PERMISSION_MODES.ALLOW_ALL);
     const resolvedPermMode =
       promptProperties === undefined
         ? wfPermMode
