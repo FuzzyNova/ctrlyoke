@@ -24,6 +24,7 @@ import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
+import { VirtualizedDropdownList } from "../shared";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
@@ -275,6 +276,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [dropdownTop, setDropdownTop] = useState(0);
   const [dropdownLeft, setDropdownLeft] = useState(0);
   const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
+  // True only while the exit transition is playing — lets the dropdown stay
+  // mounted (with its pre-close content/filters) through the fade so closing
+  // animates instead of the list re-filtering out from under it.
+  const [isDropdownClosing, setIsDropdownClosing] = useState(false);
   const [workflowSearch, setWorkflowSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedWorkflowStates, setSelectedWorkflowStates] = useState<
@@ -305,6 +310,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const runningWorkflowsScrollRef = useRef<HTMLDivElement>(null);
 
   const mergedContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -372,15 +378,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     );
   }, []);
 
-  // Position tracking (ResizeObserver + window resize/scroll) is only meaningful while the
-  // dropdown is actually open — the popup is `position: fixed` and invisible otherwise, so
-  // there's nothing to keep in sync. Scoping to `isDropdownOpen` means a closed WorkflowStatus
-  // carries no listeners at all instead of recalculating on every scroll for its entire lifetime.
+  // ResizeObserver + window resize run for the component's whole lifetime (not just
+  // while open) so dropdownTop/Left/Width are already correct the instant the user
+  // clicks the trigger — opening doesn't need to wait a frame to reposition, it just
+  // reveals. The scroll listener stays scoped to isDropdownOpen since it only matters
+  // for keeping an already-visible popup glued to its anchor as the page scrolls.
   useLayoutEffect(() => {
-    if (!isDropdownOpen) {
-      return;
-    }
-
     updateDropdownTop();
 
     const container = containerRef.current;
@@ -393,11 +396,20 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     });
     resizeObserver.observe(container);
     window.addEventListener("resize", updateDropdownTop);
-    window.addEventListener("scroll", updateDropdownTop, true);
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateDropdownTop);
+    };
+  }, [updateDropdownTop]);
+
+  useLayoutEffect(() => {
+    if (!isDropdownOpen) {
+      return;
+    }
+
+    window.addEventListener("scroll", updateDropdownTop, true);
+    return () => {
       window.removeEventListener("scroll", updateDropdownTop, true);
     };
   }, [isDropdownOpen, updateDropdownTop]);
@@ -459,10 +471,64 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     };
   }, [isDropdownOpen, syncWorkflowRowWidthLock]);
 
-  const closeDropdown = useCallback(() => {
+  // Closing plays a fade/clip-path transition before the popup actually
+  // unmounts. isDropdownOpen (and therefore the rendered list content) stays
+  // put until the transition finishes — clearing the search filter immediately
+  // instead would re-filter the list mid-fade and make the animation look
+  // broken or instant. finishClosingDropdown is the single place that actually
+  // flips isDropdownOpen off; it's called from both the transitionend handler
+  // and a fallback timer below so a missed/short-circuited transition (e.g. the
+  // opacity class never actually changing) can never leave the dropdown wedged
+  // in a permanently-closing state that ignores further toggle clicks.
+  const closeDropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  const finishClosingDropdown = useCallback(() => {
+    if (closeDropdownTimeoutRef.current) {
+      clearTimeout(closeDropdownTimeoutRef.current);
+      closeDropdownTimeoutRef.current = null;
+    }
+    setIsDropdownClosing(false);
     setIsDropdownOpen(false);
     setWorkflowSearch("");
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (closeDropdownTimeoutRef.current) {
+        clearTimeout(closeDropdownTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const closeDropdown = useCallback(() => {
+    if (!isDropdownOpen || isDropdownClosing) {
+      return;
+    }
+    setIsDropdownClosing(true);
+    if (closeDropdownTimeoutRef.current) {
+      clearTimeout(closeDropdownTimeoutRef.current);
+    }
+    // Safety net: fires slightly after the 220ms exit transition in case
+    // transitionend never arrives, so a toggle click can never get stuck.
+    closeDropdownTimeoutRef.current = setTimeout(finishClosingDropdown, 320);
+  }, [isDropdownOpen, isDropdownClosing, finishClosingDropdown]);
+
+  const handleDropdownTransitionEnd = useCallback(
+    (event: React.TransitionEvent<HTMLDivElement>) => {
+      if (
+        event.target !== event.currentTarget ||
+        event.propertyName !== "opacity"
+      ) {
+        return;
+      }
+      if (isDropdownClosing) {
+        finishClosingDropdown();
+      }
+    },
+    [isDropdownClosing, finishClosingDropdown]
+  );
 
   const filtersActive =
     selectedWorkflowStates.length !== ALL_WORKFLOW_STATES.length ||
@@ -606,12 +672,20 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       // Request recent workflows and full loaded-workflows list from extension
       vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
       vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
+      setIsDropdownClosing(false);
       setIsDropdownOpen(true);
+      return;
+    }
+    if (isDropdownClosing) {
+      WebviewLog.debug(
+        "[WorkflowStatus:toggleDropdown] ignored — still playing the close transition"
+      );
       return;
     }
     closeDropdown();
   }, [
     isDropdownOpen,
+    isDropdownClosing,
     vscode,
     loadedWorkflows,
     activeWorkflowId,
@@ -768,6 +842,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const displayName = fileName
     ? workflowName || getWorkflowNameFromPath(fileName)
     : DEFAULT_WORKFLOW_NAME;
+
+  // Single flag drives opacity, clip-path, and visible/pointer-events together —
+  // splitting these across separate conditions previously let the opacity class
+  // go stale during close (it never changed, so the transitionend listener that
+  // finalizes the close never fired, wedging the dropdown permanently "closing").
+  const dropdownRevealed = isDropdownOpen && !isDropdownClosing && !isEditing;
 
   const normalizedWorkflowSearch = workflowSearch.trim().toLowerCase();
   const isFilteringWorkflows =
@@ -1088,17 +1168,15 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       {/* Dropdown Menu */}
       <div
         ref={dropdownRef}
-        className={`workflow-dropdown-menu select-none [-webkit-touch-callout:none] fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+        onTransitionEnd={handleDropdownTransitionEnd}
+        className={`workflow-dropdown-menu select-none [-webkit-touch-callout:none] fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-[opacity,clip-path,visibility] ${dropdownRevealed ? "duration-[250ms] ease-out opacity-100 visible" : "duration-[220ms] ease-in opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,
           left: !isMobile && dropdownWidth !== null ? dropdownLeft : undefined,
           width:
             !isMobile && dropdownWidth !== null ? dropdownWidth : undefined,
           bottom: 0,
-          clipPath:
-            isDropdownOpen && !isEditing
-              ? "inset(0 0 0 0)"
-              : "inset(0 0 100% 0)",
+          clipPath: dropdownRevealed ? "inset(0 0 0 0)" : "inset(0 0 100% 0)",
         }}
       >
         {/* Section 1: Running Workflows — only shown when any workflow is active */}
@@ -1117,27 +1195,44 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               onToggleFilters={handleToggleFilters}
               filterControls={workflowFilterControls}
             />
-            <div className="py-1">
+            <div
+              ref={runningWorkflowsScrollRef}
+              // Bounded + scrollable (rather than growing unboundedly like the
+              // rest of this flex-shrink-0 section) so a large running-workflow
+              // count has somewhere to scroll instead of pushing the recent
+              // workflows list out of the dropdown — and so
+              // VirtualizedDropdownList has an actual scroll container to
+              // measure against.
+              className="py-1 max-h-[260px] overflow-y-auto overflow-x-clip"
+            >
               {filteredEffectiveLoadedWorkflows.length === 0 &&
               isFilteringWorkflows ? (
                 <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
                   No running workflows match your search.
                 </div>
               ) : (
-                filteredEffectiveLoadedWorkflows.map((workflow) => (
-                  <RunningWorkflowItem
-                    key={workflow.id}
-                    workflow={workflow}
-                    isCurrent={workflow.id === activeWorkflowId}
-                    hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
-                    isNarrow={isNarrow}
-                    onClick={() => handleSwitchWorkflow(workflow.id)}
-                    onPause={() => handlePauseWorkflow(workflow.id)}
-                    onCancelPause={() => handleCancelPauseWorkflow(workflow.id)}
-                    onResume={() => handleResumeWorkflow(workflow.id)}
-                    onStop={() => handleStopWorkflow(workflow.id)}
-                  />
-                ))
+                <VirtualizedDropdownList
+                  items={filteredEffectiveLoadedWorkflows}
+                  getItemKey={(workflow) => workflow.id}
+                  scrollContainerRef={runningWorkflowsScrollRef}
+                  renderItem={(workflow) => (
+                    <RunningWorkflowItem
+                      workflow={workflow}
+                      isCurrent={workflow.id === activeWorkflowId}
+                      hasActiveTerminal={workflowHasActiveTerminal(
+                        workflow.id
+                      )}
+                      isNarrow={isNarrow}
+                      onClick={() => handleSwitchWorkflow(workflow.id)}
+                      onPause={() => handlePauseWorkflow(workflow.id)}
+                      onCancelPause={() =>
+                        handleCancelPauseWorkflow(workflow.id)
+                      }
+                      onResume={() => handleResumeWorkflow(workflow.id)}
+                      onStop={() => handleStopWorkflow(workflow.id)}
+                    />
+                  )}
+                />
               )}
             </div>
             <div className="border-t border-dropdown-border" />

@@ -77,3 +77,7 @@ export { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 export { ExpandCollapseAllDiffsButton } from "./ExpandCollapseAllDiffsButton";
 export { AutoResumeStatusRow } from "./AutoResumeStatusRow";
 export { ScopeToggle, type ScopeToggleOption } from "./ScopeToggle";
+export {
+  VirtualizedDropdownList,
+  DROPDOWN_LIST_VIRTUALIZATION_THRESHOLD,
+} from "./VirtualizedDropdownList";
