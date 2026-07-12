@@ -1,4 +1,5 @@
 export { Button } from "./Button";
+export { ExitButton } from "./ExitButton";
 export { CustomSelect, type SelectOption } from "./CustomSelect";
 export {
   getAgentDisplayName,

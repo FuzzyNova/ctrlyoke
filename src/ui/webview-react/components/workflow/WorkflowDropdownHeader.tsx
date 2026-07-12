@@ -1,4 +1,5 @@
 import React from "react";
+import { ExitButton } from "@components/shared";
 
 interface WorkflowDropdownHeaderProps {
   icon: string;
@@ -59,13 +60,16 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
                   filtersOpen ? "Close workflow filters" : "Filter workflows"
                 }
                 aria-expanded={filtersOpen}
-                className={`control-button flex items-center justify-center w-6 h-6 rounded border transition-colors ${
+                className={`control-button flex h-6 w-6 items-center justify-center rounded border transition-colors ${
                   filtersOpen || filtersActive
                     ? "border-focus-border bg-btn-bg text-btn-fg"
                     : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 }`}
               >
-                <span className="codicon codicon-filter" />
+                <span
+                  className="codicon codicon-filter leading-none"
+                  aria-hidden="true"
+                />
               </button>
             )}
           </div>
@@ -75,15 +79,11 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
 
         <div className="flex justify-end">
           {onClose && (
-            <button
-              type="button"
-              className="control-button flex h-6 w-6 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            <ExitButton
               onClick={onClose}
               title="Close workflow menu"
               aria-label="Close workflow menu"
-            >
-              <span className="codicon codicon-close" />
-            </button>
+            />
           )}
         </div>
       </div>

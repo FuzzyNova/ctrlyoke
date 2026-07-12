@@ -2,6 +2,7 @@ import React from "react";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
+import { ExitButton } from "../shared/ExitButton";
 
 interface WorkspaceViewerHeaderProps {
   activeTab: "explorer" | "sourceControl";
@@ -128,14 +129,12 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       </div>
 
       {/* Close button — fixed right, never shrink */}
-      <button
-        className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
+      <ExitButton
+        className="shrink-0"
         onClick={onClose}
         title="Close workspace viewer"
         aria-label="Close workspace viewer"
-      >
-        <i className="codicon codicon-close" />
-      </button>
+      />
     </div>
   );
 };

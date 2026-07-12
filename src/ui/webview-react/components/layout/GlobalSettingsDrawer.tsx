@@ -24,7 +24,7 @@ import {
   McpManagerSection,
   CommitSection,
 } from "../settings";
-import { ScopeToggle } from "../shared";
+import { ExitButton, ScopeToggle } from "../shared";
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
@@ -171,14 +171,11 @@ export function GlobalSettingsDrawer() {
           />
         </div>
 
-        <button
-          className="control-button flex items-center justify-center w-5 h-5 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+        <ExitButton
           onClick={closeGlobalSettings}
           title="Close Global Settings"
           aria-label="Close Global Settings"
-        >
-          <span className="codicon codicon-close" />
-        </button>
+        />
       </div>
 
       <div className="flex flex-1 min-h-0">

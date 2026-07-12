@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import type { OutputFindState } from "@hooks/useOutputFind";
+import { ExitButton } from "@components/shared";
 
 const EXIT_DURATION_MS = 180;
 
@@ -149,15 +150,12 @@ export function OutputFindBar({
       >
         <i className="codicon codicon-case-sensitive" />
       </button>
-      <button
-        type="button"
-        className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
+      <ExitButton
+        className="shrink-0"
         onClick={onClose}
         title="Close find"
         aria-label="Close find"
-      >
-        <i className="codicon codicon-close" />
-      </button>
+      />
     </div>
   );
 }

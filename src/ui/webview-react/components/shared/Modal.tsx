@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { ExitButton } from "./ExitButton";
 
 interface ModalProps {
   isOpen: boolean;
@@ -93,25 +94,7 @@ export const Modal: React.FC<ModalProps> = ({
               <h2 className="text-xl font-semibold text-foreground">{title}</h2>
               <div className="flex items-center gap-1">
                 {headerActions}
-                <button
-                  onClick={onClose}
-                  className="text-description-fg hover:text-foreground transition-colors"
-                  aria-label="Close modal"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                <ExitButton onClick={onClose} aria-label="Close modal" />
               </div>
             </div>
             {headerSubtitle && (

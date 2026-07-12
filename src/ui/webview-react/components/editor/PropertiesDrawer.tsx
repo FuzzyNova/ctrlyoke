@@ -45,6 +45,7 @@ import {
   type ScriptConditionValue,
   AnimatedSection,
   AutoResumeStatusRow,
+  ExitButton,
 } from "../shared";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import {
@@ -427,15 +428,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <i className="codicon codicon-debug-restart text-xs" />
           </button>
         </div>
-        <button
-          type="button"
-          className="btn-close-drawer w-6 h-6 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
+        <ExitButton
           onClick={onClose}
           title="Close properties drawer"
           aria-label="Close properties drawer"
-        >
-          <i className="codicon codicon-close" />
-        </button>
+        />
       </div>
 
       {/* Body - Scrollable */}

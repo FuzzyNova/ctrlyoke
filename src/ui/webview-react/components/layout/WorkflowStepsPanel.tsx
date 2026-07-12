@@ -52,6 +52,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { ExitButton } from "../shared";
 import {
   getStepAccentClass,
   isWorkflowActive,
@@ -733,17 +734,15 @@ const WorkflowStepsPanelInner: React.FC<{
           <PromptCounter narrow={isHeaderNarrow} />
         </span>
         {onRequestClose && (
-          <button
-            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors ml-1"
+          <ExitButton
+            className="ml-1"
             onClick={(e) => {
               e.stopPropagation();
               onRequestClose();
             }}
             title="Close steps"
             aria-label="Close steps panel"
-          >
-            <i className="codicon codicon-close text-xs" />
-          </button>
+          />
         )}
       </div>
 

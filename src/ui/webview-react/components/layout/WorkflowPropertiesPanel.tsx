@@ -45,6 +45,7 @@ import {
   type ScriptConditionValue,
   AnimatedSection,
   AutoResumeStatusRow,
+  ExitButton,
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -921,17 +922,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
           </button>
         </div>
         {onRequestClose && (
-          <button
-            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+          <ExitButton
             onClick={(e) => {
               e.stopPropagation();
               onRequestClose();
             }}
             title="Close workflow properties"
             aria-label="Close workflow properties"
-          >
-            <i className="codicon codicon-close text-xs" />
-          </button>
+          />
         )}
       </div>
 

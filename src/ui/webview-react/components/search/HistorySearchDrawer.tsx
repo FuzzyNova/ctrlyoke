@@ -9,6 +9,7 @@ import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import { formatRelativeTimeVerbose } from "@utils/time";
+import { ExitButton } from "@components/shared";
 
 const RESULT_LIMIT = 50;
 
@@ -208,15 +209,11 @@ export function HistorySearchDrawer() {
           </span>
         </div>
 
-        <button
-          type="button"
-          className="control-button flex items-center justify-center w-5 h-5 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+        <ExitButton
           onClick={closeHistorySearch}
           title="Close history search"
           aria-label="Close history search"
-        >
-          <span className="codicon codicon-close" />
-        </button>
+        />
       </div>
 
       <div className="border-b border-panel-border px-4 py-3 shrink-0">
