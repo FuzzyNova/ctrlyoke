@@ -149,8 +149,13 @@ export class AgentDiscovery {
 
       const agents: AgentInfo[] = [];
       for (const entry of manifest.agents) {
-        if (typeof entry.file !== "string" || !entry.file.endsWith(".agent.md")) {
-          Log.warn(`Ignoring invalid built-in agent manifest entry: ${entry.file}`);
+        if (
+          typeof entry.file !== "string" ||
+          !entry.file.endsWith(".agent.md")
+        ) {
+          Log.warn(
+            `Ignoring invalid built-in agent manifest entry: ${entry.file}`
+          );
           continue;
         }
 

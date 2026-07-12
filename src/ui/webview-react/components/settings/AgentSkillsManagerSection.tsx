@@ -86,7 +86,9 @@ function getLocationFolderPath(
 }
 
 // Primary editable location: prefer ctrlyoke workspace, then ctrlyoke user, then first.
-function getPrimaryLocation(file: ManagedFile): ManagedFileLocation | undefined {
+function getPrimaryLocation(
+  file: ManagedFile
+): ManagedFileLocation | undefined {
   return (
     file.locations.find(
       (l) =>

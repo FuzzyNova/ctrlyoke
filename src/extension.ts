@@ -393,10 +393,7 @@ export async function activate(context: vscode.ExtensionContext) {
             TERMINAL_SPAWN_DIMENSIONS_KEY
           ),
         saveDimensions: (dims) =>
-          void context.globalState.update(
-            TERMINAL_SPAWN_DIMENSIONS_KEY,
-            dims
-          ),
+          void context.globalState.update(TERMINAL_SPAWN_DIMENSIONS_KEY, dims),
       }
     );
     context.subscriptions.push(ptyManager);

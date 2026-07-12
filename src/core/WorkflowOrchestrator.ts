@@ -2385,7 +2385,8 @@ export class WorkflowOrchestrator {
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
     try {
-      activeCliPaths = await WorkflowLockManager.normalizeStaleLocks(workingDir);
+      activeCliPaths =
+        await WorkflowLockManager.normalizeStaleLocks(workingDir);
     } catch (err) {
       Log.warn(
         "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",
