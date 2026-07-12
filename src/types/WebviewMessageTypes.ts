@@ -1408,6 +1408,8 @@ export interface ManagedFile {
   locations: ManagedFileLocation[];
   /** Immutable bundled source available for export when no editable copy exists. */
   builtInSourcePath?: string;
+  /** Description parsed from the file's frontmatter, if present. */
+  description?: string;
 }
 
 /** A target directory shown in the Agent/Skills manager UI */

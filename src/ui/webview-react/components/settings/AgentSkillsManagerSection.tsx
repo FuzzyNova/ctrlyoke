@@ -321,27 +321,27 @@ function FileRow({
           className="mt-0.5 h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
         />
 
-        <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {file.displayName}
-        </div>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-foreground">
+            {file.displayName}
+          </span>
 
-        <div className="flex shrink-0 items-center gap-1">
           {!isStandalone && file.locations.length > 0 && (
             <button
               type="button"
               onClick={() => onEdit(file)}
-              className="flex items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+              className="flex shrink-0 items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
               title={`Open ${file.type === HARNESS_FILE_TYPES.SKILL ? "SKILL.md" : file.displayName} in VS Code`}
             >
               <i className="codicon codicon-edit text-xxs" />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={() => onToggleDefault(file)}
-            className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
+            className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
               isDefault
                 ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -349,10 +349,21 @@ function FileRow({
             title={toggleTitle}
           >
             <i className="codicon codicon-globe text-xxs" />
-            {isDefault ? "Default" : "Set default"}
+            <span className="hidden sm:inline">
+              {isDefault ? "Default" : "Set default"}
+            </span>
           </button>
         </div>
       </div>
+
+      {file.description && (
+        <p
+          className="mt-1 truncate text-xs text-description-fg"
+          title={file.description}
+        >
+          {file.description}
+        </p>
+      )}
 
       <div className="mt-1 flex items-center gap-1.5 flex-wrap">
         <div className="flex items-center gap-1 flex-wrap">
@@ -370,7 +381,7 @@ function FileRow({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 ml-auto">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <FlyoutActionDropdown
             label="Save"
             icon="save"

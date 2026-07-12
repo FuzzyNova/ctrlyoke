@@ -45,6 +45,12 @@ export type PriorContext =
 export interface McpServerConfig {
   /** Unique server identifier */
   id: string;
+  /**
+   * Human-readable description, shown in the MCP manager UI. ctrlyoke-only
+   * metadata — deliberately omitted by every harness export path so it never
+   * leaks an unrecognized key into external tools' native config files.
+   */
+  description?: string;
   /** Command to run the MCP server process (stdio servers). Required when `url` is not set. */
   command?: string;
   /** Arguments to pass to the command (stdio servers only) */

@@ -188,10 +188,12 @@ function getRegistryEntryDisplayName(entry: RegistryMcpEntry): string {
 
 function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
   const id = registryEntryToSlug(entry);
+  const description = entry.description?.trim() || undefined;
 
   if (entry.remoteUrl) {
     const server: McpServerConfig = {
       id,
+      ...(description ? { description } : {}),
       url: entry.remoteUrl,
       transport: entry.remoteTransport ?? "streamable-http",
     };
@@ -210,6 +212,7 @@ function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
     const parts = entry.installCommand.trim().split(/\s+/).filter(Boolean);
     const server: McpServerConfig = {
       id,
+      ...(description ? { description } : {}),
       command: parts[0] ?? "npx",
     };
     if (parts.length > 1) {
@@ -224,8 +227,13 @@ function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
   }
 
   const server: McpServerConfig = entry.packageName
-    ? { id, command: "npx", args: ["-y", entry.packageName] }
-    : { id, command: "npx" };
+    ? {
+        id,
+        ...(description ? { description } : {}),
+        command: "npx",
+        args: ["-y", entry.packageName],
+      }
+    : { id, ...(description ? { description } : {}), command: "npx" };
 
   if (entry.envVars?.length) {
     server.env = Object.fromEntries(
@@ -1107,55 +1115,68 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           />
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedId(
-                              expandedId === server.id ? null : server.id
-                            )
-                          }
-                          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                        >
-                          <span className="truncate text-xs font-medium text-foreground">
-                            {server.displayName}
-                          </span>
-                          {server.displayName !== server.id && (
-                            <span className="shrink-0 rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
-                              {server.id}
-                            </span>
-                          )}
-                        </button>
-
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleStartEdit(server)}
-                            className="flex items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
-                            title={`Edit ${server.id} in ${activeScope}`}
-                          >
-                            <i className="codicon codicon-edit text-xxs" />
-                            Edit
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDefaultToggle(server)}
-                            className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
-                              defaultsEnabled
-                                ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                                : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
-                            }`}
-                            title={
-                              defaultsEnabled
-                                ? `Remove from default MCP servers (${activeScope})`
-                                : `Add to default MCP servers (${activeScope})`
+                            onClick={() =>
+                              setExpandedId(
+                                expandedId === server.id ? null : server.id
+                              )
                             }
+                            className="flex min-w-0 items-center gap-1.5 text-left"
                           >
-                            <i className="codicon codicon-globe text-xxs" />
-                            {defaultsEnabled ? "Default" : "Set default"}
+                            <span className="truncate text-xs font-medium text-foreground">
+                              {server.displayName}
+                            </span>
+                            {server.displayName !== server.id && (
+                              <span className="shrink-0 rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
+                                {server.id}
+                              </span>
+                            )}
                           </button>
+
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(server)}
+                              className="flex items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+                              title={`Edit ${server.id} in ${activeScope}`}
+                            >
+                              <i className="codicon codicon-edit text-xxs" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDefaultToggle(server)}
+                              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
+                                defaultsEnabled
+                                  ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                                  : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
+                              }`}
+                              title={
+                                defaultsEnabled
+                                  ? `Remove from default MCP servers (${activeScope})`
+                                  : `Add to default MCP servers (${activeScope})`
+                              }
+                            >
+                              <i className="codicon codicon-globe text-xxs" />
+                              <span className="hidden sm:inline">
+                                {defaultsEnabled ? "Default" : "Set default"}
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       </div>
+
+                      {server.config.description && (
+                        <p
+                          className="mt-1 truncate text-xs text-description-fg"
+                          title={server.config.description}
+                        >
+                          {server.config.description}
+                        </p>
+                      )}
 
                       <div className="mt-1 truncate font-mono text-xxs text-description-fg">
                         {getServerSummary(server.config)}
@@ -1173,7 +1194,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           ))}
                         </div>
 
-                        <div className="flex items-center gap-1.5 ml-auto">
+                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
                           <FlyoutActionDropdown
                             label="Save"
                             icon="save"

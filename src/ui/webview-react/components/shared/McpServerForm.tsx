@@ -12,6 +12,7 @@ const MCP_TRANSPORT_OPTIONS = [
 
 export interface McpServerFormState {
   id: string;
+  description: string;
   activeTab: McpServerFormTab;
   command: string;
   args: string;
@@ -23,6 +24,7 @@ export interface McpServerFormState {
 
 export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
   id: "",
+  description: "",
   activeTab: "stdio",
   command: "",
   args: "",
@@ -64,6 +66,7 @@ export function serverToMcpServerFormState(
 ): McpServerFormState {
   return {
     id: server.id,
+    description: server.description ?? "",
     activeTab: server.url ? "remote" : "stdio",
     command: server.command ?? "",
     args: server.args ? server.args.join(" ") : "",
@@ -84,6 +87,9 @@ export function mcpServerFormStateToServer(
       url: form.url.trim(),
       transport: form.transport,
     };
+    if (form.description.trim()) {
+      server.description = form.description.trim();
+    }
     if (form.autoApprove) {
       server.autoApprove = true;
     }
@@ -94,6 +100,10 @@ export function mcpServerFormStateToServer(
     id: form.id.trim(),
     command: form.command.trim(),
   };
+
+  if (form.description.trim()) {
+    server.description = form.description.trim();
+  }
 
   if (form.args.trim()) {
     server.args = form.args.trim().split(/\s+/);
@@ -170,6 +180,17 @@ export function McpServerForm({
         onChange={(event) => onChange({ ...value, id: event.target.value })}
         className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
         autoFocus={autoFocus}
+      />
+
+      <input
+        type="text"
+        placeholder="description (optional)"
+        aria-label="Description"
+        value={value.description}
+        onChange={(event) =>
+          onChange({ ...value, description: event.target.value })
+        }
+        className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-none"
       />
 
       <div className="flex gap-1">

@@ -26,7 +26,7 @@ import {
   HARNESS_AGENT_EXTENSION,
 } from "./HarnessDirectoryUtils";
 import { isAccessibleDirectory, formatDisplayName } from "./DiscoveryUtils";
-import { AgentDiscovery } from "./AgentDiscovery";
+import { AgentDiscovery, parseAgentFrontmatter } from "./AgentDiscovery";
 
 // ============================================================================
 // Public Types
@@ -46,6 +46,20 @@ export interface ManagedFile {
   locations: ManagedFileLocation[];
   /** Immutable bundled source available for export when no editable copy exists. */
   builtInSourcePath?: string;
+  /** Description parsed from the file's frontmatter, if present. */
+  description?: string;
+}
+
+/** Best-effort read of the `description` frontmatter field; empty on any I/O or parse failure. */
+async function readFrontmatterDescription(
+  filePath: string
+): Promise<string | undefined> {
+  try {
+    const content = await fs.promises.readFile(filePath, "utf8");
+    return parseAgentFrontmatter(content).description;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface ManagedTargetDirectory {
@@ -94,14 +108,21 @@ async function collectAgentLocations(
 ): Promise<ManagedFile[]> {
   const byName = new Map<string, ManagedFile>();
 
-  const addAgent = (name: string, loc: ManagedFileLocation) => {
+  const addAgent = (
+    name: string,
+    loc: ManagedFileLocation,
+    description?: string
+  ) => {
     if (!byName.has(name)) {
       byName.set(name, {
         name,
         displayName: formatDisplayName(name),
         type: "agent",
         locations: [],
+        ...(description ? { description } : {}),
       });
+    } else if (description && !byName.get(name)!.description) {
+      byName.get(name)!.description = description;
     }
     byName.get(name)!.locations.push(loc);
   };
@@ -135,7 +156,12 @@ async function collectAgentLocations(
       const name = isAgentMd
         ? f.slice(0, -".agent.md".length)
         : f.slice(0, -".md".length);
-      addAgent(name, { harnessId: targetId, scope, path: path.join(dir, f) });
+      const filePath = path.join(dir, f);
+      addAgent(
+        name,
+        { harnessId: targetId, scope, path: filePath },
+        await readFrontmatterDescription(filePath)
+      );
     }
   };
 
@@ -209,14 +235,21 @@ async function collectSkillLocations(
 ): Promise<ManagedFile[]> {
   const byName = new Map<string, ManagedFile>();
 
-  const addSkill = (name: string, loc: ManagedFileLocation) => {
+  const addSkill = (
+    name: string,
+    loc: ManagedFileLocation,
+    description?: string
+  ) => {
     if (!byName.has(name)) {
       byName.set(name, {
         name,
         displayName: formatDisplayName(name),
         type: "skill",
         locations: [],
+        ...(description ? { description } : {}),
       });
+    } else if (description && !byName.get(name)!.description) {
+      byName.get(name)!.description = description;
     }
     byName.get(name)!.locations.push(loc);
   };
@@ -242,11 +275,12 @@ async function collectSkillLocations(
       .catch(() => [] as fs.Dirent[]);
     for (const e of entries) {
       if (e.isDirectory() && (await isSkillDir(dir, e.name))) {
-        addSkill(e.name, {
-          harnessId: targetId,
-          scope,
-          path: path.join(dir, e.name),
-        });
+        const skillFilePath = path.join(dir, e.name, "SKILL.md");
+        addSkill(
+          e.name,
+          { harnessId: targetId, scope, path: path.join(dir, e.name) },
+          await readFrontmatterDescription(skillFilePath)
+        );
       }
     }
   };
@@ -366,6 +400,9 @@ export class HarnessFileManager {
         const existing = filesByName.get(agent.name);
         if (existing) {
           existing.builtInSourcePath = agent.path;
+          if (agent.description && !existing.description) {
+            existing.description = agent.description;
+          }
           continue;
         }
         files.push({
@@ -374,6 +411,7 @@ export class HarnessFileManager {
           type: "agent",
           locations: [],
           builtInSourcePath: agent.path,
+          ...(agent.description ? { description: agent.description } : {}),
         });
       }
       return files;
