@@ -116,7 +116,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 title={workflow.filePath}
                 className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
                   isCurrent
-                    ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
+                    ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected outline outline-1 outline-dashed outline-contrast-active-border -outline-offset-1"
                     : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
                 }`}
               >

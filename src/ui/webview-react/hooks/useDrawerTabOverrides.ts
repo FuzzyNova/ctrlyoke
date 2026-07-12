@@ -63,12 +63,25 @@ export function useDrawerTabOverrides(
         ? promptProperties.mcpServers
         : wfMcp;
 
-    // ── End condition (Validation) ─────────────────────────────────────────
+    // ── Validation: pre- and end-conditions ─────────────────────────────────
+    const wfEndCondition =
+      workflowProperties.endCondition !== undefined
+        ? workflowProperties.endCondition
+        : globalSettings.defaultEndCondition;
     const resolvedEndCondition =
       promptProperties !== undefined &&
       promptProperties.endCondition !== undefined
         ? promptProperties.endCondition
-        : workflowProperties.endCondition;
+        : wfEndCondition;
+    const wfPreCondition =
+      workflowProperties.preCondition !== undefined
+        ? workflowProperties.preCondition
+        : globalSettings.defaultPreCondition;
+    const resolvedPreCondition =
+      promptProperties !== undefined &&
+      promptProperties.preCondition !== undefined
+        ? promptProperties.preCondition
+        : wfPreCondition;
 
     // ── Context: resume session + prior context ────────────────────────────
     const wfResumeSession =
@@ -91,7 +104,11 @@ export function useDrawerTabOverrides(
       permissions: getPermissionTabOverride(resolvedPermMode),
       hooks: getHooksTabOverride(resolvedHooks),
       mcp: getMcpTabOverride(resolvedMcp),
-      validation: getValidationTabOverride(resolvedEndCondition),
+      validation: getValidationTabOverride(
+        resolvedEndCondition?.script
+          ? resolvedEndCondition
+          : resolvedPreCondition
+      ),
       context: getContextTabOverride(
         resolvedResumeSession,
         resolvedPriorContext

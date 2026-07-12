@@ -166,9 +166,24 @@ const WorkflowPropertiesPanelInner: React.FC<{
     getEffectiveAgent,
     getEffectiveSkills,
     getEffectiveResumeSession,
+    getEffectiveMcpServers,
+    getEffectiveHooks,
     getEffectivePriorContext,
     getEffectiveAdditionalArgs,
   } = useSettingsStore();
+
+  // New workflows do not have a working-file override until their first edit.
+  // Render their effective validation defaults without losing an explicit null,
+  // which means the workflow deliberately disables the configured default.
+  const effectiveEndCondition =
+    workflowProperties.endCondition !== undefined
+      ? workflowProperties.endCondition
+      : globalSettings.defaultEndCondition;
+  const effectivePreCondition =
+    workflowProperties.preCondition !== undefined
+      ? workflowProperties.preCondition
+      : globalSettings.defaultPreCondition;
+
   // Active drawer page
   const [activePage, setActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
@@ -176,8 +191,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // End condition enabled state
   const [endConditionEnabled, setEndConditionEnabled] = useState(
-    workflowProperties.endCondition !== null &&
-      workflowProperties.endCondition !== undefined
+    effectiveEndCondition !== null && effectiveEndCondition !== undefined
   );
 
   // Session ID input state
@@ -192,10 +206,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // Update end condition state when workflow properties change
   useEffect(() => {
     setEndConditionEnabled(
-      workflowProperties.endCondition !== null &&
-        workflowProperties.endCondition !== undefined
+      effectiveEndCondition !== null && effectiveEndCondition !== undefined
     );
-  }, [workflowProperties.endCondition]);
+  }, [effectiveEndCondition]);
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
@@ -209,6 +222,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
+  const effectiveMcpServers = getEffectiveMcpServers();
+  const effectiveHooks = getEffectiveHooks();
   const effectivePriorContext = getEffectivePriorContext();
   const effectiveAdditionalArgs = getEffectiveAdditionalArgs();
 
@@ -622,12 +637,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
       if (!enabled) {
-        settingsStore.updateWorkflowProperty("endCondition", undefined);
+        // null is an explicit workflow-level disable. Using undefined would
+        // inherit the global default again for a newly-created workflow.
+        settingsStore.updateWorkflowProperty("endCondition", null);
         syncWorkflowPropertiesForUndo();
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
-          value: undefined,
+          value: null,
         });
       } else {
         // Initialize from global default if set, otherwise use hardcoded defaults
@@ -671,29 +688,29 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // Pre-condition state
   const [preConditionEnabled, setPreConditionEnabled] = useState(
-    workflowProperties.preCondition !== null &&
-      workflowProperties.preCondition !== undefined
+    effectivePreCondition !== null && effectivePreCondition !== undefined
   );
 
   // Sync preConditionEnabled with store
   useEffect(() => {
     setPreConditionEnabled(
-      workflowProperties.preCondition !== null &&
-        workflowProperties.preCondition !== undefined
+      effectivePreCondition !== null && effectivePreCondition !== undefined
     );
-  }, [workflowProperties.preCondition]);
+  }, [effectivePreCondition]);
 
   const handlePreConditionToggle = useCallback(
     (enabled: boolean) => {
       setPreConditionEnabled(enabled);
       const settingsStore = useSettingsStore.getState();
       if (!enabled) {
-        settingsStore.updateWorkflowProperty("preCondition", undefined);
+        // null is an explicit workflow-level disable. Using undefined would
+        // inherit the global default again for a newly-created workflow.
+        settingsStore.updateWorkflowProperty("preCondition", null);
         syncWorkflowPropertiesForUndo();
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "preCondition",
-          value: undefined,
+          value: null,
         });
       } else {
         // Initialize from global default if set, otherwise use hardcoded defaults
@@ -1264,7 +1281,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     <ScriptConditionEditor
                       variant="preCondition"
                       value={
-                        workflowProperties.preCondition as
+                        effectivePreCondition as
                           | ScriptConditionValue
                           | null
                           | undefined
@@ -1321,7 +1338,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     <ScriptConditionEditor
                       variant="endCondition"
                       value={
-                        workflowProperties.endCondition as
+                        effectiveEndCondition as
                           | ScriptConditionValue
                           | null
                           | undefined
@@ -1388,7 +1405,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 }
               >
                 <McpServersEditor
-                  value={workflowProperties.mcpServers as McpServersValue}
+                  value={effectiveMcpServers as McpServersValue}
                   onChange={handleMcpServersChange}
                   showDefault={false}
                   fillHeight={true}
@@ -1451,8 +1468,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
                         : effectiveHarness === HARNESS_IDS.OPENCODE_CLI
                           ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
-                          : effectiveHarness ===
-                                HARNESS_IDS.ANTIGRAVITY_CLI
+                          : effectiveHarness === HARNESS_IDS.ANTIGRAVITY_CLI
                             ? "ℹ️ Antigravity CLI uses permission modes only. Tool pattern lists are ignored."
                             : "ℹ️ This harness uses permission modes only. Tool pattern lists are ignored."}
                     </p>
@@ -1578,7 +1594,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 }
               >
                 <HooksEditor
-                  value={workflowProperties.hooks}
+                  value={effectiveHooks}
                   onChange={handleHooksChange}
                   showDefault={false}
                 />

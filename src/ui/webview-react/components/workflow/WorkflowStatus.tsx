@@ -1148,7 +1148,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         <div className="flex-1 min-h-0 overflow-clip flex flex-col">
           <RecentWorkflows
             workflows={filteredRecentWorkflows}
-            currentFilePath={fileName}
+            currentFilePath={activeWorkflowWorkingFilePath ?? fileName}
             hasActiveTerminal={recentWorkflowHasActiveTerminal}
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
