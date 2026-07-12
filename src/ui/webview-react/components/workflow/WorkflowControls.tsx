@@ -134,6 +134,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainTitle="Create new workflow"
         dropdownTitle="More workflow actions"
         dropdownAriaLabel="Open workflow menu"
+        className="[&>button:first-of-type]:rounded-l-button [&>button:last-of-type]:rounded-r-button"
       />
       <WorkflowFilePickerModal
         isOpen={filePickerMode !== null}
