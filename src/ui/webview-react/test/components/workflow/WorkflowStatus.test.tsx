@@ -12,7 +12,13 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type RecentWorkflow } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
-import { HARNESS_IDS, MESSAGE_TYPES, EXECUTION_STATES } from "@/types/messages";
+import {
+  HARNESS_IDS,
+  MESSAGE_TYPES,
+  EXECUTION_STATES,
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
+} from "@/types/messages";
 
 const postMessageSpy = vi.fn();
 
@@ -342,7 +348,7 @@ describe("WorkflowStatus — loaded state", () => {
     ).toBeTruthy();
   });
 
-  it("marks loaded workflow rows with a terminal icon when a PTY session is running", async () => {
+  it("hides the terminal icon in the narrow header while keeping it on the loaded workflow row", async () => {
     const user = userEvent.setup();
     useUiStore.setState({
       activeWorkflowId: "workflow-1",
@@ -373,8 +379,40 @@ describe("WorkflowStatus — loaded state", () => {
     );
 
     expect(
+      within(screen.getByTitle("Click to edit workflow name")).queryByLabelText(
+        "Terminal session is still running"
+      )
+    ).not.toBeInTheDocument();
+    expect(
       screen.getAllByLabelText("Terminal session is still running").length
     ).toBeGreaterThan(0);
+  });
+
+  it("shows the terminal icon in the wide header as soon as the current workflow starts a terminal", () => {
+    const getBoundingClientRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ width: 500 } as DOMRect);
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+
+    render(<WorkflowStatus />);
+
+    act(() => {
+      useTerminalStore.getState().addSession({
+        id: "session-1",
+        workflowId: "workflow-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        status: TERMINAL_SESSION_STATUS.RUNNING,
+        isController: true,
+      });
+    });
+
+    expect(
+      within(screen.getByTitle("Click to edit workflow name")).getByLabelText(
+        "Terminal session is still running"
+      )
+    ).toBeInTheDocument();
+    getBoundingClientRect.mockRestore();
   });
 
   it("marks a recent (unloaded) workflow row by working file path when its terminal is still running", async () => {

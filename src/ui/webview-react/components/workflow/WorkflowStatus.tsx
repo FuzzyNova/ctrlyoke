@@ -17,6 +17,7 @@ import {
   RUNNER_IDS,
   HARNESS_IDS,
   HARNESS_INFO,
+  TERMINAL_SESSION_STATUS,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { areWorkflowPathsEqual, RecentWorkflows } from "./RecentWorkflows";
@@ -185,6 +186,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const activeTerminalWorkflows = useTerminalStore(
     (s) => s.activeTerminalWorkflows
   );
+  const terminalSessions = useTerminalStore((s) => s.sessions);
   const activeTerminalWorkflowIds = useMemo(
     () => new Set(activeTerminalWorkflows.map((w) => w.workflowId)),
     [activeTerminalWorkflows]
@@ -208,7 +210,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [activeTerminalWorkflowIds]
   );
   const currentWorkflowHasActiveTerminal =
-    workflowHasActiveTerminal(activeWorkflowId);
+    workflowHasActiveTerminal(activeWorkflowId) ||
+    (activeWorkflowId
+      ? (terminalSessions[activeWorkflowId] ?? []).some(
+          (session) => session.status === TERMINAL_SESSION_STATUS.RUNNING
+        )
+      : false);
 
   const syntheticActiveWorkflow = useMemo(
     () =>
@@ -1099,7 +1106,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 </span>
               )}
 
-              {currentWorkflowHasActiveTerminal && (
+              {!isNarrow && currentWorkflowHasActiveTerminal && (
                 <span
                   className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
                   title="Terminal session is still running"
