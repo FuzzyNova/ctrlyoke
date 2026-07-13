@@ -44,6 +44,16 @@ interface WorkflowRowProps {
   onRemove?: (filePath: string) => void;
 }
 
+/** Compare workflow paths across VS Code and hosted-client path formats. */
+export function areWorkflowPathsEqual(
+  left: string | null | undefined,
+  right: string | null | undefined
+): boolean {
+  if (!left || !right) return false;
+
+  return left.trim().replace(/\\/g, "/") === right.trim().replace(/\\/g, "/");
+}
+
 const WorkflowRow: React.FC<WorkflowRowProps> = ({
   workflow,
   currentFilePath,
@@ -53,7 +63,7 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
   onToggleFavorite,
   onRemove,
 }) => {
-  const isCurrent = workflow.filePath === currentFilePath;
+  const isCurrent = areWorkflowPathsEqual(workflow.filePath, currentFilePath);
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
     typeof workflow.totalSteps === "number" && workflow.totalSteps > 0;

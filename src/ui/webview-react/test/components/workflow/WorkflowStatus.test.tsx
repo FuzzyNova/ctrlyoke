@@ -184,6 +184,80 @@ describe("WorkflowStatus — loaded state", () => {
     });
   });
 
+  it("closes the dropdown without reloading when selecting the current workflow", async () => {
+    const user = userEvent.setup();
+    useUiStore
+      .getState()
+      .setActiveWorkflowWorkingFilePath("/workspace/my-workflow.ctrlyoke.yaml");
+    setRecentWorkflows([
+      {
+        workflowName: "My Workflow",
+        filePath: "/workspace/my-workflow.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+    render(<WorkflowStatus />);
+
+    const dropdownTrigger = screen.getByRole("button", {
+      name: /Show recent workflows/i,
+    });
+    await user.click(dropdownTrigger);
+    await user.click(
+      within(
+        screen.getByTitle("/workspace/my-workflow.ctrlyoke.yaml")
+      ).getByRole("button", { name: "My Workflow" })
+    );
+
+    expect(postMessageSpy).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.LOAD_WORKFLOW,
+      filePath: "/workspace/my-workflow.ctrlyoke.yaml",
+    });
+    expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
+      "pointer-events-none"
+    );
+  });
+
+  it("keeps a completed workflow selected after it leaves Running Workflows", async () => {
+    const user = userEvent.setup();
+    const workingFilePath = "C:\\workspace\\.ctrlyoke\\workflow.ctrlyoke.json";
+    const recentFilePath = "C:/workspace/.ctrlyoke/workflow.ctrlyoke.json";
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+      activeWorkflowWorkingFilePath: workingFilePath,
+      loadedWorkflows: [
+        {
+          id: "workflow-1",
+          workflowName: "My Workflow",
+          filePath: "C:\\workspace\\workflow.ctrlyoke.yaml",
+          workingFilePath,
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 1,
+        },
+      ],
+    });
+    render(<WorkflowStatus />);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    act(() => {
+      useUiStore.getState().setLoadedWorkflows([]);
+      useUiStore.getState().setRecentWorkflows([
+        {
+          workflowName: "My Workflow",
+          filePath: recentFilePath,
+          executionState: EXECUTION_STATES.COMPLETED,
+        },
+      ]);
+    });
+
+    expect(screen.getByTitle(recentFilePath)).toHaveClass(
+      "fp-dropdown-row-selected"
+    );
+  });
+
   it("sorts favorite workflows to the top of recent workflows", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);

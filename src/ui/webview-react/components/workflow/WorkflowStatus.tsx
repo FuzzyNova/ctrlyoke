@@ -19,7 +19,7 @@ import {
   HARNESS_INFO,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
-import { RecentWorkflows } from "./RecentWorkflows";
+import { areWorkflowPathsEqual, RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
@@ -176,6 +176,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setActiveWorkflowWorkingFilePath,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
+  const currentWorkflowFilePath = activeWorkflowWorkingFilePath ?? fileName;
   // Global set of workflows with a running PTY, broadcast by the extension. This
   // is complete for every workflow on every client (including hosted browser
   // tabs) — unlike the per-workflow `sessions` map, which a client only hydrates
@@ -724,6 +725,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Load workflow from recent list
   const handleSelectWorkflow = useCallback(
     (filePath: string) => {
+      if (areWorkflowPathsEqual(filePath, currentWorkflowFilePath)) {
+        closeDropdown();
+        return;
+      }
+
       setActiveWorkflowWorkingFilePath(filePath);
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
@@ -731,7 +737,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       });
       closeDropdown();
     },
-    [closeDropdown, setActiveWorkflowWorkingFilePath, vscode]
+    [
+      closeDropdown,
+      currentWorkflowFilePath,
+      setActiveWorkflowWorkingFilePath,
+      vscode,
+    ]
   );
 
   // Clear workflow history
@@ -1219,9 +1230,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                     <RunningWorkflowItem
                       workflow={workflow}
                       isCurrent={workflow.id === activeWorkflowId}
-                      hasActiveTerminal={workflowHasActiveTerminal(
-                        workflow.id
-                      )}
+                      hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
                       isNarrow={isNarrow}
                       onClick={() => handleSwitchWorkflow(workflow.id)}
                       onPause={() => handlePauseWorkflow(workflow.id)}
@@ -1243,7 +1252,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         <div className="flex-1 min-h-0 overflow-clip flex flex-col">
           <RecentWorkflows
             workflows={filteredRecentWorkflows}
-            currentFilePath={activeWorkflowWorkingFilePath ?? fileName}
+            currentFilePath={currentWorkflowFilePath}
             hasActiveTerminal={recentWorkflowHasActiveTerminal}
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
