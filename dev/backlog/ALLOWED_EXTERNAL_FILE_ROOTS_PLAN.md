@@ -39,7 +39,7 @@ absolute path emitted by an AI into a trusted file operation.
 - Add explicit, user-controlled trust for external directories.
 - Support attaching external files to prompts when their parent directory is trusted.
 - Support opening external file links from AI output only after trust is established
-  or after a one-time confirmation.
+  or after the user chooses to persist trust for the file's parent directory.
 - Preserve current workspace-relative reference behavior and completions.
 - Avoid a broad "allow all external files" switch.
 
@@ -100,28 +100,33 @@ Add to `schemas/settings-schema.json` under `permissions`:
 }
 ```
 
-Add a separate UI confirmation toggle:
+Add a UI toggle that controls whether an untrusted, AI-generated file link may
+offer the user a persisted trust action:
 
 ```json
-"confirmExternalFileLinks": {
+"offerTrustForUntrustedFileLinks": {
   "type": "boolean",
-  "description": "Show a confirmation dialog before opening AI-generated file links outside the workspace unless the path is under an allowed external file root.",
+  "description": "Allow AI-generated file links outside trusted roots to offer Trust Parent Folder. Untrusted paths are always blocked unless their parent is explicitly trusted.",
   "default": true
 }
 ```
 
-Important: `confirmExternalFileLinks: false` should not mean "trust all external
-paths." It should only skip prompts for already trusted external roots. Unknown
-external roots remain blocked or require an explicit trust action.
+Important: `offerTrustForUntrustedFileLinks: false` does not mean "trust all
+external paths." It suppresses the **Trust Parent Folder** offer; unknown
+external roots remain blocked. Trusted paths always open directly.
 
 **Scope (see "Decisions"):** `allowedExternalFileRoots` must be settable at
 both the user/global level and the workspace level. `getAllowedExternalFileRoots()`
-below returns the **union** of both, not one overriding the other — mirror
-whatever pattern `CtrlYokeConfigService` already uses for other array-typed
-settings that merge rather than override across scopes. Workspace-scoped
+returns the **union** of both, using a dedicated scope-aware accessor. Do not
+reuse `CtrlYokeConfigService.getAll()` for this: its ordinary deep merge replaces
+arrays rather than merging them. Workspace-scoped
 entries require the one-time per-workspace trust confirmation described in
 "Decisions" before they take effect; user-scoped entries don't (the user
 already made that trust decision on their own machine).
+
+Open workspace folders are already trusted workspace roots and do **not** use
+this approval flow. It applies only to roots requested by
+`permissions.allowedExternalFileRoots` that sit outside the workspace-root set.
 
 Run `npm run generate-schema` after editing the JSON schema. Do not hand-edit the
 generated YAML schema.
@@ -132,7 +137,7 @@ Update:
 
 - `src/types/CtrlYokeSettings.ts`
   - `permissions.allowedExternalFileRoots: string[]`
-  - `ui.confirmExternalFileLinks: boolean`
+  - `ui.offerTrustForUntrustedFileLinks: boolean`
   - Defaults: `[]` and `true`
 - `src/types/WebviewMessageTypes.ts`
   - Add the new settings to global settings payloads if needed.
@@ -140,12 +145,12 @@ Update:
   - Add webview defaults.
 - `src/utils/ConfigurationUtils.ts`
   - Add `CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS`
-  - Add `CONFIG_KEYS.UI_CONFIRM_EXTERNAL_FILE_LINKS`
+  - Add `CONFIG_KEYS.UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS`
   - Add helpers:
 
 ```ts
 getAllowedExternalFileRoots(): string[]
-shouldConfirmExternalFileLinks(): boolean
+shouldOfferTrustForUntrustedFileLinks(): boolean
 ```
 
 ## Shared Path Policy Helper
@@ -279,9 +284,10 @@ When the webview sends `OPEN_FILE`, `src/ui/WebviewMessageRouter.ts` should:
    - Workspace-relative paths
 2. Evaluate with `FileAccessPolicy`.
 3. If workspace/trusted external root: open directly.
-4. If outside trusted roots and `confirmExternalFileLinks` is true: show modal.
-5. If outside trusted roots and confirmations are disabled: still block, because
-   the path is not trusted.
+4. If outside trusted roots and `offerTrustForUntrustedFileLinks` is true: show
+   the Trust Parent Folder modal.
+5. If outside trusted roots and the Trust Parent Folder offer is disabled: still
+   block, because the path is not trusted.
 
 Suggested VS Code modal actions:
 
@@ -322,29 +328,44 @@ Add a section to the Settings drawer, likely under "File Management" or
   - Short description: "ctrlyoke may read prompt attachments and open file links
     under these directories. Workspace files are always allowed."
 
-- `Confirm external file links`
-  - Toggle matching `ui.confirmExternalFileLinks`
-  - Description must clarify that untrusted roots are still blocked.
+- `Offer trust for untrusted file links`
+  - Toggle matching `ui.offerTrustForUntrustedFileLinks`
+  - Description must clarify that untrusted roots are still blocked and that
+    this only controls whether an AI-generated link can offer Trust Parent Folder.
 
 This setting belongs in the extension host and settings sync layer, not only the
 webview store.
 
 ## Harness Permission Alignment
 
-ctrlyoke can embed external file content into prompt XML after reading it itself.
-That does not require the harness to have file-system access to the external path.
+Trusted external full-file references are deliberately passed directly to the
+harness as normal absolute file references. ctrlyoke does **not** copy them into
+the workspace, embed them merely because they are external, redact their
+contents, or expire a trust decision automatically.
 
-However, direct full-file `@absolute/path` references passed to a harness do require
-the harness to read that path. For split context:
+Append every effective allowed external root (user-scoped roots plus approved
+workspace-scoped roots) as `--add-dir <root>` whenever the active harness
+supports `--add-dir`: Claude, Codex, Copilot, and Antigravity. This extends the
+same root-list assembly used for multi-root workspaces. Each root must be a
+configured, canonical permitted root (normally the immediate parent selected by
+**Trust Parent Folder**), never a broader ancestor inferred from a file path.
 
-- If the ref is inside the workspace, keep existing direct-file behavior.
-- If the ref is external, prefer embedding content as XML instead of passing the
-  absolute path through as a direct harness ref.
-- If direct external refs are ever passed through, warn if the active harness sandbox
-  does not include the same root.
+Every harness receives trusted external full-file references normally. Qwen and
+OpenCode do not support `--add-dir`, so ctrlyoke passes the absolute reference
+without a harness-specific root flag; their existing interactive trust prompts
+and user-configured permissions remain authoritative. No harness is blocked or
+given a copy/embed fallback merely because it lacks `--add-dir`. Opening a
+trusted external file from the UI remains independent of harness support.
 
-This avoids a confusing case where ctrlyoke trusts the path but Codex/Claude cannot
-read it because their sandbox is narrower.
+`permissions.allowedExternalFileRoots` is the only setting that authorizes
+ctrlyoke to read or pass an external prompt reference. The existing
+`permissions.allowedDirs` remains a harness sandbox setting; it neither grants
+attachment access nor bypasses the external-root approval flow.
+
+References that already require ctrlyoke-side expansion—such as `#selection`,
+`#sym`, and `@dir/`—remain normal excerpt/directory attachment behavior. The
+policy authorizes the read first; no additional sanitization is performed and no
+temporary copy is created solely because the source is external.
 
 ## Implementation Plan
 
@@ -352,8 +373,15 @@ read it because their sandbox is narrower.
 
 1. Add settings schema entries.
 2. Update settings types/defaults/store sync.
-3. Add `ConfigurationUtils` helpers.
-4. Implement `FileAccessPolicy` with unit tests for:
+3. Add `ConfigurationUtils` helpers, including a dedicated union of user- and
+   workspace-scoped external roots rather than the ordinary array-replacement
+   config merge.
+4. Validate configured roots are existing directories and canonicalize them with
+   `fs.realpath`. Canonicalize existing candidates before comparison; compare a
+   nonexistent candidate's resolved lexical path against canonical roots.
+5. Implement the user-local workspace external-root approval store and its VS
+   Code/CLI approval flows before workspace-scoped roots can take effect.
+6. Implement `FileAccessPolicy` with unit tests for:
    - workspace child
    - trusted external child
    - sibling prefix attack (`/logs2` vs `/logs`)
@@ -375,8 +403,11 @@ read it because their sandbox is narrower.
    - CLI harness prompt preparation
    - dashboard token count preview
    - any chat/native attachment path
-3. For external full-file refs in `expandContextSplit()`, embed content instead of
-   adding to `directFileRefs`.
+3. Keep trusted external full-file refs in `directFileRefs` and pass their
+   canonical allowed roots through the shared `--add-dir` assembly for Claude,
+   Codex, Copilot, and Antigravity. Pass the same absolute references normally
+   to Qwen and OpenCode, whose own interactive/user-configured trust systems
+   govern their filesystem access.
 4. Update `AttachmentBuilders.buildDirectoryAttachmentXml()` (`@dir/` refs) with
    the same `FileAccessPolicy` check it currently does inline against the
    workspace root only (added by the 2026-07-04 security fix) — directory
@@ -402,22 +433,25 @@ Document:
 - Workspace files are trusted by default.
 - External roots are opt-in.
 - How to add common harness log directories.
-- Why `confirmExternalFileLinks` does not disable the trust boundary.
+- Why `offerTrustForUntrustedFileLinks` does not disable the trust boundary.
 - Recommended quoted absolute reference syntax.
 
 ## Files Likely Changed
 
 | File                                                          | Change                                                                                                                                                         |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schemas/settings-schema.json`                                | Add `permissions.allowedExternalFileRoots` and `ui.confirmExternalFileLinks`                                                                                   |
+| `schemas/settings-schema.json`                                | Add `permissions.allowedExternalFileRoots` and `ui.offerTrustForUntrustedFileLinks`                                                                            |
 | `schemas/settings-schema.yaml`                                | Regenerated via `npm run generate-schema`                                                                                                                      |
 | `src/types/CtrlYokeSettings.ts`                               | Add settings types and defaults                                                                                                                                |
 | `src/types/WebviewMessageTypes.ts`                            | Include settings payload fields if needed                                                                                                                      |
-| `src/utils/ConfigurationUtils.ts`                             | Add config keys and helpers                                                                                                                                    |
+| `src/utils/ConfigurationUtils.ts`                             | Add config keys, the scope-union helper, and link-trust-offer helper                                                                                           |
+| `src/cli.ts`, `src/cli/**`                                    | Add the explicit `trust-external-roots` command and its interactive/noninteractive behavior                                                                    |
+| `src/platform/**` or a new shared trust-store service         | Persist user-local workspace/root approvals and denials; never write these approvals into workspace config                                                     |
 | `src/utils/PathSecurity.ts`                                   | Already exists (2026-07-04 security fix); reuse `isPathWithinDirectory`/`isPathWithinAnyDirectory` as the containment primitives underlying `FileAccessPolicy` |
 | `src/utils/FileAccessPolicy.ts`                               | New shared path access policy helper, built on `PathSecurity.isPathWithinAnyDirectory`                                                                         |
 | `src/utils/ContextExpander.ts`                                | Already accepts a `trustedRoots` list (multi-root fix, 2026-07-04); extend that list with `allowedExternalFileRoots` instead of hard-rejecting outside it      |
 | `src/utils/AttachmentBuilders.ts`                             | Already accepts an `additionalTrustedRoots` list (multi-root fix, 2026-07-04); extend it with `allowedExternalFileRoots` the same way                          |
+| `src/core/harness/{claude,codex,copilot,antigravity}/**`       | Pass effective approved external roots through the shared `--add-dir` argument assembly                                                                        |
 | `src/completions/PromptLinkProvider.ts`                       | Resolve trusted absolute refs and route untrusted refs through confirmation                                                                                    |
 | `src/ui/WebviewMessageRouter.ts`                              | Enforce policy for `OPEN_FILE` and trust-folder flow                                                                                                           |
 | `src/ui/WebviewSettingsSync.ts`                               | Sync new settings to webview                                                                                                                                   |
@@ -442,14 +476,23 @@ Document:
   - Choose "Trust Parent Folder": root is persisted and subsequent links open.
   - Try a sibling-prefix path attack: trusted `/tmp/logs` must not allow
     `/tmp/logs2/file.log`.
+- Approve 127 workspace-configured external roots in one dialog; verify a
+  subsequent workspace config change prompts once for only the added roots.
+- Run `ctrlyoke trust-external-roots` interactively and verify a normal
+  noninteractive CLI workflow stays fail-closed until that approval exists.
 
 ## Decisions (2026-07-04)
 
 The open questions below are resolved. This section replaces "Open Questions."
 
-- **"Trust Parent Folder" trusts the immediate parent only.** No picker for a
+- **"Trust Parent Folder" trusts the immediate parent only and writes it to user
+  scope.** No picker for a
   higher-level root in v1. If a user wants a broader root trusted, they add it
   explicitly via the Settings UI folder picker (see "Settings UI").
+- **No automatic redaction or trust expiration.** Automatic redaction would mean
+  transforming file contents (for example, masking apparent secrets), and trust
+  expiration would remove an allowed root after time passes. Neither is part of
+  v1. Users explicitly manage roots and their contents are passed unchanged.
 - **No one-time grants in v1.** Every external attachment read and every
   external file-link open requires a persisted trusted root — either "Trust
   Parent Folder" or an explicit Settings UI entry. There is no "Open/Attach
@@ -477,24 +520,54 @@ The open questions below are resolved. This section replaces "Open Questions."
   backend with **no per-file confirmation at all**, since "no one-time grants"
   means a persisted trusted root is sufficient on its own. Mitigate this before
   shipping workspace-scope: require a one-time "This workspace wants to trust
-  external folder(s): `<list>` — Allow / Deny" prompt the first time a
-  workspace's _own_ `allowedExternalFileRoots` entries are loaded (once per
-  workspace, cached alongside VS Code's native Workspace Trust state if
-  available), separate from the already-rejected per-reference one-time
-  grants. This is new work not in the original plan and should be scoped
-  into Phase 1.
+  external folder(s): `<list>` — Allow / Deny" prompt before a workspace's
+  _own_ `allowedExternalFileRoots` entries take effect. This is separate from
+  the already-rejected per-reference one-time grants. The concrete behavior is
+  resolved below.
+
+## Additional Decisions (2026-07-13)
+
+- **Batch workspace-root approval, never per-root popups.** The first time a
+  workspace requests external roots, show one scrollable, reviewable dialog
+  listing every canonical root and offering **Trust all N listed folders** or
+  **Keep blocked**. This remains one decision even for a workspace with 127
+  requested roots. Later configuration changes prompt once for the newly added
+  roots only, again as a batch.
+- **Persist decisions locally per canonical root and workspace identity.** Keep
+  allow and deny records in user-local state, never in the workspace or its
+  repository. Per-root records make an added root untrusted by default while
+  avoiding repeated prompts for roots the user already reviewed. Denied roots
+  remain blocked without nagging until the user changes the decision in Settings.
+- **Follow VS Code's grouping model, but keep the trust boundaries distinct.**
+  VS Code trusts a multi-root workspace as a unit and prompts when an untrusted
+  folder is later added; ctrlyoke mirrors that initial-batch/later-additions UX.
+  VS Code Workspace Trust is a prerequisite: a Restricted Mode workspace cannot
+  activate workspace-scoped external roots. It is not permission for ctrlyoke
+  to read arbitrary paths outside the workspace; the external-root approval is
+  always still required. See [VS Code Workspace Trust](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust).
+- **Standalone CLI gets an explicit trust command before this feature ships.**
+  `ctrlyoke trust-external-roots` reads the current workspace's requested roots,
+  prints their normalized paths, and asks for one batch approval. It writes the
+  same user-local approval records as VS Code. `--yes` is supported only on
+  this dedicated trust command for deliberate automation. Ordinary
+  noninteractive workflow execution fails closed when required workspace-root
+  approval is absent and tells the user to run this command.
 
 ## Recommended Initial Scope
 
 Ship the smallest secure version:
 
 1. Both user-scope and workspace-scope `permissions.allowedExternalFileRoots`
-   (union), with the one-time per-workspace confirmation described above for
-   workspace-scoped entries.
+   (dedicated union), with batched, user-local approval for workspace-scoped
+   entries and the explicit CLI trust command.
 2. No one-time grants for prompt execution or file-link opening.
 3. Dashboard output links prompt with `Trust Parent Folder` / `Cancel` only.
 4. Context expansion requires a trusted root for external files.
-5. External full-file refs are embedded, not passed through as direct harness refs.
+5. External full-file refs are passed directly to every harness. Claude, Codex,
+   Copilot, and Antigravity also receive all effective approved roots through
+   `--add-dir`; Qwen and OpenCode use their own trust mechanisms.
+   Existing selection/symbol/directory references continue using their normal
+   ctrlyoke-side excerpt expansion.
 
 This solves the developer-log use case while keeping AI-generated output links and
 prompt attachment reads behind an explicit local trust boundary.
