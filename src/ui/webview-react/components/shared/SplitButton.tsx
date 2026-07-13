@@ -219,52 +219,57 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       ref={containerRef}
       role="group"
       aria-label={typeof mainLabel === "string" ? mainLabel : undefined}
-      className={`fp-button-group overflow-visible ${btnSizes.groupContainer} ${className}`}
+      className={`relative inline-flex flex-shrink-0 ${className}`}
       onKeyDown={handleKeyDown}
     >
-      {/* Main Button */}
-      <button
-        type="button"
-        onClick={mainAction}
-        disabled={disabled || mainDisabled}
-        title={mainTitle}
-        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-none ${
-          disabled || mainDisabled ? disabledClass : ""
-        }`}
-      >
-        {mainLabel}
-      </button>
+      {/* Keep the button surface clipped by the shared border. The popup is a
+          sibling so it can escape that clip without making the corner radius
+          depend on the buttons' own backgrounds. */}
+      <div className={`fp-button-group ${btnSizes.groupContainer}`}>
+        {/* Main Button */}
+        <button
+          type="button"
+          onClick={mainAction}
+          disabled={disabled || mainDisabled}
+          title={mainTitle}
+          className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-none ${
+            disabled || mainDisabled ? disabledClass : ""
+          }`}
+        >
+          {mainLabel}
+        </button>
 
-      {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
-          outer div fills with button background (padding creates the inset),
-          inner 1px div is the visible hairline using --vscode-button-separator */}
-      <div
-        className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}
-      >
-        <div className="w-px h-full bg-current opacity-40" />
+        {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
+            outer div fills with button background (padding creates the inset),
+            inner 1px div is the visible hairline using --vscode-button-separator */}
+        <div
+          className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}
+        >
+          <div className="w-px h-full bg-current opacity-40" />
+        </div>
+
+        {/* Dropdown Trigger */}
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={toggleDropdown}
+          disabled={disabled || dropdownDisabled}
+          title={dropdownTitle}
+          aria-label={dropdownAriaLabel}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-none ${
+            disabled || dropdownDisabled ? disabledClass : ""
+          } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
+        >
+          {badge && (
+            <span className="text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
+              {badge}
+            </span>
+          )}
+          {dropdownIcon || defaultChevron}
+        </button>
       </div>
-
-      {/* Dropdown Trigger */}
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={toggleDropdown}
-        disabled={disabled || dropdownDisabled}
-        title={dropdownTitle}
-        aria-label={dropdownAriaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-none ${
-          disabled || dropdownDisabled ? disabledClass : ""
-        } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
-      >
-        {badge && (
-          <span className="text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
-            {badge}
-          </span>
-        )}
-        {dropdownIcon || defaultChevron}
-      </button>
 
       {/* Dropdown Menu */}
       <div
