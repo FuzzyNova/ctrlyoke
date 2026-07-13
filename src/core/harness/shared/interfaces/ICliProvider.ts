@@ -119,6 +119,10 @@ export interface ICliProvider {
    * @param workspaceRoot Workspace root directory
    * @param sessionId Current session ID for resumption (if any)
    * @param workflowContext Optional workflow context for MCP configuration
+   * @param workspaceRoots Every open workspace-folder root. This is distinct
+   *   from workspaceRoot, which remains the primary root for cwd and
+   *   workspace-scoped artifacts. Providers that support --add-dir must add
+   *   every supplied root.
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   buildCliArgs(
@@ -131,7 +135,8 @@ export interface ICliProvider {
       promptIndex: number;
       allPrompts: WorkflowStep[];
       filePath?: string;
-    }
+    },
+    workspaceRoots?: readonly string[]
   ): Promise<string[]>;
 
   /**

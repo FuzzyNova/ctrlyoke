@@ -138,7 +138,8 @@ export class CodexCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
-    }
+    },
+    workspaceRoots?: readonly string[]
   ): Promise<string[]> {
     const args: string[] = [];
 
@@ -183,7 +184,10 @@ export class CodexCliProvider implements ICliProvider {
 
     // Add workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
+      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
+        workspaceRoot,
+        workspaceRoots
+      );
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
       });

@@ -791,6 +791,7 @@ export class CliIntegration extends HarnessIntegration {
       },
       runtimeState: {
         getWorkspaceRoot: () => this.getWorkspaceRoot(),
+        getWorkspaceRoots: () => this.getWorkspaceRoots(),
         getExtensionPath: () => this.platform.getExtensionPath(),
         isVsCodeContext: () => this.isVsCodeContext(),
         isCancelling: () => this.isCancelling,
@@ -907,7 +908,8 @@ export class CliIntegration extends HarnessIntegration {
       extensionPath,
       workspaceRoot,
       session.resolvedSessionId,
-      session.workflowContext
+      session.workflowContext,
+      this.getWorkspaceRoots()
     );
 
     // Dispatch hook setup at the integration layer so providers don't have to
@@ -1244,20 +1246,6 @@ export class CliIntegration extends HarnessIntegration {
       deniedTools: [],
     };
     return { ...base, deniedTools: [...base.deniedTools, ...serverDenied] };
-  }
-
-  // ============================================================
-  // WORKSPACE HELPERS
-  // ============================================================
-
-  /**
-   * Get workspace directories for --add-dir flag
-   */
-  protected getWorkspaceDirs(): string[] {
-    const configured = ConfigurationUtils.getCliAllowedDirs();
-    const root = this.platform.getWorkspaceRoot();
-    const workspaceDirs = root ? [root] : [];
-    return [...workspaceDirs, ...configured];
   }
 
   // ============================================================

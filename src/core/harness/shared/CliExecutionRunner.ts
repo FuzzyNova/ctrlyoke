@@ -87,6 +87,7 @@ export interface CliExecutionRunnerDeps {
   };
   runtimeState: {
     getWorkspaceRoot: () => string | undefined;
+    getWorkspaceRoots?: () => readonly string[];
     getExtensionPath: () => string;
     isVsCodeContext: () => boolean;
     isCancelling: () => boolean;
@@ -399,7 +400,8 @@ export class CliExecutionRunner {
               this.deps.runtimeState.getExtensionPath(),
               this.deps.runtimeState.getWorkspaceRoot() || "",
               undefined,
-              session.workflowContext
+              session.workflowContext,
+              this.deps.runtimeState.getWorkspaceRoots?.()
             );
 
             const retryCallback = this.buildHeadlessResponseCallback(

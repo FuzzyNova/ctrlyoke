@@ -226,6 +226,50 @@ suite("CliIntegration", () => {
     assert.strictEqual(integration.getLastCliCommand(), "test --prompt say hi");
   });
 
+  test("passes every workspace root to CLI providers", async () => {
+    const primaryRoot = path.join(os.tmpdir(), "ctrlyoke-primary-root");
+    const secondaryRoot = path.join(os.tmpdir(), "ctrlyoke-secondary-root");
+    let receivedWorkspaceRoots: readonly string[] | undefined;
+
+    class MultiRootPlatform extends MockVsCodePlatform {
+      override getWorkspaceRoot(): string {
+        return primaryRoot;
+      }
+
+      override getWorkspaceRoots(): string[] {
+        return [primaryRoot, secondaryRoot];
+      }
+    }
+
+    const integration = new CliIntegration(
+      createProvider({
+        buildCliArgs: async (
+          _prompt,
+          _isInteractive,
+          _extensionPath,
+          _workspaceRoot,
+          _sessionId,
+          _workflowContext,
+          workspaceRoots
+        ) => {
+          receivedWorkspaceRoots = workspaceRoots;
+          return ["--base"];
+        },
+      }),
+      new MultiRootPlatform(),
+      false
+    );
+    (integration as any).executionRunner.executeHeadless = async () => true;
+
+    const success = await integration.sendPrompt({ prompt: "say hi" });
+
+    assert.strictEqual(success, true);
+    assert.deepStrictEqual(receivedWorkspaceRoots, [
+      primaryRoot,
+      secondaryRoot,
+    ]);
+  });
+
   test("should keep categorized CLI wrapper prompts on one line", () => {
     const integration = createTestIntegration();
 

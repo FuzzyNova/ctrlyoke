@@ -82,7 +82,8 @@ export class AntigravityCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
-    }
+    },
+    workspaceRoots?: readonly string[]
   ): Promise<string[]> {
     const args: string[] = [];
     const resolvedModel = workflowContext?.resolvedProperties?.model;
@@ -121,7 +122,10 @@ export class AntigravityCliProvider implements ICliProvider {
     }
 
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
+      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
+        workspaceRoot,
+        workspaceRoots
+      );
       workspaceDirs.forEach((dir) => args.push("--add-dir", dir));
     }
 

@@ -133,7 +133,8 @@ export class CopilotCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
-    }
+    },
+    workspaceRoots?: readonly string[]
   ): Promise<string[]> {
     this.enablePromptModeRepoHooksForHeadlessRun = false;
 
@@ -229,7 +230,10 @@ export class CopilotCliProvider implements ICliProvider {
 
     // Workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
+      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
+        workspaceRoot,
+        workspaceRoots
+      );
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
       });

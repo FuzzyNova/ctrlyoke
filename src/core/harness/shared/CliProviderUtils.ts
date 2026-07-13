@@ -162,31 +162,44 @@ export class CliProviderUtils {
   /**
    * Get workspace directories for --add-dir arguments
    *
-   * Collects all VS Code workspace folders plus any user-configured
-   * additional directories from `ctrlyoke.cliAdditionalDirs` setting.
+   * Collects every workspace-folder root plus any user-configured additional
+   * directories from `permissions.allowedDirs`. Workspace roots stay
+   * distinct from configured directories so future external-root policy can
+   * decide explicitly which roots a harness may receive.
    *
    * @param workspaceRoot - Primary workspace root for resolving relative paths
+   * @param workspaceRoots - Every open workspace-folder root
    * @returns Array of absolute directory paths
    *
    * @remarks
    * Previously duplicated across CopilotCliProvider, ClaudeCliProvider, and CodexCliProvider.
    * CodexCliProvider was missing the `cliAdditionalDirs` support — now fixed.
    */
-  static getWorkspaceDirs(workspaceRoot: string): string[] {
+  static getWorkspaceDirs(
+    workspaceRoot: string,
+    workspaceRoots: readonly string[] = []
+  ): string[] {
     const workspaceDirs: string[] = [];
+    const directoryKeys = new Set<string>();
+    const isWindows = process.platform === "win32";
+    const addDirectory = (directory: string): void => {
+      const absolutePath = path.resolve(directory);
+      const key = isWindows ? absolutePath.toLowerCase() : absolutePath;
+      if (!directoryKeys.has(key)) {
+        directoryKeys.add(key);
+        workspaceDirs.push(absolutePath);
+      }
+    };
 
-    // Add primary workspace folder
-    workspaceDirs.push(workspaceRoot);
+    // Keep the primary root first for deterministic behavior, then include
+    // every other workspace folder for multi-root windows.
+    addDirectory(workspaceRoot);
+    workspaceRoots.forEach(addDirectory);
 
     // Add configured allowed directories
     const allowedDirs = ConfigurationUtils.getCliAllowedDirs();
     allowedDirs.forEach((dir: string) => {
-      const absolutePath = path.isAbsolute(dir)
-        ? dir
-        : path.join(workspaceRoot, dir);
-      if (!workspaceDirs.includes(absolutePath)) {
-        workspaceDirs.push(absolutePath);
-      }
+      addDirectory(path.isAbsolute(dir) ? dir : path.join(workspaceRoot, dir));
     });
 
     return workspaceDirs;
