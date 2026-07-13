@@ -15,7 +15,10 @@ const TAILWIND_CONFIG = resolve(
 
 export default [
   {
-    ignores: ["src/ui/webview-react/static/typo.js"],
+    ignores: [
+      "src/ui/webview-react/static/typo.js",
+      "src/ui/webview-react/coverage/**",
+    ],
   },
   {
     files: ["**/*.ts", "**/*.tsx"],
