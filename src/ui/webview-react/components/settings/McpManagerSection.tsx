@@ -1161,7 +1161,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                               }
                             >
                               <i className="codicon codicon-globe text-xxs" />
-                              <span className="hidden sm:inline">
+                              <span>
                                 {defaultsEnabled ? "Default" : "Set default"}
                               </span>
                             </button>

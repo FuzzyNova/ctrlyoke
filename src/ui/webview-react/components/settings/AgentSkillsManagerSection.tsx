@@ -349,9 +349,7 @@ function FileRow({
             title={toggleTitle}
           >
             <i className="codicon codicon-globe text-xxs" />
-            <span className="hidden sm:inline">
-              {isDefault ? "Default" : "Set default"}
-            </span>
+            <span>{isDefault ? "Default" : "Set default"}</span>
           </button>
         </div>
       </div>
