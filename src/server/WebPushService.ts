@@ -322,7 +322,7 @@ function isStoredVapidKeys(value: unknown): value is StoredVapidKeys {
   const candidate = value as Partial<StoredVapidKeys>;
   return Boolean(
     typeof candidate.publicKey === "string" &&
-      isVapidPrivateJwk(candidate.privateJwk)
+    isVapidPrivateJwk(candidate.privateJwk)
   );
 }
 
@@ -366,10 +366,7 @@ async function generateVapidKeys(): Promise<StoredVapidKeys> {
 }
 
 function encodePublicKeyFromJwk(privateJwk: VapidPrivateJwk): string {
-  if (
-    typeof privateJwk.x !== "string" ||
-    typeof privateJwk.y !== "string"
-  ) {
+  if (typeof privateJwk.x !== "string" || typeof privateJwk.y !== "string") {
     throw new Error("VAPID private JWK is missing public coordinates");
   }
 

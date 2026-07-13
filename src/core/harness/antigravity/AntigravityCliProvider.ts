@@ -291,9 +291,7 @@ export class AntigravityCliProvider implements ICliProvider {
   ): Promise<string | undefined> {
     if (workspaceRoot) {
       const cachedSessionId =
-        await this.logParser.readSessionIdFromLastConversations(
-          workspaceRoot
-        );
+        await this.logParser.readSessionIdFromLastConversations(workspaceRoot);
       if (cachedSessionId) {
         return cachedSessionId;
       }

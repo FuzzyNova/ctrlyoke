@@ -780,10 +780,10 @@ suite("HostedWorkspaceViewerService", function () {
 
       const result = await svc.getStatus();
 
-      assert.deepStrictEqual(
-        result.files.map((f) => f.path).sort(),
-        ["primary/p.txt", "secondary/s.txt"]
-      );
+      assert.deepStrictEqual(result.files.map((f) => f.path).sort(), [
+        "primary/p.txt",
+        "secondary/s.txt",
+      ]);
     });
 
     test("getStatus scoped to a repo id reports only that repo's changes", async () => {

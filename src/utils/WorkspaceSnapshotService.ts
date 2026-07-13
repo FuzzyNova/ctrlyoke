@@ -636,7 +636,10 @@ export class WorkspaceSnapshotService {
     root: string,
     strategy: SnapshotStrategy,
     pathspec: string
-  ): Promise<{ git?: WorkspaceSnapshotGitInfo; files: Map<string, RawFileState> }> {
+  ): Promise<{
+    git?: WorkspaceSnapshotGitInfo;
+    files: Map<string, RawFileState>;
+  }> {
     const files = new Map<string, RawFileState>();
     let git: WorkspaceSnapshotGitInfo | undefined;
 
@@ -791,9 +794,7 @@ export class WorkspaceSnapshotService {
   }
 
   /** Per-repo metadata for a WorkspaceSnapshot; undefined in single-root. */
-  snapshotRepoInfos(
-    state: RawWorkspaceState
-  ): SnapshotRepoInfo[] | undefined {
+  snapshotRepoInfos(state: RawWorkspaceState): SnapshotRepoInfo[] | undefined {
     if (state.segments.length <= 1) {
       return undefined;
     }
@@ -1048,8 +1049,7 @@ export class WorkspaceSnapshotService {
       const normalizedAbs = normalize(absPath);
       const withinTrusted = trustedRoots.some(
         (root) =>
-          normalizedAbs === root ||
-          normalizedAbs.startsWith(root + path.sep)
+          normalizedAbs === root || normalizedAbs.startsWith(root + path.sep)
       );
       if (!withinTrusted) {
         failedFiles.push({

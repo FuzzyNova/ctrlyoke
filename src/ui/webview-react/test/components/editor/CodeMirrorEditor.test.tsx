@@ -69,8 +69,10 @@ describe("CodeMirrorEditor external reference completions", () => {
         {
           label: "CodeMirrorEditor.tsx",
           kind: 16,
-          insertText: "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-          sortText: "0_src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+          insertText:
+            "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+          sortText:
+            "0_src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
         },
       ],
       12,

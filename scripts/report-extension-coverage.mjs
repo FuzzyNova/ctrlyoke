@@ -65,7 +65,10 @@ function normalizeDriveLetterCasing(dir) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name);
     const raw = fs.readFileSync(full, "utf8");
-    const fixed = raw.replace(/file:\/\/\/[a-zA-Z]:/g, `file:///${driveLetter}:`);
+    const fixed = raw.replace(
+      /file:\/\/\/[a-zA-Z]:/g,
+      `file:///${driveLetter}:`
+    );
     if (fixed !== raw) fs.writeFileSync(full, fixed);
   }
 }

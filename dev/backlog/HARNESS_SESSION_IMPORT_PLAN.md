@@ -29,18 +29,18 @@ segmentation of a session log.** See [Relationship](#relationship-to-terminal-fo
 
 ## What exists today (grounding)
 
-| Capability | Where | Status for import |
-| --- | --- | --- |
-| Per-harness JSONL parsing, incremental read | `BaseLogParser.readNewLines` / `readFirstNJsonlEvents` | ✅ reuse |
-| `events[] → UniversalCliOutput` (text + toolCalls + thinking + metadata) | `ILogParser.extractResponse` | ✅ reuse, but currently assembles the **whole** log as one response |
-| Structured per-event streaming | `ILogParser.extractStructuredEventsFromEvent` | ✅ reuse per-turn |
-| Session-id extraction, completion detection, stats formatting | `extractSessionId`, `isComplete`, `formatStatistics` | ✅ reuse |
-| Session-log discovery by prompt/sessionId | `discoverSessionLog` | ➖ related, but keyed off a known prompt — not an enumerator |
-| Parser instance per harness | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:103`) | ✅ the harness→parser map already exists |
-| Native log dir per harness (private) | e.g. `ClaudeLogParser` `~/.claude/projects/<project>/<session>.jsonl` + `sessions-index.json`; Copilot `~/.copilot/session-state/<session>/events.jsonl`; Codex `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (see `dev/research/CLI_LOG_FILES_INVESTIGATION.md`) | ➖ each parser knows its dir internally; there is no public "list sessions" API |
-| Run-history storage: `manifest.json` + `events.jsonl` | `TimelineRecorder`, `OutputHistoryManager` | ✅ reuse — write path is already public |
-| History event holding a turn | `TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED` → payload `{ cliOutput: CliOutput }` targeting an `OutputExecutionTarget` (`{ kind: queue, stepIndex }`) | ✅ this is the import target shape |
-| Workflow-create UI messages | `WorkflowControls.tsx` → `NEW_WORKFLOW` / `LOAD_WORKFLOW` / `SELECT_FILE` / `APPEND_FILE`; standalone `WorkflowFilePickerModal` | ✅ extend with an import flow |
+| Capability                                                               | Where                                                                                                                                                                                                                                                              | Status for import                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Per-harness JSONL parsing, incremental read                              | `BaseLogParser.readNewLines` / `readFirstNJsonlEvents`                                                                                                                                                                                                             | ✅ reuse                                                                        |
+| `events[] → UniversalCliOutput` (text + toolCalls + thinking + metadata) | `ILogParser.extractResponse`                                                                                                                                                                                                                                       | ✅ reuse, but currently assembles the **whole** log as one response             |
+| Structured per-event streaming                                           | `ILogParser.extractStructuredEventsFromEvent`                                                                                                                                                                                                                      | ✅ reuse per-turn                                                               |
+| Session-id extraction, completion detection, stats formatting            | `extractSessionId`, `isComplete`, `formatStatistics`                                                                                                                                                                                                               | ✅ reuse                                                                        |
+| Session-log discovery by prompt/sessionId                                | `discoverSessionLog`                                                                                                                                                                                                                                               | ➖ related, but keyed off a known prompt — not an enumerator                    |
+| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:103`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
+| Native log dir per harness (private)                                     | e.g. `ClaudeLogParser` `~/.claude/projects/<project>/<session>.jsonl` + `sessions-index.json`; Copilot `~/.copilot/session-state/<session>/events.jsonl`; Codex `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (see `dev/research/CLI_LOG_FILES_INVESTIGATION.md`) | ➖ each parser knows its dir internally; there is no public "list sessions" API |
+| Run-history storage: `manifest.json` + `events.jsonl`                    | `TimelineRecorder`, `OutputHistoryManager`                                                                                                                                                                                                                         | ✅ reuse — write path is already public                                         |
+| History event holding a turn                                             | `TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED` → payload `{ cliOutput: CliOutput }` targeting an `OutputExecutionTarget` (`{ kind: queue, stepIndex }`)                                                                                                                | ✅ this is the import target shape                                              |
+| Workflow-create UI messages                                              | `WorkflowControls.tsx` → `NEW_WORKFLOW` / `LOAD_WORKFLOW` / `SELECT_FILE` / `APPEND_FILE`; standalone `WorkflowFilePickerModal`                                                                                                                                    | ✅ extend with an import flow                                                   |
 
 **The two real gaps:**
 
@@ -112,12 +112,12 @@ Add to `ILogParser`:
 interface HarnessSessionSummary {
   harnessId: HarnessId;
   sessionId: string;
-  logPath: string;          // absolute path to the session's JSONL
-  firstPrompt: string;      // for the picker label
-  turnCount?: number;       // cheap estimate if available without full parse
+  logPath: string; // absolute path to the session's JSONL
+  firstPrompt: string; // for the picker label
+  turnCount?: number; // cheap estimate if available without full parse
   modifiedAtMs: number;
   createdAtMs?: number;
-  projectPath?: string;     // Claude/Copilot record the originating cwd
+  projectPath?: string; // Claude/Copilot record the originating cwd
   model?: string;
 }
 
@@ -129,7 +129,7 @@ interface ILogParser {
   listNativeSessions(options?: {
     limit?: number;
     modifiedAfterMs?: number;
-    projectPath?: string;   // optionally filter to the current workspace
+    projectPath?: string; // optionally filter to the current workspace
   }): Promise<HarnessSessionSummary[]>;
 }
 ```
@@ -178,7 +178,7 @@ A small backend service — `HarnessSessionImportService` (in `src/core/orchestr
      - `universal = parser.extractResponse(turn.events)`
      - Map `universal → CliOutput` (`prompt`, `response`, `structured`, `elapsed`,
        `tokens`, `timestampMs = turn.startedAtMs`, `workingDirectory =
-       summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
+summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
        `UniversalCliOutput → CliOutput` mapping the live path uses (single-source it if
        it isn't already a shared helper).
      - `saveExecutionOutput(historyFilePath, { kind: queue, stepIndex: i }, [cliOutput])`
@@ -200,10 +200,10 @@ Earlier drafts assumed imports can't support undo because they lack a
 `workspaceSnapshot`. That's only half true. ctrlyoke's undo has **two tiers**, and only
 one of them needs a snapshot:
 
-| Undo tier | Data source | Works for imports? |
-| --- | --- | --- |
-| **Per-file / per-event** (`buildUndoDialogInputForSpecificEvent`, `promptUndo.ts:403`) | The structured CLI event itself | ✅ mostly — see below |
-| **Prompt-level "undo all changes"** (`buildUndoCandidatesForOutputs:213`) | `instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null` — **snapshot-gated** | ❌ null without a snapshot |
+| Undo tier                                                                              | Data source                                                                                       | Works for imports?         |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Per-file / per-event** (`buildUndoDialogInputForSpecificEvent`, `promptUndo.ts:403`) | The structured CLI event itself                                                                   | ✅ mostly — see below      |
+| **Prompt-level "undo all changes"** (`buildUndoCandidatesForOutputs:213`)              | `instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null` — **snapshot-gated** | ❌ null without a snapshot |
 
 Per-event undo derives its instruction directly from the event:
 
@@ -236,7 +236,7 @@ diffs. Do NOT globally disable undo.** Two follow-on decisions:
 2. **`FILE_DELETE` restore** stays unavailable unless we extend the per-harness parsers
    to capture the pre-delete content where the log exposes it.
 
-### Undo target must clamp to the *open* workspace (security)
+### Undo target must clamp to the _open_ workspace (security)
 
 The apply-undo guard in `WorkspaceSnapshotService.ts:774-795` resolves the target as
 `path.resolve(workspacePath, instruction.path)` and rejects anything **outside
@@ -246,7 +246,7 @@ workspace (`useOutputUndoActions.ts:95`).
 
 That matters for cross-workspace imports (next section): if we stamp imported outputs
 with the session's **original** absolute `workingDirectory`, the guard would happily
-write undo edits back into that *foreign* directory on disk, because those paths are
+write undo edits back into that _foreign_ directory on disk, because those paths are
 "inside" the declared `workingDirectory`. That silently escapes the open workspace.
 
 **Fix:** the undo-apply path must additionally verify the resolved target is inside the
@@ -309,11 +309,11 @@ core/ext/webview per project conventions), not duplicated in the webview.
 "a new human turn just appeared." This plan parses a **completed** log and needs "split
 all human turns." Both are the same boundary problem:
 
-| | Session Import (this plan) | Terminal Follow-up Tracking |
-| --- | --- | --- |
-| Input | a finished session log, read once | a live-growing session log, tailed |
-| Core need | `segmentSessionTurns` over all events | `isHumanPromptEvent` at the current offset |
-| Output | N `cliOutputRecorded` events in a new run | 1 observed turn appended to the live run |
+|           | Session Import (this plan)                | Terminal Follow-up Tracking                |
+| --------- | ----------------------------------------- | ------------------------------------------ |
+| Input     | a finished session log, read once         | a live-growing session log, tailed         |
+| Core need | `segmentSessionTurns` over all events     | `isHumanPromptEvent` at the current offset |
+| Output    | N `cliOutputRecorded` events in a new run | 1 observed turn appended to the live run   |
 
 **Build `isHumanPromptEvent` + `segmentSessionTurns` once, in the parser layer.** The
 follow-up tracker consumes `isHumanPromptEvent` incrementally as new lines arrive; the

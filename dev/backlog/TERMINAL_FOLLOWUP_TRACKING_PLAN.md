@@ -178,7 +178,7 @@ PowerShell job and waited) against a clean session (`fa0319d7-…`). Copilot's m
 - **Every `assistant.turn_end` fires the Stop hook** (`hook.start`/`hook.end` follow it),
   including the "Ending turn — will resume when the job completes" pause. Same root cause.
 - **Launch marker:** `tool.execution_complete` whose `data.toolTelemetry.properties.executionMode
-  === "async"`, with the shell id in `data.result.content`
+=== "async"`, with the shell id in `data.result.content`
   (`"<command started in background with shellId: 0>"`). The launching tool args also carry
   `mode: "async"` (e.g. `powershell`/`bash` tools). Correlation key = **shellId** (small, stable).
 - **Completion / resume marker:** a first-class `system.notification` event with
@@ -228,7 +228,7 @@ hi"). Antigravity's markers are structured, but the key twist is **where they li
   the completion message below.
 - **Completion / resume marker:** transcript entry `source: "SYSTEM"`, `type: "SYSTEM_MESSAGE"`
   whose `content` carries `sender=<sessionId>/task-N … content=Task id "<sessionId>/task-N"
-  finished with result:`. This wakes Antigravity, which **self-resumes** (next
+finished with result:`. This wakes Antigravity, which **self-resumes** (next
   `MODEL`/`PLANNER_RESPONSE` — e.g. "task completed" — plus a fresh `streamGenerateContent`) →
   gate-able. Match on `finished with result` + the sender task-id so success and failure both
   count as completion.
@@ -260,14 +260,14 @@ tailing needed:
 - **Launch marker:** a `toolInvocationSerialized` response item (e.g. `run_in_terminal`) whose
   matching `result.metadata.toolCallRounds[].toolCalls[].arguments` has `"mode":"async"`.
 - **Completion / resume marker:** the **next entry in `requests[]`** has **`isSystemInitiated:
-  true`**, with a human-readable `systemInitiatedLabel` naming the finished command (e.g.
+true`**, with a human-readable `systemInitiatedLabel` naming the finished command (e.g.
   `` `Start-Sleep -Seconds 60` completed ``) and `message.text` set to the raw terminal
   notification. This wakes Copilot Chat, which **self-resumes** (a fresh request with its own
   `response`/`modelState`) — gate-able, and structurally unambiguous: no text parsing needed,
   cleaner than Claude's `<task-notification>` (a `user`-role message) and on par with Copilot
   CLI's `shell_completed` event.
 - **Rule: at "last request is terminal," check whether that request's response contains an
-  async-mode tool launch.** If yes → don't commit yet; keep watching the *same* session file for
+  async-mode tool launch.** If yes → don't commit yet; keep watching the _same_ session file for
   a new `isSystemInitiated: true` request to appear, then re-run the check against it (it can
   itself launch another background task). If no async launch → commit now (today's behavior for
   the common case, zero latency).
@@ -287,7 +287,7 @@ to history, and never observed by anything.
 `ILogParser.hasPendingBackgroundWork()` (Layer 1/2 below) ship for Claude/Copilot CLI/Antigravity
 on the separate `ILogParser`/`CliLogMonitor`/`CliIntegration` path; Copilot Chat needed its own
 equivalent since it runs on `ChatSessionMonitor`/`ChatSessionParser` instead. Shipped as:
-`ChatSessionParser.hasPendingBackgroundWork(request)` — true when a request's *last* tool-call
+`ChatSessionParser.hasPendingBackgroundWork(request)` — true when a request's _last_ tool-call
 round launched a `mode: "async"` tool call — layered into
 `ChatSessionMonitor.isLastRequestComplete()` after the existing `isSessionComplete()` check. A
 terminal request with pending background work is reported as `complete: false`, so
@@ -301,11 +301,11 @@ Open Question 1. See `ChatSessionParser.hasPendingBackgroundWork()` and the
 `src/test/chatSessionParser.test.ts`.
 
 **User-steer capture + post-completion tailing (Layer 1) — now implemented.** The note above
-("no separate watcher needed") only ever covered the *in-flight hold* — the outer
+("no separate watcher needed") only ever covered the _in-flight hold_ — the outer
 `sendPrompt()` call staying alive until a resume lands. It left two real gaps: (1) a human typing
 directly into the still-open chat (mid-hold, or after the step/workflow already finished) was
 invisible — no user-steer event, nothing added to output/history; (2) `extractSessionOutput()`
-only ever extracted the *last* request (index `-1`), so a step that held through a
+only ever extracted the _last_ request (index `-1`), so a step that held through a
 background-task resume silently dropped the launch request's own text (e.g. "Starting the
 background task..."), keeping only the resume's final answer. Both are fixed:
 
@@ -313,11 +313,11 @@ background task..."), keeping only the resume's final answer. Both are fixed:
   is the single shared walk: it classifies each newly-appeared request as a genuine human steer
   (no `isSystemInitiated`) or a harness auto-resume, and extracts every already-complete request's
   content in order — not just the last one. Note that a request's own `hasPendingBackgroundWork`
-  no longer blocks extracting *that request's* content; it only ever meant "expect a further
+  no longer blocks extracting _that request's_ content; it only ever meant "expect a further
   request," never "this one isn't readable yet."
 - `CopilotChatIntegration.extractSessionOutput()` now calls `collectFollowUpActivity()` from
   `ChatSessionMonitor.getSendStartRequestCount()` (a stable pre-submit baseline — deliberately
-  *not* the mutable `requestCountBeforeSend`, which `setSessionFile()` later overwrites to a
+  _not_ the mutable `requestCountBeforeSend`, which `setSessionFile()` later overwrites to a
   post-submit value) through the end, fixing the dropped-launch-text gap.
 - `ChatSessionActivityWatcher` (`src/core/harness/chat/ChatSessionActivityWatcher.ts`) is Chat's
   Layer-1 equivalent of the CLI harnesses' `SessionActivityWatcher`: poll-based (matches

@@ -42,12 +42,18 @@ suite("WorkspaceViewerPath Tests", () => {
     });
 
     test("stripViewerPrefix removes a known prefix, else returns unchanged", () => {
-      assert.strictEqual(stripViewerPrefix("root/src/x.ts", "root"), "src/x.ts");
+      assert.strictEqual(
+        stripViewerPrefix("root/src/x.ts", "root"),
+        "src/x.ts"
+      );
       assert.strictEqual(stripViewerPrefix("root", "root"), "");
       assert.strictEqual(stripViewerPrefix("other/x.ts", "root"), "other/x.ts");
       assert.strictEqual(stripViewerPrefix("root/x.ts", ""), "root/x.ts");
       // A prefix that is only a string-prefix of the segment must not match.
-      assert.strictEqual(stripViewerPrefix("rootish/x.ts", "root"), "rootish/x.ts");
+      assert.strictEqual(
+        stripViewerPrefix("rootish/x.ts", "root"),
+        "rootish/x.ts"
+      );
     });
 
     test("joinViewerPath composes prefix and remainder", () => {
@@ -97,7 +103,10 @@ suite("WorkspaceViewerPath Tests", () => {
 
     test("round-trips absolute → viewer → absolute", () => {
       const abs = path.join(primary, "a", "b.ts");
-      assert.strictEqual(fromViewerPath(toViewerPath(abs, singleRoot), singleRoot), abs);
+      assert.strictEqual(
+        fromViewerPath(toViewerPath(abs, singleRoot), singleRoot),
+        abs
+      );
     });
   });
 

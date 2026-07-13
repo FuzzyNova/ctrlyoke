@@ -4,10 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
-import {
-  CLI_EVENT_TYPES,
-  HARNESS_IDS,
-} from "../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
 
 async function withTemporaryHome<T>(
   run: (homeDir: string) => Promise<T> | T
@@ -32,7 +29,9 @@ suite("AntigravityLogParser", () => {
   suite("readNewLines", () => {
     test("parses session and completion markers from plain text logs", async () => {
       const parser = new AntigravityLogParser();
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-agy-log-"));
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-log-")
+      );
       const logPath = path.join(tempDir, "cli-20260705_120000.log");
       const sessionId = "11111111-1111-1111-1111-111111111111";
 
@@ -105,10 +104,7 @@ suite("AntigravityLogParser", () => {
         },
       ]);
 
-      assert.strictEqual(
-        result.metadata.usage?.contextWindowUsedTokens,
-        42
-      );
+      assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 42);
       assert.strictEqual(result.metadata.usage?.contextWindowSize, 1_000_000);
       assert.strictEqual(result.metadata.usage?.inputTokens, 39);
       assert.strictEqual(result.metadata.usage?.outputTokens, 3);
@@ -256,9 +252,8 @@ suite("AntigravityLogParser", () => {
           "utf8"
         );
 
-        const result = await parser.readSessionIdFromLastConversations(
-          workspaceRoot
-        );
+        const result =
+          await parser.readSessionIdFromLastConversations(workspaceRoot);
 
         assert.strictEqual(result, sessionId);
       });
@@ -278,7 +273,11 @@ suite("AntigravityLogParser", () => {
         fs.writeFileSync(olderLog, "older", "utf8");
         fs.writeFileSync(newerLog, "newer", "utf8");
         fs.utimesSync(olderLog, startTime, startTime);
-        fs.utimesSync(newerLog, new Date(startTime.getTime() + 60_000), new Date(startTime.getTime() + 60_000));
+        fs.utimesSync(
+          newerLog,
+          new Date(startTime.getTime() + 60_000),
+          new Date(startTime.getTime() + 60_000)
+        );
 
         const result = await parser.discoverSessionLog("prompt", startTime);
 

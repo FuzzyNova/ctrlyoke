@@ -232,10 +232,7 @@ suite("WorkspaceRootResolver Tests", () => {
 
   suite("resolveEffectiveAbsoluteReferences", () => {
     test("multi-root forces absolute even when the user setting is off", () => {
-      assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(false, true),
-        true
-      );
+      assert.strictEqual(resolveEffectiveAbsoluteReferences(false, true), true);
     });
 
     test("single-root falls back to the user setting (off)", () => {
@@ -246,10 +243,7 @@ suite("WorkspaceRootResolver Tests", () => {
     });
 
     test("single-root falls back to the user setting (on)", () => {
-      assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(true, false),
-        true
-      );
+      assert.strictEqual(resolveEffectiveAbsoluteReferences(true, false), true);
     });
   });
 });

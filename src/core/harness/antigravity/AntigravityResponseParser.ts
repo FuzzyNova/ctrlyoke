@@ -2,10 +2,7 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
-import {
-  CliEvent,
-  UniversalCliOutput,
-} from "../../../types/CliOutputTypes";
+import { CliEvent, UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,

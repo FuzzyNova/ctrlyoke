@@ -262,10 +262,10 @@ suite("WorkspaceSnapshotService — multi-root", () => {
     );
     const repos = snapshotService.snapshotRepoInfos(multi);
     assert.ok(repos);
-    assert.deepStrictEqual(
-      repos.map((r) => r.prefix).sort(),
-      ["alpha", "beta"]
-    );
+    assert.deepStrictEqual(repos.map((r) => r.prefix).sort(), [
+      "alpha",
+      "beta",
+    ]);
 
     const single = await snapshotService.captureWorkspaceState(
       rootA,

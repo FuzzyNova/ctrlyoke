@@ -78,7 +78,10 @@ suite("ChatSessionActivityWatcher Tests", () => {
     // Simulate VS Code appending the auto-resume after the background task finishes.
     writeSession([
       completeRequest("Follow instructions in prompt.md"),
-      { ...completeRequest("[Terminal notification: completed.]"), isSystemInitiated: true },
+      {
+        ...completeRequest("[Terminal notification: completed.]"),
+        isSystemInitiated: true,
+      },
     ]);
 
     await waitForPolls();
@@ -86,7 +89,9 @@ suite("ChatSessionActivityWatcher Tests", () => {
     const allEvents = received.flat();
     assert.ok(
       allEvents.some(
-        (e) => (e.data as any).text === "Reply to: [Terminal notification: completed.]"
+        (e) =>
+          (e.data as any).text ===
+          "Reply to: [Terminal notification: completed.]"
       )
     );
     assert.ok(!allEvents.some((e) => e.type === CLI_EVENT_TYPES.USER_STEER));

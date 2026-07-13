@@ -268,7 +268,7 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/utils/ConfigurationUtils.ts`             | `vscode.workspace.getConfiguration()`                                                                             | **Done** — now reads from `CtrlYokeConfigService` (file-based config). No VS Code dependency remaining.                                                                                                     |
 | `src/core/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                                                                      | `chokidar` (already in dependencies)                                                                                                                                                                        |
 | `src/core/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` × 4 (`:146`,`:221`,`:292`,`:314`)                                    | Same watcher abstraction; inject `PlatformAdapter` into constructor                                                                                                                                         |
-| `src/core/WorkflowOrchestrator.ts` (watcher)  | `vscode.workspace.createFileSystemWatcher()` for `*.runner.json` (`:2400`, `runnerJsonCreateWatcher`)             | Route through `PlatformAdapter.createFileWatcher()`; uses `vscode.RelativePattern` so the seam must accept a plain glob/base-path pair                                                                       |
+| `src/core/WorkflowOrchestrator.ts` (watcher)  | `vscode.workspace.createFileSystemWatcher()` for `*.runner.json` (`:2400`, `runnerJsonCreateWatcher`)             | Route through `PlatformAdapter.createFileWatcher()`; uses `vscode.RelativePattern` so the seam must accept a plain glob/base-path pair                                                                      |
 | `src/completions/CompletionHelpers.ts`        | `vscode.workspace.findFiles()`, Git extension                                                                     | Node.js `fs` + `fast-glob` + `ignore`                                                                                                                                                                       |
 
 ### Already Platform-Agnostic (zero or minimal changes)
@@ -1204,15 +1204,15 @@ Full message coverage including multi-workflow types:
 
 ## Harness Compatibility
 
-| Harness           | Works in Server? | Notes                                                       |
-| ----------------- | ---------------- | ----------------------------------------------------------- |
-| `copilot-cli`     | ✅ Yes           | Spawns process, no VS Code dep                              |
-| `claude-cli`      | ✅ Yes           | Spawns process, no VS Code dep                              |
-| `codex-cli`       | ✅ Yes           | Spawns process, no VS Code dep                              |
-| `opencode-cli`    | ✅ Yes           | Spawns process, no VS Code dep                              |
-| `qwen-cli`        | ✅ Yes           | Spawns process, no VS Code dep                              |
+| Harness           | Works in Server? | Notes                                                                               |
+| ----------------- | ---------------- | ----------------------------------------------------------------------------------- |
+| `copilot-cli`     | ✅ Yes           | Spawns process, no VS Code dep                                                      |
+| `claude-cli`      | ✅ Yes           | Spawns process, no VS Code dep                                                      |
+| `codex-cli`       | ✅ Yes           | Spawns process, no VS Code dep                                                      |
+| `opencode-cli`    | ✅ Yes           | Spawns process, no VS Code dep                                                      |
+| `qwen-cli`        | ✅ Yes           | Spawns process, no VS Code dep                                                      |
 | `antigravity-cli` | ✅ Yes           | Spawns process, no VS Code dep (replaces `gemini-cli` — see `RELEASE_PLAN.md` §2.5) |
-| `copilot-chat`    | ❌ No            | Automates VS Code's Chat UI directly                       |
+| `copilot-chat`    | ❌ No            | Automates VS Code's Chat UI directly                                                |
 
 Server validates harness at startup and rejects `copilot-chat` with a clear error.
 

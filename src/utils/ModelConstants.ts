@@ -239,9 +239,7 @@ const CODEX_CLI_CONTEXT_WINDOW_SIZES: Record<string, number> = {
   "gpt-5.6-luna": 1_050_000,
 };
 
-export function getCodexContextWindowSize(
-  modelId: string | undefined
-): number {
+export function getCodexContextWindowSize(modelId: string | undefined): number {
   if (modelId && modelId in CODEX_CLI_CONTEXT_WINDOW_SIZES) {
     return CODEX_CLI_CONTEXT_WINDOW_SIZES[modelId];
   }
@@ -441,4 +439,3 @@ export function getHarnessModelDisplayName(
       return COPILOT_MODELS[modelId] ?? modelId;
   }
 }
-

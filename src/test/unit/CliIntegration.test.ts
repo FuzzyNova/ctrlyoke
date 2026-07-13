@@ -586,7 +586,12 @@ suite("CliIntegration", () => {
         ui: { useAbsolutePathReferences: true },
       });
       const integration = integrationWithPlatform(new MockVsCodePlatform());
-      const absolutePath = path.join(process.cwd(), ".ctrlyoke", "temp", "x.md");
+      const absolutePath = path.join(
+        process.cwd(),
+        ".ctrlyoke",
+        "temp",
+        "x.md"
+      );
       const mockTempMgr = {
         getRelativePath: (p: string) => path.relative(process.cwd(), p),
       };
@@ -711,8 +716,7 @@ suite("CliIntegration", () => {
 
       const integration = new TestCliIntegration(
         createProvider({
-          formatFileReference: (relativeFilePath: string) =>
-            relativeFilePath,
+          formatFileReference: (relativeFilePath: string) => relativeFilePath,
         }),
         new MockSingleRootPlatform(root),
         false

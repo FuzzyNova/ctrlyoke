@@ -229,8 +229,16 @@ suite("TempFileManager", () => {
     test("different bytes produce different files", async () => {
       manager = freshManager();
       const dir = manager.getAttachmentsDir();
-      const a = await manager.createPastedImageFile(Buffer.from("a"), "png", dir);
-      const b = await manager.createPastedImageFile(Buffer.from("b"), "png", dir);
+      const a = await manager.createPastedImageFile(
+        Buffer.from("a"),
+        "png",
+        dir
+      );
+      const b = await manager.createPastedImageFile(
+        Buffer.from("b"),
+        "png",
+        dir
+      );
       createdFiles.push(a, b);
       assert.notStrictEqual(a, b);
     });

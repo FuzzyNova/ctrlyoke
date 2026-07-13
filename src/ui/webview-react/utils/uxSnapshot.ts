@@ -408,7 +408,13 @@ export function getMatchedAuthorRules(el: Element): string[] {
     if (!rules) {
       continue;
     }
-    collectMatchingRules(rules, el, out, undefined, MAX_MATCHED_RULES_PER_ELEMENT);
+    collectMatchingRules(
+      rules,
+      el,
+      out,
+      undefined,
+      MAX_MATCHED_RULES_PER_ELEMENT
+    );
     if (out.length >= MAX_MATCHED_RULES_PER_ELEMENT) {
       out.push("/* …additional matched rules truncated… */");
       break;
@@ -462,13 +468,14 @@ export function isUniversalRule(selectorText: string): boolean {
   if (fragments.length === 0) {
     return false;
   }
-  return fragments.every(
-    (frag) => frag === "*" || /^\*?::[a-z-]+$/.test(frag)
-  );
+  return fragments.every((frag) => frag === "*" || /^\*?::[a-z-]+$/.test(frag));
 }
 
 /** Format a style rule, filtering `--tw-*` plumbing from its declarations. */
-function formatStyleRule(rule: CSSStyleRule, condition: string | undefined): string {
+function formatStyleRule(
+  rule: CSSStyleRule,
+  condition: string | undefined
+): string {
   const prefix = condition ? `${condition} ` : "";
   return `${prefix}${rule.selectorText} { ${formatDeclarations(rule.style)} }`;
 }

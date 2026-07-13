@@ -113,7 +113,10 @@ suite("standalone-shim state persistence", () => {
       },
     });
 
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(api.getState())), lastState);
+    assert.deepStrictEqual(
+      JSON.parse(JSON.stringify(api.getState())),
+      lastState
+    );
     assert.strictEqual(sessionStorage.getItem("fpTabId"), "tab-1");
 
     const nextState = { editorState: { editorText: "updated prompt" } };
@@ -140,6 +143,9 @@ suite("standalone-shim state persistence", () => {
       },
     });
 
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(api.getState())), currentTabState);
+    assert.deepStrictEqual(
+      JSON.parse(JSON.stringify(api.getState())),
+      currentTabState
+    );
   });
 });

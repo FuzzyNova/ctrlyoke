@@ -26,7 +26,10 @@ import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
 } from "../utils/ModelRegistry";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";

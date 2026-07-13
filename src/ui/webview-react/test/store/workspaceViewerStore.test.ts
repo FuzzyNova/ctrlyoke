@@ -301,12 +301,18 @@ describe("setRepos", () => {
     Object.fromEntries(ids.map((id) => [id, id]));
 
   it("defaults the selection to the first repo when nothing is selected", () => {
-    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
+    store().setRepos(
+      [repo("alpha"), repo("beta")],
+      identityMap("alpha", "beta")
+    );
     expect(store().selectedRepoId).toBe("alpha");
   });
 
   it("keeps the current selection when it is still present", () => {
-    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
+    store().setRepos(
+      [repo("alpha"), repo("beta")],
+      identityMap("alpha", "beta")
+    );
     store().setSelectedRepoId("beta");
     store().setRepos(
       [repo("alpha"), repo("beta"), repo("gamma")],
@@ -316,16 +322,25 @@ describe("setRepos", () => {
   });
 
   it("re-defaults when the current selection disappears", () => {
-    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
+    store().setRepos(
+      [repo("alpha"), repo("beta")],
+      identityMap("alpha", "beta")
+    );
     store().setSelectedRepoId("beta");
-    store().setRepos([repo("alpha"), repo("gamma")], identityMap("alpha", "gamma"));
+    store().setRepos(
+      [repo("alpha"), repo("gamma")],
+      identityMap("alpha", "gamma")
+    );
     expect(store().selectedRepoId).toBe("alpha");
   });
 
   it("follows the open file's root when no selection is valid", () => {
     // A folder-name-prefixed diff path identifies its repo by first segment.
     store().selectDiff("beta/src/index.ts");
-    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
+    store().setRepos(
+      [repo("alpha"), repo("beta")],
+      identityMap("alpha", "beta")
+    );
     expect(store().selectedRepoId).toBe("beta");
   });
 
@@ -343,7 +358,10 @@ describe("setRepos", () => {
 
   it("falls back to the first repo when the prefix has no mapping", () => {
     store().selectDiff("unmapped/src/index.ts");
-    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
+    store().setRepos(
+      [repo("alpha"), repo("beta")],
+      identityMap("alpha", "beta")
+    );
     expect(store().selectedRepoId).toBe("alpha");
   });
 });

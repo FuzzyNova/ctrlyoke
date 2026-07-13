@@ -48,12 +48,12 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 ### Testing
 
-| Command                | Purpose                           |
-| ---------------------- | --------------------------------- |
-| `npm test`                 | Run all tests (extension + UI)                    |
-| `npm run test:ui`          | Run React dashboard UI tests only                 |
-| `npm run test:harness`     | Run harness integration tests                     |
-| `npm run test:coverage`    | Extension-host coverage report (`coverage/extension/index.html`) |
+| Command                    | Purpose                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `npm test`                 | Run all tests (extension + UI)                                               |
+| `npm run test:ui`          | Run React dashboard UI tests only                                            |
+| `npm run test:harness`     | Run harness integration tests                                                |
+| `npm run test:coverage`    | Extension-host coverage report (`coverage/extension/index.html`)             |
 | `npm run test:ui:coverage` | React dashboard coverage report (`src/ui/webview-react/coverage/index.html`) |
 
 ### Code Quality

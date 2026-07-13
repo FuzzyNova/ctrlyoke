@@ -11,7 +11,7 @@ calling `vscode.window.showOpenDialog(...)` — a **native OS dialog**.
 That is correct for the VS Code panel (extension host and user are the same
 machine) but **broken for the hosted dashboard** (`CtrlYokeHostedServer`): a
 remote browser user clicks Browse, the message routes over the WebSocket to the
-extension, and the native dialog opens on the *host's* screen — invisible and
+extension, and the native dialog opens on the _host's_ screen — invisible and
 useless to the browser user. There is no web-native way to pick a workspace file
 or folder from the hosted dashboard today.
 
@@ -49,7 +49,7 @@ Related, weaker pickers exist but don't fit this need:
 `isStandalone` already exists (`useVsCodeApi.ts:24`, backed by
 `window.__ctrlyokeStandalone`). VS Code panel → keep native `showOpenDialog`
 (full filesystem, OS-native, same machine). Browser (`isStandalone === true`) →
-open the new `FileBrowserModal`. Only the *result-application* logic is unified
+open the new `FileBrowserModal`. Only the _result-application_ logic is unified
 so the two paths can't drift.
 
 **2. Reject an off-the-shelf React file-browser plugin.**
@@ -128,7 +128,7 @@ or a `fileBrowser/` folder) and move, without behavior change:
   without status coloring or the cut/paste + context-menu wiring.
 - `toWorkspaceRelative(filePath, workspaceRoot)` — path helper.
 - The breadcrumb renderer, generalized to take `(explorerPath, rootLabel,
-  onNavigate)` instead of closing over component state.
+onNavigate)` instead of closing over component state.
 
 Also extract `extractExtensionsFromGlobs` (the ext-from-glob regex currently
 inline in `WorkflowSerializer.ts:616`) into `src/utils/fileFilterUtils.ts` as a
@@ -146,6 +146,7 @@ per-consumer state (see decision 2) for future consumers, portal/z-index
 simplicity, and so only one picker can ever be open at a time app-wide.
 
 `uiStore` additions:
+
 ```ts
 interface FileBrowserRequest {
   mode: "file" | "directory";
@@ -159,6 +160,7 @@ fileBrowserState: FileBrowserRequest | null;
 openFileBrowser: (request: FileBrowserRequest) => void;
 closeFileBrowser: () => void;
 ```
+
 `onSelect` is a plain in-memory callback, not a message-carried value —
 this is fine because the web path never round-trips through the extension
 host (unlike `templateFileSelection`, which has to be a serializable
@@ -186,11 +188,11 @@ underlying dialog's `onClose` — closing both at once.
 Fix: the caller derives a separate visual flag for its own `<Modal>` JSX —
 `modalVisible = isOpen && !fileBrowserState` for `TemplateModal`,
 `saveWorkflowDialogOpen && !fileBrowserState` for `SaveWorkflowDialog` — and
-passes *that* to its `<Modal isOpen={modalVisible} ...>`, while every other
+passes _that_ to its `<Modal isOpen={modalVisible} ...>`, while every other
 effect keyed on the real logical-open flag (`TemplateModal`'s
 `prevIsOpenRef`-guarded form-reset at `TemplateModal.tsx:101-121`,
 `SaveWorkflowDialog`'s reset effect at `SaveWorkflowDialog.tsx:58-69`) stays
-keyed on the *unmodified* flag. Don't route the hide-while-picking behavior
+keyed on the _unmodified_ flag. Don't route the hide-while-picking behavior
 through the same `isOpen` prop those effects watch — doing so would make
 closing the picker look like "the dialog just reopened" and wipe whatever the
 user had already typed. Since `isOpen={false}` returns `null` before
@@ -201,6 +203,7 @@ same `&& !fileBrowserState` guard to its own `<Modal isOpen>` — no
 coordination code needed beyond reading the one shared store field.
 
 Behavior:
+
 - On open, `workspaceTree(initialPath ?? "")`; render breadcrumb + entry list
   using the Part 1 primitives.
 - Folder row click → navigate into it (`workspaceTree(entry.path)`). Back button
@@ -208,7 +211,7 @@ Behavior:
 - **file mode**: clicking a file selects it (highlight); `fileFilter` dims/disables
   non-matching files but folders always stay navigable. Confirm button enabled
   when a file is selected → `onSelect(selectedFile)` then `closeFileBrowser()`.
-- **directory mode**: a "Select this folder" action targets the *current*
+- **directory mode**: a "Select this folder" action targets the _current_
   directory; folder rows are also directly selectable. Files render dimmed/
   non-selectable. Confirm → `onSelect(currentOrSelectedDir)` then
   `closeFileBrowser()`.
@@ -227,7 +230,7 @@ Behavior:
   apply behavior.
 - In `handleBrowseFile` (`TemplateModal.tsx:231`): if `isStandalone`, call
   `uiStore.openFileBrowser({ mode, fileFilter, initialPath: ..., onSelect: (path) =>
-  applyPickedPath(variable, path) })` instead of posting `BROWSE_TEMPLATE_FILE`.
+applyPickedPath(variable, path) })` instead of posting `BROWSE_TEMPLATE_FILE`.
   Otherwise keep the existing native post.
 - No new message type, no server change — the web path resolves entirely
   webview-side via `hostedFetch`.
@@ -244,6 +247,7 @@ today — just a single free-text "Save Path" input holding the full path
 (`SaveWorkflowDialog.tsx:266-295`). This is new UI, not a swap.
 
 **Split "Save Path" into Location + Name.**
+
 - Replace the single `filePath` state with `location` (directory, the same
   absolute-or-workspace-relative string `defaultDir`/`defaultPath` already use)
   and `name` (workflow name, no extension).
@@ -273,12 +277,13 @@ open with `location` as its starting directory (`defaultUri` / `initialPath`);
 no new persistence to add.
 
 **Browse button: branch on `isStandalone`, same pattern as Part 3.**
+
 - VS Code panel → native OS folder dialog, following the existing
   `handleBrowseTemplateFile` pattern (`WorkflowSerializer.ts:602-658`) but
   folder-only. Add `handleBrowseSaveLocation(postMessage?, defaultDir?)` to
   `WorkflowSerializer`: `showOpenDialog({ canSelectFolders: true,
-  canSelectFiles: false, canSelectMany: false, defaultUri:
-  vscode.Uri.file(defaultDir) })`, then the same fsPath → workspace-relative →
+canSelectFiles: false, canSelectMany: false, defaultUri:
+vscode.Uri.file(defaultDir) })`, then the same fsPath → workspace-relative →
   forward-slash normalization already at `WorkflowSerializer.ts:640-650`.
   Extract that normalization block into a small shared private helper (e.g.
   `resolveDialogSelection(uris, workspaceRoot)`) so `handleBrowseTemplateFile`
@@ -294,7 +299,7 @@ no new persistence to add.
   (`uiStore.setSaveLocationSelection`), mirroring `TEMPLATE_FILE_SELECTED`'s
   handling at `useMessageHandler.ts:1349-1355`.
 - Hosted browser (`isStandalone`) → call `uiStore.openFileBrowser({ mode:
-  "directory", initialPath: location, onSelect: setLocation })`, no message
+"directory", initialPath: location, onSelect: setLocation })`, no message
   round trip — same singleton picker `TemplateModal` uses in Part 3, just a
   different `mode`/`onSelect`. Unlike `TemplateModal`'s `applyPickedPath`,
   there's no `autoFillFilename` cross-cutting concern here (the Name field is
@@ -307,6 +312,7 @@ no new persistence to add.
   `saveWorkflowDialogOpen`, untouched.
 
 **Deferred further:**
+
 - Let `WorkflowFilePickerModal`'s manual-path box optionally launch
   `FileBrowserModal` too.
 - Optional git-status coloring by adding a `workspaceStatus()` fetch.
@@ -331,7 +337,7 @@ no new persistence to add.
    own instance. Rationale: one mount point avoids N sets of portal/z-index
    plumbing, guarantees only one picker can be open app-wide, and each new
    consumer (present or future) only has to call `openFileBrowser({ mode,
-   initialPath, onSelect })` instead of re-plumbing local `isOpen`/`browseState`.
+initialPath, onSelect })` instead of re-plumbing local `isOpen`/`browseState`.
    The per-consumer "apply result" logic (`applyPickedPath` +
    `autoFillFilename` for `TemplateModal` vs. plain `setLocation` for
    `SaveWorkflowDialog`) still stays caller-side as the `onSelect` callback —
@@ -355,7 +361,7 @@ Two additional decisions surfaced while verifying the plan against current code
    picker is open.** `Modal` isn't stacking-safe — two simultaneously-`isOpen`
    instances double up backdrops and, more importantly, both attach an
    Escape-closes-on-`isOpen` listener, so an un-gated stack would let Escape
-   close the picker *and* the underlying `TemplateModal`/`SaveWorkflowDialog`
+   close the picker _and_ the underlying `TemplateModal`/`SaveWorkflowDialog`
    at once. Fix is a derived `isOpen && !fileBrowserState` passed only to the
    caller's own `<Modal>` JSX, never to the effects that reset the caller's
    form state on open — see Part 2's "Caller modal hides" note, and the Part
@@ -384,6 +390,6 @@ Two additional decisions surfaced while verifying the plan against current code
   an unsaved workflow → Location defaults to the last-saved directory (or repo
   root on first save) and Name defaults to the workflow's name → Browse
   changes Location without touching Name → Save writes to
-  `location/name.ctrlyoke.<format>` → save again and confirm the *next* Save
+  `location/name.ctrlyoke.<format>` → save again and confirm the _next_ Save
   As opens with the just-used directory as Location (workspaceState roundtrip
   still works for both the VS Code panel and the hosted browser client).

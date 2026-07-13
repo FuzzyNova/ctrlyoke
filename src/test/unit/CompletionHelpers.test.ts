@@ -81,8 +81,8 @@ suite("CompletionHelpers", () => {
 
   setup(() => {
     clearFilesCache();
-    ConfigurationUtils.shouldRespectGitignoreForCompletions =
-      (() => false) as typeof ConfigurationUtils.shouldRespectGitignoreForCompletions;
+    ConfigurationUtils.shouldRespectGitignoreForCompletions = (() =>
+      false) as typeof ConfigurationUtils.shouldRespectGitignoreForCompletions;
   });
 
   teardown(() => {

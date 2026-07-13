@@ -803,7 +803,9 @@ export class HostedWorkspaceViewerService {
     };
   }
 
-  private async getSyncCounts(repoRoot: string): Promise<
+  private async getSyncCounts(
+    repoRoot: string
+  ): Promise<
     Pick<
       WorkspaceScmStatusResponse,
       "incomingCommitCount" | "outgoingCommitCount"
@@ -1214,7 +1216,14 @@ export class HostedWorkspaceViewerService {
     try {
       await execFileAsync(
         "git",
-        ["-C", repoRoot, "show-ref", "--verify", "--quiet", `refs/heads/${name}`],
+        [
+          "-C",
+          repoRoot,
+          "show-ref",
+          "--verify",
+          "--quiet",
+          `refs/heads/${name}`,
+        ],
         { timeout: GIT_TIMEOUT_MS }
       );
       return name;

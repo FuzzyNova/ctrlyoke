@@ -48,10 +48,7 @@ interface AntigravityTranscriptEntry {
   content?: unknown;
 }
 
-export class AntigravityLogParser
-  extends BaseLogParser
-  implements ILogParser
-{
+export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedSessionId?: string;
   private cachedLastConversationsSessionId?: string;
 
@@ -175,9 +172,13 @@ export class AntigravityLogParser
     startTime: Date,
     sessionId?: string
   ): Promise<string | null> {
-    const candidates = this.findModifiedSessionLogs(this.getLogDirectory(), startTime, {
-      filter: (fileName) => /^cli-\d{8}_\d{6}\.log$/.test(fileName),
-    });
+    const candidates = this.findModifiedSessionLogs(
+      this.getLogDirectory(),
+      startTime,
+      {
+        filter: (fileName) => /^cli-\d{8}_\d{6}\.log$/.test(fileName),
+      }
+    );
 
     if (sessionId) {
       this.cachedSessionId = sessionId;
@@ -231,9 +232,7 @@ export class AntigravityLogParser
       }
     }
     return (
-      this.cachedSessionId ??
-      this.cachedLastConversationsSessionId ??
-      null
+      this.cachedSessionId ?? this.cachedLastConversationsSessionId ?? null
     );
   }
 
@@ -461,7 +460,9 @@ export class AntigravityLogParser
       return false;
     }
     return (
-      this.hasPendingTaskInTranscript(this.getTranscriptPath(sessionId, true)) ||
+      this.hasPendingTaskInTranscript(
+        this.getTranscriptPath(sessionId, true)
+      ) ||
       this.hasPendingTaskInTranscript(this.getTranscriptPath(sessionId, false))
     );
   }
@@ -625,8 +626,7 @@ export class AntigravityLogParser
     const event = [...(events as AntigravityLogEvent[])]
       .reverse()
       .find(
-        (candidate) =>
-          typeof candidate.contextWindowUsedTokens === "number"
+        (candidate) => typeof candidate.contextWindowUsedTokens === "number"
       );
     if (!event) {
       return undefined;

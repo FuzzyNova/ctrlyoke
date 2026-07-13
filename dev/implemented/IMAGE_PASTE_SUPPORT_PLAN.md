@@ -15,7 +15,7 @@ text renders an inline thumbnail for any `@path` reference that resolves to an i
 Two tiers of destination are in scope:
 
 - **Primary (v1): a committed, persistent attachment folder.** Pasted images are written under
-  `.ctrlyoke/attachments/`, which is *not* gitignored (unlike `.ctrlyoke/temp/`), so committing
+  `.ctrlyoke/attachments/`, which is _not_ gitignored (unlike `.ctrlyoke/temp/`), so committing
   the workflow file alongside its referenced images is enough to share both — no schema changes,
   no materialization step, the `@relativePath` reference is the real file forever. See
   [2. Choosing a Destination](#2-choosing-a-destination-committed-attachment-folder-vs-temp).
@@ -106,7 +106,7 @@ free by the file-reference regexes already in this file (`findContextReferenceMa
 `fullFile` pattern) and decorated by the existing `createLinkDecorationExtension` /
 `createFileRefDecorationExtension` machinery — no new CodeMirror decoration code is needed.
 Clicking it already opens the image in VS Code via the existing click handler
-(`createClickHandlerExtension`). Context-reference *linting* (`createContextReferenceLintExtension`)
+(`createClickHandlerExtension`). Context-reference _linting_ (`createContextReferenceLintExtension`)
 also applies unchanged — an image ref that gets deleted from disk (e.g. after the 24h cleanup
 sweep) will surface the same "context not found" warning as any other stale `@path`.
 
@@ -381,12 +381,12 @@ base64 in memory and return a `data:<mimeType>;base64,...` URI directly in the
 
 ## Message Protocol (Summary)
 
-| Message                    | Direction           | Payload                                                            |
-| --------------------------- | -------------------- | ---------------------------------------------------------------------- |
-| `SAVE_PASTED_IMAGE`         | Webview → Extension  | `{ seq, dataBase64, mimeType }` — always saved to the flat attachments store |
-| `PASTED_IMAGE_SAVED`        | Extension → Webview  | `{ seq, relativePath }` or `{ seq, error }`                            |
-| `REQUEST_FILE_PREVIEW_URI`  | Webview → Extension  | `{ seq, relativePath }` or `{ seq, embeddedId: string }` *(stretch)*   |
-| `FILE_PREVIEW_URI_RESPONSE` | Extension → Webview  | `{ seq, uri }` or `{ seq, error }`                                     |
+| Message                     | Direction           | Payload                                                                      |
+| --------------------------- | ------------------- | ---------------------------------------------------------------------------- |
+| `SAVE_PASTED_IMAGE`         | Webview → Extension | `{ seq, dataBase64, mimeType }` — always saved to the flat attachments store |
+| `PASTED_IMAGE_SAVED`        | Extension → Webview | `{ seq, relativePath }` or `{ seq, error }`                                  |
+| `REQUEST_FILE_PREVIEW_URI`  | Webview → Extension | `{ seq, relativePath }` or `{ seq, embeddedId: string }` _(stretch)_         |
+| `FILE_PREVIEW_URI_RESPONSE` | Extension → Webview | `{ seq, uri }` or `{ seq, error }`                                           |
 
 The webview sends no path or workflow context — the destination is always the flat
 `.ctrlyoke/attachments/` store (see [2. Destination](#2-destination-a-flat-content-addressed-attachment-store)).
@@ -406,22 +406,22 @@ the active harness") is a reasonable nice-to-have but not required for v1.
 
 ## Files Changed (Summary)
 
-| File                                                                        | Change                                                                 |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`               | New `createImagePasteExtension`, placeholder + `mapPos` tracking, per-seq timeout, seq-correlated save request |
-| `src/utils/TempFileManager.ts`                                              | `getAttachmentsDir()` (flat store) + `createPastedImageFile()` — content-addressed name, skip-on-collision dedup, mtime touch; widen `cleanupOrphanedFiles()` marker match (temp only) |
-| `src/ui/WebviewMessageRouter.ts`                                            | Handle `SAVE_PASTED_IMAGE` (writes to flat attachments store), `REQUEST_FILE_PREVIEW_URI` (panel → webview URI, hosted browser → data URI) |
-| `src/utils/ConfigurationUtils.ts`                                           | `PATH_CONSTANTS.ATTACHMENTS_DIR`                                          |
-| `src/types/DashboardConstants.ts`                                           | New `MESSAGE_TYPES` entries + shared MIME/size/extension constants & helpers (`mimeTypeToImageExtension`, `imageExtensionToMimeType`, `isImageRefPath`) |
-| `src/ui/webview-react/hooks/useMessageHandler.ts`                           | No-op registration for the two new response types                        |
-| `src/ui/webview-react/components/output/MarkdownText.tsx`                   | New `remarkImageRefs`/extended `remarkFileLinks`, `image-ref` allowed tag, `ImageRefThumbnail` component |
-| `src/ui/CtrlYokeWebviewProvider.ts`                                          | Add `.ctrlyoke/temp/` and `.ctrlyoke/attachments/` to `localResourceRoots` |
-| `src/server/CtrlYokeHostedServer.ts`                                        | No change — hosted thumbnail parity achieved via `data:` URIs in the router (routes through the same `WebviewMessageRouter`) |
-| `.gitignore`                                                                 | No change — confirm `.ctrlyoke/attachments/` stays un-ignored             |
-| `.gitattributes`                                                             | Already marks png/jpg/jpeg/gif as `binary` globally; added `*.webp binary` (the one missing paste format) |
-| *(stretch)* `schemas/prompt-schema.json`, `src/types/CtrlYokeTypes.ts`      | Add `embeddedAttachments` field                                           |
-| *(stretch)* `src/utils/ContextExpander.ts`, `src/core/harness/shared/CliPromptPreparer.ts` | Recognize/materialize `@embedded:<id>` tokens                |
-| *(stretch)* `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`   | "Embed for sharing" / "Extract to file" actions on image refs             |
+| File                                                                                       | Change                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                              | New `createImagePasteExtension`, placeholder + `mapPos` tracking, per-seq timeout, seq-correlated save request                                                                         |
+| `src/utils/TempFileManager.ts`                                                             | `getAttachmentsDir()` (flat store) + `createPastedImageFile()` — content-addressed name, skip-on-collision dedup, mtime touch; widen `cleanupOrphanedFiles()` marker match (temp only) |
+| `src/ui/WebviewMessageRouter.ts`                                                           | Handle `SAVE_PASTED_IMAGE` (writes to flat attachments store), `REQUEST_FILE_PREVIEW_URI` (panel → webview URI, hosted browser → data URI)                                             |
+| `src/utils/ConfigurationUtils.ts`                                                          | `PATH_CONSTANTS.ATTACHMENTS_DIR`                                                                                                                                                       |
+| `src/types/DashboardConstants.ts`                                                          | New `MESSAGE_TYPES` entries + shared MIME/size/extension constants & helpers (`mimeTypeToImageExtension`, `imageExtensionToMimeType`, `isImageRefPath`)                                |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                                          | No-op registration for the two new response types                                                                                                                                      |
+| `src/ui/webview-react/components/output/MarkdownText.tsx`                                  | New `remarkImageRefs`/extended `remarkFileLinks`, `image-ref` allowed tag, `ImageRefThumbnail` component                                                                               |
+| `src/ui/CtrlYokeWebviewProvider.ts`                                                        | Add `.ctrlyoke/temp/` and `.ctrlyoke/attachments/` to `localResourceRoots`                                                                                                             |
+| `src/server/CtrlYokeHostedServer.ts`                                                       | No change — hosted thumbnail parity achieved via `data:` URIs in the router (routes through the same `WebviewMessageRouter`)                                                           |
+| `.gitignore`                                                                               | No change — confirm `.ctrlyoke/attachments/` stays un-ignored                                                                                                                          |
+| `.gitattributes`                                                                           | Already marks png/jpg/jpeg/gif as `binary` globally; added `*.webp binary` (the one missing paste format)                                                                              |
+| _(stretch)_ `schemas/prompt-schema.json`, `src/types/CtrlYokeTypes.ts`                     | Add `embeddedAttachments` field                                                                                                                                                        |
+| _(stretch)_ `src/utils/ContextExpander.ts`, `src/core/harness/shared/CliPromptPreparer.ts` | Recognize/materialize `@embedded:<id>` tokens                                                                                                                                          |
+| _(stretch)_ `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                  | "Embed for sharing" / "Extract to file" actions on image refs                                                                                                                          |
 
 ## Non-Goals
 
@@ -455,7 +455,7 @@ the active harness") is a reasonable nice-to-have but not required for v1.
   `@.ctrlyoke/attachments/pasted-image-<hash>.png` reference, the file lands in the flat
   `.ctrlyoke/attachments/`, and clicking the decorated reference opens the image in VS Code.
   Commit both files and confirm a fresh checkout resolves the reference and renders the thumbnail.
-- Manual (**the dedup fix**): paste the *same* screenshot into two *different* workflows — confirm
+- Manual (**the dedup fix**): paste the _same_ screenshot into two _different_ workflows — confirm
   only one file exists in `.ctrlyoke/attachments/` and both workflows' references resolve to it.
 - Manual: paste into a brand-new, unsaved prompt — confirm it still lands in
   `.ctrlyoke/attachments/` (not temp).
@@ -466,6 +466,6 @@ the active harness") is a reasonable nice-to-have but not required for v1.
 - Manual: paste an oversized image — confirm a visible error and no hung placeholder.
 - Manual: simulate a dropped save response — confirm the per-seq timeout replaces the
   `[Pasting image…]` placeholder with a visible error rather than hanging.
-- *(stretch)* Manual: "Embed for sharing" on an attachment image — confirm the token becomes
+- _(stretch)_ Manual: "Embed for sharing" on an attachment image — confirm the token becomes
   `@embedded:<id>`, the workflow file is now self-contained, and running the step still reaches
   the harness (materializes to `.ctrlyoke/temp/` first). Confirm "Extract to file" round-trips.

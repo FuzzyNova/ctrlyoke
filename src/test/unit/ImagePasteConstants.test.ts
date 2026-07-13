@@ -22,7 +22,10 @@ suite("Image paste constants", () => {
 
     test("returns undefined for unsupported or missing types", () => {
       assert.strictEqual(mimeTypeToImageExtension("image/bmp"), undefined);
-      assert.strictEqual(mimeTypeToImageExtension("application/pdf"), undefined);
+      assert.strictEqual(
+        mimeTypeToImageExtension("application/pdf"),
+        undefined
+      );
       assert.strictEqual(mimeTypeToImageExtension(""), undefined);
       assert.strictEqual(mimeTypeToImageExtension(undefined), undefined);
     });
@@ -61,7 +64,9 @@ suite("Image paste constants", () => {
 
   suite("isImageRefPath", () => {
     test("true for image extensions (any case)", () => {
-      assert.ok(isImageRefPath(".ctrlyoke/attachments/flow/pasted-image-abc.png"));
+      assert.ok(
+        isImageRefPath(".ctrlyoke/attachments/flow/pasted-image-abc.png")
+      );
       assert.ok(isImageRefPath("docs/diagram.JPG"));
       assert.ok(isImageRefPath("a.jpeg"));
       assert.ok(isImageRefPath("a.gif"));

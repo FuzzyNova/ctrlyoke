@@ -205,7 +205,9 @@ export class PromptFileLoader {
       );
     }
 
-    Log.debug(`Loaded ${promptFile.steps.length} prompt(s) from ${displayName}`);
+    Log.debug(
+      `Loaded ${promptFile.steps.length} prompt(s) from ${displayName}`
+    );
 
     return workingFilePath;
   }

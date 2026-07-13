@@ -229,26 +229,26 @@ Add **"ctrlyoke: Deactivate Pro License"** and a Free/Pro status surface (status
 
 > **Custom hooks are Free, deliberately.** User-defined hooks are _local execution_ — they work on pure localhost, so they fail the governing test. More importantly, gating them would gate **compatibility, not a premium capability**: ctrlyoke runs its own start/stop-detection hooks, and the custom-hook interface exists so a user's real hooks coexist with (rather than get clobbered by) ctrlyoke's. Paywalling that reads as ransom and generates bad reviews. Table stakes, not Pro.
 
-| Capability                                                                                          | Free     | Pro |
-| --------------------------------------------------------------------------------------------------- | -------- | --- |
-| All 7 harnesses                                                                                     | ✅       | ✅  |
-| Core workflow execution (YAML/JSON/MD), **unlimited steps**                                         | ✅       | ✅  |
-| End conditions, pre-conditions, error/retry behavior                                                | ✅       | ✅  |
-| VS Code dashboard                                                                                   | ✅       | ✅  |
-| Completion / hook notifications                                                                     | ✅       | ✅  |
-| MCP manager + MCP server integration                                                                | ✅       | ✅  |
-| Agent & Skills manager                                                                              | ✅       | ✅  |
-| AI commit message generation                                                                        | ✅       | ✅  |
-| CLI binary, templates, output history                                                               | ✅       | ✅  |
-| **Custom hooks** (user-defined pre/post execution — local, = compatibility not premium)             | ✅       | ✅  |
-| Server page — localhost essentials (start/stop, port, copy URL, regenerate token)                   | ✅       | ✅  |
-| **Hosted dashboard — localhost (`127.0.0.1`)**                                                      | ✅       | ✅  |
-| **Hosted dashboard — remote / LAN / on-the-go** (`0.0.0.0` bind, LAN IP selector, QR-to-phone)      | ⏱️ trial | ✅  |
-| **HTTPS / self-signed cert generation** (only matters off-localhost)                                | ⏱️ trial | ✅  |
-| **Mobile push notifications** (push-to-phone — the on-the-go payoff)                                 | ⏱️ trial | ✅  |
-| **Air-gapped / offline activation** (enterprise; mechanically Pro-only)                             | ❌       | ✅  |
-| Custom icon color (personalize your installed-PWA home-screen icon; "thank-you" perk)               | ❌       | ✅  |
-| All future Pro features                                                                             | ❌       | ✅  |
+| Capability                                                                                     | Free     | Pro |
+| ---------------------------------------------------------------------------------------------- | -------- | --- |
+| All 7 harnesses                                                                                | ✅       | ✅  |
+| Core workflow execution (YAML/JSON/MD), **unlimited steps**                                    | ✅       | ✅  |
+| End conditions, pre-conditions, error/retry behavior                                           | ✅       | ✅  |
+| VS Code dashboard                                                                              | ✅       | ✅  |
+| Completion / hook notifications                                                                | ✅       | ✅  |
+| MCP manager + MCP server integration                                                           | ✅       | ✅  |
+| Agent & Skills manager                                                                         | ✅       | ✅  |
+| AI commit message generation                                                                   | ✅       | ✅  |
+| CLI binary, templates, output history                                                          | ✅       | ✅  |
+| **Custom hooks** (user-defined pre/post execution — local, = compatibility not premium)        | ✅       | ✅  |
+| Server page — localhost essentials (start/stop, port, copy URL, regenerate token)              | ✅       | ✅  |
+| **Hosted dashboard — localhost (`127.0.0.1`)**                                                 | ✅       | ✅  |
+| **Hosted dashboard — remote / LAN / on-the-go** (`0.0.0.0` bind, LAN IP selector, QR-to-phone) | ⏱️ trial | ✅  |
+| **HTTPS / self-signed cert generation** (only matters off-localhost)                           | ⏱️ trial | ✅  |
+| **Mobile push notifications** (push-to-phone — the on-the-go payoff)                           | ⏱️ trial | ✅  |
+| **Air-gapped / offline activation** (enterprise; mechanically Pro-only)                        | ❌       | ✅  |
+| Custom icon color (personalize your installed-PWA home-screen icon; "thank-you" perk)          | ❌       | ✅  |
+| All future Pro features                                                                        | ❌       | ✅  |
 
 **Remote-access trial.** New users get a **14-day, full-featured trial of remote access** — no card, no account — so they can taste coding on the go before deciding. When it lapses, the server keeps running on **localhost for free**; remote binding shows a friendly upsell. The trial start timestamp lives in `globalState`; it flows through the same `LicenseService`, so an activated license simply supersedes the trial.
 

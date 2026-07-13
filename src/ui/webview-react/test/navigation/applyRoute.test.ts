@@ -86,14 +86,12 @@ describe("applyRoute — workflow", () => {
   });
 
   it("posts SWITCH_WORKFLOW when the path matches a loaded workflow", () => {
-    useUiStore
-      .getState()
-      .setLoadedWorkflows([
-        {
-          id: "w1",
-          workingFilePath: "src/m.yaml",
-        } as unknown as WorkflowSummary,
-      ]);
+    useUiStore.getState().setLoadedWorkflows([
+      {
+        id: "w1",
+        workingFilePath: "src/m.yaml",
+      } as unknown as WorkflowSummary,
+    ]);
     const api = fakeVsCode();
     applyRoute({ workflow: "src/m.yaml" }, api);
     expect(api.postMessage).toHaveBeenCalledWith({

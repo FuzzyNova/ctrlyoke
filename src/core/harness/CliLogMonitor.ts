@@ -503,10 +503,7 @@ export class CliLogMonitor {
 
         const deadline = Date.now() + CliLogMonitor.DRAIN_DEADLINE_MS;
         while (Date.now() < deadline) {
-          const newEntries = await pump.readNewEntriesSince(
-            logPath,
-            startTime
-          );
+          const newEntries = await pump.readNewEntriesSince(logPath, startTime);
           if (newEntries.length === 0) {
             await new Promise((r) =>
               setTimeout(r, CliLogMonitor.DRAIN_POLL_INTERVAL_MS)

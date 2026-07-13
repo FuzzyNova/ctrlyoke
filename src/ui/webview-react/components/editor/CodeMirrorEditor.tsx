@@ -276,9 +276,12 @@ export function buildCodeMirrorCompletionResult(
       21: "class",
     };
 
-    const type = item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
+    const type =
+      item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
     const matchLabel =
-      useFilterTextForMatching && item.filterText ? item.filterText : item.label;
+      useFilterTextForMatching && item.filterText
+        ? item.filterText
+        : item.label;
 
     return {
       label: matchLabel,
@@ -682,18 +685,21 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // `@ref ` on success or an empty string to remove it on failure/timeout — then
   // forget the entry. Ranges are clamped to the current doc length to survive
   // races with concurrent edits.
-  const resolvePendingPaste = useCallback((seq: number, replacement: string) => {
-    const entry = pendingPastesRef.current.get(seq);
-    if (!entry) return;
-    clearTimeout(entry.timeoutId);
-    pendingPastesRef.current.delete(seq);
-    const view = viewRef.current;
-    if (!view) return;
-    const docLen = view.state.doc.length;
-    const from = Math.min(entry.from, docLen);
-    const to = Math.min(Math.max(entry.to, from), docLen);
-    view.dispatch({ changes: { from, to, insert: replacement } });
-  }, []);
+  const resolvePendingPaste = useCallback(
+    (seq: number, replacement: string) => {
+      const entry = pendingPastesRef.current.get(seq);
+      if (!entry) return;
+      clearTimeout(entry.timeoutId);
+      pendingPastesRef.current.delete(seq);
+      const view = viewRef.current;
+      if (!view) return;
+      const docLen = view.state.doc.length;
+      const from = Math.min(entry.from, docLen);
+      const to = Math.min(Math.max(entry.to, from), docLen);
+      view.dispatch({ changes: { from, to, insert: replacement } });
+    },
+    []
+  );
 
   const handlePastedImageSaved = useCallback(
     (seq: number, relativePath?: string, error?: string) => {
@@ -837,7 +843,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   // Custom completions source
   const customCompletions = useCallback(
-    (context: any): CompletionResult | Promise<CompletionResult | null> | null => {
+    (
+      context: any
+    ): CompletionResult | Promise<CompletionResult | null> | null => {
       // Use lastIndexOf to find the rightmost trigger character, mirroring
       // PromptCompletionProvider's approach. Using matchBefore with @"[^"]* was
       // buggy: when the prompt contained a literal "@" (e.g. `"@"`), the pattern

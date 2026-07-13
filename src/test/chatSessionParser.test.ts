@@ -497,7 +497,10 @@ suite("ChatSessionParser Tests", () => {
 
     test("should replay a well-formed log starting with a kind:0 Initial entry", () => {
       const sessionFile = createMockJsonlFile("test-jsonl-basic", [
-        { kind: 0, v: { version: 3, sessionId: "test-jsonl-basic", requests: [] } },
+        {
+          kind: 0,
+          v: { version: 3, sessionId: "test-jsonl-basic", requests: [] },
+        },
         {
           kind: 2,
           k: ["requests"],
@@ -525,7 +528,11 @@ suite("ChatSessionParser Tests", () => {
       // write recreates the file starting directly with Set/Push entries and
       // no kind:0 line. This must still parse instead of returning null.
       const sessionFile = createMockJsonlFile("test-jsonl-no-initial", [
-        { kind: 1, k: ["customTitle"], v: "Follow instructions in prompt file" },
+        {
+          kind: 1,
+          k: ["customTitle"],
+          v: "Follow instructions in prompt file",
+        },
         {
           kind: 2,
           k: ["requests"],
@@ -556,7 +563,10 @@ suite("ChatSessionParser Tests", () => {
       assert.strictEqual(output.events.length, 1);
       assert.deepStrictEqual(output.events[0].data, { text: "Done." });
 
-      assert.strictEqual(ChatSessionParser.isSessionComplete(sessionFile), true);
+      assert.strictEqual(
+        ChatSessionParser.isSessionComplete(sessionFile),
+        true
+      );
     });
 
     test("should apply a delete (kind:3) patch", () => {
@@ -818,7 +828,10 @@ suite("ChatSessionParser Tests", () => {
       // The launch request itself is legitimately "complete" by timings/modelState —
       // this is exactly why ChatSessionMonitor layers hasPendingBackgroundWork on
       // top instead of trusting isSessionComplete alone.
-      assert.strictEqual(ChatSessionParser.isSessionComplete(sessionFile), true);
+      assert.strictEqual(
+        ChatSessionParser.isSessionComplete(sessionFile),
+        true
+      );
     });
 
     test("hasPendingBackgroundWork flags the launch request before the resume arrives", () => {
@@ -846,7 +859,10 @@ suite("ChatSessionParser Tests", () => {
       assert.strictEqual((session.requests[1] as any).isSystemInitiated, true);
 
       const lastRequest = session.requests[session.requests.length - 1];
-      assert.strictEqual(ChatSessionParser.isSessionComplete(sessionFile), true);
+      assert.strictEqual(
+        ChatSessionParser.isSessionComplete(sessionFile),
+        true
+      );
       assert.strictEqual(
         ChatSessionParser.hasPendingBackgroundWork(lastRequest),
         false
@@ -903,8 +919,14 @@ suite("ChatSessionParser Tests", () => {
 
     test("merges the launch request and its isSystemInitiated resume, no steer", () => {
       const sessionFile = createMockSessionFile("test-collect-resume", [
-        completeRequest("Follow instructions in background-test.prompt.md", asyncLaunchExtra()),
-        { ...completeRequest("[Terminal notification: completed.]"), isSystemInitiated: true },
+        completeRequest(
+          "Follow instructions in background-test.prompt.md",
+          asyncLaunchExtra()
+        ),
+        {
+          ...completeRequest("[Terminal notification: completed.]"),
+          isSystemInitiated: true,
+        },
       ]);
 
       const result = parser.collectFollowUpActivity(sessionFile, -1, 0);
@@ -974,7 +996,10 @@ suite("ChatSessionParser Tests", () => {
       const sessionFile = createMockSessionFile("test-collect-chained", [
         completeRequest("Follow instructions in prompt.md", asyncLaunchExtra()),
         {
-          ...completeRequest("[Terminal notification: first task completed.]", asyncLaunchExtra()),
+          ...completeRequest(
+            "[Terminal notification: first task completed.]",
+            asyncLaunchExtra()
+          ),
           isSystemInitiated: true,
         },
         {

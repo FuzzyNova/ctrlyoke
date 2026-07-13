@@ -41,7 +41,7 @@ steps:
 Key fields:
 
 - **`prompt`** — the instruction for that step. Reference a file with `@path/to/file.ts` or a whole directory with `@path/to/dir/` (trailing slash). `@` is **only** for files and directories — there is no "whole workspace" reference. For broad context, reference the relevant directories or just describe what to analyze.
-- **`model`** *(optional)* — a model override for the step. Omit it to inherit the workflow/user default. Model names are **harness-specific**, so prefer describing intent (see Models) over hardcoding a value.
+- **`model`** _(optional)_ — a model override for the step. Omit it to inherit the workflow/user default. Model names are **harness-specific**, so prefer describing intent (see Models) over hardcoding a value.
 - **`resumeSession: true`** — continue the prior step's conversation (shared live context) instead of starting fresh. **Only use it when the combined work fits one context window** — small, tightly-coupled steps (e.g. implement right after plan on a small change). For larger features, keep sessions separate and share context through a written plan doc instead (see Session strategy).
 - **`endCondition`** — run a `script` after the step and gate on its result. `returns: "true"` passes on exit code 0; on failure it re-runs the step with `retryPrompt` up to `maxRetries` times. Retry placeholders: `{stdout}`, `{stderr}`, `{exitCode}`. Use this at checkpoints (tests, lint, build).
 

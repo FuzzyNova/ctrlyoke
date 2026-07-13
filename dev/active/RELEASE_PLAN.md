@@ -252,21 +252,21 @@ a strong new-user story. The only deferred piece is the interactive tour (see no
 > `ROADMAP.md`.
 
 - [x] **Built-in agent correctness** — DONE. `ctrlyoke-orchestrator` was renamed to
-  `ctrlyoke-workflow-composer` and rewritten (YAML-first, no hardcoded/dead model IDs,
-  trimmed); a new `test-repair` agent was added and wired into the `fix-tests` template;
-  `spec-orchestrator` audited clean. See
-  [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part A.
+      `ctrlyoke-workflow-composer` and rewritten (YAML-first, no hardcoded/dead model IDs,
+      trimmed); a new `test-repair` agent was added and wired into the `fix-tests` template;
+      `spec-orchestrator` audited clean. See
+      [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part A.
 - [x] **Template variables** — DONE. Extended the variable model with `default` /
-  `description` / `multiline`, then brought `simple-feature` / `full-feature` / `fix-tests`
-  up to the typed `_templateMeta.variables` pattern (UI renders defaults/descriptions/
-  textareas; blanks fall back to defaults). Documented in `docs/workflows/templates.md`.
-  ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
+      `description` / `multiline`, then brought `simple-feature` / `full-feature` / `fix-tests`
+      up to the typed `_templateMeta.variables` pattern (UI renders defaults/descriptions/
+      textareas; blanks fall back to defaults). Documented in `docs/workflows/templates.md`.
+      ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
 - [x] **`ctrlyoke-tech-support` agent** — DONE. Built-in support/onboarding agent for new users, with dashboard navigation, workflow authoring, harness, MCP, validation, session, state-file, and troubleshooting guidance grounded in current product docs/UI; include it in pre-publish docs coherence checks. ([`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md))
 - [ ] **Native VS Code Getting Started integration** — `contributes.walkthroughs` (the
-  standard post-install Getting Started page most extensions use) + dashboard empty state.
-  A blank cold-open hurts Marketplace first impressions. ([`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md) Phase 1)
+      standard post-install Getting Started page most extensions use) + dashboard empty state.
+      A blank cold-open hurts Marketplace first impressions. ([`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md) Phase 1)
 - [ ] **Harness preflight** — proactively tell a user with no installed harness CLI how to
-  install/auth one, instead of only failing at run time. ([`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md))
+      install/auth one, instead of only failing at run time. ([`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md))
 
 > **Interactive tour deferred — and possibly unnecessary.** If the native Getting Started
 > walkthrough plus strong screenshots/GIF (§4, now a blocker) deliver a good first
@@ -297,11 +297,11 @@ service, CLI launch UX) and does not gate a first release.
 Decision (July 5, 2026): defer standalone; do not ship a non-functional control.
 
 - [x] Hide the "Standalone port" row in `ServerSection.tsx` — the `server.standalonePort`
-  setting is inert (nothing reads it) and misplaced (it configures a non-VS-Code process).
-  Type/schema/default (`4748`) retained so standalone can surface it later with no config
-  migration.
+      setting is inert (nothing reads it) and misplaced (it configures a non-VS-Code process).
+      Type/schema/default (`4748`) retained so standalone can surface it later with no config
+      migration.
 - [ ] Post-launch: implement `STANDALONE_SERVER_PLAN.md` Phases 5–10 and re-expose the port
-  from the standalone server's own surface (not the VS Code Server section).
+      from the standalone server's own surface (not the VS Code Server section).
 
 ---
 
@@ -349,7 +349,7 @@ README visuals are effectively MVP for conversion and pair with the native Getti
 Started onboarding (§2.9).
 
 - [ ] **BLOCKER:** Add polished dashboard screenshots and at least one demo GIF to `images/`,
-  the README, and the Marketplace listing.
+      the README, and the Marketplace listing.
 - [ ] Add `ctrlyoke.dev` links after the landing page exists.
 - [ ] Add `support@ctrlyoke.dev` after the inbox exists.
 - [ ] Add a short Known Issues section if carrying known harness-specific rough edges into v0.1.0.
@@ -406,33 +406,33 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 
 ## Summary Checklist
 
-| Item                                       | Status        | Notes                                                                                       |
-| ------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------- |
-| Populate `CHANGELOG.md` for `0.1.0`        | DONE          | Current changelog has a full entry                                                          |
-| Build release VSIX                         | DONE          | `ctrlyoke-0.1.0.vsix` exists                                                                |
-| Test package on Linux                      | DONE          | User-reported complete                                                                      |
-| Test package on macOS                      | DONE          | User-reported complete                                                                      |
-| Fix VSIX allowlist / webview assets        | DONE          | `.vscodeignore` is allowlist-based                                                          |
-| Marketplace metadata                       | DONE          | Metadata is in place; external links/domains are tracked in §2.7                              |
-| README harness coverage                    | DONE          | All seven harnesses listed                                                                  |
-| README/package VS Code version consistency | DONE          | Both say 1.104.0                                                                            |
-| Business email/support identity            | DONE          | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured                                           |
-| Publisher identity                         | DONE          | `fuzzynova`, repo at FuzzyNova/ctrlyoke                                                     |
-| License/commercial terms                   | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
-| **Remove Gemini / add Antigravity harness** | **DONE**      | Antigravity CLI is wired through source/docs/schemas; Gemini CLI removed from live product surfaces (§2.5) |
-| **Pro licensing implementation**           | **OPEN**      | **Blocker — site advertises Pro; extension gating unbuilt; see §2.6 / `PRO_LICENSE_PLAN.md`** |
-| **ctrlyoke external cutover**              | **OPEN**      | **Blocker — repo/homepage URLs + support inboxes 404 until done; see §2.7 / `CTRLYOKE_REBRAND_CUTOVER.md`** |
-| Legal effective-date placeholders          | DONE          | `LICENSE.md` and `PRIVACY.md` dates are set (§2.8)                                           |
-| **Built-in agent correctness**             | **DONE**      | Workflow composer/test-repair/template variable cleanup complete (§2.9)                     |
-| **New-user experience** (onboarding/preflight) | **OPEN** | **Tech-support agent done; next: Getting Started + harness preflight (§2.9)**            |
-| **Screenshots + demo GIF**                 | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                          |
-| Pre-publish security review                | DONE          | Security review and release-blocking triage are complete (§2.10)                             |
-| Standalone server                          | DEFERRED      | Not a blocker; hosted server ships. Standalone `ctrlyoke server` deferred, inert setting hidden (§2.11) |
-| Extension-host OOM crash                   | RESOLVED      | Confirmed fixed by Nathan — no longer a blocker                                              |
-| `npm audit` sanity check                   | PRE-PUBLISH   | Down to dev-only findings (`DEPENDENCY_UPGRADE_PLAN.md`); confirm no new prod advisories     |
-| Final `vsce ls` package inspection         | OPEN          | Run immediately before publish                                                              |
-| Marketplace publish                        | OPEN          | Blocked on licensing, cutover, onboarding/visuals, and final package inspection               |
-| npm CLI publish                            | DEFERRED      | Separate packaging decision                                                                 |
+| Item                                           | Status        | Notes                                                                                                       |
+| ---------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| Populate `CHANGELOG.md` for `0.1.0`            | DONE          | Current changelog has a full entry                                                                          |
+| Build release VSIX                             | DONE          | `ctrlyoke-0.1.0.vsix` exists                                                                                |
+| Test package on Linux                          | DONE          | User-reported complete                                                                                      |
+| Test package on macOS                          | DONE          | User-reported complete                                                                                      |
+| Fix VSIX allowlist / webview assets            | DONE          | `.vscodeignore` is allowlist-based                                                                          |
+| Marketplace metadata                           | DONE          | Metadata is in place; external links/domains are tracked in §2.7                                            |
+| README harness coverage                        | DONE          | All seven harnesses listed                                                                                  |
+| README/package VS Code version consistency     | DONE          | Both say 1.104.0                                                                                            |
+| Business email/support identity                | DONE          | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured                                                           |
+| Publisher identity                             | DONE          | `fuzzynova`, repo at FuzzyNova/ctrlyoke                                                                     |
+| License/commercial terms                       | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney                 |
+| **Remove Gemini / add Antigravity harness**    | **DONE**      | Antigravity CLI is wired through source/docs/schemas; Gemini CLI removed from live product surfaces (§2.5)  |
+| **Pro licensing implementation**               | **OPEN**      | **Blocker — site advertises Pro; extension gating unbuilt; see §2.6 / `PRO_LICENSE_PLAN.md`**               |
+| **ctrlyoke external cutover**                  | **OPEN**      | **Blocker — repo/homepage URLs + support inboxes 404 until done; see §2.7 / `CTRLYOKE_REBRAND_CUTOVER.md`** |
+| Legal effective-date placeholders              | DONE          | `LICENSE.md` and `PRIVACY.md` dates are set (§2.8)                                                          |
+| **Built-in agent correctness**                 | **DONE**      | Workflow composer/test-repair/template variable cleanup complete (§2.9)                                     |
+| **New-user experience** (onboarding/preflight) | **OPEN**      | **Tech-support agent done; next: Getting Started + harness preflight (§2.9)**                               |
+| **Screenshots + demo GIF**                     | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                                          |
+| Pre-publish security review                    | DONE          | Security review and release-blocking triage are complete (§2.10)                                            |
+| Standalone server                              | DEFERRED      | Not a blocker; hosted server ships. Standalone `ctrlyoke server` deferred, inert setting hidden (§2.11)     |
+| Extension-host OOM crash                       | RESOLVED      | Confirmed fixed by Nathan — no longer a blocker                                                             |
+| `npm audit` sanity check                       | PRE-PUBLISH   | Down to dev-only findings (`DEPENDENCY_UPGRADE_PLAN.md`); confirm no new prod advisories                    |
+| Final `vsce ls` package inspection             | OPEN          | Run immediately before publish                                                                              |
+| Marketplace publish                            | OPEN          | Blocked on licensing, cutover, onboarding/visuals, and final package inspection                             |
+| npm CLI publish                                | DEFERRED      | Separate packaging decision                                                                                 |
 
 ---
 

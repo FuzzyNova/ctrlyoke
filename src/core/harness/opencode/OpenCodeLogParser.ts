@@ -242,8 +242,9 @@ export class OpenCodeLogParser extends BaseLogParser {
     if (event.type !== "user_text") {
       return "other";
     }
-    const text = ((event as Record<string, any>).text as string | undefined)
-      ?.trim();
+    const text = (
+      (event as Record<string, any>).text as string | undefined
+    )?.trim();
     if (!text) {
       return "other";
     }
@@ -267,8 +268,9 @@ export class OpenCodeLogParser extends BaseLogParser {
     if (event.type !== "user_text") {
       return undefined;
     }
-    const text = ((event as Record<string, any>).text as string | undefined)
-      ?.trim();
+    const text = (
+      (event as Record<string, any>).text as string | undefined
+    )?.trim();
     return text || undefined;
   }
 

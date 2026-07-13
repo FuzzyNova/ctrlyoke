@@ -211,7 +211,9 @@ export class CtrlYokeWebviewProvider
    * trusted workspace root and is an allowed image type before returning it.
    */
   private getImageResourceRoots(): vscode.Uri[] {
-    return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri);
+    return (vscode.workspace.workspaceFolders ?? []).map(
+      (folder) => folder.uri
+    );
   }
 
   public resolveWebviewView(

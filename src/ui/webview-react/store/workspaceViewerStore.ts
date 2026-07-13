@@ -169,10 +169,7 @@ interface WorkspaceViewerActions {
   setMobileDiffVisible(v: boolean): void;
 
   // Repos
-  setRepos(
-    repos: WorkspaceRepo[],
-    prefixRepoIds: Record<string, string>
-  ): void;
+  setRepos(repos: WorkspaceRepo[], prefixRepoIds: Record<string, string>): void;
   setSelectedRepoId(id: string | null): void;
 
   // Source control

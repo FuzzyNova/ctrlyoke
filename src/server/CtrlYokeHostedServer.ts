@@ -92,7 +92,9 @@ export function sanitizeThemeVars(
  * charset and length. Returns null when nothing usable remains (caller then mints a
  * per-connection fallback id).
  */
-export function sanitizeBrowserClientId(supplied: string | null): string | null {
+export function sanitizeBrowserClientId(
+  supplied: string | null
+): string | null {
   const sanitized = supplied
     ? supplied.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64)
     : "";

@@ -653,7 +653,8 @@ export class CopilotLogParser extends BaseLogParser {
     if (e.type !== "user.message") {
       return undefined;
     }
-    const text = typeof e.data?.content === "string" ? e.data.content.trim() : "";
+    const text =
+      typeof e.data?.content === "string" ? e.data.content.trim() : "";
     return text || undefined;
   }
 

@@ -42,7 +42,7 @@ variable pattern.
 ### A. Fix / modernize the built-in agents (correctness)
 
 > **Reframe (decided July 2026):** "orchestrator" was overloaded. There are two distinct
-> roles: a **design-time author** that composes a workflow *file* from a request, and a
+> roles: a **design-time author** that composes a workflow _file_ from a request, and a
 > **run-time controller** that lives inside a running workflow's `finalStep` and extends
 > the queue via the `ctrlyoke_append_queue` MCP tool. The old `ctrlyoke-orchestrator` was
 > the former (written before `mcp-server.ts` existed) but misnamed. It was **renamed to

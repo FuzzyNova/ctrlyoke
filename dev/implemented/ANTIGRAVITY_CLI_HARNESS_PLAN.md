@@ -72,7 +72,7 @@ Followed up on the two open research items above with real `agy` calls (headless
 
 ### MCP — confirmed non-functional in this build, not just "unverified"
 
-Built a real test: a workspace `.agents/mcp_config.json` pointing at ctrlyoke's own working MCP stdio server (`out/mcp-server.js`, the same one `mcp.harness.test.ts` uses against `copilot-cli`), then a headless `-p` prompt that explicitly instructed the model to call `ctrlyoke_queue_status`. Result: the model itself replied that it has **no such tool in its tool list**, and suggested checking whether the MCP server was configured at all. Repeated with a probe (nonexistent-command) entry in both the workspace and the **global** `~/.gemini/config/mcp_config.json` — neither produced any log line about MCP init, spawn attempts, or the server name, in headless mode. Then repeated the real-server test in **interactive** mode (`-i`, real pty): the native permission system did show `Requested Permission: mcp(*/ctrlyoke_queue_status)` dialogs (twice) — proving the model *attempted* the call and the permission layer recognized the tool name pattern — but after granting permission, the model reported *"I don't currently have `ctrlyoke_queue_status` available as an MCP tool in my tool set... the ctrlyoke MCP server may not be connected/active in your current session."*
+Built a real test: a workspace `.agents/mcp_config.json` pointing at ctrlyoke's own working MCP stdio server (`out/mcp-server.js`, the same one `mcp.harness.test.ts` uses against `copilot-cli`), then a headless `-p` prompt that explicitly instructed the model to call `ctrlyoke_queue_status`. Result: the model itself replied that it has **no such tool in its tool list**, and suggested checking whether the MCP server was configured at all. Repeated with a probe (nonexistent-command) entry in both the workspace and the **global** `~/.gemini/config/mcp_config.json` — neither produced any log line about MCP init, spawn attempts, or the server name, in headless mode. Then repeated the real-server test in **interactive** mode (`-i`, real pty): the native permission system did show `Requested Permission: mcp(*/ctrlyoke_queue_status)` dialogs (twice) — proving the model _attempted_ the call and the permission layer recognized the tool name pattern — but after granting permission, the model reported _"I don't currently have `ctrlyoke_queue_status` available as an MCP tool in my tool set... the ctrlyoke MCP server may not be connected/active in your current session."_
 
 **Conclusion: MCP servers configured via either `.agents/mcp_config.json` (workspace) or `~/.gemini/config/mcp_config.json` (global) do not become callable tools in this build (1.0.16), in headless or interactive mode**, despite the permission layer being aware of the attempted call. This goes beyond issue #60 (which described only the workspace path being ignored) — here neither path worked with a real, working server. **Recommendation: drop MCP support from `antigravity-cli` v1 entirely.** B.1's "`.agents/mcp_config.json` writer + `serverUrl` + cleanup" design should be shelved until Google fixes MCP loading upstream; A.9's "MCP: Gemini-ish workspace file" row should be changed to "not supported in v1."
 
@@ -112,6 +112,7 @@ Every group object always carries all 5 event keys; unused ones are `null` rathe
 > **Payload shape confirmed**: `PreInvocation`/`PostInvocation` carry `{artifactDirectoryPath, conversationId, initialNumSteps, invocationNum, modelName, transcriptPath, workspacePaths}`. `Stop` carries `{artifactDirectoryPath, conversationId, error, executionNum, fullyIdle, modelName, terminationReason, transcriptPath, workspacePaths}`. Both confirm `conversationId` is present per A.6/1.0.14 — no glog parsing needed for interactive session ID.
 
 **Consequences for Part B**:
+
 - `AntigravityNotificationMonitor.buildHookConfig()` must emit the group-keyed shape above (one group, e.g. `"ctrlyoke"`, with all 5 event keys present and `null` for unused ones), not Claude's array-of-groups-per-event shape.
 - The ctrlyoke logical→native event map in A.6/B.1 needs to drop `sessionStart→SessionStart` and `userPromptSubmit→UserPromptSubmit` (neither event exists) and add `PreInvocation`/`PostInvocation` as available native hooks.
 - **RESOLVED**: use **`Stop`** as the interactive per-turn completion signal. `PostInvocation` fires per LLM invocation, so tool-using turns can produce multiple `PostInvocation` hooks before the agent is actually idle. The hook script must **not** emit `{"decision":...}` on stdout for `PreInvocation`/`PostInvocation`/`Stop` (unknown-field error) — only the `PreToolUse` decision-hook path should forward a decision response; invocation/stop handlers should emit `{}`.
@@ -214,14 +215,14 @@ With no `--output-format` flag, `agy --print "..."` is expected to print the mod
 
 Antigravity's stdin/stdout hook I/O is close to Claude's, but the config file shape and event set are agy-specific. ctrlyoke's logical→native event map becomes:
 
-| ctrlyoke logical    | Antigravity native                           |
-| ------------------- | -------------------------------------------- |
-| `stop`              | `Stop`                                       |
-| `sessionStart`      | `PreInvocation`                              |
-| `preToolUse`        | `PreToolUse`                                 |
-| `postToolUse`       | `PostToolUse`                                |
-| `userPromptSubmit`  | unsupported                                  |
-| `permissionRequest` | unsupported                                  |
+| ctrlyoke logical    | Antigravity native |
+| ------------------- | ------------------ |
+| `stop`              | `Stop`             |
+| `sessionStart`      | `PreInvocation`    |
+| `preToolUse`        | `PreToolUse`       |
+| `postToolUse`       | `PostToolUse`      |
+| `userPromptSubmit`  | unsupported        |
+| `permissionRequest` | unsupported        |
 
 ### A.7 Completion detection
 

@@ -55,9 +55,7 @@ export const FileBrowserModal: React.FC = () => {
       const fwd = (p: string) => p.replace(/\\/g, "/");
       setEntries(result.entries.map((e) => ({ ...e, path: fwd(e.path) })));
       setPath(fwd(result.path));
-      setParentPath(
-        result.parentPath !== null ? fwd(result.parentPath) : null
-      );
+      setParentPath(result.parentPath !== null ? fwd(result.parentPath) : null);
       setRootLabel(result.rootLabel);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -201,7 +199,9 @@ export const FileBrowserModal: React.FC = () => {
                   >
                     <EntryRow
                       entry={entry}
-                      isSelected={!isDirectoryMode && selectedFile === entry.path}
+                      isSelected={
+                        !isDirectoryMode && selectedFile === entry.path
+                      }
                       statusColorClass={undefined}
                       onClick={() => {
                         if (isUnselectableFile) return;

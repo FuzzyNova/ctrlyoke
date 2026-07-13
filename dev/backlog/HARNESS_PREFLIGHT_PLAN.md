@@ -31,7 +31,7 @@ run anything.
 
 ### Scope
 
-- **First-run preflight:** on activation / first dashboard open, check whether *any*
+- **First-run preflight:** on activation / first dashboard open, check whether _any_
   supported harness CLI is available (reuse `CliProviderUtils.checkCliAvailability` +
   the provider `config.installHint`). If none are, show a clear, actionable panel:
   which CLIs are supported, the install command for each (`installHint`), and an auth

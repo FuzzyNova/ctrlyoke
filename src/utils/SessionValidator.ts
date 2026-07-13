@@ -54,8 +54,8 @@ export class SessionValidator {
    * - **Claude CLI**: Strict UUID v4 format required (rejects invalid with error)
    * - **Codex CLI**: Any non-empty string (typically thread_xxx)
    * - **OpenCode CLI**: Must start with "ses_" followed by alphanumeric characters
- * - **Qwen CLI**: Strict UUID v4 format required
- * - **Antigravity CLI**: Strict UUID v4 format required
+   * - **Qwen CLI**: Strict UUID v4 format required
+   * - **Antigravity CLI**: Strict UUID v4 format required
    * - **Copilot Chat**: Not applicable (no session IDs)
    *
    * @param sessionId Session ID to validate

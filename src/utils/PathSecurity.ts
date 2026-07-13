@@ -12,9 +12,7 @@ export function isPathWithinDirectory(
   candidate: string,
   directory: string
 ): boolean {
-  return (
-    candidate === directory || candidate.startsWith(directory + path.sep)
-  );
+  return candidate === directory || candidate.startsWith(directory + path.sep);
 }
 
 /**

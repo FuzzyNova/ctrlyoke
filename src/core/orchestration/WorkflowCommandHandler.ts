@@ -350,7 +350,8 @@ export class WorkflowCommandHandler {
             },
             {
               label: "User",
-              description: "~/.ctrlyoke/templates — available in every workspace",
+              description:
+                "~/.ctrlyoke/templates — available in every workspace",
               scope: "user" as const,
             },
           ],

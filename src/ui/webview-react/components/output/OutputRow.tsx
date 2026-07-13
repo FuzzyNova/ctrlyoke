@@ -744,9 +744,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
         const data = event.data as FollowUpResumedData;
-        const resumedAtLabel = data.resumedAt
-          ? formatTime(data.resumedAt)
-          : "";
+        const resumedAtLabel = data.resumedAt ? formatTime(data.resumedAt) : "";
         return (
           <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]">
             <div className="flex-1 h-px bg-panel-border" />

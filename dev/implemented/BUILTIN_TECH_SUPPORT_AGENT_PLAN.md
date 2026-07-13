@@ -39,10 +39,10 @@ a new user:
   It **will** drift from the real product unless there is a single source. Options:
   1. Author it by hand and add it to the "docs coherence" pre-publish check (cheapest; drift risk).
   2. Generate/verify it from the docs site content at build time (more robust; more work).
-  Recommendation for v1: **hand-author, and add a checklist item** to re-verify the
-  agent whenever harnesses, formats, or major features change (same discipline as
-  the `.github/instructions/*` shared memory). Explicitly instruct the agent to say
-  "check the current docs at ctrlyoke.dev/docs" rather than inventing specifics it is unsure of.
+     Recommendation for v1: **hand-author, and add a checklist item** to re-verify the
+     agent whenever harnesses, formats, or major features change (same discipline as
+     the `.github/instructions/*` shared memory). Explicitly instruct the agent to say
+     "check the current docs at ctrlyoke.dev/docs" rather than inventing specifics it is unsure of.
 - **Anti-hallucination framing.** The agent prompt must tell it to answer only from
   the provided knowledge and defer to the docs/support inbox otherwise — a confidently
   wrong support agent is worse than none.

@@ -20,9 +20,21 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 
-const EXTENSION_SUMMARY = path.join(root, "coverage", "extension", "coverage-summary.json");
+const EXTENSION_SUMMARY = path.join(
+  root,
+  "coverage",
+  "extension",
+  "coverage-summary.json"
+);
 const EXTENSION_HTML = "coverage/extension/index.html";
-const UI_SUMMARY = path.join(root, "src", "ui", "webview-react", "coverage", "coverage-summary.json");
+const UI_SUMMARY = path.join(
+  root,
+  "src",
+  "ui",
+  "webview-react",
+  "coverage",
+  "coverage-summary.json"
+);
 const UI_HTML = "src/ui/webview-react/coverage/index.html";
 const OUTPUT_PATH = path.join(root, "dev", "backlog", "TESTING_GAPS.md");
 
@@ -34,7 +46,8 @@ const MIN_STATEMENTS = 15;
 // counts method signatures as "statements", so these always show as 0%
 // despite having nothing to test. This codebase uses `I<Name>.ts` Hungarian
 // notation for interface-only files (ICliProvider.ts, ILogParser.ts, ...).
-const EXCLUDE_NAME = /Types\.ts$|Settings\.ts$|\/interfaces\/|\/I[A-Z][A-Za-z]*\.ts$/;
+const EXCLUDE_NAME =
+  /Types\.ts$|Settings\.ts$|\/interfaces\/|\/I[A-Z][A-Za-z]*\.ts$/;
 // Build artifacts / vendored or copied assets, not first-party logic to unit test here.
 const EXCLUDE_PATH = /\/out\/(templates|schemas|runtime-deps)\//;
 
@@ -45,7 +58,12 @@ function toRepoRelative(absPath) {
 function loadRows(summaryPath) {
   if (!fs.existsSync(summaryPath)) return null;
   const data = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
-  const asOf = fs.statSync(summaryPath).mtime.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  const asOf =
+    fs
+      .statSync(summaryPath)
+      .mtime.toISOString()
+      .slice(0, 16)
+      .replace("T", " ") + " UTC";
   const total = data.total.statements.pct;
 
   const rows = [];
@@ -99,7 +117,10 @@ function renderSection(title, htmlReport, runCommand, section) {
   }
 
   if (remaining > 0) {
-    lines.push("", `_${remaining} more file(s) below 100% not shown — see the HTML report._`);
+    lines.push(
+      "",
+      `_${remaining} more file(s) below 100% not shown — see the HTML report._`
+    );
   }
 
   return lines.join("\n") + "\n";

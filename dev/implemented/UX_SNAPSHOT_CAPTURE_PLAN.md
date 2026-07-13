@@ -13,7 +13,7 @@ viewport, toggled on/off from
 **Motivating use case:** Nathan often drives ctrlyoke from a phone (PWA / hosted dashboard)
 where there are no browser dev tools to inspect and copy the rendered DOM. Raw HTML alone
 doesn't tell the full story — the utility-class soup (Tailwind) means the interesting
-information is *which CSS actually applied to each element and why*. The snapshot must capture
+information is _which CSS actually applied to each element and why_. The snapshot must capture
 both, on-device, with one tap, and land somewhere an agent (or Nathan on desktop later) can
 read it.
 
@@ -43,17 +43,17 @@ So the plan captures **all three layers** (HTML + computed + matched author rule
 explicit in the output about the provenance approximation, rather than pretending to be
 DevTools.
 
-### Existing libraries — evaluated, mostly not a fit for the *text* goal
+### Existing libraries — evaluated, mostly not a fit for the _text_ goal
 
 The user asked not to reinvent the wheel. The wheel that exists is for **visual/image**
 snapshots, not text-with-provenance:
 
-| Library | Output | Fit |
-| --- | --- | --- |
-| `@zumer/snapdom` | SVG/PNG (inlines computed styles into a clone) | Possible follow-up PNG companion; not text/provenance, and can't capture the WebGL terminal — **deferred, see below** |
-| `html-to-image`, `modern-screenshot`, `dom-to-image-more` | PNG/SVG via inlined computed styles | Same — image only |
-| `html2canvas` | Canvas raster | Image only, lossy for text |
-| `juice` | HTML with CSS inlined | Node/email-oriented; needs raw CSS source, no per-element provenance |
+| Library                                                   | Output                                         | Fit                                                                                                                   |
+| --------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `@zumer/snapdom`                                          | SVG/PNG (inlines computed styles into a clone) | Possible follow-up PNG companion; not text/provenance, and can't capture the WebGL terminal — **deferred, see below** |
+| `html-to-image`, `modern-screenshot`, `dom-to-image-more` | PNG/SVG via inlined computed styles            | Same — image only                                                                                                     |
+| `html2canvas`                                             | Canvas raster                                  | Image only, lossy for text                                                                                            |
+| `juice`                                                   | HTML with CSS inlined                          | Node/email-oriented; needs raw CSS source, no per-element provenance                                                  |
 
 **Recommendation:** build a small custom serializer for the text snapshot (no runtime
 dependency — it's ~150 lines of DOM walking over standard `getComputedStyle` /
@@ -122,7 +122,7 @@ subtree-scoped mode can be a later iteration if full-page files prove unwieldy o
   `StartupOverlay` / `WorkspaceViewerModal`). It only mounts when **(a)** the build is a dev
   build (`useSettingsStore(s => s.dev?.enabled)`) **and (b)** the user toggle is on. On press it
   calls `captureUxSnapshot()` and `vscode.postMessage({ type: UX_SNAPSHOT_CAPTURE, markdown,
-  png })`, then shows a toast (`useUiStore(s => s.showToast)`) echoing the saved path once the
+png })`, then shows a toast (`useUiStore(s => s.showToast)`) echoing the saved path once the
   extension replies.
 - **Toggle in `DeveloperSection.tsx`** — a new `SettingToggleRow` "Show UX snapshot button"
   under a "Debug Capture" subsection (same pattern as the existing Performance Profiling
@@ -164,12 +164,12 @@ subtree-scoped mode can be a later iteration if full-page files prove unwieldy o
 
 The phone PWA is `isStandalone`, and the decision is: **the server saves the file so a desktop
 agent can read it — never a client-side download.** The good news from the code is that this
-requires *no new transport*:
+requires _no new transport_:
 
 - The hosted server already forwards every inbound client WebSocket message through the
   **same** router the webview uses:
   `CtrlYokeHostedServer.setupWebSocket()` → `webviewProvider.routeExternalMessage(msg, send,
-  clientTag)` (`src/server/CtrlYokeHostedServer.ts` ~line 1330 →
+clientTag)` (`src/server/CtrlYokeHostedServer.ts` ~line 1330 →
   `src/ui/CtrlYokeWebviewProvider.ts:964`). So the single `UX_SNAPSHOT_CAPTURE` handler
   registered in `WebviewMessageRouter.ts` serves **both** the webview and the phone.
 - On the phone path, the handler must write using the **server's** `workspaceRoot`
@@ -200,27 +200,27 @@ agent can open it directly.
 
 ## File Change Checklist
 
-| File | Change |
-| --- | --- |
-| `src/ui/webview-react/utils/uxSnapshot.ts` | **New** — `captureUxSnapshot()` DOM/style/rule serializer |
-| `src/ui/webview-react/components/dev/UxSnapshotButton.tsx` | **New** — floating fixed button, dev+toggle gated |
-| `src/ui/webview-react/App.tsx` | Mount `<UxSnapshotButton />` in both mobile & desktop trees |
-| `src/ui/webview-react/components/settings/DeveloperSection.tsx` | New "Debug Capture" toggle row |
-| `src/ui/webview-react/store/uiStore.ts` | Persisted `uxSnapshotButtonVisible` + setter |
-| `src/types/DashboardConstants.ts` | `UX_SNAPSHOT_CAPTURE`, `UX_SNAPSHOT_SAVED` message types |
-| `src/types/WebviewMessageTypes.ts` | Payload types for both messages |
-| `src/ui/WebviewMessageRouter.ts` | Route `UX_SNAPSHOT_CAPTURE` → dev handler (gated) |
-| `src/dev/DevCommands.ts` | `writeUxSnapshot(md, png?, workspaceRoot)` — host-agnostic file write + reply |
-| `src/server/CtrlYokeHostedServer.ts` | Register the snapshot write callback with `this.workspaceRoot` so the phone round-trip saves server-side |
-| `src/ui/CtrlYokeWebviewProvider.ts` | Thread the `handleUxSnapshot` callback through to the router (both hosts) |
-| `src/utils/ConfigurationUtils.ts` | `SNAPSHOTS_DIR` path constant (if using new dir) |
-| ~~`package.json`~~ | *(follow-up only)* `@zumer/snapdom` devDependency for the deferred visual PNG layer — **not v1** |
-| `src/ui/webview-react/test/**` | Vitest for `captureUxSnapshot()` (jsdom) |
+| File                                                            | Change                                                                                                   |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/ui/webview-react/utils/uxSnapshot.ts`                      | **New** — `captureUxSnapshot()` DOM/style/rule serializer                                                |
+| `src/ui/webview-react/components/dev/UxSnapshotButton.tsx`      | **New** — floating fixed button, dev+toggle gated                                                        |
+| `src/ui/webview-react/App.tsx`                                  | Mount `<UxSnapshotButton />` in both mobile & desktop trees                                              |
+| `src/ui/webview-react/components/settings/DeveloperSection.tsx` | New "Debug Capture" toggle row                                                                           |
+| `src/ui/webview-react/store/uiStore.ts`                         | Persisted `uxSnapshotButtonVisible` + setter                                                             |
+| `src/types/DashboardConstants.ts`                               | `UX_SNAPSHOT_CAPTURE`, `UX_SNAPSHOT_SAVED` message types                                                 |
+| `src/types/WebviewMessageTypes.ts`                              | Payload types for both messages                                                                          |
+| `src/ui/WebviewMessageRouter.ts`                                | Route `UX_SNAPSHOT_CAPTURE` → dev handler (gated)                                                        |
+| `src/dev/DevCommands.ts`                                        | `writeUxSnapshot(md, png?, workspaceRoot)` — host-agnostic file write + reply                            |
+| `src/server/CtrlYokeHostedServer.ts`                            | Register the snapshot write callback with `this.workspaceRoot` so the phone round-trip saves server-side |
+| `src/ui/CtrlYokeWebviewProvider.ts`                             | Thread the `handleUxSnapshot` callback through to the router (both hosts)                                |
+| `src/utils/ConfigurationUtils.ts`                               | `SNAPSHOTS_DIR` path constant (if using new dir)                                                         |
+| ~~`package.json`~~                                              | _(follow-up only)_ `@zumer/snapdom` devDependency for the deferred visual PNG layer — **not v1**         |
+| `src/ui/webview-react/test/**`                                  | Vitest for `captureUxSnapshot()` (jsdom)                                                                 |
 
 ## Edge Cases & Risks
 
-- **Payload size.** A full computed-style dump per node is huge. The computed-style *diff
-  against a per-tag default* is the primary mitigation; also cap depth/element count and note
+- **Payload size.** A full computed-style dump per node is huge. The computed-style _diff
+  against a per-tag default_ is the primary mitigation; also cap depth/element count and note
   truncation. `postMessage` in the hosted (WebSocket) path has practical size limits — consider
   chunking or gzip (`CompressionStream`) if snapshots exceed a few MB; start simple and measure.
 - **Cross-origin stylesheets** throw on `.cssRules` — try/catch per sheet and record which were

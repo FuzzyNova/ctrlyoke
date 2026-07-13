@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Modal, Button, AnimatedSection, ScopeToggle, HarnessDropdown } from "../shared";
+import {
+  Modal,
+  Button,
+  AnimatedSection,
+  ScopeToggle,
+  HarnessDropdown,
+} from "../shared";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -138,9 +144,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (variable: string, path: string) => {
       setVariables((prev) => ({ ...prev, [variable]: path }));
 
-      const meta = currentTemplate?.variables?.find(
-        (v) => v.name === variable
-      );
+      const meta = currentTemplate?.variables?.find((v) => v.name === variable);
       if (meta?.autoFillFilename && !filename) {
         // Extract basename without extension: "path/to/my-spec.md" → "my-spec"
         const base = path.split(/[\\/]/).pop() ?? path;
@@ -186,7 +190,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Submit the inline create-template form — fully webview-driven, no native VS Code UI
   // (see WorkflowSerializer.handleCreateCustomTemplate for why this matters for browser clients).
   const handleCreateTemplateSubmit = useCallback(() => {
-    const error = validateSafeName(newTemplateName, "Template name is required");
+    const error = validateSafeName(
+      newTemplateName,
+      "Template name is required"
+    );
     if (error) {
       setNewTemplateNameError(error);
       return;
@@ -224,7 +231,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
 
     setCustomTemplateCreated(null);
-  }, [customTemplateCreated, setTemplates, setCurrentTemplate, setCustomTemplateCreated]);
+  }, [
+    customTemplateCreated,
+    setTemplates,
+    setCurrentTemplate,
+    setCustomTemplateCreated,
+  ]);
 
   // Handle variable change
   const handleVariableChange = useCallback(
@@ -575,10 +587,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                             hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                           }
                           onUnhideOption={(v) =>
-                            unhideDropdownOption(
-                              DROPDOWN_NAMESPACES.HARNESS,
-                              v
-                            )
+                            unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                           }
                         />
                       ) : isMultiline ? (
@@ -621,7 +630,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                             handleBrowseFile(variable.name, variable)
                           }
                           title={
-                            isDirectory ? "Browse for folder" : "Browse for file"
+                            isDirectory
+                              ? "Browse for folder"
+                              : "Browse for file"
                           }
                         >
                           Browse…

@@ -25,9 +25,7 @@ function mockTree(dirPath: string): Promise<WorkspaceTreeResponse> {
       rootLabel: "workspace",
       path: "src",
       parentPath: "",
-      entries: [
-        { name: "index.ts", path: "src/index.ts", kind: "file" },
-      ],
+      entries: [{ name: "index.ts", path: "src/index.ts", kind: "file" }],
       isGitRepo: false,
       isRootsList: false,
     });
@@ -77,9 +75,7 @@ describe("FileBrowserModal — navigation", () => {
     const folderRow = await screen.findByText("src/");
     await user.click(folderRow);
 
-    await waitFor(() =>
-      expect(workspaceTreeMock).toHaveBeenCalledWith("src")
-    );
+    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
   });
 });
@@ -120,9 +116,7 @@ describe("FileBrowserModal — file mode", () => {
     const nonMatchingRow = await screen.findByText("image.png");
     await user.click(nonMatchingRow);
 
-    expect(
-      screen.getByRole("button", { name: "Select File" })
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Select File" })).toBeDisabled();
   });
 });
 
@@ -153,9 +147,7 @@ describe("FileBrowserModal — directory mode", () => {
 
     const folderRow = await screen.findByText("src/");
     await user.click(folderRow);
-    await waitFor(() =>
-      expect(workspaceTreeMock).toHaveBeenCalledWith("src")
-    );
+    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
 
     const confirmButton = await screen.findByRole("button", {
       name: "Select Folder",

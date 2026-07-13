@@ -38,9 +38,7 @@ export function DeveloperSection() {
   );
   const resetLayoutState = useUiStore((s) => s.resetLayoutState);
   const showToast = useUiStore((s) => s.showToast);
-  const uxSnapshotButtonVisible = useUiStore(
-    (s) => s.uxSnapshotButtonVisible
-  );
+  const uxSnapshotButtonVisible = useUiStore((s) => s.uxSnapshotButtonVisible);
   const setUxSnapshotButtonVisible = useUiStore(
     (s) => s.setUxSnapshotButtonVisible
   );

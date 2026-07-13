@@ -561,17 +561,17 @@ _Dates removed: the prior timeline asserted a May 12, 2026 release that never ha
 
 ### Launch Blockers (must land before publish)
 
-| Document                                                                                     | Status      | Roadmap Item      |
-| -------------------------------------------------------------------------------------------- | ----------- | ----------------- |
-| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                               | 📝 PLANNING | 0.A / 2.8         |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                 | 📝 PLANNING | 0.B / 4.2         |
-| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                 | 📝 PLANNING | Release §2.7      |
-| [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)                         | ✅ DONE     | Release §2.5      |
-| [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)       | ✅ DONE     | Release §2.9      |
-| [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md)                   | ✅ DONE     | Release §2.9      |
-| [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md)                                         | 📝 PLANNING | Release §2.9 (P1) |
-| [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md)                                     | 📝 PLANNING | Release §2.9      |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                         | 🔄 PARTIAL  | Tier 0            |
+| Document                                                                               | Status      | Roadmap Item      |
+| -------------------------------------------------------------------------------------- | ----------- | ----------------- |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                         | 📝 PLANNING | 0.A / 2.8         |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                           | 📝 PLANNING | 0.B / 4.2         |
+| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                           | 📝 PLANNING | Release §2.7      |
+| [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)                   | ✅ DONE     | Release §2.5      |
+| [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) | ✅ DONE     | Release §2.9      |
+| [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md)             | ✅ DONE     | Release §2.9      |
+| [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md)                                   | 📝 PLANNING | Release §2.9 (P1) |
+| [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md)                               | 📝 PLANNING | Release §2.9      |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                   | 🔄 PARTIAL  | Tier 0            |
 
 > **Ordering matters — see the launch-blocker sequencing in the Dependency Graph below.**
 > The corrected harness list, built-in-content cleanup, and tech-support agent are now landed.

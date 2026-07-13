@@ -233,8 +233,8 @@ export const SaveWorkflowDialog: React.FC = () => {
     >
       <div className="space-y-4">
         <p className="text-sm text-description-fg">
-          This workflow is auto-saved to your working area as you edit. Use
-          Save As to export a clean, shareable copy without runtime state.
+          This workflow is auto-saved to your working area as you edit. Use Save
+          As to export a clean, shareable copy without runtime state.
         </p>
 
         <SettingToggleRow
@@ -300,9 +300,7 @@ export const SaveWorkflowDialog: React.FC = () => {
               />
             </label>
             {templateNameError && (
-              <p className="mt-1 text-xs text-error-fg">
-                {templateNameError}
-              </p>
+              <p className="mt-1 text-xs text-error-fg">{templateNameError}</p>
             )}
             <div className="mt-3 flex items-center gap-2">
               <span className="text-sm text-foreground">Location</span>

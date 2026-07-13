@@ -71,7 +71,11 @@ function copyDirRecursive(src, dest) {
 }
 
 function resolveInstalledPackageDir(packageName) {
-  const packageDir = path.join(__dirname, "node_modules", ...packageName.split("/"));
+  const packageDir = path.join(
+    __dirname,
+    "node_modules",
+    ...packageName.split("/")
+  );
   if (!fs.existsSync(path.join(packageDir, "package.json"))) {
     throw new Error(
       `Unable to locate installed package '${packageName}' under ${packageDir}`

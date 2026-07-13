@@ -499,10 +499,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const untrustedDir = fs.mkdtempSync(
         path.join(os.tmpdir(), "fp-ctx-untrusted-")
       );
-      fs.writeFileSync(
-        path.join(untrustedDir, "secret.txt"),
-        "TOP SECRET\n"
-      );
+      fs.writeFileSync(path.join(untrustedDir, "secret.txt"), "TOP SECRET\n");
       const traversal = path.relative(
         root,
         path.join(untrustedDir, "secret.txt")
@@ -577,10 +574,7 @@ suite("ContextExpander.expandContextSplit", () => {
     test("renders the as-typed relative path in the excerpt when effectiveAbsolute is false", async () => {
       const root = freshWorkspace();
       const filePath = path.join(root, "a.ts");
-      fs.writeFileSync(
-        filePath,
-        "line1\nline2\nline3\n"
-      );
+      fs.writeFileSync(filePath, "line1\nline2\nline3\n");
 
       const expander = new ContextExpander(root, [root], [], false);
       const result = await expander.expandContextSplit("#selection:a.ts:1-2");
@@ -592,10 +586,7 @@ suite("ContextExpander.expandContextSplit", () => {
     test("renders the resolved absolute path in the excerpt when effectiveAbsolute is true", async () => {
       const root = freshWorkspace();
       const filePath = path.join(root, "a.ts");
-      fs.writeFileSync(
-        filePath,
-        "line1\nline2\nline3\n"
-      );
+      fs.writeFileSync(filePath, "line1\nline2\nline3\n");
 
       const expander = new ContextExpander(root, [root], [], true);
       const result = await expander.expandContextSplit("#selection:a.ts:1-2");
@@ -722,10 +713,7 @@ suite("ContextExpander.sanitizeReferences", () => {
       "Please fix @root2/b.ts before merging."
     );
 
-    assert.strictEqual(
-      result,
-      `Please fix @${secondFile} before merging.`
-    );
+    assert.strictEqual(result, `Please fix @${secondFile} before merging.`);
   });
 
   test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed #sym: ref to its absolute path", async () => {
@@ -772,10 +760,7 @@ suite("ContextExpander.sanitizeReferences", () => {
       "See #selection:root2/b.ts:1-2 for context."
     );
 
-    assert.strictEqual(
-      result,
-      `See #selection:${secondFile}:1-2 for context.`
-    );
+    assert.strictEqual(result, `See #selection:${secondFile}:1-2 for context.`);
   });
 
   test("single-root, effectiveAbsolute false: leaves #sym:/#selection: refs unchanged", async () => {

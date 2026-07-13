@@ -105,5 +105,4 @@ suite("CodexResponseParser", () => {
     assert.strictEqual(output.metadata.model, "gpt-5.6-sol");
     assert.strictEqual(output.metadata.usage?.contextWindowSize, 1_050_000);
   });
-
 });

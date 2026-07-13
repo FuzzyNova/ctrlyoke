@@ -408,7 +408,11 @@ export class ChatSessionParser {
       };
     }
 
-    for (let i = fromResponseIndexExclusive + 1; i < session.requests.length; i++) {
+    for (
+      let i = fromResponseIndexExclusive + 1;
+      i < session.requests.length;
+      i++
+    ) {
       const request = session.requests[i];
 
       if (!request.isSystemInitiated && i > steerThrough) {

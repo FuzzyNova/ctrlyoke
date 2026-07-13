@@ -84,7 +84,10 @@ export interface TemplateInfo {
   variables: TemplateVariable[];
   isBuiltIn: boolean;
   /** Where a custom template was discovered; undefined for built-ins. */
-  source?: Exclude<DiscoverySource, typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE>;
+  source?: Exclude<
+    DiscoverySource,
+    typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
+  >;
 }
 
 /** Parsed shape of a `_templateMeta` block in a template file */
@@ -602,7 +605,8 @@ export class TemplateManager {
           constraints: {
             type: "text",
             default: "Follow existing patterns; keep changes minimal.",
-            description: "Extra guidance applied while planning and implementing.",
+            description:
+              "Extra guidance applied while planning and implementing.",
             multiline: true,
           },
           reviewDepth: {
@@ -613,7 +617,8 @@ export class TemplateManager {
           },
           outputDir: {
             type: "directory",
-            description: "Where implementation artifacts should be written (optional).",
+            description:
+              "Where implementation artifacts should be written (optional).",
           },
           harness: {
             type: "harness",

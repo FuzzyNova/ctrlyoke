@@ -351,10 +351,7 @@ const PREVIEW_URI_TIMEOUT_MS = 15_000;
 const imagePreviewUriCache = new Map<string, string | null>();
 /** path → in-flight request, so concurrent thumbnails for one path share it. */
 const inFlightPreviewRequests = new Map<string, Promise<string | null>>();
-const pendingPreviewResolvers = new Map<
-  number,
-  (uri: string | null) => void
->();
+const pendingPreviewResolvers = new Map<number, (uri: string | null) => void>();
 let previewSeqCounter = 0;
 let previewListenerInstalled = false;
 
@@ -493,7 +490,9 @@ function ImageRefThumbnail({
         <button
           type="button"
           onClick={() =>
-            openLine !== undefined ? openFile(openPath, openLine) : openFile(openPath)
+            openLine !== undefined
+              ? openFile(openPath, openLine)
+              : openFile(openPath)
           }
           title={`Open ${openPath}`}
           aria-label={`Open ${openPath}`}

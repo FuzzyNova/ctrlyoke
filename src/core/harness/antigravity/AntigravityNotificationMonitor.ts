@@ -22,11 +22,11 @@ export class AntigravityNotificationMonitor
   private static readonly USER_EVENT_MAP: Partial<
     Record<HookEvent, AntigravityHookKey>
   > = {
-      sessionStart: "PreInvocation",
-      stop: "Stop",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-    };
+    sessionStart: "PreInvocation",
+    stop: "Stop",
+    preToolUse: "PreToolUse",
+    postToolUse: "PostToolUse",
+  };
 
   protected override getStartHookEvents(): string[] {
     return ["PreInvocation"];
@@ -60,7 +60,10 @@ export class AntigravityNotificationMonitor
       Stop: null,
     };
 
-    const pushHandler = (eventKey: AntigravityHookKey, handlerCommand: string) => {
+    const pushHandler = (
+      eventKey: AntigravityHookKey,
+      handlerCommand: string
+    ) => {
       group[eventKey] ??= [];
       group[eventKey]!.push({
         type: "command",

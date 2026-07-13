@@ -6,10 +6,10 @@ Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrl
 
 A variable is a `{placeholder}` token in a prompt (or any string field). The token form sets its default input type:
 
-| Token in the body | Input type | UI |
-| ----------------- | ---------- | -- |
-| `{name}`          | text       | single-line input |
-| `{text:name}`     | text       | single-line input (explicit) |
+| Token in the body | Input type | UI                              |
+| ----------------- | ---------- | ------------------------------- |
+| `{name}`          | text       | single-line input               |
+| `{text:name}`     | text       | single-line input (explicit)    |
 | `{file:name}`     | file       | input with a **Browse…** button |
 
 Variable names must start with a lowercase letter and contain only letters and digits. Retry-prompt placeholders (`{stdout}`, `{stderr}`, `{exitCode}`, …) are reserved and never treated as template variables.
@@ -46,15 +46,15 @@ steps:
 
 ### Variable metadata fields
 
-| Field              | Applies to       | Effect |
-| ------------------ | ---------------- | ------ |
-| `type`             | any              | `text` (default), `file`, `directory`, or `select`. |
-| `options`          | select           | The dropdown choices (e.g. `[debug, info, warn]`). The first option is used as the default unless `default` is set. |
-| `default`          | any              | Pre-fills the input; substituted when the field is left blank. |
-| `description`      | any              | Helper text shown under the input. |
-| `multiline`        | text             | Renders a resizable textarea instead of a single-line input. |
-| `fileFilter`       | file             | Glob patterns for the file picker (e.g. `["**/*.md"]`). |
-| `autoFillFilename` | file, directory  | Seeds the new workflow's filename from the picked file/folder basename. Only the first variable that declares it wins. |
+| Field              | Applies to      | Effect                                                                                                                 |
+| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `type`             | any             | `text` (default), `file`, `directory`, or `select`.                                                                    |
+| `options`          | select          | The dropdown choices (e.g. `[debug, info, warn]`). The first option is used as the default unless `default` is set.    |
+| `default`          | any             | Pre-fills the input; substituted when the field is left blank.                                                         |
+| `description`      | any             | Helper text shown under the input.                                                                                     |
+| `multiline`        | text            | Renders a resizable textarea instead of a single-line input.                                                           |
+| `fileFilter`       | file            | Glob patterns for the file picker (e.g. `["**/*.md"]`).                                                                |
+| `autoFillFilename` | file, directory | Seeds the new workflow's filename from the picked file/folder basename. Only the first variable that declares it wins. |
 
 Input controls by type: **text** → single-line input (or textarea with `multiline`); **file** → input + Browse (file picker); **directory** → input + Browse (folder picker); **select** → dropdown of `options`.
 

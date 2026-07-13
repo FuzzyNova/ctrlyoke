@@ -282,7 +282,12 @@ suite("WorkflowInstance session activity forwarding", () => {
         attemptIndex: number,
         runIndex: number
       ) => {
-        streamingEventsCalls.push({ stepIndex, events, attemptIndex, runIndex });
+        streamingEventsCalls.push({
+          stepIndex,
+          events,
+          attemptIndex,
+          runIndex,
+        });
       },
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
@@ -574,7 +579,10 @@ suite("WorkflowInstance runtime transitions", () => {
     };
 
     instance.promptQueue.loadPrompts(promptFile);
-    instance.setCurrentPromptFile("/workspace/example.ctrlyoke.yaml", promptFile);
+    instance.setCurrentPromptFile(
+      "/workspace/example.ctrlyoke.yaml",
+      promptFile
+    );
     (instance.promptQueue as any).state.currentIndex = 1;
 
     const summary = instance.getSummary();

@@ -1,10 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { AntigravityResponseParser } from "../../core/harness/antigravity/AntigravityResponseParser";
-import {
-  CLI_EVENT_TYPES,
-  HARNESS_IDS,
-} from "../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("AntigravityResponseParser", () => {
   suite("parse", () => {
@@ -16,7 +13,10 @@ suite("AntigravityResponseParser", () => {
       assert.strictEqual(result.metadata.harness, HARNESS_IDS.ANTIGRAVITY_CLI);
       assert.strictEqual(result.events.length, 1);
       assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.TEXT);
-      assert.strictEqual((result.events[0].data as { text: string }).text, "hello from agy");
+      assert.strictEqual(
+        (result.events[0].data as { text: string }).text,
+        "hello from agy"
+      );
     });
 
     test("falls back to stderr when stdout is empty", () => {
@@ -25,7 +25,10 @@ suite("AntigravityResponseParser", () => {
       const result = parser.parse("", "stderr only\n", 0);
 
       assert.strictEqual(result.events.length, 1);
-      assert.strictEqual((result.events[0].data as { text: string }).text, "stderr only");
+      assert.strictEqual(
+        (result.events[0].data as { text: string }).text,
+        "stderr only"
+      );
     });
 
     test("emits a generic message for non-zero exit without output", () => {
@@ -49,7 +52,10 @@ suite("AntigravityResponseParser", () => {
         parser.processStreamingChunk("stream chunk", new Map()),
         "stream chunk"
       );
-      assert.strictEqual(parser.processStreamingChunk("", new Map()), undefined);
+      assert.strictEqual(
+        parser.processStreamingChunk("", new Map()),
+        undefined
+      );
     });
   });
 });

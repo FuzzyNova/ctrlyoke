@@ -407,23 +407,23 @@ Document:
 
 ## Files Likely Changed
 
-| File                                                          | Change                                                                       |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `schemas/settings-schema.json`                                | Add `permissions.allowedExternalFileRoots` and `ui.confirmExternalFileLinks` |
-| `schemas/settings-schema.yaml`                                | Regenerated via `npm run generate-schema`                                    |
-| `src/types/CtrlYokeSettings.ts`                               | Add settings types and defaults                                              |
-| `src/types/WebviewMessageTypes.ts`                            | Include settings payload fields if needed                                    |
-| `src/utils/ConfigurationUtils.ts`                             | Add config keys and helpers                                                  |
+| File                                                          | Change                                                                                                                                                         |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/settings-schema.json`                                | Add `permissions.allowedExternalFileRoots` and `ui.confirmExternalFileLinks`                                                                                   |
+| `schemas/settings-schema.yaml`                                | Regenerated via `npm run generate-schema`                                                                                                                      |
+| `src/types/CtrlYokeSettings.ts`                               | Add settings types and defaults                                                                                                                                |
+| `src/types/WebviewMessageTypes.ts`                            | Include settings payload fields if needed                                                                                                                      |
+| `src/utils/ConfigurationUtils.ts`                             | Add config keys and helpers                                                                                                                                    |
 | `src/utils/PathSecurity.ts`                                   | Already exists (2026-07-04 security fix); reuse `isPathWithinDirectory`/`isPathWithinAnyDirectory` as the containment primitives underlying `FileAccessPolicy` |
-| `src/utils/FileAccessPolicy.ts`                               | New shared path access policy helper, built on `PathSecurity.isPathWithinAnyDirectory` |
-| `src/utils/ContextExpander.ts`                                | Already accepts a `trustedRoots` list (multi-root fix, 2026-07-04); extend that list with `allowedExternalFileRoots` instead of hard-rejecting outside it |
-| `src/utils/AttachmentBuilders.ts`                             | Already accepts an `additionalTrustedRoots` list (multi-root fix, 2026-07-04); extend it with `allowedExternalFileRoots` the same way |
-| `src/completions/PromptLinkProvider.ts`                       | Resolve trusted absolute refs and route untrusted refs through confirmation  |
-| `src/ui/WebviewMessageRouter.ts`                              | Enforce policy for `OPEN_FILE` and trust-folder flow                         |
-| `src/ui/WebviewSettingsSync.ts`                               | Sync new settings to webview                                                 |
-| `src/ui/webview-react/store/settingsStore.ts`                 | Add webview defaults/types                                                   |
-| `src/ui/webview-react/components/settings/GeneralSection.tsx` | Add settings UI                                                              |
-| `src/test/**`                                                 | Policy, expander, router/link-provider tests                                 |
+| `src/utils/FileAccessPolicy.ts`                               | New shared path access policy helper, built on `PathSecurity.isPathWithinAnyDirectory`                                                                         |
+| `src/utils/ContextExpander.ts`                                | Already accepts a `trustedRoots` list (multi-root fix, 2026-07-04); extend that list with `allowedExternalFileRoots` instead of hard-rejecting outside it      |
+| `src/utils/AttachmentBuilders.ts`                             | Already accepts an `additionalTrustedRoots` list (multi-root fix, 2026-07-04); extend it with `allowedExternalFileRoots` the same way                          |
+| `src/completions/PromptLinkProvider.ts`                       | Resolve trusted absolute refs and route untrusted refs through confirmation                                                                                    |
+| `src/ui/WebviewMessageRouter.ts`                              | Enforce policy for `OPEN_FILE` and trust-folder flow                                                                                                           |
+| `src/ui/WebviewSettingsSync.ts`                               | Sync new settings to webview                                                                                                                                   |
+| `src/ui/webview-react/store/settingsStore.ts`                 | Add webview defaults/types                                                                                                                                     |
+| `src/ui/webview-react/components/settings/GeneralSection.tsx` | Add settings UI                                                                                                                                                |
+| `src/test/**`                                                 | Policy, expander, router/link-provider tests                                                                                                                   |
 
 ## Testing
 
@@ -464,7 +464,7 @@ The open questions below are resolved. This section replaces "Open Questions."
   workspace-level config) and the user's global settings each contribute
   entries; the effective allowlist is the **union** of both — matching how
   `CtrlYokeConfigService`'s layered config generally works, and consistent
-  with the fact that this is an *allow*-list, so a union is safe rather than
+  with the fact that this is an _allow_-list, so a union is safe rather than
   the two scopes needing precedence rules on top of each other.
 
   **New consideration this raises:** unlike most ctrlyoke settings, workspace-
@@ -478,7 +478,7 @@ The open questions below are resolved. This section replaces "Open Questions."
   means a persisted trusted root is sufficient on its own. Mitigate this before
   shipping workspace-scope: require a one-time "This workspace wants to trust
   external folder(s): `<list>` — Allow / Deny" prompt the first time a
-  workspace's *own* `allowedExternalFileRoots` entries are loaded (once per
+  workspace's _own_ `allowedExternalFileRoots` entries are loaded (once per
   workspace, cached alongside VS Code's native Workspace Trust state if
   available), separate from the already-rejected per-reference one-time
   grants. This is new work not in the original plan and should be scoped
@@ -508,7 +508,7 @@ patch referenced at the top of this document:
 - **The bug:** `ContextExpander`/`AttachmentBuilders` originally checked
   containment against the single window-wide `.ctrlyoke` root
   (`getVsCodeWorkspaceRoot()`). For a saved multi-root `.code-workspace`, that
-  root is the directory *containing the `.code-workspace` file* — which VS
+  root is the directory _containing the `.code-workspace` file_ — which VS
   Code does not require to be an ancestor of the actual folders (e.g. folders
   on different drives entirely). Any `@file`/`@dir/` reference into a folder
   that wasn't a descendant of that directory was wrongly hard-blocked as

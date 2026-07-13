@@ -65,14 +65,16 @@ describe("collectMatchedRuleDictionary", () => {
 
 describe("elementMatches", () => {
   it("returns true when any selector fragment matches", () => {
-    const el = mount('<div class="foo"></div>').firstElementChild as HTMLElement;
+    const el = mount('<div class="foo"></div>')
+      .firstElementChild as HTMLElement;
     expect(elementMatches(el, ".foo")).toBe(true);
     expect(elementMatches(el, ".bar, .foo")).toBe(true);
     expect(elementMatches(el, ".bar")).toBe(false);
   });
 
   it("ignores selector fragments the engine cannot parse", () => {
-    const el = mount('<div class="foo"></div>').firstElementChild as HTMLElement;
+    const el = mount('<div class="foo"></div>')
+      .firstElementChild as HTMLElement;
     // A bogus fragment must not throw or discard the valid one.
     expect(elementMatches(el, "::-webkit-bogus, .foo")).toBe(true);
     expect(elementMatches(el, "")).toBe(false);
@@ -135,9 +137,9 @@ describe("getMatchedAuthorRules", () => {
       .firstElementChild as HTMLElement;
 
     const rules = getMatchedAuthorRules(el);
-    expect(rules.some((r) => r.includes("@media") && r.includes(".responsive"))).toBe(
-      true
-    );
+    expect(
+      rules.some((r) => r.includes("@media") && r.includes(".responsive"))
+    ).toBe(true);
   });
 });
 
@@ -163,7 +165,9 @@ describe("collectAmbientRules", () => {
       "*, ::before, ::after { --tw-ring-color: red; box-sizing: border-box; } .scoped { color: red; }"
     );
     const ambient = collectAmbientRules();
-    const universal = ambient.filter((r) => r.startsWith("*, ::before, ::after"));
+    const universal = ambient.filter((r) =>
+      r.startsWith("*, ::before, ::after")
+    );
     expect(universal.length).toBe(1);
     expect(universal[0]).toContain("box-sizing: border-box");
     expect(universal[0]).not.toContain("--tw-ring-color");
@@ -173,8 +177,11 @@ describe("collectAmbientRules", () => {
   });
 
   it("does not repeat a universal rule in per-element matched rules", () => {
-    addStyle("* { -webkit-tap-highlight-color: transparent; } .kept { color: red; }");
-    const el = mount('<div class="kept"></div>').firstElementChild as HTMLElement;
+    addStyle(
+      "* { -webkit-tap-highlight-color: transparent; } .kept { color: red; }"
+    );
+    const el = mount('<div class="kept"></div>')
+      .firstElementChild as HTMLElement;
     const matched = getMatchedAuthorRules(el);
     // The universal rule is hoisted, so it must not appear per element…
     expect(matched.some((r) => r.startsWith("* {"))).toBe(false);

@@ -2222,9 +2222,11 @@ export class WorkflowInstance {
             ? (Date.now() - existing.cliOutput.timestampMs) / 1000
             : existing.cliOutput.elapsed,
       };
-      await this.outputHistoryManager.saveExecutionOutput(historyFilePath, target, [
-        merged,
-      ]);
+      await this.outputHistoryManager.saveExecutionOutput(
+        historyFilePath,
+        target,
+        [merged]
+      );
     } catch (error) {
       Log.warn(
         `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity to history:`,

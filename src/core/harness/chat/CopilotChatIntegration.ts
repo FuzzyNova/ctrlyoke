@@ -692,11 +692,12 @@ export class CopilotChatIntegration extends HarnessIntegration {
       // before it) so this send's own dispatched request is never
       // misclassified as a human steer — only requests after it can be.
       const sendStartIndex = this.sessionMonitor.getSendStartRequestCount();
-      const { events: mergedEvents } = this.sessionParser.collectFollowUpActivity(
-        sessionFile,
-        sendStartIndex - 1,
-        sendStartIndex
-      );
+      const { events: mergedEvents } =
+        this.sessionParser.collectFollowUpActivity(
+          sessionFile,
+          sendStartIndex - 1,
+          sendStartIndex
+        );
       // Fall back to the plain last-request extraction above if the merge walk
       // came back empty (e.g. a parse error already surfaced there as an
       // error-text event) so that failure information isn't silently dropped.

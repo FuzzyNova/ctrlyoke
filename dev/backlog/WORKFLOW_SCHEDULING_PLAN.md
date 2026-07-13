@@ -41,12 +41,12 @@
 
 A schedule needs a live process to fire it. ctrlyoke's runtime hosts:
 
-| Host | Alive when… | Owns a `WorkflowOrchestrator`? | Fires schedules? |
-| --- | --- | --- | --- |
-| **Extension host** | VS Code open with the extension active | Yes | **Yes** |
-| **Hosted server** (`CtrlYokeHostedServer`) | The extension boots it | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
-| **Standalone `ctrlyoke server`** (future — `STANDALONE_SERVER_PLAN.md`, not started) | The user runs `ctrlyoke server` | Yes — constructs its own via `StandaloneServerAdapter` | **Yes**, once it ships |
-| **CLI** (`ctrlyoke run`) | One invocation only | No — uses `WorkflowInstance`/`IntegrationFactory` directly | **No** (by design — one-shot, not a scheduling host) |
+| Host                                                                                 | Alive when…                            | Owns a `WorkflowOrchestrator`?                                          | Fires schedules?                                                           |
+| ------------------------------------------------------------------------------------ | -------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Extension host**                                                                   | VS Code open with the extension active | Yes                                                                     | **Yes**                                                                    |
+| **Hosted server** (`CtrlYokeHostedServer`)                                           | The extension boots it                 | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
+| **Standalone `ctrlyoke server`** (future — `STANDALONE_SERVER_PLAN.md`, not started) | The user runs `ctrlyoke server`        | Yes — constructs its own via `StandaloneServerAdapter`                  | **Yes**, once it ships                                                     |
+| **CLI** (`ctrlyoke run`)                                                             | One invocation only                    | No — uses `WorkflowInstance`/`IntegrationFactory` directly              | **No** (by design — one-shot, not a scheduling host)                       |
 
 The decisive simplification: **the hosted server is not a separate substrate** —
 it rides on the extension's orchestrator, so "VS Code open" and "hosted server
@@ -225,13 +225,13 @@ optional field with the machine zone as the default, so no migration.
   passed while no ctrlyoke host was running (VS Code closed, machine asleep). v1
   **does not run these** — no catch-up, ever. Opening VS Code after several days
   must **not** kick off every schedule whose time elapsed; the scheduler simply
-  re-arms each schedule for its *next future* occurrence. (This is intentionally
+  re-arms each schedule for its _next future_ occurrence. (This is intentionally
   the opposite of a cron-style catch-up; a catch-up policy could be added later,
   off by default.) A schedule with a one-shot `at` in the past is just inert.
   Optionally surface a quiet "last occurrence missed while offline" hint on the
   row so the skip is visible rather than mysterious — but never auto-run.
 - **Overlapping runs — always skip (v1).** "Overlap" is when the scheduled time
-  arrives but *this same workflow is still running* — e.g. a daily 9am run that
+  arrives but _this same workflow is still running_ — e.g. a daily 9am run that
   occasionally takes >24h, or the user manually started it and it's mid-run at
   9am. v1 **skips the new fire** rather than launching a second concurrent copy
   (AI runs are expensive and stateful, so double-running is the wrong default).

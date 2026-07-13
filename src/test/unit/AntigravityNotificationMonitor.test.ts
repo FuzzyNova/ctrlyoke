@@ -79,7 +79,10 @@ suite("AntigravityNotificationMonitor", () => {
     assert.strictEqual(group.PostInvocation, null);
     assert.strictEqual(group.Stop, null);
     assert.strictEqual(group.PreToolUse.length, 1);
-    assert.strictEqual(group.PreToolUse[0].command, "node script.js notify-dir PreToolUse");
+    assert.strictEqual(
+      group.PreToolUse[0].command,
+      "node script.js notify-dir PreToolUse"
+    );
     assert.strictEqual(
       group.PostToolUse[0].command,
       "node script.js notify-dir PostToolUse"

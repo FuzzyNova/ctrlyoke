@@ -25,7 +25,10 @@ suite("PathSecurity", () => {
 
     test("rejects the parent directory", () => {
       const dir = path.join("C:", "dev", "ctrlyoke");
-      assert.strictEqual(isPathWithinDirectory(path.join("C:", "dev"), dir), false);
+      assert.strictEqual(
+        isPathWithinDirectory(path.join("C:", "dev"), dir),
+        false
+      );
     });
   });
 
@@ -35,17 +38,17 @@ suite("PathSecurity", () => {
 
     test("accepts a path under any of several trusted roots", () => {
       assert.strictEqual(
-        isPathWithinAnyDirectory(
-          path.join(frontend, "src", "a.ts"),
-          [frontend, backend]
-        ),
+        isPathWithinAnyDirectory(path.join(frontend, "src", "a.ts"), [
+          frontend,
+          backend,
+        ]),
         true
       );
       assert.strictEqual(
-        isPathWithinAnyDirectory(
-          path.join(backend, "src", "b.ts"),
-          [frontend, backend]
-        ),
+        isPathWithinAnyDirectory(path.join(backend, "src", "b.ts"), [
+          frontend,
+          backend,
+        ]),
         true
       );
     });

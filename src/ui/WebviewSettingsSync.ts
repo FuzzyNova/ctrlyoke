@@ -850,12 +850,10 @@ export class WebviewSettingsSync {
 
     const antigravityCliOptions = [
       noneOption,
-      ...Object.entries(ANTIGRAVITY_CLI_MODEL_LABELS).map(
-        ([value, label]) => ({
-          value,
-          label,
-        })
-      ),
+      ...Object.entries(ANTIGRAVITY_CLI_MODEL_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
     ];
 
     return {

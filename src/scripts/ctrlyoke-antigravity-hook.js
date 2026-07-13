@@ -177,7 +177,13 @@ function main() {
     // Stop → completion notification file (fires once when the agent goes
     // idle after a turn; PostInvocation is deliberately NOT used here).
     if (hookEvent === "Stop") {
-      requireSessionId(sessionId, hookEvent, hookInput, SCRIPT_PREFIX, debugLog);
+      requireSessionId(
+        sessionId,
+        hookEvent,
+        hookInput,
+        SCRIPT_PREFIX,
+        debugLog
+      );
       ensureNotifyDir(notifyDir, debugLog);
       const notifyFile = buildNotifyFilePath(notifyDir, sessionId, false);
       const notifyData = {

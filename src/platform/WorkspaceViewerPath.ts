@@ -132,7 +132,10 @@ export function toViewerPath(
   if (!root) {
     return posixRelative(primary, absolutePath);
   }
-  return joinViewerPath(root.name, posixRelative(path.resolve(root.fsPath), absolutePath));
+  return joinViewerPath(
+    root.name,
+    posixRelative(path.resolve(root.fsPath), absolutePath)
+  );
 }
 
 /**

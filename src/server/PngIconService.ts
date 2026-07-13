@@ -32,15 +32,17 @@ interface ResvgRuntimeModule {
 }
 
 const RESVG_PACKAGE_NAME = "@resvg/resvg-wasm";
-const WASM_PATH = resolveRuntimePackageFile(RESVG_PACKAGE_NAME, "index_bg.wasm");
+const WASM_PATH = resolveRuntimePackageFile(
+  RESVG_PACKAGE_NAME,
+  "index_bg.wasm"
+);
 
 let cachedResvgModule: ResvgRuntimeModule | null = null;
 
 function getResvgRuntimeModule(): ResvgRuntimeModule {
   if (!cachedResvgModule) {
-    cachedResvgModule = requireRuntimePackage<ResvgRuntimeModule>(
-      RESVG_PACKAGE_NAME
-    );
+    cachedResvgModule =
+      requireRuntimePackage<ResvgRuntimeModule>(RESVG_PACKAGE_NAME);
   }
 
   return cachedResvgModule;

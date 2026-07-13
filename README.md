@@ -26,15 +26,15 @@ ctrlyoke is a VS Code extension that automates AI coding assistants through stru
 
 ## Supported Harnesses
 
-| Harness ID     | Description                                                                     |
-| -------------- | ------------------------------------------------------------------------------- |
-| `copilot-cli`  | GitHub Copilot CLI — log file monitoring, session resumption (default)          |
-| `claude-cli`   | Anthropic Claude Code CLI — JSON streaming, hook-based completion               |
-| `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                                    |
-| `opencode-cli` | OpenCode CLI — JSONL events, config-file permissions                            |
-| `qwen-cli`     | Qwen Code CLI — JSONL events, log-based session discovery                       |
+| Harness ID        | Description                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `copilot-cli`     | GitHub Copilot CLI — log file monitoring, session resumption (default)                |
+| `claude-cli`      | Anthropic Claude Code CLI — JSON streaming, hook-based completion                     |
+| `codex-cli`       | OpenAI Codex CLI — JSONL events, notify hook                                          |
+| `opencode-cli`    | OpenCode CLI — JSONL events, config-file permissions                                  |
+| `qwen-cli`        | Qwen Code CLI — JSONL events, log-based session discovery                             |
 | `antigravity-cli` | Google Antigravity CLI — plain-text output, hook-based completion, MCP config support |
-| `copilot-chat` | GitHub Copilot Chat — UI automation via VS Code commands and session monitoring |
+| `copilot-chat`    | GitHub Copilot Chat — UI automation via VS Code commands and session monitoring       |
 
 Set the active harness:
 
@@ -313,15 +313,15 @@ All settings use the `ctrlyoke.` prefix.
 
 ### Models
 
-| Setting            | Default                       | Harness      |
-| ------------------ | ----------------------------- | ------------ |
-| `copilotCliModel`  | `claude-sonnet-4.5`           | Copilot CLI  |
-| `claudeCliModel`   | `sonnet`                      | Claude CLI   |
-| `codexCliModel`    | `gpt-5.1-codex`               | Codex CLI    |
-| `openCodeCliModel` | `anthropic/claude-sonnet-4-6` | OpenCode CLI |
-| `qwenCliModel`     | `coder-model`                 | Qwen CLI     |
+| Setting               | Default                        | Harness         |
+| --------------------- | ------------------------------ | --------------- |
+| `copilotCliModel`     | `claude-sonnet-4.5`            | Copilot CLI     |
+| `claudeCliModel`      | `sonnet`                       | Claude CLI      |
+| `codexCliModel`       | `gpt-5.1-codex`                | Codex CLI       |
+| `openCodeCliModel`    | `anthropic/claude-sonnet-4-6`  | OpenCode CLI    |
+| `qwenCliModel`        | `coder-model`                  | Qwen CLI        |
 | `antigravityCliModel` | `Claude Sonnet 4.6 (Thinking)` | Antigravity CLI |
-| `copilotChatModel` | `claude-sonnet-4.5`           | Copilot Chat |
+| `copilotChatModel`    | `claude-sonnet-4.5`            | Copilot Chat    |
 
 ### Tool permissions
 

@@ -85,7 +85,7 @@ no folder prefix — so two roots can produce the identical ref for two differen
    `FileReferenceParser` needs **zero changes** — `root2/src/index.ts` is already a valid path
    token; only resolution changes (the earlier draft rejected this syntax claiming it needed
    parser support — that claim was wrong).
-3. **One global boolean setting** governing *rendering only*: `ui.useAbsolutePathReferences`.
+3. **One global boolean setting** governing _rendering only_: `ui.useAbsolutePathReferences`.
    When effective, the final prompt uses absolute paths uniformly across temp prompt file
    refs, direct `@file` refs, and excerpt XML paths — never mix relative and absolute for the
    same file within one prompt.
@@ -275,24 +275,24 @@ is unconditional and portable.
 
 ## Files touched
 
-| File | Change |
-| --- | --- |
-| `src/completions/CompletionHelpers.ts` | Multi-root: folder-name-prefixed relative insertText (file/dir/symbol/selection/prompt-file) via `asRelativePath(uri, true)` |
-| `src/utils/ContextExpander.ts` | Named-root constructor param; folder-name-match resolution in `resolveWorkspacePath` (stays sync); multi-root warning on skipped refs; render absolute excerpt paths when `effectiveAbsolute` |
-| `src/utils/AttachmentBuilders.ts` | `buildDirectoryAttachmentXml`: named-root resolution for `@dir/` refs; absolute path in XML body when `effectiveAbsolute` |
-| `src/core/PromptFileParser.ts` | `resolvePromptFilePath`: add folder-name-match candidate for multi-root prompt-file refs |
-| `src/platform/PlatformAdapter.ts` + `VsCodeAdapter.ts`/`CliAdapter.ts` | `getNamedWorkspaceRoots()` (or equivalent) carrying folder names |
-| `src/platform/VsCodeWorkspaceRoot.ts` | Add `isMultiRootWorkspace()` |
-| `src/platform/WorkspaceRootResolver.ts` (or sibling) | Add pure `resolveEffectiveAbsoluteReferences()` |
-| `src/types/CtrlYokeSettings.ts` | Add `ui.useAbsolutePathReferences` (type + default) |
-| `schemas/settings-schema.json` | Add property; regenerate |
-| `src/utils/ConfigurationUtils.ts` | Add `shouldUseAbsolutePathReferences()` |
-| `src/ui/WebviewSettingsSync.ts`, `settingsStore.ts` | Sync setting + push multi-root state |
-| `src/ui/webview-react/components/settings/GeneralSection.tsx` | New toggle, forced-on state when multi-root |
-| `src/core/HarnessIntegration.ts` | Compute `effectiveAbsolute` in `buildPromptSections`; pass named roots + flag to `ContextExpander` |
-| `src/core/harness/CliIntegration.ts` | `formatDirectFileRef`/`formatTempFileRef` consult computed flag, not just provider config |
-| `src/ui/WebviewMessageRouter.ts` | Pass named roots to its `ContextExpander` construction (line 2236; token counting — no render flag needed) |
-| `src/test/**` | Unit tests: pure resolver; `ContextExpander` multi-root resolution + both render-flag states; `CliIntegration` format methods; completion prefix behavior |
+| File                                                                   | Change                                                                                                                                                                                        |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/completions/CompletionHelpers.ts`                                 | Multi-root: folder-name-prefixed relative insertText (file/dir/symbol/selection/prompt-file) via `asRelativePath(uri, true)`                                                                  |
+| `src/utils/ContextExpander.ts`                                         | Named-root constructor param; folder-name-match resolution in `resolveWorkspacePath` (stays sync); multi-root warning on skipped refs; render absolute excerpt paths when `effectiveAbsolute` |
+| `src/utils/AttachmentBuilders.ts`                                      | `buildDirectoryAttachmentXml`: named-root resolution for `@dir/` refs; absolute path in XML body when `effectiveAbsolute`                                                                     |
+| `src/core/PromptFileParser.ts`                                         | `resolvePromptFilePath`: add folder-name-match candidate for multi-root prompt-file refs                                                                                                      |
+| `src/platform/PlatformAdapter.ts` + `VsCodeAdapter.ts`/`CliAdapter.ts` | `getNamedWorkspaceRoots()` (or equivalent) carrying folder names                                                                                                                              |
+| `src/platform/VsCodeWorkspaceRoot.ts`                                  | Add `isMultiRootWorkspace()`                                                                                                                                                                  |
+| `src/platform/WorkspaceRootResolver.ts` (or sibling)                   | Add pure `resolveEffectiveAbsoluteReferences()`                                                                                                                                               |
+| `src/types/CtrlYokeSettings.ts`                                        | Add `ui.useAbsolutePathReferences` (type + default)                                                                                                                                           |
+| `schemas/settings-schema.json`                                         | Add property; regenerate                                                                                                                                                                      |
+| `src/utils/ConfigurationUtils.ts`                                      | Add `shouldUseAbsolutePathReferences()`                                                                                                                                                       |
+| `src/ui/WebviewSettingsSync.ts`, `settingsStore.ts`                    | Sync setting + push multi-root state                                                                                                                                                          |
+| `src/ui/webview-react/components/settings/GeneralSection.tsx`          | New toggle, forced-on state when multi-root                                                                                                                                                   |
+| `src/core/HarnessIntegration.ts`                                       | Compute `effectiveAbsolute` in `buildPromptSections`; pass named roots + flag to `ContextExpander`                                                                                            |
+| `src/core/harness/CliIntegration.ts`                                   | `formatDirectFileRef`/`formatTempFileRef` consult computed flag, not just provider config                                                                                                     |
+| `src/ui/WebviewMessageRouter.ts`                                       | Pass named roots to its `ContextExpander` construction (line 2236; token counting — no render flag needed)                                                                                    |
+| `src/test/**`                                                          | Unit tests: pure resolver; `ContextExpander` multi-root resolution + both render-flag states; `CliIntegration` format methods; completion prefix behavior                                     |
 
 ---
 
@@ -306,7 +306,7 @@ is unconditional and portable.
   another folder's name makes step 1 of the resolution order win over a plain-relative
   interpretation. Deterministic and documented; considered acceptable (completions always
   generate the prefixed form in multi-root, so authored refs match step 1 by construction).
-- **Token cost**: absolute paths cost more tokens than relative in the *rendered* prompt.
+- **Token cost**: absolute paths cost more tokens than relative in the _rendered_ prompt.
   Accepted — unavoidable for multi-root, opt-in otherwise; stored workflows are unaffected.
 - Whether `getWorkspaceRoots().length > 1` (prompt-building path) and `isMultiRootWorkspace()`
   (completion path) agree — both ultimately reflect `vscode.workspace.workspaceFolders.length`

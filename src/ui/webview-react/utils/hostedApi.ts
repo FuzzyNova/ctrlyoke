@@ -176,7 +176,9 @@ export async function workspaceGenerateCommitMessage(
   const payload: { instructions?: string; repo?: string } = {};
   if (instructions) payload.instructions = instructions;
   if (repo) payload.repo = repo;
-  const body = Object.keys(payload).length ? JSON.stringify(payload) : undefined;
+  const body = Object.keys(payload).length
+    ? JSON.stringify(payload)
+    : undefined;
   return hostedFetch<WorkspaceGenerateCommitMessageResponse>(
     "/api/workspace-viewer/generate-commit-message",
     {

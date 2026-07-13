@@ -82,7 +82,13 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
     links.push(
-      ...this.findFileLinks(document, text, workspaceRoot, namedRoots, trustedRoots)
+      ...this.findFileLinks(
+        document,
+        text,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      )
     );
 
     // 2. Detect directory references (@dir/ and @"path with spaces/dir/")
@@ -109,7 +115,13 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     // 4. Detect symbol references with encoded line ranges
     links.push(
-      ...this.findSymbolLinks(document, text, workspaceRoot, namedRoots, trustedRoots)
+      ...this.findSymbolLinks(
+        document,
+        text,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      )
     );
 
     // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
