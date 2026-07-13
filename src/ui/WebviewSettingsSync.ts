@@ -762,7 +762,7 @@ export class WebviewSettingsSync {
       const finalStep = promptQueue?.getWorkflowFile().finalStep ?? null;
       const finalStepRuntime = promptQueue?.getFinalStepRuntime();
       return {
-        fileName: currentFile || "",
+        fileName: currentFile?.fileName || "",
         workflowName: workflowName || "",
         steps: queueState.steps || [],
         executionState: queueState.status || EXECUTION_STATES.IDLE,

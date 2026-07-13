@@ -49,6 +49,7 @@ export function areWorkflowPathsEqual(
   left: string | null | undefined,
   right: string | null | undefined
 ): boolean {
+  if (typeof left !== "string" || typeof right !== "string") return false;
   if (!left || !right) return false;
 
   return left.trim().replace(/\\/g, "/") === right.trim().replace(/\\/g, "/");
