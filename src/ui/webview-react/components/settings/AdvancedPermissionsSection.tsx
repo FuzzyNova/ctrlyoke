@@ -3,10 +3,13 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
 import { LocalTextarea } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
+import { Button } from "../shared/Button";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -33,9 +36,18 @@ export function AdvancedPermissionsSection({
   onUpdate,
   onReset,
 }: Props) {
+  const vscode = useVsCodeApi();
   const permissions = settings.settings.permissions;
+  const ui = settings.settings.ui;
   const sources = settings.sources as Record<string, SettingSource>;
   const rowProps = { sources, onReset, activeScope };
+
+  const handleBrowseExternalRoot = () => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT,
+      scope: activeScope,
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -69,6 +81,56 @@ export function AdvancedPermissionsSection({
           Applies to copilot-cli, claude-cli, codex-cli, qwen-cli, and
           antigravity-cli. Not supported by opencode-cli or copilot-chat.
         </p>
+      </div>
+      <div className="border-t border-panel-border pt-4">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          External File Roots
+        </h3>
+        <SettingInputRow
+          label="Allowed external directories (one per line)"
+          id="allowed-external-file-roots"
+          path="permissions.allowedExternalFileRoots"
+          {...rowProps}
+        >
+          <div className="flex flex-col gap-2">
+            <LocalTextarea
+              id="allowed-external-file-roots"
+              rows={3}
+              value={permissions.allowedExternalFileRoots.join("\n")}
+              onCommit={(v) =>
+                onUpdate(
+                  "permissions.allowedExternalFileRoots",
+                  v
+                    .split("\n")
+                    .map((d) => d.trim())
+                    .filter(Boolean)
+                )
+              }
+              className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
+            />
+            <Button variant="secondary" size="sm" onClick={handleBrowseExternalRoot}>
+              Add folder…
+            </Button>
+          </div>
+        </SettingInputRow>
+        <p className="text-xs text-description-fg mt-1">
+          Absolute directories outside the workspace that ctrlyoke may read
+          for prompt attachments and open from file links. Workspace files
+          are always allowed. Entries added at workspace scope require a
+          one-time approval (VS Code prompt, or{" "}
+          <code className="font-mono">ctrlyoke trust-external-roots</code> for
+          the standalone CLI) before they take effect.
+        </p>
+        <div className="mt-3">
+          <SettingToggleRow
+            label="Offer trust for untrusted file links"
+            description="Allow an AI-generated file link outside trusted roots to offer a Trust Parent Folder action. When off, untrusted links are still blocked outright — this only controls whether the offer appears."
+            checked={ui.offerTrustForUntrustedFileLinks}
+            onChange={(v) => onUpdate("ui.offerTrustForUntrustedFileLinks", v)}
+            path="ui.offerTrustForUntrustedFileLinks"
+            {...rowProps}
+          />
+        </div>
       </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">

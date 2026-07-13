@@ -20,11 +20,18 @@ import {
 import { TempFileManager } from "../utils/TempFileManager";
 import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
+import { evaluateFileAccess } from "../utils/FileAccessPolicy";
+import {
+  openResolvedTarget,
+  confirmExternalFileTrustAndOpen,
+  type FileOpenTarget,
+} from "./ExternalFileTrustPrompt";
 import {
   resolveNamedRelativePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
 import {
   getFileCompletions,
@@ -1227,6 +1234,13 @@ export class WebviewMessageRouter {
       this.settingsSync.handleUpdateConfig(message.key, message.value);
     });
 
+    table.set(MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT, (message) => {
+      this.settingsSync.handleBrowseAndAddExternalRoot(
+        message.scope,
+        this.getCurrentPostMessage()
+      );
+    });
+
     table.set(MESSAGE_TYPES.LOG_MESSAGE, (message) => {
       this.handleWebviewLog(message.level, message.message);
     });
@@ -2363,45 +2377,32 @@ export class WebviewMessageRouter {
       );
       const targetUri = vscode.Uri.file(resolvedFsPath);
 
-      if (!isPathWithinAnyDirectory(targetUri.fsPath, trustedRoots)) {
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+      const approvedExternalRoots =
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          workspaceIdentity
+        );
+      const decision = evaluateFileAccess(targetUri.fsPath, {
+        workspaceRoots: trustedRoots,
+        approvedExternalRoots,
+      });
+      const target: FileOpenTarget = {
+        path: targetUri.fsPath,
+        isDirectory,
+        startLine: lineStart,
+        endLine: lineEnd,
+      };
+
+      if (!decision.allowed) {
         Log.warn(
-          `Blocked dashboard request to open path outside workspace: ${relativePath}`
+          `Blocked dashboard request to open path outside every trusted root: ${relativePath}`
         );
-        vscode.window.showWarningMessage(
-          "ctrlyoke blocked a file link outside the current workspace."
-        );
+        await confirmExternalFileTrustAndOpen(target);
         return;
       }
 
-      if (isDirectory) {
-        try {
-          await vscode.commands.executeCommand("revealInExplorer", targetUri);
-        } catch {
-          await vscode.commands.executeCommand("revealFileInOS", targetUri);
-        }
-        return;
-      }
-
-      // A line target means the caller wants to land on a specific line, which
-      // only a text editor can do — force one via showTextDocument. Without a
-      // line, open through the `vscode.open` command so VS Code picks the right
-      // editor for the file type: text files still open in the editor, but
-      // binary files (images, PDFs, …) open in their native viewer instead of
-      // failing with "File seems to be binary and cannot be opened as text".
-      if (lineStart) {
-        const start = new vscode.Position(lineStart - 1, 0);
-        const end = lineEnd
-          ? new vscode.Position(lineEnd - 1, Number.MAX_SAFE_INTEGER)
-          : start;
-        await vscode.window.showTextDocument(targetUri, {
-          preview: false,
-          selection: new vscode.Range(start, end),
-        });
-      } else {
-        await vscode.commands.executeCommand("vscode.open", targetUri, {
-          preview: false,
-        });
-      }
+      await openResolvedTarget(target);
     } catch (error) {
       Log.error("Error opening file:", error);
       vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
@@ -2474,7 +2475,13 @@ export class WebviewMessageRouter {
 
     const counts: Record<string, number> = {};
 
-    const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const trustedRoots = [
+      ...getVsCodeTrustedWorkspaceRoots(),
+      ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        workspaceIdentity
+      ),
+    ];
     const namedRoots = getVsCodeNamedWorkspaceRoots();
 
     await Promise.all(

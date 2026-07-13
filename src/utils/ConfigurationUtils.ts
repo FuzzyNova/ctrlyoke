@@ -14,6 +14,19 @@ import {
   type PermissionMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
+import { externalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+
+/** The subset of `ExternalRootsTrustStore` these helpers depend on — narrowed so tests can inject a fake without constructing a real file-backed store. */
+interface ExternalRootsTrustStoreLike {
+  getApprovedRoots(
+    workspaceIdentity: string,
+    candidateRoots: readonly string[]
+  ): string[];
+  getPendingRoots(
+    workspaceIdentity: string,
+    candidateRoots: readonly string[]
+  ): string[];
+}
 
 /**
  * Configuration key constants (single source of truth for configService.get/set key strings)
@@ -63,6 +76,8 @@ export const CONFIG_KEYS = {
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
+  PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS: "permissions.allowedExternalFileRoots",
+  UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
 
@@ -387,6 +402,124 @@ export const ConfigurationUtils = {
    */
   getCliAllowedDirs(): string[] {
     return configService.get(CONFIG_KEYS.PERMISSIONS).allowedDirs;
+  },
+
+  // ============================================================
+  // ALLOWED EXTERNAL FILE ROOTS
+  // See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md
+  // ============================================================
+
+  /**
+   * Get `permissions.allowedExternalFileRoots` split by scope. A dedicated
+   * union (not the ordinary deep-merge, which replaces arrays wholesale) is
+   * required because both user and workspace scope can independently
+   * contribute roots.
+   */
+  getAllowedExternalFileRootsByScope(): {
+    user: string[];
+    workspace: string[];
+  } {
+    // `getScoped` returns a single-backend PartialCtrlYokeSettings slice, where
+    // TS's mapped Partial<> treats array leaves as sparse (elements typed
+    // `string | undefined`) — filter defensively rather than casting blindly.
+    const toStringArray = (
+      value: readonly (string | undefined)[] | undefined
+    ): string[] =>
+      (value ?? []).filter((v): v is string => typeof v === "string");
+
+    return {
+      user: toStringArray(
+        configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.USER)
+          ?.allowedExternalFileRoots
+      ),
+      workspace: toStringArray(
+        configService.getScoped(
+          CONFIG_KEYS.PERMISSIONS,
+          CONFIG_SCOPE.WORKSPACE
+        )?.allowedExternalFileRoots
+      ),
+    };
+  },
+
+  /**
+   * Get the flat union of configured external file roots across both
+   * scopes, regardless of whether workspace-scope entries have been
+   * approved yet. Use this only for display/configuration purposes (e.g.
+   * Settings UI, the CLI trust command) — for actual read/open decisions use
+   * {@link getEffectiveApprovedExternalFileRoots}.
+   */
+  getAllowedExternalFileRoots(): string[] {
+    const { user, workspace } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    return Array.from(new Set([...user, ...workspace]));
+  },
+
+  /**
+   * Get the external roots actually authorized to be read/opened right now:
+   * every user-scope root (trusted immediately — the user already made that
+   * decision on their own machine) plus every workspace-scope root with a
+   * recorded `"allow"` decision in `ExternalRootsTrustStore` for this
+   * workspace identity. Workspace-scope roots with no decision yet, or a
+   * `"deny"` decision, are excluded.
+   *
+   * @param workspaceIdentity Canonical identity of the current workspace
+   *   (e.g. `ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)`).
+   * @param trustStore Override for testing; defaults to the real singleton.
+   */
+  getEffectiveApprovedExternalFileRoots(
+    workspaceIdentity: string,
+    trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
+  ): string[] {
+    const { user, workspace } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    const approvedWorkspaceRoots = trustStore.getApprovedRoots(
+      workspaceIdentity,
+      workspace
+    );
+    return Array.from(new Set([...user, ...approvedWorkspaceRoots]));
+  },
+
+  /**
+   * Get workspace-scope external roots that have never been decided (allow
+   * or deny) for this workspace identity — the set that should trigger a
+   * batch approval prompt (VS Code) or gate `ctrlyoke run` (CLI).
+   *
+   * @param trustStore Override for testing; defaults to the real singleton.
+   */
+  getPendingWorkspaceExternalFileRoots(
+    workspaceIdentity: string,
+    trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
+  ): string[] {
+    const { workspace } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    return trustStore.getPendingRoots(workspaceIdentity, workspace);
+  },
+
+  /**
+   * Add a directory to the user-scope `allowedExternalFileRoots` list (no
+   * workspace-approval gate — this is the "Trust Parent Folder" action).
+   * No-op if the directory is already present.
+   */
+  async addUserAllowedExternalFileRoot(root: string): Promise<void> {
+    const { user: current } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    if (current.includes(root)) {
+      return;
+    }
+    await configService.set(
+      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      [...current, root],
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /**
+   * Check whether an AI-generated file link outside trusted roots may offer
+   * a "Trust Parent Folder" action. When false, untrusted links are still
+   * blocked outright — trusted roots always open regardless of this value.
+   */
+  shouldOfferTrustForUntrustedFileLinks(): boolean {
+    return configService.get(CONFIG_KEYS.UI).offerTrustForUntrustedFileLinks;
   },
 
   /**

@@ -11,6 +11,7 @@ Harness-specific adapters for CLI execution. Provider directories should contain
 - `buildCliArgs()` should handle resolved model/session/workspace/additionalArgs and provider-only flags. Leave prompt assembly, generic hook dispatch, PTY lifecycle, and workflow runtime persistence to shared code.
 - `buildHeadlessArgs()` / `buildInteractiveArgs()` are the source of truth for prompt flag/positional ordering. Some CLIs require different prompt placement between modes, so do not push that logic into shared helpers.
 - Hook setup now belongs in `buildNotificationHookArgs()` and `buildHeadlessUserHookArgs()`, not inline inside `buildCliArgs()`.
+- `CliProviderUtils.getWorkspaceDirs(workspaceRoot, workspaceRoots)` already appends every effective approved external file root (`permissions.allowedExternalFileRoots`, see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) after workspace folders and `permissions.allowedDirs`, for the four providers here that call it (Claude, Codex, Copilot, Antigravity). Do not re-fetch or re-append external roots in a provider's own `buildCliArgs()` — that would duplicate `--add-dir` entries. Qwen and OpenCode don't call this helper and are untouched by design (no `--add-dir` equivalent; they rely on their own trust mechanisms for external file references).
 </providerResponsibilities>
 
 <statefulProviders>

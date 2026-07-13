@@ -91,6 +91,23 @@ export class CtrlYokeConfigService {
     return this.getAll()[key];
   }
 
+  /**
+   * Get a top-level setting from exactly one backend, with no cross-scope
+   * merge — `undefined` when that backend doesn't define the key at all.
+   * Use this (instead of `get`/`getAll`) when a caller needs to reason about
+   * user-scope and workspace-scope values separately, e.g. to union array
+   * settings explicitly rather than letting the normal deep-merge replace one
+   * scope's array with another's.
+   */
+  getScoped<K extends keyof CtrlYokeGlobalSettings>(
+    key: K,
+    scope: SettingWriteScope
+  ): PartialCtrlYokeSettings[K] | undefined {
+    const backend =
+      scope === SETTING_SCOPES.WORKSPACE ? this.workspaceBackend : this.userBackend;
+    return backend?.getAll()[key];
+  }
+
   /** Get a nested setting value using dot notation (e.g. "execution.mode") */
   getNested(path: string): unknown {
     const parts = path.split(".");

@@ -9,7 +9,13 @@ import {
   resolveNamedRelativePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
-import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
+import {
+  evaluateFileAccess,
+  type FileAccessDecision,
+} from "../utils/FileAccessPolicy";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -79,6 +85,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     const namedRoots = getVsCodeNamedWorkspaceRoots();
     const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+    const workspaceIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const approvedExternalRoots =
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        workspaceIdentity
+      );
 
     // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
     links.push(
@@ -87,7 +99,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         text,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       )
     );
 
@@ -98,7 +111,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         text,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       )
     );
 
@@ -109,7 +123,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         text,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       )
     );
 
@@ -120,7 +135,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         text,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       )
     );
 
@@ -132,24 +148,39 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
   /**
    * Resolve a ref's path the same way every other `@`-reference is resolved
-   * (`resolveNamedRelativePath` + trusted-root containment): a folder-name
+   * (`resolveNamedRelativePath`) and decide whether it's inside the
+   * workspace, inside a trusted external root, or neither — a folder-name
    * prefix from a multi-root `.code-workspace` (`root2/src/index.ts`)
    * resolves against that named root instead of always joining onto the
-   * primary root, and a ref that escapes every trusted root is rejected
-   * (`null`) instead of producing a broken/unsafe link.
+   * primary root. See `FileAccessPolicy.evaluateFileAccess`.
    */
-  private resolveLinkPath(
+  private resolveLinkAccess(
     relativePath: string,
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
-    trustedRoots: readonly string[]
-  ): string | null {
+    trustedRoots: readonly string[],
+    approvedExternalRoots: readonly string[]
+  ): FileAccessDecision {
     const resolved = resolveNamedRelativePath(
       relativePath,
       workspaceRoot,
       namedRoots
     );
-    return isPathWithinAnyDirectory(resolved, trustedRoots) ? resolved : null;
+    return evaluateFileAccess(resolved, {
+      workspaceRoots: trustedRoots,
+      approvedExternalRoots,
+    });
+  }
+
+  /**
+   * Build a command URI routing an untrusted reference through the shared
+   * `ctrlyoke.confirmExternalFileTrust` command (same "Trust Parent Folder"
+   * flow used by dashboard output links) instead of a raw `file:` URI.
+   */
+  private buildTrustCommandUri(target: FileOpenTarget): vscode.Uri {
+    return vscode.Uri.parse(
+      `command:ctrlyoke.confirmExternalFileTrust?${encodeURIComponent(JSON.stringify(target))}`
+    );
   }
 
   /**
@@ -185,30 +216,38 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     text: string,
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
-    trustedRoots: readonly string[]
+    trustedRoots: readonly string[],
+    approvedExternalRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
     // Helper to add a file link from a regex match
     const addFileLink = (match: RegExpExecArray): void => {
       const relativePath = match[1];
-      const absolutePath = this.resolveLinkPath(
+      const decision = this.resolveLinkAccess(
         relativePath,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       );
-      if (absolutePath === null) {
-        return;
-      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const fileUri = vscode.Uri.file(absolutePath);
+      if (decision.allowed) {
+        const fileUri = vscode.Uri.file(decision.normalizedPath);
+        const link = new vscode.DocumentLink(range, fileUri);
+        link.tooltip = `Open ${relativePath}`;
+        links.push(link);
+        return;
+      }
 
-      const link = new vscode.DocumentLink(range, fileUri);
-      link.tooltip = `Open ${relativePath}`;
+      const commandUri = this.buildTrustCommandUri({
+        path: decision.normalizedPath,
+      });
+      const link = new vscode.DocumentLink(range, commandUri);
+      link.tooltip = `Trust and open ${relativePath}`;
       links.push(link);
     };
 
@@ -236,34 +275,42 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     text: string,
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
-    trustedRoots: readonly string[]
+    trustedRoots: readonly string[],
+    approvedExternalRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
     // Helper to add a directory link from a regex match
     const addDirLink = (match: RegExpExecArray): void => {
       const relativePath = match[1];
-      const absolutePath = this.resolveLinkPath(
+      const decision = this.resolveLinkAccess(
         relativePath,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       );
-      if (absolutePath === null) {
-        return;
-      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const dirUri = vscode.Uri.file(absolutePath);
+      if (decision.allowed) {
+        const dirUri = vscode.Uri.file(decision.normalizedPath);
+        const commandUri = vscode.Uri.parse(
+          `command:revealInExplorer?${encodeURIComponent(JSON.stringify(dirUri.toString()))}`
+        );
+        const link = new vscode.DocumentLink(range, commandUri);
+        link.tooltip = `Reveal ${relativePath} in File Explorer`;
+        links.push(link);
+        return;
+      }
 
-      const commandUri = vscode.Uri.parse(
-        `command:revealInExplorer?${encodeURIComponent(JSON.stringify(dirUri.toString()))}`
-      );
-
-      const link = new vscode.DocumentLink(range, commandUri);
-      link.tooltip = `Reveal ${relativePath} in File Explorer`;
+      const trustCommandUri = this.buildTrustCommandUri({
+        path: decision.normalizedPath,
+        isDirectory: true,
+      });
+      const link = new vscode.DocumentLink(range, trustCommandUri);
+      link.tooltip = `Trust and reveal ${relativePath} in File Explorer`;
       links.push(link);
     };
 
@@ -291,7 +338,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     text: string,
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
-    trustedRoots: readonly string[]
+    trustedRoots: readonly string[],
+    approvedExternalRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -301,29 +349,37 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const startLine = parseInt(match[2], 10);
       const endLine = parseInt(match[3], 10);
 
-      const absolutePath = this.resolveLinkPath(
+      const decision = this.resolveLinkAccess(
         relativePath,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       );
-      if (absolutePath === null) {
-        return;
-      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const fileUri = vscode.Uri.file(absolutePath);
+      if (decision.allowed) {
+        const fileUri = vscode.Uri.file(decision.normalizedPath);
+        const commandUri = vscode.Uri.parse(
+          `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
+            JSON.stringify({ uri: fileUri.toString(), startLine, endLine })
+          )}`
+        );
+        const link = new vscode.DocumentLink(range, commandUri);
+        link.tooltip = `Open ${relativePath} at lines ${startLine}-${endLine}`;
+        links.push(link);
+        return;
+      }
 
-      const commandUri = vscode.Uri.parse(
-        `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
-          JSON.stringify({ uri: fileUri.toString(), startLine, endLine })
-        )}`
-      );
-
-      const link = new vscode.DocumentLink(range, commandUri);
-      link.tooltip = `Open ${relativePath} at lines ${startLine}-${endLine}`;
+      const trustCommandUri = this.buildTrustCommandUri({
+        path: decision.normalizedPath,
+        startLine,
+        endLine,
+      });
+      const link = new vscode.DocumentLink(range, trustCommandUri);
+      link.tooltip = `Trust and open ${relativePath} at lines ${startLine}-${endLine}`;
       links.push(link);
     };
 
@@ -394,7 +450,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     text: string,
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
-    trustedRoots: readonly string[]
+    trustedRoots: readonly string[],
+    approvedExternalRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -405,33 +462,41 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const startLine = parseInt(match[3], 10);
       const endLine = parseInt(match[4], 10);
 
-      const absolutePath = this.resolveLinkPath(
+      const decision = this.resolveLinkAccess(
         relativePath,
         workspaceRoot,
         namedRoots,
-        trustedRoots
+        trustedRoots,
+        approvedExternalRoots
       );
-      if (absolutePath === null) {
-        return;
-      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const fileUri = vscode.Uri.file(absolutePath);
+      if (decision.allowed) {
+        const fileUri = vscode.Uri.file(decision.normalizedPath);
+        const commandUri = vscode.Uri.parse(
+          `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
+            JSON.stringify({
+              uri: fileUri.toString(),
+              startLine,
+              endLine,
+            })
+          )}`
+        );
+        const link = new vscode.DocumentLink(range, commandUri);
+        link.tooltip = `Go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;
+        links.push(link);
+        return;
+      }
 
-      const commandUri = vscode.Uri.parse(
-        `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
-          JSON.stringify({
-            uri: fileUri.toString(),
-            startLine,
-            endLine,
-          })
-        )}`
-      );
-
-      const link = new vscode.DocumentLink(range, commandUri);
-      link.tooltip = `Go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;
+      const trustCommandUri = this.buildTrustCommandUri({
+        path: decision.normalizedPath,
+        startLine,
+        endLine,
+      });
+      const link = new vscode.DocumentLink(range, trustCommandUri);
+      link.tooltip = `Trust and go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;
       links.push(link);
     };
 

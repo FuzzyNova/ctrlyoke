@@ -57,6 +57,11 @@ import {
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
 import { NotificationManager } from "./ui/NotificationManager";
+import {
+  confirmExternalFileTrustAndOpen,
+  promptBatchApprovalForPendingWorkspaceExternalRoots,
+  type FileOpenTarget,
+} from "./ui/ExternalFileTrustPrompt";
 import { ScmCommitCommand } from "./scm/ScmCommitCommand";
 
 let workflowOrchestrator: WorkflowOrchestrator;
@@ -306,7 +311,24 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       );
       configService.setWorkspaceBackend(workspaceConfigBackend);
+
+      // Batch-approve any workspace-configured external file roots that
+      // haven't been reviewed yet (no-op if there are none, or the
+      // workspace isn't trusted — retried below via onDidGrantWorkspaceTrust).
+      // See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
+      void promptBatchApprovalForPendingWorkspaceExternalRoots(
+        getVsCodeWorkspaceRoot()
+      );
     }
+    context.subscriptions.push(
+      vscode.workspace.onDidGrantWorkspaceTrust(() => {
+        if (vscode.workspace.workspaceFolders?.length) {
+          void promptBatchApprovalForPendingWorkspaceExternalRoots(
+            getVsCodeWorkspaceRoot()
+          );
+        }
+      })
+    );
 
     // Initialize logging system early (creates output channel)
     Log.initialize(
@@ -899,6 +921,17 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  // Confirm External File Trust command — shared "Trust Parent Folder" /
+  // Cancel flow for file links (editor Ctrl+click and dashboard output
+  // links) that resolve outside the workspace and outside every currently
+  // trusted external root. See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
+  const confirmExternalFileTrustCommand = vscode.commands.registerCommand(
+    "ctrlyoke.confirmExternalFileTrust",
+    async (target: FileOpenTarget) => {
+      await confirmExternalFileTrustAndOpen(target);
+    }
+  );
+
   // Open Git Change command — opens a git change (diff/staged/stash:N/<hash>) in
   // VS Code's native diff UI: the multi-file commit viewer for a hash, the changes
   // views for working-tree/staged, and the generic multi-file diff editor for a
@@ -1223,6 +1256,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     showOutputPanelCommand,
     createDraftPromptCommand,
     openFileWithSelectionCommand,
+    confirmExternalFileTrustCommand,
     clearWorkflowCommand,
     openGitChangeCommand,
     addFileToPromptEditorCommand,

@@ -306,6 +306,11 @@
           "type": "string",
           "enum": ["untrusted", "on-request", "never"],
           "description": "Approval policy for Codex CLI tool calls."
+        },
+        "allowedExternalFileRoots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Absolute directory paths outside the workspace that ctrlyoke may read for prompt attachments and open from file links. Workspace files are always allowed. User-scope entries are trusted immediately; workspace-scope entries require a one-time batch approval before they take effect."
         }
       }
     },
@@ -534,6 +539,10 @@
         "hideGitIgnoredFiles": {
           "type": "boolean",
           "description": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."
+        },
+        "offerTrustForUntrustedFileLinks": {
+          "type": "boolean",
+          "description": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears."
         }
       }
     },

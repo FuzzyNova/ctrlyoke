@@ -66,6 +66,15 @@ export interface CtrlYokeGlobalSettings {
     // Codex CLI-specific
     codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
     codexApprovalPolicy: "untrusted" | "on-request" | "never";
+    /**
+     * Absolute directory paths outside the workspace that ctrlyoke may read for
+     * prompt attachments and open from file links. Workspace files are always
+     * allowed regardless of this list. User-scope entries are trusted
+     * immediately; workspace-scope entries require a one-time batch approval
+     * (see `ExternalRootsTrustStore`) before they take effect. See
+     * `dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`.
+     */
+    allowedExternalFileRoots: string[];
   };
 
   // Execution
@@ -132,6 +141,14 @@ export interface CtrlYokeGlobalSettings {
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
     hideGitIgnoredFiles: boolean;
+    /**
+     * Allow an AI-generated file link outside trusted roots to offer a "Trust
+     * Parent Folder" action. When false, untrusted external links are still
+     * blocked outright — this only controls whether the trust offer appears.
+     * Trusted roots (workspace or `permissions.allowedExternalFileRoots`)
+     * always open directly regardless of this setting.
+     */
+    offerTrustForUntrustedFileLinks: boolean;
   };
 
   // Server (new)
@@ -282,6 +299,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     copilotAllowAllPaths: true,
     codexSandboxMode: "workspace-write",
     codexApprovalPolicy: "on-request",
+    allowedExternalFileRoots: [],
   },
   execution: {
     mode: "interactive",
@@ -335,6 +353,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     confirmDeleteOperations: true,
     confirmResetOperations: true,
     hideGitIgnoredFiles: false,
+    offerTrustForUntrustedFileLinks: true,
   },
   server: {
     enabled: false,

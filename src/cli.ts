@@ -35,6 +35,11 @@ import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 import { WorkflowLockManager } from "./utils/WorkflowLockManager";
 import { setRuntimeMode } from "./utils/RuntimeMode";
+import { ConfigurationUtils } from "./utils/ConfigurationUtils";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+} from "./config/ExternalRootsTrustStore";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -120,6 +125,17 @@ program
   .description("Validate a prompt file without executing it")
   .action(async (file: string) => {
     await validateCommand(file);
+  });
+
+program
+  .command("trust-external-roots")
+  .description(
+    "Review and approve this workspace's requested external file roots (permissions.allowedExternalFileRoots)"
+  )
+  .option("-d, --cwd <path>", "Working directory (default: current directory)")
+  .option("-y, --yes", "Approve all pending roots without prompting")
+  .action(async (options: TrustExternalRootsOptions) => {
+    await trustExternalRootsCommand(options);
   });
 
 program
@@ -334,6 +350,31 @@ async function runCommand(
     };
   }
   configService.setCliOverlay(overlay);
+
+  // Fail closed when this workspace requests external file roots
+  // (permissions.allowedExternalFileRoots at workspace scope) that have not
+  // been reviewed yet — see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
+  // User-scope roots need no such gate (the user already approved them by
+  // editing their own settings).
+  const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const pendingExternalRoots =
+    ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
+  if (pendingExternalRoots.length > 0) {
+    console.error(
+      chalk.red(
+        "Error: This workspace requests external file roots that have not been approved yet:"
+      )
+    );
+    pendingExternalRoots.forEach((root) =>
+      console.error(chalk.red(`  - ${root}`))
+    );
+    console.error(
+      chalk.yellow(
+        "Run `ctrlyoke trust-external-roots` to review and approve them."
+      )
+    );
+    process.exit(2);
+  }
 
   const platform = new CliAdapter(config);
   // Register the adapter with the vscode-shim for backward compatibility.
@@ -628,6 +669,95 @@ async function validateCommand(file: string): Promise<void> {
   }
 }
 
+/** Ask a y/N question on stderr (keeps stdout pipe-friendly). */
+async function promptYesNo(question: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  const answer = await new Promise<string>((resolve) => {
+    rl.question(question, resolve);
+  });
+  rl.close();
+  return answer.toLowerCase().startsWith("y");
+}
+
+interface TrustExternalRootsOptions {
+  cwd?: string;
+  yes?: boolean;
+}
+
+/**
+ * Review and approve this workspace's requested external file roots
+ * (`permissions.allowedExternalFileRoots` at workspace scope). Ordinary
+ * `ctrlyoke run` fails closed while any workspace-scope root is still
+ * pending — see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
+ */
+async function trustExternalRootsCommand(
+  options: TrustExternalRootsOptions
+): Promise<void> {
+  const workingDir = options.cwd ? path.resolve(options.cwd) : process.cwd();
+  Log.initializeCli(workingDir, false);
+
+  const userBackend = createUserConfigBackend();
+  const workspaceBackend = createWorkspaceConfigBackend(workingDir);
+  configService.setUserBackend(userBackend);
+  configService.setWorkspaceBackend(workspaceBackend);
+
+  const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const pendingRoots =
+    ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
+
+  if (pendingRoots.length === 0) {
+    console.log(
+      chalk.green(
+        "No pending external file roots to approve for this workspace."
+      )
+    );
+    process.exit(0);
+  }
+
+  console.log(
+    chalk.bold(
+      `This workspace requests ${pendingRoots.length} external file root(s):`
+    )
+  );
+  pendingRoots.forEach((root) => console.log(`  - ${root}`));
+  console.log();
+
+  const approved =
+    options.yes ||
+    (await promptYesNo(
+      `Trust all ${pendingRoots.length} listed folder(s)? [y/N] `
+    ));
+
+  if (!approved) {
+    await externalRootsTrustStore.setDecisions(
+      workspaceIdentity,
+      pendingRoots,
+      "deny"
+    );
+    console.log(
+      chalk.yellow(
+        "No roots were approved. They remain blocked — change this in Settings if needed."
+      )
+    );
+    process.exit(0);
+  }
+
+  await externalRootsTrustStore.setDecisions(
+    workspaceIdentity,
+    pendingRoots,
+    "allow"
+  );
+  console.log(
+    chalk.green(
+      `✓ Approved ${pendingRoots.length} external file root(s) for this workspace.`
+    )
+  );
+  process.exit(0);
+}
+
 interface CommitCommandOptions {
   model?: string;
   cwd?: string;
@@ -711,15 +841,8 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   }
 
   if (!options.yes) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stderr,
-    });
-    const answer = await new Promise<string>((resolve) => {
-      rl.question("Commit with this message? [y/N] ", resolve);
-    });
-    rl.close();
-    if (!answer.toLowerCase().startsWith("y")) {
+    const confirmed = await promptYesNo("Commit with this message? [y/N] ");
+    if (!confirmed) {
       console.error("Aborted.");
       process.exit(0);
     }

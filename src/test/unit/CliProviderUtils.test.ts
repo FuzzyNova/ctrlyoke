@@ -12,6 +12,7 @@ suite("CliProviderUtils", () => {
 
   teardown(() => {
     configService.setCliOverlay({});
+    configService.setUserBackend({ getAll: () => ({}), set: async () => {} });
   });
 
   test("includes every workspace-folder root exactly once for --add-dir", () => {
@@ -30,6 +31,27 @@ suite("CliProviderUtils", () => {
     assert.deepStrictEqual(result, [
       path.resolve(primaryRoot),
       path.resolve(secondaryRoot),
+    ]);
+  });
+
+  test("appends every effective approved external root after allowedDirs", () => {
+    const primaryRoot = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
+    const externalRoot = path.join(os.tmpdir(), "ctrlyoke-external-root");
+    // User-scope allowedExternalFileRoots is trusted immediately (no
+    // trust-store decision needed) — read via getScoped(..., "user"), which
+    // only sees the user/workspace backends, not the CLI overlay.
+    configService.setUserBackend({
+      getAll: () => ({
+        permissions: { allowedExternalFileRoots: [externalRoot] },
+      }),
+      set: async () => {},
+    });
+
+    const result = CliProviderUtils.getWorkspaceDirs(primaryRoot, []);
+
+    assert.deepStrictEqual(result, [
+      path.resolve(primaryRoot),
+      path.resolve(externalRoot),
     ]);
   });
 });

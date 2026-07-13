@@ -56,6 +56,8 @@ Key roles:
 **Inline image previews are host-gated, workspace-wide:** `WebviewMessageRouter.handleFilePreviewUriRequest` resolves any harness-referenced image path (using the same `resolveNamedRelativePath` + trusted-root containment as `@`-references, so multi-root works) and returns a URI only when it lands inside an open workspace folder and is an allowed image type. Because that host-side check is the real security boundary, `CtrlYokeWebviewProvider.getImageResourceRoots()` deliberately puts **every workspace folder** on `localResourceRoots` (not just `.ctrlyoke/temp`+`attachments`) so the panel can stream any workspace image via `asWebviewUri`; the webview never constructs these URIs itself. Do not re-narrow `localResourceRoots` back to the `.ctrlyoke` dirs, and do not add a duplicate client-side allow-list — the gate belongs in the router.
 
 **Opening a file must branch on whether a line was requested:** the `OPEN_FILE` handler in `WebviewMessageRouter` uses `showTextDocument` **only** when a line target is present (a selection needs a text editor). With no line it opens via the `vscode.open` command so VS Code picks the editor by file type — otherwise binary files (images, PDFs) throw `CodeExpectedError: File seems to be binary and cannot be opened as text`. Clicking an inline image thumbnail hits this path, so it must never force a text editor.
+
+**External file trust is centralized in `ExternalFileTrustPrompt.ts`:** `openResolvedTarget()` is the single dispatcher for opening an already-trusted path (directory reveal / line-selection / `vscode.open`) — `WebviewMessageRouter.handleOpenFile()` uses it for its trusted-path branch, and the shared `ctrlyoke.confirmExternalFileTrust` command uses it after approval, so both call sites open things identically. Do not inline a second copy of that open-dispatch logic; add a new open behavior there if one is ever needed. `confirmExternalFileTrust()` is the only place that shows the "Trust Parent Folder" modal and writes to **user-scope** `permissions.allowedExternalFileRoots` — both `PromptLinkProvider` (editor Ctrl+click, via the command) and the dashboard `OPEN_FILE` flow route through it rather than duplicating the confirm UX. See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
 </criticalPatterns>
 
 <relatedFiles>
@@ -65,5 +67,6 @@ Key roles:
 - `src/ui/PostMessageDashboardSink.ts` — canonical sink-to-message translation
 - `src/ui/WorkflowSerializer.ts` — save/export/history logic and persistence allowlists
 - `src/ui/notifications/CompletionNotificationFactory.ts` — shared notification event builder
+- `src/ui/ExternalFileTrustPrompt.ts` — shared "Trust Parent Folder" confirm + trusted-open dispatch (dashboard `OPEN_FILE` and the `ctrlyoke.confirmExternalFileTrust` command)
 - `src/ui/webview-react/` — actual React UI; see separate instructions
 </relatedFiles>

@@ -948,6 +948,42 @@ export class WebviewSettingsSync {
     );
   }
 
+  /**
+   * Handle BROWSE_AND_ADD_EXTERNAL_ROOT: open a native folder picker and, if
+   * the user selects a folder, append it to `permissions.allowedExternalFileRoots`
+   * for the given scope (deduping). No-op on cancel. See
+   * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
+   */
+  async handleBrowseAndAddExternalRoot(
+    scope: SettingWriteScope,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      canSelectFolders: true,
+      canSelectFiles: false,
+      title: "Select External File Root",
+    });
+    if (!uris || uris.length === 0) {
+      return;
+    }
+
+    const newRoot = uris[0].fsPath;
+    const { user, workspace } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    const current = scope === CONFIG_SCOPE.WORKSPACE ? workspace : user;
+    if (current.includes(newRoot)) {
+      return;
+    }
+
+    await configService.set(
+      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      [...current, newRoot],
+      scope
+    );
+    await this.handleGlobalSettingsLoadRequest(postMessage);
+  }
+
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {
     await vscode.commands.executeCommand(VSCODE_COMMANDS.ENABLE_SERVER);
   }

@@ -171,6 +171,48 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(service.getNested("execution.mode"), defaultMode);
   });
 
+  suite("getScoped(key, scope)", () => {
+    test("returns undefined when the requested scope's backend lacks the key", () => {
+      service.setUserBackend(
+        makeBackend({ defaults: { harness: "claude-cli" } })
+      );
+      assert.strictEqual(service.getScoped("permissions", "user"), undefined);
+    });
+
+    test("returns only the requested scope's value, ignoring the other scope", () => {
+      service.setUserBackend(
+        makeBackend({
+          permissions: { allowedExternalFileRoots: ["/home/user/logs"] },
+        })
+      );
+      service.setWorkspaceBackend(
+        makeBackend({
+          permissions: { allowedExternalFileRoots: ["/shared/logs"] },
+        })
+      );
+      assert.deepStrictEqual(
+        service.getScoped("permissions", "user")?.allowedExternalFileRoots,
+        ["/home/user/logs"]
+      );
+      assert.deepStrictEqual(
+        service.getScoped("permissions", "workspace")
+          ?.allowedExternalFileRoots,
+        ["/shared/logs"]
+      );
+    });
+
+    test("ignores the CLI overlay entirely", () => {
+      service.setCliOverlay({
+        permissions: { allowedExternalFileRoots: ["/cli/only"] },
+      });
+      assert.strictEqual(service.getScoped("permissions", "user"), undefined);
+      assert.strictEqual(
+        service.getScoped("permissions", "workspace"),
+        undefined
+      );
+    });
+  });
+
   test("subscribe listener is called after notify()", () => {
     let called = 0;
     const unsubscribe = service.subscribe(() => {

@@ -21,6 +21,7 @@ import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import {
   resolveEffectiveAbsoluteReferences,
   type ResolverWorkspaceFolder,
@@ -456,7 +457,10 @@ export abstract class HarnessIntegration {
         );
         const expander = new ContextExpander(
           workspaceRoot,
-          this.getWorkspaceRoots(),
+          [
+            ...this.getWorkspaceRoots(),
+            ...this.getEffectiveApprovedExternalFileRoots(),
+          ],
           this.getNamedWorkspaceRoots(),
           effectiveAbsolute
         );
@@ -986,6 +990,24 @@ export abstract class HarnessIntegration {
    */
   protected getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
     return [];
+  }
+
+  /**
+   * Get every external directory currently authorized to be read/attached
+   * for this workspace: user-scope `permissions.allowedExternalFileRoots`
+   * (trusted immediately) plus workspace-scope entries with a recorded
+   * "allow" decision in `ExternalRootsTrustStore`. Returns `[]` when no
+   * workspace is open. See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
+   */
+  protected getEffectiveApprovedExternalFileRoots(): string[] {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return [];
+    }
+    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+      workspaceIdentity
+    );
   }
 
   /**

@@ -517,6 +517,90 @@ suite("ContextExpander.expandContextSplit", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Allowed external file roots (dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md).
+  // Callers widen the same `additionalTrustedRoots` list with the effective
+  // approved external roots — ContextExpander itself needs no new branch, so
+  // these tests exercise the identical mechanism as "multi-root workspace
+  // trust" above, just naming the intent explicitly.
+  suite("allowed external file roots", () => {
+    let externalRoot: string;
+
+    afterEach(() => {
+      try {
+        if (externalRoot) {
+          fs.rmSync(externalRoot, { recursive: true, force: true });
+        }
+      } catch {
+        // best-effort
+      }
+    });
+
+    test("attaches a trusted external full-file reference", async () => {
+      const root = freshWorkspace();
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      const externalFile = path.join(externalRoot, "session.jsonl");
+      fs.writeFileSync(externalFile, '{"event":"start"}\n');
+
+      const expander = new ContextExpander(root, [root, externalRoot]);
+      const result = await expander.expandContextSplit(`@"${externalFile}"`);
+
+      assert.deepStrictEqual(result.directFileRefs, [externalFile]);
+    });
+
+    test("attaches a trusted external selection excerpt", async () => {
+      const root = freshWorkspace();
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      const externalFile = path.join(externalRoot, "debug.log");
+      fs.writeFileSync(externalFile, "line1\nline2\nline3\n");
+
+      const expander = new ContextExpander(root, [root, externalRoot]);
+      const result = await expander.expandContextSplit(
+        `#selection:"${externalFile}":1-2`
+      );
+
+      assert.ok(result.excerptBlocks.includes("line1"));
+      assert.ok(result.excerptBlocks.includes("line2"));
+    });
+
+    test("attaches a trusted external directory listing", async () => {
+      const root = freshWorkspace();
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      fs.writeFileSync(path.join(externalRoot, "notes.txt"), "hi\n");
+
+      const expander = new ContextExpander(root, [root, externalRoot]);
+      const result = await expander.expandContextSplit(`@"${externalRoot}/"`);
+
+      assert.ok(result.excerptBlocks.includes("notes.txt"));
+      assert.ok(!result.excerptBlocks.includes("blocked"));
+    });
+
+    test("blocks an unapproved external full-file reference", async () => {
+      const root = freshWorkspace();
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      const externalFile = path.join(externalRoot, "session.jsonl");
+      fs.writeFileSync(externalFile, '{"event":"start"}\n');
+
+      // externalRoot intentionally NOT included in additionalTrustedRoots —
+      // simulates a root that is configured but not yet approved.
+      const expander = new ContextExpander(root, [root]);
+      const result = await expander.expandContextSplit(`@"${externalFile}"`);
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+    });
+
+    test("blocks an unapproved external directory listing", async () => {
+      const root = freshWorkspace();
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      fs.writeFileSync(path.join(externalRoot, "notes.txt"), "hi\n");
+
+      const expander = new ContextExpander(root, [root]);
+      const result = await expander.expandContextSplit(`@"${externalRoot}/"`);
+
+      assert.ok(result.excerptBlocks.includes("blocked"));
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   suite("named-root (folder-name-prefixed) resolution", () => {
     let secondRoot: string;
 

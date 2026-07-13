@@ -3,6 +3,7 @@ import * as path from "path";
 import { promisify } from "util";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../../../config/ExternalRootsTrustStore";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
@@ -162,10 +163,17 @@ export class CliProviderUtils {
   /**
    * Get workspace directories for --add-dir arguments
    *
-   * Collects every workspace-folder root plus any user-configured additional
-   * directories from `permissions.allowedDirs`. Workspace roots stay
-   * distinct from configured directories so future external-root policy can
-   * decide explicitly which roots a harness may receive.
+   * Collects every workspace-folder root, any user-configured additional
+   * directories from `permissions.allowedDirs`, and every external root
+   * currently authorized via `permissions.allowedExternalFileRoots` (see
+   * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md). Workspace roots stay
+   * distinct from configured directories so external-root policy can decide
+   * explicitly which roots a harness may receive.
+   *
+   * Single source of truth for `--add-dir` assembly — used identically by
+   * Claude, Codex, Copilot, and Antigravity. Qwen and OpenCode don't call
+   * this (no `--add-dir` equivalent); they pass external file references
+   * directly and rely on their own trust mechanisms.
    *
    * @param workspaceRoot - Primary workspace root for resolving relative paths
    * @param workspaceRoots - Every open workspace-folder root
@@ -201,6 +209,14 @@ export class CliProviderUtils {
     allowedDirs.forEach((dir: string) => {
       addDirectory(path.isAbsolute(dir) ? dir : path.join(workspaceRoot, dir));
     });
+
+    // Add every external root currently approved for this workspace
+    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const effectiveExternalRoots =
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        workspaceIdentity
+      );
+    effectiveExternalRoots.forEach(addDirectory);
 
     return workspaceDirs;
   }

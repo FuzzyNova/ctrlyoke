@@ -103,6 +103,7 @@ export const MESSAGE_TYPES = {
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
+  BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
 
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
