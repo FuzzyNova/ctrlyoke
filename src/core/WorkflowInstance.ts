@@ -79,7 +79,6 @@ import type {
   OutputExecutionTarget,
   UndoExecutionTarget,
 } from "../types/OutputHistoryTypes";
-import type { CtrlYokeMcpServerProvider } from "../ui/CtrlYokeMcpServerProvider";
 import {
   OutputCaptureBuffer,
   type OutputCaptureCallbacks,
@@ -168,9 +167,6 @@ export class WorkflowInstance {
     null;
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
-
-  /** MCP server provider for injecting user-defined MCP servers (chat harness only) */
-  mcpServerProvider?: CtrlYokeMcpServerProvider;
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
@@ -2341,7 +2337,6 @@ export class WorkflowInstance {
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
-      mcpServerProvider: this.mcpServerProvider,
       targetRunIndices,
       getIntegrationForPrompt: (
         prompt: PromptStep,
@@ -2761,7 +2756,7 @@ export class WorkflowInstance {
         ) {
           // Either the PTY is still alive with inject context set (CLI), or the
           // integration wants to stay alive for its own post-completion session
-          // watcher (Copilot Chat, no PTY). Keep it alive for the next run rather
+          // watcher (non-PTY harness). Keep it alive for the next run rather
           // than destroying it. Store under the same map key so the restore code
           // can insert it where createIntegrationForMode looks. Register a
           // one-shot exit callback so we dispose it if the terminal is killed

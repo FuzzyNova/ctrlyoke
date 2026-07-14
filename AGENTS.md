@@ -1,5 +1,4 @@
 <!-- AUTO-GENERATED — run `npm run generate-agent-files` to update -->
-
 # ctrlyoke Project Memory
 
 ## Core Project Context
@@ -16,7 +15,6 @@ The `.github/instructions/` directory contains detailed implementation guideline
 
 | File Pattern                                                                                                                                                                  | Instruction File                         |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `src/core/harness/chat/**`                                                                                                                                                    | chat.instructions.md                     |
 | `src/cli.ts,src/cli/**`                                                                                                                                                       | cli-binary.instructions.md               |
 | `src/completions/**`                                                                                                                                                          | completions.instructions.md              |
 | `src/config/**`                                                                                                                                                               | config.instructions.md                   |

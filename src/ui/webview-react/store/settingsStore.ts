@@ -350,10 +350,6 @@ const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
     available: false,
     status: HARNESS_STATUS_STRINGS.CHECKING,
   },
-  [HARNESS_IDS.COPILOT_CHAT]: {
-    available: false,
-    status: HARNESS_STATUS_STRINGS.CHECKING,
-  },
   [HARNESS_IDS.CLAUDE_CLI]: {
     available: false,
     status: HARNESS_STATUS_STRINGS.CHECKING,
@@ -379,7 +375,6 @@ const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
 const initialState: SettingsState = {
   modelOptions: {
     [HARNESS_IDS.COPILOT_CLI]: [],
-    [HARNESS_IDS.COPILOT_CHAT]: [],
     [HARNESS_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
     [HARNESS_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
     [HARNESS_IDS.OPENCODE_CLI]: [],

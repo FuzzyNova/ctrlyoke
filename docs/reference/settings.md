@@ -21,7 +21,6 @@ These settings apply to both the extension and the standalone CLI where relevant
 | `execution`            | Interactive vs headless behavior, prompt timeout, script timeout  |
 | `tools`                | Permission mode, allow/deny lists, harness-specific tool controls |
 | `workflow`             | Defaults for new workflows                                        |
-| `chat`                 | Copilot Chat behavior                                             |
 | `mcp`                  | Default MCP servers                                               |
 | `hooks`                | Global user-defined hooks                                         |
 | `queue`                | Queue size and execution time limits                              |

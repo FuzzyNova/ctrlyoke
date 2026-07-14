@@ -315,7 +315,8 @@ export abstract class HarnessIntegration {
    * a live PTY session for the *next prompt's* inject-mode dispatch — this is
    * about keeping a non-PTY integration's own long-lived watcher alive.
    *
-   * Default: false. Overridden by `CopilotChatIntegration`.
+   * Default: false. Overridden by non-PTY harness integrations that need a
+   * post-completion session-activity watcher to keep running.
    */
   shouldPersistForSessionActivity(): boolean {
     return false;
@@ -783,9 +784,8 @@ export abstract class HarnessIntegration {
    * Build the additional workflow-context text (prior context + critical instruction)
    * for injection into the prompt file section of a categorized split.
    *
-   * Used by CopilotChatIntegration and any other integration that builds
-   * categorized prompt files and needs to include workflow context in the
-   * prompt file section.
+   * Used by integrations that build categorized prompt files and need to
+   * include workflow context in the prompt file section.
    *
    * @returns Assembled text block, or empty string if nothing to inject
    */

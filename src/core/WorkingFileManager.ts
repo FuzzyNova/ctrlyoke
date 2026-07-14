@@ -427,8 +427,6 @@ export class WorkingFileManager {
     switch (harness) {
       case HARNESS_IDS.COPILOT_CLI:
         return ConfigurationUtils.getCliModel();
-      case HARNESS_IDS.COPILOT_CHAT:
-        return ConfigurationUtils.getCopilotChatModel();
       case HARNESS_IDS.CLAUDE_CLI:
         return ConfigurationUtils.getClaudeCliModel();
       case HARNESS_IDS.CODEX_CLI:

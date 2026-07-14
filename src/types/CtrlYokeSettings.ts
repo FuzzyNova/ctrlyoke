@@ -22,8 +22,6 @@ import type {
   UserHookConfig,
 } from "./CtrlYokeTypes";
 
-type CliAdditionalArgsHarnessId = Exclude<HarnessId, "copilot-chat">;
-
 export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
   general: {
@@ -38,7 +36,7 @@ export interface CtrlYokeGlobalSettings {
   defaults: {
     harness: HarnessId;
     models: Partial<Record<HarnessId, string>>;
-    additionalArgs: Partial<Record<CliAdditionalArgsHarnessId, string>>;
+    additionalArgs: Partial<Record<HarnessId, string>>;
     agent: string;
     skills: string[];
     resumeSession: boolean;
@@ -82,15 +80,6 @@ export interface CtrlYokeGlobalSettings {
     scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
     autoDeleteTempFiles: boolean;
-  };
-
-  // Chat
-  chat: {
-    windowLocation: "chatPanel" | "newTab" | "newWindow";
-    inactivityTimeout: number; // seconds
-    treatTimeoutAsSuccess: boolean;
-    forceAgentMode: boolean;
-    useNativeAttachments: boolean;
   };
 
   // Queue
@@ -239,7 +228,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     harness: "copilot-cli",
     models: {
       "copilot-cli": "claude-sonnet-4.6",
-      "copilot-chat": "claude-sonnet-4.6",
       "claude-cli": "sonnet",
       "codex-cli": "gpt-5.5",
       "opencode-cli": "opencode/big-pickle",
@@ -302,13 +290,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     scriptTimeout: 300,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
-  },
-  chat: {
-    windowLocation: "chatPanel",
-    inactivityTimeout: 300,
-    treatTimeoutAsSuccess: true,
-    forceAgentMode: false,
-    useNativeAttachments: false,
   },
   queue: {
     maxSize: 100,

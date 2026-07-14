@@ -6,7 +6,6 @@ import {
   ScriptRuntimeOutput,
   WorkflowStep,
   isScriptStep,
-  McpServerConfig,
   DynamicQueueConfig,
   FinalStepRuntimeState,
   EXECUTION_STATES,
@@ -14,7 +13,6 @@ import {
   type WorkflowAttemptTarget,
   type PreConditionAction,
 } from "../types/CtrlYokeTypes";
-import type { CtrlYokeMcpServerProvider } from "../ui/CtrlYokeMcpServerProvider";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import {
   EXECUTION_MODES,
@@ -24,7 +22,6 @@ import {
   STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
-  HARNESS_IDS,
   FAILURE_KINDS,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
@@ -139,8 +136,6 @@ export interface WorkflowExecutionContext {
     target: ExecutionTarget,
     snapshot: WorkspaceSnapshot
   ) => void;
-  /** MCP server provider for injecting user-defined MCP servers into VS Code's MCP subsystem (chat harness only) */
-  mcpServerProvider?: CtrlYokeMcpServerProvider;
   /**
    * Spawn a PTY session for interactive script execution.
    * Wraps the script in a shell so PTY interactive input works correctly.
@@ -489,27 +484,6 @@ export class WorkflowExecutor {
       resolvedProperties.harness
     );
 
-    // Inject user-defined MCP servers for Copilot Chat prompts.
-    // CLI harnesses handle this via --mcp-config flags in CliProviderUtils.
-    const isChatHarness =
-      resolvedProperties.harness === HARNESS_IDS.COPILOT_CHAT ||
-      (!resolvedProperties.harness &&
-        integration.getIntegrationMode() === HARNESS_IDS.COPILOT_CHAT);
-    let didSetMcpServers = false;
-    if (isChatHarness && context.mcpServerProvider) {
-      const mcpServers = resolvedProperties.mcpServers ?? [];
-      const userServers = mcpServers.filter(
-        (s): s is McpServerConfig => typeof s === "object"
-      );
-      if (userServers.length > 0) {
-        context.mcpServerProvider.setActiveServers(userServers);
-        didSetMcpServers = true;
-        Log.debug(
-          `🔧 Injected ${userServers.length} user MCP server(s) for chat prompt`
-        );
-      }
-    }
-
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
         harness: resolvedProperties.harness,
@@ -539,67 +513,60 @@ export class WorkflowExecutor {
     let result: { responseText: string; duration: number } | null = null;
     let attemptIndex = 0;
 
-    try {
-      while (true) {
-        result = await this.executeWithStreaming(
-          prompt,
-          integration,
-          context,
-          target,
-          target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-          runIndex,
-          attemptIndex,
-          {
-            promptIndex: sendPromptIndex,
-            allPrompts: state.steps,
-            filePath: context.currentPromptFilePath,
-            workflowName: this.promptQueue.getState().workflowName,
-            instanceId: context.instanceId,
-            workingFilePath: context.workingFilePath,
-            resolvedProperties,
-            workflowFile,
-            workingFilePersistence: this.promptQueue,
-            getFinalStepResponseTexts: () =>
-              this.promptQueue.getFinalStepResponseTexts(),
-            finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-              | string
-              | undefined,
-          },
-          async () => {
-            if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-              await this.promptQueue.markCurrentAsSent();
-            }
-            this.isWaitingForResponse = true;
+    while (true) {
+      result = await this.executeWithStreaming(
+        prompt,
+        integration,
+        context,
+        target,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+        runIndex,
+        attemptIndex,
+        {
+          promptIndex: sendPromptIndex,
+          allPrompts: state.steps,
+          filePath: context.currentPromptFilePath,
+          workflowName: this.promptQueue.getState().workflowName,
+          instanceId: context.instanceId,
+          workingFilePath: context.workingFilePath,
+          resolvedProperties,
+          workflowFile,
+          workingFilePersistence: this.promptQueue,
+          getFinalStepResponseTexts: () =>
+            this.promptQueue.getFinalStepResponseTexts(),
+          finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
+            | string
+            | undefined,
+        },
+        async () => {
+          if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+            await this.promptQueue.markCurrentAsSent();
           }
-        );
-
-        if (result) {
-          break;
+          this.isWaitingForResponse = true;
         }
+      );
 
-        const failureDisposition = await this.handlePromptSendFailure(
-          integration,
-          context,
-          target,
-          prompt,
-          signedStepIndex,
-          runIndex,
-          attemptIndex,
-          resolvedProperties
-        );
-
-        if (failureDisposition.outcome === "retry") {
-          attemptIndex++;
-          continue;
-        }
-
-        return failureDisposition.outcome === "continue";
+      if (result) {
+        break;
       }
-    } finally {
-      // Clear injected MCP servers after the chat prompt completes (or fails)
-      if (didSetMcpServers && context.mcpServerProvider) {
-        context.mcpServerProvider.setActiveServers([]);
+
+      const failureDisposition = await this.handlePromptSendFailure(
+        integration,
+        context,
+        target,
+        prompt,
+        signedStepIndex,
+        runIndex,
+        attemptIndex,
+        resolvedProperties
+      );
+
+      if (failureDisposition.outcome === "retry") {
+        attemptIndex++;
+        continue;
       }
+
+      return failureDisposition.outcome === "continue";
     }
 
     const { responseText, duration } = result;

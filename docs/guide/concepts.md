@@ -2,7 +2,7 @@
 
 ## Harness
 
-A **harness** is the execution strategy ctrlyoke uses to talk to an AI assistant. The term covers both CLI-backed integrations and the Copilot Chat window integration.
+A **harness** is the execution strategy ctrlyoke uses to talk to an AI assistant CLI.
 
 ctrlyoke currently supports:
 
@@ -12,7 +12,6 @@ ctrlyoke currently supports:
 - `opencode-cli`
 - `qwen-cli`
 - `antigravity-cli`
-- `copilot-chat`
 
 ## Workflow
 

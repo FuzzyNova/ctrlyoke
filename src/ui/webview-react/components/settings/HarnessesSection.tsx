@@ -26,7 +26,6 @@ const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.OPENCODE_CLI,
   HARNESS_IDS.QWEN_CLI,
   HARNESS_IDS.ANTIGRAVITY_CLI,
-  HARNESS_IDS.COPILOT_CHAT,
 ] as HarnessId[];
 
 const EMPTY_HIDDEN_VALUES: string[] = [];
@@ -87,7 +86,6 @@ export function HarnessesSection({
       <div className="space-y-4">
         {CLI_HARNESSES.map((harnessId) => {
           const info = HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO];
-          const isChat = harnessId === HARNESS_IDS.COPILOT_CHAT;
           const currentModel =
             (models as Record<string, string | undefined>)[harnessId] ?? "";
           const discoveredModels = getModelsForHarness(harnessId);
@@ -127,31 +125,29 @@ export function HarnessesSection({
                   />
                 )}
               </SettingInputRow>
-              {!isChat && (
-                <SettingInputRow
-                  label="Extra args"
+              <SettingInputRow
+                label="Extra args"
+                id={`extra-args-${harnessId}`}
+                path={`defaults.additionalArgs.${harnessId}`}
+                {...rowProps}
+              >
+                <LocalTextInput
                   id={`extra-args-${harnessId}`}
-                  path={`defaults.additionalArgs.${harnessId}`}
-                  {...rowProps}
-                >
-                  <LocalTextInput
-                    id={`extra-args-${harnessId}`}
-                    value={
-                      (additionalArgs as Record<string, string | undefined>)[
-                        harnessId
-                      ] ?? ""
-                    }
-                    onCommit={(v) =>
-                      onUpdate(
-                        `defaults.additionalArgs.${harnessId}`,
-                        v || undefined
-                      )
-                    }
-                    placeholder="None"
-                    className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-                  />
-                </SettingInputRow>
-              )}
+                  value={
+                    (additionalArgs as Record<string, string | undefined>)[
+                      harnessId
+                    ] ?? ""
+                  }
+                  onCommit={(v) =>
+                    onUpdate(
+                      `defaults.additionalArgs.${harnessId}`,
+                      v || undefined
+                    )
+                  }
+                  placeholder="None"
+                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                />
+              </SettingInputRow>
             </div>
           );
         })}

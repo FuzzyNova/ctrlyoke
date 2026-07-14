@@ -28,7 +28,6 @@ ctrlyoke does not bundle AI assistants. It orchestrates harnesses that you alrea
 | `opencode-cli`    | OpenCode CLI configured with a provider         |
 | `qwen-cli`        | Qwen Code CLI installed and configured          |
 | `antigravity-cli` | Antigravity CLI (`agy`) installed and signed in |
-| `copilot-chat`    | GitHub Copilot Chat extension inside VS Code    |
 
 Start with `copilot-cli` or `claude-cli` unless you already know you need another harness.
 

@@ -945,7 +945,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               {/* Row 1: Harness + Model */}
               <DrawerRow narrow={isNarrow}>
                 <FormField
-                  label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : harnessCategory(effectiveHarness) === "chat" ? " (Chat)" : ""}`}
+                  label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : ""}`}
                   htmlFor="settings-harness"
                   description="AI harness for execution"
                   setAsDefaultButton={
@@ -1429,17 +1429,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
           {activePage === DRAWER_PAGES.PERMISSIONS && (
             <div className="flex-1 flex flex-col min-h-0">
-              {/* Copilot Chat: not applicable */}
-              {harnessSupport === "n/a" && (
-                <p className="text-xxs text-description-fg mb-2">
-                  ℹ️ Tool permissions apply to CLI harnesses only and are
-                  ignored for Copilot Chat.
-                </p>
-              )}
-
-              <div
-                className={`flex-1 flex flex-col min-h-0${harnessSupport === "n/a" ? " opacity-60" : ""}`}
-              >
+              <div className="flex-1 flex flex-col min-h-0">
                 {/* Permission Mode */}
                 <FormField
                   label="Permission Mode"

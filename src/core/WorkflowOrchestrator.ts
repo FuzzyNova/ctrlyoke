@@ -2,11 +2,9 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
-import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
-import { VsCodeIntegrationFactory } from "./VsCodeIntegrationFactory";
+import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
-import type { CtrlYokeMcpServerProvider } from "../ui/CtrlYokeMcpServerProvider";
 import { PromptQueue } from "./PromptQueue";
 import {
   QueueState,
@@ -150,13 +148,12 @@ export class WorkflowOrchestrator {
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
   private readonly dashboardBroadcastHub = new DashboardBroadcastHub();
-  private readonly integrationFactory: VsCodeIntegrationFactory;
+  private readonly integrationFactory: IntegrationFactory;
   private readonly statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
 
   // Harness integrations — created once at startup
   private readonly copilotCliIntegration: CliIntegration;
-  private readonly chatIntegration: CopilotChatIntegration;
   private readonly claudeCliIntegration: CliIntegration;
   private readonly codexCliIntegration: CliIntegration;
   private readonly openCodeCliIntegration: CliIntegration;
@@ -196,9 +193,6 @@ export class WorkflowOrchestrator {
    */
   private panelStartupReplayedWorkflowId: string | null = null;
 
-  /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
-  private mcpServerProvider?: CtrlYokeMcpServerProvider;
-
   constructor(
     private readonly context: vscode.ExtensionContext,
     dashboardProvider?: DashboardClient
@@ -214,13 +208,12 @@ export class WorkflowOrchestrator {
     if (dashboardProvider) {
       this.dashboardBroadcastHub.addClient(dashboardProvider);
     }
-    this.integrationFactory = new VsCodeIntegrationFactory(
+    this.integrationFactory = new IntegrationFactory(
       new VsCodeAdapter(context)
     );
 
-    // Create the four shared harness integrations
+    // Create the shared CLI harness integrations
     this.copilotCliIntegration = this.integrationFactory.createCopilotCli();
-    this.chatIntegration = this.integrationFactory.createCopilotChat();
     this.claudeCliIntegration = this.integrationFactory.createClaudeCli();
     this.codexCliIntegration = this.integrationFactory.createCodexCli();
     this.openCodeCliIntegration = this.integrationFactory.createOpenCodeCli();
@@ -258,7 +251,6 @@ export class WorkflowOrchestrator {
     const defaultIntegration = this.getDefaultIntegration();
     const allIntegrations: Array<[string, HarnessIntegration]> = [
       [HARNESS_IDS.COPILOT_CLI, this.copilotCliIntegration],
-      [HARNESS_IDS.COPILOT_CHAT, this.chatIntegration],
       [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
       [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
       [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
@@ -307,11 +299,6 @@ export class WorkflowOrchestrator {
 
   public getDashboardBroadcastHub(): DashboardBroadcastHub {
     return this.dashboardBroadcastHub;
-  }
-
-  /** Set the MCP server provider for injecting user-defined MCP servers (chat harness) */
-  public setMcpServerProvider(provider: CtrlYokeMcpServerProvider): void {
-    this.mcpServerProvider = provider;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -898,7 +885,6 @@ export class WorkflowOrchestrator {
       const integrationMode = ConfigurationUtils.getIntegrationMode();
       const modeLabel =
         {
-          [HARNESS_IDS.COPILOT_CHAT]: "Copilot Chat",
           [HARNESS_IDS.CLAUDE_CLI]: "Claude Code CLI",
           [HARNESS_IDS.CODEX_CLI]: "Codex CLI",
           [HARNESS_IDS.COPILOT_CLI]: "Copilot CLI",
@@ -910,7 +896,6 @@ export class WorkflowOrchestrator {
 
       await Promise.all([
         this.copilotCliIntegration.initialize(),
-        this.chatIntegration.initialize(),
         this.claudeCliIntegration.initialize(),
         this.codexCliIntegration.initialize(),
         this.openCodeCliIntegration.initialize(),
@@ -1283,20 +1268,6 @@ export class WorkflowOrchestrator {
     // in buildWorkflowInstance(). Registering there (not here) guarantees
     // getWorkflowSummaries() only ever returns truly running/paused workflows.
 
-    // Warn (but don't block) if trying to run a second Chat-harness workflow
-    const effectiveHarness =
-      modeOverride ?? ConfigurationUtils.getIntegrationMode();
-    if (effectiveHarness === HARNESS_IDS.COPILOT_CHAT) {
-      const alreadyRunning = this.getRunningWorkflows().filter(
-        (w) => w !== instance
-      );
-      if (alreadyRunning.length > 0) {
-        void vscode.window.showWarningMessage(
-          "Another Chat workflow is already running. Starting this one may cause conflicts."
-        );
-        // Continue anyway
-      }
-    }
 
     return instance.executeLoadedPromptFile(modeOverride, continueFromCurrent);
   }
@@ -2224,11 +2195,6 @@ export class WorkflowOrchestrator {
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
 
-    // Pass MCP server provider so chat harness prompts can inject user-defined MCP servers
-    if (this.mcpServerProvider) {
-      instance.mcpServerProvider = this.mcpServerProvider;
-    }
-
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
@@ -2328,8 +2294,6 @@ export class WorkflowOrchestrator {
   ): HarnessIntegration {
     const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
     switch (harness) {
-      case HARNESS_IDS.COPILOT_CHAT:
-        return this.chatIntegration;
       case HARNESS_IDS.CLAUDE_CLI:
         return this.claudeCliIntegration;
       case HARNESS_IDS.CODEX_CLI:

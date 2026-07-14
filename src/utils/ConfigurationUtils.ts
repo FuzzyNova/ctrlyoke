@@ -37,7 +37,6 @@ export const CONFIG_KEYS = {
   DEFAULTS: "defaults",
   PERMISSIONS: "permissions",
   EXECUTION: "execution",
-  CHAT: "chat",
   QUEUE: "queue",
   HISTORY: "history",
   TERMINAL: "terminal",
@@ -220,7 +219,6 @@ export const ConfigurationUtils = {
 
   /**
    * Get the default harness from settings
-   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
   getIntegrationMode(): HarnessId {
     const mode = configService.get(CONFIG_KEYS.DEFAULTS).harness as HarnessId;
@@ -378,8 +376,6 @@ export const ConfigurationUtils = {
     switch (harness) {
       case HARNESS_IDS.COPILOT_CLI:
         return ConfigurationUtils.getCliModel();
-      case HARNESS_IDS.COPILOT_CHAT:
-        return ConfigurationUtils.getCopilotChatModel();
       case HARNESS_IDS.CLAUDE_CLI:
         return ConfigurationUtils.getClaudeCliModel();
       case HARNESS_IDS.CODEX_CLI:
@@ -520,29 +516,6 @@ export const ConfigurationUtils = {
   getCliToolPermissions(): Exclude<PermissionMode, "none"> {
     return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions
       .mode as Exclude<PermissionMode, "none">;
-  },
-
-  /**
-   * Get chat window location preference
-   */
-  getChatWindowLocation(): "chatPanel" | "newTab" | "newWindow" {
-    return configService.get(CONFIG_KEYS.CHAT).windowLocation;
-  },
-
-  /**
-   * Get chat inactivity timeout in milliseconds
-   * User configures in seconds, this returns milliseconds
-   */
-  getChatInactivityTimeoutMs(): number {
-    return configService.get(CONFIG_KEYS.CHAT).inactivityTimeout * 1000;
-  },
-
-  /**
-   * Check if chat timeout should be treated as success
-   * When true, inactivity timeouts are treated as successful completions
-   */
-  shouldTreatChatTimeoutAsSuccess(): boolean {
-    return configService.get(CONFIG_KEYS.CHAT).treatTimeoutAsSuccess;
   },
 
   // ============================================================
@@ -705,17 +678,9 @@ export const ConfigurationUtils = {
   /**
    * Get extra CLI flags to append for a specific harness (global fallback).
    * Prompt-level and workflow-level additionalArgs take precedence via PropertyResolver.
-   * copilot-chat is not a CLI harness and returns "".
    */
   getAdditionalArgsForHarness(harness: HarnessId): string {
-    if (harness === HARNESS_IDS.COPILOT_CHAT) {
-      return "";
-    }
-    return (
-      configService.get(CONFIG_KEYS.DEFAULTS).additionalArgs[
-        harness as Exclude<HarnessId, "copilot-chat">
-      ] ?? ""
-    );
+    return configService.get(CONFIG_KEYS.DEFAULTS).additionalArgs[harness] ?? "";
   },
 
   /**
@@ -744,14 +709,14 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Check if existing chat session should be resumed per prompt
+   * Check if an existing session should be resumed per prompt
    */
   shouldResumeExistingSession(): boolean {
     return configService.get(CONFIG_KEYS.DEFAULTS).resumeSession;
   },
 
   /**
-   * Determine if existing chat session should be resumed for a specific prompt
+   * Determine if an existing session should be resumed for a specific prompt
    * Checks prompt's explicit setting first, then falls back to global setting
    * @param promptResumeSession The prompt's resumeSession property (may be undefined)
    * @returns true if session should be resumed, false to start new session
@@ -779,21 +744,6 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.GENERAL).autoLoadRecentSession;
   },
 
-  // ============================================================
-  // CHAT MODE SETTINGS
-  // ============================================================
-
-  /**
-   * Get the default Copilot Chat model
-   */
-  getCopilotChatModel(): string {
-    return (
-      configService.get(CONFIG_KEYS.DEFAULTS).models[
-        HARNESS_IDS.COPILOT_CHAT
-      ] ?? DEFAULT_MODELS[HARNESS_IDS.COPILOT_CHAT]
-    );
-  },
-
   /**
    * Get the default agent name for new workflows
    * Returns empty string if no default agent is selected
@@ -808,22 +758,6 @@ export const ConfigurationUtils = {
    */
   getDefaultSkills(): string[] {
     return configService.get(CONFIG_KEYS.DEFAULTS).skills ?? [];
-  },
-
-  /**
-   * Check if agent mode should be forced for chat
-   */
-  shouldForceAgentModeForChat(): boolean {
-    return configService.get(CONFIG_KEYS.CHAT).forceAgentMode;
-  },
-
-  /**
-   * Check if native attachments should be used for chat mode.
-   * When false (default), builds temp prompt files with embedded agent/skills/context.
-   * When true, uses VS Code's native attachFile commands and agent-specific chat windows.
-   */
-  shouldUseChatNativeAttachments(): boolean {
-    return configService.get(CONFIG_KEYS.CHAT).useNativeAttachments;
   },
 
   /**

@@ -34,7 +34,6 @@ ctrlyoke is a VS Code extension that automates AI coding assistants through stru
 | `opencode-cli`    | OpenCode CLI — JSONL events, config-file permissions                                  |
 | `qwen-cli`        | Qwen Code CLI — JSONL events, log-based session discovery                             |
 | `antigravity-cli` | Google Antigravity CLI — plain-text output, hook-based completion, MCP config support |
-| `copilot-chat`    | GitHub Copilot Chat — UI automation via VS Code commands and session monitoring       |
 
 Set the active harness:
 
@@ -321,7 +320,6 @@ All settings use the `ctrlyoke.` prefix.
 | `openCodeCliModel`    | `anthropic/claude-sonnet-4-6`  | OpenCode CLI    |
 | `qwenCliModel`        | `coder-model`                  | Qwen CLI        |
 | `antigravityCliModel` | `Claude Sonnet 4.6 (Thinking)` | Antigravity CLI |
-| `copilotChatModel`    | `claude-sonnet-4.5`            | Copilot Chat    |
 
 ### Tool permissions
 
@@ -378,15 +376,6 @@ All settings use the `ctrlyoke.` prefix.
 | `saveOutputHistory`    | `true`  | Save per-run output history in `.ctrlyoke/.history/` |
 | `maxHistoryRuns`       | `-1`    | Max history entries per workflow (-1 = keep all)     |
 | `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.ctrlyoke/logs/`           |
-
-### Copilot Chat harness
-
-| Setting                     | Default     | Description                                            |
-| --------------------------- | ----------- | ------------------------------------------------------ |
-| `chatInactivityTimeout`     | `300`       | Seconds of inactivity before treating chat as complete |
-| `treatChatTimeoutAsSuccess` | `true`      | Count inactivity timeout as a successful completion    |
-| `chatWindowLocation`        | `chatPanel` | `chatPanel`, `newTab`, or `newWindow`                  |
-| `forceAgentModeForChat`     | `false`     | Force Agent mode before sending each prompt            |
 
 ---
 

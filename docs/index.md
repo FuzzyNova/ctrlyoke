@@ -19,8 +19,8 @@ hero:
 features:
   - title: One workflow format
     details: Write workflows in YAML, JSON, or simple Markdown prompts. The same schema works across the extension and the standalone CLI.
-  - title: Seven harnesses
-    details: Switch between Copilot CLI, Claude CLI, Codex CLI, OpenCode CLI, Qwen CLI, Antigravity CLI, and Copilot Chat.
+  - title: Six harnesses
+    details: Switch between Copilot CLI, Claude CLI, Codex CLI, OpenCode CLI, Qwen CLI, and Antigravity CLI.
   - title: Validation and retries
     details: Gate prompts with end conditions, pre-conditions, and script steps so workflows can stop, continue, or retry based on real project output.
   - title: Stateful execution

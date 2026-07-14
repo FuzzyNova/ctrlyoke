@@ -27,7 +27,6 @@ import {
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import {
-  getAvailableModelsSync,
   getCliSupportedModelIdsSync,
   getOpenCodeModelIdsSync,
   getQwenModelIdsSync,
@@ -98,10 +97,6 @@ export class WebviewSettingsSync {
       available: false,
       status: HARNESS_STATUS_STRINGS.CHECKING,
     },
-    [HARNESS_IDS.COPILOT_CHAT]: {
-      available: false,
-      status: HARNESS_STATUS_STRINGS.CHECKING,
-    },
     [HARNESS_IDS.CLAUDE_CLI]: {
       available: false,
       status: HARNESS_STATUS_STRINGS.CHECKING,
@@ -127,7 +122,6 @@ export class WebviewSettingsSync {
   // Validation constants
   private static readonly VALID_HARNESSES = [
     HARNESS_IDS.COPILOT_CLI,
-    HARNESS_IDS.COPILOT_CHAT,
     HARNESS_IDS.CLAUDE_CLI,
     HARNESS_IDS.CODEX_CLI,
     HARNESS_IDS.OPENCODE_CLI,
@@ -670,9 +664,6 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(
         HARNESS_IDS.COPILOT_CLI
       ),
-      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(
-        HARNESS_IDS.COPILOT_CHAT
-      ),
       [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(HARNESS_IDS.CLAUDE_CLI),
       [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(HARNESS_IDS.CODEX_CLI),
       [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(
@@ -793,16 +784,8 @@ export class WebviewSettingsSync {
    * Build model options for all harnesses.
    */
   buildModelOptions(): Record<string, Array<{ value: string; label: string }>> {
-    const chatModels = getAvailableModelsSync();
     const cliModelIds = getCliSupportedModelIdsSync();
     const hiddenModels = new Set(["copilot-fast"]);
-
-    const copilotChatOptions = chatModels
-      .filter((m) => !hiddenModels.has(m.id))
-      .map((m) => ({
-        value: m.id,
-        label: getModelDisplayName(m.id),
-      }));
 
     const noneOption = { value: MODEL_OPTION_VALUES.NONE, label: "None" };
 
@@ -858,7 +841,6 @@ export class WebviewSettingsSync {
 
     return {
       [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
-      [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
       [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
       [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
       [HARNESS_IDS.OPENCODE_CLI]: openCodeCliOptions,

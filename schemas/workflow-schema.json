@@ -61,10 +61,9 @@
       "properties": {
         "harness": {
           "type": "string",
-          "description": "Harness to use for this prompt. Determines which AI CLI or chat integration executes the prompt. Optional - defaults to ctrlyoke.harness setting.",
+          "description": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to ctrlyoke.harness setting.",
           "enum": [
             "copilot-cli",
-            "copilot-chat",
             "claude-cli",
             "codex-cli",
             "opencode-cli",
@@ -135,7 +134,7 @@
               "type": "null"
             }
           ],
-          "description": "Custom agent to use for this prompt. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). The agent's instructions will be prepended to your prompt using <agentInstructions> tags. Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat). Use null to explicitly disable inherited agent selection."
+          "description": "Custom agent to use for this prompt. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). The agent's instructions will be prepended to your prompt using <agentInstructions> tags. Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with all harnesses (Copilot CLI, Claude CLI, Codex CLI, etc.). Use null to explicitly disable inherited agent selection."
         },
         "resumeSession": {
           "type": "boolean",
@@ -257,7 +256,7 @@
               "type": "null"
             }
           ],
-          "description": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Ignored for copilot-chat. Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\""
+          "description": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\""
         },
         "toolPermissions": {
           "oneOf": [

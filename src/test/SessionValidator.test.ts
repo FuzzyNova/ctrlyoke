@@ -128,18 +128,6 @@ suite("SessionValidator Tests", () => {
     });
   });
 
-  suite("Copilot Chat (Not Applicable)", () => {
-    test("Should return false and warn for Copilot Chat", () => {
-      const sessionId = "any-session-id";
-
-      assert.strictEqual(
-        SessionValidator.validate(sessionId, HARNESS_IDS.COPILOT_CHAT),
-        false,
-        "Copilot Chat should not use session IDs"
-      );
-    });
-  });
-
   suite("isUuidFormat Utility", () => {
     test("Should correctly identify UUID format", () => {
       assert.strictEqual(

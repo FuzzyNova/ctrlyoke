@@ -13,7 +13,6 @@ import { SESSION_ID_SENTINELS } from "@root/types/DashboardConstants";
 export const DROPDOWN_NAMESPACES = {
   HARNESS: "harness",
   MODEL_COPILOT_CLI: "model:copilot-cli",
-  MODEL_COPILOT_CHAT: "model:copilot-chat",
   MODEL_CLAUDE_CLI: "model:claude-cli",
   MODEL_CODEX_CLI: "model:codex-cli",
   AGENT: "agent",

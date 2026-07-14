@@ -61,7 +61,6 @@ export class ValidationUtils {
         type: "string",
         enum: [
           HARNESS_IDS.COPILOT_CLI,
-          HARNESS_IDS.COPILOT_CHAT,
           HARNESS_IDS.CLAUDE_CLI,
           HARNESS_IDS.CODEX_CLI,
           HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -134,7 +133,6 @@ export class ValidationUtils {
             type: "string",
             enum: [
               HARNESS_IDS.COPILOT_CLI,
-              HARNESS_IDS.COPILOT_CHAT,
               HARNESS_IDS.CLAUDE_CLI,
               HARNESS_IDS.CODEX_CLI,
               HARNESS_IDS.ANTIGRAVITY_CLI,

@@ -4,7 +4,6 @@ export { HarnessesSection } from "./HarnessesSection";
 export { AdvancedPermissionsSection } from "./AdvancedPermissionsSection";
 export { ExecutionSection } from "./ExecutionSection";
 export { TerminalSection } from "./TerminalSection";
-export { ChatSection } from "./ChatSection";
 export { QueueSection } from "./QueueSection";
 export { ServerSection } from "./ServerSection";
 export { DeveloperSection } from "./DeveloperSection";

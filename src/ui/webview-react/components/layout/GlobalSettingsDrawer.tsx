@@ -15,7 +15,6 @@ import {
   AdvancedPermissionsSection,
   ExecutionSection,
   TerminalSection,
-  ChatSection,
   QueueSection,
   ServerSection,
   NotificationsSection,
@@ -33,7 +32,6 @@ const ALL_TABS = [
   { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "notifications", label: "Notifications", icon: "codicon-bell" },
   { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
-  { id: "chat", label: "Chat", icon: "codicon-comment-discussion" },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
   { id: "server", label: "Server", icon: "codicon-server" },
   {
@@ -224,9 +222,6 @@ export function GlobalSettingsDrawer() {
               )}
               {fullSettings && effectiveActiveTab === "terminal" && (
                 <TerminalSection settings={fullSettings} {...sectionProps} />
-              )}
-              {fullSettings && effectiveActiveTab === "chat" && (
-                <ChatSection settings={fullSettings} {...sectionProps} />
               )}
               {fullSettings && effectiveActiveTab === "queue" && (
                 <QueueSection settings={fullSettings} {...sectionProps} />

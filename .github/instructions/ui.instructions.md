@@ -23,13 +23,12 @@ Key roles:
 - **`WebviewSettingsSync`** owns global settings, workflow-property syncing, harness availability, agent/skill discovery, and the `capabilities.json` file consumed by the external MCP server process.
 - **`WorkflowSerializer`** owns workflow save/export/history flows and strips runtime-only working-file data by explicit allowlists before writing YAML/JSON.
 - **`NotificationManager`** is just another hub client; notification payload construction lives in `notifications/CompletionNotificationFactory.ts` so browser and VS Code notifications share wording/rules.
-- **`CtrlYokeMcpServerProvider`** applies only to the `copilot-chat` harness and only for user-defined stdio MCP servers. The built-in `ctrlyoke` MCP server is registered elsewhere and should not be handled here.
   </architecture>
 
 <terminology>
 **Critical:** "Provider" has been renamed to "harness" throughout the codebase
-- Old: copilot-cli provider, copilot-chat provider, claude-cli provider
-- New: copilot-cli harness, copilot-chat harness, claude-cli harness
+- Old: copilot-cli provider, claude-cli provider
+- New: copilot-cli harness, claude-cli harness
 - Constants: HARNESS_IDS (not PROVIDER_IDS)
 - Types: Harness type (from CtrlYokeTypes)
 - Configuration: ctrlyoke.harness setting

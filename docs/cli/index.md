@@ -17,7 +17,6 @@ ctrlyoke ships with two command-line entry points:
 ## What is different
 
 - no VS Code dashboard UI
-- no Copilot Chat window harness
 - terminal-oriented output instead of the panel UI
 
 Read [ctrlyoke](/cli/ctrlyoke) for the user-facing commands.

@@ -4,7 +4,6 @@ import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 // Raw SVG imports — inlined at build time, no CSP issues
 import claudeRaw from "@icons/harnesses/claude.svg?raw";
 import antigravityRaw from "@icons/harnesses/antigravity.svg?raw";
-import copilotChatRaw from "@icons/harnesses/copilot-chat.svg?raw";
 import copilotRaw from "@icons/harnesses/copilot-cli.svg?raw";
 import openaiRaw from "@icons/harnesses/codex.svg?raw";
 import opencodeRaw from "@icons/harnesses/opencode.svg?raw";
@@ -13,7 +12,6 @@ import qwenRaw from "@icons/harnesses/qwen.svg?raw";
 // Icons designed for dark backgrounds (white fills).
 // The CSS class "harness-icon-adaptive" applies filter:invert(1) on light VS Code themes.
 const ADAPTIVE_HARNESSES = new Set<HarnessId>([
-  HARNESS_IDS.COPILOT_CHAT,
   HARNESS_IDS.CODEX_CLI,
   HARNESS_IDS.OPENCODE_CLI,
 ]);
@@ -21,7 +19,6 @@ const ADAPTIVE_HARNESSES = new Set<HarnessId>([
 const SVG_MAP: Record<HarnessId, string> = {
   [HARNESS_IDS.ANTIGRAVITY_CLI]: antigravityRaw,
   [HARNESS_IDS.CLAUDE_CLI]: claudeRaw,
-  [HARNESS_IDS.COPILOT_CHAT]: copilotChatRaw,
   [HARNESS_IDS.COPILOT_CLI]: copilotRaw,
   [HARNESS_IDS.CODEX_CLI]: openaiRaw,
   [HARNESS_IDS.OPENCODE_CLI]: opencodeRaw,

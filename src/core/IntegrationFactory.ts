@@ -18,9 +18,9 @@ import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProv
  * CLI integration construction so callers never import individual provider
  * classes directly.
  *
- * Handles copilot-cli, claude-cli, and codex-cli harnesses only.
- * For copilot-chat (VS Code-only), use VsCodeIntegrationFactory which
- * extends this class and adds chat support.
+ * Handles all CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli,
+ * qwen-cli, antigravity-cli) and is platform-agnostic; WorkflowOrchestrator
+ * (VS Code-only) and the standalone CLI/server binaries both use it directly.
  *
  * Phase 1: WorkflowOrchestrator creates and caches the four integrations at
  *           startup (same lifecycle as today).

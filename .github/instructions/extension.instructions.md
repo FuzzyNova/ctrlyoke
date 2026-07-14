@@ -27,9 +27,8 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
    - `webviewProvider.setHub(...)`
    - `setPtyPostMessage(hub.postMessage)` to upgrade PTY fan-out from panel-only to all dashboard clients
 8. Register `NotificationManager` as a hub client and share the orchestrator's `OutputHistoryManager` with the webview provider.
-9. Register `CtrlYokeMcpServerProvider` only when `vscode.lm.registerMcpServerDefinitionProvider` exists. This provider is only for user-defined MCP servers in `copilot-chat`; it does **not** represent the built-in `ctrlyoke` tools.
-10. Call `workflowOrchestrator.initialize()` fire-and-forget. The webview is allowed to resolve before harness detection finishes.
-11. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, LM tools, then command registration.
+9. Call `workflowOrchestrator.initialize()` fire-and-forget. The webview is allowed to resolve before harness detection finishes.
+10. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, LM tools, then command registration.
 
 Current activation assumes the **first workspace folder** is the workspace root for config backend setup, initialization, workflow discovery, and several commands. If multi-root behavior changes, update those paths together.
 </extensionActivation>
@@ -79,7 +78,6 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 
 <relatedFiles>
 - `src/ui/CtrlYokeWebviewProvider.ts` — panel shell and outbound UI transport
-- `src/ui/CtrlYokeMcpServerProvider.ts` — dynamic MCP definitions for `copilot-chat`
 - `src/core/WorkflowOrchestrator.ts` — main lifecycle owner created by `activate()`
 - `src/core/QueueOperations.ts` — shared queue/read/append logic mirrored by LM tools
 - `src/scm/ScmCommitCommand.ts` — SCM command implementation registered from `extension.ts`

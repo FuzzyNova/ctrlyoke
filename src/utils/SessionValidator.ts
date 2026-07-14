@@ -56,7 +56,6 @@ export class SessionValidator {
    * - **OpenCode CLI**: Must start with "ses_" followed by alphanumeric characters
    * - **Qwen CLI**: Strict UUID v4 format required
    * - **Antigravity CLI**: Strict UUID v4 format required
-   * - **Copilot Chat**: Not applicable (no session IDs)
    *
    * @param sessionId Session ID to validate
    * @param harness Harness to validate against
@@ -93,14 +92,6 @@ export class SessionValidator {
           sessionId,
           HARNESS_INFO[HARNESS_IDS.ANTIGRAVITY_CLI].name
         );
-
-      case HARNESS_IDS.COPILOT_CHAT:
-        // Chat mode doesn't use session IDs
-        Log.warn(
-          `⚠️ Session ID validation not applicable for Copilot Chat mode. ` +
-            `Session IDs are only used in CLI modes.`
-        );
-        return false;
 
       default:
         Log.warn(

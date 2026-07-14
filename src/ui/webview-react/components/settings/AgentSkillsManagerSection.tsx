@@ -36,10 +36,8 @@ import { isStandalone } from "@hooks/useVsCodeApi";
 
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
 
-// All harnesses eligible for display (excludes copilot-chat which shares dirs with copilot-cli)
-const ELIGIBLE_HARNESS_IDS: HarnessId[] = ALL_HARNESS_IDS.filter(
-  (id) => id !== HARNESS_IDS.COPILOT_CHAT
-);
+// All harnesses eligible for display
+const ELIGIBLE_HARNESS_IDS: HarnessId[] = ALL_HARNESS_IDS;
 
 function getTargetLabel(id: AnyTargetId): string {
   if (id === SPECIAL_TARGET_IDS.CTRLYOKE) return "ctrlyoke";

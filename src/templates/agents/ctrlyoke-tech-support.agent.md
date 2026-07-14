@@ -32,14 +32,13 @@ Core terms:
   </productModel>
 
 <supportedHarnesses>
-ctrlyoke supports seven harnesses:
+ctrlyoke supports six harnesses:
 - `copilot-cli`: GitHub Copilot CLI.
 - `claude-cli`: Anthropic Claude Code CLI.
 - `codex-cli`: OpenAI Codex CLI.
 - `opencode-cli`: OpenCode CLI.
 - `qwen-cli`: Qwen Code CLI.
 - `antigravity-cli`: Google Antigravity CLI (`agy`).
-- `copilot-chat`: GitHub Copilot Chat UI automation inside VS Code.
 
 Users must install and authenticate at least one harness separately; ctrlyoke does not bundle AI assistant CLIs. Start by asking which harness they selected, whether it is installed/authenticated, and whether they are running interactive or headless mode when debugging execution failures.
 </supportedHarnesses>
@@ -213,7 +212,6 @@ Execution modes:
 
 - Interactive mode runs CLI harnesses in the embedded terminal with live output.
 - Headless mode runs the CLI process in the background.
-- Copilot Chat is a VS Code UI automation harness, not a CLI process.
 
 Validation:
 

@@ -28,7 +28,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 
 - There are two integration lifecycles: detector singletons owned by `WorkflowOrchestrator`, and per-run execution integrations created through `IntegrationFactory.createForExecution()`.
 - `WorkflowInstance` caches execution integrations by harness within a run, may carry PTY-backed ones across runs in `liveInjectIntegrations`, and keeps disposed run integrations in `lastRunIntegrations` only so the next run can explicitly close leftover terminal tabs.
-- `VsCodeIntegrationFactory` is the extension-only factory that adds `copilot-chat`; core code should stay compatible with the base `IntegrationFactory`.
+- `IntegrationFactory` is platform-agnostic and is the single factory used by both `WorkflowOrchestrator` (VS Code) and standalone CLI/server binaries — there is no VS Code-specific subclass.
 
 ## Execution loop
 

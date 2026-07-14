@@ -43,7 +43,6 @@ export default defineConfig({
             { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
             { text: "Qwen CLI", link: "/harnesses/qwen-cli" },
             { text: "Gemini CLI", link: "/harnesses/gemini-cli" },
-            { text: "Copilot Chat", link: "/harnesses/copilot-chat" },
           ],
         },
       ],

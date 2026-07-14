@@ -345,21 +345,21 @@ describe("toggleRecentWorkflowsDropdown", () => {
 
 describe("hideDropdownOption / unhideDropdownOption", () => {
   it("hides an option and unhides it", () => {
-    store().hideDropdownOption("harness", "copilot-chat");
-    expect(store().hiddenDropdownOptions["harness"]).toContain("copilot-chat");
+    store().hideDropdownOption("harness", "codex-cli");
+    expect(store().hiddenDropdownOptions["harness"]).toContain("codex-cli");
 
-    store().unhideDropdownOption("harness", "copilot-chat");
+    store().unhideDropdownOption("harness", "codex-cli");
     expect(store().hiddenDropdownOptions["harness"]).not.toContain(
-      "copilot-chat"
+      "codex-cli"
     );
   });
 
   it("does not duplicate hidden options", () => {
-    store().hideDropdownOption("harness", "copilot-chat");
-    store().hideDropdownOption("harness", "copilot-chat");
+    store().hideDropdownOption("harness", "codex-cli");
+    store().hideDropdownOption("harness", "codex-cli");
     expect(
       store().hiddenDropdownOptions["harness"].filter(
-        (v) => v === "copilot-chat"
+        (v) => v === "codex-cli"
       )
     ).toHaveLength(1);
   });
@@ -367,8 +367,8 @@ describe("hideDropdownOption / unhideDropdownOption", () => {
 
 describe("clearHiddenDropdownOptions", () => {
   it("empties the list for a namespace", () => {
-    store().hideDropdownOption("harness", "copilot-chat");
     store().hideDropdownOption("harness", "codex-cli");
+    store().hideDropdownOption("harness", "qwen-cli");
     store().clearHiddenDropdownOptions("harness");
     expect(store().hiddenDropdownOptions["harness"]).toHaveLength(0);
   });

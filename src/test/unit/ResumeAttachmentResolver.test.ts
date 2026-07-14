@@ -55,7 +55,7 @@ suite("ResumeAttachmentResolver", () => {
     assert.deepStrictEqual(result.skills, ["testing"]);
   });
 
-  test("should fall back to the most recent completed prompt on resumed chat-style flows", () => {
+  test("should fall back to the most recent completed prompt when no session ID is available", () => {
     const result = ResumeAttachmentResolver.resolve({
       promptIndex: 2,
       allPrompts: [
@@ -64,7 +64,7 @@ suite("ResumeAttachmentResolver", () => {
           _runtime: {
             startedAt: 1,
             completedAt: 2,
-            harness: "copilot-chat",
+            harness: "claude-cli",
             skills: ["skill-a"],
           },
         } as PromptStep,
@@ -78,7 +78,7 @@ suite("ResumeAttachmentResolver", () => {
           },
         } as PromptStep,
       ],
-      harness: "copilot-chat",
+      harness: "claude-cli",
       resumeSession: true,
       skills: ["skill-a", "skill-b"],
     });

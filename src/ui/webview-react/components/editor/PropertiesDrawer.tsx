@@ -450,7 +450,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   htmlFor="prop-harness"
                   className="text-xs font-semibold uppercase text-description-fg"
                 >
-                  {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : harnessCategory(properties.harness ?? "") === "chat" ? " (Chat)" : ""}`}
+                  {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : ""}`}
                 </label>
                 <HarnessDropdown
                   id="prop-harness"
@@ -918,17 +918,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Permissions */}
         {activePage === DRAWER_PAGES.PERMISSIONS && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Copilot Chat: not applicable */}
-            {permHarnessSupport === "n/a" && (
-              <p className="text-xxs text-description-fg mb-2">
-                ℹ️ Tool permissions apply to CLI harnesses only and are ignored
-                for Copilot Chat.
-              </p>
-            )}
-
-            <div
-              className={`flex-1 flex flex-col min-h-0${permHarnessSupport === "n/a" ? " opacity-60" : ""}`}
-            >
+            <div className="flex-1 flex flex-col min-h-0">
               {/* Permission Mode */}
               <div className="flex flex-col gap-1">
                 <label

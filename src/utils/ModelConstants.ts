@@ -8,7 +8,7 @@
  * package.json enums are synced via: `npm run sync-models`
  *
  * IMPORTANT: There are FOUR different model sets:
- * 1. COPILOT_MODELS - All models available via Copilot Chat (superset)
+ * 1. COPILOT_MODELS - All models discoverable via VS Code's Language Model API (superset)
  * 2. COPILOT_CLI_MODEL_IDS - Models supported by `copilot` CLI (subset of above)
  * 3. CLAUDE_CLI_MODELS - Models for Anthropic's `claude` CLI (separate)
  * 4. CODEX_CLI_MODELS - Models for OpenAI's `codex` CLI (separate)
@@ -24,11 +24,11 @@
  */
 
 /**
- * All Copilot-supported models with display names (Chat superset)
+ * All Copilot-supported models with display names (Language Model API superset)
  * Key: model ID (used in API calls)
  * Value: human-readable display name (shown in UI)
  *
- * This includes ALL models available via Copilot Chat.
+ * This includes ALL models discoverable via VS Code's Language Model API.
  * Some of these may NOT be available via Copilot CLI.
  */
 export const COPILOT_MODELS: Record<string, string> = {
@@ -149,10 +149,10 @@ export const MODEL_NONE = "none";
 // Derived exports for convenience
 
 /**
- * All Copilot Chat model IDs as an array (superset)
- * Used for Chat mode enum validation and fallback lists
+ * All Language Model API-discovered Copilot model IDs as an array (superset)
+ * Used as the fallback list when live discovery hasn't completed yet.
  */
-export const COPILOT_CHAT_MODEL_IDS = Object.keys(COPILOT_MODELS);
+export const COPILOT_LM_MODEL_IDS = Object.keys(COPILOT_MODELS);
 
 /**
  * Get display name for a model ID

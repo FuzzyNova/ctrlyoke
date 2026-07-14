@@ -10,9 +10,8 @@
  * 6. #sym:path:SymbolName:line-line → Symbol reference with an encoded line range
  * 7. #sym:"path with spaces":SymbolName:line-line → Quoted-path symbol reference
  *
- * This module provides unified parsing logic used by:
- * - NativeAttachmentHandler (Chat mode)
- * - HarnessIntegration base class (CLI modes)
+ * This module provides unified parsing logic used by the HarnessIntegration
+ * base class (CLI modes).
  */
 
 import {

@@ -13,23 +13,18 @@ export const PERMISSION_MODE_OPTIONS = [
   { value: PERMISSION_MODES.NONE, label: "None" },
 ];
 
-export type PermissionHarnessSupport = "full" | "mode-only" | "n/a";
+export type PermissionHarnessSupport = "full" | "mode-only";
 
 export function getPermissionHarnessSupport(
   harnessId: HarnessId
 ): PermissionHarnessSupport {
   switch (harnessId) {
-    case HARNESS_IDS.COPILOT_CLI:
-    case HARNESS_IDS.CLAUDE_CLI:
-    case HARNESS_IDS.QWEN_CLI:
-      return "full";
     case HARNESS_IDS.CODEX_CLI:
     case HARNESS_IDS.OPENCODE_CLI:
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return "mode-only";
-    case HARNESS_IDS.COPILOT_CHAT:
     default:
-      return "n/a";
+      return "full";
   }
 }
 

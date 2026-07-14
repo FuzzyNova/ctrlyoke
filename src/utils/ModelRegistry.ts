@@ -2,7 +2,7 @@
  * ModelRegistry - Dynamic model discovery and caching
  *
  * Queries available models via:
- * 1. VS Code's Language Model API (for Chat models) - User-specific availability
+ * 1. VS Code's Language Model API (for Copilot models) - User-specific availability
  * 2. `copilot help config` output (for Copilot CLI models) - Parsed dynamically
  *
  * Claude Code CLI models are maintained as a static list because:
@@ -13,7 +13,7 @@
  * Provides runtime access to the model list for:
  * - IntelliSense completions in prompt files
  * - Validation of model selection
- * - CLI/Chat harness model switching
+ * - CLI harness model switching
  *
  * Falls back to static model lists from ModelConstants when queries fail.
  */
@@ -25,7 +25,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { promises as fsPromises } from "fs";
 import {
-  COPILOT_CHAT_MODEL_IDS,
+  COPILOT_LM_MODEL_IDS,
   COPILOT_CLI_MODEL_IDS,
   OPENCODE_CLI_FALLBACK_MODELS,
 } from "./ModelConstants";
@@ -71,7 +71,7 @@ let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
 // Fallback model lists - imported from ModelConstants (single source of truth)
-const FALLBACK_CHAT_MODELS = COPILOT_CHAT_MODEL_IDS;
+const FALLBACK_LM_MODELS = COPILOT_LM_MODEL_IDS;
 const FALLBACK_COPILOT_CLI_MODELS = [...COPILOT_CLI_MODEL_IDS];
 
 /**
@@ -93,9 +93,9 @@ export async function initializeModelRegistry(): Promise<void> {
   }
 
   initializationPromise = (async () => {
-    // Query Copilot CLI first, then Chat models (so we can set cliSupported correctly)
+    // Query Copilot CLI first, then LM API models (so we can set cliSupported correctly)
     await queryCopilotCliModels();
-    await queryChatModels();
+    await queryLmModels();
     await queryOpenCodeModels();
     await queryQwenModels();
     isInitialized = true;
@@ -184,7 +184,7 @@ async function queryCopilotCliModels(): Promise<void> {
 /**
  * Query available models from VS Code Language Model API
  */
-async function queryChatModels(): Promise<void> {
+async function queryLmModels(): Promise<void> {
   try {
     Log.debug("Querying VS Code LM API for available models...");
 
@@ -201,7 +201,7 @@ async function queryChatModels(): Promise<void> {
       }));
 
       Log.debug(
-        `Discovered ${cachedModels.length} chat models: ${cachedModels.map((m) => m.id).join(", ")}`
+        `Discovered ${cachedModels.length} LM API models: ${cachedModels.map((m) => m.id).join(", ")}`
       );
     } else {
       Log.info("No models returned from LM API, using fallback list");
@@ -376,7 +376,7 @@ async function queryQwenModels(): Promise<void> {
  * Populate cache with static fallback models
  */
 function useFallbackModels(): void {
-  cachedModels = FALLBACK_CHAT_MODELS.map((id) => ({
+  cachedModels = FALLBACK_LM_MODELS.map((id) => ({
     id,
     family: id,
     vendor: "copilot",
@@ -405,10 +405,10 @@ export function getCliSupportedModelIdsSync(): string[] {
 }
 
 /**
- * Check if a model is available for Chat
+ * Check if a model is available via the Language Model API
  *
  * @param modelId The model ID to check
- * @returns true if model is available for chat
+ * @returns true if the model was discovered via the LM API
  */
 export function isModelAvailable(modelId: string): boolean {
   return cachedModels.some((m) => m.id === modelId);

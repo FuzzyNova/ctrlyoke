@@ -118,7 +118,7 @@ export interface ErrorBehavior {
  * 3. VS Code global settings (lowest priority/fallback)
  */
 export interface ExecutionProperties {
-  /** Harness/framework for execution (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat) */
+  /** Harness/framework for execution (Copilot CLI, Claude CLI, Codex CLI, etc.) */
   harness?: HarnessId;
 
   /** AI model to use */
@@ -177,7 +177,7 @@ export interface ExecutionProperties {
 
   /** Extra CLI flags appended to ctrlyoke's standard argument set.
    * ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally.
-   * Tokens are injected before the tool permission args. Applies only to CLI harnesses; ignored for copilot-chat.
+   * Tokens are injected before the tool permission args. Applies only to CLI harnesses.
    * Example: "--effort high --max-turns 10"
    *
    * - string: Use these additional args (overrides workflow and settings)
@@ -331,7 +331,7 @@ export interface PromptStep extends ExecutionProperties {
   /** When false, the step remains in the workflow but never executes. */
   enabled?: boolean;
   prompt: string;
-  sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for Copilot Chat)
+  sessionId?: string | number; // Session ID for resuming conversations (string session ID, or number = resume from that prompt index)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
 }
 

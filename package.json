@@ -1,7 +1,7 @@
 {
   "name": "ctrlyoke",
   "displayName": "ctrlyoke",
-  "description": "Run multi-step AI coding workflows across 7 harnesses (Copilot CLI, Copilot Chat, Claude, Codex, Antigravity, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
+  "description": "Run multi-step AI coding workflows across 6 harnesses (Copilot CLI, Claude, Codex, Antigravity, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
   "version": "0.1.0",
   "publisher": "fuzzynova",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -576,7 +576,7 @@
             },
             "source": {
               "type": "string",
-              "description": "Source identifier (e.g., 'copilot-chat', 'AI-generated tasks')"
+              "description": "Source identifier (e.g., 'claude-cli', 'AI-generated tasks')"
             },
             "reason": {
               "type": "string",

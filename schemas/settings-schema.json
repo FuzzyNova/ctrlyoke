@@ -42,7 +42,6 @@
           "type": "string",
           "enum": [
             "copilot-cli",
-            "copilot-chat",
             "claude-cli",
             "codex-cli",
             "opencode-cli",
@@ -56,7 +55,6 @@
           "description": "The default model to use for each harness for new workflows.",
           "properties": {
             "copilot-cli": { "type": "string" },
-            "copilot-chat": { "type": "string" },
             "claude-cli": { "type": "string" },
             "codex-cli": { "type": "string" },
             "opencode-cli": { "type": "string" },
@@ -334,34 +332,6 @@
         "autoDeleteTempFiles": {
           "type": "boolean",
           "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging."
-        }
-      }
-    },
-    "chat": {
-      "type": "object",
-      "description": "Copilot Chat harness settings.",
-      "additionalProperties": false,
-      "properties": {
-        "windowLocation": {
-          "type": "string",
-          "enum": ["chatPanel", "newTab", "newWindow"],
-          "description": "Where to open the Copilot Chat window."
-        },
-        "inactivityTimeout": {
-          "type": "number",
-          "description": "Seconds of inactivity before treating a chat session as complete."
-        },
-        "treatTimeoutAsSuccess": {
-          "type": "boolean",
-          "description": "Treat an inactivity timeout as a successful completion."
-        },
-        "forceAgentMode": {
-          "type": "boolean",
-          "description": "Force Copilot Chat into agent mode."
-        },
-        "useNativeAttachments": {
-          "type": "boolean",
-          "description": "Use native VS Code chat attachment API instead of inline text."
         }
       }
     },
@@ -698,7 +668,6 @@
           "enum": [
             "",
             "copilot-cli",
-            "copilot-chat",
             "claude-cli",
             "codex-cli",
             "opencode-cli",

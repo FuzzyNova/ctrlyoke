@@ -17,7 +17,6 @@ import { HarnessIcon } from "./HarnessIcon";
 export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
   [HARNESS_IDS.ANTIGRAVITY_CLI]: "Antigravity",
   [HARNESS_IDS.COPILOT_CLI]: "Copilot CLI",
-  [HARNESS_IDS.COPILOT_CHAT]: "Copilot",
   [HARNESS_IDS.CLAUDE_CLI]: "Claude Code",
   [HARNESS_IDS.CODEX_CLI]: "Codex",
   [HARNESS_IDS.OPENCODE_CLI]: "OpenCode",
@@ -35,17 +34,13 @@ const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.QWEN_CLI,
 ];
 
-const CHAT_HARNESSES: HarnessId[] = [HARNESS_IDS.COPILOT_CHAT];
-
 /** Returns the integration category for a harness value, or null for "default". */
-export function harnessCategory(value: string): "cli" | "chat" | null {
+export function harnessCategory(value: string): "cli" | null {
   if (CLI_HARNESSES.includes(value as HarnessId)) return "cli";
-  if (CHAT_HARNESSES.includes(value as HarnessId)) return "chat";
   return null;
 }
 
 // The selected harness can never be hidden (canHide enforces this).
-// showChatGroup already suppresses the empty Chat section when all items are hidden.
 const NON_HIDEABLE: HarnessId[] = [];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -285,14 +280,11 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     h !== (value as HarnessId) && // never hide the selected item
     !isHiddenValue(h);
 
-  const totalHidden = [...CLI_HARNESSES, ...CHAT_HARNESSES].filter(
-    isHiddenValue
-  ).length;
+  const totalHidden = CLI_HARNESSES.filter(isHiddenValue).length;
 
-  // Hide a group header when every item in that group is hidden and we're not
-  // in "show hidden" mode — an empty section is visually confusing.
+  // Hide the group header when every item is hidden and we're not in
+  // "show hidden" mode — an empty section is visually confusing.
   const showCliGroup = !CLI_HARNESSES.every(isHiddenValue) || showHidden;
-  const showChatGroup = !CHAT_HARNESSES.every(isHiddenValue) || showHidden;
 
   // ── Group renderer ────────────────────────────────────────────────────────
   const renderGroup = (harnesses: HarnessId[]) =>
@@ -343,14 +335,6 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         <>
           <GroupHeader label="CLI" />
           {renderGroup(CLI_HARNESSES)}
-        </>
-      )}
-
-      {/* ── VS Code Chat group ── */}
-      {showChatGroup && (
-        <>
-          <GroupHeader label="VS Code Chat" />
-          {renderGroup(CHAT_HARNESSES)}
         </>
       )}
     </div>

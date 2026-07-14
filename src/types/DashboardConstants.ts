@@ -527,7 +527,6 @@ export const BROWSER_CLIENT_PREFIX = "browser:" as const;
 // ============================================================================
 export const HARNESS_IDS = {
   COPILOT_CLI: "copilot-cli",
-  COPILOT_CHAT: "copilot-chat",
   CLAUDE_CLI: "claude-cli",
   CODEX_CLI: "codex-cli",
   OPENCODE_CLI: "opencode-cli",
@@ -540,10 +539,6 @@ export const HARNESS_IDS = {
 // ============================================================================
 export const HARNESS_INFO = {
   [HARNESS_IDS.COPILOT_CLI]: { name: "Copilot CLI", shortName: "Copilot CLI" },
-  [HARNESS_IDS.COPILOT_CHAT]: {
-    name: "Copilot Chat",
-    shortName: "Copilot Chat",
-  },
   [HARNESS_IDS.CLAUDE_CLI]: { name: "Claude Code", shortName: "Claude Code" },
   [HARNESS_IDS.CODEX_CLI]: { name: "Codex", shortName: "Codex" },
   [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode", shortName: "OpenCode" },
@@ -702,7 +697,6 @@ export type ExecutionMode =
 // ============================================================================
 export const DEFAULT_MODELS = {
   [HARNESS_IDS.COPILOT_CLI]: "claude-sonnet-4.6",
-  [HARNESS_IDS.COPILOT_CHAT]: "claude-sonnet-4.6",
   [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.4",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",

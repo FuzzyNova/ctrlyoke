@@ -24,7 +24,7 @@ export class CopilotNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
-  /** Logical → Copilot native event name mapping. Shared with CopilotChatIntegration. */
+  /** Logical → Copilot native event name mapping. */
   static readonly EVENT_MAP: Record<string, string> = {
     stop: "agentStop",
     error: "errorOccurred",
@@ -37,7 +37,6 @@ export class CopilotNotificationMonitor
 
   /**
    * Build a user-hooks-only Copilot hook config object (no ctrlyoke notification entries).
-   * Used by CopilotChatIntegration, which has its own completion detection mechanism.
    */
   static buildUserOnlyConfig(
     userHooks: UserHookConfig[]

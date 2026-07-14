@@ -284,7 +284,7 @@ export class CopilotCliProvider implements ICliProvider {
 
     // Lazily initialize the registry if not yet done (CLI mode).
     // queryCopilotCliModels() runs `copilot help config` — no VS Code context needed.
-    // queryChatModels() falls back to the static list via the vscode shim.
+    // queryLmModels() falls back to the static list via the vscode shim.
     if (!isRegistryInitialized()) {
       await initializeModelRegistry();
     }

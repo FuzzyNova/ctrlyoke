@@ -3,7 +3,7 @@ applyTo: "src/core/harness/CliIntegration.ts, src/core/harness/CliLogMonitor.ts,
 ---
 
 <purpose>
-Core CLI-harness runtime orchestration shared by every non-chat harness.
+Core CLI-harness runtime orchestration shared by every harness.
 </purpose>
 
 <architecture>
