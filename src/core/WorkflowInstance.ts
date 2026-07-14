@@ -2353,9 +2353,8 @@ export class WorkflowInstance {
           resolvedHarness &&
           resolvedHarness !== currentIntegration.getIntegrationMode()
         ) {
-          currentIntegration.closeTerminal(); // close orphaned terminal before switching harnesses
           Log.debug(
-            `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}`
+            `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}; retaining the previous harness terminal`
           );
           const overrideIntegration =
             this.createIntegrationForMode(resolvedHarness);

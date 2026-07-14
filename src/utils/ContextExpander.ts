@@ -23,6 +23,7 @@ import {
   ATTACHMENT_PREFIXES,
   GIT_CHANGE_KINDS,
 } from "../types/DashboardConstants";
+import { getErrorMessage } from "./ErrorUtils";
 
 /**
  * Result of context splitting — separates direct file references from embedded excerpts.
@@ -126,8 +127,7 @@ export class ContextExpander {
       const t0 = Date.now();
       const attachmentPromises = fileReferences.map((ref) =>
         this.buildAttachmentForReference(ref).catch((err) => {
-          const refDesc = this.getRefDescription(ref);
-          Log.error(`Failed to attach ${refDesc}:`, err);
+          this.logAttachmentBuildFailure(this.getRefDescription(ref), err);
           return null; // Skip failed attachments
         })
       );
@@ -480,6 +480,34 @@ export class ContextExpander {
       return `${ref.path}:${ref.startLine}-${ref.endLine}`;
     }
     return ref.path;
+  }
+
+  /**
+   * A missing attachment is expected while the editor requests token counts
+   * for an in-progress @ reference. Keep that high-frequency case in debug
+   * logs, while preserving warnings for unexpected attachment failures.
+   */
+  private logAttachmentBuildFailure(
+    reference: string,
+    error: unknown
+  ): void {
+    const errorCode = (error as NodeJS.ErrnoException | undefined)?.code;
+    const message = getErrorMessage(error);
+    const isUnreadableReference =
+      errorCode === "ENOENT" ||
+      errorCode === "ENOTDIR" ||
+      errorCode === "EISDIR";
+
+    if (isUnreadableReference) {
+      Log.debug(
+        `[ContextExpander] Skipping unreadable attachment ${reference}: ${message}`
+      );
+      return;
+    }
+
+    Log.warn(
+      `[ContextExpander] Failed to attach ${reference}: ${message}`
+    );
   }
 
   /**

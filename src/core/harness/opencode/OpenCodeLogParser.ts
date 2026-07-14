@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as os from "os";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { EventEmitter } from "events";
 import type * as fs from "fs";
@@ -25,11 +25,30 @@ import {
   accumulateOpenCodeStepTokens,
 } from "./OpenCodeEventMapper";
 import { Log } from "../../../utils/Log";
+import { resolveCliCommand } from "../shared/CliLauncherResolver";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /** Polling interval (ms) between `opencode export` calls in interactive mode */
 const EXPORT_POLL_INTERVAL_MS = 1000;
+
+type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
+
+/**
+ * Run OpenCode's export command through the same platform-aware launcher used
+ * to spawn the interactive TUI. On Windows, calling a bare `opencode` through
+ * a shell depends on the extension host's PATH, which may not include npm's
+ * shim directory even when the TUI itself launched successfully.
+ */
+async function runOpenCodeExport(sessionId: string): Promise<string> {
+  const command = await resolveCliCommand("opencode", ["export", sessionId]);
+  const { stdout } = await execFileAsync(command.command, command.args, {
+    encoding: "utf8",
+    timeout: 10_000,
+    windowsHide: true,
+  });
+  return stdout;
+}
 
 /**
  * Minimal fs.FSWatcher shim backed by a polling interval.
@@ -114,7 +133,10 @@ export class OpenCodeLogParser extends BaseLogParser {
    */
   private readonly contextWindowSizeFn: () => number | undefined;
 
-  constructor(contextWindowSizeFn: () => number | undefined = () => undefined) {
+  constructor(
+    contextWindowSizeFn: () => number | undefined = () => undefined,
+    private readonly runExport: OpenCodeExportRunner = runOpenCodeExport
+  ) {
     super();
     this.contextWindowSizeFn = contextWindowSizeFn;
   }
@@ -527,9 +549,7 @@ export class OpenCodeLogParser extends BaseLogParser {
    */
   private async fetchNewEvents(sessionId: string): Promise<BaseCliEvent[]> {
     try {
-      const { stdout } = await execAsync(`opencode export ${sessionId}`, {
-        timeout: 10000,
-      });
+      const stdout = await this.runExport(sessionId);
       const exportData = JSON.parse(stdout) as OpenCodeExport;
       return this.extractNewEventsFromExport(exportData);
     } catch (error) {

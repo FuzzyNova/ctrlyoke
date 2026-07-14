@@ -1459,4 +1459,64 @@ suite("WorkflowInstance append-and-continue", () => {
       1,
     ]);
   });
+
+  test("keeps an earlier harness terminal alive when the next prompt switches harnesses", () => {
+    class TrackingIntegration extends MockHarnessIntegration {
+      closeTerminalCalls = 0;
+
+      constructor(private readonly harness: HarnessId) {
+        super(undefined, false);
+      }
+
+      override getIntegrationMode(): string {
+        return this.harness;
+      }
+
+      override closeTerminal(): void {
+        this.closeTerminalCalls += 1;
+      }
+    }
+
+    class TrackingFactory extends IntegrationFactory {
+      readonly created: TrackingIntegration[] = [];
+
+      override createForExecution(harness: HarnessId): HarnessIntegration {
+        const integration = new TrackingIntegration(harness);
+        this.created.push(integration);
+        return integration;
+      }
+    }
+
+    const platform = new MockPlatform();
+    const factory = new TrackingFactory(platform);
+    const initialIntegration = new TrackingIntegration(HARNESS_IDS.CODEX_CLI);
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      factory,
+      () => initialIntegration,
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const context = (instance as any).buildWorkflowExecutionContext(
+      initialIntegration,
+      "",
+      undefined
+    );
+
+    const claudeIntegration = context.getIntegrationForPrompt(
+      { name: "Claude follow-up", prompt: "continue" },
+      HARNESS_IDS.CLAUDE_CLI
+    ) as TrackingIntegration;
+
+    assert.strictEqual(initialIntegration.closeTerminalCalls, 0);
+
+    context.getIntegrationForPrompt(
+      { name: "Copilot follow-up", prompt: "continue" },
+      HARNESS_IDS.COPILOT_CLI
+    );
+
+    assert.strictEqual(claudeIntegration.closeTerminalCalls, 0);
+  });
 });

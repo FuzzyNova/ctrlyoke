@@ -2454,6 +2454,29 @@ suite("OpenCodeLogParser", () => {
     });
   });
 
+  suite("export command execution", () => {
+    test("uses the injected OpenCode export runner instead of a shell command", async () => {
+      let requestedSessionId: string | undefined;
+      const parserWithExportRunner = new OpenCodeLogParser(
+        () => undefined,
+        async (sessionId) => {
+          requestedSessionId = sessionId;
+          return JSON.stringify({
+            info: { id: sessionId },
+            messages: [],
+          });
+        }
+      );
+
+      const events = await parserWithExportRunner.readNewLines(
+        "ses_export_test"
+      );
+
+      assert.strictEqual(requestedSessionId, "ses_export_test");
+      assert.deepStrictEqual(events, []);
+    });
+  });
+
   suite("extractNewEventsFromExport — part completion gating", () => {
     function makeExport(parts: object[]): object {
       return {
