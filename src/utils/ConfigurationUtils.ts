@@ -396,14 +396,6 @@ export const ConfigurationUtils = {
     }
   },
 
-  /**
-   * Get allowed directories for CLI operations (copilot-cli, claude-cli, codex-cli, qwen-cli, antigravity-cli).
-   * Not supported by opencode-cli or copilot-chat.
-   */
-  getCliAllowedDirs(): string[] {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).allowedDirs;
-  },
-
   // ============================================================
   // ALLOWED EXTERNAL FILE ROOTS
   // See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md
@@ -619,13 +611,6 @@ export const ConfigurationUtils = {
    */
   getBackgroundWorkIdleBackstopMs(): number {
     return 10 * 60 * 1000; // 10 minutes
-  },
-
-  /**
-   * Check if all paths should be allowed for Copilot CLI
-   */
-  shouldAllowAllPaths(): boolean {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).copilotAllowAllPaths;
   },
 
   // ============================================================

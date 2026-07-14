@@ -53,37 +53,6 @@ export function AdvancedPermissionsSection({
     <div className="space-y-4">
       <div>
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Allowed Directories
-        </h3>
-        <SettingInputRow
-          label="Additional directories (one per line)"
-          id="allowed-dirs"
-          path="permissions.allowedDirs"
-          {...rowProps}
-        >
-          <LocalTextarea
-            id="allowed-dirs"
-            rows={3}
-            value={permissions.allowedDirs.join("\n")}
-            onCommit={(v) =>
-              onUpdate(
-                "permissions.allowedDirs",
-                v
-                  .split("\n")
-                  .map((d) => d.trim())
-                  .filter(Boolean)
-              )
-            }
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
-          />
-        </SettingInputRow>
-        <p className="text-xs text-description-fg mt-1">
-          Applies to copilot-cli, claude-cli, codex-cli, qwen-cli, and
-          antigravity-cli. Not supported by opencode-cli or copilot-chat.
-        </p>
-      </div>
-      <div className="border-t border-panel-border pt-4">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           External File Roots
         </h3>
         <SettingInputRow
@@ -115,9 +84,12 @@ export function AdvancedPermissionsSection({
         </SettingInputRow>
         <p className="text-xs text-description-fg mt-1">
           Absolute directories outside the workspace that ctrlyoke may read
-          for prompt attachments and open from file links. Workspace files
-          are always allowed. Entries added at workspace scope require a
-          one-time approval (VS Code prompt, or{" "}
+          for prompt attachments and open from file links, and that the
+          harness (copilot-cli, claude-cli, codex-cli, and antigravity-cli
+          via --add-dir; qwen-cli and opencode-cli via their own trust
+          mechanisms) gets tool access to. Workspace files are always
+          allowed. Entries added at workspace scope require a one-time
+          approval (VS Code prompt, or{" "}
           <code className="font-mono">ctrlyoke trust-external-roots</code> for
           the standalone CLI) before they take effect.
         </p>
@@ -131,19 +103,6 @@ export function AdvancedPermissionsSection({
             {...rowProps}
           />
         </div>
-      </div>
-      <div className="border-t border-panel-border pt-4">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Copilot CLI
-        </h3>
-        <SettingToggleRow
-          label="Allow all paths"
-          description="Allow the Copilot CLI to access all file paths."
-          checked={permissions.copilotAllowAllPaths}
-          onChange={(v) => onUpdate("permissions.copilotAllowAllPaths", v)}
-          path="permissions.copilotAllowAllPaths"
-          {...rowProps}
-        />
       </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">

@@ -163,12 +163,12 @@ export class CliProviderUtils {
   /**
    * Get workspace directories for --add-dir arguments
    *
-   * Collects every workspace-folder root, any user-configured additional
-   * directories from `permissions.allowedDirs`, and every external root
-   * currently authorized via `permissions.allowedExternalFileRoots` (see
-   * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md). Workspace roots stay
-   * distinct from configured directories so external-root policy can decide
-   * explicitly which roots a harness may receive.
+   * Collects every workspace-folder root plus every external root currently
+   * authorized via `permissions.allowedExternalFileRoots` (see
+   * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) — the sole mechanism for
+   * granting a harness sandbox access to a directory outside the workspace.
+   * Workspace roots stay distinct from external roots so external-root
+   * policy can decide explicitly which roots a harness may receive.
    *
    * Single source of truth for `--add-dir` assembly — used identically by
    * Claude, Codex, Copilot, and Antigravity. Qwen and OpenCode don't call
@@ -178,10 +178,6 @@ export class CliProviderUtils {
    * @param workspaceRoot - Primary workspace root for resolving relative paths
    * @param workspaceRoots - Every open workspace-folder root
    * @returns Array of absolute directory paths
-   *
-   * @remarks
-   * Previously duplicated across CopilotCliProvider, ClaudeCliProvider, and CodexCliProvider.
-   * CodexCliProvider was missing the `cliAdditionalDirs` support — now fixed.
    */
   static getWorkspaceDirs(
     workspaceRoot: string,
@@ -203,12 +199,6 @@ export class CliProviderUtils {
     // every other workspace folder for multi-root windows.
     addDirectory(workspaceRoot);
     workspaceRoots.forEach(addDirectory);
-
-    // Add configured allowed directories
-    const allowedDirs = ConfigurationUtils.getCliAllowedDirs();
-    allowedDirs.forEach((dir: string) => {
-      addDirectory(path.isAbsolute(dir) ? dir : path.join(workspaceRoot, dir));
-    });
 
     // Add every external root currently approved for this workspace
     const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);

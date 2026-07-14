@@ -223,11 +223,6 @@ export class CopilotCliProvider implements ICliProvider {
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
     // Permission args are similarly dispatched via buildPermissionArgs() — not here.
 
-    // Path permissions
-    if (ConfigurationUtils.shouldAllowAllPaths()) {
-      args.push("--allow-all-paths");
-    }
-
     // Workspace directories
     if (workspaceRoot) {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(

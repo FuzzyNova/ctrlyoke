@@ -7,7 +7,7 @@ import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
 
 suite("CliProviderUtils", () => {
   setup(() => {
-    configService.setCliOverlay({ permissions: { allowedDirs: [] } });
+    configService.setCliOverlay({});
   });
 
   teardown(() => {
@@ -34,7 +34,7 @@ suite("CliProviderUtils", () => {
     ]);
   });
 
-  test("appends every effective approved external root after allowedDirs", () => {
+  test("appends every effective approved external root after workspace roots", () => {
     const primaryRoot = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
     const externalRoot = path.join(os.tmpdir(), "ctrlyoke-external-root");
     // User-scope allowedExternalFileRoots is trusted immediately (no

@@ -59,10 +59,6 @@ export interface CtrlYokeGlobalSettings {
 
   // Permissions (harness-specific advanced settings)
   permissions: {
-    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli, antigravity-cli (not supported by opencode-cli or copilot-chat)
-    allowedDirs: string[];
-    // Copilot CLI-specific
-    copilotAllowAllPaths: boolean;
     // Codex CLI-specific
     codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
     codexApprovalPolicy: "untrusted" | "on-request" | "never";
@@ -295,8 +291,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     preCondition: null,
   },
   permissions: {
-    allowedDirs: [],
-    copilotAllowAllPaths: true,
     codexSandboxMode: "workspace-write",
     codexApprovalPolicy: "on-request",
     allowedExternalFileRoots: [],

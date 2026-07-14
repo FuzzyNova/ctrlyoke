@@ -358,9 +358,15 @@ given a copy/embed fallback merely because it lacks `--add-dir`. Opening a
 trusted external file from the UI remains independent of harness support.
 
 `permissions.allowedExternalFileRoots` is the only setting that authorizes
-ctrlyoke to read or pass an external prompt reference. The existing
-`permissions.allowedDirs` remains a harness sandbox setting; it neither grants
-attachment access nor bypasses the external-root approval flow.
+ctrlyoke to read or pass an external prompt reference, and (2026-07-13) is now
+also the only source of extra `--add-dir` entries. The previously separate
+`permissions.allowedDirs` harness-sandbox setting was removed as duplication:
+both settings ultimately fed the same `--add-dir` assembly in
+`CliProviderUtils.getWorkspaceDirs()`, so a directory a user wants a harness to
+touch now goes through the external-roots trust flow (approval, folder picker)
+rather than a second, unguarded list. `permissions.copilotAllowAllPaths` was
+removed at the same time — it mirrored Copilot's single `--allow-all-paths`
+flag 1:1, which is already reachable via `defaults.additionalArgs["copilot-cli"]`.
 
 References that already require ctrlyoke-side expansion—such as `#selection`,
 `#sym`, and `@dir/`—remain normal excerpt/directory attachment behavior. The

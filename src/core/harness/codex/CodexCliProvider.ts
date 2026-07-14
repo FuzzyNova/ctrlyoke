@@ -19,10 +19,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import {
-  PERMISSION_MODES,
-  HARNESS_IDS,
-} from "../../../types/DashboardConstants";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -386,13 +383,6 @@ export class CodexCliProvider implements ICliProvider {
       isInteractive
     );
     args.push(...permissionArgs);
-    // Add additional allowed directories when not in dangerous mode
-    if (config.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      const additionalDirs = ConfigurationUtils.getCliAllowedDirs();
-      additionalDirs.forEach((dir: string) => {
-        args.push("--add-dir", dir);
-      });
-    }
     return args;
   }
 

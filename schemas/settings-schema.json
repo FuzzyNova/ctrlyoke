@@ -288,15 +288,6 @@
       "description": "Harness-specific path and sandbox permission settings.",
       "additionalProperties": false,
       "properties": {
-        "allowedDirs": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Additional directories to allow tool access to. Applies to copilot-cli, claude-cli, codex-cli, qwen-cli, and antigravity-cli. Not supported by opencode-cli or copilot-chat."
-        },
-        "copilotAllowAllPaths": {
-          "type": "boolean",
-          "description": "Allow Copilot CLI to access all paths."
-        },
         "codexSandboxMode": {
           "type": "string",
           "enum": ["read-only", "workspace-write", "danger-full-access"],
