@@ -32,7 +32,6 @@ import {
   toAgentSelectOption,
   MultiCheckboxDropdown,
   HarnessDropdown,
-  harnessCategory,
   PriorContextSelect,
   DrawerTabBar,
   DrawerRow,
@@ -945,7 +944,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               {/* Row 1: Harness + Model */}
               <DrawerRow narrow={isNarrow}>
                 <FormField
-                  label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : ""}`}
+                  label="Harness"
                   htmlFor="settings-harness"
                   description="AI harness for execution"
                   setAsDefaultButton={

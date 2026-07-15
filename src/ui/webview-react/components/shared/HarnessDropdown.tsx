@@ -23,9 +23,9 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
   [HARNESS_IDS.QWEN_CLI]: "Qwen Code",
 };
 
-// ─── Grouping ─────────────────────────────────────────────────────────────────
+// ─── Harness list ─────────────────────────────────────────────────────────────
 
-const CLI_HARNESSES: HarnessId[] = [
+const HARNESSES: HarnessId[] = [
   HARNESS_IDS.ANTIGRAVITY_CLI,
   HARNESS_IDS.CLAUDE_CLI,
   HARNESS_IDS.CODEX_CLI,
@@ -33,12 +33,6 @@ const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.OPENCODE_CLI,
   HARNESS_IDS.QWEN_CLI,
 ];
-
-/** Returns the integration category for a harness value, or null for "default". */
-export function harnessCategory(value: string): "cli" | null {
-  if (CLI_HARNESSES.includes(value as HarnessId)) return "cli";
-  return null;
-}
 
 // The selected harness can never be hidden (canHide enforces this).
 const NON_HIDEABLE: HarnessId[] = [];
@@ -79,16 +73,6 @@ const StatusIndicator: React.FC<{
     </span>
   );
 };
-
-const GroupHeader: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex items-center gap-1.5 px-2 py-1 select-none">
-    <div className="flex-1 h-[2px] bg-widget-border" />
-    <span className="text-xxs font-semibold uppercase tracking-wider text-description-fg whitespace-nowrap leading-none flex-shrink-0">
-      {label}
-    </span>
-    <div className="flex-1 h-[2px] bg-widget-border" />
-  </div>
-);
 
 // ─── Harness row ──────────────────────────────────────────────────────────────
 
@@ -280,11 +264,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     h !== (value as HarnessId) && // never hide the selected item
     !isHiddenValue(h);
 
-  const totalHidden = CLI_HARNESSES.filter(isHiddenValue).length;
-
-  // Hide the group header when every item is hidden and we're not in
-  // "show hidden" mode — an empty section is visually confusing.
-  const showCliGroup = !CLI_HARNESSES.every(isHiddenValue) || showHidden;
+  const totalHidden = HARNESSES.filter(isHiddenValue).length;
 
   // ── Group renderer ────────────────────────────────────────────────────────
   const renderGroup = (harnesses: HarnessId[]) =>
@@ -330,13 +310,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         </div>
       )}
 
-      {/* ── CLI group ── */}
-      {showCliGroup && (
-        <>
-          <GroupHeader label="CLI" />
-          {renderGroup(CLI_HARNESSES)}
-        </>
-      )}
+      {renderGroup(HARNESSES)}
     </div>
   );
 

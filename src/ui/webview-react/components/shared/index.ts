@@ -22,7 +22,6 @@ export {
 export {
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
-  harnessCategory,
   type HarnessDropdownProps,
 } from "./HarnessDropdown";
 export { HarnessIcon } from "./HarnessIcon";

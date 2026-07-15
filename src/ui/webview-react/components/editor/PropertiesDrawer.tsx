@@ -30,7 +30,6 @@ import {
   DrawerRow,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
-  harnessCategory,
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,
   SkillsSelect,
@@ -450,7 +449,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   htmlFor="prop-harness"
                   className="text-xs font-semibold uppercase text-description-fg"
                 >
-                  {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : ""}`}
+                  Harness
                 </label>
                 <HarnessDropdown
                   id="prop-harness"
