@@ -1,6 +1,7 @@
 import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
+  HarnessId,
   StatusMessageSeverity,
   StepStatus,
 } from "../types/DashboardConstants";
@@ -92,9 +93,13 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyHarnessAvailability(harnessId: string, available: boolean): void {
+  notifyHarnessAvailability(
+    harnessId: HarnessId,
+    available: boolean,
+    installHint: string
+  ): void {
     for (const client of this.clients) {
-      client.notifyHarnessAvailability(harnessId, available);
+      client.notifyHarnessAvailability(harnessId, available, installHint);
     }
   }
 

@@ -166,6 +166,23 @@ suite("CliIntegration", () => {
   teardown(() => {
     configService.setCliOverlay({});
   });
+
+  test("should include install and sign-in guidance when unavailable", async () => {
+    const integration = createHeadlessIntegration({
+      config: {
+        installHint: "Install via: npm install -g test-cli",
+      } as ICliProvider["config"],
+      checkAvailability: async () => false,
+    });
+
+    await integration.initialize();
+
+    assert.strictEqual(
+      integration.getDetailedStatus().message,
+      "❌ Test CLI unavailable. Install via: npm install -g test-cli. Then sign in with the CLI before running a workflow."
+    );
+  });
+
   test("should keep last result snapshot in sync after headless execution", async () => {
     const integration = createHeadlessIntegration();
 

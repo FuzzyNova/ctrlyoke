@@ -61,6 +61,7 @@ export interface HarnessStatus {
   available: boolean;
   status: HarnessStatusString;
   message?: string;
+  installHint?: string;
 }
 
 export interface DevBuildState {

@@ -25,7 +25,7 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
 
 // ─── Harness list ─────────────────────────────────────────────────────────────
 
-const HARNESSES: HarnessId[] = [
+export const SUPPORTED_HARNESSES: HarnessId[] = [
   HARNESS_IDS.ANTIGRAVITY_CLI,
   HARNESS_IDS.CLAUDE_CLI,
   HARNESS_IDS.CODEX_CLI,
@@ -84,7 +84,11 @@ interface HarnessRowProps {
   narrow: boolean;
   harnessStatus?: Record<
     string,
-    { status: HarnessStatusString; available?: boolean }
+    {
+      status: HarnessStatusString;
+      available?: boolean;
+      installHint?: string;
+    }
   >;
   canHideRow: boolean;
   onSelect: (h: HarnessId) => void;
@@ -108,6 +112,10 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   const isAvailable = status?.available !== false;
   const isChecking = status?.status === HARNESS_STATUS_STRINGS.CHECKING;
   const name = HARNESS_DISPLAY_NAMES[harness] ?? harness;
+  const unavailableHint =
+    !isAvailable && !isChecking
+      ? (status?.installHint ?? "Harness is not available")
+      : undefined;
 
   if (isHidden) {
     // Dimmed, italic, eye-open on the left to restore
@@ -142,6 +150,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
 
   return (
     <div
+      title={unavailableHint}
       className={`group flex items-center pr-2 gap-1 ${
         isSelected
           ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
@@ -202,7 +211,11 @@ export interface HarnessDropdownProps {
   /** Required when showStatus is true. */
   harnessStatus?: Record<
     string,
-    { status: HarnessStatusString; available?: boolean }
+    {
+      status: HarnessStatusString;
+      available?: boolean;
+      installHint?: string;
+    }
   >;
   hiddenValues?: string[];
   onHideOption?: (value: string) => void;
@@ -264,7 +277,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     h !== (value as HarnessId) && // never hide the selected item
     !isHiddenValue(h);
 
-  const totalHidden = HARNESSES.filter(isHiddenValue).length;
+  const totalHidden = SUPPORTED_HARNESSES.filter(isHiddenValue).length;
 
   // ── Group renderer ────────────────────────────────────────────────────────
   const renderGroup = (harnesses: HarnessId[]) =>
@@ -310,7 +323,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         </div>
       )}
 
-      {renderGroup(HARNESSES)}
+      {renderGroup(SUPPORTED_HARNESSES)}
     </div>
   );
 
@@ -359,7 +372,13 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
-        title={triggerTitle}
+        title={
+          triggerTitle ??
+          (!triggerStatus?.available &&
+          triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
+            ? (triggerStatus?.installHint ?? "Harness is not available")
+            : undefined)
+        }
         className="fp-select-trigger fp-dropdown-row"
       >
         <span>{triggerLabel}</span>

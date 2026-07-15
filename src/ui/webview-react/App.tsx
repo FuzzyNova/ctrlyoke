@@ -36,6 +36,7 @@ import {
 } from "./constants";
 import {
   Header,
+  HarnessPreflightPanel,
   WorkflowStepsPanel,
   OutputSection,
   EditorSection,
@@ -729,6 +730,7 @@ function App() {
           onToggleMobileSteps={handleToggleMobileSteps}
           onToggleMobileWorkflowProps={handleToggleMobileWorkflowProps}
         />
+        <HarnessPreflightPanel />
 
         {/* Main area — relative container for absolute overlays */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -980,6 +982,7 @@ function App() {
   return (
     <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground relative">
       <Header />
+      <HarnessPreflightPanel />
 
       {/* Main layout: relative container enables GlobalSettingsDrawer overlay */}
       <div className="flex-1 relative overflow-hidden flex flex-col min-h-0">

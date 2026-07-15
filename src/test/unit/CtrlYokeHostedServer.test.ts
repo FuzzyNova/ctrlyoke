@@ -35,7 +35,11 @@ suite("sanitizeBrowserClientId", () => {
 suite("HostedServerMessageFactory", () => {
   test("creates harness updates in the webview message shape", () => {
     assert.deepStrictEqual(
-      createHostedHarnessStatusUpdate(HARNESS_IDS.CODEX_CLI, true),
+      createHostedHarnessStatusUpdate(
+        HARNESS_IDS.CODEX_CLI,
+        true,
+        "Install via: npm install -g @openai/codex-cli"
+      ),
       {
         type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
         data: {
@@ -43,6 +47,7 @@ suite("HostedServerMessageFactory", () => {
             [HARNESS_IDS.CODEX_CLI]: {
               available: true,
               status: HARNESS_STATUS_STRINGS.AVAILABLE,
+              installHint: "Install via: npm install -g @openai/codex-cli",
             },
           },
         },

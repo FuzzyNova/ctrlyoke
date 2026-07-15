@@ -1,5 +1,6 @@
 import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
+import type { HarnessId } from "../types/DashboardConstants";
 
 /**
  * Platform-agnostic interface for pushing workflow state updates to the dashboard.
@@ -38,7 +39,11 @@ export interface IDashboardProvider {
   // ── Harness availability ──────────────────────────────────────────────────
 
   /** Update a single harness availability status and push the change to the UI. */
-  notifyHarnessAvailability(harnessId: string, available: boolean): void;
+  notifyHarnessAvailability(
+    harnessId: HarnessId,
+    available: boolean,
+    installHint: string
+  ): void;
 
   // ── Generic pass-through ──────────────────────────────────────────────────
 

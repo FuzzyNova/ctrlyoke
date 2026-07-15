@@ -1,7 +1,7 @@
 # Harness Preflight & Install Guidance
 
 **Created:** July 4, 2026
-**Status:** PLANNING
+**Status:** IMPLEMENTED (minimal preflight; auth distinction remains fast-follow)
 **Priority:** **v0.1.0 BLOCKER** (confirmed by Nathan, July 4, 2026)
 **Effort:** 2–4 days
 **Related:** [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md)
@@ -61,7 +61,7 @@ auth-vs-installed distinction stretch remains fast-follow. Tracked in `RELEASE_P
 
 ## Acceptance
 
-- [ ] First-run/activation detects when no supported harness CLI is available.
-- [ ] Clear panel lists supported harnesses + install commands (`installHint`) + auth reminder.
-- [ ] Harness picker marks unavailable harnesses with the install hint.
-- [ ] Execution-time "unavailable" error links to the same guidance.
+- [x] First-run/activation detects when no supported harness CLI is available.
+- [x] Clear panel lists supported harnesses + install commands (`installHint`) + auth reminder.
+- [x] Harness picker marks unavailable harnesses with the install hint.
+- [x] Execution-time "unavailable" error points to the same install/auth guidance.

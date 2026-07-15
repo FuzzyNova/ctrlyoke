@@ -5,7 +5,8 @@ import {
 
 export function createHostedHarnessStatusUpdate(
   harnessId: string,
-  available: boolean
+  available: boolean,
+  installHint: string
 ): {
   type: string;
   data: {
@@ -14,6 +15,7 @@ export function createHostedHarnessStatusUpdate(
       {
         available: boolean;
         status: string;
+        installHint: string;
       }
     >;
   };
@@ -27,6 +29,7 @@ export function createHostedHarnessStatusUpdate(
           status: available
             ? HARNESS_STATUS_STRINGS.AVAILABLE
             : HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          installHint,
         },
       },
     },

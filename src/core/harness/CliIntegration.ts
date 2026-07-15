@@ -1401,6 +1401,27 @@ export class CliIntegration extends HarnessIntegration {
     return this.isAvailable;
   }
 
+  /**
+   * Return the provider-owned installation guidance for dashboard surfaces.
+   * Keeping this on the integration prevents UI code from duplicating
+   * provider-specific install commands.
+   */
+  getInstallHint(): string {
+    return this.provider.config.installHint;
+  }
+
+  override getDetailedStatus() {
+    const status = super.getDetailedStatus();
+    if (status.initializationStatus !== HarnessStatus.Unavailable) {
+      return status;
+    }
+
+    return {
+      ...status,
+      message: this.getUnavailableGuidance(),
+    };
+  }
+
   getLastSpawnedCommand(): string | undefined {
     return this.processManager.getLastSpawnedCommand();
   }
@@ -1434,10 +1455,14 @@ export class CliIntegration extends HarnessIntegration {
     } else {
       return {
         available: false,
-        message: `❌ ${this.provider.config.displayName} unavailable - ${this.provider.config.installHint}`,
+        message: this.getUnavailableGuidance(),
         strategy: this.getIntegrationMode(),
       };
     }
+  }
+
+  private getUnavailableGuidance(): string {
+    return `❌ ${this.provider.config.displayName} unavailable. ${this.getInstallHint()}. Then sign in with the CLI before running a workflow.`;
   }
 
   // ============================================================

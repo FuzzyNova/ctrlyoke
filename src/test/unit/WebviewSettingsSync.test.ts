@@ -71,6 +71,31 @@ suite("WebviewSettingsSync", () => {
     return p;
   }
 
+  suite("notifyHarnessAvailability", () => {
+    test("should forward provider install guidance with availability updates", () => {
+      const messages: any[] = [];
+      const sync = new WebviewSettingsSync(
+        (message) => messages.push(message),
+        () => undefined
+      );
+
+      sync.notifyHarnessAvailability(
+        HARNESS_IDS.CODEX_CLI,
+        false,
+        "Install via: npm install -g @openai/codex-cli"
+      );
+
+      const update = messages.find(
+        (message) => message.type === MESSAGE_TYPES.HARNESS_STATUS_UPDATE
+      );
+      assert.deepStrictEqual(update.data.harnessStatus[HARNESS_IDS.CODEX_CLI], {
+        available: false,
+        status: "unavailable",
+        installHint: "Install via: npm install -g @openai/codex-cli",
+      });
+    });
+  });
+
   suite("handleGlobalSettingsLoadRequest", () => {
     test("should include notifications settings and leaf-level source metadata", async () => {
       const originalGetAll = configService.getAll.bind(configService);

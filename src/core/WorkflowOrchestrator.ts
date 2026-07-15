@@ -249,7 +249,7 @@ export class WorkflowOrchestrator {
 
     // Wire harness status subscriptions
     const defaultIntegration = this.getDefaultIntegration();
-    const allIntegrations: Array<[string, HarnessIntegration]> = [
+    const allIntegrations: Array<[HarnessId, CliIntegration]> = [
       [HARNESS_IDS.COPILOT_CLI, this.copilotCliIntegration],
       [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
       [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
@@ -258,6 +258,7 @@ export class WorkflowOrchestrator {
       [HARNESS_IDS.ANTIGRAVITY_CLI, this.antigravityCliIntegration],
     ];
     for (const [harnessId, integration] of allIntegrations) {
+      const installHint = integration.getInstallHint();
       context.subscriptions.push(
         integration.onDidChangeStatus((status) => {
           if (integration === defaultIntegration) {
@@ -270,7 +271,8 @@ export class WorkflowOrchestrator {
           ) {
             this.dashboardBroadcastHub.notifyHarnessAvailability(
               harnessId,
-              status === HarnessStatus.Ready
+              status === HarnessStatus.Ready,
+              installHint
             );
           }
         })
@@ -1267,7 +1269,6 @@ export class WorkflowOrchestrator {
     // transitions to RUNNING or PAUSED via the onDidChangeState listener wired
     // in buildWorkflowInstance(). Registering there (not here) guarantees
     // getWorkflowSummaries() only ever returns truly running/paused workflows.
-
 
     return instance.executeLoadedPromptFile(modeOverride, continueFromCurrent);
   }

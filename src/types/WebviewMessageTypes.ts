@@ -356,7 +356,12 @@ export interface InitMessageData {
   modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
   harnessStatus: Record<
     string,
-    { available: boolean; status: string; message?: string }
+    {
+      available: boolean;
+      status: string;
+      message?: string;
+      installHint?: string;
+    }
   >;
   availableAgents: Array<{
     name: string;
@@ -701,7 +706,12 @@ export interface HarnessStatusUpdateMessage {
   data: {
     harnessStatus: Record<
       string,
-      { available: boolean; status: string; message?: string }
+      {
+        available: boolean;
+        status: string;
+        message?: string;
+        installHint?: string;
+      }
     >;
   };
 }

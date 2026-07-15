@@ -63,6 +63,8 @@ export interface HarnessStatus {
   available: boolean;
   status: HarnessStatusString;
   message?: string;
+  /** Provider-owned CLI install command shown by the dashboard. */
+  installHint?: string;
 }
 
 /**
@@ -398,12 +400,17 @@ export class WebviewSettingsSync {
   /**
    * Update a single harness availability status and push the change to the UI.
    */
-  notifyHarnessAvailability(harnessId: string, available: boolean): void {
+  notifyHarnessAvailability(
+    harnessId: HarnessId,
+    available: boolean,
+    installHint: string
+  ): void {
     this.harnessStatus[harnessId] = {
       available,
       status: available
         ? HARNESS_STATUS_STRINGS.AVAILABLE
         : HARNESS_STATUS_STRINGS.UNAVAILABLE,
+      installHint,
     };
     this.sendHarnessStatusUpdate();
   }

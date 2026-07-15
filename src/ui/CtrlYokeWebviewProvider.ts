@@ -9,6 +9,7 @@ import {
   type StatusMessageSeverity,
   type StepStatus,
   type FinalStepPhase,
+  type HarnessId,
   PANEL_CLIENT_ID,
 } from "../types/DashboardConstants";
 import {
@@ -1082,10 +1083,15 @@ export class CtrlYokeWebviewProvider
    * runs during construction.
    */
   public notifyHarnessAvailability(
-    harnessId: string,
-    available: boolean
+    harnessId: HarnessId,
+    available: boolean,
+    installHint: string
   ): void {
-    this.settingsSync.notifyHarnessAvailability(harnessId, available);
+    this.settingsSync.notifyHarnessAvailability(
+      harnessId,
+      available,
+      installHint
+    );
   }
 
   /**

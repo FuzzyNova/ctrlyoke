@@ -1,4 +1,5 @@
 export { Header } from "./Header";
+export { HarnessPreflightPanel } from "./HarnessPreflightPanel";
 export { WorkflowStepsPanel } from "./WorkflowStepsPanel";
 export { OutputSection } from "./OutputSection";
 export { EditorSection } from "./EditorSection";

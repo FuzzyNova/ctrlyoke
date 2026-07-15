@@ -23,6 +23,7 @@ import {
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
   type FinalStepPhase,
+  type HarnessId,
   type StepStatus,
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
@@ -250,8 +251,14 @@ export class CtrlYokeHostedServer
     this.broadcast({ type: MESSAGE_TYPES.STEPS_EXTENDED, workflowId, steps });
   }
 
-  notifyHarnessAvailability(harnessId: string, available: boolean): void {
-    this.broadcast(createHostedHarnessStatusUpdate(harnessId, available));
+  notifyHarnessAvailability(
+    harnessId: HarnessId,
+    available: boolean,
+    installHint: string
+  ): void {
+    this.broadcast(
+      createHostedHarnessStatusUpdate(harnessId, available, installHint)
+    );
   }
 
   // ── IDashboardSink — delegate to PostMessageDashboardSink ────────────────
