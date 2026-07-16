@@ -712,7 +712,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       // Focus the dashboard panel first
       await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
       // Then open the modal
-      webviewProvider.openNewWorkflowModal();
+      await webviewProvider.openNewWorkflowModal();
     }
   );
 
@@ -881,7 +881,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const showOutputPanelCommand = vscode.commands.registerCommand(
     "ctrlyoke.showOutputPanel",
     () => {
-      vscode.commands.executeCommand("workbench.action.output.show");
+      Log.getOutputChannel().show();
     }
   );
 

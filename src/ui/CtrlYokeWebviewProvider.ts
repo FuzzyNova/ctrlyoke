@@ -1124,12 +1124,12 @@ export class CtrlYokeWebviewProvider
   }
 
   /**
-   * Open new workflow modal in the webview
+   * Open new workflow modal in the webview, pre-loaded with the template list
+   * and default template (same data the "From Template" dropdown button sends
+   * via NEW_WORKFLOW — see WorkflowSerializer.handleNewWorkflow).
    */
-  public openNewWorkflowModal(): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL,
-    });
+  public async openNewWorkflowModal(): Promise<void> {
+    await this.serializer.handleNewWorkflow((msg) => this.postMessage(msg));
   }
 
   public async enqueuePromptEditorInsert(
