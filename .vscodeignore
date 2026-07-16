@@ -20,6 +20,10 @@
 !images/ctrlyoke-sidebar-icon.svg
 !images/ctrlyoke-icon-light.svg
 !images/ctrlyoke-icon-dark.svg
+!images/ctrlyoke-icon-simple-color.png
+
+# Getting Started walkthrough step content.
+!walkthroughs/**
 
 # Bundled extension and MCP server entrypoints.
 # cli.js is released as a standalone npm package, not bundled with the VSIX.

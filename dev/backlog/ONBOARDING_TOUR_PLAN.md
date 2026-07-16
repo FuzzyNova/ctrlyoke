@@ -1,10 +1,10 @@
 # New-User Onboarding & Tour
 
 **Created:** July 4, 2026
-**Status:** PLANNING
+**Status:** Phase 1 IMPLEMENTED; Phase 2 deferred/likely unnecessary
 **Priority:** **Phase 1 = v0.1.0 BLOCKER; Phase 2 deferred/likely unnecessary** (Nathan, July 4, 2026)
 **Effort:** Minimal path 2–3 days; full interactive tour 1–2 weeks
-**Related:** [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md), [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md), [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)
+**Related:** [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](../implemented/BUILTIN_TECH_SUPPORT_AGENT_PLAN.md), [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md), [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](../implemented/BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)
 
 ---
 
@@ -63,7 +63,21 @@ highlighting the common controls along the way.
 
 ## Acceptance (Phase 1)
 
-- [ ] `contributes.walkthroughs` added with 3–5 steps ending in a successful run.
-- [ ] Dashboard shows a getting-started empty state when no workflows exist.
-- [ ] Onboarding is dismissible and reopenable via a command; "seen" state persists.
-- [ ] Copy points to the tech-support agent and `ctrlyoke.dev/docs`.
+- [x] `contributes.walkthroughs` added with 3–5 steps ending in a successful run.
+- [x] Dashboard shows a getting-started empty state when no workflows exist.
+- [x] Onboarding is dismissible and reopenable via a command; "seen" state persists.
+- [x] Copy points to the tech-support agent and `ctrlyoke.dev/docs`.
+
+## Implementation notes (Phase 1)
+
+- Walkthrough: `package.json` `contributes.walkthroughs` (`ctrlyoke.gettingStarted`),
+  step content in `walkthroughs/getting-started/*.md`. Steps use `onView`/`onCommand`
+  completion events against existing commands (`ctrlyoke.openPanel`,
+  `ctrlyoke.newWorkflow`, `ctrlyoke.run`) — no new completion plumbing needed.
+- First-run auto-open + reopen: `src/extension.ts` (`GETTING_STARTED_SHOWN_KEY`
+  globalState flag, `ctrlyoke.showGettingStarted` command).
+- Dashboard empty state: `WorkflowStepsPanel.tsx`'s existing `steps.length === 0`
+  branch, not a new App-level panel — it's the actual "no workflow" signal already
+  used in the codebase.
+- Screenshots/GIF for the walkthrough steps are intentionally deferred — see
+  `RELEASE_PLAN.md` §4 (captured last, after onboarding UI is final).

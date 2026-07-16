@@ -287,6 +287,17 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
   }
 }
 
+// Publisher/name must match package.json; walkthrough id must match contributes.walkthroughs.
+const GETTING_STARTED_WALKTHROUGH_ID = "fuzzynova.ctrlyoke#ctrlyoke.gettingStarted";
+const GETTING_STARTED_SHOWN_KEY = "ctrlyoke.gettingStartedShown";
+
+function openGettingStartedWalkthrough(): void {
+  void vscode.commands.executeCommand(
+    "workbench.action.openWalkthrough",
+    GETTING_STARTED_WALKTHROUGH_ID
+  );
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   Log.info("ctrlyoke: Extension activating...");
   if (IS_DEV_MODE) {
@@ -612,6 +623,12 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register commands
     registerCommands(context);
 
+    // Show the Getting Started walkthrough once, on first activation after install.
+    if (!context.globalState.get<boolean>(GETTING_STARTED_SHOWN_KEY)) {
+      openGettingStartedWalkthrough();
+      void context.globalState.update(GETTING_STARTED_SHOWN_KEY, true);
+    }
+
     Log.info("ctrlyoke: Extension activated successfully!");
   } catch (error) {
     Log.error("ctrlyoke: Failed to activate extension:", error);
@@ -629,6 +646,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.openPanel",
     async () => {
       await workflowOrchestrator.openPanel();
+    }
+  );
+
+  // Show Getting Started walkthrough command (manual reopen affordance)
+  const showGettingStartedCommand = vscode.commands.registerCommand(
+    "ctrlyoke.showGettingStarted",
+    () => {
+      openGettingStartedWalkthrough();
     }
   );
 
@@ -1218,6 +1243,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
+    showGettingStartedCommand,
     createPromptFileCommand,
     pauseCommand,
     resumeCommand,

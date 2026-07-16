@@ -75,6 +75,11 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.showGettingStarted",
+        "title": "Show Getting Started",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.createPromptFile",
         "title": "Create Prompt File",
         "category": "ctrlyoke"
@@ -514,6 +519,59 @@
         }
       ]
     },
+    "walkthroughs": [
+      {
+        "id": "ctrlyoke.gettingStarted",
+        "title": "Getting Started with ctrlyoke",
+        "description": "Run your first AI coding workflow: verify a harness, create a workflow from a template, run it, and know where to get help.",
+        "icon": "images/ctrlyoke-icon-simple-color.png",
+        "steps": [
+          {
+            "id": "openPanel",
+            "title": "Open the ctrlyoke panel",
+            "description": "Everything happens in one panel: steps, live output, and settings.",
+            "media": {
+              "markdown": "walkthroughs/getting-started/open-panel.md"
+            },
+            "completionEvents": ["onView:ctrlyoke.dashboard"]
+          },
+          {
+            "id": "verifyHarness",
+            "title": "Install and verify a harness CLI",
+            "description": "ctrlyoke drives a CLI you install yourself — no CLI is bundled.",
+            "media": {
+              "markdown": "walkthroughs/getting-started/verify-harness.md"
+            }
+          },
+          {
+            "id": "createWorkflow",
+            "title": "Create a workflow from a template",
+            "description": "Templates build a multi-step workflow for you.",
+            "media": {
+              "markdown": "walkthroughs/getting-started/create-workflow.md"
+            },
+            "completionEvents": ["onCommand:ctrlyoke.newWorkflow"]
+          },
+          {
+            "id": "runWorkflow",
+            "title": "Run it and read the output",
+            "description": "Watch the harness work and step through the queue.",
+            "media": {
+              "markdown": "walkthroughs/getting-started/run-workflow.md"
+            },
+            "completionEvents": ["onCommand:ctrlyoke.run"]
+          },
+          {
+            "id": "getHelp",
+            "title": "Get help when you're stuck",
+            "description": "A built-in support agent and the docs are always available.",
+            "media": {
+              "markdown": "walkthroughs/getting-started/get-help.md"
+            }
+          }
+        ]
+      }
+    ],
     "languageModelTools": [
       {
         "name": "ctrlyoke_queue_status",

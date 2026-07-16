@@ -805,10 +805,29 @@ const WorkflowStepsPanelInner: React.FC<{
         }}
       >
         {steps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <p className="text-xs italic text-description-fg">
-              No steps loaded
+          <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center">
+            <p className="text-xs font-medium text-foreground">
+              No workflow steps yet
             </p>
+            <button
+              type="button"
+              className="rounded bg-btn-bg px-3 py-1.5 text-xs font-medium text-btn-fg hover:bg-btn-hover"
+              onClick={() => sendMessage(MESSAGE_TYPES.NEW_WORKFLOW)}
+            >
+              Create from Template
+            </button>
+            <p className="text-xxs text-description-fg">
+              Or ask the built-in <code>ctrlyoke-tech-support</code> agent for
+              help getting started.
+            </p>
+            <a
+              href="https://ctrlyoke.dev/docs"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xxs text-link-fg hover:underline"
+            >
+              ctrlyoke.dev/docs
+            </a>
           </div>
         ) : (
           <div className="relative py-1">

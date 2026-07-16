@@ -238,18 +238,17 @@ Attorney review and the final custom EULA replacement remain tracked in §2.3, n
 
 ### 2.9 New-User Experience & Built-in Content
 
-**Status:** OPEN — **all blockers** (Nathan confirmed July 4, 2026)
+**Status:** DONE — all Phase 1 blockers complete (Nathan confirmed July 4, 2026)
 
 A backlog review surfaced first-run / built-in-content gaps not previously tracked.
 Nathan's decision: **every item below blocks v0.1.0** — the first paid release must land
 a strong new-user story. The only deferred piece is the interactive tour (see note).
 
 > **Ordering (load-bearing):** the **Antigravity harness swap (§2.5)**,
-> **agent/template cleanup (Parts A+B)**, and **tech-support agent** are now done.
-> Next author the **Getting Started walkthrough** and **preflight**, which cite
-> the final harness list and formats. Capture **screenshots + GIF (§4) last**,
-> after the onboarding/UI is final. See the launch-blocker sequencing diagram in
-> `ROADMAP.md`.
+> **agent/template cleanup (Parts A+B)**, **tech-support agent**, **Getting Started
+> walkthrough**, and **harness preflight** are all now done. Only **screenshots + GIF
+> (§4)** remain, captured last, after the onboarding/UI is final. See the launch-blocker
+> sequencing diagram in `ROADMAP.md`.
 
 - [x] **Built-in agent correctness** — DONE. `ctrlyoke-orchestrator` was renamed to
       `ctrlyoke-workflow-composer` and rewritten (YAML-first, no hardcoded/dead model IDs,
@@ -262,11 +261,14 @@ a strong new-user story. The only deferred piece is the interactive tour (see no
       textareas; blanks fall back to defaults). Documented in `docs/workflows/templates.md`.
       ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
 - [x] **`ctrlyoke-tech-support` agent** — DONE. Built-in support/onboarding agent for new users, with dashboard navigation, workflow authoring, harness, MCP, validation, session, state-file, and troubleshooting guidance grounded in current product docs/UI; include it in pre-publish docs coherence checks. ([`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md))
-- [ ] **Native VS Code Getting Started integration** — `contributes.walkthroughs` (the
-      standard post-install Getting Started page most extensions use) + dashboard empty state.
-      A blank cold-open hurts Marketplace first impressions. ([`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md) Phase 1)
-- [ ] **Harness preflight** — proactively tell a user with no installed harness CLI how to
-      install/auth one, instead of only failing at run time. ([`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md))
+- [x] **Native VS Code Getting Started integration** — DONE. `contributes.walkthroughs`
+      (the standard post-install Getting Started page most extensions use) + dashboard
+      empty state in `WorkflowStepsPanel`. Screenshots/GIF for the walkthrough steps are
+      deferred to §4 (captured last, after onboarding UI is final).
+      ([`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md) Phase 1)
+- [x] **Harness preflight** — DONE. Proactively tells a user with no installed harness CLI
+      how to install/auth one, instead of only failing at run time.
+      ([`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md))
 
 > **Interactive tour deferred — and possibly unnecessary.** If the native Getting Started
 > walkthrough plus strong screenshots/GIF (§4, now a blocker) deliver a good first
@@ -424,7 +426,7 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | **ctrlyoke external cutover**                  | **OPEN**      | **Blocker — repo/homepage URLs + support inboxes 404 until done; see §2.7 / `CTRLYOKE_REBRAND_CUTOVER.md`** |
 | Legal effective-date placeholders              | DONE          | `LICENSE.md` and `PRIVACY.md` dates are set (§2.8)                                                          |
 | **Built-in agent correctness**                 | **DONE**      | Workflow composer/test-repair/template variable cleanup complete (§2.9)                                     |
-| **New-user experience** (onboarding/preflight) | **OPEN**      | **Tech-support agent done; next: Getting Started + harness preflight (§2.9)**                               |
+| **New-user experience** (onboarding/preflight) | **DONE**      | Tech-support agent, harness preflight, and Getting Started walkthrough all complete (§2.9)                  |
 | **Screenshots + demo GIF**                     | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                                          |
 | Pre-publish security review                    | DONE          | Security review and release-blocking triage are complete (§2.10)                                            |
 | Standalone server                              | DEFERRED      | Not a blocker; hosted server ships. Standalone `ctrlyoke server` deferred, inert setting hidden (§2.11)     |

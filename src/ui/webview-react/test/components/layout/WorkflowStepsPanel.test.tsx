@@ -339,4 +339,20 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
       )
     ).toBeInTheDocument();
   });
+
+  it("shows a getting-started CTA when no steps are loaded and posts NEW_WORKFLOW on click", () => {
+    resetStores();
+
+    render(<WorkflowStepsPanel />);
+
+    expect(screen.getByText("No workflow steps yet")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create from Template" })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.NEW_WORKFLOW,
+    });
+  });
 });
