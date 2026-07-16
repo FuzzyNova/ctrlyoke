@@ -9,7 +9,7 @@ import {
   tooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -1017,6 +1017,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       extensions: [
         minimalSetup,
         createFindKeyHandlerExtension(),
+        createReferenceDeleteExtension(),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
@@ -1304,6 +1305,71 @@ function createFindKeyHandlerExtension() {
       return false;
     },
   });
+}
+
+// Find the context reference whose boundary sits exactly at `pos`: its end
+// (`edge === "end"`, for Backspace) or its start (`edge === "start"`, for
+// Delete). Covers @/#/~ references and $ prior-context refs — the same tokens
+// the link decorations render — and skips refs inside fenced blocks, which
+// aren't decorated as links. Lone prompt-path prompts carry no @/#/~/$ trigger
+// so they're naturally excluded. Returns null when no reference edge is at pos.
+export function findReferenceAtBoundary(
+  docText: string,
+  pos: number,
+  edge: "start" | "end"
+): { from: number; to: number } | null {
+  const fencedRanges = getFencedBlockRanges(docText);
+  const refs = [
+    ...findContextReferenceMatches(docText),
+    ...findInlinePriorContextRefs(docText),
+  ];
+  for (const ref of refs) {
+    const boundary = edge === "end" ? ref.to : ref.from;
+    if (boundary === pos && !isInFencedBlock(ref.from, ref.to, fencedRanges)) {
+      return { from: ref.from, to: ref.to };
+    }
+  }
+  return null;
+}
+
+// "Select then delete" for context-reference links. When the caret sits at a
+// link's trailing edge, Backspace selects the whole reference (Delete does the
+// same at the leading edge); the *next* press falls through to the default
+// keymap, which deletes the now-selected range. Two presses total instead of
+// one-per-character — far friendlier on mobile — while still letting the user
+// drop the caret mid-link to edit it character by character.
+//
+// Prec.high is required: minimalSetup's defaultKeymap already binds
+// Backspace/Delete and, being earlier in the extension list, would otherwise
+// win before this binding ran. Both handlers no-op (return false → default
+// behavior) when the selection is already non-empty or no link edge is at the
+// caret.
+function createReferenceDeleteExtension() {
+  const selectReferenceAtCaret = (
+    view: EditorView,
+    edge: "start" | "end"
+  ): boolean => {
+    const { main } = view.state.selection;
+    if (!main.empty) return false;
+    const ref = findReferenceAtBoundary(
+      view.state.doc.toString(),
+      main.head,
+      edge
+    );
+    if (!ref) return false;
+    view.dispatch({
+      selection: { anchor: ref.from, head: ref.to },
+      userEvent: "select",
+    });
+    return true;
+  };
+
+  return Prec.high(
+    keymap.of([
+      { key: "Backspace", run: (view) => selectReferenceAtCaret(view, "end") },
+      { key: "Delete", run: (view) => selectReferenceAtCaret(view, "start") },
+    ])
+  );
 }
 
 // Prompt-editor-specific decoration styles (link, file-ref, fenced-block, prior-context).

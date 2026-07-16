@@ -22,7 +22,7 @@ highlighting the common controls along the way.
 
 ### Scope options (phased)
 
-**Phase 1 — Minimal onboarding (achievable for v0.1.0):**
+**Phase 1 — Minimal onboarding (achievable for v0.1.0):** - DONE
 
 - **VS Code Walkthrough** via `contributes.walkthroughs` in `package.json` — the native
   onboarding surface VS Code shows after install (Getting Started page). Steps: pick/

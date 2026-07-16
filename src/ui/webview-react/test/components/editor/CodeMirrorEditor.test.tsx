@@ -6,6 +6,7 @@ import {
   buildPromptReferenceInsertion,
   destroyOrphanedMouseSelection,
   findContextReferenceMatches,
+  findReferenceAtBoundary,
   getRetryPlaceholderCompletions,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
@@ -204,5 +205,52 @@ describe("CodeMirrorEditor context reference parsing", () => {
         path: "src/file.ts",
       },
     ]);
+  });
+});
+
+describe("CodeMirrorEditor reference-boundary detection", () => {
+  it("finds a file reference when the caret is at its end (Backspace)", () => {
+    const doc = "See @src/file.ts";
+    expect(findReferenceAtBoundary(doc, doc.length, "end")).toEqual({
+      from: "See ".length,
+      to: doc.length,
+    });
+  });
+
+  it("finds a file reference when the caret is at its start (Delete)", () => {
+    const doc = "See @src/file.ts";
+    expect(findReferenceAtBoundary(doc, "See ".length, "start")).toEqual({
+      from: "See ".length,
+      to: doc.length,
+    });
+  });
+
+  it("returns null when the caret is in the middle of a reference", () => {
+    const doc = "@src/file.ts";
+    expect(findReferenceAtBoundary(doc, 5, "end")).toBeNull();
+  });
+
+  it("does not match the end edge when the caret is at the start", () => {
+    const doc = "See @src/file.ts";
+    expect(findReferenceAtBoundary(doc, "See ".length, "end")).toBeNull();
+  });
+
+  it("detects $ prior-context references at their end", () => {
+    const doc = "Use $previous";
+    expect(findReferenceAtBoundary(doc, doc.length, "end")).toEqual({
+      from: "Use ".length,
+      to: doc.length,
+    });
+  });
+
+  it("ignores references inside fenced blocks", () => {
+    const doc = "```\n@src/file.ts\n```";
+    const end = "```\n@src/file.ts".length;
+    expect(findReferenceAtBoundary(doc, end, "end")).toBeNull();
+  });
+
+  it("does not match a lone prompt-path prompt (no trigger character)", () => {
+    const doc = "./src/completions/CompletionHelpers.ts";
+    expect(findReferenceAtBoundary(doc, doc.length, "end")).toBeNull();
   });
 });
