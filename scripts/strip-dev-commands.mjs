@@ -33,6 +33,7 @@ const DEV_COMMAND_IDS = [
   "ctrlyoke.investigateChatLogs",
   "ctrlyoke.exportDiscoveredModels",
   "ctrlyoke.showLanguageId",
+  "ctrlyoke.devMenu",
 ];
 
 function stripDevCommands() {
@@ -46,6 +47,8 @@ function stripDevCommands() {
   console.log(`✅ Created backup at ${backupPath}`);
 
   // Filter out dev commands
+  const removedCommandIds = new Set();
+
   if (packageJson.contributes?.commands) {
     const originalCount = packageJson.contributes.commands.length;
 
@@ -57,12 +60,14 @@ function stripDevCommands() {
           DEV_COMMAND_CATEGORIES.includes(cmd.category.trim())
         ) {
           console.log(`  ❌ Removing: ${cmd.command} (${cmd.category})`);
+          removedCommandIds.add(cmd.command);
           return false;
         }
 
         // Remove if command ID is in dev list (fallback)
         if (DEV_COMMAND_IDS.includes(cmd.command)) {
           console.log(`  ❌ Removing: ${cmd.command} (dev command)`);
+          removedCommandIds.add(cmd.command);
           return false;
         }
 
@@ -75,6 +80,22 @@ function stripDevCommands() {
     console.log(
       `\n✅ Removed ${removedCount} dev commands (${packageJson.contributes.commands.length} remaining)`
     );
+  }
+
+  // Any menu contribution referencing a removed command would dangle
+  // (undeclared command id) once contributes.commands no longer lists it.
+  if (packageJson.contributes?.menus && removedCommandIds.size > 0) {
+    for (const [menuId, entries] of Object.entries(
+      packageJson.contributes.menus
+    )) {
+      packageJson.contributes.menus[menuId] = entries.filter((entry) => {
+        if (removedCommandIds.has(entry.command)) {
+          console.log(`  ❌ Removing menu entry: ${entry.command} (${menuId})`);
+          return false;
+        }
+        return true;
+      });
+    }
   }
 
   // Write modified package.json
