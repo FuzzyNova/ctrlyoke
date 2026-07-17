@@ -1099,13 +1099,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
                 // Return null for other types to avoid empty space
                 if (completion.type === "file") {
                   const icon = document.createElement("span");
-                  icon.className = "cm-completionIcon";
-                  icon.textContent = "📄";
+                  icon.className = "cm-completionIcon codicon codicon-symbol-file";
                   return icon;
                 } else if (completion.type === "folder") {
                   const icon = document.createElement("span");
-                  icon.className = "cm-completionIcon";
-                  icon.textContent = "📁";
+                  icon.className = "cm-completionIcon codicon codicon-folder";
                   return icon;
                 }
 
@@ -1338,7 +1336,7 @@ function createFindKeyHandlerExtension() {
 export interface AtomicReferenceChip {
   from: number;
   to: number;
-  /** Leading glyph shown in the chip. */
+  /** Codicon name (without the `codicon-` prefix) shown as the chip's leading icon. */
   icon: string;
   /** Short label shown in place of the full reference text. */
   label: string;
@@ -1385,7 +1383,7 @@ function describeContextReferenceChip(
     case "directory":
       attrs["data-path"] = ref.path ?? "";
       return {
-        icon: "📁",
+        icon: "folder",
         label: `${referenceBasename(ref.path ?? "")}/`,
         title,
         attrs,
@@ -1395,7 +1393,7 @@ function describeContextReferenceChip(
       if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
       if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
       return {
-        icon: "📄",
+        icon: "list-selection",
         label: `${referenceBasename(ref.path ?? "")}:${ref.lineStart}-${ref.lineEnd}`,
         title,
         attrs,
@@ -1406,7 +1404,7 @@ function describeContextReferenceChip(
       if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
       if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
       return {
-        icon: "🏷️",
+        icon: "symbol-misc",
         label: ref.symbolName || referenceBasename(ref.path ?? ""),
         title,
         attrs,
@@ -1414,7 +1412,7 @@ function describeContextReferenceChip(
     case "git":
       if (ref.gitRef) attrs["data-git-ref"] = ref.gitRef;
       return {
-        icon: "⎇",
+        icon: "source-control",
         label: gitReferenceLabel(ref.gitRef ?? ""),
         title,
         attrs,
@@ -1423,7 +1421,7 @@ function describeContextReferenceChip(
     default:
       attrs["data-path"] = ref.path ?? "";
       return {
-        icon: "📄",
+        icon: "symbol-file",
         label: referenceBasename(ref.path ?? ""),
         title,
         attrs,
@@ -1443,7 +1441,7 @@ function describePriorContextChip(
       ? `step ${ref.indices?.join(",") ?? ""}`
       : PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
   return {
-    icon: "↩",
+    icon: "book",
     label,
     title,
     attrs: { "data-type": "priorContext", "data-ref": dataRef },
@@ -1531,8 +1529,7 @@ class AtomicReferenceWidget extends WidgetType {
     }
     if (this.chip.icon) {
       const icon = document.createElement("span");
-      icon.className = "cm-atomic-ref-icon";
-      icon.textContent = this.chip.icon;
+      icon.className = `cm-atomic-ref-icon codicon codicon-${this.chip.icon}`;
       chip.appendChild(icon);
     }
     const label = document.createElement("span");

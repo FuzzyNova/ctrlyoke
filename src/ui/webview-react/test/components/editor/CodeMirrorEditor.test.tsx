@@ -279,7 +279,7 @@ describe("CodeMirrorEditor atomic reference chips", () => {
       {
         from: "See ".length,
         to: doc.length,
-        icon: "📄",
+        icon: "symbol-file",
         label: "file.ts",
         title: "@src/deep/file.ts",
         attrs: { "data-type": "file", "data-path": "src/deep/file.ts" },
@@ -290,7 +290,7 @@ describe("CodeMirrorEditor atomic reference chips", () => {
   it("labels a directory with a trailing slash", () => {
     const chips = findAtomicReferences("@src/deep/");
     expect(chips[0]).toMatchObject({
-      icon: "📁",
+      icon: "folder",
       label: "deep/",
       attrs: { "data-type": "directory", "data-path": "src/deep/" },
     });
@@ -333,7 +333,7 @@ describe("CodeMirrorEditor atomic reference chips", () => {
       {
         from: "Use ".length,
         to: "Use $previous".length,
-        icon: "↩",
+        icon: "book",
         label: "previous",
         title: "$previous",
         attrs: { "data-type": "priorContext", "data-ref": "previous" },
