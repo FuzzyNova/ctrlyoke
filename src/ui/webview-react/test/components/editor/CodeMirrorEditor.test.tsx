@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import {
   buildCodeMirrorCompletionResult,
   buildPromptReferenceInsertion,
+  createAtomicReferenceExtension,
+  createClickHandlerExtension,
   destroyOrphanedMouseSelection,
   findContextReferenceMatches,
   findAtomicReferences,
@@ -11,6 +13,7 @@ import {
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
 import {
+  MESSAGE_TYPES,
   PROMPT_EDITOR_INSERT_MODES,
   RETRY_PROMPT_PLACEHOLDERS,
 } from "@/types/messages";
@@ -209,6 +212,49 @@ describe("CodeMirrorEditor context reference parsing", () => {
 });
 
 describe("CodeMirrorEditor atomic reference chips", () => {
+  it("opens on a plain click without starting a CodeMirror mouse selection", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.fn();
+    const view = new EditorView({
+      parent,
+      doc: "@src/deep/file.ts",
+      extensions: [
+        createAtomicReferenceExtension(),
+        createClickHandlerExtension({ postMessage }, { current: 2 }),
+      ],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip).not.toBeNull();
+
+      chip?.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, button: 0 })
+      );
+      const inputState = view as unknown as {
+        inputState: { mouseSelection: unknown };
+      };
+      expect(inputState.inputState.mouseSelection).toBeNull();
+
+      const click = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+      });
+      chip?.dispatchEvent(click);
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.OPEN_FILE,
+        path: "src/deep/file.ts",
+      });
+      expect(click.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(view.contentDOM);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("labels a file reference with just its basename and keeps the full text as title", () => {
     const doc = "See @src/deep/file.ts";
     expect(findAtomicReferences(doc)).toEqual([

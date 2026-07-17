@@ -1505,9 +1505,19 @@ class AtomicReferenceWidget extends WidgetType {
     );
   }
 
+  ignoreEvent(event: Event): boolean {
+    // WidgetType ignores every event by default. That is useful for controls
+    // embedded in an editor, but these chips deliberately reuse the editor's
+    // delegated link handlers below. Let only those events reach CodeMirror;
+    // in particular, keep mousedown ignored so its built-in handler cannot
+    // create a MouseSelection at an indeterminate position inside a replace
+    // widget (the source of the stuck-cursor behavior).
+    return !ATOMIC_REFERENCE_LINK_EVENTS.has(event.type);
+  }
+
   toDOM(): HTMLElement {
-    // cm-link + the data-* attributes let the existing click/tap handler open
-    // the reference exactly as it does for the non-atomic mark decoration.
+    // cm-link + the data-* attributes let the shared click/tap handler open
+    // the reference while recognizing this element's button-like chip UX.
     const chip = document.createElement("span");
     chip.className = "cm-link cm-atomic-ref";
     chip.title = this.chip.title;
@@ -1528,6 +1538,14 @@ class AtomicReferenceWidget extends WidgetType {
   }
 }
 
+const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
+  "click",
+  "touchstart",
+  "touchmove",
+  "touchcancel",
+  "touchend",
+]);
+
 // Atomic mode: replace each reference's text with a compact chip widget and
 // mark the range atomic via the atomicRanges facet, so arrow keys skip over the
 // whole reference and Backspace/Delete removes it in one press — the caret can
@@ -1535,7 +1553,7 @@ class AtomicReferenceWidget extends WidgetType {
 // the existing link handlers still open the reference. Built over the whole doc
 // (not just visibleRanges) so off-screen references stay atomic for cursor
 // motion. Gated on `ui.atomicContextReferences` by the caller.
-function createAtomicReferenceExtension() {
+export function createAtomicReferenceExtension() {
   const buildDecorations = (view: EditorView) => {
     const builder = new RangeSetBuilder<Decoration>();
     for (const chip of findAtomicReferences(view.state.doc.toString())) {
@@ -2432,12 +2450,12 @@ function openContextReferenceLink(
   );
 }
 
-// Handle clicks/taps on links. git/priorContext respond to plain clicks
-// (modal preview); file/directory/lineRange/symbol require Ctrl+Click on
-// pointer devices, but short touch taps open directly because mobile has no
-// modifier-key equivalent. Long press remains available for native editor
-// positioning/selection behavior.
-function createClickHandlerExtension(
+// Handle clicks/taps on links. Atomic chips and git/priorContext links respond
+// to plain clicks; non-atomic file/directory/lineRange/symbol text links require
+// Ctrl/Cmd+Click on pointer devices. Short touch taps open directly because
+// mobile has no modifier-key equivalent. Long press remains available for
+// native editor positioning/selection behavior.
+export function createClickHandlerExtension(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ) {
@@ -2512,13 +2530,16 @@ function createClickHandlerExtension(
       event.preventDefault();
       return true;
     },
-    click: (event) => {
+    click: (event, view) => {
       const target = getLinkElement(event.target);
       if (!target) return false;
 
-      // file/directory/lineRange/symbol: require Ctrl+Click to open in editor/viewer
+      // Atomic chips are button-like and open on a plain click. Text links keep
+      // the conventional editor behavior: file/directory/lineRange/symbol
+      // require Ctrl/Cmd+Click, while previews open on a plain click.
       const type = target.getAttribute("data-type");
       if (
+        !target.classList.contains("cm-atomic-ref") &&
         type !== "git" &&
         type !== "priorContext" &&
         !(event.ctrlKey || event.metaKey)
@@ -2535,6 +2556,12 @@ function createClickHandlerExtension(
       }
 
       event.preventDefault();
+      // A native click inside a contenteditable replacement widget can leave
+      // the DOM selection outside CodeMirror's editable text. Reassert the
+      // state selection after disarming any stale pointer selection so typing
+      // continues immediately after the reference opens.
+      destroyOrphanedMouseSelection(view);
+      view.focus();
       return true;
     },
   });
