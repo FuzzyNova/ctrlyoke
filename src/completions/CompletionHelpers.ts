@@ -105,6 +105,69 @@ function mapSymbolKindToCompletionKind(
 }
 
 /**
+ * Resolve the CompletionItemKind for an already-inserted #sym: reference, by
+ * its exact name and 1-based line range, for icon purposes (the reference
+ * text itself carries no kind — only a live completion item does). Used by
+ * WebviewMessageRouter's context-reference validation to let the dashboard
+ * chip show the real symbol-kind icon instead of a generic fallback.
+ */
+export async function findSymbolKindForReference(
+  uri: vscode.Uri,
+  symbolName: string,
+  startLine: number,
+  endLine: number
+): Promise<vscode.CompletionItemKind | undefined> {
+  try {
+    const symbols = (await vscode.commands.executeCommand(
+      "vscode.executeDocumentSymbolProvider",
+      uri
+    )) as vscode.DocumentSymbol[] | undefined;
+    if (!symbols?.length) {
+      return undefined;
+    }
+
+    const match = findDocumentSymbolByNameAndRange(
+      symbols,
+      symbolName,
+      startLine,
+      endLine
+    );
+    return match ? mapSymbolKindToCompletionKind(match.kind) : undefined;
+  } catch (error) {
+    Log.error("Failed to resolve symbol kind for reference:", error);
+    return undefined;
+  }
+}
+
+// Exported for unit testing only; findSymbolKindForReference is the real entry point.
+export function findDocumentSymbolByNameAndRange(
+  symbols: vscode.DocumentSymbol[],
+  name: string,
+  startLine: number,
+  endLine: number
+): vscode.DocumentSymbol | undefined {
+  for (const symbol of symbols) {
+    if (
+      symbol.name === name &&
+      symbol.range.start.line + 1 === startLine &&
+      symbol.range.end.line + 1 === endLine
+    ) {
+      return symbol;
+    }
+    const childMatch = findDocumentSymbolByNameAndRange(
+      symbol.children,
+      name,
+      startLine,
+      endLine
+    );
+    if (childMatch) {
+      return childMatch;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Cache for workspace files to avoid repeated scans
  */
 let filesCache: vscode.Uri[] = [];
@@ -627,7 +690,11 @@ function getSelectionCompletions(): PlainCompletionItem[] {
 
     const item: PlainCompletionItem = {
       label: label,
-      kind: vscode.CompletionItemKind.Reference,
+      // Unit is otherwise unused by any provider in this file, which makes it
+      // a stable, collision-free marker for "this is the selection entry" —
+      // git (~) completions use Reference, and without a distinct kind the
+      // two were indistinguishable to clients picking an icon by kind.
+      kind: vscode.CompletionItemKind.Unit,
       insertText: completionText,
       detail: `Lines ${startLine}-${endLine} in ${relativePath}`,
       documentation:

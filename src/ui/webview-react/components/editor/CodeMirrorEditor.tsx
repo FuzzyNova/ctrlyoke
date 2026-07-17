@@ -32,7 +32,7 @@ import {
   forceLinting,
   type Diagnostic,
 } from "@codemirror/lint";
-import { RangeSetBuilder } from "@codemirror/state";
+import { RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
 import {
@@ -124,6 +124,8 @@ interface ContextReferenceValidationResult {
   id: string;
   exists: boolean;
   message?: string;
+  /** CompletionItemKind, resolved live for #sym: refs so the chip can show the real symbol-kind icon. */
+  symbolKind?: number;
 }
 
 type CompletionTrigger = "@" | "#" | "~" | "$" | "path";
@@ -181,6 +183,48 @@ const RETRY_PROMPT_PLACEHOLDER_METADATA: Record<
   },
 };
 
+// Maps VS Code CompletionItemKind values to the codicon that best represents
+// them — the single source shared by the completions dropdown (built from a
+// live item's `kind`) and atomic reference chips (resolved asynchronously for
+// #sym: refs; see symbolIconCacheKey/createContextReferenceLintExtension).
+// Every name here ships in @vscode/codicons' codicon.css (checked against the
+// pinned package version) — don't add one without verifying it exists there.
+//
+// kind 10 (Unit) is repurposed: getSelectionCompletions() (extension host)
+// assigns it to the "current selection" item specifically because Unit is
+// otherwise unused by any provider, giving that entry a stable,
+// collision-free marker distinct from git (~) completions, which use
+// Reference (17).
+const COMPLETION_KIND_ICONS: Record<number, string> = {
+  0: "symbol-text", // Text
+  1: "symbol-method", // Method
+  2: "symbol-function", // Function
+  3: "symbol-constructor", // Constructor
+  4: "symbol-field", // Field
+  5: "symbol-variable", // Variable
+  6: "symbol-class", // Class
+  7: "symbol-interface", // Interface
+  8: "symbol-module", // Module (also covers collapsed Namespace/Package)
+  9: "symbol-property", // Property (also covers collapsed Key)
+  10: "list-selection", // Unit — repurposed marker for the selection completion
+  11: "symbol-value", // Value (also covers collapsed String/Number/Boolean/Array/Object/Null)
+  12: "symbol-enum", // Enum
+  13: "symbol-keyword", // Keyword
+  14: "symbol-snippet", // Snippet
+  15: "symbol-color", // Color
+  16: "symbol-file", // File
+  17: "source-control", // Reference — git (~) completions
+  18: "folder", // Folder
+  19: "symbol-enum-member", // EnumMember
+  20: "symbol-constant", // Constant
+  21: "symbol-struct", // Struct
+  22: "symbol-event", // Event
+  23: "symbol-operator", // Operator
+  24: "symbol-type-parameter", // TypeParameter
+};
+
+const DEFAULT_COMPLETION_ICON = "symbol-misc";
+
 export function getRetryPlaceholderCompletions(
   context: Pick<CompletionContext, "state" | "pos" | "explicit">,
   mode: CodeMirrorEditorMode = "endCondition"
@@ -200,7 +244,7 @@ export function getRetryPlaceholderCompletions(
     (placeholder) => ({
       label: placeholder,
       apply: `${placeholder}}`,
-      type: "variable",
+      type: "symbol-variable",
       detail: RETRY_PROMPT_PLACEHOLDER_METADATA[placeholder].detail,
       info: RETRY_PROMPT_PLACEHOLDER_METADATA[placeholder].info,
       boost: 1000,
@@ -252,34 +296,10 @@ export function buildCodeMirrorCompletionResult(
       boost = -index;
     }
 
-    // Map VS Code CompletionItemKind to CodeMirror type
-    const kindMap: Record<number, string> = {
-      0: "text",
-      1: "method",
-      2: "function",
-      3: "function",
-      4: "property",
-      5: "variable",
-      6: "class",
-      7: "interface",
-      8: "namespace",
-      9: "property",
-      10: "constant",
-      11: "constant",
-      12: "enum",
-      13: "keyword",
-      14: "text",
-      15: "string",
-      16: "file",
-      17: "text",
-      18: "folder",
-      19: "enum",
-      20: "constant",
-      21: "class",
-    };
-
     const type =
-      item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
+      item.kind !== undefined
+        ? COMPLETION_KIND_ICONS[item.kind] || DEFAULT_COMPLETION_ICON
+        : DEFAULT_COMPLETION_ICON;
     const matchLabel =
       useFilterTextForMatching && item.filterText
         ? item.filterText
@@ -425,6 +445,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // user keeps typing before the save completes.
   const pasteSeqRef = useRef(0);
   const pendingPastesRef = useRef<Map<number, PendingPaste>>(new Map());
+  // Resolved #sym: symbol-kind icons, keyed by symbolIconCacheKey. Populated
+  // asynchronously by createContextReferenceLintExtension's validation pass
+  // and read by createAtomicReferenceExtension to upgrade a chip's icon from
+  // DEFAULT_COMPLETION_ICON once the real kind is known. Persists across
+  // re-renders of the setup effect (a fresh Map would just re-resolve).
+  const symbolIconCacheRef = useRef<Map<string, string>>(new Map());
   const vscode = getVsCodeApi();
   // When on, context references behave as atomic units (see
   // createAtomicReferenceExtension). Toggling recreates the editor via the
@@ -1029,7 +1055,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       extensions: [
         minimalSetup,
         createFindKeyHandlerExtension(),
-        ...(atomicContextReferences ? [createAtomicReferenceExtension()] : []),
+        ...(atomicContextReferences
+          ? [createAtomicReferenceExtension(symbolIconCacheRef.current)]
+          : []),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
@@ -1067,7 +1095,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         highlightActiveLine(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
         createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
-        createContextReferenceLintExtension(validateContextReferences),
+        createContextReferenceLintExtension(
+          validateContextReferences,
+          symbolIconCacheRef.current
+        ),
         // Mount autocomplete tooltips on document.body so they escape the
         // overflow:hidden ancestors (critical on iOS where CodeMirror forces
         // position:absolute for tooltips, which causes them to be clipped and
@@ -1090,25 +1121,19 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           activateOnTyping: true,
           closeOnBlur: true,
           optionClass: (completion) =>
-            `cm-completion-${completion.type || "text"}`,
-          // Add icon elements for file/folder types
+            `cm-completion-${completion.type || DEFAULT_COMPLETION_ICON}`,
+          // `type` is a codicon name (see COMPLETION_KIND_ICONS), not
+          // CodeMirror's own semantic bucket vocabulary — icons:false turns
+          // off CM's built-in char-glyph icon renderer (ƒ, ○, 𝑥, ...) so
+          // this is the only icon source, for every completion kind, not
+          // just file/folder.
+          icons: false,
           addToOptions: [
             {
               render: (completion) => {
-                // Only render icons for file/folder types
-                // Return null for other types to avoid empty space
-                if (completion.type === "file") {
-                  const icon = document.createElement("span");
-                  icon.className = "cm-completionIcon codicon codicon-symbol-file";
-                  return icon;
-                } else if (completion.type === "folder") {
-                  const icon = document.createElement("span");
-                  icon.className = "cm-completionIcon codicon codicon-folder";
-                  return icon;
-                }
-
-                // Return null for all other types (let CodeMirror handle them)
-                return null;
+                const icon = document.createElement("span");
+                icon.className = `cm-completionIcon codicon codicon-${completion.type || DEFAULT_COMPLETION_ICON}`;
+                return icon;
               },
               position: 20, // Position before label
             },
@@ -1372,9 +1397,21 @@ const PRIOR_CONTEXT_CHIP_LABELS: Record<
   allFinalStep: "all final",
 };
 
+// Looks up the codicon for a resolved #sym: reference, keyed by
+// symbolIconCacheKey(path, symbolName, lineStart, lineEnd). Returns undefined
+// until (if ever) the async lookup in createContextReferenceLintExtension
+// resolves it, in which case the chip falls back to DEFAULT_COMPLETION_ICON.
+type SymbolIconResolver = (
+  path: string,
+  symbolName: string,
+  lineStart?: string,
+  lineEnd?: string
+) => string | undefined;
+
 function describeContextReferenceChip(
   ref: ContextReferenceMatch,
-  docText: string
+  docText: string,
+  getSymbolIcon?: SymbolIconResolver
 ): Omit<AtomicReferenceChip, "from" | "to"> {
   const title = docText.slice(ref.from, ref.to);
   const attrs: Record<string, string> = { "data-type": ref.type };
@@ -1404,7 +1441,16 @@ function describeContextReferenceChip(
       if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
       if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
       return {
-        icon: "symbol-misc",
+        icon:
+          (ref.path &&
+            ref.symbolName &&
+            getSymbolIcon?.(
+              ref.path,
+              ref.symbolName,
+              ref.lineStart,
+              ref.lineEnd
+            )) ||
+          DEFAULT_COMPLETION_ICON,
         label: ref.symbolName || referenceBasename(ref.path ?? ""),
         title,
         attrs,
@@ -1455,7 +1501,10 @@ function describePriorContextChip(
 // start with overlaps dropped (widest wins) so the resulting decoration/atomic
 // RangeSet stays well-formed — e.g. a `$token` that falls inside an `@path.ts`
 // match is absorbed by the enclosing reference.
-export function findAtomicReferences(docText: string): AtomicReferenceChip[] {
+export function findAtomicReferences(
+  docText: string,
+  getSymbolIcon?: SymbolIconResolver
+): AtomicReferenceChip[] {
   const fencedRanges = getFencedBlockRanges(docText);
 
   const candidates: Array<{
@@ -1466,7 +1515,7 @@ export function findAtomicReferences(docText: string): AtomicReferenceChip[] {
     ...findContextReferenceMatches(docText).map((ref) => ({
       from: ref.from,
       to: ref.to,
-      describe: () => describeContextReferenceChip(ref, docText),
+      describe: () => describeContextReferenceChip(ref, docText, getSymbolIcon),
     })),
     ...findInlinePriorContextRefs(docText).map((ref) => ({
       from: ref.from,
@@ -1548,6 +1597,25 @@ const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
   "touchend",
 ]);
 
+// Stable identity for a #sym: reference, independent of its position in the
+// document — correlates an async symbol-kind lookup (resolved in
+// createContextReferenceLintExtension) back to the matching chip icon in
+// createAtomicReferenceExtension without changing the reference's stored
+// text/wire format.
+function symbolIconCacheKey(
+  path: string,
+  symbolName: string,
+  lineStart?: string,
+  lineEnd?: string
+): string {
+  return `${path}::${symbolName}::${lineStart ?? ""}-${lineEnd ?? ""}`;
+}
+
+// Dispatched once a #sym: reference's real kind resolves asynchronously (see
+// createContextReferenceLintExtension), so createAtomicReferenceExtension
+// knows to rebuild chip decorations outside of a doc-change cycle.
+const symbolKindsUpdatedEffect = StateEffect.define<void>();
+
 // Atomic mode: replace each reference's text with a compact chip widget and
 // mark the range atomic via the atomicRanges facet, so arrow keys skip over the
 // whole reference and Backspace/Delete removes it in one press — the caret can
@@ -1555,10 +1623,28 @@ const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
 // the existing link handlers still open the reference. Built over the whole doc
 // (not just visibleRanges) so off-screen references stay atomic for cursor
 // motion. Gated on `ui.atomicContextReferences` by the caller.
-export function createAtomicReferenceExtension() {
+//
+// symbolIconCache is populated asynchronously by createContextReferenceLintExtension
+// (keyed by symbolIconCacheKey) as #sym: refs' real kinds resolve; passing the
+// same Map instance to both extensions is what lets a chip "upgrade" from
+// DEFAULT_COMPLETION_ICON to the correct symbol-* icon without a second
+// decoration pipeline.
+export function createAtomicReferenceExtension(
+  symbolIconCache?: Map<string, string>
+) {
+  const getSymbolIcon: SymbolIconResolver | undefined = symbolIconCache
+    ? (path, symbolName, lineStart, lineEnd) =>
+        symbolIconCache.get(
+          symbolIconCacheKey(path, symbolName, lineStart, lineEnd)
+        )
+    : undefined;
+
   const buildDecorations = (view: EditorView) => {
     const builder = new RangeSetBuilder<Decoration>();
-    for (const chip of findAtomicReferences(view.state.doc.toString())) {
+    for (const chip of findAtomicReferences(
+      view.state.doc.toString(),
+      getSymbolIcon
+    )) {
       builder.add(
         chip.from,
         chip.to,
@@ -1577,7 +1663,10 @@ export function createAtomicReferenceExtension() {
       }
 
       update(update: any) {
-        if (update.docChanged) {
+        const symbolKindsUpdated = update.transactions.some((tr: any) =>
+          tr.effects.some((effect: any) => effect.is(symbolKindsUpdatedEffect))
+        );
+        if (update.docChanged || symbolKindsUpdated) {
           this.decorations = buildDecorations(update.view);
         }
       }
@@ -1644,8 +1733,15 @@ function createPromptDecorationThemeExtension() {
       color: "var(--vscode-badge-foreground, var(--vscode-editor-foreground))",
       borderColor: "var(--vscode-focusBorder)",
     },
-    ".cm-atomic-ref-icon": {
-      fontSize: "0.85em",
+    // Compound with .codicon (rather than relying on cascade order against the
+    // global .codicon rule in globals.css, which sets a flat 16px/line-height:1)
+    // so the shrink deterministically wins. Without it, the icon's 16px box
+    // became the tallest child of the inline-flex chip, inflating that line's
+    // height wherever a chip appeared — the icon must render no taller than
+    // the chip's own text to avoid that.
+    ".cm-atomic-ref-icon.codicon": {
+      fontSize: "0.85em !important",
+      lineHeight: "1 !important",
       opacity: "0.85",
     },
     ".cm-atomic-ref-label": {
@@ -1814,7 +1910,8 @@ function createSpellCheckExtension(
 function createContextReferenceLintExtension(
   validateReferences: (
     references: Array<ContextReferenceMatch & { id: string }>
-  ) => Promise<ContextReferenceValidationResult[]>
+  ) => Promise<ContextReferenceValidationResult[]>,
+  symbolIconCache?: Map<string, string>
 ) {
   return linter(
     async (view): Promise<Diagnostic[]> => {
@@ -1840,6 +1937,40 @@ function createContextReferenceLintExtension(
 
       const results = await validateReferences(allReferences);
       const resultById = new Map(results.map((result) => [result.id, result]));
+
+      // Piggyback the resolved symbol kinds (present only for "symbol" refs,
+      // see handleContextRefsValidation) onto the atomic-chip icon cache —
+      // this lint pass already validates every visible reference on a
+      // debounce, so it's the natural place to keep that cache warm rather
+      // than running a second round trip just for icons.
+      if (symbolIconCache) {
+        let changed = false;
+        for (const reference of allReferences) {
+          if (
+            reference.type !== "symbol" ||
+            !reference.path ||
+            !reference.symbolName
+          ) {
+            continue;
+          }
+          const symbolKind = resultById.get(reference.id)?.symbolKind;
+          if (symbolKind === undefined) continue;
+          const icon = COMPLETION_KIND_ICONS[symbolKind] || DEFAULT_COMPLETION_ICON;
+          const key = symbolIconCacheKey(
+            reference.path,
+            reference.symbolName,
+            reference.lineStart,
+            reference.lineEnd
+          );
+          if (symbolIconCache.get(key) !== icon) {
+            symbolIconCache.set(key, icon);
+            changed = true;
+          }
+        }
+        if (changed) {
+          view.dispatch({ effects: symbolKindsUpdatedEffect.of(undefined) });
+        }
+      }
 
       return allReferences.flatMap((reference): Diagnostic[] => {
         const result = resultById.get(reference.id);

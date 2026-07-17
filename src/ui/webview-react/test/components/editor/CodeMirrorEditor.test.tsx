@@ -141,6 +141,34 @@ describe("CodeMirrorEditor external reference completions", () => {
   });
 });
 
+describe("CodeMirrorEditor completion kind icons", () => {
+  function typeFor(kind: number | undefined) {
+    return buildCodeMirrorCompletionResult(
+      [{ label: "x", kind, insertText: "x" }],
+      0,
+      { trigger: "#", query: "" }
+    ).options[0]?.type;
+  }
+
+  it("maps symbol completion kinds to distinct symbol-* codicons", () => {
+    expect(typeFor(1)).toBe("symbol-method"); // Method
+    expect(typeFor(2)).toBe("symbol-function"); // Function
+    expect(typeFor(6)).toBe("symbol-class"); // Class
+    expect(typeFor(7)).toBe("symbol-interface"); // Interface
+    expect(typeFor(21)).toBe("symbol-struct"); // Struct
+  });
+
+  it("gives the selection completion (Unit) its own icon, distinct from git completions (Reference)", () => {
+    expect(typeFor(10)).toBe("list-selection");
+    expect(typeFor(17)).toBe("source-control");
+  });
+
+  it("falls back to symbol-misc for an unknown or missing kind", () => {
+    expect(typeFor(999)).toBe("symbol-misc");
+    expect(typeFor(undefined)).toBe("symbol-misc");
+  });
+});
+
 describe("CodeMirrorEditor prompt reference insertion", () => {
   it("surrounds multi-reference inserts with newlines when inserting mid-line", () => {
     const result = buildPromptReferenceInsertion(
@@ -308,6 +336,25 @@ describe("CodeMirrorEditor atomic reference chips", () => {
         "data-line-end": "20",
       },
     });
+  });
+
+  it("falls back to a generic symbol icon when the kind hasn't resolved yet", () => {
+    const chips = findAtomicReferences("#sym:src/a.ts:MyClass:10-20");
+    expect(chips[0]).toMatchObject({ icon: "symbol-misc" });
+  });
+
+  it("uses the resolved codicon once the symbol's kind is cached", () => {
+    const chips = findAtomicReferences(
+      "#sym:src/a.ts:MyClass:10-20",
+      (path, symbolName, lineStart, lineEnd) =>
+        path === "src/a.ts" &&
+        symbolName === "MyClass" &&
+        lineStart === "10" &&
+        lineEnd === "20"
+          ? "symbol-class"
+          : undefined
+    );
+    expect(chips[0]).toMatchObject({ icon: "symbol-class" });
   });
 
   it("labels a line-range selection with basename and lines", () => {

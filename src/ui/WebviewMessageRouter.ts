@@ -40,6 +40,7 @@ import {
   getGitChangeCompletions,
   getPromptFileCompletions,
   getPriorContextCompletions,
+  findSymbolKindForReference,
   type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
 import { getStashList } from "../utils/GitUtils";
@@ -2158,7 +2159,7 @@ export class WebviewMessageRouter {
     },
     workspaceRoot: string | null,
     namedRoots: readonly ResolverWorkspaceFolder[]
-  ): Promise<{ exists: boolean; message?: string }> {
+  ): Promise<{ exists: boolean; message?: string; symbolKind?: number }> {
     if (reference.type === "git") {
       return this.validateGitContextReference(reference.gitRef, workspaceRoot);
     }
@@ -2212,15 +2213,30 @@ export class WebviewMessageRouter {
         const document = await vscode.workspace.openTextDocument(
           vscode.Uri.file(pathValidation.resolvedPath)
         );
-        return endLine <= document.lineCount
-          ? { exists: true }
-          : {
-              exists: false,
-              message:
-                reference.type === "symbol"
-                  ? "symbol not found"
-                  : "selection not found",
-            };
+        if (endLine > document.lineCount) {
+          return {
+            exists: false,
+            message:
+              reference.type === "symbol"
+                ? "symbol not found"
+                : "selection not found",
+          };
+        }
+        if (reference.type === "symbol" && reference.symbolName) {
+          // Best-effort: the reference text itself carries no kind, only a
+          // live completion item does. A miss here (renamed/moved symbol,
+          // no provider) just leaves the icon at its generic fallback.
+          const symbolKind = await findSymbolKindForReference(
+            document.uri,
+            reference.symbolName,
+            startLine,
+            endLine
+          );
+          return symbolKind === undefined
+            ? { exists: true }
+            : { exists: true, symbolKind };
+        }
+        return { exists: true };
       } catch {
         return {
           exists: false,

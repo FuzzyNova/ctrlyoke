@@ -1561,7 +1561,13 @@ export type IncomingMessage =
     }
   | {
       type: typeof MESSAGE_TYPES.CONTEXT_REFS_VALIDATION;
-      results: Array<{ id: string; exists: boolean; message?: string }>;
+      results: Array<{
+        id: string;
+        exists: boolean;
+        message?: string;
+        /** CompletionItemKind, resolved live for #sym: refs so the dashboard chip can show the real symbol-kind icon. */
+        symbolKind?: number;
+      }>;
       seq?: number;
     }
   | {

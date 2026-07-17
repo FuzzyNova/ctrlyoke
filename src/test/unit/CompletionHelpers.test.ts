@@ -8,6 +8,7 @@ import {
   getFileCompletions,
   getHashSelectionCompletions,
   getPromptFileCompletions,
+  findDocumentSymbolByNameAndRange,
 } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
@@ -238,11 +239,74 @@ suite("CompletionHelpers", () => {
     // Prefixed with "0_" so selections bubble above the "1_" symbol items in
     // the merged getHashCompletions result.
     assert.ok(items[0].sortText?.startsWith("0_"));
+    // Unit is otherwise unused by any provider here, giving clients a
+    // collision-free marker distinct from git (~) completions (Reference).
+    assert.strictEqual(items[0].kind, vscode.CompletionItemKind.Unit);
   });
 
   test("getHashSelectionCompletions returns nothing when there is no selection", () => {
     mockSelections([]);
 
     assert.deepStrictEqual(getHashSelectionCompletions(), []);
+  });
+});
+
+suite("findDocumentSymbolByNameAndRange", () => {
+  function makeSymbol(
+    name: string,
+    startLine: number,
+    endLine: number,
+    kind: vscode.SymbolKind = vscode.SymbolKind.Method,
+    children: vscode.DocumentSymbol[] = []
+  ): vscode.DocumentSymbol {
+    return {
+      name,
+      kind,
+      children,
+      range: {
+        start: { line: startLine - 1 },
+        end: { line: endLine - 1 },
+      },
+    } as vscode.DocumentSymbol;
+  }
+
+  test("finds a top-level symbol by exact name and 1-based line range", () => {
+    const symbols = [makeSymbol("foo", 5, 10), makeSymbol("bar", 12, 20)];
+
+    const match = findDocumentSymbolByNameAndRange(symbols, "bar", 12, 20);
+
+    assert.strictEqual(match?.name, "bar");
+  });
+
+  test("finds a nested symbol inside children", () => {
+    const method = makeSymbol("method", 3, 4);
+    const parent = makeSymbol("Outer", 1, 10, vscode.SymbolKind.Class, [
+      method,
+    ]);
+
+    const match = findDocumentSymbolByNameAndRange(
+      [parent],
+      "method",
+      3,
+      4
+    );
+
+    assert.strictEqual(match, method);
+  });
+
+  test("does not match a same-named symbol with a different line range", () => {
+    const symbols = [makeSymbol("foo", 5, 10)];
+
+    assert.strictEqual(
+      findDocumentSymbolByNameAndRange(symbols, "foo", 5, 11),
+      undefined
+    );
+  });
+
+  test("returns undefined when nothing matches", () => {
+    assert.strictEqual(
+      findDocumentSymbolByNameAndRange([], "missing", 1, 2),
+      undefined
+    );
   });
 });

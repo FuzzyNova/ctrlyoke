@@ -121,25 +121,39 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         outline: `1px solid ${autocompleteSelectedOutlineColor}`,
         outlineOffset: "-1px",
       },
-      ".cm-completion-file .cm-completionIcon": {
+      ".cm-completion-symbol-file .cm-completionIcon": {
         color: "var(--vscode-symbolIcon-fileForeground, #858585)",
       },
       ".cm-completion-folder .cm-completionIcon": {
         color: "var(--vscode-symbolIcon-folderForeground, #dcb67a)",
       },
-      ".cm-completion-class .cm-completionLabel": {
+      // CodeMirror's own .cm-completionIcon sizes its built-in glyph set at
+      // 90% with no vertical-align, which works because those glyphs are
+      // plain text characters. Our codicon glyphs come from a separate font
+      // whose global .codicon rule hard-codes 16px/line-height:1 — bigger
+      // than the row text — so left alone they render taller than (and
+      // baseline-shifted above) the completion label. Compounding with
+      // .codicon here beats that rule outright instead of hoping cascade
+      // order cooperates, and text-bottom lines the glyph back up with the
+      // label text the way other codicon-next-to-text spots in this app do.
+      ".cm-completionIcon.codicon": {
+        fontSize: "90% !important",
+        lineHeight: "1 !important",
+        verticalAlign: "text-bottom",
+      },
+      ".cm-completion-symbol-class .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-classForeground, #ee9d28)",
       },
-      ".cm-completion-method .cm-completionLabel": {
+      ".cm-completion-symbol-method .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-methodForeground, #b180d7)",
       },
-      ".cm-completion-function .cm-completionLabel": {
+      ".cm-completion-symbol-function .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-functionForeground, #b180d7)",
       },
-      ".cm-completion-property .cm-completionLabel": {
+      ".cm-completion-symbol-property .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-propertyForeground, #75beff)",
       },
-      ".cm-completion-variable .cm-completionLabel": {
+      ".cm-completion-symbol-variable .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
       },
       ".cm-searchMatch": {
