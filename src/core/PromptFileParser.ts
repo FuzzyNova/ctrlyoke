@@ -194,7 +194,12 @@ export class PromptFileParser {
     promptFilePath: string
   ): Promise<string> {
     // Quick check - if it doesn't look like a file path, return as-is
-    if (!looksLikeFilePath(promptValue)) {
+    if (
+      !looksLikeFilePath(promptValue, {
+        allowWorkspaceFolderPrefix:
+          (this.platform?.getNamedWorkspaceRoots().length ?? 0) > 1,
+      })
+    ) {
       return promptValue;
     }
 

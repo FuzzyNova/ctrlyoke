@@ -121,6 +121,24 @@ describe("CodeMirrorEditor external reference completions", () => {
     );
     expect(result.options[0]?.displayLabel).toBe("CodeMirrorEditor.tsx");
   });
+
+  it("replaces the complete lone prompt path without adding a trigger offset", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        {
+          label: "current.prompt.md",
+          kind: 16,
+          insertText: "root2/prompts/current.prompt.md",
+        },
+      ],
+      0,
+      { trigger: "path", query: "root2/prompts/cu" }
+    );
+
+    expect(result.from).toBe(0);
+    expect(result.filter).toBe(false);
+    expect(result.options[0]?.apply).toBe("root2/prompts/current.prompt.md");
+  });
 });
 
 describe("CodeMirrorEditor prompt reference insertion", () => {

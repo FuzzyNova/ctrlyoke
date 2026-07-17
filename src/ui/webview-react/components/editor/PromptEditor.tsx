@@ -128,7 +128,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const isFinalStep = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
-  const isFileRef = looksLikeFilePath(promptText.trim());
+  const isFileRef = looksLikeFilePath(promptText.trim(), {
+    allowWorkspaceFolderPrefix: globalSettings.isMultiRoot,
+  });
 
   // Number of steps that precede this prompt — used by the prior-context linter.
   // QUEUE(index): steps 0..index-1 are prior; NEW_PROMPT / FINAL_STEP: all queue steps are prior.

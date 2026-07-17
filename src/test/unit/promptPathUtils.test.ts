@@ -26,6 +26,28 @@ suite("promptPathUtils", () => {
       assert.strictEqual(looksLikeFilePath("./prompts/setup.prompt.md"), true);
     });
 
+    test("recognizes folder-qualified paths only when multi-root syntax is enabled", () => {
+      assert.strictEqual(
+        looksLikeFilePath("root2/prompts/setup.prompt.md"),
+        false
+      );
+      assert.strictEqual(
+        looksLikeFilePath("root2/prompts/setup.prompt.md", {
+          allowWorkspaceFolderPrefix: true,
+        }),
+        true
+      );
+    });
+
+    test("does not treat a lone @-reference as a workspace-folder-prefixed path", () => {
+      // "@src/index.ts" matches the folder-qualified prefix shape but is a
+      // ctrlyoke context reference (@file), not a standalone prompt path.
+      assert.strictEqual(
+        looksLikeFilePath("@src/index.ts", { allowWorkspaceFolderPrefix: true }),
+        false
+      );
+    });
+
     test("recognizes relative path with .md extension", () => {
       assert.strictEqual(looksLikeFilePath("./README.md"), true);
     });

@@ -105,6 +105,7 @@ export interface GlobalSettings {
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   hideGitIgnoredFiles: boolean;
+  isMultiRoot: boolean;
   priorContext: string;
   workspaceRoot: string;
   defaultErrorBehavior: ErrorBehavior | null;
@@ -327,6 +328,7 @@ const initialGlobalSettings: GlobalSettings = {
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   hideGitIgnoredFiles: false,
+  isMultiRoot: false,
   priorContext: "none",
   workspaceRoot: "",
   defaultErrorBehavior: null,

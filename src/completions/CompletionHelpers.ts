@@ -874,13 +874,15 @@ const PROMPT_REF_EXTENSIONS = [".prompt.md", ".md", ".txt"];
 
 /**
  * Get completions for the file-path trigger in the prompt editor.
- * Only returns .prompt.md / .md / .txt files, with full ./relative paths as
- * insertText so the completion replaces the entire typed path.
+ * Only returns .prompt.md / .md / .txt files. Single-root workspaces emit
+ * ./relative paths; multi-root workspaces emit folder-qualified paths such as
+ * root2/path/to/file.prompt.md, matching the other context completions.
  */
 export async function getPromptFileCompletions(
   filterText: string
 ): Promise<PlainCompletionItem[]> {
   const files = await getWorkspaceFiles();
+  const isMultiRoot = isMultiRootWorkspace();
   const filter = buildPathCompletionFilter(filterText, {
     stripPromptPathPrefixes: true,
   });
@@ -901,7 +903,7 @@ export async function getPromptFileCompletions(
 
     const fileName = path.posix.basename(relativePath);
     const dirName = getNormalizedParentDirectory(relativePath);
-    const insertPath = `./${relativePath}`;
+    const insertPath = isMultiRoot ? relativePath : `./${relativePath}`;
 
     items.push({
       label: fileName,

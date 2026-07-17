@@ -140,10 +140,12 @@ export function resolveTrustedWorkspaceRoots(
  *
  * Resolution order:
  * 1. Absolute paths are returned as-is (matches `path.resolve` semantics).
- * 2. If the first path segment matches a named root's `name` (or, as
+ * 2. A single leading `./` is stripped before matching (a manually-typed
+ *    `./root2/src/index.ts` names the same root as `root2/src/index.ts`).
+ * 3. If the first path segment matches a named root's `name` (or, as
  *    fallback, that root's directory basename), resolve the remainder
  *    against that root.
- * 3. Otherwise resolve the whole path against `primaryRoot` (today's
+ * 4. Otherwise resolve the whole path against `primaryRoot` (today's
  *    behavior — an unprefixed ref is "relative to the primary root").
  *
  * Deliberately synchronous and side-effect free: no filesystem probing
@@ -158,7 +160,7 @@ export function resolveNamedRelativePath(
     return path.resolve(relativePath);
   }
 
-  const normalized = relativePath.replace(/\\/g, "/");
+  const normalized = relativePath.replace(/\\/g, "/").replace(/^\.\//, "");
   const firstSlash = normalized.indexOf("/");
   if (firstSlash > 0) {
     const firstSegment = normalized.slice(0, firstSlash);

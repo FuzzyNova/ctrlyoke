@@ -222,6 +222,13 @@ suite("WorkspaceRootResolver Tests", () => {
       );
     });
 
+    test("a manually-typed leading ./ still resolves against the matching named root", () => {
+      assert.strictEqual(
+        resolveNamedRelativePath("./docs/readme.md", appFolder, folders),
+        path.resolve(docsFolder, "readme.md")
+      );
+    });
+
     test("empty named roots behaves exactly like plain path.resolve", () => {
       assert.strictEqual(
         resolveNamedRelativePath("docs/readme.md", appFolder, []),

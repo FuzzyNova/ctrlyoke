@@ -170,6 +170,7 @@ describe("setGlobalSettings", () => {
       confirmDeleteOperations: false,
       confirmResetOperations: false,
       hideGitIgnoredFiles: true,
+      isMultiRoot: false,
       priorContext: "none",
       workspaceRoot: "",
       defaultErrorBehavior: null,

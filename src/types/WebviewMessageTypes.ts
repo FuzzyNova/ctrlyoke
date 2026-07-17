@@ -351,6 +351,8 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
+    isMultiRoot: boolean;
     terminal?: TerminalSettings;
   };
   workflowProperties: Record<string, any>;

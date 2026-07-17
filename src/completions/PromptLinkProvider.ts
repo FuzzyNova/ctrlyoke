@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
 import * as path from "path";
 import {
   getVsCodeWorkspaceRoot,
@@ -16,6 +17,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
+import { looksLikeFilePath } from "../utils/promptPathUtils";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -92,6 +94,21 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceIdentity
       );
 
+    // A standalone prompt-file path has no @/# marker, so it needs its own
+    // link entry. Keep this separate from context-reference matching because
+    // prompt parsing resolves these paths relative to the prompt document
+    // before falling back to the workspace and .ctrlyoke roots.
+    links.push(
+      ...this.findPromptFileLinks(
+        document,
+        text,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots,
+        approvedExternalRoots
+      )
+    );
+
     // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
     links.push(
       ...this.findFileLinks(
@@ -144,6 +161,59 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     links.push(...this.findGitChangeLinks(document, text));
 
     return links;
+  }
+
+  /**
+   * Find a link for a prompt whose entire value is a standalone file path.
+   * The candidate order mirrors PromptFileParser.resolvePromptFilePath().
+   */
+  private findPromptFileLinks(
+    document: vscode.TextDocument,
+    text: string,
+    workspaceRoot: string,
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    trustedRoots: readonly string[],
+    approvedExternalRoots: readonly string[]
+  ): vscode.DocumentLink[] {
+    const trimmedPath = text.trim();
+    if (
+      !looksLikeFilePath(trimmedPath, {
+        allowWorkspaceFolderPrefix: namedRoots.length > 1,
+      })
+    ) {
+      return [];
+    }
+
+    const candidates = path.isAbsolute(trimmedPath)
+      ? [path.resolve(trimmedPath)]
+      : [
+          path.resolve(path.dirname(document.fileName), trimmedPath),
+          resolveNamedRelativePath(trimmedPath, workspaceRoot, namedRoots),
+          path.resolve(workspaceRoot, ".ctrlyoke", trimmedPath),
+        ];
+    const resolvedPath =
+      candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+
+    const decision = evaluateFileAccess(resolvedPath, {
+      workspaceRoots: trustedRoots,
+      approvedExternalRoots,
+    });
+    const start = text.indexOf(trimmedPath);
+    const range = new vscode.Range(
+      document.positionAt(start),
+      document.positionAt(start + trimmedPath.length)
+    );
+
+    const link = decision.allowed
+      ? new vscode.DocumentLink(range, vscode.Uri.file(decision.normalizedPath))
+      : new vscode.DocumentLink(
+          range,
+          this.buildTrustCommandUri({ path: decision.normalizedPath })
+        );
+    link.tooltip = decision.allowed
+      ? `Open prompt file ${trimmedPath}`
+      : `Trust and open prompt file ${trimmedPath}`;
+    return [link];
   }
 
   /**

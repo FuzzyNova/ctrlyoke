@@ -432,6 +432,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const atomicContextReferences = useSettingsStore(
     (state) => state.globalSettings.atomicContextReferences
   );
+  const isMultiRootWorkspace = useSettingsStore(
+    (state) => state.globalSettings.isMultiRoot
+  );
 
   // Keep callback refs current
   useEffect(() => {
@@ -964,9 +967,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const pathCompletions = useCallback(
     (context: any): Promise<CompletionResult | null> | null => {
       // Match paths starting with ./ ../ / or a Windows drive letter
-      const before = context.matchBefore(
-        /(?:\.\.?\/|\/|[a-zA-Z]:[/\\])[^\s\n]*/
-      );
+      const pathPattern = isMultiRootWorkspace
+        ? /(?:\.\.?\/|\/|[a-zA-Z]:[/\\]|[^\s/\\]+[/\\])[^\s\n]*/
+        : /(?:\.\.?\/|\/|[a-zA-Z]:[/\\])[^\s\n]*/;
+      const before = context.matchBefore(pathPattern);
       if (!before) return null;
 
       // Only activate when this match starts at the very beginning of the
@@ -1005,7 +1009,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         });
       });
     },
-    [vscode]
+    [isMultiRootWorkspace, vscode]
   );
 
   const retryPlaceholderCompletions = useCallback(
@@ -1062,7 +1066,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createLinterThemeExtension(),
         highlightActiveLine(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
-        createSpellCheckExtension(typoCheckerRef),
+        createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
         createContextReferenceLintExtension(validateContextReferences),
         // Mount autocomplete tooltips on document.body so they escape the
         // overflow:hidden ancestors (critical on iOS where CodeMirror forces
@@ -1137,7 +1141,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               createLinkDecorationExtension(),
               createPriorContextDecorationExtension(),
             ]),
-        createFileRefDecorationExtension(),
+        createFileRefDecorationExtension(isMultiRootWorkspace),
         createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
         createClickHandlerExtension(vscode, stepCountRef),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
@@ -1241,6 +1245,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     mode,
     surface,
     atomicContextReferences,
+    isMultiRootWorkspace,
   ]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
@@ -1707,14 +1712,21 @@ function createLinterThemeExtension() {
 
 // Spell checking with Typo.js
 function createSpellCheckExtension(
-  typoCheckerRef: React.RefObject<TypoChecker | null>
+  typoCheckerRef: React.RefObject<TypoChecker | null>,
+  allowWorkspaceFolderPrefix: boolean
 ) {
   return linter(
     (view) => {
       if (!typoCheckerRef.current) return [];
 
       // Skip spellcheck entirely when the document is a lone file-path reference
-      if (looksLikeFilePath(view.state.doc.toString().trim())) return [];
+      if (
+        looksLikeFilePath(view.state.doc.toString().trim(), {
+          allowWorkspaceFolderPrefix,
+        })
+      ) {
+        return [];
+      }
 
       const diagnostics: any[] = [];
 
@@ -2205,7 +2217,7 @@ function createLinkDecorationExtension() {
 }
 
 // Decorate the entire editor content when it is a lone file-path reference
-function createFileRefDecorationExtension() {
+function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
   return ViewPlugin.fromClass(
     class {
       decorations;
@@ -2223,7 +2235,10 @@ function createFileRefDecorationExtension() {
       buildDecorations(view: EditorView) {
         const doc = view.state.doc.toString();
         const trimmed = doc.trim();
-        if (!trimmed || !looksLikeFilePath(trimmed)) {
+        if (
+          !trimmed ||
+          !looksLikeFilePath(trimmed, { allowWorkspaceFolderPrefix })
+        ) {
           return Decoration.none;
         }
 

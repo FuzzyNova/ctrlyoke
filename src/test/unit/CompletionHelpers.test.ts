@@ -14,6 +14,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 suite("CompletionHelpers", () => {
   const originalFindFiles = vscode.workspace.findFiles;
   const originalAsRelativePath = vscode.workspace.asRelativePath;
+  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
   const originalVisibleTextEditors = vscode.window.visibleTextEditors;
   const originalShouldRespectGitignore =
     ConfigurationUtils.shouldRespectGitignoreForCompletions;
@@ -74,7 +75,12 @@ suite("CompletionHelpers", () => {
       configurable: true,
     });
     Object.defineProperty(vscode.workspace, "asRelativePath", {
-      value: (uri: vscode.Uri) => pathByFsPath.get(uri.fsPath) ?? uri.fsPath,
+      value: (uri: vscode.Uri, includeWorkspaceFolder?: boolean) => {
+        const relativePath = pathByFsPath.get(uri.fsPath) ?? uri.fsPath;
+        return includeWorkspaceFolder
+          ? `ctrlyoke/${relativePath}`
+          : relativePath;
+      },
       configurable: true,
     });
   }
@@ -93,6 +99,10 @@ suite("CompletionHelpers", () => {
     });
     Object.defineProperty(vscode.workspace, "asRelativePath", {
       value: originalAsRelativePath,
+      configurable: true,
+    });
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      value: originalWorkspaceFolders,
       configurable: true,
     });
     Object.defineProperty(vscode.window, "visibleTextEditors", {
@@ -180,6 +190,35 @@ suite("CompletionHelpers", () => {
     const labels = items.map((item) => item.label);
 
     assert.deepStrictEqual(labels, ["setup.prompt.md"]);
+  });
+
+  test("uses the folder-qualified path for standalone prompts in multi-root workspaces", async () => {
+    const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-completion-helpers");
+    mockWorkspaceFiles([".ctrlyoke/prompts/current.prompt.md"]);
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      value: [
+        {
+          name: "ctrlyoke",
+          uri: vscode.Uri.file(workspaceRoot),
+          index: 0,
+        },
+        {
+          name: "other",
+          uri: vscode.Uri.file(path.join(os.tmpdir(), "other")),
+          index: 1,
+        },
+      ],
+      configurable: true,
+    });
+
+    const items = await getPromptFileCompletions(
+      "ctrlyoke/.ctrlyoke/prompts/cu"
+    );
+
+    assert.strictEqual(
+      items[0]?.insertText,
+      "ctrlyoke/.ctrlyoke/prompts/current.prompt.md"
+    );
   });
 
   test("getHashSelectionCompletions returns the active selection with a top-bubbled sortText", () => {
