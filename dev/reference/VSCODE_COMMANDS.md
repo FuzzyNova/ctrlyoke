@@ -1,7 +1,7 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-07-11T21:55:58.702Z  
-**Total Commands:** 3843
+**Generated:** 2026-07-17T03:59:39.360Z  
+**Total Commands:** 3821
 
 ---
 
@@ -42,6 +42,7 @@
 - `agents.github.copilot.cli.deleteSessions`
 - `agentsVoice.connecting`
 - `agentsVoice.disconnect`
+- `agentsVoice.openSettings`
 - `agentsVoice.pttStopInChat`
 - `agentsVoice.pushToTalk`
 - `agentsVoice.resetOnboarding`
@@ -347,6 +348,7 @@
 - `ctrlyoke.appendFromDashboard`
 - `ctrlyoke.cancelCommitMessageGeneration`
 - `ctrlyoke.clearWorkflow`
+- `ctrlyoke.confirmExternalFileTrust`
 - `ctrlyoke.createDraftPrompt`
 - `ctrlyoke.createEndConditionScript`
 - `ctrlyoke.createNewTemplate`
@@ -364,11 +366,9 @@
 - `ctrlyoke.enableServer`
 - `ctrlyoke.exportDiscoveredModels`
 - `ctrlyoke.generateCommitMessage`
-- `ctrlyoke.importAgents`
 - `ctrlyoke.importWorkflowTemplates`
 - `ctrlyoke.initWorkspace`
 - `ctrlyoke.listAllCommands`
-- `ctrlyoke.listChatCommands`
 - `ctrlyoke.loadFromContext`
 - `ctrlyoke.newWorkflow`
 - `ctrlyoke.openFileWithSelection`
@@ -384,13 +384,10 @@
 - `ctrlyoke.runFromContext`
 - `ctrlyoke.searchHistory`
 - `ctrlyoke.selectPromptFile`
+- `ctrlyoke.showGettingStarted`
 - `ctrlyoke.showLanguageId`
 - `ctrlyoke.showOutputPanel`
 - `ctrlyoke.stop`
-- `ctrlyoke.test.chatAgentSelection`
-- `ctrlyoke.test.chatModelSelection`
-- `ctrlyoke.test.copilotAutomation`
-- `ctrlyoke.test.fileAttachment`
 - `cursorBottom`
 - `cursorBottomSelect`
 - `cursorColumnSelectDown`
@@ -547,24 +544,6 @@
 - `diffEditor.toggleCollapseUnchangedRegions`
 - `diffEditor.toggleShowMovedCodeBlocks`
 - `diffEditor.toggleUseInlineViewWhenSpaceIsLimited`
-- `dotnet._resetUpdateTimer`
-- `dotnet.acquire`
-- `dotnet.acquireGlobalSDK`
-- `dotnet.acquireGlobalSDKPublic`
-- `dotnet.acquireStatus`
-- `dotnet.availableInstalls`
-- `dotnet.ensureDotnetDependencies`
-- `dotnet.findPath`
-- `dotnet.forceUpdate`
-- `dotnet.getAcquisitionLog`
-- `dotnet.listVersions`
-- `dotnet.recommendedVersion`
-- `dotnet.reportIssue`
-- `dotnet.resetData`
-- `dotnet.showAcquisitionLog`
-- `dotnet.uninstall`
-- `dotnet.uninstallAll`
-- `dotnet.uninstallPublic`
 - `editor.action.accessibilityHelp`
 - `editor.action.accessibilityHelpConfigureAssignedKeybindings`
 - `editor.action.accessibilityHelpConfigureKeybindings`
@@ -2036,7 +2015,6 @@
 - `targetsWsl.open`
 - `targetsWsl.resetViewLocation`
 - `terminal.focus`
-- `terminal.integrated.suggest.clearCachedGlobals`
 - `terminal.removeView`
 - `terminal.resetViewContainerLocation`
 - `terminal.resetViewLocation`
@@ -2336,6 +2314,7 @@
 - `workbench.action.chat.addDynamicVariable`
 - `workbench.action.chat.addToChatAction`
 - `workbench.action.chat.agentHost.otel.exportAgentTracesDB`
+- `workbench.action.chat.agentHostNetworkDiagnostics`
 - `workbench.action.chat.agentsHandoffTip.mute`
 - `workbench.action.chat.agentsHandoffTip.open`
 - `workbench.action.chat.applyCompareEdits`
@@ -2443,7 +2422,8 @@
 - `workbench.action.chat.openAgentHostFolderPicker`
 - `workbench.action.chat.openAgentHostModePicker`
 - `workbench.action.chat.openAgentHostPermissionModePicker`
-- `workbench.action.chat.openAutomationsWorkspacePicker`
+- `workbench.action.chat.openAgentHostSettings`
+- `workbench.action.chat.openAgentSessionSettings`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
 - `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
@@ -2455,17 +2435,16 @@
 - `workbench.action.chat.openModePicker`
 - `workbench.action.chat.openModelPicker`
 - `workbench.action.chat.openNewChatSessionExternal.openai-codex`
-- `workbench.action.chat.openNewChatSessionInPlace.claude-code`
+- `workbench.action.chat.openNewChatSessionInPlace.agent-host-claude`
+- `workbench.action.chat.openNewChatSessionInPlace.agent-host-copilotcli`
 - `workbench.action.chat.openNewChatSessionInPlace.copilot-cloud-agent`
 - `workbench.action.chat.openNewChatSessionInPlace.copilotcli`
 - `workbench.action.chat.openNewChatSessionInPlace.local`
 - `workbench.action.chat.openNewChatSessionInPlace.openai-codex`
 - `workbench.action.chat.openNewSessionEditor.agent-host-copilotcli`
-- `workbench.action.chat.openNewSessionEditor.claude-code`
 - `workbench.action.chat.openNewSessionEditor.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionEditor.copilotcli`
 - `workbench.action.chat.openNewSessionSidebar.agent-host-copilotcli`
-- `workbench.action.chat.openNewSessionSidebar.claude-code`
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
@@ -2475,7 +2454,6 @@
 - `workbench.action.chat.openSessionInNewEditorGroup`
 - `workbench.action.chat.openSessionInNewWindow`
 - `workbench.action.chat.openSessionTargetPicker`
-- `workbench.action.chat.openSessionWithPrompt.claude-code`
 - `workbench.action.chat.openSessionWithPrompt.copilot-cloud-agent`
 - `workbench.action.chat.openSessionWithPrompt.copilotcli`
 - `workbench.action.chat.openStorageFolder`
@@ -2920,13 +2898,13 @@
 - `workbench.action.output.show.Anthropic.claude-code.Claude VSCode.log`
 - `workbench.action.output.show.GitHub.copilot-chat.GitHub Copilot Chat.log`
 - `workbench.action.output.show.agentSessionsOutput`
+- `workbench.action.output.show.agenthost`
 - `workbench.action.output.show.dbaeumer.vscode-eslint.ESLint.log`
 - `workbench.action.output.show.denoland.vscode-deno.Deno Language Server.log`
 - `workbench.action.output.show.extension-output-GitHub.copilot-chat-#1-GitHub Copilot Log (Code References)`
 - `workbench.action.output.show.extension-output-bradlc.vscode-tailwindcss-#1-Tailwind CSS IntelliSense`
 - `workbench.action.output.show.extension-output-esbenp.prettier-vscode-#1-Prettier`
 - `workbench.action.output.show.extension-output-fuzzynova.ctrlyoke-#1-ctrlyoke`
-- `workbench.action.output.show.extension-output-ms-dotnettools.vscode-dotnet-runtime-#1-.NET Install Tool`
 - `workbench.action.output.show.extension-output-saoudrizwan.claude-dev-#1-Cline`
 - `workbench.action.output.show.extension-output-streetsidesoftware.code-spell-checker-#1-Code Spell Checker Server`
 - `workbench.action.output.show.extension-output-vscode.markdown-language-features-#1-Markdown Language Server`
