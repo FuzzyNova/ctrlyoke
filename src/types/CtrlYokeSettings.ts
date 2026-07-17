@@ -127,6 +127,13 @@ export interface CtrlYokeGlobalSettings {
     confirmResetOperations: boolean;
     hideGitIgnoredFiles: boolean;
     /**
+     * Treat `@file`/`#symbol`/`~git`/`$context` references in the prompt editor
+     * as atomic units: cursor motion skips over them and Backspace/Delete
+     * removes the whole reference at once (no character-by-character editing
+     * inside a reference). Clicking/long-pressing a reference still opens it.
+     */
+    atomicContextReferences: boolean;
+    /**
      * Allow an AI-generated file link outside trusted roots to offer a "Trust
      * Parent Folder" action. When false, untrusted external links are still
      * blocked outright — this only controls whether the trust offer appears.
@@ -328,6 +335,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     confirmDeleteOperations: true,
     confirmResetOperations: true,
     hideGitIgnoredFiles: false,
+    atomicContextReferences: false,
     offerTrustForUntrustedFileLinks: true,
   },
   server: {

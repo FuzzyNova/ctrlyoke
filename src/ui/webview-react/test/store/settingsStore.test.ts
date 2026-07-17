@@ -165,6 +165,7 @@ describe("setGlobalSettings", () => {
       },
       respectGitignore: false,
       autoExpandEditorWhenTyping: true,
+      atomicContextReferences: false,
       outputVirtualizationRowThreshold: 200,
       confirmDeleteOperations: false,
       confirmResetOperations: false,

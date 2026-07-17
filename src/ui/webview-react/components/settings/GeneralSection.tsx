@@ -151,6 +151,14 @@ export function GeneralSection({
           {...rowProps}
         />
         <SettingToggleRow
+          label="Atomic context references"
+          description="Treat @file, #symbol, ~git, and $context references as single units in the prompt editor: arrow keys skip over them and Backspace/Delete removes the whole reference at once. Clicking or long-pressing a reference still opens it. When off, references edit character by character."
+          checked={ui.atomicContextReferences}
+          onChange={(v) => onUpdate("ui.atomicContextReferences", v)}
+          path="ui.atomicContextReferences"
+          {...rowProps}
+        />
+        <SettingToggleRow
           label="Use absolute file paths"
           description={
             isMultiRoot

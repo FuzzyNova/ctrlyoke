@@ -344,6 +344,10 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).autoExpandEditorWhenTyping;
   },
 
+  shouldTreatReferencesAsAtomic(): boolean {
+    return configService.get(CONFIG_KEYS.UI).atomicContextReferences;
+  },
+
   /**
    * Raw `ui.useAbsolutePathReferences` setting value only — NOT the
    * multi-root-forced effective value. Callers that need the effective

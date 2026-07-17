@@ -100,6 +100,7 @@ export interface GlobalSettings {
   };
   respectGitignore: boolean;
   autoExpandEditorWhenTyping: boolean;
+  atomicContextReferences: boolean;
   outputVirtualizationRowThreshold: number;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
@@ -321,6 +322,7 @@ const initialGlobalSettings: GlobalSettings = {
   },
   respectGitignore: true,
   autoExpandEditorWhenTyping: true,
+  atomicContextReferences: false,
   outputVirtualizationRowThreshold: 200,
   confirmDeleteOperations: true,
   confirmResetOperations: true,

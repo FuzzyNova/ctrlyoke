@@ -346,6 +346,7 @@ export interface InitMessageData {
     autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
     autoExpandEditorWhenTyping?: boolean;
+    atomicContextReferences?: boolean;
     outputVirtualizationRowThreshold?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
@@ -930,6 +931,7 @@ export interface GlobalSettingsUpdatedMessage {
     autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
     autoExpandEditorWhenTyping?: boolean;
+    atomicContextReferences?: boolean;
     outputVirtualizationRowThreshold?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;

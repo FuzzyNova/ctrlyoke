@@ -6,7 +6,7 @@ import {
   buildPromptReferenceInsertion,
   destroyOrphanedMouseSelection,
   findContextReferenceMatches,
-  findReferenceAtBoundary,
+  findAtomicReferences,
   getRetryPlaceholderCompletions,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
@@ -208,49 +208,106 @@ describe("CodeMirrorEditor context reference parsing", () => {
   });
 });
 
-describe("CodeMirrorEditor reference-boundary detection", () => {
-  it("finds a file reference when the caret is at its end (Backspace)", () => {
-    const doc = "See @src/file.ts";
-    expect(findReferenceAtBoundary(doc, doc.length, "end")).toEqual({
-      from: "See ".length,
-      to: doc.length,
+describe("CodeMirrorEditor atomic reference chips", () => {
+  it("labels a file reference with just its basename and keeps the full text as title", () => {
+    const doc = "See @src/deep/file.ts";
+    expect(findAtomicReferences(doc)).toEqual([
+      {
+        from: "See ".length,
+        to: doc.length,
+        icon: "📄",
+        label: "file.ts",
+        title: "@src/deep/file.ts",
+        attrs: { "data-type": "file", "data-path": "src/deep/file.ts" },
+      },
+    ]);
+  });
+
+  it("labels a directory with a trailing slash", () => {
+    const chips = findAtomicReferences("@src/deep/");
+    expect(chips[0]).toMatchObject({
+      icon: "📁",
+      label: "deep/",
+      attrs: { "data-type": "directory", "data-path": "src/deep/" },
     });
   });
 
-  it("finds a file reference when the caret is at its start (Delete)", () => {
-    const doc = "See @src/file.ts";
-    expect(findReferenceAtBoundary(doc, "See ".length, "start")).toEqual({
-      from: "See ".length,
-      to: doc.length,
+  it("labels a symbol with its symbol name", () => {
+    const chips = findAtomicReferences("#sym:src/a.ts:MyClass:10-20");
+    expect(chips[0]).toMatchObject({
+      label: "MyClass",
+      attrs: {
+        "data-type": "symbol",
+        "data-path": "src/a.ts",
+        "data-symbol-name": "MyClass",
+        "data-line-start": "10",
+        "data-line-end": "20",
+      },
     });
   });
 
-  it("returns null when the caret is in the middle of a reference", () => {
-    const doc = "@src/file.ts";
-    expect(findReferenceAtBoundary(doc, 5, "end")).toBeNull();
+  it("labels a line-range selection with basename and lines", () => {
+    const chips = findAtomicReferences("#selection:src/a.ts:10-20");
+    expect(chips[0]).toMatchObject({ label: "a.ts:10-20" });
   });
 
-  it("does not match the end edge when the caret is at the start", () => {
-    const doc = "See @src/file.ts";
-    expect(findReferenceAtBoundary(doc, "See ".length, "end")).toBeNull();
-  });
-
-  it("detects $ prior-context references at their end", () => {
-    const doc = "Use $previous";
-    expect(findReferenceAtBoundary(doc, doc.length, "end")).toEqual({
-      from: "Use ".length,
-      to: doc.length,
+  it("shortens a git commit hash but keeps keyword refs as-is", () => {
+    expect(findAtomicReferences("~diff")[0]).toMatchObject({
+      label: "diff",
+      attrs: { "data-type": "git", "data-git-ref": "diff" },
+    });
+    const hash = "0123456789abcdef0123456789abcdef01234567";
+    expect(findAtomicReferences(`~${hash}`)[0]).toMatchObject({
+      label: "0123456",
+      attrs: { "data-type": "git", "data-git-ref": hash },
     });
   });
 
-  it("ignores references inside fenced blocks", () => {
-    const doc = "```\n@src/file.ts\n```";
-    const end = "```\n@src/file.ts".length;
-    expect(findReferenceAtBoundary(doc, end, "end")).toBeNull();
+  it("labels a $ prior-context reference", () => {
+    const chips = findAtomicReferences("Use $previous here");
+    expect(chips).toEqual([
+      {
+        from: "Use ".length,
+        to: "Use $previous".length,
+        icon: "↩",
+        label: "previous",
+        title: "$previous",
+        attrs: { "data-type": "priorContext", "data-ref": "previous" },
+      },
+    ]);
   });
 
-  it("does not match a lone prompt-path prompt (no trigger character)", () => {
-    const doc = "./src/completions/CompletionHelpers.ts";
-    expect(findReferenceAtBoundary(doc, doc.length, "end")).toBeNull();
+  it("labels a $step range reference", () => {
+    const chips = findAtomicReferences("$step:1,3-4");
+    expect(chips[0]).toMatchObject({
+      label: "step 1,3,4",
+      attrs: { "data-type": "priorContext", "data-ref": "step:1,3,4" },
+    });
+  });
+
+  it("returns multiple references sorted by start", () => {
+    const chips = findAtomicReferences("@a/one.ts and @b/two.ts");
+    expect(chips.map((c) => [c.from, c.to])).toEqual([
+      [0, "@a/one.ts".length],
+      ["@a/one.ts and ".length, "@a/one.ts and @b/two.ts".length],
+    ]);
+  });
+
+  it("excludes references inside fenced blocks", () => {
+    expect(findAtomicReferences("```\n@src/file.ts\n```")).toEqual([]);
+  });
+
+  it("excludes a lone prompt-path prompt (no trigger character)", () => {
+    expect(
+      findAtomicReferences("./src/completions/CompletionHelpers.ts")
+    ).toEqual([]);
+  });
+
+  it("absorbs a $token that overlaps an enclosing @path reference", () => {
+    // `$previous` sits inside the `@…$previous.ts` file match; the wider @ range
+    // must win so the RangeSet stays non-overlapping.
+    const doc = "@foo$previous.ts";
+    const chips = findAtomicReferences(doc);
+    expect(chips.map((c) => [c.from, c.to])).toEqual([[0, doc.length]]);
   });
 });

@@ -501,6 +501,10 @@
           "type": "boolean",
           "description": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."
         },
+        "atomicContextReferences": {
+          "type": "boolean",
+          "description": "Treat @file/#symbol/~git/$context references in the prompt editor as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. Clicking or long-pressing a reference still opens it."
+        },
         "offerTrustForUntrustedFileLinks": {
           "type": "boolean",
           "description": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears."

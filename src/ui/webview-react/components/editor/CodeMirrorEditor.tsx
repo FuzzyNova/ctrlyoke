@@ -5,11 +5,12 @@ import {
   keymap,
   ViewPlugin,
   Decoration,
+  WidgetType,
   highlightActiveLine,
   tooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
-import { EditorState, Prec } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -48,6 +49,7 @@ import {
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
 import { useUiStore } from "../../store/uiStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
 // Typo.js spell checker (will be loaded from window.Typo)
@@ -424,6 +426,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const pasteSeqRef = useRef(0);
   const pendingPastesRef = useRef<Map<number, PendingPaste>>(new Map());
   const vscode = getVsCodeApi();
+  // When on, context references behave as atomic units (see
+  // createAtomicReferenceExtension). Toggling recreates the editor via the
+  // setup effect's dependency array.
+  const atomicContextReferences = useSettingsStore(
+    (state) => state.globalSettings.atomicContextReferences
+  );
 
   // Keep callback refs current
   useEffect(() => {
@@ -1017,7 +1025,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       extensions: [
         minimalSetup,
         createFindKeyHandlerExtension(),
-        createReferenceDeleteExtension(),
+        ...(atomicContextReferences ? [createAtomicReferenceExtension()] : []),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
@@ -1113,9 +1121,23 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             ]
           : []),
         createFencedBlockDecorationExtension(),
-        createLinkDecorationExtension(),
+        // In atomic mode, createAtomicReferenceExtension already covers every
+        // range these two would mark (same findContextReferenceMatches /
+        // findInlinePriorContextRefs tokens) with a replace-widget decoration.
+        // Keeping both active means two decoration sources fight over the
+        // exact same range — a replace widget from one plugin and a mark from
+        // another — which is unnecessary and was implicated in clicks leaving
+        // the editor unresponsive. createFileRefDecorationExtension stays on
+        // regardless: it covers lone prompt-path prompts (no @/#/~/$ trigger),
+        // which findAtomicReferences deliberately excludes, so atomic mode
+        // never puts a chip there.
+        ...(atomicContextReferences
+          ? []
+          : [
+              createLinkDecorationExtension(),
+              createPriorContextDecorationExtension(),
+            ]),
         createFileRefDecorationExtension(),
-        createPriorContextDecorationExtension(),
         createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
         createClickHandlerExtension(vscode, stepCountRef),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
@@ -1218,6 +1240,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     handleImagePaste,
     mode,
     surface,
+    atomicContextReferences,
   ]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
@@ -1307,68 +1330,245 @@ function createFindKeyHandlerExtension() {
   });
 }
 
-// Find the context reference whose boundary sits exactly at `pos`: its end
-// (`edge === "end"`, for Backspace) or its start (`edge === "start"`, for
-// Delete). Covers @/#/~ references and $ prior-context refs — the same tokens
-// the link decorations render — and skips refs inside fenced blocks, which
-// aren't decorated as links. Lone prompt-path prompts carry no @/#/~/$ trigger
-// so they're naturally excluded. Returns null when no reference edge is at pos.
-export function findReferenceAtBoundary(
-  docText: string,
-  pos: number,
-  edge: "start" | "end"
-): { from: number; to: number } | null {
-  const fencedRanges = getFencedBlockRanges(docText);
-  const refs = [
-    ...findContextReferenceMatches(docText),
-    ...findInlinePriorContextRefs(docText),
-  ];
-  for (const ref of refs) {
-    const boundary = edge === "end" ? ref.to : ref.from;
-    if (boundary === pos && !isInFencedBlock(ref.from, ref.to, fencedRanges)) {
-      return { from: ref.from, to: ref.to };
-    }
-  }
-  return null;
+export interface AtomicReferenceChip {
+  from: number;
+  to: number;
+  /** Leading glyph shown in the chip. */
+  icon: string;
+  /** Short label shown in place of the full reference text. */
+  label: string;
+  /** Full original reference text — surfaced as the chip's hover title. */
+  title: string;
+  /** data-* attributes forwarded to the existing link click/tap handler. */
+  attrs: Record<string, string>;
 }
 
-// "Select then delete" for context-reference links. When the caret sits at a
-// link's trailing edge, Backspace selects the whole reference (Delete does the
-// same at the leading edge); the *next* press falls through to the default
-// keymap, which deletes the now-selected range. Two presses total instead of
-// one-per-character — far friendlier on mobile — while still letting the user
-// drop the caret mid-link to edit it character by character.
-//
-// Prec.high is required: minimalSetup's defaultKeymap already binds
-// Backspace/Delete and, being earlier in the extension list, would otherwise
-// win before this binding ran. Both handlers no-op (return false → default
-// behavior) when the selection is already non-empty or no link edge is at the
-// caret.
-function createReferenceDeleteExtension() {
-  const selectReferenceAtCaret = (
-    view: EditorView,
-    edge: "start" | "end"
-  ): boolean => {
-    const { main } = view.state.selection;
-    if (!main.empty) return false;
-    const ref = findReferenceAtBoundary(
-      view.state.doc.toString(),
-      main.head,
-      edge
-    );
-    if (!ref) return false;
-    view.dispatch({
-      selection: { anchor: ref.from, head: ref.to },
-      userEvent: "select",
+// Basename of a workspace-relative path, tolerant of a trailing slash.
+function referenceBasename(path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  const slash = trimmed.lastIndexOf("/");
+  return slash === -1 ? trimmed : trimmed.slice(slash + 1);
+}
+
+// Compact label for a ~git reference: keywords stay as-is, a commit hash is
+// shortened to 7 chars (the full hash remains in the document + hover title).
+function gitReferenceLabel(gitRef: string): string {
+  if (gitRef === "diff" || gitRef === "staged") return gitRef;
+  const stash = gitRef.match(/^stash:(\d+)$/);
+  if (stash) return `stash ${stash[1]}`;
+  return gitRef.slice(0, 7);
+}
+
+const PRIOR_CONTEXT_CHIP_LABELS: Record<
+  Exclude<InlinePriorContextRef["kind"], "step">,
+  string
+> = {
+  previous: "previous",
+  all: "all steps",
+  finalStep: "final step",
+  allFinalStep: "all final",
+};
+
+function describeContextReferenceChip(
+  ref: ContextReferenceMatch,
+  docText: string
+): Omit<AtomicReferenceChip, "from" | "to"> {
+  const title = docText.slice(ref.from, ref.to);
+  const attrs: Record<string, string> = { "data-type": ref.type };
+
+  switch (ref.type) {
+    case "directory":
+      attrs["data-path"] = ref.path ?? "";
+      return {
+        icon: "📁",
+        label: `${referenceBasename(ref.path ?? "")}/`,
+        title,
+        attrs,
+      };
+    case "lineRange":
+      attrs["data-path"] = ref.path ?? "";
+      if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
+      if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
+      return {
+        icon: "📄",
+        label: `${referenceBasename(ref.path ?? "")}:${ref.lineStart}-${ref.lineEnd}`,
+        title,
+        attrs,
+      };
+    case "symbol":
+      attrs["data-path"] = ref.path ?? "";
+      if (ref.symbolName) attrs["data-symbol-name"] = ref.symbolName;
+      if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
+      if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
+      return {
+        icon: "🏷️",
+        label: ref.symbolName || referenceBasename(ref.path ?? ""),
+        title,
+        attrs,
+      };
+    case "git":
+      if (ref.gitRef) attrs["data-git-ref"] = ref.gitRef;
+      return {
+        icon: "⎇",
+        label: gitReferenceLabel(ref.gitRef ?? ""),
+        title,
+        attrs,
+      };
+    case "file":
+    default:
+      attrs["data-path"] = ref.path ?? "";
+      return {
+        icon: "📄",
+        label: referenceBasename(ref.path ?? ""),
+        title,
+        attrs,
+      };
+  }
+}
+
+function describePriorContextChip(
+  ref: InlinePriorContextRef,
+  docText: string
+): Omit<AtomicReferenceChip, "from" | "to"> {
+  const title = docText.slice(ref.from, ref.to);
+  const dataRef =
+    ref.kind === "step" ? `step:${ref.indices?.join(",") ?? ""}` : ref.kind;
+  const label =
+    ref.kind === "step"
+      ? `step ${ref.indices?.join(",") ?? ""}`
+      : PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
+  return {
+    icon: "↩",
+    label,
+    title,
+    attrs: { "data-type": "priorContext", "data-ref": dataRef },
+  };
+}
+
+// Enrich every atomic reference with the metadata needed to render its chip.
+// Covers @/#/~ references and $ prior-context refs — the same tokens the link
+// decorations render — and skips refs inside fenced blocks (not decorated as
+// links) and lone prompt-path prompts (no @/#/~/$ trigger). Returned sorted by
+// start with overlaps dropped (widest wins) so the resulting decoration/atomic
+// RangeSet stays well-formed — e.g. a `$token` that falls inside an `@path.ts`
+// match is absorbed by the enclosing reference.
+export function findAtomicReferences(docText: string): AtomicReferenceChip[] {
+  const fencedRanges = getFencedBlockRanges(docText);
+
+  const candidates: Array<{
+    from: number;
+    to: number;
+    describe: () => Omit<AtomicReferenceChip, "from" | "to">;
+  }> = [
+    ...findContextReferenceMatches(docText).map((ref) => ({
+      from: ref.from,
+      to: ref.to,
+      describe: () => describeContextReferenceChip(ref, docText),
+    })),
+    ...findInlinePriorContextRefs(docText).map((ref) => ({
+      from: ref.from,
+      to: ref.to,
+      describe: () => describePriorContextChip(ref, docText),
+    })),
+  ]
+    .filter((ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges))
+    .sort((a, b) => a.from - b.from || b.to - a.to);
+
+  const chips: AtomicReferenceChip[] = [];
+  let lastTo = -1;
+  for (const candidate of candidates) {
+    if (candidate.from < lastTo) continue; // overlaps a wider range already kept
+    chips.push({
+      from: candidate.from,
+      to: candidate.to,
+      ...candidate.describe(),
     });
-    return true;
+    lastTo = candidate.to;
+  }
+  return chips;
+}
+
+// Inline widget that renders a context reference as a compact, outlined chip
+// showing just the file/folder name (or short git hash / prior-context label)
+// instead of the full path. The full reference text stays in the document (so
+// context expansion is unchanged) and is surfaced on hover via the title.
+class AtomicReferenceWidget extends WidgetType {
+  constructor(private readonly chip: AtomicReferenceChip) {
+    super();
+  }
+
+  eq(other: AtomicReferenceWidget): boolean {
+    return (
+      other.chip.icon === this.chip.icon &&
+      other.chip.label === this.chip.label &&
+      other.chip.title === this.chip.title
+    );
+  }
+
+  toDOM(): HTMLElement {
+    // cm-link + the data-* attributes let the existing click/tap handler open
+    // the reference exactly as it does for the non-atomic mark decoration.
+    const chip = document.createElement("span");
+    chip.className = "cm-link cm-atomic-ref";
+    chip.title = this.chip.title;
+    for (const [key, value] of Object.entries(this.chip.attrs)) {
+      chip.setAttribute(key, value);
+    }
+    if (this.chip.icon) {
+      const icon = document.createElement("span");
+      icon.className = "cm-atomic-ref-icon";
+      icon.textContent = this.chip.icon;
+      chip.appendChild(icon);
+    }
+    const label = document.createElement("span");
+    label.className = "cm-atomic-ref-label";
+    label.textContent = this.chip.label;
+    chip.appendChild(label);
+    return chip;
+  }
+}
+
+// Atomic mode: replace each reference's text with a compact chip widget and
+// mark the range atomic via the atomicRanges facet, so arrow keys skip over the
+// whole reference and Backspace/Delete removes it in one press — the caret can
+// never land inside. Clicks/taps are DOM events, untouched by atomicRanges, so
+// the existing link handlers still open the reference. Built over the whole doc
+// (not just visibleRanges) so off-screen references stay atomic for cursor
+// motion. Gated on `ui.atomicContextReferences` by the caller.
+function createAtomicReferenceExtension() {
+  const buildDecorations = (view: EditorView) => {
+    const builder = new RangeSetBuilder<Decoration>();
+    for (const chip of findAtomicReferences(view.state.doc.toString())) {
+      builder.add(
+        chip.from,
+        chip.to,
+        Decoration.replace({ widget: new AtomicReferenceWidget(chip) })
+      );
+    }
+    return builder.finish();
   };
 
-  return Prec.high(
-    keymap.of([
-      { key: "Backspace", run: (view) => selectReferenceAtCaret(view, "end") },
-      { key: "Delete", run: (view) => selectReferenceAtCaret(view, "start") },
-    ])
+  return ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = buildDecorations(view);
+      }
+
+      update(update: any) {
+        if (update.docChanged) {
+          this.decorations = buildDecorations(update.view);
+        }
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+      provide: (plugin) =>
+        EditorView.atomicRanges.of(
+          (view) => view.plugin(plugin)?.decorations || Decoration.none
+        ),
+    }
   );
 }
 
@@ -1395,6 +1595,44 @@ function createPromptDecorationThemeExtension() {
     },
     ".cm-prior-context-ref": {
       fontStyle: "italic",
+    },
+    // Atomic-mode reference chip: a compact outlined box showing just the
+    // file/folder name (or short git/prior-context label). Placed after
+    // `.cm-link` so its non-underlined, boxed styling wins the cascade even
+    // though the chip also carries the cm-link class (for click handling).
+    ".cm-atomic-ref": {
+      display: "inline-flex",
+      alignItems: "baseline",
+      gap: "3px",
+      padding: "0 5px",
+      margin: "0 1px",
+      border:
+        "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
+      borderRadius: "4px",
+      backgroundColor:
+        "var(--vscode-badge-background, var(--vscode-editorWidget-background))",
+      color: "var(--vscode-badge-foreground, var(--vscode-editor-foreground))",
+      fontFamily: "var(--vscode-editor-font-family)",
+      fontSize: "0.92em",
+      lineHeight: "1.35",
+      textDecoration: "none",
+      whiteSpace: "nowrap",
+      verticalAlign: "baseline",
+      cursor: "pointer",
+    },
+    ".cm-atomic-ref:hover": {
+      color: "var(--vscode-badge-foreground, var(--vscode-editor-foreground))",
+      borderColor: "var(--vscode-focusBorder)",
+    },
+    ".cm-atomic-ref-icon": {
+      fontSize: "0.85em",
+      opacity: "0.85",
+    },
+    ".cm-atomic-ref-label": {
+      // No max-width/ellipsis: the label already dropped the directory
+      // portion of the path (see referenceBasename), so the remaining
+      // basename/symbol/selection text is short enough to show in full —
+      // truncating it further would hide useful info like line numbers.
     },
   });
 }
@@ -2274,7 +2512,7 @@ function createClickHandlerExtension(
       event.preventDefault();
       return true;
     },
-    click: (event, view) => {
+    click: (event) => {
       const target = getLinkElement(event.target);
       if (!target) return false;
 
@@ -2288,9 +2526,10 @@ function createClickHandlerExtension(
         return false;
       }
 
-      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-      if (pos === null) return false;
-
+      // No posAtCoords check here: the target element (found via `.closest`)
+      // is all we need. Requiring a resolvable doc position broke clicks on
+      // atomic-mode chips — posAtCoords over a replaced widget's DOM can
+      // return null even though the click plainly landed on a real link.
       if (!openContextReferenceLink(target, vscode, stepCountRef)) {
         return false;
       }
