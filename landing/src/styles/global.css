@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand-950: #020c15;
+  --color-brand-900: #041625;
+  --color-brand-800: #072c45;
+  --color-brand-700: #0a3d61;
+  --color-brand-600: #0e5380;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
