@@ -1,6 +1,10 @@
 (function () {
   "use strict";
 
+  // Replaced at request time by HostedStandaloneShimScript so message names and
+  // timing thresholds remain single-sourced with the TypeScript server.
+  const CONNECTION_CONFIG = "__CTRLYOKE_HOSTED_CONNECTION_CONFIG__";
+
   // Generate a stable per-tab ID so each browser tab tracks its own state.
   // sessionStorage survives page refreshes, but a real browser/PWA close clears
   // it. Mirror the most recent state in localStorage so reopening the only tab
@@ -98,8 +102,10 @@
   let lastReadyMessage;
   let hiddenAtMs;
   let lastForegroundRefreshAt = 0;
+  let lastInboundAt = Date.now();
+  let lastHeartbeatAt;
+  let foregroundProbe;
   const reconnectDelaysMs = [250, 500, 1000, 1500, 2000];
-  const backgroundSocketRevalidateMs = 30000;
   const foregroundRefreshDebounceMs = 1000;
   const pendingOutbound = [];
   // iOS Safari rejects WSS to self-signed certs even after the HTTPS warning is
@@ -142,6 +148,19 @@
       lastSentReadyPreferredWorkingFilePath = msg.preferredWorkingFilePath;
     }
     return true;
+  }
+
+  function connectionLog(level, message, replayOnReconnect) {
+    const diagnostic = {
+      type: CONNECTION_CONFIG.logMessageType,
+      level,
+      message: `[standalone-shim] ${message}`,
+    };
+    const sent =
+      ws && ws.readyState === WebSocket.OPEN ? sendNow(ws, diagnostic) : false;
+    if (!sent || replayOnReconnect) {
+      pendingOutbound.push(diagnostic);
+    }
   }
 
   function flushOutbound() {
@@ -235,6 +254,34 @@
       return;
     }
 
+    lastInboundAt = Date.now();
+
+    if (msg.type === CONNECTION_CONFIG.heartbeatType) {
+      lastHeartbeatAt = lastInboundAt;
+      const socket = event.currentTarget || ws;
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        sendNow(socket, {
+          type: CONNECTION_CONFIG.heartbeatAckType,
+          id: msg.id,
+        });
+      }
+      return;
+    }
+
+    if (msg.type === CONNECTION_CONFIG.heartbeatAckType) {
+      if (foregroundProbe && msg.id === foregroundProbe.id) {
+        const elapsedMs = Date.now() - foregroundProbe.startedAt;
+        window.clearTimeout(foregroundProbe.timer);
+        foregroundProbe = undefined;
+        connectionLog(
+          CONNECTION_CONFIG.logLevels.debug,
+          `foreground probe acknowledged afterMs=${elapsedMs}`
+        );
+        refreshReadyState();
+      }
+      return;
+    }
+
     // Theme var updates: apply directly to :root without going through React
     if (msg.type === "themeVarsUpdated") {
       applyThemeVars(msg.vars || {});
@@ -253,14 +300,83 @@
     connectWatchdogTimer = undefined;
   }
 
+  function clearForegroundProbe(socket) {
+    if (!foregroundProbe || (socket && foregroundProbe.socket !== socket)) {
+      return;
+    }
+    window.clearTimeout(foregroundProbe.timer);
+    foregroundProbe = undefined;
+  }
+
+  function startForegroundProbe(reason) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || foregroundProbe) return;
+    const socket = ws;
+    const id = `browser-${tabId}-${Date.now()}-${randomId()}`;
+    const startedAt = Date.now();
+    const timer = window.setTimeout(() => {
+      if (!foregroundProbe || foregroundProbe.id !== id) return;
+      foregroundProbe = undefined;
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.warn,
+        `foreground probe timed out reason=${reason} timeoutMs=${CONNECTION_CONFIG.FOREGROUND_PROBE_TIMEOUT_MS} lastInboundAgoMs=${Date.now() - lastInboundAt}`,
+        true
+      );
+      reconnectNow(`foreground probe timeout: ${reason}`);
+    }, CONNECTION_CONFIG.FOREGROUND_PROBE_TIMEOUT_MS);
+    foregroundProbe = { id, reason, socket, startedAt, timer };
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.debug,
+      `foreground probe started reason=${reason} lastInboundAgoMs=${Date.now() - lastInboundAt} lastHeartbeatAgoMs=${lastHeartbeatAt ? Date.now() - lastHeartbeatAt : "none"}`
+    );
+    if (
+      !sendNow(socket, {
+        type: CONNECTION_CONFIG.heartbeatType,
+        id,
+        sentAt: startedAt,
+      })
+    ) {
+      clearForegroundProbe(socket);
+      reconnectNow(`foreground probe send failed: ${reason}`);
+    }
+  }
+
+  function checkInboundLiveness() {
+    if (
+      pageUnloading ||
+      document.visibilityState === "hidden" ||
+      !ws ||
+      ws.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+    const staleForMs = Date.now() - lastInboundAt;
+    if (staleForMs <= CONNECTION_CONFIG.CLIENT_STALE_TIMEOUT_MS) return;
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.warn,
+      `inbound watchdog timed out staleForMs=${staleForMs} thresholdMs=${CONNECTION_CONFIG.CLIENT_STALE_TIMEOUT_MS} lastHeartbeatAgoMs=${lastHeartbeatAt ? Date.now() - lastHeartbeatAt : "none"}`,
+      true
+    );
+    reconnectNow("inbound heartbeat timeout");
+  }
+
   function scheduleReconnect() {
-    if (pageUnloading || document.visibilityState === "hidden") return;
+    if (pageUnloading || document.visibilityState === "hidden") {
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.debug,
+        `reconnect deferred pageUnloading=${pageUnloading} visibility=${document.visibilityState}`
+      );
+      return;
+    }
     if (reconnectTimer) return;
     const delay =
       reconnectDelaysMs[
         Math.min(reconnectAttempt, reconnectDelaysMs.length - 1)
       ];
     reconnectAttempt += 1;
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.debug,
+      `reconnect scheduled delayMs=${delay} attempt=${reconnectAttempt}`
+    );
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = undefined;
       connect();
@@ -276,7 +392,13 @@
   function reconnectNow(reason) {
     clearReconnectTimer();
     clearConnectWatchdog();
+    clearForegroundProbe();
     reconnectAttempt = 0;
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.warn,
+      `forcing reconnect reason=${reason} visibility=${document.visibilityState} lastInboundAgoMs=${Date.now() - lastInboundAt}`,
+      true
+    );
     if (ws && ws.readyState !== WebSocket.CLOSED) {
       const socket = ws;
       ws = undefined;
@@ -289,7 +411,7 @@
     connect();
   }
 
-  function refreshConnectionOnForeground(forceReconnect) {
+  function refreshConnectionOnForeground(forceReconnect, reason) {
     if (
       pageUnloading ||
       document.visibilityState === "hidden" ||
@@ -312,24 +434,24 @@
 
     if (ws.readyState === WebSocket.CONNECTING) {
       if (forceReconnect) {
-        reconnectNow("foreground revalidate");
+        reconnectNow(`foreground revalidate: ${reason}`);
       }
       return;
     }
 
     if (ws.readyState === WebSocket.CLOSING) {
       if (forceReconnect) {
-        reconnectNow("foreground revalidate");
+        reconnectNow(`foreground revalidate: ${reason}`);
       }
       return;
     }
 
     if (forceReconnect) {
-      reconnectNow("foreground revalidate");
+      reconnectNow(`foreground revalidate: ${reason}`);
       return;
     }
 
-    refreshReadyState();
+    startForegroundProbe(reason);
   }
 
   function isSocketActive() {
@@ -349,6 +471,10 @@
     let socketOpened = false;
     const socket = new WebSocket(getWebSocketUrl());
     ws = socket;
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.debug,
+      `connect started attempt=${reconnectAttempt + 1} visibility=${document.visibilityState}`
+    );
 
     // iOS Safari can leave a WebSocket stuck in CONNECTING indefinitely — the
     // server sees a brief connect/close but the browser fires neither open nor
@@ -359,6 +485,11 @@
       connectWatchdogTimer = undefined;
       if (ws !== socket || socket.readyState !== WebSocket.CONNECTING) return;
       ws = undefined;
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.warn,
+        "connect watchdog abandoned socket stuck in CONNECTING",
+        true
+      );
       try {
         socket.close();
       } catch {
@@ -373,6 +504,7 @@
       consecutiveConnectFailures = 0;
       hideConnectionErrorBanner();
       reconnectAttempt = 0;
+      lastInboundAt = Date.now();
       const hasQueuedReady = pendingOutbound.some(
         (msg) => msg && msg.type === "ready"
       );
@@ -383,6 +515,10 @@
         sendNow(socket, buildReadyMessage());
       }
       flushOutbound();
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.info,
+        `socket opened visibility=${document.visibilityState}`
+      );
     });
 
     socket.addEventListener("message", handleInboundMessage);
@@ -390,12 +526,22 @@
     // Reconnect without reloading the page while the document is alive. Safari
     // can fire WebSocket close during refresh/page cache teardown; reconnecting
     // from that stale document creates short-lived sockets that never send READY.
-    socket.addEventListener("close", () => {
-      // clearConnectWatchdog() also cancels the watchdog for any socket that was
-      // created synchronously by the watchdog's own connect() call before this
-      // close event fired (the watchdog sets a new timer in connect()).
-      clearConnectWatchdog();
-      if (ws === socket) ws = undefined;
+    socket.addEventListener("close", (event) => {
+      const wasCurrentSocket = ws === socket;
+      if (wasCurrentSocket) {
+        clearConnectWatchdog();
+        ws = undefined;
+      }
+      clearForegroundProbe(socket);
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.warn,
+        `socket closed code=${event.code ?? "unknown"} reason=${event.reason || "none"} opened=${socketOpened} current=${wasCurrentSocket} visibility=${document.visibilityState} lastInboundAgoMs=${Date.now() - lastInboundAt}`,
+        true
+      );
+      // A deliberately abandoned socket can close after its replacement is
+      // already connecting. Its late close must not cancel that socket's
+      // watchdog, increment failure counters, or schedule a duplicate reconnect.
+      if (!wasCurrentSocket) return;
       if (!socketOpened) {
         // During an expected server restart (e.g. Rebuild All & Reload) don't
         // count failures toward the banner threshold — the server will be down
@@ -425,6 +571,11 @@
     });
 
     socket.addEventListener("error", () => {
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.warn,
+        `socket error opened=${socketOpened} current=${ws === socket} visibility=${document.visibilityState}`,
+        true
+      );
       try {
         socket.close();
       } catch {
@@ -492,6 +643,11 @@
   function pauseForPageExit() {
     pageUnloading = true;
     clearReconnectTimer();
+    clearForegroundProbe();
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.debug,
+      `page exit visibility=${document.visibilityState}`
+    );
     if (ws) {
       try {
         ws.close(1001, "page unloading");
@@ -505,8 +661,13 @@
     pageUnloading = false;
     const hiddenDuration = hiddenAtMs ? Date.now() - hiddenAtMs : 0;
     hiddenAtMs = undefined;
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.debug,
+      `pageshow hiddenDurationMs=${hiddenDuration} socketState=${ws?.readyState ?? "none"}`
+    );
     refreshConnectionOnForeground(
-      hiddenDuration >= backgroundSocketRevalidateMs
+      hiddenDuration >= CONNECTION_CONFIG.BACKGROUND_REVALIDATE_MS,
+      "pageshow"
     );
   }
 
@@ -516,20 +677,40 @@
     if (document.visibilityState === "hidden") {
       hiddenAtMs = Date.now();
       clearReconnectTimer();
+      clearForegroundProbe();
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.debug,
+        `visibility hidden socketState=${ws?.readyState ?? "none"}`
+      );
       return;
     }
     pageUnloading = false;
     const hiddenDuration = hiddenAtMs ? Date.now() - hiddenAtMs : 0;
     hiddenAtMs = undefined;
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.debug,
+      `visibility visible hiddenDurationMs=${hiddenDuration} socketState=${ws?.readyState ?? "none"} lastInboundAgoMs=${Date.now() - lastInboundAt}`
+    );
     refreshConnectionOnForeground(
-      hiddenDuration >= backgroundSocketRevalidateMs
+      hiddenDuration >= CONNECTION_CONFIG.BACKGROUND_REVALIDATE_MS,
+      "visibilitychange"
     );
   });
   window.addEventListener("focus", () => {
-    refreshConnectionOnForeground(false);
+    refreshConnectionOnForeground(false, "focus");
   });
   window.addEventListener("online", () => {
-    refreshConnectionOnForeground(true);
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.info,
+      `network online socketState=${ws?.readyState ?? "none"}`
+    );
+    refreshConnectionOnForeground(false, "online");
+  });
+  window.addEventListener("offline", () => {
+    connectionLog(
+      CONNECTION_CONFIG.logLevels.warn,
+      `network offline socketState=${ws?.readyState ?? "none"}`
+    );
   });
 
   // Called by React's DEV_RESTARTING handler when a full rebuild + window reload
@@ -547,6 +728,10 @@
     }
   };
 
+  window.setInterval(
+    checkInboundLiveness,
+    CONNECTION_CONFIG.CLIENT_WATCHDOG_INTERVAL_MS
+  );
   connect();
 
   window.__ctrlyokeStandalone = true;

@@ -20,6 +20,7 @@ import {
   BROWSER_NOTIFICATION_MODES,
   HOSTED_ICON_FILES,
   HOSTED_ICON_PATHS,
+  HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
   type FinalStepPhase,
@@ -46,6 +47,7 @@ import {
   type CtrlYokeNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
+import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
 import {
   WebPushService,
   type WebPushSubscriptionPayload,
@@ -105,8 +107,6 @@ export function sanitizeBrowserClientId(
 export class CtrlYokeHostedServer
   implements IDashboardProvider, IDashboardSink
 {
-  private static readonly SOCKET_HEARTBEAT_INTERVAL_MS = 30000;
-
   /**
    * When a new client connects we probe all existing sockets for liveness and
    * reap any that don't respond within this grace window — far faster than the
@@ -124,6 +124,12 @@ export class CtrlYokeHostedServer
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
   private readonly socketLiveness = new WeakMap<WebSocket, boolean>();
+  private readonly socketLastProtocolPongAt = new WeakMap<WebSocket, number>();
+  private readonly socketLastApplicationAckAt = new WeakMap<
+    WebSocket,
+    number
+  >();
+  private readonly socketTerminationCauses = new WeakMap<WebSocket, string>();
   /**
    * Per-socket clientId (the stable browser tag). Multiple sockets can briefly
    * share a tag when a reopened PWA/tab reconnects before the stale socket's close
@@ -132,6 +138,7 @@ export class CtrlYokeHostedServer
    */
   private readonly socketClientTags = new WeakMap<WebSocket, string>();
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  private nextApplicationHeartbeatId = 1;
   private readonly workflowSummaries = new Map<string, WorkflowSummary>();
   private readonly notifiedEventIds = new Set<string>();
   private cachedThemeVars: Record<string, string> = {};
@@ -565,12 +572,7 @@ export class CtrlYokeHostedServer
       this.setNoStore(res);
       res
         .type("application/javascript")
-        .send(
-          fs.readFileSync(
-            path.join(__dirname, "server", "standalone-shim.js"),
-            "utf8"
-          )
-        );
+        .send(buildHostedStandaloneShimScript());
     });
     // Cert download — no token required so iOS users can fetch and install it
     // before the WebSocket handshake can succeed. The cert is a public key only.
@@ -1406,8 +1408,11 @@ export class CtrlYokeHostedServer
         return;
       }
       const clientTag = this.resolveClientTag(url);
+      const connectedAt = Date.now();
       this.connections.add(ws);
       this.socketLiveness.set(ws, true);
+      this.socketLastProtocolPongAt.set(ws, connectedAt);
+      this.socketLastApplicationAckAt.set(ws, connectedAt);
       this.socketClientTags.set(ws, clientTag);
       // A reopened PWA/tab presents the same stable id while a stale socket for it
       // may still linger (iOS often never reports the old close). Terminate that
@@ -1421,7 +1426,6 @@ export class CtrlYokeHostedServer
       // without waiting for the slow steady-state heartbeat.
       this.probeExistingConnectionsForLiveness(ws, clientTag);
       let sawReady = false;
-      const connectedAt = Date.now();
       Log.debug(
         `[hosted-server] WebSocket connected clientId=${clientTag} connectedCount=${this.connections.size} ip=${req.socket.remoteAddress ?? ""} ua=${req.headers["user-agent"] ?? ""} origin=${req.headers.origin ?? ""}`
       );
@@ -1432,6 +1436,23 @@ export class CtrlYokeHostedServer
       ws.on("message", (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
+          if (msg?.type === MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT) {
+            const heartbeatId = this.getHeartbeatId(msg);
+            if (heartbeatId) {
+              this.socketLastApplicationAckAt.set(ws, Date.now());
+              send({
+                type: MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT_ACK,
+                id: heartbeatId,
+              });
+            }
+            return;
+          }
+          if (msg?.type === MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT_ACK) {
+            if (this.getHeartbeatId(msg)) {
+              this.socketLastApplicationAckAt.set(ws, Date.now());
+            }
+            return;
+          }
           if (msg?.type === MESSAGE_TYPES.READY) {
             sawReady = true;
             Log.debug(
@@ -1453,10 +1474,15 @@ export class CtrlYokeHostedServer
       });
       ws.on("pong", () => {
         this.socketLiveness.set(ws, true);
+        this.socketLastProtocolPongAt.set(ws, Date.now());
       });
       ws.on("close", (code, reason) => {
+        const terminationCause = this.socketTerminationCauses.get(ws);
         this.connections.delete(ws);
         this.socketLiveness.delete(ws);
+        this.socketLastProtocolPongAt.delete(ws);
+        this.socketLastApplicationAckAt.delete(ws);
+        this.socketTerminationCauses.delete(ws);
         this.socketClientTags.delete(ws);
         // Only unregister the client (releasing its controller slot + remembered
         // terminal viewport) if no OTHER live socket still holds this id. With
@@ -1465,7 +1491,7 @@ export class CtrlYokeHostedServer
         // just inherited it.
         const clientStillConnected = this.hasLiveSocketForTag(clientTag);
         Log.debug(
-          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} remainingCount=${this.connections.size} clientStillConnected=${clientStillConnected}`
+          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} terminationCause=${terminationCause ?? "peer-or-network"} remainingCount=${this.connections.size} clientStillConnected=${clientStillConnected}`
         );
         if (!clientStillConnected) {
           this.webviewProvider.unregisterBrowserClient(clientTag);
@@ -1506,11 +1532,7 @@ export class CtrlYokeHostedServer
       Log.debug(
         `[hosted-server] reconnect takeover: terminating stale socket for ${tag}`
       );
-      try {
-        ws.terminate();
-      } catch {
-        // Best-effort; the close handler owns the rest of cleanup.
-      }
+      this.terminateSocket(ws, "same-client-reconnect-takeover");
     }
   }
 
@@ -1548,12 +1570,12 @@ export class CtrlYokeHostedServer
       try {
         ws.ping();
         probed.push(ws);
-      } catch {
-        try {
-          ws.terminate();
-        } catch {
-          // Best-effort cleanup. close/error handlers own the rest.
-        }
+      } catch (error) {
+        this.terminateSocket(
+          ws,
+          "new-connection-probe-send-failed",
+          `triggeredBy=${newClientTag} error=${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
     if (probed.length === 0) return;
@@ -1564,14 +1586,11 @@ export class CtrlYokeHostedServer
       for (const ws of probed) {
         if (ws.readyState !== WebSocket.OPEN) continue;
         if (this.socketLiveness.get(ws) === false) {
-          Log.debug(
-            `[hosted-server] terminating unresponsive socket after ${newClientTag} liveness probe`
+          this.terminateSocket(
+            ws,
+            "new-connection-protocol-pong-timeout",
+            `triggeredBy=${newClientTag}`
           );
-          try {
-            ws.terminate();
-          } catch {
-            // Best-effort cleanup. close/error handlers own the rest.
-          }
         }
       }
     }, CtrlYokeHostedServer.NEW_CONNECTION_LIVENESS_PROBE_GRACE_MS);
@@ -1579,33 +1598,79 @@ export class CtrlYokeHostedServer
 
   private setupHeartbeat(): void {
     this.heartbeatInterval = setInterval(() => {
-      for (const ws of this.connections) {
-        if (ws.readyState !== WebSocket.OPEN) {
-          continue;
-        }
+      this.runHeartbeatCycle();
+    }, HOSTED_CONNECTION_LIVENESS.HEARTBEAT_INTERVAL_MS);
+  }
 
-        const isAlive = this.socketLiveness.get(ws);
-        if (isAlive === false) {
-          try {
-            ws.terminate();
-          } catch {
-            // Best-effort cleanup. close/error handlers own the rest.
-          }
-          continue;
-        }
+  private runHeartbeatCycle(): void {
+    const now = Date.now();
+    for (const ws of this.connections) {
+      if (ws.readyState !== WebSocket.OPEN) continue;
 
-        this.socketLiveness.set(ws, false);
-        try {
-          ws.ping();
-        } catch {
-          try {
-            ws.terminate();
-          } catch {
-            // Best-effort cleanup. close/error handlers own the rest.
-          }
-        }
+      if (this.socketLiveness.get(ws) === false) {
+        const lastPongAt = this.socketLastProtocolPongAt.get(ws) ?? now;
+        this.terminateSocket(
+          ws,
+          "protocol-pong-timeout",
+          `lastPongAgoMs=${now - lastPongAt}`
+        );
+        continue;
       }
-    }, CtrlYokeHostedServer.SOCKET_HEARTBEAT_INTERVAL_MS);
+
+      const lastApplicationAckAt =
+        this.socketLastApplicationAckAt.get(ws) ?? now;
+      if (
+        now - lastApplicationAckAt >
+        HOSTED_CONNECTION_LIVENESS.SERVER_APPLICATION_ACK_TIMEOUT_MS
+      ) {
+        this.terminateSocket(
+          ws,
+          "application-heartbeat-ack-timeout",
+          `lastApplicationAckAgoMs=${now - lastApplicationAckAt}`
+        );
+        continue;
+      }
+
+      this.socketLiveness.set(ws, false);
+      try {
+        ws.ping();
+        ws.send(
+          JSON.stringify({
+            type: MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT,
+            id: `server-${this.nextApplicationHeartbeatId++}`,
+            sentAt: now,
+          })
+        );
+      } catch (error) {
+        this.terminateSocket(
+          ws,
+          "heartbeat-send-failed",
+          `error=${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  }
+
+  private getHeartbeatId(message: unknown): string | undefined {
+    if (!message || typeof message !== "object") return undefined;
+    const id = (message as { id?: unknown }).id;
+    return typeof id === "string" && id.length > 0 && id.length <= 128
+      ? id
+      : undefined;
+  }
+
+  private terminateSocket(ws: WebSocket, cause: string, detail?: string): void {
+    if (this.socketTerminationCauses.has(ws)) return;
+    this.socketTerminationCauses.set(ws, cause);
+    const clientTag = this.socketClientTags.get(ws) ?? "browser:unknown";
+    Log.warn(
+      `[hosted-server] terminating WebSocket clientId=${clientTag} cause=${cause}${detail ? ` ${detail}` : ""}`
+    );
+    try {
+      ws.terminate();
+    } catch {
+      // Best-effort; close/error handlers own the rest of cleanup.
+    }
   }
 
   private sendInitialState(ws: WebSocket): void {

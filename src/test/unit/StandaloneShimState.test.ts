@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vm from "vm";
 import { suite, test } from "mocha";
+import { renderHostedStandaloneShimScript } from "../../server/HostedStandaloneShimScript";
 
 type StorageSeed = Record<string, string>;
 
@@ -50,7 +51,9 @@ function loadShim(options: {
 }) {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
   const shimPath = path.join(repoRoot, "src", "server", "standalone-shim.js");
-  const source = fs.readFileSync(shimPath, "utf8");
+  const source = renderHostedStandaloneShimScript(
+    fs.readFileSync(shimPath, "utf8")
+  );
   const localStorage = new FakeStorage(options.localStorage);
   const sessionStorage = new FakeStorage(options.sessionStorage);
   const windowListeners: Record<string, () => void> = {};
@@ -91,6 +94,7 @@ function loadShim(options: {
       dispatchEvent: () => true,
       setTimeout: () => 1,
       clearTimeout: () => undefined,
+      setInterval: () => 1,
     },
   } as any;
   context.window.window = context.window;

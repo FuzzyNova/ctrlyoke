@@ -298,6 +298,11 @@ export const MESSAGE_TYPES = {
   // Client identity — Extension → Webview once per connection
   CLIENT_ID_ASSIGNED: "clientIdAssigned", // { clientId: string }
 
+  // Hosted browser connection liveness — handled by standalone-shim.js and
+  // CtrlYokeHostedServer before messages enter the normal webview router.
+  HOSTED_CONNECTION_HEARTBEAT: "hostedConnectionHeartbeat", // bidirectional probe: { id: string, sentAt: number }
+  HOSTED_CONNECTION_HEARTBEAT_ACK: "hostedConnectionHeartbeatAck", // bidirectional response: { id: string }
+
   // Startup lifecycle — Extension → Webview
   STARTUP_COMPLETE: "startupComplete", // Extension → Webview: startup sequence done (with or without auto-load)
   WORKSPACE_INIT_REQUIRED: "workspaceInitRequired", // Extension → Webview: ctrlyoke not yet initialized in this workspace
@@ -388,6 +393,20 @@ export const SERVICE_WORKER_BADGE_MESSAGE_TYPES = {
 
 export type ServiceWorkerBadgeMessageType =
   (typeof SERVICE_WORKER_BADGE_MESSAGE_TYPES)[keyof typeof SERVICE_WORKER_BADGE_MESSAGE_TYPES];
+
+/**
+ * Shared timing contract for hosted-browser WebSocket liveness. The raw
+ * standalone shim receives these values through HostedStandaloneShimScript so
+ * the server and browser cannot silently drift to incompatible thresholds.
+ */
+export const HOSTED_CONNECTION_LIVENESS = {
+  HEARTBEAT_INTERVAL_MS: 30_000,
+  SERVER_APPLICATION_ACK_TIMEOUT_MS: 60_000,
+  CLIENT_STALE_TIMEOUT_MS: 45_000,
+  CLIENT_WATCHDOG_INTERVAL_MS: 5_000,
+  FOREGROUND_PROBE_TIMEOUT_MS: 8_000,
+  BACKGROUND_REVALIDATE_MS: 30_000,
+} as const;
 
 export const HOSTED_ICON_FILES = {
   APP_ICON_PNG: "icon.png",

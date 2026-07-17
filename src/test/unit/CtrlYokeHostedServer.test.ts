@@ -1,9 +1,13 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
-import { sanitizeBrowserClientId } from "../../server/CtrlYokeHostedServer";
+import {
+  CtrlYokeHostedServer,
+  sanitizeBrowserClientId,
+} from "../../server/CtrlYokeHostedServer";
 import {
   HARNESS_IDS,
+  HOSTED_CONNECTION_LIVENESS,
   HARNESS_STATUS_STRINGS,
   MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
@@ -52,6 +56,108 @@ suite("HostedServerMessageFactory", () => {
           },
         },
       }
+    );
+  });
+});
+
+interface FakeHostedSocket {
+  readyState: number;
+  pingCalls: number;
+  sent: string[];
+  terminated: boolean;
+  ping(): void;
+  send(message: string): void;
+  terminate(): void;
+}
+
+interface HostedServerHeartbeatInternals {
+  connections: Set<FakeHostedSocket>;
+  socketLiveness: WeakMap<FakeHostedSocket, boolean>;
+  socketLastProtocolPongAt: WeakMap<FakeHostedSocket, number>;
+  socketLastApplicationAckAt: WeakMap<FakeHostedSocket, number>;
+  socketTerminationCauses: WeakMap<FakeHostedSocket, string>;
+  socketClientTags: WeakMap<FakeHostedSocket, string>;
+  nextApplicationHeartbeatId: number;
+  runHeartbeatCycle(): void;
+}
+
+function createHeartbeatHarness(): {
+  server: HostedServerHeartbeatInternals;
+  socket: FakeHostedSocket;
+} {
+  const socket: FakeHostedSocket = {
+    readyState: 1,
+    pingCalls: 0,
+    sent: [],
+    terminated: false,
+    ping() {
+      this.pingCalls++;
+    },
+    send(message) {
+      this.sent.push(message);
+    },
+    terminate() {
+      this.terminated = true;
+    },
+  };
+  const server = Object.create(
+    CtrlYokeHostedServer.prototype
+  ) as HostedServerHeartbeatInternals;
+  server.connections = new Set([socket]);
+  server.socketLiveness = new WeakMap([[socket, true]]);
+  server.socketLastProtocolPongAt = new WeakMap([[socket, Date.now()]]);
+  server.socketLastApplicationAckAt = new WeakMap([[socket, Date.now()]]);
+  server.socketTerminationCauses = new WeakMap();
+  server.socketClientTags = new WeakMap([[socket, "browser:test"]]);
+  server.nextApplicationHeartbeatId = 1;
+  return { server, socket };
+}
+
+suite("CtrlYokeHostedServer connection heartbeat", () => {
+  test("sends protocol and application heartbeats on a healthy socket", () => {
+    const { server, socket } = createHeartbeatHarness();
+
+    server.runHeartbeatCycle();
+
+    assert.strictEqual(socket.pingCalls, 1);
+    const heartbeat = JSON.parse(socket.sent[0]);
+    assert.strictEqual(
+      heartbeat.type,
+      MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT
+    );
+    assert.strictEqual(heartbeat.id, "server-1");
+    assert.strictEqual(typeof heartbeat.sentAt, "number");
+    assert.strictEqual(socket.terminated, false);
+  });
+
+  test("records an explicit cause before terminating a missed protocol pong", () => {
+    const { server, socket } = createHeartbeatHarness();
+    server.socketLiveness.set(socket, false);
+
+    server.runHeartbeatCycle();
+
+    assert.strictEqual(socket.terminated, true);
+    assert.strictEqual(
+      server.socketTerminationCauses.get(socket),
+      "protocol-pong-timeout"
+    );
+  });
+
+  test("terminates a socket whose application heartbeat was never acknowledged", () => {
+    const { server, socket } = createHeartbeatHarness();
+    server.socketLastApplicationAckAt.set(
+      socket,
+      Date.now() -
+        HOSTED_CONNECTION_LIVENESS.SERVER_APPLICATION_ACK_TIMEOUT_MS -
+        1
+    );
+
+    server.runHeartbeatCycle();
+
+    assert.strictEqual(socket.terminated, true);
+    assert.strictEqual(
+      server.socketTerminationCauses.get(socket),
+      "application-heartbeat-ack-timeout"
     );
   });
 });

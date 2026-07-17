@@ -34,6 +34,7 @@ Key supporting pieces:
 
 - It must be injected **before** React modules in `buildHtml()`.
 - It opens `/ws?token=...`, sends `READY`, buffers inbound messages until React posts its own `READY`, and re-sends the latest `READY` after reconnects so the new socket gets targeted replay.
+- Connection liveness has two layers: the server's protocol ping/pong plus an application heartbeat/ack, and the shim's visible-page inbound watchdog plus foreground probe. Timing and message names come from `HOSTED_CONNECTION_LIVENESS` / `MESSAGE_TYPES` and are injected by `HostedStandaloneShimScript`; keep both sides aligned there rather than hardcoding raw-shim values. The shim must be able to abandon a socket still reported as `OPEN` because iOS can omit its close event after a mobile/VPN route change.
 - Per-tab state is isolated with `sessionStorage` tab IDs and `localStorage` keys derived from that tab ID; do not collapse this to a single global browser state.
 - Because browser/PWA closes can clear `sessionStorage`, `standalone-shim.js` also keeps `fpLastTabId`, an open-tab heartbeat registry, and a `fpState-last` fallback so unsent prompt drafts survive a one-tab close/reopen without forcing live tabs to share one state object.
 - Theme updates bypass React: the shim applies `THEME_VARS_UPDATED` directly to `:root` and `body` classes to avoid startup flashes and dark-mode mismatches.
