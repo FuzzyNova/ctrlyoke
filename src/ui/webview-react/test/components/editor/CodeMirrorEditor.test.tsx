@@ -17,6 +17,7 @@ import {
   PROMPT_EDITOR_INSERT_MODES,
   RETRY_PROMPT_PLACEHOLDERS,
 } from "@/types/messages";
+import { useUiStore } from "@store/uiStore";
 
 function getCompletions(
   doc: string,
@@ -429,6 +430,43 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     }
   });
 
+  it("refuses to open a chip the validation pass marked invalid and warns instead of posting OPEN_FILE", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.fn();
+    const toastSpy = vi.spyOn(useUiStore.getState(), "showToast");
+    const validity = new Map<string, boolean>([["@b/missing.ts", false]]);
+    const view = new EditorView({
+      parent,
+      doc: "@b/missing.ts",
+      extensions: [
+        createAtomicReferenceExtension(new Map(), validity),
+        createClickHandlerExtension({ postMessage }, { current: 0 }),
+      ],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      // Flagged for the click handler...
+      expect(chip?.getAttribute("data-invalid")).toBe("true");
+
+      const click = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+      });
+      chip?.dispatchEvent(click);
+
+      // ...so the click is consumed with a warning, never an open attempt.
+      expect(postMessage).not.toHaveBeenCalled();
+      expect(toastSpy).toHaveBeenCalledOnce();
+      expect(click.defaultPrevented).toBe(true);
+    } finally {
+      toastSpy.mockRestore();
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("labels a file reference with just its basename and keeps the full text as title", () => {
     const doc = "See @src/deep/file.ts";
     expect(findAtomicReferences(doc)).toEqual([
@@ -601,6 +639,44 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     try {
       const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
       expect(chip?.classList.contains("cm-atomic-ref-invalid")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("suppresses the native hover title on an unresolvable reference chip so it doesn't fight the lint tooltip", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const validity = new Map<string, boolean>([["@b/missing.ts", false]]);
+    const view = new EditorView({
+      parent,
+      doc: "@b/missing.ts",
+      extensions: [createAtomicReferenceExtension(new Map(), validity)],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.hasAttribute("title")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("keeps the native hover title on a resolvable reference chip", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const validity = new Map<string, boolean>([["@a/valid.ts", true]]);
+    const view = new EditorView({
+      parent,
+      doc: "@a/valid.ts",
+      extensions: [createAtomicReferenceExtension(new Map(), validity)],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.title).toBe("@a/valid.ts");
     } finally {
       view.destroy();
       parent.remove();

@@ -1292,7 +1292,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         ...(atomicContextReferences
           ? []
           : [
-              createLinkDecorationExtension(),
+              createLinkDecorationExtension(referenceValidityRef.current),
               createPriorContextDecorationExtension(),
             ]),
         createFileRefDecorationExtension(isMultiRootWorkspace),
@@ -1725,11 +1725,19 @@ class AtomicReferenceWidget extends WidgetType {
     chip.className = "cm-link cm-atomic-ref";
     // Warning-colored border when validation found the reference unresolvable —
     // the chip's counterpart to the lint squiggle (which a chip replaces). The
-    // lint hover still supplies the "context not found" message on the same span.
+    // native title (full reference text on hover) is suppressed while invalid so
+    // it doesn't fight the lint tooltip that opens on the same span; the lint
+    // message folds that reference text in instead (see the linter's
+    // renderMessage). Valid chips keep the native title as their only hover.
     if (this.chip.invalid) {
       chip.classList.add("cm-atomic-ref-invalid");
+      // Also flag it for the click handler so it refuses to open a target the
+      // validation pass already resolved as nonexistent (see
+      // openContextReferenceLink).
+      chip.setAttribute("data-invalid", "true");
+    } else {
+      chip.title = this.chip.title;
     }
-    chip.title = this.chip.title;
     for (const [key, value] of Object.entries(this.chip.attrs)) {
       chip.setAttribute(key, value);
     }
@@ -1972,6 +1980,17 @@ function createLinterThemeExtension() {
     ".cm-diagnosticMessage": {
       color:
         "var(--vscode-editorWidget-foreground, var(--vscode-editor-foreground))",
+    },
+    // The offending reference path, folded into a not-found lint message on its
+    // own line (see the linter's renderMessage). Italic + muted to read as a
+    // subordinate detail; break-all so a long path wraps instead of forcing the
+    // tooltip wide.
+    ".cm-reference-lint-path": {
+      display: "block",
+      fontStyle: "italic",
+      opacity: "0.85",
+      marginTop: "2px",
+      wordBreak: "break-all",
     },
     ".cm-diagnosticAction": {
       display: "block",
@@ -2254,12 +2273,34 @@ function createContextReferenceLintExtension(
           return [];
         }
 
+        const message = result.message || "context not found";
+        // The atomic chip suppresses its native hover title while invalid (see
+        // AtomicReferenceWidget.toDOM), so fold the full reference text into the
+        // lint tooltip on its own italic line — otherwise the chip's compact
+        // label (basename only) leaves the actual offending path invisible.
+        // Captured now, not in the closure, so it reflects the linted text.
+        const referenceText = view.state.doc.sliceString(
+          reference.from,
+          reference.to
+        );
         return [
           {
             from: reference.from,
             to: reference.to,
             severity: "warning",
-            message: result.message || "context not found",
+            message,
+            renderMessage: () => {
+              // Rendered inside lint's inline .cm-diagnosticText span, so the
+              // path line is a display:block span (not a div) to stay valid
+              // inline-nesting while still sitting on its own line.
+              const fragment = document.createDocumentFragment();
+              fragment.append(message);
+              const pathLine = document.createElement("span");
+              pathLine.className = "cm-reference-lint-path";
+              pathLine.textContent = referenceText;
+              fragment.appendChild(pathLine);
+              return fragment;
+            },
             // One-click "did you mean?" fixes for a mistyped/collapsed path (see
             // getPathSuggestions). apply() uses the diagnostic's live from/to so
             // the swap lands correctly even if the doc changed since linting.
@@ -2541,7 +2582,7 @@ function createFencedBlockDecorationExtension() {
 }
 
 // Decorate links (@file, @dir/, #file:, #sym:)
-function createLinkDecorationExtension() {
+function createLinkDecorationExtension(referenceValidity?: Map<string, boolean>) {
   const linkPlugin = ViewPlugin.fromClass(
     class {
       decorations;
@@ -2551,7 +2592,15 @@ function createLinkDecorationExtension() {
       }
 
       update(update: any) {
-        if (update.docChanged || update.viewportChanged) {
+        // Rebuild on referenceValidityUpdatedEffect too, so a link mark picks up
+        // (or clears) data-invalid when the async validation pass resolves —
+        // same effect the atomic-chip plugin listens for.
+        const validityUpdated = update.transactions.some((tr: any) =>
+          tr.effects.some((effect: any) =>
+            effect.is(referenceValidityUpdatedEffect)
+          )
+        );
+        if (update.docChanged || update.viewportChanged || validityUpdated) {
           this.decorations = this.buildDecorations(update.view);
         }
       }
@@ -2586,6 +2635,16 @@ function createLinkDecorationExtension() {
             }
             if (linkMatch.symbolName) {
               attrs["data-symbol-name"] = linkMatch.symbolName;
+            }
+            // Keyed by the exact reference token, matching the validity map the
+            // lint pass populates; blocks opening a nonexistent target (see
+            // openContextReferenceLink). Undefined until validated → no flag.
+            if (
+              referenceValidity?.get(
+                view.state.doc.sliceString(linkMatch.from, linkMatch.to)
+              ) === false
+            ) {
+              attrs["data-invalid"] = "true";
             }
 
             builder.add(
@@ -2843,6 +2902,22 @@ function openContextReferenceLink(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ): boolean {
+  // The async validation pass marks references it resolved as nonexistent with
+  // data-invalid (on the atomic chip and on the non-atomic link mark). Refuse to
+  // open those — otherwise the click asks VS Code to open a file that isn't
+  // there — and surface why, since the click is otherwise a dead no-op. Returns
+  // true so the caller still consumes the event (preventDefault) rather than
+  // falling through to editor cursor placement.
+  if (target.getAttribute("data-invalid") === "true") {
+    useUiStore
+      .getState()
+      .showToast(
+        "Can't open — this reference doesn't resolve to an existing file",
+        "warning"
+      );
+    return true;
+  }
+
   // Adapt the decoration's data-* attributes to the shared reference-open
   // logic (single-sourced with the output prompt row's inline links).
   return openContextReference(
