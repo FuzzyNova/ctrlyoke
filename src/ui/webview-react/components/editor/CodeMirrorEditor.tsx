@@ -1794,14 +1794,10 @@ function createPromptDecorationThemeExtension() {
       border:
         "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
       borderRadius: "4px",
-      // badge-background/badge-foreground is VS Code's one guaranteed-contrasting
-      // background+foreground pair (themes must keep badges legible). No CSS
-      // fallback here deliberately: falling back independently per-property (as
-      // this used to, to editorWidget-background/editor-foreground) can pair up
-      // unrelated colors with no contrast guarantee between them if a theme ever
-      // defines only one side of the badge pair.
-      backgroundColor: "var(--vscode-titleBar-activeBackground)",
-      color: "var(--vscode-titleBar-activeForeground)",
+      // editorActionList-background/foreground are the closest VS Code vars to a "chip" look,
+      // while still contrasting with colors we pick in the symbol icon color map.
+      backgroundColor: "var(--vscode-editorActionList-background)",
+      color: "var(--vscode-editorActionList-foreground)",
       fontFamily: "var(--vscode-editor-font-family)",
       fontSize: "0.92em",
       lineHeight: "1.35",
@@ -1814,8 +1810,9 @@ function createPromptDecorationThemeExtension() {
     // (buildChipAccentShadowRules), keyed off the same SYMBOL_ICON_COLORS map
     // that colors the chip's icon.
     ".cm-atomic-ref:hover": {
-      color: "var(--vscode-titleBar-activeForeground)",
+      color: "var(--vscode-editorActionList-foreground)",
       borderColor: "var(--vscode-focusBorder)",
+      fontWeight: "bold",
     },
     // Compound with .codicon (rather than relying on cascade order against the
     // global .codicon rule in globals.css, which sets a flat 16px/line-height:1)
