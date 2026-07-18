@@ -74,8 +74,14 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         surface === "input"
           ? { backgroundColor: "transparent" }
           : {
-              outline: "1px solid var(--vscode-editor-lineHighlightBorder)",
-              outlineOffset: "-1px",
+              // An inset box-shadow (not outline) is intentional: outlines are
+              // always painted on top of a box's descendants per spec, which
+              // clipped the bottom edge of atomic-ref chip borders (see
+              // .cm-atomic-ref) whenever a chip sat on the active line.
+              // box-shadow paints in the background/border layer, beneath
+              // in-flow children, so chip borders stay fully visible.
+              boxShadow:
+                "inset 0 0 0 1px var(--vscode-editor-lineHighlightBorder)",
               backgroundColor:
                 "color-mix(in srgb, var(--vscode-editor-lineHighlightBackground) 40%, transparent)",
             },

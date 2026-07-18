@@ -4,9 +4,9 @@ import {
   placeholder,
   keymap,
   ViewPlugin,
+  ViewUpdate,
   Decoration,
   WidgetType,
-  highlightActiveLine,
   tooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
@@ -1161,7 +1161,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createThemeExtension(surface),
         createPromptDecorationThemeExtension(),
         createLinterThemeExtension(),
-        highlightActiveLine(),
+        createActiveLineHighlightExtension(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
         createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
         createContextReferenceLintExtension(
@@ -1870,6 +1870,44 @@ function createLinterThemeExtension() {
       backgroundColor: "var(--vscode-button-hoverBackground)",
     },
   });
+}
+
+// Same behavior as @codemirror/view's highlightActiveLine(), except a range
+// is skipped once it spans more than one line — matching VS Code, which
+// suppresses the current-line highlight for multi-line selections because it
+// otherwise cuts a visible gap into the selection highlight on the first and
+// last selected lines.
+const activeLineDeco = Decoration.line({ class: "cm-activeLine" });
+function createActiveLineHighlightExtension() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: ReturnType<typeof Decoration.set>;
+      constructor(view: EditorView) {
+        this.decorations = this.getDeco(view);
+      }
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.selectionSet) {
+          this.decorations = this.getDeco(update.view);
+        }
+      }
+      getDeco(view: EditorView) {
+        let lastLineStart = -1;
+        const deco = [];
+        for (const r of view.state.selection.ranges) {
+          const headLine = view.lineBlockAt(r.head);
+          if (!r.empty && view.lineBlockAt(r.anchor).from !== headLine.from) {
+            continue;
+          }
+          if (headLine.from > lastLineStart) {
+            deco.push(activeLineDeco.range(headLine.from));
+            lastLineStart = headLine.from;
+          }
+        }
+        return Decoration.set(deco);
+      }
+    },
+    { decorations: (v) => v.decorations }
+  );
 }
 
 // Spell checking with Typo.js
