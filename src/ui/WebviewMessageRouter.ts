@@ -41,6 +41,7 @@ import {
   getPromptFileCompletions,
   getPriorContextCompletions,
   findSymbolKindForReference,
+  getPathSuggestions,
   type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
 import { getStashList } from "../utils/GitUtils";
@@ -2159,7 +2160,12 @@ export class WebviewMessageRouter {
     },
     workspaceRoot: string | null,
     namedRoots: readonly ResolverWorkspaceFolder[]
-  ): Promise<{ exists: boolean; message?: string; symbolKind?: number }> {
+  ): Promise<{
+    exists: boolean;
+    message?: string;
+    symbolKind?: number;
+    suggestions?: string[];
+  }> {
     if (reference.type === "git") {
       return this.validateGitContextReference(reference.gitRef, workspaceRoot);
     }
@@ -2175,17 +2181,25 @@ export class WebviewMessageRouter {
     );
 
     if (!pathValidation.exists || !pathValidation.resolvedPath) {
-      return { exists: false, message: "file not found" };
+      // Type-agnostic exit (nothing exists on disk at the typed path), so word
+      // the message by reference type — a missing directory ref reads "file not
+      // found" otherwise. file/lineRange/symbol all point at a file, so they
+      // keep "file not found".
+      const message =
+        reference.type === "directory"
+          ? "directory not found"
+          : "file not found";
+      return this.notFoundWithSuggestions(reference, message);
     }
 
     if (reference.type === "directory") {
       return pathValidation.isDirectory
         ? { exists: true }
-        : { exists: false, message: "directory not found" };
+        : this.notFoundWithSuggestions(reference, "directory not found");
     }
 
     if (!pathValidation.isFile) {
-      return { exists: false, message: "file not found" };
+      return this.notFoundWithSuggestions(reference, "file not found");
     }
 
     if (reference.type === "lineRange" || reference.type === "symbol") {
@@ -2249,6 +2263,32 @@ export class WebviewMessageRouter {
     }
 
     return { exists: true };
+  }
+
+  /**
+   * Build a not-found validation result, attaching "did you mean?" path
+   * suggestions for @file / @directory references so the editor can offer
+   * one-click lint quick-fixes (see getPathSuggestions). Only file/directory
+   * refs get suggestions — for symbol/lineRange the file usually resolves and
+   * it's the symbol/line-range that's wrong, which a path swap can't fix.
+   */
+  private async notFoundWithSuggestions(
+    reference: { type: string; path?: string },
+    message: string
+  ): Promise<{ exists: false; message: string; suggestions?: string[] }> {
+    if (
+      reference.path &&
+      (reference.type === "file" || reference.type === "directory")
+    ) {
+      const suggestions = await getPathSuggestions(
+        reference.path,
+        reference.type
+      );
+      if (suggestions.length > 0) {
+        return { exists: false, message, suggestions };
+      }
+    }
+    return { exists: false, message };
   }
 
   private async resolveContextReferencePath(

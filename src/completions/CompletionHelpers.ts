@@ -638,6 +638,132 @@ export async function getFileCompletions(
   return [...dirItems, ...fileItems.slice(0, remainingForFiles)];
 }
 
+// Count leading path segments (case-insensitive) two relative paths share,
+// excluding the basename itself — a proximity measure for tie-breaking a moved
+// file toward the nearest match to where it was typed.
+function sharedPathPrefixLength(a: string[], b: string[]): number {
+  const limit = Math.min(a.length, b.length) - 1;
+  let shared = 0;
+  for (let index = 0; index < limit; index++) {
+    if (a[index].toLowerCase() !== b[index].toLowerCase()) break;
+    shared++;
+  }
+  return shared;
+}
+
+/**
+ * Rank workspace paths as "did you mean?" suggestions for an @file / @directory
+ * reference whose typed path did not resolve — powers the lint quick-fixes in
+ * CodeMirrorEditor (createContextReferenceLintExtension). Returns ready-to-insert
+ * reference tokens (e.g. `@src/foo/Bar.ts`, quoting applied) so reference
+ * formatting stays single-sourced in ContextReferenceBuilder.
+ *
+ * Ranking (highest signal first), deduped and capped at maxResults:
+ *   0. Same directory + a prefix relationship between the typed and candidate
+ *      basename — catches the token-collapse bug (`Foo.tsxbar` → `Foo.tsx`) and
+ *      truncation (`CodeMirrorEdi` → `CodeMirrorEditor.tsx`) with no false hits.
+ *   1. Same directory + a fuzzy basename match (typos/transpositions).
+ *   2. Exact basename anywhere — a moved file or a wrong middle path segment.
+ *   3. A basename prefix relationship anywhere — a moved + slightly-renamed file.
+ * Plain fuzzy-anywhere is deliberately excluded to keep suggestions high-precision.
+ * Within a tier: closest basename length first, then nearest by shared path
+ * prefix, then lexical for determinism.
+ */
+export async function getPathSuggestions(
+  typedPath: string,
+  kind: "file" | "directory",
+  maxResults = 3
+): Promise<string[]> {
+  const normalizedTyped = normalizeReferencePath(typedPath)
+    .replace(/^\.\.?\//, "")
+    .replace(/\/+$/, "");
+  const typedBase = path.posix.basename(normalizedTyped).toLowerCase();
+  if (!typedBase) {
+    return [];
+  }
+  const typedParent = getNormalizedParentDirectory(normalizedTyped);
+  const typedSegments = normalizedTyped.split("/");
+
+  const files = await getWorkspaceFiles();
+
+  // Candidates: files for @file; unique ancestor directories for @directory.
+  let candidatePaths: string[];
+  if (kind === "directory") {
+    const directories = new Set<string>();
+    for (const fileUri of files) {
+      collectWorkspaceDirectories(
+        getNormalizedWorkspaceRelativePath(fileUri),
+        directories
+      );
+    }
+    candidatePaths = [...directories];
+  } else {
+    candidatePaths = files.map((fileUri) =>
+      getNormalizedWorkspaceRelativePath(fileUri)
+    );
+  }
+
+  const ranked: Array<{
+    relativePath: string;
+    tier: number;
+    lengthDelta: number;
+    sharedPrefix: number;
+  }> = [];
+
+  for (const relativePath of candidatePaths) {
+    if (relativePath === normalizedTyped) {
+      continue; // identical to the (non-resolving) input — nothing to suggest
+    }
+    const candBase = path.posix.basename(relativePath).toLowerCase();
+    if (!candBase) continue;
+
+    const sameDir = getNormalizedParentDirectory(relativePath) === typedParent;
+    const prefixRel =
+      typedBase.startsWith(candBase) || candBase.startsWith(typedBase);
+    const basenameExact = candBase === typedBase;
+    const fuzzy = matchesFuzzyQuery(candBase, typedBase);
+
+    let tier: number;
+    if (sameDir && prefixRel) {
+      tier = 0;
+    } else if (sameDir && fuzzy) {
+      tier = 1;
+    } else if (basenameExact) {
+      tier = 2;
+    } else if (prefixRel) {
+      tier = 3;
+    } else {
+      continue;
+    }
+
+    ranked.push({
+      relativePath,
+      tier,
+      lengthDelta: Math.abs(candBase.length - typedBase.length),
+      sharedPrefix: sharedPathPrefixLength(
+        typedSegments,
+        relativePath.split("/")
+      ),
+    });
+  }
+
+  ranked.sort(
+    (a, b) =>
+      a.tier - b.tier ||
+      a.lengthDelta - b.lengthDelta ||
+      b.sharedPrefix - a.sharedPrefix ||
+      a.relativePath.localeCompare(b.relativePath)
+  );
+
+  return ranked
+    .slice(0, maxResults)
+    .map((entry) =>
+      kind === "directory"
+        ? buildDirectoryReference(entry.relativePath)
+        : buildFileReference(entry.relativePath)
+    );
+}
+
 /**
  * Get symbol completions for # trigger
  * Shows workspace symbols from all file types

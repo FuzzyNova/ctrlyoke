@@ -7,6 +7,7 @@ import {
   clearFilesCache,
   getFileCompletions,
   getHashSelectionCompletions,
+  getPathSuggestions,
   getPromptFileCompletions,
   findDocumentSymbolByNameAndRange,
   findWorkspaceSymbolByUriNameAndRange,
@@ -249,6 +250,105 @@ suite("CompletionHelpers", () => {
     mockSelections([]);
 
     assert.deepStrictEqual(getHashSelectionCompletions(), []);
+  });
+
+  suite("getPathSuggestions", () => {
+    test("suggests the same-directory file the typed basename collapsed onto (token-collapse bug)", async () => {
+      mockWorkspaceFiles([
+        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+        "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
+        "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
+      ]);
+
+      const suggestions = await getPathSuggestions(
+        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsxfoo",
+        "file"
+      );
+
+      assert.strictEqual(
+        suggestions[0],
+        "@src/ui/webview-react/components/editor/CodeMirrorEditor.tsx"
+      );
+    });
+
+    test("suggests the same-directory completion for a truncated basename", async () => {
+      mockWorkspaceFiles([
+        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+        "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
+      ]);
+
+      const suggestions = await getPathSuggestions(
+        "src/ui/webview-react/components/editor/CodeMirrorEdi",
+        "file"
+      );
+
+      // CodeMirrorEditor.tsx is a prefix match (tier 0); CodeMirrorTheme.ts is
+      // neither a prefix nor a fuzzy match of "CodeMirrorEdi", so it's excluded.
+      assert.deepStrictEqual(suggestions, [
+        "@src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+      ]);
+    });
+
+    test("ranks a same-directory near-match above an exact-basename match elsewhere", async () => {
+      mockWorkspaceFiles(["src/a/Button.tsx", "src/z/Button.ts"]);
+
+      const suggestions = await getPathSuggestions("src/a/Button.ts", "file");
+
+      // Same dir + prefix (tier 0) beats exact basename in another dir (tier 2).
+      assert.strictEqual(suggestions[0], "@src/a/Button.tsx");
+    });
+
+    test("falls back to an exact-basename match elsewhere when the typed directory is wrong (moved file)", async () => {
+      mockWorkspaceFiles([
+        "src/ui/components/CodeMirrorEditor.tsx",
+        "src/unrelated/Other.ts",
+      ]);
+
+      const suggestions = await getPathSuggestions(
+        "src/old/path/CodeMirrorEditor.tsx",
+        "file"
+      );
+
+      assert.deepStrictEqual(suggestions, [
+        "@src/ui/components/CodeMirrorEditor.tsx",
+      ]);
+    });
+
+    test("suggests a directory for a mistyped @directory reference", async () => {
+      mockWorkspaceFiles([
+        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+      ]);
+
+      const suggestions = await getPathSuggestions(
+        "src/ui/webview-react/components/edito/",
+        "directory"
+      );
+
+      assert.ok(
+        suggestions.includes("@src/ui/webview-react/components/editor/")
+      );
+    });
+
+    test("returns no suggestions when nothing resembles the typed basename", async () => {
+      mockWorkspaceFiles(["src/a/Alpha.ts", "src/b/Beta.ts"]);
+
+      const suggestions = await getPathSuggestions("src/c/Zzzzz.md", "file");
+
+      assert.deepStrictEqual(suggestions, []);
+    });
+
+    test("caps the number of suggestions at maxResults", async () => {
+      mockWorkspaceFiles([
+        "src/a/Report1.ts",
+        "src/a/Report2.ts",
+        "src/a/Report3.ts",
+        "src/a/Report4.ts",
+      ]);
+
+      const suggestions = await getPathSuggestions("src/a/Report", "file", 3);
+
+      assert.strictEqual(suggestions.length, 3);
+    });
   });
 });
 

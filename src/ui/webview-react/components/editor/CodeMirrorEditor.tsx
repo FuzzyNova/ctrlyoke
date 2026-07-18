@@ -128,6 +128,13 @@ interface ContextReferenceValidationResult {
   message?: string;
   /** CompletionItemKind, resolved live for #sym: refs so the chip can show the real symbol-kind icon. */
   symbolKind?: number;
+  /**
+   * "Did you mean?" replacement reference tokens (e.g. `@src/foo/Bar.ts`) for a
+   * not-found @file / @directory ref, ranked by the extension host
+   * (getPathSuggestions). Rendered as lint quick-fix actions. Absent/empty when
+   * the reference resolves or no close match exists.
+   */
+  suggestions?: string[];
 }
 
 type CompletionTrigger = "@" | "#" | "~" | "$" | "path";
@@ -2253,6 +2260,15 @@ function createContextReferenceLintExtension(
             to: reference.to,
             severity: "warning",
             message: result.message || "context not found",
+            // One-click "did you mean?" fixes for a mistyped/collapsed path (see
+            // getPathSuggestions). apply() uses the diagnostic's live from/to so
+            // the swap lands correctly even if the doc changed since linting.
+            actions: result.suggestions?.map((suggestion) => ({
+              name: `Change to ${suggestion}`,
+              apply: (view: EditorView, from: number, to: number) => {
+                view.dispatch({ changes: { from, to, insert: suggestion } });
+              },
+            })),
           },
         ];
       });
