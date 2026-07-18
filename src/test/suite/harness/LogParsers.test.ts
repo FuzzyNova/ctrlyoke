@@ -601,7 +601,10 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
-    test("should clear pending background work from queue-operation notifications", () => {
+    test("should keep background work pending while its notification is only queued", () => {
+      const notification =
+        "<task-notification><tool-use-id>toolu_background_queue</tool-use-id></task-notification>";
+
       parser.trackBackgroundWorkState({
         type: "assistant",
         message: {
@@ -618,10 +621,27 @@ suite("ClaudeLogParser", () => {
 
       parser.trackBackgroundWorkState({
         type: "queue-operation",
-        content:
-          "<task-notification><tool-use-id>toolu_background_queue</tool-use-id></task-notification>",
+        operation: "enqueue",
+        content: notification,
       });
 
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // Queue bookkeeping can be written immediately before the current turn's
+      // Stop. Only the subsequently delivered user event may release the hold.
+      parser.trackBackgroundWorkState({
+        type: "queue-operation",
+        operation: "dequeue",
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content: notification,
+        },
+      });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 

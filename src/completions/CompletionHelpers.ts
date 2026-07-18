@@ -110,6 +110,17 @@ function mapSymbolKindToCompletionKind(
  * text itself carries no kind — only a live completion item does). Used by
  * WebviewMessageRouter's context-reference validation to let the dashboard
  * chip show the real symbol-kind icon instead of a generic fallback.
+ *
+ * Tries executeDocumentSymbolProvider first (cheap, single file), then falls
+ * back to executeWorkspaceSymbolProvider. The fallback matters: the #sym:
+ * completion list itself is built from getWorkspaceSymbols() (below), whose
+ * navigateTo-style index frequently surfaces symbols — deeply nested object
+ * keys, CSS custom properties inside a JS style object, etc. — that the
+ * document outline (executeDocumentSymbolProvider) never includes at all, and
+ * even when both include a symbol, the two providers aren't guaranteed to
+ * report the same range for it. Without this fallback, any reference created
+ * from such a completion item can never resolve and is stuck on the generic
+ * icon forever.
  */
 export async function findSymbolKindForReference(
   uri: vscode.Uri,
@@ -118,25 +129,92 @@ export async function findSymbolKindForReference(
   endLine: number
 ): Promise<vscode.CompletionItemKind | undefined> {
   try {
-    const symbols = (await vscode.commands.executeCommand(
-      "vscode.executeDocumentSymbolProvider",
-      uri
-    )) as vscode.DocumentSymbol[] | undefined;
-    if (!symbols?.length) {
-      return undefined;
-    }
-
-    const match = findDocumentSymbolByNameAndRange(
-      symbols,
+    const documentMatch = await findSymbolKindViaDocumentSymbols(
+      uri,
       symbolName,
       startLine,
       endLine
     );
-    return match ? mapSymbolKindToCompletionKind(match.kind) : undefined;
+    if (documentMatch !== undefined) {
+      return documentMatch;
+    }
+    return await findSymbolKindViaWorkspaceSymbols(
+      uri,
+      symbolName,
+      startLine,
+      endLine
+    );
   } catch (error) {
     Log.error("Failed to resolve symbol kind for reference:", error);
     return undefined;
   }
+}
+
+async function findSymbolKindViaDocumentSymbols(
+  uri: vscode.Uri,
+  symbolName: string,
+  startLine: number,
+  endLine: number
+): Promise<vscode.CompletionItemKind | undefined> {
+  const symbols = (await vscode.commands.executeCommand(
+    "vscode.executeDocumentSymbolProvider",
+    uri
+  )) as vscode.DocumentSymbol[] | undefined;
+  if (!symbols?.length) {
+    return undefined;
+  }
+
+  const match = findDocumentSymbolByNameAndRange(
+    symbols,
+    symbolName,
+    startLine,
+    endLine
+  );
+  return match ? mapSymbolKindToCompletionKind(match.kind) : undefined;
+}
+
+// Mirrors getSymbolCompletions()'s own provider call (same command, same
+// query-by-name) so the range comparison below is apples-to-apples with
+// whatever range that function used to build the original reference.
+async function findSymbolKindViaWorkspaceSymbols(
+  uri: vscode.Uri,
+  symbolName: string,
+  startLine: number,
+  endLine: number
+): Promise<vscode.CompletionItemKind | undefined> {
+  const symbols = (await vscode.commands.executeCommand(
+    "vscode.executeWorkspaceSymbolProvider",
+    symbolName
+  )) as vscode.SymbolInformation[] | undefined;
+  if (!symbols?.length) {
+    return undefined;
+  }
+
+  const match = findWorkspaceSymbolByUriNameAndRange(
+    symbols,
+    uri,
+    symbolName,
+    startLine,
+    endLine
+  );
+  return match ? mapSymbolKindToCompletionKind(match.kind) : undefined;
+}
+
+// Exported for unit testing only; findSymbolKindForReference is the real entry point.
+export function findWorkspaceSymbolByUriNameAndRange(
+  symbols: vscode.SymbolInformation[],
+  uri: vscode.Uri,
+  name: string,
+  startLine: number,
+  endLine: number
+): vscode.SymbolInformation | undefined {
+  return symbols.find(
+    (symbol) =>
+      symbol.name === name &&
+      symbol.location.uri.toString() === uri.toString() &&
+      symbol.location.range.start.line + 1 === startLine &&
+      symbol.location.range.end.line + 1 === endLine
+  );
 }
 
 // Exported for unit testing only; findSymbolKindForReference is the real entry point.

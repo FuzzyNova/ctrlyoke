@@ -16,6 +16,8 @@ import {
   autocompletion,
   completionKeymap,
   startCompletion,
+  insertCompletionText,
+  pickedCompletion,
   type Completion,
   type CompletionContext,
   type CompletionResult,
@@ -273,10 +275,31 @@ function shouldBypassCodeMirrorFiltering(
   );
 }
 
+// Parses a single completion's insertText into the fields needed to key the
+// symbol icon cache, iff it's a well-formed #sym: reference. Reuses
+// findContextReferenceMatches (the same parser the chip/lint pipeline runs on
+// the saved document text) instead of re-deriving the quoted-path format, so
+// this never drifts from what the reference actually looks like once inserted.
+function parseSingleSymbolReference(text: string):
+  | { path: string; symbolName: string; lineStart?: string; lineEnd?: string }
+  | undefined {
+  const [match] = findContextReferenceMatches(text);
+  if (!match || match.type !== "symbol" || !match.path || !match.symbolName) {
+    return undefined;
+  }
+  return {
+    path: match.path,
+    symbolName: match.symbolName,
+    lineStart: match.lineStart,
+    lineEnd: match.lineEnd,
+  };
+}
+
 export function buildCodeMirrorCompletionResult(
   items: ExtensionCompletionItem[],
   from: number,
-  request: PendingCompletionRequest | null
+  request: PendingCompletionRequest | null,
+  symbolIconCache?: Map<string, string>
 ): CompletionResult {
   const useFilterTextForMatching = !shouldBypassCodeMirrorFiltering(request);
   const completions = items.map((item, index) => {
@@ -304,6 +327,21 @@ export function buildCodeMirrorCompletionResult(
       useFilterTextForMatching && item.filterText
         ? item.filterText
         : item.label;
+    const applyText = item.insertText || item.label;
+
+    // The completion item's own `kind` is known synchronously, right now —
+    // seed the chip icon cache from it on pick so the chip renders with the
+    // correct symbol-* icon immediately, instead of showing
+    // DEFAULT_COMPLETION_ICON until createContextReferenceLintExtension's
+    // debounced round trip resolves. That round trip still runs afterward and
+    // will correct the cache if it ever disagrees (e.g. the symbol moved
+    // between listing the completion and picking it); this only short-circuits
+    // the common case. It can't help a pasted or hand-typed reference, which
+    // has no completion item to draw a kind from.
+    const symbolRef =
+      symbolIconCache && item.kind !== undefined
+        ? parseSingleSymbolReference(applyText)
+        : undefined;
 
     return {
       label: matchLabel,
@@ -313,7 +351,33 @@ export function buildCodeMirrorCompletionResult(
       boost,
       // Don't prepend trigger - it stays in the document at position 'from'
       // We only replace from 'from + 1' onward for trigger-based completions.
-      apply: item.insertText || item.label,
+      apply: symbolRef
+        ? (
+            view: EditorView,
+            completion: Completion,
+            applyFrom: number,
+            applyTo: number
+          ) => {
+            symbolIconCache!.set(
+              symbolIconCacheKey(
+                symbolRef.path,
+                symbolRef.symbolName,
+                symbolRef.lineStart,
+                symbolRef.lineEnd
+              ),
+              type
+            );
+            // Mirrors applyCompletion()'s own string-apply path (see
+            // @codemirror/autocomplete) so picking a symbol completion still
+            // behaves identically to any other — same insert/cursor/scroll
+            // behavior, same pickedCompletion annotation — with the cache
+            // seed as the only addition.
+            view.dispatch({
+              ...insertCompletionText(view.state, applyText, applyFrom, applyTo),
+              annotations: pickedCompletion.of(completion),
+            });
+          }
+        : applyText,
     };
   });
 
@@ -658,7 +722,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       }
 
       const request = pendingCompletionRequestRef.current;
-      const result = buildCodeMirrorCompletionResult(items, from, request);
+      const result = buildCodeMirrorCompletionResult(
+        items,
+        from,
+        request,
+        symbolIconCacheRef.current
+      );
 
       if (partial) {
         // Deliver the instant items now, but keep the request context so the
@@ -1601,8 +1670,8 @@ const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
 // document — correlates an async symbol-kind lookup (resolved in
 // createContextReferenceLintExtension) back to the matching chip icon in
 // createAtomicReferenceExtension without changing the reference's stored
-// text/wire format.
-function symbolIconCacheKey(
+// text/wire format. Exported for unit testing only.
+export function symbolIconCacheKey(
   path: string,
   symbolName: string,
   lineStart?: string,

@@ -169,6 +169,85 @@ describe("CodeMirrorEditor completion kind icons", () => {
   });
 });
 
+describe("CodeMirrorEditor symbol completion icon cache seeding", () => {
+  // The completion item's kind is known synchronously at pick time; picking it
+  // should seed the chip icon cache immediately instead of waiting on the
+  // debounced round trip in createContextReferenceLintExtension, so the chip
+  // never has to show DEFAULT_COMPLETION_ICON first and flash to the real
+  // icon later. See symbolIconCacheKey for the cache key format.
+  function pickSymbolCompletion(
+    cache: Map<string, string>,
+    insertText: string,
+    kind: number
+  ) {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({ parent, doc: "" });
+
+    const result = buildCodeMirrorCompletionResult(
+      [{ label: "MySymbol", kind, insertText }],
+      0,
+      { trigger: "#", query: "" },
+      cache
+    );
+    const completion = result.options[0];
+    const apply = completion.apply as (
+      view: EditorView,
+      completion: unknown,
+      from: number,
+      to: number
+    ) => void;
+    apply(view, completion, 0, 0);
+
+    const docText = view.state.doc.toString();
+    view.destroy();
+    return docText;
+  }
+
+  it("seeds the cache with the completion's own icon on pick", () => {
+    const cache = new Map<string, string>();
+
+    const docText = pickSymbolCompletion(
+      cache,
+      "#sym:src/a.ts:MyClass:10-20",
+      6 // Class
+    );
+
+    expect(docText).toBe("#sym:src/a.ts:MyClass:10-20");
+    expect(cache.get("src/a.ts::MyClass::10-20")).toBe("symbol-class");
+  });
+
+  it("does not seed the cache when no cache is supplied", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        {
+          label: "MyClass",
+          kind: 6,
+          insertText: "#sym:src/a.ts:MyClass:10-20",
+        },
+      ],
+      0,
+      { trigger: "#", query: "" }
+    );
+
+    expect(result.options[0].apply).toBe("#sym:src/a.ts:MyClass:10-20");
+  });
+
+  it("does not seed the cache for non-symbol completions even with a kind", () => {
+    const cache = new Map<string, string>();
+
+    const result = buildCodeMirrorCompletionResult(
+      [{ label: "foo.ts", kind: 16, insertText: "foo.ts" }],
+      0,
+      { trigger: "@", query: "" },
+      cache
+    );
+
+    expect(result.options[0].apply).toBe("foo.ts");
+    expect(cache.size).toBe(0);
+  });
+});
+
 describe("CodeMirrorEditor prompt reference insertion", () => {
   it("surrounds multi-reference inserts with newlines when inserting mid-line", () => {
     const result = buildPromptReferenceInsertion(

@@ -524,18 +524,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
-   * Extract a background-task notification from every encoding Claude has
-   * written in session JSONL. Older versions surface it as a `user` message;
-   * current versions first write a `queue-operation` and later an `attachment`
-   * with the same XML payload. These records are control signals, not display
-   * content, but all must clear the matching pending background launch.
+   * Extract a background-task notification only after Claude has consumed it.
+   * Between turns, delivery is a `user` message. During an active turn, Claude
+   * injects it as a `queued_command` attachment before continuing. A preceding
+   * `queue-operation` only records queue bookkeeping: clearing on `enqueue`
+   * creates a race where the current turn can Stop before the notification is
+   * delivered and starts the resumed turn.
    */
   private extractTaskNotificationText(e: ClaudeProviderEvent): string {
     if (e.type === "user") {
       return this.extractUserMessageText(e);
-    }
-    if (e.type === "queue-operation" && typeof e.content === "string") {
-      return e.content;
     }
     if (e.type === "attachment" && typeof e.attachment?.prompt === "string") {
       return e.attachment.prompt;
@@ -551,10 +549,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *   `input.run_in_background === true`. Its id becomes the new
    *   "most recent" launch, superseding any prior one (a superseded launch
    *   is a "zombie" that will never be notified — see class doc).
-   * - **Notification:** a `user`, `queue-operation`, or `attachment` event
-   *   whose payload contains
+   * - **Notification delivery:** a `user` or `attachment` event whose payload contains
    *   `<task-notification>…<tool-use-id>{id}</tool-use-id>…`. Clears the
-   *   tracked id only when it matches the most-recent launch.
+   *   tracked id only when it matches the most-recent launch. Queue operations
+   *   deliberately do not clear it because they can precede the Stop that must
+   *   remain gated while Claude has not yet consumed the notification.
    */
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as ClaudeProviderEvent;

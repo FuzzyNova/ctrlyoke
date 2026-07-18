@@ -9,6 +9,7 @@ import {
   getHashSelectionCompletions,
   getPromptFileCompletions,
   findDocumentSymbolByNameAndRange,
+  findWorkspaceSymbolByUriNameAndRange,
 } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
@@ -306,6 +307,80 @@ suite("findDocumentSymbolByNameAndRange", () => {
   test("returns undefined when nothing matches", () => {
     assert.strictEqual(
       findDocumentSymbolByNameAndRange([], "missing", 1, 2),
+      undefined
+    );
+  });
+});
+
+suite("findWorkspaceSymbolByUriNameAndRange", () => {
+  const uriA = vscode.Uri.file("/workspace/src/a.ts");
+  const uriB = vscode.Uri.file("/workspace/src/b.ts");
+
+  function makeSymbolInformation(
+    name: string,
+    uri: vscode.Uri,
+    startLine: number,
+    endLine: number,
+    kind: vscode.SymbolKind = vscode.SymbolKind.Field
+  ): vscode.SymbolInformation {
+    return {
+      name,
+      kind,
+      containerName: "",
+      location: {
+        uri,
+        range: {
+          start: { line: startLine - 1 },
+          end: { line: endLine - 1 },
+        },
+      },
+    } as vscode.SymbolInformation;
+  }
+
+  // This is the fallback path for #sym: references whose completion item came
+  // from getSymbolCompletions() (executeWorkspaceSymbolProvider), which can
+  // surface symbols — deeply nested object keys, CSS custom properties inside
+  // a JS style object, etc. — that executeDocumentSymbolProvider's per-file
+  // outline never includes, so findDocumentSymbolByNameAndRange alone can
+  // never resolve them.
+  test("finds a symbol by exact uri, name, and 1-based line range", () => {
+    const symbols = [
+      makeSymbolInformation("--safe-area-bottom", uriA, 80, 80),
+      makeSymbolInformation("--safe-area-top", uriA, 82, 82),
+    ];
+
+    const match = findWorkspaceSymbolByUriNameAndRange(
+      symbols,
+      uriA,
+      "--safe-area-bottom",
+      80,
+      80
+    );
+
+    assert.strictEqual(match?.name, "--safe-area-bottom");
+  });
+
+  test("does not match the same name/range in a different file", () => {
+    const symbols = [makeSymbolInformation("foo", uriB, 5, 10)];
+
+    assert.strictEqual(
+      findWorkspaceSymbolByUriNameAndRange(symbols, uriA, "foo", 5, 10),
+      undefined
+    );
+  });
+
+  test("does not match a same-named symbol with a different line range", () => {
+    const symbols = [makeSymbolInformation("foo", uriA, 5, 10)];
+
+    assert.strictEqual(
+      findWorkspaceSymbolByUriNameAndRange(symbols, uriA, "foo", 5, 11),
+      undefined
+    );
+  });
+
+  test("returns undefined when nothing matches", () => {
+    assert.strictEqual(
+      findWorkspaceSymbolByUriNameAndRange([], uriA, "missing", 1, 2),
       undefined
     );
   });
