@@ -1,0 +1,3496 @@
+{
+  "generatedAt": "2026-07-18T04:13:26.631Z",
+  "sourceThemes": [
+    "darkcontrast",
+    "darkplus",
+    "defaultdark"
+  ],
+  "count": 697,
+  "vars": {
+    "--vscode-actionBar-toggledBackground": {
+      "darkcontrast": "#383a49",
+      "darkplus": "#383a49",
+      "defaultdark": "#383a49"
+    },
+    "--vscode-activeSessionView-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-activityBar-activeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-activityBar-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#333333",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-activityBar-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-activityBar-inactiveForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(255, 255, 255, 0.4)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-activityBarBadge-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#007acc",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-activityBarBadge-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-activityBarTop-activeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-activityBarTop-dropBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#e7e7e7"
+    },
+    "--vscode-activityBarTop-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#e7e7e7"
+    },
+    "--vscode-activityBarTop-inactiveForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(231, 231, 231, 0.6)",
+      "defaultdark": "rgba(231, 231, 231, 0.6)"
+    },
+    "--vscode-activityWarningBadge-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#202020"
+    },
+    "--vscode-agentFeedbackEditorWidget-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#282829",
+      "defaultdark": "#222325"
+    },
+    "--vscode-agentFeedbackEditorWidget-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.35)",
+      "defaultdark": "rgba(191, 191, 191, 0.35)"
+    },
+    "--vscode-agentFeedbackInputWidget-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-agentSessionSelectedBadge-border": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(255, 255, 255, 0.3)",
+      "defaultdark": "rgba(237, 237, 237, 0.3)"
+    },
+    "--vscode-agentSessionSelectedUnfocusedBadge-border": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(204, 204, 204, 0.3)",
+      "defaultdark": "rgba(191, 191, 191, 0.3)"
+    },
+    "--vscode-agents-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-agents-fontSize-body1": {
+      "darkcontrast": "13px",
+      "darkplus": "13px",
+      "defaultdark": "13px"
+    },
+    "--vscode-agents-fontSize-body2": {
+      "darkcontrast": "11px",
+      "darkplus": "11px",
+      "defaultdark": "11px"
+    },
+    "--vscode-agents-fontSize-heading1": {
+      "darkcontrast": "26px",
+      "darkplus": "26px",
+      "defaultdark": "26px"
+    },
+    "--vscode-agents-fontSize-heading2": {
+      "darkcontrast": "18px",
+      "darkplus": "18px",
+      "defaultdark": "18px"
+    },
+    "--vscode-agents-fontSize-heading3": {
+      "darkcontrast": "13px",
+      "darkplus": "13px",
+      "defaultdark": "13px"
+    },
+    "--vscode-agents-fontSize-label1": {
+      "darkcontrast": "12px",
+      "darkplus": "12px",
+      "defaultdark": "12px"
+    },
+    "--vscode-agents-fontSize-label2": {
+      "darkcontrast": "11px",
+      "darkplus": "11px",
+      "defaultdark": "11px"
+    },
+    "--vscode-agents-fontSize-label3": {
+      "darkcontrast": "10px",
+      "darkplus": "10px",
+      "defaultdark": "10px"
+    },
+    "--vscode-agents-fontWeight-regular": {
+      "darkcontrast": "400",
+      "darkplus": "400",
+      "defaultdark": "400"
+    },
+    "--vscode-agents-fontWeight-semiBold": {
+      "darkcontrast": "600",
+      "darkplus": "600",
+      "defaultdark": "600"
+    },
+    "--vscode-agentsBadge-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#007acc",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-agentsBadge-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-agentsChatInput-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#202122"
+    },
+    "--vscode-agentsChatInput-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#303031",
+      "defaultdark": "#333536"
+    },
+    "--vscode-agentsChatInput-focusBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007acc",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-agentsChatInput-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-agentsChatInput-placeholderForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "#a6a6a6",
+      "defaultdark": "#555555"
+    },
+    "--vscode-agentsGradient-tintColor": {
+      "darkcontrast": "#000000",
+      "darkplus": "#0e639c",
+      "defaultdark": "#297aa0"
+    },
+    "--vscode-agentsNewSessionButton-background": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-agentsNewSessionButton-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#303031",
+      "defaultdark": "#333536"
+    },
+    "--vscode-agentsPanel-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-agentsPanel-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#303031",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-agentsUnreadBadge-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#007acc",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-agentsUnreadBadge-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-agentsUpdateButton-downloadedBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0.7)",
+      "darkplus": "rgba(14, 99, 156, 0.7)",
+      "defaultdark": "rgba(41, 122, 160, 0.7)"
+    },
+    "--vscode-agentsUpdateButton-downloadingBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0.4)",
+      "darkplus": "rgba(14, 99, 156, 0.4)",
+      "defaultdark": "rgba(41, 122, 160, 0.4)"
+    },
+    "--vscode-agentsVoice-speakingBackground": {
+      "darkcontrast": "rgba(210, 168, 255, 0.08)",
+      "darkplus": "rgba(163, 113, 247, 0.08)",
+      "defaultdark": "rgba(163, 113, 247, 0.08)"
+    },
+    "--vscode-agentsVoice-speakingForeground": {
+      "darkcontrast": "#d2a8ff",
+      "darkplus": "#a371f7",
+      "defaultdark": "#a371f7"
+    },
+    "--vscode-badge-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#4d4d4d",
+      "defaultdark": "rgba(57, 148, 188, 0.94)"
+    },
+    "--vscode-badge-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-banner-iconForeground": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-bodyFontSize": {
+      "darkcontrast": "13px",
+      "darkplus": "13px",
+      "defaultdark": "13px"
+    },
+    "--vscode-bodyFontSize-small": {
+      "darkcontrast": "12px",
+      "darkplus": "12px",
+      "defaultdark": "12px"
+    },
+    "--vscode-bodyFontSize-xSmall": {
+      "darkcontrast": "11px",
+      "darkplus": "11px",
+      "defaultdark": "11px"
+    },
+    "--vscode-breadcrumb-activeSelectionForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e0e0e0",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-breadcrumb-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-breadcrumb-focusForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e0e0e0",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-breadcrumb-foreground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.8)",
+      "darkplus": "rgba(204, 204, 204, 0.8)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-breadcrumbPicker-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-browser-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#252526",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-button-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#0e639c",
+      "defaultdark": "#297aa0"
+    },
+    "--vscode-button-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-button-hoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1177bb",
+      "defaultdark": "#2b7da3"
+    },
+    "--vscode-button-secondaryBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.15)",
+      "defaultdark": "#333536"
+    },
+    "--vscode-button-secondaryForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#cccccc"
+    },
+    "--vscode-button-separator": {
+      "darkcontrast": "rgba(255, 255, 255, 0.4)",
+      "darkplus": "rgba(255, 255, 255, 0.4)",
+      "defaultdark": "rgba(255, 255, 255, 0.4)"
+    },
+    "--vscode-chart-axis": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(191, 191, 191, 0.4)",
+      "defaultdark": "rgba(191, 191, 191, 0.4)"
+    },
+    "--vscode-chart-guide": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(191, 191, 191, 0.2)",
+      "defaultdark": "rgba(191, 191, 191, 0.2)"
+    },
+    "--vscode-chart-line": {
+      "darkcontrast": "#236b8e",
+      "darkplus": "#236b8e",
+      "defaultdark": "#236b8e"
+    },
+    "--vscode-charts-blue": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#57a3f8"
+    },
+    "--vscode-charts-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#cccccc"
+    },
+    "--vscode-charts-green": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#86cf86"
+    },
+    "--vscode-charts-lines": {
+      "darkcontrast": "rgba(255, 255, 255, 0.5)",
+      "darkplus": "rgba(204, 204, 204, 0.5)",
+      "defaultdark": "rgba(200, 202, 204, 0.5)"
+    },
+    "--vscode-charts-purple": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#ad80d7"
+    },
+    "--vscode-charts-red": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#ef8773"
+    },
+    "--vscode-charts-yellow": {
+      "darkcontrast": "#ffd370",
+      "darkplus": "#cca700",
+      "defaultdark": "#e0b97f"
+    },
+    "--vscode-chat-avatarBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1f1f1f",
+      "defaultdark": "#1f1f1f"
+    },
+    "--vscode-chat-avatarForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-chat-checkpointSeparator": {
+      "darkcontrast": "#a9a9a9",
+      "darkplus": "#585858",
+      "defaultdark": "#585858"
+    },
+    "--vscode-chat-editedFileForeground": {
+      "darkcontrast": "#e2c08d",
+      "darkplus": "#e2c08d",
+      "defaultdark": "#e2c08d"
+    },
+    "--vscode-chat-inputWorkingBorderColor1": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#0e639c",
+      "defaultdark": "#297aa0"
+    },
+    "--vscode-chat-inputWorkingBorderColor2": {
+      "darkcontrast": "#a0a0a0",
+      "darkplus": "#07324e",
+      "defaultdark": "#1c546f"
+    },
+    "--vscode-chat-inputWorkingBorderColor3": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1595ea",
+      "defaultdark": "#5ba8cc"
+    },
+    "--vscode-chat-linesAddedForeground": {
+      "darkcontrast": "#54b054",
+      "darkplus": "#54b054",
+      "defaultdark": "#54b054"
+    },
+    "--vscode-chat-linesRemovedForeground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#fc6a6a",
+      "defaultdark": "#fc6a6a"
+    },
+    "--vscode-chat-requestBackground": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "rgba(30, 30, 30, 0.62)",
+      "defaultdark": "rgba(18, 19, 20, 0.62)"
+    },
+    "--vscode-chat-requestBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(255, 255, 255, 0.1)",
+      "defaultdark": "rgba(255, 255, 255, 0.1)"
+    },
+    "--vscode-chat-slashCommandBackground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(38, 71, 120, 0.4)",
+      "defaultdark": "rgba(38, 71, 120, 0.4)"
+    },
+    "--vscode-chat-slashCommandForeground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#85b6ff",
+      "defaultdark": "#85b6ff"
+    },
+    "--vscode-chat-thinkingShimmer": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-checkbox-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#242526"
+    },
+    "--vscode-checkbox-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#6b6b6b",
+      "defaultdark": "#707070"
+    },
+    "--vscode-checkbox-disabled.background": {
+      "darkcontrast": "#545454",
+      "darkplus": "#777777",
+      "defaultdark": "#464647"
+    },
+    "--vscode-checkbox-disabled.foreground": {
+      "darkcontrast": "#aaaaaa",
+      "darkplus": "#b4b4b4",
+      "defaultdark": "#696a6a"
+    },
+    "--vscode-checkbox-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#f0f0f0",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-checkbox-selectBackground": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-checkbox-selectBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#c5c5c5",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-codiconFontSize": {
+      "darkcontrast": "16px",
+      "darkplus": "16px",
+      "defaultdark": "16px"
+    },
+    "--vscode-codiconFontSize-compact": {
+      "darkcontrast": "12px",
+      "darkplus": "12px",
+      "defaultdark": "12px"
+    },
+    "--vscode-commandCenter-activeBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(204, 204, 204, 0.3)",
+      "defaultdark": "#333536"
+    },
+    "--vscode-commandCenter-activeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-commandCenter-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2e3031"
+    },
+    "--vscode-commandCenter-debuggingBackground": {
+      "darkcontrast": "rgba(186, 89, 44, 0.26)",
+      "darkplus": "rgba(204, 102, 51, 0.26)",
+      "defaultdark": "rgba(57, 148, 188, 0.26)"
+    },
+    "--vscode-commandCenter-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-commentsView-resolvedIcon": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.5)",
+      "defaultdark": "#555555"
+    },
+    "--vscode-commentsView-unresolvedIcon": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-cornerRadius-circle": {
+      "darkcontrast": "9999px",
+      "darkplus": "9999px",
+      "defaultdark": "9999px"
+    },
+    "--vscode-cornerRadius-large": {
+      "darkcontrast": "8px",
+      "darkplus": "8px",
+      "defaultdark": "8px"
+    },
+    "--vscode-cornerRadius-medium": {
+      "darkcontrast": "6px",
+      "darkplus": "6px",
+      "defaultdark": "6px"
+    },
+    "--vscode-cornerRadius-small": {
+      "darkcontrast": "4px",
+      "darkplus": "4px",
+      "defaultdark": "4px"
+    },
+    "--vscode-cornerRadius-xLarge": {
+      "darkcontrast": "12px",
+      "darkplus": "12px",
+      "defaultdark": "12px"
+    },
+    "--vscode-cornerRadius-xSmall": {
+      "darkcontrast": "2px",
+      "darkplus": "2px",
+      "defaultdark": "2px"
+    },
+    "--vscode-debugConsole-errorForeground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f48771",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-debugConsole-infoForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-debugConsole-sourceForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-debugConsole-warningForeground": {
+      "darkcontrast": "#008000",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-debugConsoleInputIcon-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-debugExceptionWidget-background": {
+      "darkcontrast": "#420b0d",
+      "darkplus": "#420b0d",
+      "defaultdark": "#420b0d"
+    },
+    "--vscode-debugExceptionWidget-border": {
+      "darkcontrast": "#a31515",
+      "darkplus": "#a31515",
+      "defaultdark": "#a31515"
+    },
+    "--vscode-debugIcon-breakpointCurrentStackframeForeground": {
+      "darkcontrast": "#ffcc00",
+      "darkplus": "#ffcc00",
+      "defaultdark": "#ffcc00"
+    },
+    "--vscode-debugIcon-breakpointDisabledForeground": {
+      "darkcontrast": "#848484",
+      "darkplus": "#848484",
+      "defaultdark": "#848484"
+    },
+    "--vscode-debugIcon-breakpointForeground": {
+      "darkcontrast": "#e51400",
+      "darkplus": "#e51400",
+      "defaultdark": "#e51400"
+    },
+    "--vscode-debugIcon-breakpointStackframeForeground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#89d185"
+    },
+    "--vscode-debugIcon-breakpointUnverifiedForeground": {
+      "darkcontrast": "#848484",
+      "darkplus": "#848484",
+      "defaultdark": "#848484"
+    },
+    "--vscode-debugIcon-continueForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-debugIcon-disconnectForeground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f48771",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-debugIcon-pauseForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-debugIcon-restartForeground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#89d185"
+    },
+    "--vscode-debugIcon-startForeground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#89d185"
+    },
+    "--vscode-debugIcon-stepBackForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-debugIcon-stepIntoForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-debugIcon-stepOutForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-debugIcon-stepOverForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-debugIcon-stopForeground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f48771",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-debugTokenExpression-boolean": {
+      "darkcontrast": "#75bdfe",
+      "darkplus": "#4e94ce",
+      "defaultdark": "#4e94ce"
+    },
+    "--vscode-debugTokenExpression-error": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f48771",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-debugTokenExpression-name": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#c586c0",
+      "defaultdark": "#c586c0"
+    },
+    "--vscode-debugTokenExpression-number": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#b5cea8",
+      "defaultdark": "#b5cea8"
+    },
+    "--vscode-debugTokenExpression-string": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#ce9178",
+      "defaultdark": "#ce9178"
+    },
+    "--vscode-debugTokenExpression-type": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#4a90e2",
+      "defaultdark": "#4a90e2"
+    },
+    "--vscode-debugTokenExpression-value": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(204, 204, 204, 0.6)",
+      "defaultdark": "rgba(204, 204, 204, 0.6)"
+    },
+    "--vscode-debugToolBar-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#333333",
+      "defaultdark": "#181818"
+    },
+    "--vscode-debugView-exceptionLabelBackground": {
+      "darkcontrast": "#6c2022",
+      "darkplus": "#6c2022",
+      "defaultdark": "#6c2022"
+    },
+    "--vscode-debugView-exceptionLabelForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-debugView-stateLabelBackground": {
+      "darkcontrast": "rgba(136, 136, 136, 0.27)",
+      "darkplus": "rgba(136, 136, 136, 0.27)",
+      "defaultdark": "rgba(136, 136, 136, 0.27)"
+    },
+    "--vscode-debugView-stateLabelForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-debugView-valueChangedHighlight": {
+      "darkcontrast": "#569cd6",
+      "darkplus": "#569cd6",
+      "defaultdark": "#569cd6"
+    },
+    "--vscode-descriptionForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "rgba(204, 204, 204, 0.7)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-diffEditor-move.border": {
+      "darkcontrast": "rgba(139, 139, 139, 0.61)",
+      "darkplus": "rgba(139, 139, 139, 0.61)",
+      "defaultdark": "rgba(139, 139, 139, 0.61)"
+    },
+    "--vscode-diffEditor-moveActive.border": {
+      "darkcontrast": "#ffa500",
+      "darkplus": "#ffa500",
+      "defaultdark": "#ffa500"
+    },
+    "--vscode-diffEditor-unchangedRegionBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-diffEditor-unchangedRegionForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-diffEditor-unchangedRegionShadow": {
+      "darkcontrast": "#000000",
+      "darkplus": "#000000",
+      "defaultdark": "#000000"
+    },
+    "--vscode-disabledForeground": {
+      "darkcontrast": "#a5a5a5",
+      "darkplus": "rgba(204, 204, 204, 0.5)",
+      "defaultdark": "#555555"
+    },
+    "--vscode-dropdown-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-dropdown-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#333536"
+    },
+    "--vscode-dropdown-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#f0f0f0",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-editor-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editor-compositionBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-editor-focusedStackFrameHighlightBackground": {
+      "darkcontrast": "rgba(122, 189, 122, 0.3)",
+      "darkplus": "rgba(122, 189, 122, 0.3)",
+      "defaultdark": "rgba(122, 189, 122, 0.3)"
+    },
+    "--vscode-editor-font-family": {
+      "darkcontrast": "Consolas, 'Courier New', monospace",
+      "darkplus": "Consolas, 'Courier New', monospace",
+      "defaultdark": "Consolas, 'Courier New', monospace"
+    },
+    "--vscode-editor-font-feature-settings": {
+      "darkcontrast": "\"liga\" off, \"calt\" off",
+      "darkplus": "\"liga\" off, \"calt\" off",
+      "defaultdark": "\"liga\" off, \"calt\" off"
+    },
+    "--vscode-editor-font-size": {
+      "darkcontrast": "14px",
+      "darkplus": "14px",
+      "defaultdark": "14px"
+    },
+    "--vscode-editor-font-weight": {
+      "darkcontrast": "normal",
+      "darkplus": "normal",
+      "defaultdark": "normal"
+    },
+    "--vscode-editor-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#d4d4d4",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editor-hoverHighlightBackground": {
+      "darkcontrast": "rgba(173, 214, 255, 0.15)",
+      "darkplus": "rgba(38, 79, 120, 0.25)",
+      "defaultdark": "#242526"
+    },
+    "--vscode-editor-inactiveSelectionBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "#3a3d41",
+      "defaultdark": "rgba(39, 103, 130, 0.38)"
+    },
+    "--vscode-editor-inlineValuesBackground": {
+      "darkcontrast": "rgba(255, 200, 0, 0.2)",
+      "darkplus": "rgba(255, 200, 0, 0.2)",
+      "defaultdark": "rgba(255, 200, 0, 0.2)"
+    },
+    "--vscode-editor-inlineValuesForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.5)",
+      "darkplus": "rgba(255, 255, 255, 0.5)",
+      "defaultdark": "rgba(255, 255, 255, 0.5)"
+    },
+    "--vscode-editor-lineHighlightBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#282828",
+      "defaultdark": "#282828"
+    },
+    "--vscode-editor-linkedEditingBackground": {
+      "darkcontrast": "rgba(255, 0, 0, 0.3)",
+      "darkplus": "rgba(255, 0, 0, 0.3)",
+      "defaultdark": "rgba(255, 0, 0, 0.3)"
+    },
+    "--vscode-editor-selectionBackground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#264f78",
+      "defaultdark": "rgba(39, 103, 130, 0.87)"
+    },
+    "--vscode-editor-snippetFinalTabstopHighlightBorder": {
+      "darkcontrast": "#525252",
+      "darkplus": "#525252",
+      "defaultdark": "#525252"
+    },
+    "--vscode-editor-snippetTabstopHighlightBackground": {
+      "darkcontrast": "rgba(124, 124, 124, 0.3)",
+      "darkplus": "rgba(124, 124, 124, 0.3)",
+      "defaultdark": "rgba(124, 124, 124, 0.3)"
+    },
+    "--vscode-editor-stackFrameHighlightBackground": {
+      "darkcontrast": "rgba(255, 255, 0, 0.2)",
+      "darkplus": "rgba(255, 255, 0, 0.2)",
+      "defaultdark": "rgba(255, 255, 0, 0.2)"
+    },
+    "--vscode-editorActionList-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-editorActionList-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-editorActiveLineNumber-foreground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#c6c6c6",
+      "defaultdark": "#c6c6c6"
+    },
+    "--vscode-editorBracketHighlight-foreground1": {
+      "darkcontrast": "#ffd700",
+      "darkplus": "#ffd700",
+      "defaultdark": "#ffd700"
+    },
+    "--vscode-editorBracketHighlight-foreground2": {
+      "darkcontrast": "#da70d6",
+      "darkplus": "#da70d6",
+      "defaultdark": "#da70d6"
+    },
+    "--vscode-editorBracketHighlight-foreground3": {
+      "darkcontrast": "#87cefa",
+      "darkplus": "#179fff",
+      "defaultdark": "#179fff"
+    },
+    "--vscode-editorBracketHighlight-foreground4": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketHighlight-foreground5": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketHighlight-foreground6": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketHighlight-unexpectedBracket.foreground": {
+      "darkcontrast": "#ff3232",
+      "darkplus": "rgba(255, 18, 18, 0.8)",
+      "defaultdark": "rgba(255, 18, 18, 0.8)"
+    },
+    "--vscode-editorBracketMatch-background": {
+      "darkcontrast": "rgba(0, 100, 0, 0.1)",
+      "darkplus": "rgba(0, 100, 0, 0.1)",
+      "defaultdark": "rgba(57, 148, 188, 0.33)"
+    },
+    "--vscode-editorBracketMatch-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#888888",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-editorBracketPairGuide-activeBackground1": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-activeBackground2": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-activeBackground3": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-activeBackground4": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-activeBackground5": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-activeBackground6": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-background1": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-background2": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-background3": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-background4": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-background5": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorBracketPairGuide-background6": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorCodeLens-foreground": {
+      "darkcontrast": "#999999",
+      "darkplus": "#999999",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-editorCommentsWidget-rangeActiveBackground": {
+      "darkcontrast": "rgba(111, 195, 223, 0.1)",
+      "darkplus": "rgba(0, 127, 212, 0.1)",
+      "defaultdark": "rgba(72, 143, 174, 0.28)"
+    },
+    "--vscode-editorCommentsWidget-rangeBackground": {
+      "darkcontrast": "rgba(111, 195, 223, 0.1)",
+      "darkplus": "rgba(0, 127, 212, 0.1)",
+      "defaultdark": "rgba(72, 143, 174, 0.15)"
+    },
+    "--vscode-editorCommentsWidget-replyInputBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#242526"
+    },
+    "--vscode-editorCommentsWidget-resolvedBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.5)",
+      "defaultdark": "#555555"
+    },
+    "--vscode-editorCommentsWidget-unresolvedBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-editorCursor-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#aeafad",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorError-foreground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-editorGroup-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#444444",
+      "defaultdark": "rgba(255, 255, 255, 0.09)"
+    },
+    "--vscode-editorGroup-dropIntoPromptBackground": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-editorGroup-dropIntoPromptForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-editorGroupHeader-noTabsBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editorGutter-addedBackground": {
+      "darkcontrast": "#487e02",
+      "darkplus": "#487e02",
+      "defaultdark": "#72c892"
+    },
+    "--vscode-editorGutter-addedSecondaryBackground": {
+      "darkcontrast": "#487e02",
+      "darkplus": "#243f01",
+      "defaultdark": "#2c7145"
+    },
+    "--vscode-editorGutter-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editorGutter-commentDraftGlyphForeground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#d4d4d4",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorGutter-commentGlyphForeground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#d4d4d4",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorGutter-commentRangeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-editorGutter-commentUnresolvedGlyphForeground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#d4d4d4",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorGutter-deletedBackground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f28772"
+    },
+    "--vscode-editorGutter-deletedSecondaryBackground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#b00e0e",
+      "defaultdark": "#c43012"
+    },
+    "--vscode-editorGutter-foldingControlForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#c5c5c5",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-editorGutter-itemBackground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-editorGutter-itemGlyphForeground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#d4d4d4",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorGutter-modifiedBackground": {
+      "darkcontrast": "#1b81a8",
+      "darkplus": "#1b81a8",
+      "defaultdark": "#0078d4"
+    },
+    "--vscode-editorGutter-modifiedSecondaryBackground": {
+      "darkcontrast": "#1b81a8",
+      "darkplus": "#0d4054",
+      "defaultdark": "#003c6a"
+    },
+    "--vscode-editorHoverWidget-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-editorHoverWidget-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-editorHoverWidget-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-editorHoverWidget-highlightForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#2aaaff",
+      "defaultdark": "#48a0c7"
+    },
+    "--vscode-editorHoverWidget-statusBarBackground": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#2c2c2d",
+      "defaultdark": "#262829"
+    },
+    "--vscode-editorIndentGuide-activeBackground": {
+      "darkcontrast": "#7c7c7c",
+      "darkplus": "rgba(227, 228, 226, 0.16)",
+      "defaultdark": "#838485"
+    },
+    "--vscode-editorIndentGuide-activeBackground1": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#707070",
+      "defaultdark": "#707070"
+    },
+    "--vscode-editorIndentGuide-activeBackground2": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-activeBackground3": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-activeBackground4": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-activeBackground5": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-activeBackground6": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-background": {
+      "darkcontrast": "#7c7c7c",
+      "darkplus": "rgba(227, 228, 226, 0.16)",
+      "defaultdark": "rgba(131, 132, 133, 0.3)"
+    },
+    "--vscode-editorIndentGuide-background1": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#404040",
+      "defaultdark": "#404040"
+    },
+    "--vscode-editorIndentGuide-background2": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-background3": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-background4": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-background5": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorIndentGuide-background6": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-editorInfo-foreground": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-editorInlayHint-background": {
+      "darkcontrast": "rgba(255, 255, 255, 0.1)",
+      "darkplus": "rgba(77, 77, 77, 0.1)",
+      "defaultdark": "rgba(57, 148, 188, 0.09)"
+    },
+    "--vscode-editorInlayHint-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#969696",
+      "defaultdark": "#969696"
+    },
+    "--vscode-editorInlayHint-parameterBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.1)",
+      "darkplus": "rgba(77, 77, 77, 0.1)",
+      "defaultdark": "rgba(57, 148, 188, 0.09)"
+    },
+    "--vscode-editorInlayHint-parameterForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#969696",
+      "defaultdark": "#969696"
+    },
+    "--vscode-editorInlayHint-typeBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.1)",
+      "darkplus": "rgba(77, 77, 77, 0.1)",
+      "defaultdark": "rgba(57, 148, 188, 0.09)"
+    },
+    "--vscode-editorInlayHint-typeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#969696",
+      "defaultdark": "#969696"
+    },
+    "--vscode-editorLightBulb-foreground": {
+      "darkcontrast": "#ffcc00",
+      "darkplus": "#ffcc00",
+      "defaultdark": "#ffcc00"
+    },
+    "--vscode-editorLightBulbAi-foreground": {
+      "darkcontrast": "#ffcc00",
+      "darkplus": "#ffcc00",
+      "defaultdark": "#ffcc00"
+    },
+    "--vscode-editorLightBulbAutoFix-foreground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-editorLineNumber-activeForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#c6c6c6",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorLineNumber-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#858585",
+      "defaultdark": "#858889"
+    },
+    "--vscode-editorLink-activeForeground": {
+      "darkcontrast": "#00ffff",
+      "darkplus": "#4e94ce",
+      "defaultdark": "#3a94bc"
+    },
+    "--vscode-editorMarkerNavigation-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editorMarkerNavigationError-background": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-editorMarkerNavigationInfo-background": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-editorMarkerNavigationWarning-background": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-editorMarkerNavigationWarning-headerBackground": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "rgba(204, 167, 0, 0.1)",
+      "defaultdark": "rgba(204, 167, 0, 0.1)"
+    },
+    "--vscode-editorMultiCursor-primary.foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#aeafad",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorMultiCursor-secondary.foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#aeafad",
+      "defaultdark": "#bbbebf"
+    },
+    "--vscode-editorOverviewRuler-addedForeground": {
+      "darkcontrast": "rgba(72, 126, 2, 0.6)",
+      "darkplus": "rgba(72, 126, 2, 0.6)",
+      "defaultdark": "#73c991"
+    },
+    "--vscode-editorOverviewRuler-border": {
+      "darkcontrast": "rgba(127, 127, 127, 0.3)",
+      "darkplus": "rgba(127, 127, 127, 0.3)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-editorOverviewRuler-bracketMatchForeground": {
+      "darkcontrast": "#a0a0a0",
+      "darkplus": "#a0a0a0",
+      "defaultdark": "#a0a0a0"
+    },
+    "--vscode-editorOverviewRuler-commentDraftForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-editorOverviewRuler-commentForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-editorOverviewRuler-commentUnresolvedForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-editorOverviewRuler-commonContentForeground": {
+      "darkcontrast": "#c3df6f",
+      "darkplus": "rgba(96, 96, 96, 0.4)",
+      "defaultdark": "rgba(96, 96, 96, 0.4)"
+    },
+    "--vscode-editorOverviewRuler-currentContentForeground": {
+      "darkcontrast": "#c3df6f",
+      "darkplus": "rgba(64, 200, 174, 0.5)",
+      "defaultdark": "rgba(64, 200, 174, 0.5)"
+    },
+    "--vscode-editorOverviewRuler-deletedForeground": {
+      "darkcontrast": "rgba(244, 135, 113, 0.6)",
+      "darkplus": "rgba(241, 76, 76, 0.6)",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-editorOverviewRuler-errorForeground": {
+      "darkcontrast": "#ff3232",
+      "darkplus": "rgba(255, 18, 18, 0.7)",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-editorOverviewRuler-findMatchForeground": {
+      "darkcontrast": "#ab5a00",
+      "darkplus": "rgba(209, 134, 22, 0.49)",
+      "defaultdark": "rgba(58, 148, 188, 0.6)"
+    },
+    "--vscode-editorOverviewRuler-incomingContentForeground": {
+      "darkcontrast": "#c3df6f",
+      "darkplus": "rgba(64, 166, 255, 0.5)",
+      "defaultdark": "rgba(64, 166, 255, 0.5)"
+    },
+    "--vscode-editorOverviewRuler-infoForeground": {
+      "darkcontrast": "rgba(89, 164, 249, 0.8)",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-editorOverviewRuler-modifiedForeground": {
+      "darkcontrast": "rgba(27, 129, 168, 0.6)",
+      "darkplus": "rgba(27, 129, 168, 0.6)",
+      "defaultdark": "#6ab890"
+    },
+    "--vscode-editorOverviewRuler-rangeHighlightForeground": {
+      "darkcontrast": "rgba(0, 122, 204, 0.6)",
+      "darkplus": "rgba(0, 122, 204, 0.6)",
+      "defaultdark": "rgba(0, 122, 204, 0.6)"
+    },
+    "--vscode-editorOverviewRuler-selectionHighlightForeground": {
+      "darkcontrast": "rgba(160, 160, 160, 0.8)",
+      "darkplus": "rgba(160, 160, 160, 0.8)",
+      "defaultdark": "rgba(160, 160, 160, 0.8)"
+    },
+    "--vscode-editorOverviewRuler-warningForeground": {
+      "darkcontrast": "rgba(255, 204, 0, 0.8)",
+      "darkplus": "#cca700",
+      "defaultdark": "#e5ba7d"
+    },
+    "--vscode-editorOverviewRuler-wordHighlightForeground": {
+      "darkcontrast": "rgba(160, 160, 160, 0.8)",
+      "darkplus": "rgba(160, 160, 160, 0.8)",
+      "defaultdark": "rgba(160, 160, 160, 0.8)"
+    },
+    "--vscode-editorOverviewRuler-wordHighlightStrongForeground": {
+      "darkcontrast": "rgba(192, 160, 192, 0.8)",
+      "darkplus": "rgba(192, 160, 192, 0.8)",
+      "defaultdark": "rgba(192, 160, 192, 0.8)"
+    },
+    "--vscode-editorOverviewRuler-wordHighlightTextForeground": {
+      "darkcontrast": "rgba(160, 160, 160, 0.8)",
+      "darkplus": "rgba(160, 160, 160, 0.8)",
+      "defaultdark": "rgba(160, 160, 160, 0.8)"
+    },
+    "--vscode-editorPane-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editorRuler-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#5a5a5a",
+      "defaultdark": "#848484"
+    },
+    "--vscode-editorStickyScroll-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editorStickyScrollGutter-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-editorSuggestWidget-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-editorSuggestWidget-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-editorSuggestWidget-focusHighlightForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#2aaaff",
+      "defaultdark": "#48a0c7"
+    },
+    "--vscode-editorSuggestWidget-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#d4d4d4",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-editorSuggestWidget-highlightForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#2aaaff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-editorSuggestWidgetStatus-foreground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.5)",
+      "darkplus": "rgba(212, 212, 212, 0.5)",
+      "defaultdark": "rgba(191, 191, 191, 0.5)"
+    },
+    "--vscode-editorUnicodeHighlight-border": {
+      "darkcontrast": "#ffd370",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-editorWarning-foreground": {
+      "darkcontrast": "#ffd370",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-editorWhitespace-foreground": {
+      "darkcontrast": "#7c7c7c",
+      "darkplus": "rgba(227, 228, 226, 0.16)",
+      "defaultdark": "rgba(140, 140, 140, 0.3)"
+    },
+    "--vscode-editorWidget-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-editorWidget-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-editorWidget-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-errorForeground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f48771",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-extensionBadge-remoteBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#007acc",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-extensionBadge-remoteForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-extensionButton-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.15)",
+      "defaultdark": "#333536"
+    },
+    "--vscode-extensionButton-separator": {
+      "darkcontrast": "rgba(255, 255, 255, 0.4)",
+      "darkplus": "rgba(255, 255, 255, 0.4)",
+      "defaultdark": "rgba(255, 255, 255, 0.4)"
+    },
+    "--vscode-extensionIcon-preReleaseForeground": {
+      "darkcontrast": "#1d9271",
+      "darkplus": "#1d9271",
+      "defaultdark": "#1d9271"
+    },
+    "--vscode-extensionIcon-privateForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.38)",
+      "darkplus": "rgba(255, 255, 255, 0.38)",
+      "defaultdark": "rgba(255, 255, 255, 0.38)"
+    },
+    "--vscode-extensionIcon-starForeground": {
+      "darkcontrast": "#ff8e00",
+      "darkplus": "#ff8e00",
+      "defaultdark": "#ff8e00"
+    },
+    "--vscode-extensionIcon-verifiedForeground": {
+      "darkcontrast": "#21a6ff",
+      "darkplus": "#3794ff",
+      "defaultdark": "#48a0c7"
+    },
+    "--vscode-focusBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-font-family": {
+      "darkcontrast": "\"Segoe WPC\", \"Segoe UI\", sans-serif",
+      "darkplus": "\"Segoe WPC\", \"Segoe UI\", sans-serif",
+      "defaultdark": "\"Segoe WPC\", \"Segoe UI\", sans-serif"
+    },
+    "--vscode-font-size": {
+      "darkcontrast": "13px",
+      "darkplus": "13px",
+      "defaultdark": "13px"
+    },
+    "--vscode-font-weight": {
+      "darkcontrast": "normal",
+      "darkplus": "normal",
+      "defaultdark": "normal"
+    },
+    "--vscode-fontSize-body1": {
+      "darkcontrast": "13px",
+      "darkplus": "13px",
+      "defaultdark": "13px"
+    },
+    "--vscode-fontSize-body2": {
+      "darkcontrast": "11px",
+      "darkplus": "11px",
+      "defaultdark": "11px"
+    },
+    "--vscode-fontSize-heading1": {
+      "darkcontrast": "26px",
+      "darkplus": "26px",
+      "defaultdark": "26px"
+    },
+    "--vscode-fontSize-heading2": {
+      "darkcontrast": "18px",
+      "darkplus": "18px",
+      "defaultdark": "18px"
+    },
+    "--vscode-fontSize-heading3": {
+      "darkcontrast": "13px",
+      "darkplus": "13px",
+      "defaultdark": "13px"
+    },
+    "--vscode-fontSize-label1": {
+      "darkcontrast": "12px",
+      "darkplus": "12px",
+      "defaultdark": "12px"
+    },
+    "--vscode-fontSize-label2": {
+      "darkcontrast": "11px",
+      "darkplus": "11px",
+      "defaultdark": "11px"
+    },
+    "--vscode-fontSize-label3": {
+      "darkcontrast": "10px",
+      "darkplus": "10px",
+      "defaultdark": "10px"
+    },
+    "--vscode-fontWeight-regular": {
+      "darkcontrast": "400",
+      "darkplus": "400",
+      "defaultdark": "400"
+    },
+    "--vscode-fontWeight-semiBold": {
+      "darkcontrast": "600",
+      "darkplus": "600",
+      "defaultdark": "600"
+    },
+    "--vscode-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-git-blame.editorDecorationForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#969696",
+      "defaultdark": "#969696"
+    },
+    "--vscode-gitDecoration-addedResourceForeground": {
+      "darkcontrast": "#a1e3ad",
+      "darkplus": "#81b88b",
+      "defaultdark": "#73c991"
+    },
+    "--vscode-gitDecoration-conflictingResourceForeground": {
+      "darkcontrast": "#c74e39",
+      "darkplus": "#e4676b",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-gitDecoration-deletedResourceForeground": {
+      "darkcontrast": "#c74e39",
+      "darkplus": "#c74e39",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-gitDecoration-ignoredResourceForeground": {
+      "darkcontrast": "#a7a8a9",
+      "darkplus": "#8c8c8c",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-gitDecoration-modifiedResourceForeground": {
+      "darkcontrast": "#e2c08d",
+      "darkplus": "#e2c08d",
+      "defaultdark": "#e5ba7d"
+    },
+    "--vscode-gitDecoration-renamedResourceForeground": {
+      "darkcontrast": "#73c991",
+      "darkplus": "#73c991",
+      "defaultdark": "#73c991"
+    },
+    "--vscode-gitDecoration-stageDeletedResourceForeground": {
+      "darkcontrast": "#c74e39",
+      "darkplus": "#c74e39",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-gitDecoration-stageModifiedResourceForeground": {
+      "darkcontrast": "#e2c08d",
+      "darkplus": "#e2c08d",
+      "defaultdark": "#e5ba7d"
+    },
+    "--vscode-gitDecoration-submoduleResourceForeground": {
+      "darkcontrast": "#8db9e2",
+      "darkplus": "#8db9e2",
+      "defaultdark": "#8db9e2"
+    },
+    "--vscode-gitDecoration-untrackedResourceForeground": {
+      "darkcontrast": "#73c991",
+      "darkplus": "#73c991",
+      "defaultdark": "#73c991"
+    },
+    "--vscode-icon-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#c5c5c5",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-inactiveSessionView-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-inlineChat-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-inlineChat-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-inlineChat-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-inlineChatInput-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-inlineChatInput-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-inlineChatInput-focusBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-inlineChatInput-placeholderForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "#a6a6a6",
+      "defaultdark": "#555555"
+    },
+    "--vscode-inlineEdit-gutterIndicator.primaryBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0.4)",
+      "darkplus": "rgba(14, 99, 156, 0.4)",
+      "defaultdark": "rgba(41, 122, 160, 0.4)"
+    },
+    "--vscode-inlineEdit-gutterIndicator.primaryBorder": {
+      "darkcontrast": "#000000",
+      "darkplus": "#0e639c",
+      "defaultdark": "#297aa0"
+    },
+    "--vscode-inlineEdit-gutterIndicator.primaryForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-inlineEdit-gutterIndicator.secondaryBackground": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-inlineEdit-gutterIndicator.secondaryBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-inlineEdit-gutterIndicator.secondaryForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-inlineEdit-gutterIndicator.successfulBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#0e639c",
+      "defaultdark": "#297aa0"
+    },
+    "--vscode-inlineEdit-gutterIndicator.successfulBorder": {
+      "darkcontrast": "#000000",
+      "darkplus": "#0e639c",
+      "defaultdark": "#297aa0"
+    },
+    "--vscode-inlineEdit-gutterIndicator.successfulForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-input-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-input-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-input-placeholderForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "#a6a6a6",
+      "defaultdark": "#555555"
+    },
+    "--vscode-inputOption-activeBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 127, 212, 0.4)",
+      "defaultdark": "rgba(57, 148, 188, 0.2)"
+    },
+    "--vscode-inputOption-activeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#007acc",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-inputOption-activeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-inputValidation-errorBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#5a1d1d",
+      "defaultdark": "#3a1d1d"
+    },
+    "--vscode-inputValidation-errorBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#be1100",
+      "defaultdark": "#be1100"
+    },
+    "--vscode-inputValidation-infoBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#063b49",
+      "defaultdark": "#1e3a47"
+    },
+    "--vscode-inputValidation-infoBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#007acc",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-inputValidation-warningBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#352a05",
+      "defaultdark": "#352a05"
+    },
+    "--vscode-inputValidation-warningBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#b89500",
+      "defaultdark": "#b89500"
+    },
+    "--vscode-interactive-activeCodeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#007acc",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-interactive-inactiveCodeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-keybindingLabel-background": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(128, 128, 128, 0.17)",
+      "defaultdark": "rgba(128, 128, 128, 0.17)"
+    },
+    "--vscode-keybindingLabel-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(51, 51, 51, 0.6)",
+      "defaultdark": "rgba(51, 51, 51, 0.6)"
+    },
+    "--vscode-keybindingLabel-bottomBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(68, 68, 68, 0.6)",
+      "defaultdark": "rgba(68, 68, 68, 0.6)"
+    },
+    "--vscode-keybindingLabel-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#cccccc"
+    },
+    "--vscode-list-deemphasizedForeground": {
+      "darkcontrast": "#a7a8a9",
+      "darkplus": "#8c8c8c",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-list-focusHighlightForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#2aaaff",
+      "defaultdark": "#48a0c7"
+    },
+    "--vscode-list-focusOutline": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-list-highlightForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#2aaaff",
+      "defaultdark": "#48a0c7"
+    },
+    "--vscode-list-hoverBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.1)",
+      "darkplus": "#2a2d2e",
+      "defaultdark": "rgba(255, 255, 255, 0.08)"
+    },
+    "--vscode-list-invalidItemForeground": {
+      "darkcontrast": "#b89500",
+      "darkplus": "#b89500",
+      "defaultdark": "#444444"
+    },
+    "--vscode-listFilterWidget-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-listFilterWidget-noMatchesOutline": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#be1100",
+      "defaultdark": "#be1100"
+    },
+    "--vscode-listFilterWidget-outline": {
+      "darkcontrast": "#f38518",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-markdown-extension.editor.codeSpan.background": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 0, 0, 0)",
+      "defaultdark": "rgba(0, 0, 0, 0)"
+    },
+    "--vscode-markdown-extension.editor.codeSpan.border": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#264f78",
+      "defaultdark": "rgba(39, 103, 130, 0.87)"
+    },
+    "--vscode-markdown-extension.editor.formattingMark.foreground": {
+      "darkcontrast": "#33ff2e",
+      "darkplus": "rgba(227, 228, 226, 0.16)",
+      "defaultdark": "rgba(140, 140, 140, 0.3)"
+    },
+    "--vscode-markdown-extension.editor.trailingSpace.background": {
+      "darkcontrast": "#7c7c7c",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "rgba(204, 204, 204, 0.2)"
+    },
+    "--vscode-markdownAlert-caution.foreground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-markdownAlert-important.foreground": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#ad80d7"
+    },
+    "--vscode-markdownAlert-note.foreground": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-markdownAlert-tip.foreground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#86cf86"
+    },
+    "--vscode-markdownAlert-warning.foreground": {
+      "darkcontrast": "#ffd370",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-mcpIcon-starForeground": {
+      "darkcontrast": "#ff8e00",
+      "darkplus": "#ff8e00",
+      "defaultdark": "#ff8e00"
+    },
+    "--vscode-menu-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-menu-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#454545",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-menu-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-menu-separatorBackground": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#454545",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-menubar-selectionForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-mergeEditor-change.background": {
+      "darkcontrast": "rgba(155, 185, 85, 0.2)",
+      "darkplus": "rgba(155, 185, 85, 0.2)",
+      "defaultdark": "rgba(155, 185, 85, 0.2)"
+    },
+    "--vscode-mergeEditor-change.word.background": {
+      "darkcontrast": "rgba(156, 204, 44, 0.2)",
+      "darkplus": "rgba(156, 204, 44, 0.2)",
+      "defaultdark": "rgba(156, 204, 44, 0.2)"
+    },
+    "--vscode-mergeEditor-changeBase.background": {
+      "darkcontrast": "#4b1818",
+      "darkplus": "#4b1818",
+      "defaultdark": "#4b1818"
+    },
+    "--vscode-mergeEditor-changeBase.word.background": {
+      "darkcontrast": "#6f1313",
+      "darkplus": "#6f1313",
+      "defaultdark": "#6f1313"
+    },
+    "--vscode-mergeEditor-conflict.handled.minimapOverViewRuler": {
+      "darkcontrast": "rgba(173, 172, 168, 0.93)",
+      "darkplus": "rgba(173, 172, 168, 0.93)",
+      "defaultdark": "rgba(173, 172, 168, 0.93)"
+    },
+    "--vscode-mergeEditor-conflict.handledFocused.border": {
+      "darkcontrast": "rgba(193, 193, 193, 0.8)",
+      "darkplus": "rgba(193, 193, 193, 0.8)",
+      "defaultdark": "rgba(193, 193, 193, 0.8)"
+    },
+    "--vscode-mergeEditor-conflict.handledUnfocused.border": {
+      "darkcontrast": "rgba(134, 134, 134, 0.29)",
+      "darkplus": "rgba(134, 134, 134, 0.29)",
+      "defaultdark": "rgba(134, 134, 134, 0.29)"
+    },
+    "--vscode-mergeEditor-conflict.unhandled.minimapOverViewRuler": {
+      "darkcontrast": "#fcba03",
+      "darkplus": "#fcba03",
+      "defaultdark": "#fcba03"
+    },
+    "--vscode-mergeEditor-conflict.unhandledFocused.border": {
+      "darkcontrast": "#ffa600",
+      "darkplus": "#ffa600",
+      "defaultdark": "#ffa600"
+    },
+    "--vscode-mergeEditor-conflict.unhandledUnfocused.border": {
+      "darkcontrast": "rgba(255, 166, 0, 0.48)",
+      "darkplus": "rgba(255, 166, 0, 0.48)",
+      "defaultdark": "rgba(255, 166, 0, 0.48)"
+    },
+    "--vscode-mergeEditor-conflictingLines.background": {
+      "darkcontrast": "rgba(255, 234, 0, 0.28)",
+      "darkplus": "rgba(255, 234, 0, 0.28)",
+      "defaultdark": "rgba(255, 234, 0, 0.28)"
+    },
+    "--vscode-minimap-chatEditHighlight": {
+      "darkcontrast": "rgba(0, 0, 0, 0.6)",
+      "darkplus": "rgba(30, 30, 30, 0.6)",
+      "defaultdark": "rgba(18, 19, 20, 0.6)"
+    },
+    "--vscode-minimap-errorHighlight": {
+      "darkcontrast": "#ff3232",
+      "darkplus": "rgba(255, 18, 18, 0.7)",
+      "defaultdark": "rgba(255, 18, 18, 0.7)"
+    },
+    "--vscode-minimap-foregroundOpacity": {
+      "darkcontrast": "#000000",
+      "darkplus": "#000000",
+      "defaultdark": "#000000"
+    },
+    "--vscode-minimap-infoHighlight": {
+      "darkcontrast": "rgba(89, 164, 249, 0.8)",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-minimap-selectionHighlight": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#264f78",
+      "defaultdark": "rgba(39, 103, 130, 0.87)"
+    },
+    "--vscode-minimap-warningHighlight": {
+      "darkcontrast": "rgba(255, 204, 0, 0.8)",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-minimapGutter-addedBackground": {
+      "darkcontrast": "#487e02",
+      "darkplus": "#487e02",
+      "defaultdark": "#72c892"
+    },
+    "--vscode-minimapGutter-deletedBackground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f28772"
+    },
+    "--vscode-minimapGutter-modifiedBackground": {
+      "darkcontrast": "#1b81a8",
+      "darkplus": "#1b81a8",
+      "defaultdark": "#0078d4"
+    },
+    "--vscode-minimapSlider-activeBackground": {
+      "darkcontrast": "rgba(111, 195, 223, 0.5)",
+      "darkplus": "rgba(191, 191, 191, 0.2)",
+      "defaultdark": "rgba(168, 169, 170, 0.61)"
+    },
+    "--vscode-minimapSlider-background": {
+      "darkcontrast": "rgba(111, 195, 223, 0.3)",
+      "darkplus": "rgba(121, 121, 121, 0.2)",
+      "defaultdark": "rgba(168, 169, 170, 0.52)"
+    },
+    "--vscode-minimapSlider-hoverBackground": {
+      "darkcontrast": "rgba(111, 195, 223, 0.4)",
+      "darkplus": "rgba(100, 100, 100, 0.35)",
+      "defaultdark": "rgba(168, 169, 170, 0.56)"
+    },
+    "--vscode-multiDiffEditor-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-multiDiffEditor-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-notebook-cellBorderColor": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-notebook-cellInsertionIndicator": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-notebook-cellStatusBarItemHoverBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.15)",
+      "darkplus": "rgba(255, 255, 255, 0.15)",
+      "defaultdark": "rgba(255, 255, 255, 0.15)"
+    },
+    "--vscode-notebook-cellToolbarSeparator": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "rgba(128, 128, 128, 0.35)"
+    },
+    "--vscode-notebook-focusedCellBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-notebook-focusedEditorBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-notebook-inactiveFocusedCellBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-notebook-selectedCellBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-notebookEditorOverviewRuler-runningCellForeground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#89d185"
+    },
+    "--vscode-notebookScrollbarSlider-activeBackground": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(191, 191, 191, 0.4)",
+      "defaultdark": "rgba(168, 169, 170, 0.61)"
+    },
+    "--vscode-notebookScrollbarSlider-background": {
+      "darkcontrast": "rgba(111, 195, 223, 0.6)",
+      "darkplus": "rgba(121, 121, 121, 0.4)",
+      "defaultdark": "rgba(168, 169, 170, 0.52)"
+    },
+    "--vscode-notebookScrollbarSlider-hoverBackground": {
+      "darkcontrast": "rgba(111, 195, 223, 0.8)",
+      "darkplus": "rgba(100, 100, 100, 0.7)",
+      "defaultdark": "rgba(168, 169, 170, 0.56)"
+    },
+    "--vscode-notebookStatusErrorIcon-foreground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f48771",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-notebookStatusRunningIcon-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-notebookStatusSuccessIcon-foreground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "#89d185",
+      "defaultdark": "#89d185"
+    },
+    "--vscode-notificationCenter-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#303031",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-notificationCenterHeader-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#303031",
+      "defaultdark": "#242526"
+    },
+    "--vscode-notificationLink-foreground": {
+      "darkcontrast": "#21a6ff",
+      "darkplus": "#3794ff",
+      "defaultdark": "#3a94bc"
+    },
+    "--vscode-notificationToast-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#303031",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-notifications-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-notifications-border": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#303031",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-notifications-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-notificationsErrorIcon-foreground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f48771"
+    },
+    "--vscode-notificationsInfoIcon-foreground": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#3a94bc"
+    },
+    "--vscode-notificationsWarningIcon-foreground": {
+      "darkcontrast": "#ffd370",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-panel-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-panel-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-panel-dropBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-panelSection-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-panelStickyScroll-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-panelTitle-activeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-panelTitle-activeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-panelTitle-inactiveForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(231, 231, 231, 0.6)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-panelTitleBadge-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#007acc",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-panelTitleBadge-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-peekView-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-peekViewEditor-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#001f33",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-peekViewEditorGutter-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#001f33",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-peekViewEditorStickyScroll-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#001f33",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-peekViewEditorStickyScrollGutter-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#001f33",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-peekViewResult-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-peekViewResult-fileForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-peekViewResult-lineForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#bbbbbb",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-peekViewResult-selectionForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-peekViewTitle-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#242526"
+    },
+    "--vscode-peekViewTitleDescription-foreground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.6)",
+      "darkplus": "rgba(204, 204, 204, 0.7)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-peekViewTitleLabel-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-pickerGroup-border": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#3f3f46",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-pickerGroup-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#3794ff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-ports-iconRunningProcessForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#369432",
+      "defaultdark": "#369432"
+    },
+    "--vscode-problemsErrorIcon-foreground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-problemsInfoIcon-foreground": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-problemsWarningIcon-foreground": {
+      "darkcontrast": "#ffd370",
+      "darkplus": "#cca700",
+      "defaultdark": "#cca700"
+    },
+    "--vscode-profileBadge-background": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#4d4d4d",
+      "defaultdark": "#4d4d4d"
+    },
+    "--vscode-profileBadge-foreground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-profiles-sashBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-progressBar-background": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#0e70c0",
+      "defaultdark": "#878889"
+    },
+    "--vscode-quickInput-background": {
+      "darkcontrast": "#0c141f",
+      "darkplus": "#252526",
+      "defaultdark": "#202122"
+    },
+    "--vscode-quickInput-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-quickInputList-focusHighlightForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#2aaaff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-quickInputTitle-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.1)",
+      "defaultdark": "#202122"
+    },
+    "--vscode-radio-activeBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "rgba(0, 127, 212, 0.4)",
+      "defaultdark": "rgba(57, 148, 188, 0.2)"
+    },
+    "--vscode-radio-activeBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#007acc",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-radio-activeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-radio-inactiveBorder": {
+      "darkcontrast": "rgba(255, 255, 255, 0.4)",
+      "darkplus": "rgba(255, 255, 255, 0.2)",
+      "defaultdark": "rgba(191, 191, 191, 0.2)"
+    },
+    "--vscode-sash-hoverBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-scmGraph-foreground1": {
+      "darkcontrast": "#ffb000",
+      "darkplus": "#ffb000",
+      "defaultdark": "#ffb000"
+    },
+    "--vscode-scmGraph-foreground2": {
+      "darkcontrast": "#dc267f",
+      "darkplus": "#dc267f",
+      "defaultdark": "#dc267f"
+    },
+    "--vscode-scmGraph-foreground3": {
+      "darkcontrast": "#994f00",
+      "darkplus": "#994f00",
+      "defaultdark": "#994f00"
+    },
+    "--vscode-scmGraph-foreground4": {
+      "darkcontrast": "#40b0a6",
+      "darkplus": "#40b0a6",
+      "defaultdark": "#40b0a6"
+    },
+    "--vscode-scmGraph-foreground5": {
+      "darkcontrast": "#b66dff",
+      "darkplus": "#b66dff",
+      "defaultdark": "#b66dff"
+    },
+    "--vscode-scmGraph-historyItemBaseRefColor": {
+      "darkcontrast": "#ea5c00",
+      "darkplus": "#ea5c00",
+      "defaultdark": "#ea5c00"
+    },
+    "--vscode-scmGraph-historyItemHoverAdditionsForeground": {
+      "darkcontrast": "#a1e3ad",
+      "darkplus": "#81b88b",
+      "defaultdark": "#81b88b"
+    },
+    "--vscode-scmGraph-historyItemHoverDefaultLabelBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#4d4d4d",
+      "defaultdark": "rgba(57, 148, 188, 0.94)"
+    },
+    "--vscode-scmGraph-historyItemHoverDefaultLabelForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-scmGraph-historyItemHoverDeletionsForeground": {
+      "darkcontrast": "#c74e39",
+      "darkplus": "#c74e39",
+      "defaultdark": "#c74e39"
+    },
+    "--vscode-scmGraph-historyItemHoverLabelForeground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-scmGraph-historyItemRefColor": {
+      "darkcontrast": "#59a4f9",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#57a3f8"
+    },
+    "--vscode-scmGraph-historyItemRemoteRefColor": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#ad80d7"
+    },
+    "--vscode-scrollbarSlider-activeBackground": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(191, 191, 191, 0.4)",
+      "defaultdark": "rgba(168, 169, 170, 0.61)"
+    },
+    "--vscode-scrollbarSlider-background": {
+      "darkcontrast": "rgba(111, 195, 223, 0.6)",
+      "darkplus": "rgba(121, 121, 121, 0.4)",
+      "defaultdark": "rgba(168, 169, 170, 0.52)"
+    },
+    "--vscode-scrollbarSlider-hoverBackground": {
+      "darkcontrast": "rgba(111, 195, 223, 0.8)",
+      "darkplus": "rgba(100, 100, 100, 0.7)",
+      "defaultdark": "rgba(168, 169, 170, 0.56)"
+    },
+    "--vscode-search-resultsInfoForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(204, 204, 204, 0.65)",
+      "defaultdark": "rgba(191, 191, 191, 0.65)"
+    },
+    "--vscode-settings-checkboxBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#242526"
+    },
+    "--vscode-settings-checkboxBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#6b6b6b",
+      "defaultdark": "#707070"
+    },
+    "--vscode-settings-checkboxForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#f0f0f0",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-settings-dropdownBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#313131"
+    },
+    "--vscode-settings-dropdownBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#3c3c3c"
+    },
+    "--vscode-settings-dropdownForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#f0f0f0",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-settings-dropdownListBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-settings-focusedRowBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#007fd4",
+      "defaultdark": "rgba(57, 148, 188, 0.7)"
+    },
+    "--vscode-settings-headerBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-settings-headerForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e7e7e7",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-settings-modifiedItemIndicator": {
+      "darkcontrast": "#00497a",
+      "darkplus": "#0c7d9d",
+      "defaultdark": "rgba(187, 128, 9, 0.4)"
+    },
+    "--vscode-settings-numberInputBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-settings-numberInputForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-settings-sashBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-settings-settingsHeaderHoverForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "rgba(231, 231, 231, 0.7)",
+      "defaultdark": "rgba(255, 255, 255, 0.7)"
+    },
+    "--vscode-settings-textInputBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-settings-textInputForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-sideBar-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-sideBarActivityBarTop-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-sideBarSectionHeader-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-sideBarStickyScroll-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-sideBarTitle-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-sideBarTitle-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#bbbbbb",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-sideBySideEditor-horizontalBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#444444",
+      "defaultdark": "rgba(255, 255, 255, 0.09)"
+    },
+    "--vscode-sideBySideEditor-verticalBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#444444",
+      "defaultdark": "rgba(255, 255, 255, 0.09)"
+    },
+    "--vscode-simpleFindWidget-sashBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#454545",
+      "defaultdark": "#454545"
+    },
+    "--vscode-spacing-size100": {
+      "darkcontrast": "10px",
+      "darkplus": "10px",
+      "defaultdark": "10px"
+    },
+    "--vscode-spacing-size120": {
+      "darkcontrast": "12px",
+      "darkplus": "12px",
+      "defaultdark": "12px"
+    },
+    "--vscode-spacing-size160": {
+      "darkcontrast": "16px",
+      "darkplus": "16px",
+      "defaultdark": "16px"
+    },
+    "--vscode-spacing-size20": {
+      "darkcontrast": "2px",
+      "darkplus": "2px",
+      "defaultdark": "2px"
+    },
+    "--vscode-spacing-size200": {
+      "darkcontrast": "20px",
+      "darkplus": "20px",
+      "defaultdark": "20px"
+    },
+    "--vscode-spacing-size240": {
+      "darkcontrast": "24px",
+      "darkplus": "24px",
+      "defaultdark": "24px"
+    },
+    "--vscode-spacing-size280": {
+      "darkcontrast": "28px",
+      "darkplus": "28px",
+      "defaultdark": "28px"
+    },
+    "--vscode-spacing-size320": {
+      "darkcontrast": "32px",
+      "darkplus": "32px",
+      "defaultdark": "32px"
+    },
+    "--vscode-spacing-size360": {
+      "darkcontrast": "36px",
+      "darkplus": "36px",
+      "defaultdark": "36px"
+    },
+    "--vscode-spacing-size40": {
+      "darkcontrast": "4px",
+      "darkplus": "4px",
+      "defaultdark": "4px"
+    },
+    "--vscode-spacing-size400": {
+      "darkcontrast": "40px",
+      "darkplus": "40px",
+      "defaultdark": "40px"
+    },
+    "--vscode-spacing-size60": {
+      "darkcontrast": "6px",
+      "darkplus": "6px",
+      "defaultdark": "6px"
+    },
+    "--vscode-spacing-size80": {
+      "darkcontrast": "8px",
+      "darkplus": "8px",
+      "defaultdark": "8px"
+    },
+    "--vscode-spacing-sizeNone": {
+      "darkcontrast": "0px",
+      "darkplus": "0px",
+      "defaultdark": "0px"
+    },
+    "--vscode-statusBar-debuggingBackground": {
+      "darkcontrast": "#ba592c",
+      "darkplus": "#cc6633",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-statusBar-debuggingForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBar-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-statusBar-noFolderForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-statusBarItem-activeBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.18)",
+      "darkplus": "rgba(255, 255, 255, 0.18)",
+      "defaultdark": "#4b4c4d"
+    },
+    "--vscode-statusBarItem-compactHoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "rgba(255, 255, 255, 0.12)"
+    },
+    "--vscode-statusBarItem-errorForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-errorHoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "#323233"
+    },
+    "--vscode-statusBarItem-errorHoverForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-hoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "#323233"
+    },
+    "--vscode-statusBarItem-hoverForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-offlineBackground": {
+      "darkcontrast": "#6c1717",
+      "darkplus": "#6c1717",
+      "defaultdark": "#6c1717"
+    },
+    "--vscode-statusBarItem-offlineForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-offlineHoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "#323233"
+    },
+    "--vscode-statusBarItem-offlineHoverForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-prominentBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0.5)",
+      "darkplus": "rgba(0, 0, 0, 0.5)",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-statusBarItem-prominentForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-prominentHoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "#3994bc"
+    },
+    "--vscode-statusBarItem-prominentHoverForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-remoteBackground": {
+      "darkcontrast": "rgba(0, 0, 0, 0)",
+      "darkplus": "#16825d",
+      "defaultdark": "#0078d4"
+    },
+    "--vscode-statusBarItem-remoteForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-remoteHoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "#323233"
+    },
+    "--vscode-statusBarItem-remoteHoverForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-warningForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-statusBarItem-warningHoverBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.12)",
+      "defaultdark": "#323233"
+    },
+    "--vscode-statusBarItem-warningHoverForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-strokeThickness": {
+      "darkcontrast": "1px",
+      "darkplus": "1px",
+      "defaultdark": "1px"
+    },
+    "--vscode-strongForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-symbolIcon-arrayForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-booleanForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-classForeground": {
+      "darkcontrast": "#ee9d28",
+      "darkplus": "#ee9d28",
+      "defaultdark": "#ee9d28"
+    },
+    "--vscode-symbolIcon-colorForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-constantForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-constructorForeground": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#b180d7"
+    },
+    "--vscode-symbolIcon-enumeratorForeground": {
+      "darkcontrast": "#ee9d28",
+      "darkplus": "#ee9d28",
+      "defaultdark": "#ee9d28"
+    },
+    "--vscode-symbolIcon-enumeratorMemberForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-symbolIcon-eventForeground": {
+      "darkcontrast": "#ee9d28",
+      "darkplus": "#ee9d28",
+      "defaultdark": "#ee9d28"
+    },
+    "--vscode-symbolIcon-fieldForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-symbolIcon-fileForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-folderForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-functionForeground": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#b180d7"
+    },
+    "--vscode-symbolIcon-interfaceForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-symbolIcon-keyForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-keywordForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-methodForeground": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#b180d7"
+    },
+    "--vscode-symbolIcon-moduleForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-namespaceForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-nullForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-numberForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-objectForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-operatorForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-packageForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-propertyForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-referenceForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-snippetForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-stringForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-structForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-textForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-typeParameterForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-unitForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-symbolIcon-variableForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-tab-activeBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-tab-activeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-tab-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#252526",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-tab-dragAndDropBorder": {
+      "darkcontrast": "#f38518",
+      "darkplus": "#ffffff",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-tab-inactiveForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(255, 255, 255, 0.5)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-tab-inactiveModifiedBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(51, 153, 204, 0.5)",
+      "defaultdark": "rgba(51, 153, 204, 0.5)"
+    },
+    "--vscode-tab-lastPinnedBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(204, 204, 204, 0.2)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-tab-selectedBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#222222",
+      "defaultdark": "#222222"
+    },
+    "--vscode-tab-selectedForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(255, 255, 255, 0.63)",
+      "defaultdark": "rgba(255, 255, 255, 0.63)"
+    },
+    "--vscode-tab-unfocusedActiveBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#1e1e1e",
+      "defaultdark": "#121314"
+    },
+    "--vscode-tab-unfocusedActiveForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(255, 255, 255, 0.5)",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-tab-unfocusedActiveModifiedBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(51, 153, 204, 0.5)",
+      "defaultdark": "rgba(51, 153, 204, 0.5)"
+    },
+    "--vscode-tab-unfocusedInactiveForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(255, 255, 255, 0.25)",
+      "defaultdark": "#444444"
+    },
+    "--vscode-tab-unfocusedInactiveModifiedBorder": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(51, 153, 204, 0.25)",
+      "defaultdark": "rgba(51, 153, 204, 0.25)"
+    },
+    "--vscode-terminal-ansiBlack": {
+      "darkcontrast": "#000000",
+      "darkplus": "#000000",
+      "defaultdark": "#000000"
+    },
+    "--vscode-terminal-ansiBlue": {
+      "darkcontrast": "#0000ee",
+      "darkplus": "#2472c8",
+      "defaultdark": "#2472c8"
+    },
+    "--vscode-terminal-ansiBrightBlack": {
+      "darkcontrast": "#7f7f7f",
+      "darkplus": "#666666",
+      "defaultdark": "#666666"
+    },
+    "--vscode-terminal-ansiBrightBlue": {
+      "darkcontrast": "#5c5cff",
+      "darkplus": "#3b8eea",
+      "defaultdark": "#3b8eea"
+    },
+    "--vscode-terminal-ansiBrightCyan": {
+      "darkcontrast": "#00ffff",
+      "darkplus": "#29b8db",
+      "defaultdark": "#29b8db"
+    },
+    "--vscode-terminal-ansiBrightGreen": {
+      "darkcontrast": "#00ff00",
+      "darkplus": "#23d18b",
+      "defaultdark": "#23d18b"
+    },
+    "--vscode-terminal-ansiBrightMagenta": {
+      "darkcontrast": "#ff00ff",
+      "darkplus": "#d670d6",
+      "defaultdark": "#d670d6"
+    },
+    "--vscode-terminal-ansiBrightRed": {
+      "darkcontrast": "#ff0000",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-terminal-ansiBrightWhite": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#e5e5e5",
+      "defaultdark": "#e5e5e5"
+    },
+    "--vscode-terminal-ansiBrightYellow": {
+      "darkcontrast": "#ffff00",
+      "darkplus": "#f5f543",
+      "defaultdark": "#f5f543"
+    },
+    "--vscode-terminal-ansiCyan": {
+      "darkcontrast": "#00cdcd",
+      "darkplus": "#11a8cd",
+      "defaultdark": "#11a8cd"
+    },
+    "--vscode-terminal-ansiGreen": {
+      "darkcontrast": "#00cd00",
+      "darkplus": "#0dbc79",
+      "defaultdark": "#0dbc79"
+    },
+    "--vscode-terminal-ansiMagenta": {
+      "darkcontrast": "#cd00cd",
+      "darkplus": "#bc3fbc",
+      "defaultdark": "#bc3fbc"
+    },
+    "--vscode-terminal-ansiRed": {
+      "darkcontrast": "#cd0000",
+      "darkplus": "#cd3131",
+      "defaultdark": "#cd3131"
+    },
+    "--vscode-terminal-ansiWhite": {
+      "darkcontrast": "#e5e5e5",
+      "darkplus": "#e5e5e5",
+      "defaultdark": "#e5e5e5"
+    },
+    "--vscode-terminal-ansiYellow": {
+      "darkcontrast": "#cdcd00",
+      "darkplus": "#e5e510",
+      "defaultdark": "#e5e510"
+    },
+    "--vscode-terminal-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(128, 128, 128, 0.35)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-terminal-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#cccccc"
+    },
+    "--vscode-terminal-hoverHighlightBackground": {
+      "darkcontrast": "rgba(173, 214, 255, 0.07)",
+      "darkplus": "rgba(38, 79, 120, 0.13)",
+      "defaultdark": "rgba(36, 37, 38, 0.5)"
+    },
+    "--vscode-terminal-inactiveSelectionBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.7)",
+      "darkplus": "#3a3d41",
+      "defaultdark": "#3a3d41"
+    },
+    "--vscode-terminal-selectionBackground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#264f78",
+      "defaultdark": "rgba(57, 148, 188, 0.2)"
+    },
+    "--vscode-terminalCommandDecoration-defaultBackground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.5)",
+      "darkplus": "rgba(255, 255, 255, 0.25)",
+      "defaultdark": "rgba(255, 255, 255, 0.25)"
+    },
+    "--vscode-terminalCommandDecoration-errorBackground": {
+      "darkcontrast": "#f14c4c",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-terminalCommandDecoration-successBackground": {
+      "darkcontrast": "#1b81a8",
+      "darkplus": "#1b81a8",
+      "defaultdark": "#1b81a8"
+    },
+    "--vscode-terminalCommandGuide-foreground": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#37373d",
+      "defaultdark": "#2c2d2e"
+    },
+    "--vscode-terminalOverviewRuler-border": {
+      "darkcontrast": "rgba(127, 127, 127, 0.3)",
+      "darkplus": "rgba(127, 127, 127, 0.3)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-terminalOverviewRuler-cursorForeground": {
+      "darkcontrast": "rgba(160, 160, 160, 0.8)",
+      "darkplus": "rgba(160, 160, 160, 0.8)",
+      "defaultdark": "rgba(160, 160, 160, 0.8)"
+    },
+    "--vscode-terminalOverviewRuler-findMatchForeground": {
+      "darkcontrast": "#f38518",
+      "darkplus": "rgba(209, 134, 22, 0.49)",
+      "defaultdark": "rgba(58, 148, 188, 0.6)"
+    },
+    "--vscode-terminalStickyScrollHover-background": {
+      "darkcontrast": "#e48b39",
+      "darkplus": "#2a2d2e",
+      "defaultdark": "#2a2d2e"
+    },
+    "--vscode-terminalSymbolIcon-aliasForeground": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#b180d7"
+    },
+    "--vscode-terminalSymbolIcon-argumentForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-terminalSymbolIcon-branchForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-commitForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-fileForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-flagForeground": {
+      "darkcontrast": "#ee9d28",
+      "darkplus": "#ee9d28",
+      "defaultdark": "#ee9d28"
+    },
+    "--vscode-terminalSymbolIcon-folderForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-methodForeground": {
+      "darkcontrast": "#b180d7",
+      "darkplus": "#b180d7",
+      "defaultdark": "#b180d7"
+    },
+    "--vscode-terminalSymbolIcon-optionForeground": {
+      "darkcontrast": "#ee9d28",
+      "darkplus": "#ee9d28",
+      "defaultdark": "#ee9d28"
+    },
+    "--vscode-terminalSymbolIcon-optionValueForeground": {
+      "darkcontrast": "#75beff",
+      "darkplus": "#75beff",
+      "defaultdark": "#75beff"
+    },
+    "--vscode-terminalSymbolIcon-pullRequestDoneForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-pullRequestForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-remoteForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-stashForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-symbolText": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-symbolicLinkFileForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-symbolicLinkFolderForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-terminalSymbolIcon-tagForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#bfbfbf"
+    },
+    "--vscode-testing-coverCountBadgeBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#4d4d4d",
+      "defaultdark": "rgba(57, 148, 188, 0.94)"
+    },
+    "--vscode-testing-coverCountBadgeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#ffffff",
+      "defaultdark": "#ffffff"
+    },
+    "--vscode-testing-coveredBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(156, 204, 44, 0.15)",
+      "defaultdark": "rgba(87, 171, 90, 0.23)"
+    },
+    "--vscode-testing-coveredGutterBackground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "rgba(156, 204, 44, 0.12)",
+      "defaultdark": "rgba(87, 171, 90, 0.18)"
+    },
+    "--vscode-testing-coveredMinimapBackground": {
+      "darkcontrast": "#89d185",
+      "darkplus": "rgba(156, 204, 44, 0.12)",
+      "defaultdark": "rgba(87, 171, 90, 0.18)"
+    },
+    "--vscode-testing-iconPassed": {
+      "darkcontrast": "#73c991",
+      "darkplus": "#73c991",
+      "defaultdark": "#73c991"
+    },
+    "--vscode-testing-iconPassed.retired": {
+      "darkcontrast": "rgba(115, 201, 145, 0.7)",
+      "darkplus": "rgba(115, 201, 145, 0.7)",
+      "defaultdark": "rgba(115, 201, 145, 0.7)"
+    },
+    "--vscode-testing-iconSkipped": {
+      "darkcontrast": "#848484",
+      "darkplus": "#848484",
+      "defaultdark": "#848484"
+    },
+    "--vscode-testing-iconSkipped.retired": {
+      "darkcontrast": "rgba(132, 132, 132, 0.7)",
+      "darkplus": "rgba(132, 132, 132, 0.7)",
+      "defaultdark": "rgba(132, 132, 132, 0.7)"
+    },
+    "--vscode-testing-iconUnset": {
+      "darkcontrast": "#848484",
+      "darkplus": "#848484",
+      "defaultdark": "#848484"
+    },
+    "--vscode-testing-iconUnset.retired": {
+      "darkcontrast": "rgba(132, 132, 132, 0.7)",
+      "darkplus": "rgba(132, 132, 132, 0.7)",
+      "defaultdark": "rgba(132, 132, 132, 0.7)"
+    },
+    "--vscode-testing-message.info.decorationForeground": {
+      "darkcontrast": "rgba(255, 255, 255, 0.5)",
+      "darkplus": "rgba(212, 212, 212, 0.5)",
+      "defaultdark": "rgba(187, 190, 191, 0.5)"
+    },
+    "--vscode-testing-messagePeekBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#59a4f9",
+      "defaultdark": "#59a4f9"
+    },
+    "--vscode-testing-peekBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#f14c4c",
+      "defaultdark": "#f14c4c"
+    },
+    "--vscode-testing-runAction": {
+      "darkcontrast": "#73c991",
+      "darkplus": "#73c991",
+      "defaultdark": "#73c991"
+    },
+    "--vscode-testing-uncoveredBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(255, 0, 0, 0.15)",
+      "defaultdark": "rgba(244, 112, 103, 0.23)"
+    },
+    "--vscode-testing-uncoveredGutterBackground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "rgba(255, 0, 0, 0.3)",
+      "defaultdark": "rgba(244, 112, 103, 0.45)"
+    },
+    "--vscode-testing-uncoveredMinimapBackground": {
+      "darkcontrast": "#f48771",
+      "darkplus": "rgba(255, 0, 0, 0.3)",
+      "defaultdark": "rgba(244, 112, 103, 0.45)"
+    },
+    "--vscode-textBlockQuote-border": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "rgba(0, 122, 204, 0.5)",
+      "defaultdark": "#2a2b2c"
+    },
+    "--vscode-textCodeBlock-background": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(10, 10, 10, 0.4)",
+      "defaultdark": "#242526"
+    },
+    "--vscode-textLink-activeForeground": {
+      "darkcontrast": "#21a6ff",
+      "darkplus": "#3794ff",
+      "defaultdark": "#53a5ca"
+    },
+    "--vscode-textLink-foreground": {
+      "darkcontrast": "#21a6ff",
+      "darkplus": "#3794ff",
+      "defaultdark": "#48a0c7"
+    },
+    "--vscode-textPreformat-foreground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#d7ba7d",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-textSeparator-foreground": {
+      "darkcontrast": "#000000",
+      "darkplus": "rgba(255, 255, 255, 0.18)",
+      "defaultdark": "#2a2a2a"
+    },
+    "--vscode-titleBar-activeBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-titleBar-activeForeground": {
+      "darkcontrast": "#ffffff",
+      "darkplus": "#cccccc",
+      "defaultdark": "#8c8c8c"
+    },
+    "--vscode-tree-inactiveIndentGuidesStroke": {
+      "darkcontrast": "rgba(169, 169, 169, 0.4)",
+      "darkplus": "rgba(88, 88, 88, 0.4)",
+      "defaultdark": "rgba(88, 88, 88, 0.4)"
+    },
+    "--vscode-tree-indentGuidesStroke": {
+      "darkcontrast": "#a9a9a9",
+      "darkplus": "#585858",
+      "defaultdark": "#585858"
+    },
+    "--vscode-welcomePage-progress.background": {
+      "darkcontrast": "#000000",
+      "darkplus": "#3c3c3c",
+      "defaultdark": "#191a1b"
+    },
+    "--vscode-welcomePage-progress.foreground": {
+      "darkcontrast": "#21a6ff",
+      "darkplus": "#3794ff",
+      "defaultdark": "#0078d4"
+    },
+    "--vscode-welcomePage-tileBackground": {
+      "darkcontrast": "#000000",
+      "darkplus": "#252526",
+      "defaultdark": "#2b2b2b"
+    },
+    "--vscode-welcomePage-tileBorder": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "rgba(255, 255, 255, 0.1)",
+      "defaultdark": "rgba(255, 255, 255, 0.1)"
+    },
+    "--vscode-widget-border": {
+      "darkcontrast": "#6fc3df",
+      "darkplus": "#303031",
+      "defaultdark": "#2a2b2c"
+    }
+  }
+}

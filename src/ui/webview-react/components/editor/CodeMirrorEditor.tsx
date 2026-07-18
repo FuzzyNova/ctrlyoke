@@ -9,7 +9,10 @@ import {
   WidgetType,
   tooltips,
 } from "@codemirror/view";
-import { createThemeExtension } from "@utils/codemirrorTheme";
+import {
+  createThemeExtension,
+  CHART_ACCENT_COLORS,
+} from "@utils/codemirrorTheme";
 import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
@@ -1750,6 +1753,29 @@ export function createAtomicReferenceExtension(
   );
 }
 
+// Maps each atomic-reference chip's data-type (set in describeContextReferenceChip
+// and describePriorContextChip below) to the CHART_ACCENT_COLORS entry
+// SYMBOL_ICON_COLORS in codemirrorTheme.ts uses for that same chip's icon —
+// reusing it here (rather than a second color table) keeps a chip's border and
+// icon the same color. "symbol" is deliberately absent: its icon color already
+// varies per resolved SymbolKind, so its border stays the neutral default
+// instead of picking one color to represent every kind.
+const CHIP_TYPE_ACCENT_COLORS: Record<string, string> = {
+  directory: CHART_ACCENT_COLORS.yellow,
+  file: CHART_ACCENT_COLORS.blue,
+  lineRange: CHART_ACCENT_COLORS.purple,
+  git: CHART_ACCENT_COLORS.green,
+  priorContext: CHART_ACCENT_COLORS.red,
+};
+
+function buildChipAccentBorderRules(): Record<string, { borderColor: string }> {
+  const rules: Record<string, { borderColor: string }> = {};
+  for (const [dataType, color] of Object.entries(CHIP_TYPE_ACCENT_COLORS)) {
+    rules[`.cm-atomic-ref[data-type="${dataType}"]`] = { borderColor: color };
+  }
+  return rules;
+}
+
 // Prompt-editor-specific decoration styles (link, file-ref, fenced-block, prior-context).
 // Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.
 function createPromptDecorationThemeExtension() {
@@ -1787,9 +1813,14 @@ function createPromptDecorationThemeExtension() {
       border:
         "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
       borderRadius: "4px",
-      backgroundColor:
-        "var(--vscode-badge-background, var(--vscode-editorWidget-background))",
-      color: "var(--vscode-badge-foreground, var(--vscode-editor-foreground))",
+      // badge-background/badge-foreground is VS Code's one guaranteed-contrasting
+      // background+foreground pair (themes must keep badges legible). No CSS
+      // fallback here deliberately: falling back independently per-property (as
+      // this used to, to editorWidget-background/editor-foreground) can pair up
+      // unrelated colors with no contrast guarantee between them if a theme ever
+      // defines only one side of the badge pair.
+      backgroundColor: "var(--vscode-badge-background)",
+      color: "var(--vscode-badge-foreground)",
       fontFamily: "var(--vscode-editor-font-family)",
       fontSize: "0.92em",
       lineHeight: "1.35",
@@ -1798,8 +1829,12 @@ function createPromptDecorationThemeExtension() {
       verticalAlign: "baseline",
       cursor: "pointer",
     },
+    // Per-chip-type border accent (folder/file/selection/git/prior-context) —
+    // see CHIP_TYPE_ACCENT_COLORS above. Placed before `:hover` so hover's
+    // focus-border color still wins over the accent at equal specificity.
+    ...buildChipAccentBorderRules(),
     ".cm-atomic-ref:hover": {
-      color: "var(--vscode-badge-foreground, var(--vscode-editor-foreground))",
+      color: "var(--vscode-badge-foreground)",
       borderColor: "var(--vscode-focusBorder)",
     },
     // Compound with .codicon (rather than relying on cascade order against the
