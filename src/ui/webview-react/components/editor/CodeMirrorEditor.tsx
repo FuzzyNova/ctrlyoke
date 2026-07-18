@@ -9,10 +9,7 @@ import {
   WidgetType,
   tooltips,
 } from "@codemirror/view";
-import {
-  createThemeExtension,
-  CHART_ACCENT_COLORS,
-} from "@utils/codemirrorTheme";
+import { createThemeExtension } from "@utils/codemirrorTheme";
 import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
@@ -1753,29 +1750,6 @@ export function createAtomicReferenceExtension(
   );
 }
 
-// Maps each atomic-reference chip's data-type (set in describeContextReferenceChip
-// and describePriorContextChip below) to the CHART_ACCENT_COLORS entry
-// SYMBOL_ICON_COLORS in codemirrorTheme.ts uses for that same chip's icon —
-// reusing it here (rather than a second color table) keeps a chip's border and
-// icon the same color. "symbol" is deliberately absent: its icon color already
-// varies per resolved SymbolKind, so its border stays the neutral default
-// instead of picking one color to represent every kind.
-const CHIP_TYPE_ACCENT_COLORS: Record<string, string> = {
-  directory: CHART_ACCENT_COLORS.yellow,
-  file: CHART_ACCENT_COLORS.blue,
-  lineRange: CHART_ACCENT_COLORS.purple,
-  git: CHART_ACCENT_COLORS.green,
-  priorContext: CHART_ACCENT_COLORS.red,
-};
-
-function buildChipAccentBorderRules(): Record<string, { borderColor: string }> {
-  const rules: Record<string, { borderColor: string }> = {};
-  for (const [dataType, color] of Object.entries(CHIP_TYPE_ACCENT_COLORS)) {
-    rules[`.cm-atomic-ref[data-type="${dataType}"]`] = { borderColor: color };
-  }
-  return rules;
-}
-
 // Prompt-editor-specific decoration styles (link, file-ref, fenced-block, prior-context).
 // Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.
 function createPromptDecorationThemeExtension() {
@@ -1829,10 +1803,9 @@ function createPromptDecorationThemeExtension() {
       verticalAlign: "baseline",
       cursor: "pointer",
     },
-    // Per-chip-type border accent (folder/file/selection/git/prior-context) —
-    // see CHIP_TYPE_ACCENT_COLORS above. Placed before `:hover` so hover's
-    // focus-border color still wins over the accent at equal specificity.
-    ...buildChipAccentBorderRules(),
+    // Per-kind left+bottom accent lives in codemirrorTheme.ts
+    // (buildChipAccentShadowRules), keyed off the same SYMBOL_ICON_COLORS map
+    // that colors the chip's icon.
     ".cm-atomic-ref:hover": {
       color: "var(--vscode-badge-foreground)",
       borderColor: "var(--vscode-focusBorder)",

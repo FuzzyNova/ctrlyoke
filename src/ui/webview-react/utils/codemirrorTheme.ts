@@ -8,9 +8,9 @@ type ThemeSurface = "editor" | "input";
 // dev/reference/vscode-css-vars-union.json output) — unlike most badge/status
 // colors, which turned out to be aliases of one another across themes. Used
 // to give each atomic-reference chip type (folder/file/selection/git/prior-
-// context) a distinct, always-available accent. Exported so
-// CodeMirrorEditor.tsx can color the chip border with the same values used
-// here for the chip icon, rather than a second hardcoded color table.
+// context) a distinct, always-available accent, reused for both the chip's
+// icon (via SYMBOL_ICON_COLORS below) and its border accent (via
+// buildChipAccentShadowRules below) so the two never drift apart.
 export const CHART_ACCENT_COLORS = {
   blue: "var(--vscode-charts-blue, #59a4f9)",
   green: "var(--vscode-charts-green, #89d185)",
@@ -30,9 +30,10 @@ export const CHART_ACCENT_COLORS = {
 // folder/symbol-file/list-selection/source-control/book are pinned to
 // CHART_ACCENT_COLORS rather than their symbolIcon var: those are the fixed
 // icons for the folder/file/selection/git/prior-context chip types (see
-// CHIP_TYPE_ICON_KIND in CodeMirrorEditor.tsx), and their symbolIcon vars
-// resolve to near-identical grays across themes, which defeated the point of
-// giving each chip type a distinguishable color.
+// describeContextReferenceChip/describePriorContextChip in
+// CodeMirrorEditor.tsx), and their symbolIcon vars resolve to near-identical
+// grays across themes, which defeated the point of giving each chip type a
+// distinguishable color.
 const SYMBOL_ICON_COLORS: Record<string, string> = {
   "symbol-text": "var(--vscode-symbolIcon-textForeground, #cccccc)",
   "symbol-method": "var(--vscode-symbolIcon-methodForeground, #b180d7)",
@@ -80,6 +81,27 @@ function buildSymbolIconColorRules(): Record<string, { color: string }> {
   for (const [name, color] of Object.entries(SYMBOL_ICON_COLORS)) {
     rules[`.cm-completion-${name} .cm-completionIcon`] = { color };
     rules[`.cm-atomic-ref-icon.codicon-${name}`] = { color };
+  }
+  return rules;
+}
+
+// Gives every atomic-reference chip a left+bottom accent matching its own
+// icon's color, driven off the same SYMBOL_ICON_COLORS map so a kind's chip
+// accent can never drift from its icon color. Matches via `:has()` on the
+// icon's codicon class rather than the chip's `data-type` attribute so
+// #sym: chips (data-type="symbol") pick up their resolved SymbolKind's own
+// color automatically instead of needing a flat "symbol" color that would
+// misrepresent every kind but one. Rendered as an inset box-shadow (not the
+// chip's actual `border`) so it never has to compete with
+// `.cm-atomic-ref:hover`'s full-perimeter focus-border highlight — the two
+// paint as independent layers, so hovering a chip still shows its color
+// accent alongside the highlight instead of the highlight replacing it.
+function buildChipAccentShadowRules(): Record<string, { boxShadow: string }> {
+  const rules: Record<string, { boxShadow: string }> = {};
+  for (const [name, color] of Object.entries(SYMBOL_ICON_COLORS)) {
+    rules[`.cm-atomic-ref:has(.cm-atomic-ref-icon.codicon-${name})`] = {
+      boxShadow: `inset 1px 0 0 0 ${color}, inset 0 -1px 0 0 ${color}`,
+    };
   }
   return rules;
 }
@@ -224,6 +246,7 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         verticalAlign: "text-bottom",
       },
       ...buildSymbolIconColorRules(),
+      ...buildChipAccentShadowRules(),
       ".cm-searchMatch": {
         backgroundColor:
           "var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33))",
