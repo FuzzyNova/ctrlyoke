@@ -119,6 +119,27 @@ describe("DiffView", () => {
   });
 
   it("shows a summary toggle when collapsed", () => {
+    mockGetRenderedDiffStats.mockReturnValue({
+      added: 1,
+      removed: 1,
+      runs: [{ count: 1, addedLines: 1, removedLines: 1 }],
+    });
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -1,1 +1,1 @@",
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 1,
+          changes: [
+            { type: "delete", content: "-const a = 1;" },
+            { type: "insert", content: "+const a = 2;" },
+          ],
+        },
+      ],
+      diffType: "modify",
+    });
     const { getByText } = render(
       <DiffView
         oldContent={"const a = 1;\n"}
@@ -127,6 +148,8 @@ describe("DiffView", () => {
       />
     );
     expect(getByText(/Show diff/)).toBeTruthy();
+    expect(getByText("+1")).toHaveClass("text-minimap-diff-added");
+    expect(getByText("-1")).toHaveClass("text-minimap-diff-removed");
   });
 
   it("shows diff when expanded", () => {

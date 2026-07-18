@@ -219,12 +219,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
   const hasDiff = estimatedLineCount > 0;
 
-  // Convert input to react-diff-view hunks — only when expanded (lazy).
-  const { baseHunks, diffType } = useMemo((): {
+  // Parse the source once so the collapsed header can show exact add/remove
+  // counts. Rendering, gap expansion, and tokenization remain lazy below.
+  const parsedDiff = useMemo((): {
     baseHunks: HunkData[];
     diffType: DiffType;
   } => {
-    if (!isExpanded) return { baseHunks: [], diffType: "modify" };
     if (externalHunks !== undefined) {
       return {
         baseHunks: externalHunks,
@@ -241,13 +241,16 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
     return { baseHunks: [], diffType: "modify" };
   }, [
-    isExpanded,
     externalHunks,
     externalDiffType,
     structuredPatch,
     oldContent,
     newContent,
   ]);
+
+  const { baseHunks, diffType } = isExpanded
+    ? parsedDiff
+    : { baseHunks: [], diffType: parsedDiff.diffType };
 
   useEffect(() => {
     if (expandedGaps !== undefined) return;
@@ -405,6 +408,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
     [expandedHunks, viewType]
   );
 
+  const summaryStats = useMemo(
+    () => getRenderedDiffStats(parsedDiff.baseHunks, viewType),
+    [parsedDiff.baseHunks, viewType]
+  );
+
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
@@ -471,6 +479,23 @@ export const DiffView: React.FC<DiffViewProps> = ({
             )}
           </span>
         </button>
+        {(summaryStats.added > 0 || summaryStats.removed > 0) && (
+          <span
+            className="flex shrink-0 items-center gap-1 font-mono text-[length:var(--fp-output-font-size-xs)]"
+            aria-label={`${summaryStats.added} lines added, ${summaryStats.removed} lines removed`}
+          >
+            {summaryStats.added > 0 && (
+              <span className="text-minimap-diff-added">
+                +{summaryStats.added}
+              </span>
+            )}
+            {summaryStats.removed > 0 && (
+              <span className="text-minimap-diff-removed">
+                -{summaryStats.removed}
+              </span>
+            )}
+          </span>
+        )}
         {actionSlot && (
           <div className="ml-auto flex shrink-0 items-center">{actionSlot}</div>
         )}
