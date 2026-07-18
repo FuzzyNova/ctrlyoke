@@ -2,6 +2,61 @@ import { EditorView } from "@codemirror/view";
 
 type ThemeSurface = "editor" | "input";
 
+// Maps codicon names (the same names produced by COMPLETION_KIND_ICONS in
+// CodeMirrorEditor.tsx, e.g. "symbol-class", "folder", "source-control") to the VS
+// Code symbolIcon theme variable that colors that icon, with the Dark+ theme's
+// default value as the CSS fallback (see dev/reference/vscode-css-vars-darkplus.json).
+// Single source for both the completions dropdown icon and the atomic-reference chip
+// icon — generated into selectors for each by buildSymbolIconColorRules() below, so a
+// kind's color can never drift between the two surfaces.
+const SYMBOL_ICON_COLORS: Record<string, string> = {
+  "symbol-text": "var(--vscode-symbolIcon-textForeground, #cccccc)",
+  "symbol-method": "var(--vscode-symbolIcon-methodForeground, #b180d7)",
+  "symbol-function": "var(--vscode-symbolIcon-functionForeground, #b180d7)",
+  "symbol-constructor": "var(--vscode-symbolIcon-constructorForeground, #b180d7)",
+  "symbol-field": "var(--vscode-symbolIcon-fieldForeground, #75beff)",
+  "symbol-variable": "var(--vscode-symbolIcon-variableForeground, #75beff)",
+  "symbol-class": "var(--vscode-symbolIcon-classForeground, #ee9d28)",
+  "symbol-interface": "var(--vscode-symbolIcon-interfaceForeground, #75beff)",
+  "symbol-module": "var(--vscode-symbolIcon-moduleForeground, #cccccc)",
+  "symbol-property": "var(--vscode-symbolIcon-propertyForeground, #cccccc)",
+  "symbol-value": "var(--vscode-symbolIcon-constantForeground, #cccccc)",
+  "symbol-enum": "var(--vscode-symbolIcon-enumeratorForeground, #ee9d28)",
+  "symbol-keyword": "var(--vscode-symbolIcon-keywordForeground, #cccccc)",
+  "symbol-snippet": "var(--vscode-symbolIcon-snippetForeground, #cccccc)",
+  "symbol-color": "var(--vscode-symbolIcon-colorForeground, #cccccc)",
+  "symbol-file": "var(--vscode-symbolIcon-fileForeground, #cccccc)",
+  folder: "var(--vscode-symbolIcon-folderForeground, #cccccc)",
+  "symbol-enum-member":
+    "var(--vscode-symbolIcon-enumeratorMemberForeground, #75beff)",
+  "symbol-constant": "var(--vscode-symbolIcon-constantForeground, #cccccc)",
+  "symbol-struct": "var(--vscode-symbolIcon-structForeground, #cccccc)",
+  "symbol-event": "var(--vscode-symbolIcon-eventForeground, #ee9d28)",
+  "symbol-operator": "var(--vscode-symbolIcon-operatorForeground, #cccccc)",
+  "symbol-type-parameter":
+    "var(--vscode-symbolIcon-typeParameterForeground, #cccccc)",
+  // Not real SymbolKinds — repurposed markers (see COMPLETION_KIND_ICONS in
+  // CodeMirrorEditor.tsx) — but still colored from the closest matching var so
+  // they don't look unstyled next to every other completion/chip icon.
+  "list-selection": "var(--vscode-symbolIcon-unitForeground, #cccccc)",
+  "source-control": "var(--vscode-symbolIcon-referenceForeground, #cccccc)",
+};
+
+// Expands SYMBOL_ICON_COLORS into the two selector shapes that actually need the
+// color: the completions dropdown icon (`.cm-completion-<kind> .cm-completionIcon`,
+// where `.cm-completion-<kind>` comes from autocompletion()'s optionClass) and the
+// atomic-reference chip icon (`.cm-atomic-ref-icon.codicon-<kind>`, see
+// AtomicReferenceWidget.toDOM in CodeMirrorEditor.tsx). Both surfaces render the same
+// codicon name for a given kind, so one map drives both.
+function buildSymbolIconColorRules(): Record<string, { color: string }> {
+  const rules: Record<string, { color: string }> = {};
+  for (const [name, color] of Object.entries(SYMBOL_ICON_COLORS)) {
+    rules[`.cm-completion-${name} .cm-completionIcon`] = { color };
+    rules[`.cm-atomic-ref-icon.codicon-${name}`] = { color };
+  }
+  return rules;
+}
+
 /** VS Code themed base extension for CodeMirror 6.  Shared by the prompt editor and workspace file editor. */
 export function createThemeExtension(surface: ThemeSurface = "editor") {
   const backgroundColor =
@@ -127,12 +182,6 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         outline: `1px solid ${autocompleteSelectedOutlineColor}`,
         outlineOffset: "-1px",
       },
-      ".cm-completion-symbol-file .cm-completionIcon": {
-        color: "var(--vscode-symbolIcon-fileForeground, #858585)",
-      },
-      ".cm-completion-folder .cm-completionIcon": {
-        color: "var(--vscode-symbolIcon-folderForeground, #dcb67a)",
-      },
       // CodeMirror's own .cm-completionIcon sizes its built-in glyph set at
       // 90% with no vertical-align, which works because those glyphs are
       // plain text characters. Our codicon glyphs come from a separate font
@@ -147,21 +196,7 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         lineHeight: "1 !important",
         verticalAlign: "text-bottom",
       },
-      ".cm-completion-symbol-class .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-classForeground, #ee9d28)",
-      },
-      ".cm-completion-symbol-method .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-methodForeground, #b180d7)",
-      },
-      ".cm-completion-symbol-function .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-functionForeground, #b180d7)",
-      },
-      ".cm-completion-symbol-property .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-propertyForeground, #75beff)",
-      },
-      ".cm-completion-symbol-variable .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
-      },
+      ...buildSymbolIconColorRules(),
       ".cm-searchMatch": {
         backgroundColor:
           "var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33))",
