@@ -207,13 +207,19 @@ describe("CodeMirrorEditor symbol completion icon cache seeding", () => {
   it("seeds the cache with the completion's own icon on pick", () => {
     const cache = new Map<string, string>();
 
+    // Production insertText has no leading `#` (the `#` trigger stays in the
+    // doc at `from`); the seed reconstructs `#` + insertText before parsing, so
+    // this must still resolve the symbol kind. Before that reconstruction the
+    // parse silently no-op'd and the chip flashed the misc icon.
     const docText = pickSymbolCompletion(
       cache,
-      "#sym:src/a.ts:MyClass:10-20",
+      "sym:src/a.ts:MyClass:10-20",
       6 // Class
     );
 
-    expect(docText).toBe("#sym:src/a.ts:MyClass:10-20");
+    // Terminal reference → self-terminating trailing space (see
+    // withReferenceBoundarySpace). The seeded cache key is unaffected.
+    expect(docText).toBe("sym:src/a.ts:MyClass:10-20 ");
     expect(cache.get("src/a.ts::MyClass::10-20")).toBe("symbol-class");
   });
 
@@ -223,14 +229,14 @@ describe("CodeMirrorEditor symbol completion icon cache seeding", () => {
         {
           label: "MyClass",
           kind: 6,
-          insertText: "#sym:src/a.ts:MyClass:10-20",
+          insertText: "sym:src/a.ts:MyClass:10-20",
         },
       ],
       0,
       { trigger: "#", query: "" }
     );
 
-    expect(result.options[0].apply).toBe("#sym:src/a.ts:MyClass:10-20");
+    expect(result.options[0].apply).toBe("sym:src/a.ts:MyClass:10-20 ");
   });
 
   it("does not seed the cache for non-symbol completions even with a kind", () => {
@@ -243,8 +249,51 @@ describe("CodeMirrorEditor symbol completion icon cache seeding", () => {
       cache
     );
 
-    expect(result.options[0].apply).toBe("foo.ts");
+    expect(result.options[0].apply).toBe("foo.ts ");
     expect(cache.size).toBe(0);
+  });
+});
+
+describe("CodeMirrorEditor completion boundary space", () => {
+  // A terminal reference gets a trailing space on pick so appended text can't
+  // merge into it (and, in atomic mode, get absorbed into the chip). "Keep
+  // typing" completions (directories, "$step:") and the whole-prompt path
+  // trigger are exempt so progressive completion / file loading still works.
+  function applyFor(
+    insertText: string,
+    trigger: "@" | "#" | "~" | "$" | "path"
+  ) {
+    return buildCodeMirrorCompletionResult([{ label: "x", insertText }], 0, {
+      trigger,
+      query: "",
+    }).options[0].apply;
+  }
+
+  it("appends a trailing space to terminal @file / #selection / ~git references", () => {
+    expect(applyFor("src/app.ts", "@")).toBe("src/app.ts ");
+    expect(applyFor('"path with spaces/a.ts"', "@")).toBe(
+      '"path with spaces/a.ts" '
+    );
+    expect(applyFor("selection:src/a.ts:10-20", "#")).toBe(
+      "selection:src/a.ts:10-20 "
+    );
+    expect(applyFor("diff", "~")).toBe("diff ");
+    expect(applyFor("previous", "$")).toBe("previous ");
+  });
+
+  it("leaves directory completions unterminated so sub-folder drilling continues", () => {
+    expect(applyFor("src/ui/", "@")).toBe("src/ui/");
+    expect(applyFor('"path with spaces/"', "@")).toBe('"path with spaces/"');
+  });
+
+  it("leaves colon-continuation tokens ($step:) unterminated", () => {
+    expect(applyFor("step:", "$")).toBe("step:");
+  });
+
+  it("does not add a space for the whole-prompt path trigger", () => {
+    expect(applyFor("prompts/current.prompt.md", "path")).toBe(
+      "prompts/current.prompt.md"
+    );
   });
 });
 
@@ -499,5 +548,62 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     const doc = "@foo$previous.ts";
     const chips = findAtomicReferences(doc);
     expect(chips.map((c) => [c.from, c.to])).toEqual([[0, doc.length]]);
+  });
+
+  it("flags a chip invalid only when validation resolved the token as not-found", () => {
+    const doc = "@a/valid.ts and @b/missing.ts and @c/pending.ts";
+    // Validation resolved two of the three tokens; the third is still unknown.
+    const validity = new Map<string, boolean>([
+      ["@a/valid.ts", true],
+      ["@b/missing.ts", false],
+    ]);
+    const chips = findAtomicReferences(doc, undefined, (token) =>
+      validity.get(token)
+    );
+    // undefined (not the literal false) while resolvable or unvalidated, so no
+    // border shows before the debounced pass or for a good reference.
+    expect(chips.map((c) => c.invalid)).toEqual([undefined, true, undefined]);
+  });
+
+  it("leaves the invalid flag undefined when no validity resolver is supplied", () => {
+    expect(findAtomicReferences("@b/missing.ts")[0].invalid).toBeUndefined();
+  });
+
+  it("renders the warning border class on an unresolvable reference chip", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const validity = new Map<string, boolean>([["@b/missing.ts", false]]);
+    const view = new EditorView({
+      parent,
+      doc: "@b/missing.ts",
+      extensions: [createAtomicReferenceExtension(new Map(), validity)],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.classList.contains("cm-atomic-ref-invalid")).toBe(true);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("does not mark a resolvable reference chip with the warning border class", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const validity = new Map<string, boolean>([["@a/valid.ts", true]]);
+    const view = new EditorView({
+      parent,
+      doc: "@a/valid.ts",
+      extensions: [createAtomicReferenceExtension(new Map(), validity)],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.classList.contains("cm-atomic-ref-invalid")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
   });
 });

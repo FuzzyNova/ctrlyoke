@@ -297,6 +297,30 @@ function parseSingleSymbolReference(
   };
 }
 
+// Terminal context-reference completions self-terminate with a trailing space
+// when picked, so text typed immediately after can't merge into the reference —
+// and, in atomic mode, get absorbed into the chip (the "@file.tsxfoo" bug).
+// "Keep typing" completions are exempt so progressive completion still works:
+// directories ("dir/", whose sub-folder completions keep firing as you drill in)
+// and colon-continuation tokens ("$step:"). Path-trigger completions replace the
+// whole prompt with a file to load (never a chip), so they're exempt too.
+// Mirrors the pasted-image handler, which likewise appends a trailing space to
+// its inserted @ref (see resolvePendingPaste).
+function withReferenceBoundarySpace(
+  applyText: string,
+  trigger: CompletionTrigger | undefined
+): string {
+  if (trigger === "path" || applyText.length === 0 || /\s$/.test(applyText)) {
+    return applyText;
+  }
+  // A quoted path ends in `"`; look past it for the real terminator.
+  const core = applyText.endsWith('"') ? applyText.slice(0, -1) : applyText;
+  if (core.endsWith("/") || core.endsWith(":")) {
+    return applyText; // directory or "keep typing" token — expects more input
+  }
+  return `${applyText} `;
+}
+
 export function buildCodeMirrorCompletionResult(
   items: ExtensionCompletionItem[],
   from: number,
@@ -330,6 +354,8 @@ export function buildCodeMirrorCompletionResult(
         ? item.filterText
         : item.label;
     const applyText = item.insertText || item.label;
+    // Final inserted text — a trailing boundary space for terminal references.
+    const applyValue = withReferenceBoundarySpace(applyText, request?.trigger);
 
     // The completion item's own `kind` is known synchronously, right now —
     // seed the chip icon cache from it on pick so the chip renders with the
@@ -340,9 +366,20 @@ export function buildCodeMirrorCompletionResult(
     // between listing the completion and picking it); this only short-circuits
     // the common case. It can't help a pasted or hand-typed reference, which
     // has no completion item to draw a kind from.
+    //
+    // The trigger char stays in the document at `from`; `insertText` is only
+    // what's inserted after it (e.g. `sym:file:Name:1-2`, no leading `#`). So
+    // reconstruct the reference as it will actually read in the document —
+    // trigger + insertText — before parsing, or `#sym:` never matches and the
+    // seed silently no-ops (the chip flashes the misc icon until the async pass
+    // resolves it). `path` is a pseudo-trigger with no document char.
+    const referenceText =
+      request && request.trigger !== "path"
+        ? `${request.trigger}${applyText}`
+        : applyText;
     const symbolRef =
       symbolIconCache && item.kind !== undefined
-        ? parseSingleSymbolReference(applyText)
+        ? parseSingleSymbolReference(referenceText)
         : undefined;
 
     return {
@@ -377,14 +414,14 @@ export function buildCodeMirrorCompletionResult(
             view.dispatch({
               ...insertCompletionText(
                 view.state,
-                applyText,
+                applyValue,
                 applyFrom,
                 applyTo
               ),
               annotations: pickedCompletion.of(completion),
             });
           }
-        : applyText,
+        : applyValue,
     };
   });
 
@@ -522,6 +559,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // DEFAULT_COMPLETION_ICON once the real kind is known. Persists across
   // re-renders of the setup effect (a fresh Map would just re-resolve).
   const symbolIconCacheRef = useRef<Map<string, string>>(new Map());
+  // Reference-token → exists, populated by createContextReferenceLintExtension's
+  // validation pass and read by createAtomicReferenceExtension to draw the
+  // warning border on an unresolvable chip. Same shared-Map pattern as
+  // symbolIconCacheRef; persists across setup-effect re-runs.
+  const referenceValidityRef = useRef<Map<string, boolean>>(new Map());
   const vscode = getVsCodeApi();
   // When on, context references behave as atomic units (see
   // createAtomicReferenceExtension). Toggling recreates the editor via the
@@ -1132,7 +1174,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         minimalSetup,
         createFindKeyHandlerExtension(),
         ...(atomicContextReferences
-          ? [createAtomicReferenceExtension(symbolIconCacheRef.current)]
+          ? [
+              createAtomicReferenceExtension(
+                symbolIconCacheRef.current,
+                referenceValidityRef.current
+              ),
+            ]
           : []),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
@@ -1173,7 +1220,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
         createContextReferenceLintExtension(
           validateContextReferences,
-          symbolIconCacheRef.current
+          symbolIconCacheRef.current,
+          referenceValidityRef.current
         ),
         // Mount autocomplete tooltips on document.body so they escape the
         // overflow:hidden ancestors (critical on iOS where CodeMirror forces
@@ -1445,6 +1493,14 @@ export interface AtomicReferenceChip {
   title: string;
   /** data-* attributes forwarded to the existing link click/tap handler. */
   attrs: Record<string, string>;
+  /**
+   * True once the async validation pass (createContextReferenceLintExtension)
+   * has confirmed the reference doesn't resolve — drives the warning-colored
+   * border. Undefined until validated (no border), so a freshly-typed chip
+   * isn't flagged before the debounced check runs. Only context references
+   * (@/#/~) are validated this way; prior-context ($) chips leave it undefined.
+   */
+  invalid?: boolean;
 }
 
 // Basename of a workspace-relative path, tolerant of a trailing slash.
@@ -1579,18 +1635,28 @@ function describePriorContextChip(
 // match is absorbed by the enclosing reference.
 export function findAtomicReferences(
   docText: string,
-  getSymbolIcon?: SymbolIconResolver
+  getSymbolIcon?: SymbolIconResolver,
+  getValidity?: (referenceToken: string) => boolean | undefined
 ): AtomicReferenceChip[] {
   const fencedRanges = getFencedBlockRanges(docText);
 
   const candidates: Array<{
     from: number;
     to: number;
+    invalid?: boolean;
     describe: () => Omit<AtomicReferenceChip, "from" | "to">;
   }> = [
     ...findContextReferenceMatches(docText).map((ref) => ({
       from: ref.from,
       to: ref.to,
+      // Keyed by the exact reference token (validity is content-based, so two
+      // identical tokens share a result). `true` only once the async pass
+      // confirmed it doesn't resolve; left undefined while unvalidated or
+      // resolvable so a freshly-typed chip isn't flagged and no border shows.
+      invalid:
+        getValidity?.(docText.slice(ref.from, ref.to)) === false
+          ? true
+          : undefined,
       describe: () => describeContextReferenceChip(ref, docText, getSymbolIcon),
     })),
     ...findInlinePriorContextRefs(docText).map((ref) => ({
@@ -1607,9 +1673,10 @@ export function findAtomicReferences(
   for (const candidate of candidates) {
     if (candidate.from < lastTo) continue; // overlaps a wider range already kept
     chips.push({
+      ...candidate.describe(),
       from: candidate.from,
       to: candidate.to,
-      ...candidate.describe(),
+      invalid: candidate.invalid,
     });
     lastTo = candidate.to;
   }
@@ -1629,7 +1696,8 @@ class AtomicReferenceWidget extends WidgetType {
     return (
       other.chip.icon === this.chip.icon &&
       other.chip.label === this.chip.label &&
-      other.chip.title === this.chip.title
+      other.chip.title === this.chip.title &&
+      other.chip.invalid === this.chip.invalid
     );
   }
 
@@ -1648,6 +1716,12 @@ class AtomicReferenceWidget extends WidgetType {
     // the reference while recognizing this element's button-like chip UX.
     const chip = document.createElement("span");
     chip.className = "cm-link cm-atomic-ref";
+    // Warning-colored border when validation found the reference unresolvable —
+    // the chip's counterpart to the lint squiggle (which a chip replaces). The
+    // lint hover still supplies the "context not found" message on the same span.
+    if (this.chip.invalid) {
+      chip.classList.add("cm-atomic-ref-invalid");
+    }
     chip.title = this.chip.title;
     for (const [key, value] of Object.entries(this.chip.attrs)) {
       chip.setAttribute(key, value);
@@ -1692,6 +1766,12 @@ export function symbolIconCacheKey(
 // knows to rebuild chip decorations outside of a doc-change cycle.
 const symbolKindsUpdatedEffect = StateEffect.define<void>();
 
+// Dispatched once the async validation pass updates a reference's exists/not-
+// found state (see createContextReferenceLintExtension), so the chip plugin
+// rebuilds to add/remove the warning border outside a doc-change cycle — the
+// validity map counterpart to symbolKindsUpdatedEffect.
+const referenceValidityUpdatedEffect = StateEffect.define<void>();
+
 // Atomic mode: replace each reference's text with a compact chip widget and
 // mark the range atomic via the atomicRanges facet, so arrow keys skip over the
 // whole reference and Backspace/Delete removes it in one press — the caret can
@@ -1706,7 +1786,8 @@ const symbolKindsUpdatedEffect = StateEffect.define<void>();
 // DEFAULT_COMPLETION_ICON to the correct symbol-* icon without a second
 // decoration pipeline.
 export function createAtomicReferenceExtension(
-  symbolIconCache?: Map<string, string>
+  symbolIconCache?: Map<string, string>,
+  referenceValidity?: Map<string, boolean>
 ) {
   const getSymbolIcon: SymbolIconResolver | undefined = symbolIconCache
     ? (path, symbolName, lineStart, lineEnd) =>
@@ -1715,11 +1796,16 @@ export function createAtomicReferenceExtension(
         )
     : undefined;
 
+  const getValidity = referenceValidity
+    ? (referenceToken: string) => referenceValidity.get(referenceToken)
+    : undefined;
+
   const buildDecorations = (view: EditorView) => {
     const builder = new RangeSetBuilder<Decoration>();
     for (const chip of findAtomicReferences(
       view.state.doc.toString(),
-      getSymbolIcon
+      getSymbolIcon,
+      getValidity
     )) {
       builder.add(
         chip.from,
@@ -1739,10 +1825,14 @@ export function createAtomicReferenceExtension(
       }
 
       update(update: any) {
-        const symbolKindsUpdated = update.transactions.some((tr: any) =>
-          tr.effects.some((effect: any) => effect.is(symbolKindsUpdatedEffect))
+        const chipStateUpdated = update.transactions.some((tr: any) =>
+          tr.effects.some(
+            (effect: any) =>
+              effect.is(symbolKindsUpdatedEffect) ||
+              effect.is(referenceValidityUpdatedEffect)
+          )
         );
-        if (update.docChanged || symbolKindsUpdated) {
+        if (update.docChanged || chipStateUpdated) {
           this.decorations = buildDecorations(update.view);
         }
       }
@@ -1813,6 +1903,17 @@ function createPromptDecorationThemeExtension() {
       color: "var(--vscode-editorActionList-foreground)",
       borderColor: "var(--vscode-focusBorder)",
       fontWeight: "bold",
+    },
+    // Unresolvable reference: warning-colored border matching the lint squiggle
+    // (which uses `orange`, see createLinterThemeExtension's cm-lintRange-warning).
+    // Kept orange even on hover so the not-found signal isn't lost to the focus
+    // border; the lint tooltip on hover explains why. Placed after the base and
+    // :hover rules so it wins the cascade.
+    ".cm-atomic-ref-invalid": {
+      borderColor: "orange",
+    },
+    ".cm-atomic-ref-invalid:hover": {
+      borderColor: "orange",
     },
     // Compound with .codicon (rather than relying on cascade order against the
     // global .codicon rule in globals.css, which sets a flat 16px/line-height:1)
@@ -2030,7 +2131,8 @@ function createContextReferenceLintExtension(
   validateReferences: (
     references: Array<ContextReferenceMatch & { id: string }>
   ) => Promise<ContextReferenceValidationResult[]>,
-  symbolIconCache?: Map<string, string>
+  symbolIconCache?: Map<string, string>,
+  referenceValidity?: Map<string, boolean>
 ) {
   return linter(
     async (view): Promise<Diagnostic[]> => {
@@ -2089,6 +2191,34 @@ function createContextReferenceLintExtension(
         }
         if (changed) {
           view.dispatch({ effects: symbolKindsUpdatedEffect.of(undefined) });
+        }
+      }
+
+      // Feed the atomic-chip validity map so an unresolvable reference's chip
+      // shows the warning border (the chip's stand-in for the lint squiggle it
+      // replaces). Keyed by the exact reference token, matching what
+      // findAtomicReferences looks up. Fenced references are skipped — they get
+      // no chip — and their "expansion suppressed" warning is a separate signal
+      // that does not mean the reference itself is invalid.
+      if (referenceValidity) {
+        let validityChanged = false;
+        for (const reference of allReferences) {
+          if (fencedReferenceIds.has(reference.id)) continue;
+          const result = resultById.get(reference.id);
+          if (!result) continue;
+          const token = view.state.doc.sliceString(
+            reference.from,
+            reference.to
+          );
+          if (referenceValidity.get(token) !== result.exists) {
+            referenceValidity.set(token, result.exists);
+            validityChanged = true;
+          }
+        }
+        if (validityChanged) {
+          view.dispatch({
+            effects: referenceValidityUpdatedEffect.of(undefined),
+          });
         }
       }
 
