@@ -280,7 +280,9 @@ function shouldBypassCodeMirrorFiltering(
 // findContextReferenceMatches (the same parser the chip/lint pipeline runs on
 // the saved document text) instead of re-deriving the quoted-path format, so
 // this never drifts from what the reference actually looks like once inserted.
-function parseSingleSymbolReference(text: string):
+function parseSingleSymbolReference(
+  text: string
+):
   | { path: string; symbolName: string; lineStart?: string; lineEnd?: string }
   | undefined {
   const [match] = findContextReferenceMatches(text);
@@ -373,7 +375,12 @@ export function buildCodeMirrorCompletionResult(
             // behavior, same pickedCompletion annotation — with the cache
             // seed as the only addition.
             view.dispatch({
-              ...insertCompletionText(view.state, applyText, applyFrom, applyTo),
+              ...insertCompletionText(
+                view.state,
+                applyText,
+                applyFrom,
+                applyTo
+              ),
               annotations: pickedCompletion.of(completion),
             });
           }
@@ -1793,8 +1800,8 @@ function createPromptDecorationThemeExtension() {
       // this used to, to editorWidget-background/editor-foreground) can pair up
       // unrelated colors with no contrast guarantee between them if a theme ever
       // defines only one side of the badge pair.
-      backgroundColor: "var(--vscode-badge-background)",
-      color: "var(--vscode-badge-foreground)",
+      backgroundColor: "var(--vscode-titleBar-activeBackground)",
+      color: "var(--vscode-titleBar-activeForeground)",
       fontFamily: "var(--vscode-editor-font-family)",
       fontSize: "0.92em",
       lineHeight: "1.35",
@@ -1807,7 +1814,7 @@ function createPromptDecorationThemeExtension() {
     // (buildChipAccentShadowRules), keyed off the same SYMBOL_ICON_COLORS map
     // that colors the chip's icon.
     ".cm-atomic-ref:hover": {
-      color: "var(--vscode-badge-foreground)",
+      color: "var(--vscode-titleBar-activeForeground)",
       borderColor: "var(--vscode-focusBorder)",
     },
     // Compound with .codicon (rather than relying on cascade order against the
@@ -2070,7 +2077,8 @@ function createContextReferenceLintExtension(
           }
           const symbolKind = resultById.get(reference.id)?.symbolKind;
           if (symbolKind === undefined) continue;
-          const icon = COMPLETION_KIND_ICONS[symbolKind] || DEFAULT_COMPLETION_ICON;
+          const icon =
+            COMPLETION_KIND_ICONS[symbolKind] || DEFAULT_COMPLETION_ICON;
           const key = symbolIconCacheKey(
             reference.path,
             reference.symbolName,
