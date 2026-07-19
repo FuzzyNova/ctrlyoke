@@ -28,6 +28,10 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
+import {
+  StreamingHistoryBuffer,
+  type StreamingHistoryFlush,
+} from "./StreamingHistoryBuffer";
 
 /**
  * OutputHistoryManager
@@ -51,6 +55,10 @@ export class OutputHistoryManager {
     this.timelineRecorder
   );
   private readonly historySearchIndexService = new HistorySearchIndexService();
+  /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
+  private readonly streamingBuffer = new StreamingHistoryBuffer(
+    (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush)
+  );
   private readonly snapshotService = new WorkspaceSnapshotService();
   /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
   private pendingIndexRefresh: Promise<void> = Promise.resolve();
@@ -151,6 +159,9 @@ export class OutputHistoryManager {
     }
 
     try {
+      // Land any buffered deltas before the aggregate so events.jsonl stays a
+      // faithful log; the adapter seals the attempt once the aggregate lands.
+      await this.streamingBuffer.flush(historyFilePath);
       await this.saveTimelineExecutionOutput(
         historyFilePath,
         target,
@@ -190,7 +201,10 @@ export class OutputHistoryManager {
     }
   }
 
-  /** Append a raw text chunk immediately so an interrupted run remains replayable. */
+  /**
+   * Buffer a raw text delta for an in-flight attempt. Written on a semantic
+   * boundary rather than immediately — see {@link StreamingHistoryBuffer}.
+   */
   async appendStreamingChunk(
     historyFilePath: string,
     target: OutputExecutionTarget,
@@ -201,23 +215,19 @@ export class OutputHistoryManager {
     if (!historyFilePath || !chunk) {
       return;
     }
-    try {
-      await this.timelineRecorder.appendEvents(historyFilePath, [
-        {
-          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
-          timestampMs: Date.now(),
-          target,
-          runIndex,
-          attemptIndex,
-          payload: { chunk },
-        },
-      ]);
-    } catch (error) {
-      Log.warn("Failed to append streaming output chunk to history:", error);
-    }
+    await this.streamingBuffer.addChunk(
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex,
+      chunk
+    );
   }
 
-  /** Append parsed CLI events immediately instead of waiting for attempt completion. */
+  /**
+   * Buffer parsed CLI events for an in-flight attempt. Consecutive text-only
+   * events merge; a tool call or other boundary event writes immediately.
+   */
   async appendStreamingEvents(
     historyFilePath: string,
     target: OutputExecutionTarget,
@@ -228,24 +238,57 @@ export class OutputHistoryManager {
     if (!historyFilePath || events.length === 0) {
       return;
     }
+    await this.streamingBuffer.addEvents(
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex,
+      events
+    );
+  }
+
+  /** Write one coalesced batch of streamed deltas to the timeline. */
+  private async writeStreamingFlush(
+    historyFilePath: string,
+    flush: StreamingHistoryFlush
+  ): Promise<void> {
+    const drafts: WorkflowTimelineEventDraft[] = [];
+    const shared = {
+      timestampMs: flush.timestampMs,
+      target: flush.target,
+      runIndex: flush.runIndex,
+      attemptIndex: flush.attemptIndex,
+    };
+
+    if (flush.chunk) {
+      drafts.push({
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+        ...shared,
+        payload: { chunk: flush.chunk },
+      });
+    }
+    if (flush.events) {
+      drafts.push({
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+        ...shared,
+        payload: { events: flush.events },
+      });
+    }
+
     try {
-      await this.timelineRecorder.appendEvents(historyFilePath, [
-        {
-          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
-          timestampMs: Date.now(),
-          target,
-          runIndex,
-          attemptIndex,
-          payload: { events },
-        },
-      ]);
+      // One appendEvents call so a chunk + event batch cost a single write.
+      await this.timelineRecorder.appendEvents(historyFilePath, drafts);
     } catch (error) {
-      Log.warn("Failed to append streaming CLI events to history:", error);
+      Log.warn("Failed to append streamed output deltas to history:", error);
     }
   }
 
-  /** Wait for all serialized timeline writes already queued by live callbacks. */
+  /**
+   * Write buffered deltas, then wait for all serialized timeline writes already
+   * queued by live callbacks.
+   */
   async flushPendingWrites(historyFilePath?: string): Promise<void> {
+    await this.streamingBuffer.flush(historyFilePath);
     await this.timelineRecorder.flushPendingOperations(historyFilePath);
   }
 
@@ -357,6 +400,7 @@ export class OutputHistoryManager {
     }
 
     try {
+      await this.streamingBuffer.flush(historyFilePath);
       const completedAt = Date.now();
       await this.timelineRecorder.updateManifest(
         historyFilePath,

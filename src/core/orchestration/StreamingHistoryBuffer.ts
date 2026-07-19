@@ -1,0 +1,292 @@
+import type {
+  CliEvent,
+  TextData,
+  ThinkingBlock,
+} from "../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
+import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
+
+/**
+ * Event types whose payload is nothing but streamed text, so consecutive ones
+ * can be concatenated without losing information. Everything else (tool calls,
+ * tool results, compaction, user steers) is a semantic boundary.
+ */
+const COALESCABLE_EVENT_TYPES = new Set<string>([
+  CLI_EVENT_TYPES.TEXT,
+  CLI_EVENT_TYPES.THINKING,
+]);
+
+/** Accumulated text that forces a write even mid-block, so a crash loses little. */
+const DEFAULT_MAX_BUFFERED_CHARS = 4096;
+/** Wall-clock ceiling on how long any delta may sit unwritten. */
+const DEFAULT_MAX_BUFFERED_AGE_MS = 1000;
+
+/** One coalesced write: at most one chunk delta plus one merged event batch. */
+export interface StreamingHistoryFlush {
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  /** Timestamp of the first delta in the batch, so ordering stays truthful. */
+  timestampMs: number;
+  chunk?: string;
+  events?: CliEvent[];
+}
+
+interface PendingEntry {
+  historyFilePath: string;
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  timestampMs: number;
+  chunk: string;
+  events: CliEvent[];
+  bufferedChars: number;
+  timer: ReturnType<typeof setTimeout> | undefined;
+}
+
+export interface StreamingHistoryBufferOptions {
+  maxBufferedChars?: number;
+  maxBufferedAgeMs?: number;
+}
+
+/**
+ * Coalesces live streaming deltas before they reach `events.jsonl`.
+ *
+ * Headless CLI execution and log tailing deliver output at wildly different
+ * cadences. `CliLogEventPump` emits one batch per log line — a whole text block
+ * or a single tool call. The headless path runs stdout through
+ * `IResponseParser.processStreamingChunk`, and every harness parser turns a
+ * provider's token-level delta (Claude `text_delta`, Copilot
+ * `assistant.message_delta`) into its own TEXT event. Persisting those
+ * one-for-one meant a file lock, manifest read, event append and manifest
+ * rewrite *per token*.
+ *
+ * This buffer merges consecutive text-only events into a single event and
+ * writes on a semantic boundary instead: a non-text event (tool call, result,
+ * compaction), a size cap, or an age cap. The result is roughly one write per
+ * content block or tool call, whichever transport produced it.
+ *
+ * Durability is bounded rather than immediate: a hard crash can lose at most
+ * `maxBufferedAgeMs` of text, and never a tool event. Graceful paths
+ * (`flush`) lose nothing.
+ */
+export class StreamingHistoryBuffer {
+  private readonly pending = new Map<string, PendingEntry>();
+  private readonly maxBufferedChars: number;
+  private readonly maxBufferedAgeMs: number;
+
+  constructor(
+    private readonly write: (
+      historyFilePath: string,
+      flush: StreamingHistoryFlush
+    ) => Promise<void>,
+    options: StreamingHistoryBufferOptions = {}
+  ) {
+    this.maxBufferedChars =
+      options.maxBufferedChars ?? DEFAULT_MAX_BUFFERED_CHARS;
+    this.maxBufferedAgeMs =
+      options.maxBufferedAgeMs ?? DEFAULT_MAX_BUFFERED_AGE_MS;
+  }
+
+  /** Buffer a raw text delta, writing once a size or age cap is reached. */
+  async addChunk(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    chunk: string
+  ): Promise<void> {
+    const entry = this.ensureEntry(
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex
+    );
+    entry.chunk += chunk;
+    entry.bufferedChars += chunk.length;
+
+    if (entry.bufferedChars >= this.maxBufferedChars) {
+      await this.flushEntry(
+        this.getKey(historyFilePath, target, runIndex, attemptIndex)
+      );
+    }
+  }
+
+  /**
+   * Buffer parsed events. Consecutive text-only events merge into one; any
+   * other event type is a boundary and writes the batch immediately.
+   */
+  async addEvents(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    events: CliEvent[]
+  ): Promise<void> {
+    if (events.length === 0) {
+      return;
+    }
+
+    const key = this.getKey(historyFilePath, target, runIndex, attemptIndex);
+    const entry = this.ensureEntry(
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex
+    );
+    let hasBoundaryEvent = false;
+
+    for (const event of events) {
+      const previous = entry.events[entry.events.length - 1];
+      if (canMerge(previous, event)) {
+        entry.events[entry.events.length - 1] = mergeTextEvents(
+          previous,
+          event
+        );
+      } else {
+        entry.events.push(event);
+        if (!COALESCABLE_EVENT_TYPES.has(event.type)) {
+          hasBoundaryEvent = true;
+        }
+      }
+      entry.bufferedChars += getEventTextLength(event);
+    }
+
+    if (hasBoundaryEvent || entry.bufferedChars >= this.maxBufferedChars) {
+      await this.flushEntry(key);
+    }
+  }
+
+  /**
+   * Write everything buffered. Pass a history file to flush only that run's
+   * entries; omit it to flush every run (process shutdown).
+   */
+  async flush(historyFilePath?: string): Promise<void> {
+    const keys = [...this.pending.keys()].filter(
+      (key) =>
+        !historyFilePath ||
+        this.pending.get(key)?.historyFilePath === historyFilePath
+    );
+    for (const key of keys) {
+      await this.flushEntry(key);
+    }
+  }
+
+  /** Drop buffered state without writing. Used when disposing. */
+  clear(): void {
+    for (const entry of this.pending.values()) {
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+      }
+    }
+    this.pending.clear();
+  }
+
+  private ensureEntry(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number
+  ): PendingEntry {
+    const key = this.getKey(historyFilePath, target, runIndex, attemptIndex);
+    const existing = this.pending.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const entry: PendingEntry = {
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex,
+      timestampMs: Date.now(),
+      chunk: "",
+      events: [],
+      bufferedChars: 0,
+      timer: undefined,
+    };
+    entry.timer = setTimeout(() => {
+      void this.flushEntry(key);
+    }, this.maxBufferedAgeMs);
+    // Never hold the host process open just to flush a delta.
+    entry.timer.unref?.();
+    this.pending.set(key, entry);
+    return entry;
+  }
+
+  private async flushEntry(key: string): Promise<void> {
+    const entry = this.pending.get(key);
+    if (!entry) {
+      return;
+    }
+
+    this.pending.delete(key);
+    if (entry.timer) {
+      clearTimeout(entry.timer);
+    }
+    if (!entry.chunk && entry.events.length === 0) {
+      return;
+    }
+
+    await this.write(entry.historyFilePath, {
+      target: entry.target,
+      runIndex: entry.runIndex,
+      attemptIndex: entry.attemptIndex,
+      timestampMs: entry.timestampMs,
+      chunk: entry.chunk || undefined,
+      events: entry.events.length > 0 ? entry.events : undefined,
+    });
+  }
+
+  private getKey(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number
+  ): string {
+    const base =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? `queue:${target.stepIndex}`
+        : `final:${target.loopIndex}`;
+    return `${historyFilePath}::${base}:run:${runIndex}:attempt:${attemptIndex}`;
+  }
+}
+
+/** Text-only events of the same type/label/caller concatenate losslessly. */
+function canMerge(
+  previous: CliEvent | undefined,
+  next: CliEvent
+): previous is CliEvent {
+  if (!previous || previous.type !== next.type) {
+    return false;
+  }
+  if (!COALESCABLE_EVENT_TYPES.has(next.type)) {
+    return false;
+  }
+  if (previous.callerType !== next.callerType) {
+    return false;
+  }
+  return (
+    (previous.data as ThinkingBlock).label ===
+    (next.data as ThinkingBlock).label
+  );
+}
+
+function mergeTextEvents(previous: CliEvent, next: CliEvent): CliEvent {
+  return {
+    ...previous,
+    data: {
+      ...previous.data,
+      text: getEventText(previous) + getEventText(next),
+    } as TextData,
+  };
+}
+
+function getEventText(event: CliEvent): string {
+  return (event.data as Partial<TextData>).text ?? "";
+}
+
+function getEventTextLength(event: CliEvent): number {
+  return getEventText(event).length;
+}

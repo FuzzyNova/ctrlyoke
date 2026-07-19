@@ -231,7 +231,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.ok(events.every((event) => typeof event.timestampMs === "number"));
   });
 
-  test("durably projects in-flight chunks and parsed events before completion", async () => {
+  test("durably projects in-flight chunks and parsed events on graceful shutdown", async () => {
     const { filePath } = await manager.initializeRun("wf-streaming");
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
@@ -252,6 +252,8 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         data: { text: "parsed" },
       },
     ]);
+    // Streamed deltas are coalesced; the shutdown path is what lands them.
+    await manager.flushPendingWrites(filePath);
 
     const interrupted = await manager.loadHistory(filePath);
     const interruptedOutput = interrupted.orderedEntries.find(
@@ -277,6 +279,51 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
       ]
     );
+  });
+
+  test("coalesces token-cadence deltas into one timeline event", async () => {
+    const { filePath } = await manager.initializeRun("wf-coalescing");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    await manager.startStreamingExecutionOutput(filePath, target, {
+      prompt: "stream me",
+      response: "",
+      elapsed: 0,
+      isStreaming: true,
+      timestampMs: 100,
+      runIndex: 0,
+      attemptIndex: 0,
+    });
+    // The headless path emits one TEXT event per provider token delta.
+    for (const token of ["Hel", "lo ", "wor", "ld"]) {
+      await manager.appendStreamingEvents(filePath, target, 0, 0, [
+        { type: CLI_EVENT_TYPES.TEXT, timestamp: 110, data: { text: token } },
+      ]);
+    }
+    await manager.flushPendingWrites(filePath);
+
+    const events = await recorder.readEvents(filePath);
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+      ],
+      "four token deltas should cost one appended event, not four"
+    );
+
+    const history = await manager.loadHistory(filePath);
+    const output = history.orderedEntries.find(
+      (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(output?.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.deepStrictEqual(output.cliOutput.structured?.events, [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: 110,
+        data: { text: "Hello world" },
+      },
+    ]);
   });
 
   test("does not re-append streamed deltas once the completed aggregate lands", async () => {
