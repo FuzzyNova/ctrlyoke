@@ -4,7 +4,7 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { FailureKind } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
@@ -12,6 +12,41 @@ import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";
 import { CliLogEventPump } from "./shared/CliLogEventPump";
 import type { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "./shared/interfaces/INotificationMonitor";
+
+/**
+ * Preserve synthetic user-steer events in parser-produced final output.
+ *
+ * User steers are created by `CliLogEventPump`, not by harness parsers, so a
+ * later `extractResponse()` call cannot reconstruct them. Merge the observed
+ * events back by timestamp while preserving each source's existing order.
+ */
+function mergeObservedUserSteers(
+  response: UniversalCliOutput,
+  observedUserSteers: CliEvent[]
+): UniversalCliOutput {
+  if (observedUserSteers.length === 0) {
+    return response;
+  }
+
+  const events = [...response.events];
+  for (const steer of observedUserSteers) {
+    const insertAt =
+      steer.timestamp === undefined
+        ? -1
+        : events.findIndex(
+            (event) =>
+              event.timestamp !== undefined &&
+              event.timestamp > steer.timestamp!
+          );
+    if (insertAt === -1) {
+      events.push(steer);
+    } else {
+      events.splice(insertAt, 0, steer);
+    }
+  }
+
+  return { ...response, events };
+}
 
 /**
  * Result of log file monitoring.
@@ -124,10 +159,18 @@ export class CliLogMonitor {
     const parser = this.deps.logParser;
     parser.setCurrentModel?.(model);
     const events: BaseCliEvent[] = [];
+    const observedUserSteers: CliEvent[] = [];
     const pump = new CliLogEventPump({
       parser,
       model,
-      onStreamingEvents: this.deps.hostCallbacks.onStreamingEvents,
+      onStreamingEvents: (streamingEvents) => {
+        observedUserSteers.push(
+          ...streamingEvents.filter(
+            (event) => event.type === CLI_EVENT_TYPES.USER_STEER
+          )
+        );
+        this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
+      },
       onContextWindowUpdate: this.deps.hostCallbacks.onContextWindowUpdate,
       dispatchedPromptText,
     });
@@ -167,7 +210,12 @@ export class CliLogMonitor {
         }
 
         const partialResponse =
-          events.length > 0 ? parser.extractResponse(events) : undefined;
+          events.length > 0
+            ? mergeObservedUserSteers(
+                parser.extractResponse(events),
+                observedUserSteers
+              )
+            : undefined;
         const partialText = partialResponse
           ? extractTextFromEvents(partialResponse)
           : undefined;
@@ -223,16 +271,14 @@ export class CliLogMonitor {
           if (entryTime && entryTime < startTime) {
             continue;
           }
-          events.push(event);
-          const streamingEvents =
-            parser.extractStructuredEventsFromEvent(event);
-          if (streamingEvents.length > 0) {
-            this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
-          }
+          processEvent(event, "completion final events");
         }
 
         // Extract final response from accumulated events
-        const response = parser.extractResponse(events);
+        const response = mergeObservedUserSteers(
+          parser.extractResponse(events),
+          observedUserSteers
+        );
 
         // Copilot-specific: patch in context-window usage from whichever source is
         // available, most-reliable first:
@@ -684,14 +730,19 @@ export class CliLogMonitor {
                 startTime
               );
               for (const entry of newEntries) {
-                events.push(entry);
+                processEvent(entry, "cancellation catch-up");
               }
             } catch {
               // ignore read errors during cancellation
             }
 
             const partialResponse =
-              events.length > 0 ? parser.extractResponse(events) : undefined;
+              events.length > 0
+                ? mergeObservedUserSteers(
+                    parser.extractResponse(events),
+                    observedUserSteers
+                  )
+                : undefined;
             const partialText = partialResponse
               ? extractTextFromEvents(partialResponse)
               : undefined;

@@ -608,20 +608,19 @@ export class CodexLogParser extends BaseLogParser {
   }
 
   /**
-   * Classify a user-authored log event. Codex represents user text two ways —
-   * `response_item:role=user` (the persisted rollout entry) and
-   * `event_msg:user_message` (a live echo) — mirroring how `event_msg:agent_message`
-   * duplicates `response_item:role=assistant` on the assistant side (see the
-   * comment in `extractResponse`). To avoid emitting the same steer twice, only
-   * `response_item:role=user` is classified here, matching the established
-   * pattern of preferring `response_item` over its `event_msg` echo.
+   * Classify a user-authored log event. Codex persists both harness-injected
+   * context (for example AGENTS.md + environment_context) and genuine user text
+   * as `response_item:role=user`. Only genuine submitted text also receives an
+   * `event_msg:user_message` live echo, so that is the authoritative shape for
+   * steer classification and naturally avoids both injected context and the
+   * duplicate persisted response item.
    */
   override classifyUserEvent(
     event: BaseCliEvent,
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     const e = event as CodexProviderEvent;
-    if (e.type !== "response_item" || e.payload?.role !== "user") {
+    if (e.type !== "event_msg" || e.payload?.type !== "user_message") {
       return "other";
     }
 
@@ -647,28 +646,18 @@ export class CodexLogParser extends BaseLogParser {
 
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as CodexProviderEvent;
-    if (e.type !== "response_item" || e.payload?.role !== "user") {
+    if (e.type !== "event_msg" || e.payload?.type !== "user_message") {
       return undefined;
     }
     const text = this.extractUserMessageText(e);
     return text || undefined;
   }
 
-  /** Concatenates text content items in a Codex `response_item:role=user` event. */
+  /** Extracts submitted text from a Codex `event_msg:user_message` event. */
   private extractUserMessageText(e: CodexProviderEvent): string {
-    const content = e.payload?.content;
-    if (!Array.isArray(content)) {
-      return "";
-    }
-    return content
-      .filter(
-        (item: any) =>
-          (item.type === "input_text" || item.type === "output_text") &&
-          typeof item.text === "string"
-      )
-      .map((item: any) => item.text as string)
-      .join("")
-      .trim();
+    return typeof e.payload?.message === "string"
+      ? e.payload.message.trim()
+      : "";
   }
 
   /**

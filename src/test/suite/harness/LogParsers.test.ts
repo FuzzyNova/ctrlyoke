@@ -1412,6 +1412,69 @@ suite("CodexLogParser", () => {
     parser = new CodexLogParser();
   });
 
+  suite("classifyUserEvent", () => {
+    test("should ignore user-role response items containing injected project context", () => {
+      const event = {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "# AGENTS.md instructions for /workspace\n<INSTRUCTIONS>...</INSTRUCTIONS>",
+            },
+            {
+              type: "input_text",
+              text: "<environment_context><cwd>/workspace</cwd></environment_context>",
+            },
+          ],
+        },
+      } as unknown as BaseCliEvent;
+
+      assert.strictEqual(parser.classifyUserEvent(event, {}), "other");
+      assert.strictEqual(parser.extractUserSteerText(event), undefined);
+    });
+
+    test("should classify the event_msg echo of the dispatched prompt as injected", () => {
+      const event = {
+        type: "event_msg",
+        payload: {
+          type: "user_message",
+          message: "Please update src/app.ts",
+        },
+      } as unknown as BaseCliEvent;
+
+      assert.strictEqual(
+        parser.classifyUserEvent(event, {
+          dispatchedPromptText: "Please update src/app.ts",
+        }),
+        "injected-prompt"
+      );
+    });
+
+    test("should classify an unmatched event_msg user message as a human steer", () => {
+      const event = {
+        type: "event_msg",
+        payload: {
+          type: "user_message",
+          message: "Also update the tests",
+        },
+      } as unknown as BaseCliEvent;
+
+      assert.strictEqual(
+        parser.classifyUserEvent(event, {
+          dispatchedPromptText: "Please update src/app.ts",
+        }),
+        "human-steer"
+      );
+      assert.strictEqual(
+        parser.extractUserSteerText(event),
+        "Also update the tests"
+      );
+    });
+  });
+
   suite("extractResponse", () => {
     test("should extract session metadata", () => {
       const events = [

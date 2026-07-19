@@ -112,9 +112,13 @@ export class CliLogEventPump {
       return undefined;
     }
 
+    const timestamp =
+      this.deps.parser.extractTimestamp?.(event)?.getTime() ??
+      (typeof event.timestamp === "number" ? event.timestamp : Date.now());
+
     return {
       type: CLI_EVENT_TYPES.USER_STEER,
-      timestamp: event.timestamp ?? Date.now(),
+      timestamp,
       data: { text } as UserSteerData,
     };
   }
