@@ -10,23 +10,24 @@
 
 ### Recommended tagline
 
-> **One cockpit for every AI coding harness.**
+> **One interface for every AI coding harness.**
 
 ### Recommended supporting line
 
-> Prompt, steer, automate, and revisit work across Claude Code, Codex, Copilot CLI, and more—without relearning the tools around each harness.
+> The better way to prompt, steer, automate, and revisit work across Claude Code, Codex, Copilot CLI, and more.
 
-This leads with ctrlyoke's broadest differentiator: it is not merely a workflow file runner. It is a consistent control surface around the developer's preferred AI coding harnesses. Workflow automation is one of its strongest capabilities, but not the limit of the product.
+This leads with ctrlyoke's broadest differentiator in the clearest possible language: it is not merely a workflow file runner. It is a consistent control surface around the developer's preferred AI coding harnesses. **Steer** keeps the control-yoke character in the supporting copy without asking the audience to decode an aviation metaphor before they understand the product. Workflow automation is one of ctrlyoke's strongest capabilities, but not the limit of the product.
 
 ### Useful alternate taglines
 
-- **Your prompts. Your workflows. Any harness.**
-- **One interface for every AI coding harness.**
 - **Switch harnesses, not habits.**
-- **The better way to prompt, steer, and automate AI coding harnesses.**
+- **Take control of every AI coding harness.**
+- **Your prompts. Your workflows. Any harness.**
+- **Pilot every AI coding harness from one interface.**
+- **One yoke for piloting every AI harness.**
 - **Automate your favorite AI coding harness.**
 
-The last option is direct and searchable, but it is narrower than the product. It works best as campaign copy or the heading of a workflow-focused section rather than the master tagline.
+**Switch harnesses, not habits** is the preferred campaign line and the strongest alternative to the main tagline. **Take control of every AI coding harness** is the preferred brand-forward option: it evokes the control-yoke name without becoming too literal. The two pilot/yoke options are useful for playful brand moments, but both require more explanation and should not lead general product positioning. **Automate your favorite AI coding harness** is direct and searchable, but narrower than the product; it works best as campaign copy or the heading of a workflow-focused section.
 
 ## Elevator pitch
 
@@ -36,7 +37,7 @@ ctrlyoke is a unified control surface for AI coding harnesses. Use one prompt la
 
 ### Full version
 
-ctrlyoke gives developers one place to prompt, steer, automate, and revisit work across their AI coding harnesses. It handles harness-specific invocation, session resumption, permissions, MCP servers, hooks, agents, and skills behind a consistent interface. Its prompt editor understands project files, symbols, selections, Git changes, and prior results; its dashboard turns harness-specific event streams into a unified, navigable history with diffs and granular undo/redo. Start with one prompt, build a validated multi-step workflow, run it again with another harness, take it to CI, or steer the live terminal from a phone.
+ctrlyoke gives developers one place to prompt, steer, automate, and revisit work across their AI coding harnesses. It handles harness-specific invocation, session resumption, permissions, MCP servers, hooks, agents, and skills behind a consistent interface. Its prompt editor understands project files, symbols, selections, images, Git changes, prior results, and the size of the expanded context; its dashboard turns harness-specific event streams into a unified, navigable history with diffs and granular undo/redo. Start with one prompt, visually build a validated multi-step workflow, mix harnesses within the same run, take it to CI, or inspect the workspace and steer the live terminal from a phone.
 
 ## Messaging hierarchy
 
@@ -44,10 +45,12 @@ Marketing should present ctrlyoke in this order:
 
 1. **One control surface across harnesses** — switch tools without switching mental models.
 2. **A better way to write prompts** — rich project context, completions, validation, and spell check.
-3. **A better way to understand and control results** — normalized output, diffs, navigation, history, and undo/redo.
-4. **Repeatable automation when it is useful** — reusable workflows, scripts, validation, retries, and dynamic task loops.
-5. **The same work wherever it needs to run** — VS Code, an embedded terminal, a browser or phone, the CLI, and CI/CD.
-6. **One place for the surrounding ecosystem** — sessions, agents, skills, MCP servers, hooks, and permissions.
+3. **Visual workflow building with portable files underneath** — compose in the dashboard; save, share, version, and run as YAML or JSON.
+4. **A better way to understand and control results** — normalized output, diffs, navigation, history, and undo/redo.
+5. **Native CLI interaction plus structured observability** — preserve the real terminal while gaining a control layer around it.
+6. **Repeatable automation when it is useful** — reusable workflows, scripts, validation, retries, and dynamic task loops.
+7. **The same work wherever it needs to run** — VS Code, an embedded terminal, a browser or phone, the CLI, and CI/CD.
+8. **One place for the surrounding ecosystem** — sessions, agents, skills, MCP servers, hooks, and permissions.
 
 This order keeps ctrlyoke relevant to developers who want a better single-prompt experience as well as those who want fully automated workflows.
 
@@ -59,9 +62,11 @@ This order keeps ctrlyoke relevant to developers who want a better single-prompt
 
 ctrlyoke provides a consistent interface for supported harnesses while translating the details each CLI expects. Harness, model, session behavior, additional arguments, permissions, MCP servers, hooks, agents, and skills can be configured globally, at the workflow level, or for an individual prompt where applicable.
 
+This is not limited to choosing one harness for an entire run. Individual steps can select their own harness and model while remaining in the same queue, output timeline, and saved workflow. A workflow can use one harness to plan, another to implement, and another to review without requiring separate orchestration glue.
+
 **Marketing copy:**
 
-> Stop rebuilding your setup around every AI CLI. ctrlyoke gives Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity a shared control surface—so switching harnesses does not mean switching habits.
+> Stop rebuilding your setup around every AI CLI. ctrlyoke gives Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity a shared control surface—so switching harnesses does not mean switching habits. Choose one harness for the workflow or the best harness for each individual step.
 
 ### 2. A universal language for project context
 
@@ -84,17 +89,31 @@ These references remain readable in the authored prompt and are expanded before 
 
 **Customer value:** Write and refine serious prompts with editor ergonomics instead of a plain chat box.
 
-The CodeMirror editor provides context-aware completions, syntax-aware reference chips, reference validation and quick fixes, search, undo/redo, keyboard workflows, pasted-image handling, and native VS Code theming. It also includes local spell checking.
+The CodeMirror editor provides context-aware completions, syntax-aware reference chips, reference validation and quick fixes, search, undo/redo, keyboard workflows, and native VS Code theming. It also includes local spell checking.
+
+Its token estimate includes the content behind supported references, not only the words visible in the editor, so developers can see the approximate size of the context they are actually assembling. Clipboard images can be pasted directly into a prompt—including multiple images at once—and become reusable, content-addressed attachments instead of a manual save-and-reference chore. When a harness reports it, live and completed steps also show context-window utilization and detailed token metadata.
 
 **Marketing copy:**
 
-> Prompts are part of the work. Edit them like it—with completions for project context, reference validation, search, undo/redo, and, yes, spell check.
+> Prompts are part of the work. Edit them like it—with completions for project context, reference validation, expanded-context token estimates, image paste, search, undo/redo, and, yes, spell check.
 
 **Personality copy:**
 
 > Spell check in a prompt editor. Somehow still a differentiator.
 
-### 4. One rich, reversible view of every result
+### 4. Build workflows visually and save them as code
+
+**Customer value:** Get the convenience of a visual workflow builder without trapping valuable automation in an opaque project format.
+
+The dashboard can create and edit workflows without requiring hand-authored YAML. Developers can add prompt and script steps, configure workflow-wide defaults and individual overrides, drag pending steps to reorder them, enable or disable steps, copy and paste steps, configure a final step, choose where execution begins, and save or export a clean shareable workflow without runtime state.
+
+Built-in and custom templates make repeatable workflows approachable. Templates can be scoped to a workspace or user, selected as a default, and expose typed inputs such as text, multiline text, files, directories, options, and harness choices. The result is still an ordinary YAML or JSON workflow that can be reviewed, versioned, shared, or run from the CLI.
+
+**Marketing copy:**
+
+> **Build visually. Save as code.** Compose and rearrange workflows in the dashboard, then keep the result as ordinary YAML or JSON that can travel with the project and run anywhere ctrlyoke does.
+
+### 5. One rich, reversible view of every result
 
 **Customer value:** Keep the output experience consistent even when the underlying harness changes.
 
@@ -106,11 +125,21 @@ The output minimap shows the shape of the entire run: each step, its position in
 
 > Different harness underneath. The same clear view on top. Follow the whole run, see every change in context, jump through the minimap, and undo only the work you do not want.
 
-### 5. Workflows that grow from simple to sophisticated
+### 6. Keep the native CLI and gain a control room
+
+**Customer value:** Preserve the immediacy and full interactivity of the harness's real terminal without giving up structured, persistent, cross-harness observability.
+
+In interactive mode, ctrlyoke runs the actual AI CLI in an embedded xterm.js terminal. Developers can watch and steer it directly, keep separate AI and shell sessions in a tab rail, and continue using native interactive behavior. At the same time, ctrlyoke captures the run into its normalized output timeline with tool calls, diffs, token details, history, and workflow attribution. Headless mode provides the same orchestration model when no interactive terminal is needed.
+
+**Marketing copy:**
+
+> **Keep the native CLI. Gain a control room.** Steer the real interactive terminal while ctrlyoke builds a structured, searchable, reversible record beside it—or switch to headless execution when no one needs to watch.
+
+### 7. Workflows that grow from simple to sophisticated
 
 **Customer value:** Start with a prompt, then add structure only when the task needs it.
 
-ctrlyoke supports simple Markdown prompts and shareable YAML or JSON workflows. A workflow can mix AI prompt steps with ordinary script steps. Common execution properties can be set once at the workflow level and selectively overridden or disabled for an individual step, including the harness, model, agent, skills, session behavior, prior context, MCP servers, hooks, permissions, validation, and error policy.
+ctrlyoke supports simple Markdown prompts and shareable YAML or JSON workflows. A workflow can mix AI prompt steps with ordinary script steps and can select a different harness or model for each step. Common execution properties can be set once at the workflow level and selectively overridden or disabled for an individual step, including the harness, model, agent, skills, session behavior, prior context, MCP servers, hooks, permissions, validation, and error policy.
 
 Variables and enabled/disabled steps make workflows reusable without forcing every run to be identical.
 
@@ -118,19 +147,19 @@ Variables and enabled/disabled steps make workflows reusable without forcing eve
 
 > Start with one prompt. Add another step, a test gate, a script, or a different harness when you need it. ctrlyoke scales from quick requests to durable engineering workflows without changing formats halfway through.
 
-### 6. Portable automation, not trapped chat history
+### 8. Portable automation, not trapped chat history
 
 **Customer value:** Turn successful ways of working into assets that can be reviewed, versioned, shared, compared, and run again.
 
 Workflows are ordinary YAML, JSON, or Markdown files. Favorite a useful workflow for quick reuse, rerun it with different variables or harnesses, or execute it headlessly with the ctrlyoke CLI in local scripts and CI/CD.
 
-Multiple workflows can run concurrently with independent pause, resume, and cancel controls.
+Multiple workflows can run concurrently rather than making unrelated work wait in one global queue. Each retains independent execution state, sessions, terminals, output, and pause, resume, and cancel controls.
 
 **Marketing copy:**
 
-> When a prompt sequence works, keep it. Version it with the code, share it with the team, rerun it with another harness, or move it into CI.
+> When a prompt sequence works, keep it. Version it with the code, share it with the team, rerun it with another harness, or move it into CI. Run several independent workflows at once without forcing one task to wait for another.
 
-### 7. Validation based on the project, not the model's confidence
+### 9. Validation based on the project, not the model's confidence
 
 **Customer value:** Let real project state decide what happens next.
 
@@ -140,7 +169,7 @@ Pre-conditions can run a script before a prompt and continue, skip the prompt, o
 
 > “Looks done” is not a test result. Gate AI work with the scripts your project already trusts, then continue, retry, skip, or stop based on what actually happened.
 
-### 8. Dynamic agentic task loops without an external orchestrator
+### 10. Dynamic agentic task loops without an external orchestrator
 
 **Customer value:** Let the workflow discover and schedule follow-up work while preserving an explicit, inspectable queue.
 
@@ -150,7 +179,7 @@ A final step can review the completed run and use ctrlyoke's built-in MCP server
 
 > Build the “keep going until it is actually done” loop into the workflow. A final review step can inspect the work, queue the remaining tasks, and run again until there is nothing left to fix.
 
-### 9. Resume conversations without learning every CLI's resume command
+### 11. Resume conversations without learning every CLI's resume command
 
 **Customer value:** Continue the right conversation while ctrlyoke handles harness-specific session mechanics.
 
@@ -160,29 +189,33 @@ A step can resume the immediately preceding compatible session, refer to the ses
 
 > Continue the conversation you mean. ctrlyoke tracks the session and calls the right harness-specific resume path for you.
 
-### 10. Searchable conversation history across runs
+### 12. Search, replay, and reuse every run
 
-**Customer value:** Find an earlier decision, command, file change, or answer without remembering which workflow or harness produced it.
+**Customer value:** Find an earlier decision, command, file change, or answer without remembering which workflow or harness produced it—and return to the complete run around it.
 
 The persistent history index searches more than response prose. It covers prompts, responses and reasoning, shell commands and output, file paths and diffs, tool and MCP activity, web-search results, and status messages. Results link back to the relevant workflow run and step, with a disk-scan fallback if the index is unavailable.
 
-**Marketing copy:**
-
-> Your AI coding history should be searchable. Find the answer, command, diff, tool call, or prompt you remember—even when you do not remember which run it came from.
-
-### 11. Steer live work from a browser or phone
-
-**Customer value:** Start a long-running task at the desk and remain in control away from it.
-
-The hosted dashboard brings workflows, output, the workspace viewer, source control, and the live terminal to a browser. Its responsive mobile layout and terminal control bar provide touch-friendly Esc, Tab, arrow, Enter, control-key, and customizable shortcut buttons. Hosted access supports token-protected routes, TLS configuration, LAN/public URL selection, controller handoff between clients, and browser push notifications.
+History is not a flat transcript archive. Saved runs use the same ordered event model and rich rendering as live output, so developers can select and replay a run, inspect its structured tool activity and diffs, use available historical undo actions, export it as Markdown, or rerun the underlying workflow.
 
 **Marketing copy:**
 
-> Start the task at your desk. Check the diff, answer the prompt, send terminal controls, or steer the harness from your phone when hosted access is configured.
+> Your AI coding history should be usable. Search for the answer, command, diff, tool call, or prompt you remember; reopen the complete run around it; then export or run the workflow again.
+
+### 13. A browser control room for the entire workspace
+
+**Customer value:** Start a long-running task at the desk and retain meaningful development control from another browser or phone.
+
+The hosted dashboard brings workflows, output, the workspace, source control, and the live terminal to a browser. The workspace viewer can browse and edit files across multi-root workspaces, understand multiple Git repositories, inspect working, staged, stash, and commit diffs, stage or unstage files, discard changes, generate commit messages with a selected harness, commit, pull, push, browse commit history, and check out branches or commits.
+
+Its responsive mobile layout and terminal control bar provide touch-friendly Esc, Tab, arrow, Enter, control-key, and customizable shortcut buttons. Hosted access supports token-protected routes, TLS configuration, LAN/public URL selection, controller handoff between clients, and browser push notifications.
+
+**Marketing copy:**
+
+> Start the task at your desk. From another browser or phone, inspect and edit files, review and commit changes, answer the prompt, or steer the live harness terminal when hosted access is configured.
 
 Remote/LAN access is a Pro feature; localhost browser access remains part of the free product.
 
-### 12. One management surface for agents, skills, MCP servers, and hooks
+### 14. One management surface for agents, skills, MCP servers, and hooks
 
 **Customer value:** Reuse the surrounding AI toolchain instead of maintaining it independently for every harness.
 
@@ -192,30 +225,51 @@ The agents and skills manager discovers definitions across supported locations, 
 
 > Your harness may change. Your toolkit should not. Manage reusable agents, skills, MCP servers, hooks, and their workspace or user scope from ctrlyoke.
 
+## Technical differentiator: predictable context delivery
+
+This capability is more useful in product education and technical evaluation than in the primary hero, but it is an important reason ctrlyoke can deliver complex prompts consistently across harnesses.
+
+For a simple prompt, ctrlyoke can use the harness's direct input path. When a prompt includes richer assembled context, ctrlyoke packages that content into clearly categorized files instead of concatenating one enormous terminal command or one undifferentiated document. Categories include:
+
+- agent instructions;
+- available skills;
+- direct workspace file references;
+- prior conversation context;
+- expanded selection, symbol, directory, and Git excerpts;
+- the user's main prompt.
+
+The harness receives a short ordered instruction that names the available categories and identifies the main prompt as the controlling task. Reference syntax is adapted for each harness. Large generated sections are split conservatively by token and line count; prior context is split at step boundaries, and attachment blocks are kept intact where possible.
+
+This design reduces dependence on shell and terminal command-length limits—especially on Windows—and avoids asking a harness to consume one oversized generated file that exceeds known per-file read limits. It also makes the payload easier for a harness or a human debugging a run to audit: supporting material has an explicit role, and the main request is not buried inside it.
+
+**Marketing copy:**
+
+> **Your prompt arrives organized, not as a blob.** ctrlyoke packages instructions, skills, project files, prior context, excerpts, and the main request into a predictable, harness-aware payload—and splits large sections before per-file limits become the problem.
+
+**Documentation guidance:** Explain this in the context-reference manual rather than requiring users to understand it during onboarding. Show the categorized instruction shape, explain that simple prompts may still use a direct fast path, and position the mechanism as transparent delivery infrastructure rather than new syntax the user must author.
+
 ## Supporting strengths worth featuring
 
 These are important supporting benefits even when they do not lead the page:
 
-- **Interactive or headless execution:** Watch and steer a real CLI terminal, or run quietly in the background.
-- **Live terminal plus structured history:** Keep the harness's native interactivity without giving up normalized, persistent output.
-- **Per-harness choice inside one workflow:** Use the harness or model best suited to each step rather than forcing one vendor on the entire task.
 - **Prior-result injection:** Pass selected earlier output into a fresh session when direct session continuation would overfill the context window.
 - **Workspace change safety:** Inspect diffs and selectively restore files instead of treating a run as an all-or-nothing black box.
-- **Shareable templates and variables:** Package repeatable workflows with user-supplied values rather than cloning and editing near-identical files.
 - **Favorites and run comparison:** Keep useful workflows close and rerun them with different harnesses to compare results.
-- **Exportable results:** Preserve or share a run as Markdown.
 - **Notifications:** Receive completion and hosted-browser notifications instead of continuously watching a long task.
 - **Workspace-aware security:** Scope file operations and hosted workspace access to trusted roots.
+- **Rich response rendering:** Render streaming Markdown safely, including highlighted code, images, diagrams, links, and incomplete syntax while a response is still arriving.
+- **Harness preflight guidance:** Detect whether supported CLIs are available and show the relevant installation commands when none are ready.
+- **AI commit messages:** Generate commit messages from the real Git diff using the selected harness and model from VS Code, the hosted workspace, or the CLI.
 
 ## The core story by audience
 
 ### Developer trying multiple harnesses
 
-> Keep your workflow and switch the engine. ctrlyoke gives every supported harness the same prompt syntax, editor, output view, session controls, and reusable toolkit.
+> Keep your workflow and switch the engine—or assign a different engine to each step. ctrlyoke gives every supported harness the same prompt syntax, editor, output view, session controls, and reusable toolkit.
 
 ### Developer who mostly sends one prompt at a time
 
-> You do not need to author YAML to benefit from ctrlyoke. Start with the prompt editor, rich context references, embedded terminal, normalized output, diffs, undo/redo, and searchable history. Save a workflow only when a sequence is worth repeating.
+> You do not need to author YAML to benefit from ctrlyoke. Start with the prompt editor, rich context references, image paste, expanded-context token estimates, embedded terminal, normalized output, diffs, undo/redo, and searchable history. Build visually and save a workflow only when a sequence is worth repeating.
 
 ### Power user automating long tasks
 
@@ -223,23 +277,25 @@ These are important supporting benefits even when they do not lead the page:
 
 ### Team or CI/CD user
 
-> Store AI workflows beside the code as reviewable YAML, JSON, or Markdown. Share the same execution contract across developers and run it headlessly in CI.
+> Build workflows visually or author them as text, then store the reviewable YAML, JSON, or Markdown beside the code. Share the same execution contract across developers, run workflows in parallel, and execute them headlessly in CI.
 
 ### Remote/mobile user
 
-> Keep long-running harnesses on the development machine and use the hosted dashboard to review, respond, and steer from another browser or phone.
+> Keep long-running harnesses on the development machine and use the hosted dashboard to browse and edit the workspace, review and commit changes, respond to prompts, and steer the terminal from another browser or phone.
 
 ## Suggested homepage narrative
 
-1. **Hero:** One cockpit for every AI coding harness.
-2. **Subhead:** Prompt, steer, automate, and revisit work across supported harnesses from one interface.
+1. **Hero:** One interface for every AI coding harness.
+2. **Subhead:** The better way to prompt, steer, automate, and revisit work across supported harnesses.
 3. **Harness strip:** Show the supported harnesses early as proof of breadth.
 4. **Three primary promises:** One prompt language; one rich output view; one reusable toolkit.
-5. **Everyday use:** Demonstrate a single prompt with file, selection, Git, and prior-context references.
-6. **Control and safety:** Show the output minimap, diffs, history, and undo/redo.
-7. **Automation:** Introduce shareable workflows, prompt/script steps, validation, retries, and dynamic final-step loops.
-8. **Anywhere:** Show the CLI/CI path and the mobile hosted dashboard.
-9. **Closing CTA:** Start with one prompt. Automate when you are ready.
+5. **Everyday use:** Demonstrate a single prompt with file, selection, image, Git, and prior-context references plus the expanded-context token estimate.
+6. **Visual authoring:** Build and rearrange a workflow in the dashboard, then reveal the clean YAML file underneath.
+7. **Native terminal, structured control:** Show the real CLI terminal beside the normalized output timeline.
+8. **Control and safety:** Show the output minimap, diffs, history search/replay, and undo/redo.
+9. **Automation:** Introduce mixed prompt/script steps, per-step harness choice, parallel workflows, validation, retries, and dynamic final-step loops.
+10. **Anywhere:** Show the CLI/CI path and the mobile browser's workspace, source control, output, and terminal surfaces.
+11. **Closing CTA:** Start with one prompt. Build visually. Automate when you are ready.
 
 This order corrects the impression that users must first become YAML workflow authors before ctrlyoke becomes useful.
 
@@ -251,6 +307,7 @@ This order corrects the impression that users must first become YAML workflow au
 - Describe agents, skills, MCP servers, and hooks as managed or synchronized **from one place**. Some features are exported to harness-native files rather than stored in literally one physical file.
 - Describe undo/redo as applying to **workspace file changes captured by ctrlyoke**. It does not reverse arbitrary external side effects or the internal state of a harness.
 - Describe history search as searching **saved ctrlyoke workflow output in the current workspace**, not every conversation created directly in every vendor's native client.
+- Describe categorized prompt delivery as **designed to reduce command-length and per-file truncation risks**, not as a guarantee that every third-party harness or model will always consume every referenced byte.
 - Qualify remote claims with **“when hosted access is configured.”** Network reachability depends on the selected bind address, TLS, and the user's LAN or remote-access setup.
 - Avoid unverified exclusivity claims such as **“the only tool”** or **“no other VS Code extension.”** The spell-check joke can keep its personality without making an absolute competitive claim.
 - Use **harness** for the AI execution strategy. Reserve **provider** for VS Code API concepts.
@@ -259,16 +316,20 @@ This order corrects the impression that users must first become YAML workflow au
 
 Use these implementation anchors when refreshing claims:
 
-| Capability                                                                                            | Primary evidence                                                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prompt editor, completions, validation, spell check                                                   | [`CodeMirrorEditor.tsx`](../../src/ui/webview-react/components/editor/CodeMirrorEditor.tsx), [`PromptCompletionProvider.ts`](../../src/completions/PromptCompletionProvider.ts), [`CompletionHelpers.ts`](../../src/completions/CompletionHelpers.ts)               |
-| Unified output, history replay, diffs, workflow undo/redo                                             | [`OutputSection.tsx`](../../src/ui/webview-react/components/layout/OutputSection.tsx), [`OutputRow.tsx`](../../src/ui/webview-react/components/output/OutputRow.tsx), [`UndoChangesDialog.tsx`](../../src/ui/webview-react/components/output/UndoChangesDialog.tsx) |
-| Whole-run navigation and change visualization                                                         | [`OutputMinimap.tsx`](../../src/ui/webview-react/components/output/OutputMinimap.tsx)                                                                                                                                                                               |
-| Workflow defaults, step overrides, prompt/script steps, validation, sessions, hooks, MCP, permissions | [`workflow-schema.yaml`](../../schemas/workflow-schema.yaml)                                                                                                                                                                                                        |
-| Dynamic final-step loop                                                                               | [`spec-driven-loop.ctrlyoke.yaml`](../../src/templates/workflows/spec-driven-loop.ctrlyoke.yaml), [`dynamic-queue.md`](../../docs/workflows/dynamic-queue.md)                                                                                                       |
-| Indexed history search and fallback                                                                   | [`HistorySearchService.ts`](../../src/core/orchestration/HistorySearchService.ts), [`HistorySearchIndexService.ts`](../../src/core/orchestration/HistorySearchIndexService.ts)                                                                                      |
-| Hosted browser dashboard, access controls, workspace API, client control, push                        | [`CtrlYokeHostedServer.ts`](../../src/server/CtrlYokeHostedServer.ts), [`HostedWorkspaceViewerService.ts`](../../src/server/HostedWorkspaceViewerService.ts)                                                                                                        |
-| Mobile terminal controls                                                                              | [`TerminalControlBar.tsx`](../../src/ui/webview-react/components/output/TerminalControlBar.tsx)                                                                                                                                                                     |
-| Agent and skill discovery/synchronization                                                             | [`AgentSkillsManagerSection.tsx`](../../src/ui/webview-react/components/settings/AgentSkillsManagerSection.tsx)                                                                                                                                                     |
-| MCP discovery, registry, defaults, and harness export                                                 | [`McpManagerSection.tsx`](../../src/ui/webview-react/components/settings/McpManagerSection.tsx)                                                                                                                                                                     |
-| Public overview of current shipped behavior                                                           | [`README.md`](../../README.md)                                                                                                                                                                                                                                      |
+| Capability                                                                                            | Primary evidence                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Prompt editor, completions, validation, spell check, image paste, expanded-context token estimate     | [`CodeMirrorEditor.tsx`](../../src/ui/webview-react/components/editor/CodeMirrorEditor.tsx), [`EditorFooter.tsx`](../../src/ui/webview-react/components/editor/EditorFooter.tsx), [`useAttachmentTokenCount.ts`](../../src/ui/webview-react/hooks/useAttachmentTokenCount.ts), [`PromptCompletionProvider.ts`](../../src/completions/PromptCompletionProvider.ts)                                      |
+| Visual workflow authoring, reordering, templates, variables, and clean save/export                    | [`WorkflowStepsPanel.tsx`](../../src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx), [`WorkflowPropertiesPanel.tsx`](../../src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx), [`TemplateModal.tsx`](../../src/ui/webview-react/components/workflow/TemplateModal.tsx), [`SaveWorkflowDialog.tsx`](../../src/ui/webview-react/components/workflow/SaveWorkflowDialog.tsx) |
+| Unified output, history replay, diffs, workflow undo/redo                                             | [`OutputSection.tsx`](../../src/ui/webview-react/components/layout/OutputSection.tsx), [`OutputRow.tsx`](../../src/ui/webview-react/components/output/OutputRow.tsx), [`UndoChangesDialog.tsx`](../../src/ui/webview-react/components/output/UndoChangesDialog.tsx)                                                                                                                                    |
+| Native interactive terminal, multiple terminal sessions, and headless mode                            | [`TerminalView.tsx`](../../src/ui/webview-react/components/output/TerminalView.tsx), [`TerminalInstance.tsx`](../../src/ui/webview-react/components/output/TerminalInstance.tsx), [`CliIntegration.ts`](../../src/core/harness/CliIntegration.ts)                                                                                                                                                      |
+| Whole-run navigation and change visualization                                                         | [`OutputMinimap.tsx`](../../src/ui/webview-react/components/output/OutputMinimap.tsx)                                                                                                                                                                                                                                                                                                                  |
+| Workflow defaults, step overrides, prompt/script steps, validation, sessions, hooks, MCP, permissions | [`workflow-schema.yaml`](../../schemas/workflow-schema.yaml)                                                                                                                                                                                                                                                                                                                                           |
+| Parallel workflow instances and independent orchestration state                                       | [`WorkflowOrchestrator.ts`](../../src/core/WorkflowOrchestrator.ts), [`WorkflowInstance.ts`](../../src/core/WorkflowInstance.ts)                                                                                                                                                                                                                                                                       |
+| Dynamic final-step loop                                                                               | [`spec-driven-loop.ctrlyoke.yaml`](../../src/templates/workflows/spec-driven-loop.ctrlyoke.yaml), [`dynamic-queue.md`](../../docs/workflows/dynamic-queue.md)                                                                                                                                                                                                                                          |
+| Indexed history search, replay, and fallback                                                          | [`HistorySearchService.ts`](../../src/core/orchestration/HistorySearchService.ts), [`HistorySearchIndexService.ts`](../../src/core/orchestration/HistorySearchIndexService.ts), [`OutputHistoryManager.ts`](../../src/core/orchestration/OutputHistoryManager.ts)                                                                                                                                      |
+| Categorized, harness-aware prompt delivery and large-content splitting                                | [`CliIntegration.ts`](../../src/core/harness/CliIntegration.ts), [`CliPromptPreparer.ts`](../../src/core/harness/shared/CliPromptPreparer.ts), [`PromptFileSplitter.ts`](../../src/utils/PromptFileSplitter.ts), [`context-files.md`](../../docs/workflows/context-files.md)                                                                                                                           |
+| Hosted browser dashboard, workspace editing, Git controls, access controls, client control, and push  | [`CtrlYokeHostedServer.ts`](../../src/server/CtrlYokeHostedServer.ts), [`HostedWorkspaceViewerService.ts`](../../src/server/HostedWorkspaceViewerService.ts), [`WorkspaceViewerModal.tsx`](../../src/ui/webview-react/components/workspace-viewer/WorkspaceViewerModal.tsx), [`WorkspaceSourceControlPane.tsx`](../../src/ui/webview-react/components/workspace-viewer/WorkspaceSourceControlPane.tsx) |
+| Mobile terminal controls                                                                              | [`TerminalControlBar.tsx`](../../src/ui/webview-react/components/output/TerminalControlBar.tsx)                                                                                                                                                                                                                                                                                                        |
+| Agent and skill discovery/synchronization                                                             | [`AgentSkillsManagerSection.tsx`](../../src/ui/webview-react/components/settings/AgentSkillsManagerSection.tsx)                                                                                                                                                                                                                                                                                        |
+| MCP discovery, registry, defaults, and harness export                                                 | [`McpManagerSection.tsx`](../../src/ui/webview-react/components/settings/McpManagerSection.tsx)                                                                                                                                                                                                                                                                                                        |
+| Public overview of current shipped behavior                                                           | [`README.md`](../../README.md)                                                                                                                                                                                                                                                                                                                                                                         |
