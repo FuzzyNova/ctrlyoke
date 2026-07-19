@@ -13,6 +13,8 @@ import type { OrderedCliHistoryEntry } from "../../types/OutputHistoryTypes";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import {
   TIMELINE_EVENT_TYPES,
+  type CliOutputChunkAppendedEvent,
+  type CliOutputEventsAppendedEvent,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
@@ -48,6 +50,25 @@ export class OutputHistoryTimelineAdapter {
     };
     const orderedEntries: OrderedHistoryEntry[] = [];
     const cliEntriesByKey = new Map<string, OrderedCliHistoryEntry>();
+    /**
+     * Attempts whose completed aggregate has already been projected. The final
+     * `cliOutputRecorded` carries the attempt's *start* timestamp, so it sorts
+     * ahead of the streamed deltas it supersedes. Without this seal those
+     * deltas would be appended a second time onto an already-complete response.
+     */
+    const sealedCliKeys = new Set<string>();
+
+    /** The still-streaming entry a delta belongs to, or undefined once sealed. */
+    const resolveStreamingEntry = (
+      event: CliOutputChunkAppendedEvent | CliOutputEventsAppendedEvent
+    ): OrderedCliHistoryEntry | undefined => {
+      const key = getCliEntryKey(
+        event.target,
+        event.runIndex ?? 0,
+        event.attemptIndex
+      );
+      return sealedCliKeys.has(key) ? undefined : cliEntriesByKey.get(key);
+    };
 
     for (const event of [...events].sort(compareTimelineEvents)) {
       switch (event.eventType) {
@@ -62,28 +83,27 @@ export class OutputHistoryTimelineAdapter {
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
           const runIndex = event.runIndex ?? 0;
           const attemptIndex = event.attemptIndex;
-          cliEntriesByKey.set(
-            getCliEntryKey(event.target, runIndex, attemptIndex),
-            {
-              kind: OUTPUT_HISTORY_KINDS.CLI,
-              target: event.target,
-              runIndex,
-              attemptIndex,
-              cliOutput: event.payload.cliOutput,
-              timestampMs: event.timestampMs,
-              sequence: event.sequence,
-            }
-          );
+          const key = getCliEntryKey(event.target, runIndex, attemptIndex);
+          cliEntriesByKey.set(key, {
+            kind: OUTPUT_HISTORY_KINDS.CLI,
+            target: event.target,
+            runIndex,
+            attemptIndex,
+            cliOutput: event.payload.cliOutput,
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+          });
+          // A completed aggregate supersedes every streamed delta for this
+          // attempt; a fresh streaming placeholder re-opens it (append/retry).
+          if (event.payload.cliOutput.isStreaming) {
+            sealedCliKeys.delete(key);
+          } else {
+            sealedCliKeys.add(key);
+          }
           break;
         }
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED: {
-          const existing = cliEntriesByKey.get(
-            getCliEntryKey(
-              event.target,
-              event.runIndex ?? 0,
-              event.attemptIndex
-            )
-          );
+          const existing = resolveStreamingEntry(event);
           if (existing) {
             existing.cliOutput = {
               ...existing.cliOutput,
@@ -93,13 +113,7 @@ export class OutputHistoryTimelineAdapter {
           break;
         }
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED: {
-          const existing = cliEntriesByKey.get(
-            getCliEntryKey(
-              event.target,
-              event.runIndex ?? 0,
-              event.attemptIndex
-            )
-          );
+          const existing = resolveStreamingEntry(event);
           if (existing) {
             existing.cliOutput = {
               ...existing.cliOutput,

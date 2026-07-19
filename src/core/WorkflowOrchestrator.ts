@@ -2365,13 +2365,27 @@ export class WorkflowOrchestrator {
 
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
+    let recoveredPaths: string[];
     try {
       const normalized =
         await WorkflowLockManager.normalizeStaleLocks(workingDir);
       activeCliPaths = normalized.activeCliPaths;
+      recoveredPaths = normalized.recoveredPaths;
+    } catch (err) {
+      Log.warn(
+        "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",
+        err
+      );
+      activeCliPaths = [];
+      recoveredPaths = [];
+    }
 
+    // Close out history manifests left RUNNING by the dead owner. Kept off the
+    // block above so a recovery failure cannot discard activeCliPaths and
+    // silently leave CLI-managed workflows unwatched.
+    try {
       const historyManager = new OutputHistoryManager(workspaceFolderPath);
-      for (const recoveredPath of normalized.recoveredPaths) {
+      for (const recoveredPath of recoveredPaths) {
         let stepCount = 0;
         try {
           const recoveredWorkingFile = JSON.parse(
@@ -2388,10 +2402,9 @@ export class WorkflowOrchestrator {
       }
     } catch (err) {
       Log.warn(
-        "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",
+        "[WorkflowOrchestrator] setupCliWatching: interrupted-run recovery failed:",
         err
       );
-      activeCliPaths = [];
     }
 
     // Create CliWatchSession for each active-cli workflow (Entry Point 1)

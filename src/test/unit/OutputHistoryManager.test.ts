@@ -279,6 +279,65 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
   });
 
+  test("does not re-append streamed deltas once the completed aggregate lands", async () => {
+    const { filePath } = await manager.initializeRun("wf-streaming-complete");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    // The completed aggregate carries the attempt's *start* timestamp, so it
+    // sorts ahead of the deltas it supersedes. Mirror that ordering exactly.
+    const attemptStartedAt = 100;
+
+    await manager.startStreamingExecutionOutput(filePath, target, {
+      prompt: "stream me",
+      response: "",
+      elapsed: 0,
+      isStreaming: true,
+      timestampMs: attemptStartedAt,
+      runIndex: 0,
+      attemptIndex: 0,
+    });
+    await manager.appendStreamingChunk(filePath, target, 0, 0, "Hello ");
+    await manager.appendStreamingChunk(filePath, target, 0, 0, "world");
+    await manager.appendStreamingEvents(filePath, target, 0, 0, [
+      { type: CLI_EVENT_TYPES.TEXT, timestamp: 110, data: { text: "Hello " } },
+    ]);
+    await manager.saveExecutionOutput(filePath, target, [
+      {
+        prompt: "stream me",
+        response: "Hello world",
+        elapsed: 30,
+        isStreaming: false,
+        timestampMs: attemptStartedAt,
+        runIndex: 0,
+        attemptIndex: 0,
+        structured: {
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp: 110,
+              data: { text: "Hello world" },
+            },
+          ],
+          metadata: {},
+        },
+      },
+    ]);
+
+    const completed = await manager.loadHistory(filePath);
+    const output = completed.orderedEntries.find(
+      (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(output?.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(output.cliOutput.response, "Hello world");
+    assert.deepStrictEqual(output.cliOutput.structured?.events, [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: 110,
+        data: { text: "Hello world" },
+      },
+    ]);
+    assert.strictEqual(output.cliOutput.isStreaming, false);
+  });
+
   test("records authoritative workflow runtime transitions without affecting history projection", async () => {
     const historyInit = await manager.initializeRun("wf-runtime");
     const historyFilePath = historyInit.filePath;
