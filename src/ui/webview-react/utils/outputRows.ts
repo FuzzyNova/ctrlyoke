@@ -286,6 +286,15 @@ const HEADER_VERTICAL_CHROME = 11; // pb-spacing-xs(4) + border-b(1) + mb-spacin
 const STATS_VERTICAL_CHROME = 10;
 const BASH_RESULT_MAX_LINES = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
 const BASH_RESULT_MAX_CHARS = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
+/**
+ * Horizontal space ToolCallBlock's gutter column takes from its content: the ●
+ * glyph plus the `gap-x-2` separator. Everything in the content column (header
+ * text, ⎿ result/error lines, tool parameters) is narrower by this much.
+ * Diffs are exempt — they render full-bleed, spanning the gutter.
+ */
+function toolCallGutterWidth(outputFontSize: number): number {
+  return Math.max(5.5, outputFontSize * 0.6) + 8;
+}
 
 function normalizeTextForLayout(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\t/g, "    ");
@@ -715,9 +724,11 @@ function estimateFileOperationHeaderHeight(
   const charWidth = Math.max(5.5, outputFontSize * 0.6);
   const lineHeight = Math.max(18, outputFontSize * 1.55);
   const gapWidth = Math.max(4, outputFontSize * 0.35);
-  const dotWidth = charWidth;
+  // The ● is no longer inline — it lives in ToolCallBlock's gutter, which the
+  // caller has already subtracted from outputContentWidth. Only the action
+  // label ("Edited", "Wrote (N bytes)", …) still shares the path's first line.
   const actionWidth = actionLabel.length * charWidth;
-  const prefixWidth = dotWidth + gapWidth + actionWidth + gapWidth;
+  const prefixWidth = actionWidth + gapWidth;
   const pathWidth = Math.max(64, availableWidth - prefixWidth);
   const pathCharsPerLine = Math.max(8, Math.floor(pathWidth / charWidth));
   const pathLineCount = Math.max(1, Math.ceil(path.length / pathCharsPerLine));
@@ -837,21 +848,28 @@ function estimateBashOutputHeight(
 
 function estimateStructuredTextHeight(
   row: StructuredEventRow,
-  outputContentWidth: number | undefined,
+  fullContentWidth: number | undefined,
   outputFontSize: number
 ): number {
+  // ● blocks render inside ToolCallBlock, whose gutter column narrows every
+  // line — header text and body alike. Non-block events (text, thinking, the
+  // compaction/follow-up dividers, a bare tool result) keep the full width.
+  const gutter = toolCallGutterWidth(outputFontSize);
+  const outputContentWidth =
+    fullContentWidth != null ? fullContentWidth - gutter : undefined;
+
   switch (row.event.type) {
     case CLI_EVENT_TYPES.TEXT: {
       const text = (row.event.data as { text?: string }).text ?? "";
       return row.rawTextOutput
-        ? estimateTextBlockHeight(text, outputContentWidth, outputFontSize)
-        : estimateMarkdownBlockHeight(text, outputContentWidth, outputFontSize);
+        ? estimateTextBlockHeight(text, fullContentWidth, outputFontSize)
+        : estimateMarkdownBlockHeight(text, fullContentWidth, outputFontSize);
     }
     case CLI_EVENT_TYPES.THINKING: {
       const text = (row.event.data as { text?: string }).text ?? "";
       const contentHeight = estimateTextBlockHeight(
         text,
-        outputContentWidth,
+        fullContentWidth,
         outputFontSize,
         {
           chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
@@ -943,7 +961,7 @@ function estimateStructuredTextHeight(
         "";
       return estimateTextBlockHeight(
         content.slice(0, 200),
-        outputContentWidth,
+        fullContentWidth,
         outputFontSize,
         {
           charWidthMultiplier: 0.6,
@@ -965,7 +983,7 @@ function estimateStructuredTextHeight(
       }`.trim();
       return estimateTerminalSummaryHeight(
         label,
-        outputContentWidth,
+        fullContentWidth,
         outputFontSize,
         18
       );
@@ -973,7 +991,7 @@ function estimateStructuredTextHeight(
     case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
       return estimateTerminalSummaryHeight(
         "Follow-up",
-        outputContentWidth,
+        fullContentWidth,
         outputFontSize,
         18
       );
@@ -1040,7 +1058,9 @@ function estimateToolCallStructuredEventHeight(
     data.result,
     row.toolCall.expansion,
     outputFontSize,
-    outputContentWidth
+    outputContentWidth == null
+      ? undefined
+      : outputContentWidth - toolCallGutterWidth(outputFontSize)
   );
 }
 
@@ -1311,6 +1331,13 @@ export function buildOutputRows(
     }
 
     const rawTextOutput = getRawTextOutput(output);
+    // Tool call bodies sit in ToolCallBlock's content column, right of the ●
+    // gutter. Diffs don't — they render full-bleed and keep the whole width.
+    const toolCallContentWidth =
+      input.outputContentWidth != null
+        ? input.outputContentWidth -
+          toolCallGutterWidth(input.outputFontSize ?? 13)
+        : undefined;
     const streamingChunk = getStreamingChunk(input, target);
     const visibleEvents = getVisibleStructuredEvents(output.structured?.events);
     const hasStructuredEvents = visibleEvents.length > 0;
@@ -1368,7 +1395,7 @@ export function buildOutputRows(
               result: (visibleEvent.event.data as ToolCall).result,
               expansion: toolCallExpansion,
               outputFontSize: input.outputFontSize,
-              outputContentWidth: input.outputContentWidth,
+              outputContentWidth: toolCallContentWidth,
             })
           : undefined;
 

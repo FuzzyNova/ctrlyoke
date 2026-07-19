@@ -9,12 +9,8 @@ import {
   formatCollapsedOutputToggleLabel,
 } from "@utils/outputTruncation";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
-import {
-  TOOL_CALL_TERMINAL,
-  TOOL_CALL_LINE,
-  TOOL_RESULT_LINE,
-  TOOL_ERROR_LINE,
-} from "./outputStyles";
+import { TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
+import { ToolCallBlock } from "./ToolCallBlock";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
 
@@ -224,46 +220,52 @@ export const BashOutput = memo<BashOutputProps>(
           : "text-editor-fg";
 
     return (
-      <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-        <div className={TOOL_CALL_LINE}>
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-            <span className={dotColorClass}>●</span>{" "}
-            <span
-              className={
-                hasCommandLabel
-                  ? "text-editor-fg [overflow-wrap:anywhere]"
-                  : "text-description-fg italic [overflow-wrap:anywhere]"
-              }
-            >
-              {highlightText(
-                commandPreview.visibleText,
-                commandFindMatches ?? []
-              )}
-              {!resolvedExpansion.commandExpanded &&
-                commandPreview.isTruncated &&
-                "..."}
+      <ToolCallBlock
+        className={className}
+        dot={<span className={dotColorClass}>●</span>}
+        header={
+          <>
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+              <span
+                className={
+                  hasCommandLabel
+                    ? "text-editor-fg [overflow-wrap:anywhere]"
+                    : "text-description-fg italic [overflow-wrap:anywhere]"
+                }
+              >
+                {highlightText(
+                  commandPreview.visibleText,
+                  commandFindMatches ?? []
+                )}
+                {!resolvedExpansion.commandExpanded &&
+                  commandPreview.isTruncated &&
+                  "..."}
+              </span>
+              {renderStatusBadge()}
             </span>
-            {renderStatusBadge()}
-          </span>
-          {canToggleCommand && (
-            <button
-              type="button"
-              className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
-              onClick={(event) => {
-                event.preventDefault();
-                updateExpansion("command", !resolvedExpansion.commandExpanded);
-              }}
-              title={
-                resolvedExpansion.commandExpanded
-                  ? "Hide full command"
-                  : "Show full command"
-              }
-            >
-              {resolvedExpansion.commandExpanded ? "▲" : "▼"}
-            </button>
-          )}
-        </div>
-
+            {canToggleCommand && (
+              <button
+                type="button"
+                className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
+                onClick={(event) => {
+                  event.preventDefault();
+                  updateExpansion(
+                    "command",
+                    !resolvedExpansion.commandExpanded
+                  );
+                }}
+                title={
+                  resolvedExpansion.commandExpanded
+                    ? "Hide full command"
+                    : "Show full command"
+                }
+              >
+                {resolvedExpansion.commandExpanded ? "▲" : "▼"}
+              </button>
+            )}
+          </>
+        }
+      >
         {/* Only show output/error for completed commands */}
         {isCompleted && (
           <>
@@ -281,7 +283,7 @@ export const BashOutput = memo<BashOutputProps>(
             )}
           </>
         )}
-      </div>
+      </ToolCallBlock>
     );
   }
 );

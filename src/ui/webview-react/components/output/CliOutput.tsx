@@ -22,7 +22,11 @@ import {
   WebSearchOutput,
   GenericToolCallOutput,
 } from "./ToolCallOutput";
-import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
+import {
+  OUTPUT_BLOCK_BASE,
+  TOOL_RESULT_LINE,
+  TOOL_RESULT_STANDALONE_INDENT,
+} from "./outputStyles";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { WebviewLog } from "../../utils/logger";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -166,7 +170,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1 ${className}`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error text-[length:var(--fp-output-font-size-sm)]"} ${TOOL_RESULT_STANDALONE_INDENT} flex items-start gap-1 ${className}`}
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap min-w-0 [overflow-wrap:anywhere]">

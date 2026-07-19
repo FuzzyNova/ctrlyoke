@@ -6,7 +6,7 @@
  */
 import React, { memo } from "react";
 import { DiffView } from "./DiffView";
-import { TOOL_CALL_TERMINAL } from "./outputStyles";
+import { ToolCallBlock } from "./ToolCallBlock";
 import { openFile } from "@hooks/useMessageHandler";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { useUiStore } from "@store/uiStore";
@@ -47,39 +47,54 @@ const FilePath: React.FC<{
   </button>
 );
 
-interface FileOperationHeaderProps {
+interface FileOperationBlockProps {
   dotStatus: DotStatus;
   actionLabel: string;
   path: string;
   pathContent?: React.ReactNode;
-  error?: string;
   trailingAction?: React.ReactNode;
+  /** Failure detail. Rendered in the body so it hangs under the ●, not inline. */
+  error?: string;
+  children?: React.ReactNode;
+  /** Full-width content below the rail — the diff. */
+  fullBleed?: React.ReactNode;
+  className?: string;
 }
 
-const FileOperationHeader: React.FC<FileOperationHeaderProps> = ({
+/** Shared `● <action> <path>` frame for all four file operations. */
+const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
   dotStatus,
   actionLabel,
   path,
   pathContent,
-  error,
   trailingAction,
+  error,
+  children,
+  fullBleed,
+  className,
 }) => (
-  <div className="text-editor-fg text-[length:var(--fp-output-font-size)] flex flex-wrap items-start gap-x-1 gap-y-0">
-    <ToolDot status={dotStatus} />
-    <span className="shrink-0 leading-relaxed">{actionLabel}</span>
-    <span className="min-w-0 flex-1 leading-relaxed">
-      <FilePath
-        path={path}
-        className="inline-block whitespace-normal [overflow-wrap:anywhere] text-left align-top"
-      >
-        {pathContent}
-      </FilePath>
-    </span>
-    {trailingAction}
-    {error ? (
-      <span className="basis-full pl-5 text-indicator-error">{error}</span>
-    ) : null}
-  </div>
+  <ToolCallBlock
+    className={className}
+    fullBleed={fullBleed}
+    dot={<ToolDot status={dotStatus} />}
+    header={
+      <>
+        <span className="shrink-0 leading-relaxed">{actionLabel}</span>
+        <span className="min-w-0 flex-1 leading-relaxed">
+          <FilePath
+            path={path}
+            className="inline-block whitespace-normal [overflow-wrap:anywhere] text-left align-top"
+          >
+            {pathContent}
+          </FilePath>
+        </span>
+        {trailingAction}
+      </>
+    }
+  >
+    {error ? <div className="text-indicator-error">— {error}</div> : null}
+    {children}
+  </ToolCallBlock>
 );
 
 function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
@@ -195,34 +210,39 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       ) : null;
 
     return (
-      <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-        <FileOperationHeader
-          dotStatus={dotStatus}
-          actionLabel={getActionLabel()}
-          path={path}
-          pathContent={pathContent}
-          error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
-        />
-        {hasDiffData ? (
-          <DiffView
-            oldContent={oldContent}
-            newContent={newContent}
-            structuredPatch={structuredPatch}
-            language={getLanguageFromPath(path)}
-            globallyCollapsed={diffsCollapsed}
-            actionSlot={undoButton}
-            collapsed={collapsed}
-            onCollapsedChange={onCollapsedChange}
-            expandedGaps={expandedGaps}
-            onExpandGap={onExpandGap}
-            viewType={viewType}
-            findQuery={findQuery}
-            findCaseSensitive={findCaseSensitive}
-          />
-        ) : (
-          undoButton && <div className="ml-6 mt-1">{undoButton}</div>
+      <FileOperationBlock
+        className={className}
+        dotStatus={dotStatus}
+        actionLabel={getActionLabel()}
+        path={path}
+        pathContent={pathContent}
+        error={status === OPERATION_STATUS.FAILED ? error : undefined}
+        // The diff spans the gutter as well so it keeps the full block width;
+        // the rail therefore stops just above its "Show diff" toggle.
+        fullBleed={
+          hasDiffData ? (
+            <DiffView
+              oldContent={oldContent}
+              newContent={newContent}
+              structuredPatch={structuredPatch}
+              language={getLanguageFromPath(path)}
+              globallyCollapsed={diffsCollapsed}
+              actionSlot={undoButton}
+              collapsed={collapsed}
+              onCollapsedChange={onCollapsedChange}
+              expandedGaps={expandedGaps}
+              onExpandGap={onExpandGap}
+              viewType={viewType}
+              findQuery={findQuery}
+              findCaseSensitive={findCaseSensitive}
+            />
+          ) : undefined
+        }
+      >
+        {!hasDiffData && undoButton && (
+          <div className="mt-1">{undoButton}</div>
         )}
-      </div>
+      </FileOperationBlock>
     );
   }
 );
@@ -263,31 +283,30 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   };
 
   return (
-    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <FileOperationHeader
-        dotStatus={dotStatus}
-        actionLabel={getActionLabel()}
-        path={path}
-        pathContent={pathContent}
-        error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
-        trailingAction={
-          onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
-            <button
-              type="button"
-              className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-              title={
-                fileUndoMode === "redo"
-                  ? `Redo changes to ${path}`
-                  : `Undo changes to ${path}`
-              }
-              onClick={onUndoFile}
-            >
-              {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
-            </button>
-          ) : null
-        }
-      />
-    </div>
+    <FileOperationBlock
+      className={className}
+      dotStatus={dotStatus}
+      actionLabel={getActionLabel()}
+      path={path}
+      pathContent={pathContent}
+      error={status === OPERATION_STATUS.FAILED ? error : undefined}
+      trailingAction={
+        onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
+          <button
+            type="button"
+            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
+            title={
+              fileUndoMode === "redo"
+                ? `Redo changes to ${path}`
+                : `Undo changes to ${path}`
+            }
+            onClick={onUndoFile}
+          >
+            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+          </button>
+        ) : null
+      }
+    />
   );
 };
 
@@ -319,15 +338,14 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
   };
 
   return (
-    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <FileOperationHeader
-        dotStatus={dotStatus}
-        actionLabel={getActionLabel()}
-        path={path}
-        pathContent={pathContent}
-        error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
-      />
-    </div>
+    <FileOperationBlock
+      className={className}
+      dotStatus={dotStatus}
+      actionLabel={getActionLabel()}
+      path={path}
+      pathContent={pathContent}
+      error={status === OPERATION_STATUS.FAILED ? error : undefined}
+    />
   );
 };
 
@@ -357,30 +375,29 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   const dotStatus = boolDotStatus(success);
 
   return (
-    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <FileOperationHeader
-        dotStatus={dotStatus}
-        actionLabel="Delete file:"
-        path={path}
-        pathContent={pathContent}
-        error={success === false ? `— ${error}` : undefined}
-        trailingAction={
-          onUndoFile && success !== false ? (
-            <button
-              type="button"
-              className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-              title={
-                fileUndoMode === "redo"
-                  ? `Redo deletion of ${path}`
-                  : `Undo deletion of ${path}`
-              }
-              onClick={onUndoFile}
-            >
-              {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
-            </button>
-          ) : null
-        }
-      />
-    </div>
+    <FileOperationBlock
+      className={className}
+      dotStatus={dotStatus}
+      actionLabel="Delete file:"
+      path={path}
+      pathContent={pathContent}
+      error={success === false ? error : undefined}
+      trailingAction={
+        onUndoFile && success !== false ? (
+          <button
+            type="button"
+            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
+            title={
+              fileUndoMode === "redo"
+                ? `Redo deletion of ${path}`
+                : `Undo deletion of ${path}`
+            }
+            onClick={onUndoFile}
+          >
+            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+          </button>
+        ) : null
+      }
+    />
   );
 };

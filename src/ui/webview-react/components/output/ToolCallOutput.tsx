@@ -23,13 +23,9 @@ import {
   type ToolCallSectionRenderPlan,
 } from "@utils/toolCallLayout";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
-import {
-  TOOL_CALL_TERMINAL,
-  TOOL_CALL_LINE,
-  TOOL_RESULT_LINE,
-  TOOL_ERROR_LINE,
-} from "./outputStyles";
+import { TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
 import { ToolDot } from "./FileOperationOutput";
+import { ToolCallBlock } from "./ToolCallBlock";
 import type { ToolResult } from "../../types/cliEvents";
 
 // Re-exports so existing consumers (CliOutput, UndoChangesDialog, index.ts)
@@ -68,14 +64,15 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   labelContent,
   className = "",
 }) => (
-  <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-    <div className={TOOL_CALL_LINE}>
+  <ToolCallBlock
+    className={className}
+    dot={<ToolDot status={resultDotStatus(result)} />}
+    header={
       <span className="min-w-0 [overflow-wrap:anywhere]">
-        <ToolDot status={resultDotStatus(result)} />{" "}
         {labelContent ?? `MCP: ${server}.${tool}`}
       </span>
-    </div>
-  </div>
+    }
+  />
 );
 
 // ============================================================================
@@ -99,17 +96,21 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
   errorContent,
   className = "",
 }) => (
-  <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-    <div className={TOOL_CALL_LINE}>
+  <ToolCallBlock
+    className={className}
+    dot={
+      <ToolDot
+        status={
+          success === undefined ? "pending" : success ? "success" : "error"
+        }
+      />
+    }
+    header={
       <span className="min-w-0 [overflow-wrap:anywhere]">
-        <ToolDot
-          status={
-            success === undefined ? "pending" : success ? "success" : "error"
-          }
-        />{" "}
         {queryContent ?? <>Web search: &ldquo;{query}&rdquo;</>}
       </span>
-    </div>
+    }
+  >
     {error && (
       <div className={`${TOOL_ERROR_LINE} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
@@ -118,7 +119,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
         </div>
       </div>
     )}
-  </div>
+  </ToolCallBlock>
 );
 
 // ============================================================================
@@ -240,40 +241,46 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   };
 
   return (
-    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <div className={TOOL_CALL_LINE}>
-        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-          <ToolDot status={resultDotStatus(result)} />{" "}
-          {nameFindMatches?.length ? (
-            <>
-              {highlightText(name, nameFindMatches)}({params})
-              {showSummaryEllipsis && "..."}
-            </>
-          ) : (
-            `${name}(${params})${showSummaryEllipsis ? "..." : ""}`
+    <ToolCallBlock
+      className={className}
+      dot={<ToolDot status={resultDotStatus(result)} />}
+      header={
+        <>
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+            {nameFindMatches?.length ? (
+              <>
+                {highlightText(name, nameFindMatches)}({params})
+                {showSummaryEllipsis && "..."}
+              </>
+            ) : (
+              `${name}(${params})${showSummaryEllipsis ? "..." : ""}`
+            )}
+          </span>
+          {resolvedRenderPlan.params.canToggle && (
+            <button
+              type="button"
+              className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
+              onClick={(event) => {
+                event.preventDefault();
+                updateExpansion(
+                  "params",
+                  !resolvedRenderPlan.params.isExpanded
+                );
+              }}
+              title={
+                resolvedRenderPlan.params.isExpanded
+                  ? "Hide parameters"
+                  : "Show all parameters"
+              }
+            >
+              {resolvedRenderPlan.params.isExpanded ? "▲" : "▼"}
+            </button>
           )}
-        </span>
-        {resolvedRenderPlan.params.canToggle && (
-          <button
-            type="button"
-            className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
-            onClick={(event) => {
-              event.preventDefault();
-              updateExpansion("params", !resolvedRenderPlan.params.isExpanded);
-            }}
-            title={
-              resolvedRenderPlan.params.isExpanded
-                ? "Hide parameters"
-                : "Show all parameters"
-            }
-          >
-            {resolvedRenderPlan.params.isExpanded ? "▲" : "▼"}
-          </button>
-        )}
-      </div>
-
+        </>
+      }
+    >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
-        <div className="pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <div className="text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
           {fullParamsText}
         </div>
       )}
@@ -292,7 +299,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           resolvedRenderPlan.error,
           errorFindMatches
         )}
-    </div>
+    </ToolCallBlock>
   );
 };
 
