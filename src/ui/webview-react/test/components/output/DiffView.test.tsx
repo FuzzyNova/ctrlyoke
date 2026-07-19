@@ -90,6 +90,7 @@ vi.mock("@hooks/useElementNarrow", () => ({
   useElementNarrow: vi.fn(() => [vi.fn(), true]),
 }));
 
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import { DiffView } from "@components/output/DiffView";
 
 describe("DiffView", () => {
@@ -111,6 +112,9 @@ describe("DiffView", () => {
     mockExpandFromRawCode.mockImplementation((hunks: unknown[]) => hunks);
     mockRefractorRegistered.mockReturnValue(false);
     mockTokenize.mockClear();
+    // Restored every test because the render-loop regression guard below swaps
+    // in a counting implementation that can throw.
+    vi.mocked(useElementNarrow).mockImplementation(() => [vi.fn(), true]);
   });
 
   it("renders nothing when there is no diff content", () => {
@@ -150,6 +154,64 @@ describe("DiffView", () => {
     expect(getByText(/Show diff/)).toBeTruthy();
     expect(getByText("+1")).toHaveClass("text-minimap-diff-added");
     expect(getByText("-1")).toHaveClass("text-minimap-diff-removed");
+  });
+
+  it("stops re-rendering when collapsed with uncontrolled gap state", () => {
+    // Regression guard. While collapsed, `baseHunks` was a fresh `[]` literal
+    // every render, and the gap-reset effect that depends on it always stored a
+    // brand-new Map — never Object.is-equal to the previous state, so React
+    // could never bail out. Render → effect → setState → render never
+    // terminated, allocating on every pass until the heap died; it OOM'd the
+    // entire UI suite (4GB) rather than failing.
+    //
+    // Deliberately pass neither `collapsed` nor `expandedGaps` — both pieces of
+    // state must stay uncontrolled, which is the only configuration that looped.
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -1,1 +1,1 @@",
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 1,
+          changes: [
+            { type: "delete", content: "-const a = 1;" },
+            { type: "insert", content: "+const a = 2;" },
+          ],
+        },
+      ],
+      diffType: "modify",
+    });
+
+    // useElementNarrow is an unconditional hook call, so it runs once per
+    // DiffView render. Throwing past a bound makes the guard trip *inside* the
+    // loop: the runaway renders happen within render()'s act(), so any
+    // assertion placed after it would never be reached — the process exhausts
+    // its heap first. Tripping mid-loop turns a regression into a fast, legible
+    // failure instead of a 4GB OOM that takes down the whole suite.
+    const MAX_RENDERS = 50;
+    let renders = 0;
+    vi.mocked(useElementNarrow).mockImplementation(() => {
+      renders += 1;
+      if (renders > MAX_RENDERS) {
+        throw new Error(
+          `DiffView rendered more than ${MAX_RENDERS} times while collapsed — ` +
+            `the uncontrolled gap-reset effect is looping again.`
+        );
+      }
+      return [vi.fn(), true];
+    });
+
+    const { getByText } = render(
+      <DiffView
+        oldContent={"const a = 1;\n"}
+        newContent={"const a = 2;\n"}
+        globallyCollapsed={true}
+      />
+    );
+
+    expect(getByText(/Show diff/)).toBeTruthy();
+    expect(renders).toBeLessThanOrEqual(MAX_RENDERS);
   });
 
   it("shows diff when expanded", () => {

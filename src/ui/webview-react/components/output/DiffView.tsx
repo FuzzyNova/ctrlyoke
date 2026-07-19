@@ -49,6 +49,12 @@ import { useElementNarrow } from "@hooks/useElementNarrow";
 
 const SIDE_BY_SIDE_THRESHOLD = 1024;
 const HIDDEN_CONTEXT_CHUNK_LINES = 25;
+/**
+ * Shared empty hunk list for the collapsed state. Must be a module constant,
+ * not a `[]` literal — `baseHunks` is an effect dependency below, and a fresh
+ * array each render re-fires that effect on every render.
+ */
+const EMPTY_HUNKS: HunkData[] = [];
 const DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD = 240;
 const DEFER_DIFF_TOKENIZATION_TIMEOUT_MS = 900;
 
@@ -250,11 +256,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
   const { baseHunks, diffType } = isExpanded
     ? parsedDiff
-    : { baseHunks: [], diffType: parsedDiff.diffType };
+    : { baseHunks: EMPTY_HUNKS, diffType: parsedDiff.diffType };
 
+  // Reset gap expansion whenever the underlying hunks change.
+  //
+  // Both halves of this matter, and dropping either reintroduces an infinite
+  // render loop that exhausts the heap (it OOM'd the whole UI test suite):
+  // `baseHunks` must keep a stable identity while collapsed (see EMPTY_HUNKS),
+  // and the update must return the *same* Map when there is nothing to clear.
+  // A fresh `new Map()` is never Object.is-equal to the previous state, so
+  // React re-renders unconditionally — render → effect → setState → render.
   useEffect(() => {
     if (expandedGaps !== undefined) return;
-    setUncontrolledExpandedGaps(new Map());
+    setUncontrolledExpandedGaps((previous) =>
+      previous.size === 0 ? previous : new Map()
+    );
   }, [baseHunks, expandedGaps]);
 
   // Auto-expand single-line gaps: a "show 1 hidden line" control takes as much
