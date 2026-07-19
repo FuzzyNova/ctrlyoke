@@ -27,6 +27,7 @@ import {
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
 import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
+import type { CliEvent } from "../../types/CliOutputTypes";
 
 /**
  * OutputHistoryManager
@@ -161,6 +162,94 @@ export class OutputHistoryManager {
   }
 
   /**
+   * Persist the initial in-flight output record before any streamed deltas arrive.
+   * Streaming writes intentionally do not rebuild the search index; the completed
+   * aggregate write does that once when the attempt settles.
+   */
+  async startStreamingExecutionOutput(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    cliOutput: CliOutput
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+    try {
+      await this.timelineRecorder.appendEvents(historyFilePath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: cliOutput.timestampMs ?? Date.now(),
+          target,
+          runIndex: cliOutput.runIndex ?? 0,
+          attemptIndex: cliOutput.attemptIndex ?? 0,
+          payload: { cliOutput },
+        },
+      ]);
+    } catch (error) {
+      Log.warn("Failed to start streaming output history:", error);
+    }
+  }
+
+  /** Append a raw text chunk immediately so an interrupted run remains replayable. */
+  async appendStreamingChunk(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    chunk: string
+  ): Promise<void> {
+    if (!historyFilePath || !chunk) {
+      return;
+    }
+    try {
+      await this.timelineRecorder.appendEvents(historyFilePath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+          timestampMs: Date.now(),
+          target,
+          runIndex,
+          attemptIndex,
+          payload: { chunk },
+        },
+      ]);
+    } catch (error) {
+      Log.warn("Failed to append streaming output chunk to history:", error);
+    }
+  }
+
+  /** Append parsed CLI events immediately instead of waiting for attempt completion. */
+  async appendStreamingEvents(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    events: CliEvent[]
+  ): Promise<void> {
+    if (!historyFilePath || events.length === 0) {
+      return;
+    }
+    try {
+      await this.timelineRecorder.appendEvents(historyFilePath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+          timestampMs: Date.now(),
+          target,
+          runIndex,
+          attemptIndex,
+          payload: { events },
+        },
+      ]);
+    } catch (error) {
+      Log.warn("Failed to append streaming CLI events to history:", error);
+    }
+  }
+
+  /** Wait for all serialized timeline writes already queued by live callbacks. */
+  async flushPendingWrites(historyFilePath?: string): Promise<void> {
+    await this.timelineRecorder.flushPendingOperations(historyFilePath);
+  }
+
+  /**
    * Append a single status message at the moment it is emitted.
    */
   async appendStatusMessage(
@@ -282,6 +371,32 @@ export class OutputHistoryManager {
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to finalize history run:", error);
+    }
+  }
+
+  /** Finalize the newest still-running run after startup detects a dead owner. */
+  async recoverInterruptedRun(
+    workflowId: string,
+    runStepCount: number
+  ): Promise<void> {
+    const [latestRun] = await this.getRunsForWorkflow(workflowId);
+    if (!latestRun) {
+      return;
+    }
+    const historyFilePath = this.getHistoryFilePath(workflowId, latestRun);
+    try {
+      const manifest =
+        await this.timelineRecorder.readManifest(historyFilePath);
+      if (manifest.executionState !== EXECUTION_STATES.RUNNING) {
+        return;
+      }
+      await this.finalizeRun(
+        historyFilePath,
+        EXECUTION_STATES.STOPPED,
+        runStepCount
+      );
+    } catch (error) {
+      Log.warn("Failed to recover interrupted history run:", error);
     }
   }
 

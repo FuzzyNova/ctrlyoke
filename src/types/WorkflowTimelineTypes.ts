@@ -8,7 +8,7 @@ import type {
   WorkspaceSnapshot,
   UndoRecord,
 } from "./OutputHistoryTypes";
-import type { CliOutput, StatusMessage } from "./WebviewMessageTypes";
+import type { CliEvent, CliOutput, StatusMessage } from "./WebviewMessageTypes";
 
 export const TIMELINE_STORAGE_FILES = {
   MANIFEST: "manifest.json",
@@ -16,11 +16,13 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = "2.0.0" as const;
+export const TIMELINE_SCHEMA_VERSION = "2.1.0" as const;
 
 export const TIMELINE_EVENT_TYPES = {
   WORKFLOW_RUNTIME_TRANSITION_RECORDED: "workflowRuntimeTransitionRecorded",
   CLI_OUTPUT_RECORDED: "cliOutputRecorded",
+  CLI_OUTPUT_CHUNK_APPENDED: "cliOutputChunkAppended",
+  CLI_OUTPUT_EVENTS_APPENDED: "cliOutputEventsAppended",
   STATUS_MESSAGE_RECORDED: "statusMessageRecorded",
   // Legacy aggregate event retained for read compatibility only.
   STATUS_MESSAGES_UPDATED: "statusMessagesUpdated",
@@ -156,6 +158,24 @@ export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftB
   };
 }
 
+export interface CliOutputChunkAppendedEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED;
+  runIndex?: number;
+  attemptIndex: number;
+  payload: {
+    chunk: string;
+  };
+}
+
+export interface CliOutputEventsAppendedEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED;
+  runIndex?: number;
+  attemptIndex: number;
+  payload: {
+    events: CliEvent[];
+  };
+}
+
 export interface StatusMessageRecordedEventDraft extends TargetedTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED;
   payload: {
@@ -208,6 +228,8 @@ export interface UndoRecordUpdatedEventDraft extends TargetedTimelineEventDraftB
 export type WorkflowTimelineEventDraft =
   | WorkflowRuntimeTransitionRecordedEventDraft
   | CliOutputRecordedEventDraft
+  | CliOutputChunkAppendedEventDraft
+  | CliOutputEventsAppendedEventDraft
   | StatusMessageRecordedEventDraft
   | StatusMessagesUpdatedEventDraft
   | WorkspaceSnapshotCapturedEventDraft
@@ -222,6 +244,24 @@ export interface CliOutputRecordedEvent extends TargetedTimelineEventBase {
   attemptIndex: number;
   payload: {
     cliOutput: CliOutput;
+  };
+}
+
+export interface CliOutputChunkAppendedEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED;
+  runIndex?: number;
+  attemptIndex: number;
+  payload: {
+    chunk: string;
+  };
+}
+
+export interface CliOutputEventsAppendedEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED;
+  runIndex?: number;
+  attemptIndex: number;
+  payload: {
+    events: CliEvent[];
   };
 }
 
@@ -284,6 +324,8 @@ export interface UndoRecordUpdatedEvent extends TargetedTimelineEventBase {
 export type WorkflowTimelineEvent =
   | WorkflowRuntimeTransitionRecordedEvent
   | CliOutputRecordedEvent
+  | CliOutputChunkAppendedEvent
+  | CliOutputEventsAppendedEvent
   | StatusMessageRecordedEvent
   | StatusMessagesUpdatedEvent
   | WorkspaceSnapshotCapturedEvent

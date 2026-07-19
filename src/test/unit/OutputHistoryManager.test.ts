@@ -8,6 +8,7 @@ import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryMana
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   EXECUTION_STATES,
+  CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   SNAPSHOT_BASE_SOURCES,
@@ -230,6 +231,54 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.ok(events.every((event) => typeof event.timestampMs === "number"));
   });
 
+  test("durably projects in-flight chunks and parsed events before completion", async () => {
+    const { filePath } = await manager.initializeRun("wf-streaming");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    await manager.startStreamingExecutionOutput(filePath, target, {
+      prompt: "stream me",
+      response: "",
+      elapsed: 0,
+      isStreaming: true,
+      timestampMs: 100,
+      runIndex: 0,
+      attemptIndex: 0,
+    });
+    await manager.appendStreamingChunk(filePath, target, 0, 0, "raw ");
+    await manager.appendStreamingEvents(filePath, target, 0, 0, [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: 110,
+        data: { text: "parsed" },
+      },
+    ]);
+
+    const interrupted = await manager.loadHistory(filePath);
+    const interruptedOutput = interrupted.orderedEntries.find(
+      (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(interruptedOutput?.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(interruptedOutput.cliOutput.response, "raw ");
+    assert.deepStrictEqual(interruptedOutput.cliOutput.structured?.events, [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: 110,
+        data: { text: "parsed" },
+      },
+    ]);
+    assert.strictEqual(interruptedOutput.cliOutput.isStreaming, true);
+
+    const events = await recorder.readEvents(filePath);
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+      ]
+    );
+  });
+
   test("records authoritative workflow runtime transitions without affecting history projection", async () => {
     const historyInit = await manager.initializeRun("wf-runtime");
     const historyFilePath = historyInit.filePath;
@@ -306,6 +355,34 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       loaded.orderedEntries.map((entry) => entry.kind),
       ["runtime", "status"]
     );
+  });
+
+  test("finalizes the newest running manifest during crash recovery", async () => {
+    const { filePath } = await manager.initializeRun("wf-interrupted");
+    await manager.startStreamingExecutionOutput(
+      filePath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      {
+        prompt: "interrupted",
+        response: "",
+        elapsed: 0,
+        isStreaming: true,
+        attemptIndex: 0,
+      }
+    );
+
+    await manager.recoverInterruptedRun("wf-interrupted", 3);
+
+    const manifest = await recorder.readManifest(filePath);
+    assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(manifest.runStepCount, 3);
+    assert.strictEqual(typeof manifest.completedAt, "number");
+    const recovered = await manager.loadHistory(filePath);
+    const output = recovered.orderedEntries.find(
+      (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(output?.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(output.cliOutput.isStreaming, false);
   });
 
   test("orders canonical history entries by timestamp and sequence", async () => {

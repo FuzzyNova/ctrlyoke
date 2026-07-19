@@ -207,6 +207,16 @@ export class TimelineRecorder {
     );
   }
 
+  async flushPendingOperations(manifestPath?: string): Promise<void> {
+    if (manifestPath) {
+      await (TimelineRecorder.manifestOperationQueues.get(
+        path.resolve(manifestPath)
+      ) ?? Promise.resolve());
+      return;
+    }
+    await Promise.all(TimelineRecorder.manifestOperationQueues.values());
+  }
+
   private async runSerializedManifestOperation<T>(
     manifestPath: string,
     operation: () => Promise<T>

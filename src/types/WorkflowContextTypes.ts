@@ -4,6 +4,8 @@ import type { ResolvedProperties } from "../utils/PropertyResolver";
 /** Narrow working-file persistence contract exposed to harnesses. */
 export interface WorkflowWorkingFilePersistence {
   updateWorkingFile(skipMerge?: boolean): Promise<void>;
+  /** Persist a newly discovered harness session before the prompt completes. */
+  persistSessionId?(promptIndex: number, sessionId: string): Promise<void>;
 }
 
 /**

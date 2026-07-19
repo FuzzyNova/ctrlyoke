@@ -167,6 +167,8 @@ export class WorkflowInstance {
     null;
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  private executionSettledPromise: Promise<void> = Promise.resolve();
+  private resolveExecutionSettled: (() => void) | undefined;
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
@@ -565,6 +567,43 @@ export class WorkflowInstance {
       integration.dispose();
     }
     this.liveInjectIntegrations.clear();
+  }
+
+  /**
+   * Stop an active run and wait for its working-file/history writes to settle.
+   * Used by process shutdown; ordinary view disposal remains synchronous.
+   */
+  async shutdown(): Promise<void> {
+    const status = this.workflowRuntime.status;
+    if (
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSING ||
+      status === EXECUTION_STATES.PAUSED
+    ) {
+      await this.stop().catch((error) =>
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to request stop during shutdown:`,
+          error
+        )
+      );
+    }
+
+    const shutdownTimeoutMs = 12_000;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      this.executionSettledPromise,
+      new Promise<void>((resolve) => {
+        timeoutHandle = setTimeout(resolve, shutdownTimeoutMs);
+      }),
+    ]);
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+
+    await this.pendingRuntimeTransitionHistoryWrite;
+    await this.outputHistoryManager.flushPendingWrites(
+      this.activeHistoryFilePath || undefined
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2626,6 +2665,9 @@ export class WorkflowInstance {
     }
 
     this.startPending = true;
+    this.executionSettledPromise = new Promise<void>((resolve) => {
+      this.resolveExecutionSettled = resolve;
+    });
     this.startedAt = Date.now();
     this.activeHistoryFilePath = historyFilePath;
 
@@ -2790,6 +2832,8 @@ export class WorkflowInstance {
           .catch((err) => Log.warn("Failed to finalize history run:", err));
       }
       this.startPending = false;
+      this.resolveExecutionSettled?.();
+      this.resolveExecutionSettled = undefined;
     }
   }
 

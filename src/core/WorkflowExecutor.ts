@@ -807,6 +807,13 @@ export class WorkflowExecutor {
       signedStepIndex,
       initCliOutput
     );
+    if (context.historyFilePath && context.outputHistoryManager) {
+      void context.outputHistoryManager.startStreamingExecutionOutput(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        initCliOutput
+      );
+    }
 
     // Accumulate output chunks so interactive mode has output to save to history.
     const outputChunks: string[] = [];
@@ -814,6 +821,15 @@ export class WorkflowExecutor {
     // Streaming callback — strips ANSI codes for the CliOutput text panel.
     const onStreamChunk = (chunk: string): void => {
       outputChunks.push(chunk);
+      if (context.historyFilePath && context.outputHistoryManager) {
+        void context.outputHistoryManager.appendStreamingChunk(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          runIndex,
+          attemptIndex,
+          chunk
+        );
+      }
       if (!context.dashboardProvider) return;
       if (signedStepIndex >= 0) {
         context.dashboardProvider.updateCliStreamingChunk(
@@ -1271,9 +1287,10 @@ export class WorkflowExecutor {
     timestampMs: number,
     runIndex: number,
     attemptIndex: number,
-    rawTextOutput: boolean | undefined
+    rawTextOutput: boolean | undefined,
+    persistToHistory: boolean = false
   ): void {
-    const placeholder = {
+    const placeholder: CliOutput = {
       prompt,
       response: "",
       elapsed: 0,
@@ -1319,6 +1336,18 @@ export class WorkflowExecutor {
         attemptIndex,
         rawTextOutput,
         runIndex
+      );
+    }
+
+    if (
+      persistToHistory &&
+      context.historyFilePath &&
+      context.outputHistoryManager
+    ) {
+      void context.outputHistoryManager.startStreamingExecutionOutput(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        placeholder
       );
     }
   }
@@ -1751,7 +1780,8 @@ export class WorkflowExecutor {
       initTimestampMs,
       runIndex,
       attemptIndex,
-      rawTextOutput
+      rawTextOutput,
+      true
     );
 
     const responsePromise = this.waitForResponseComplete(
@@ -1799,6 +1829,16 @@ export class WorkflowExecutor {
           chunk
         );
       }
+
+      if (context.historyFilePath && context.outputHistoryManager) {
+        void context.outputHistoryManager.appendStreamingChunk(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          runIndex,
+          attemptIndex,
+          chunk
+        );
+      }
     });
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
@@ -1820,6 +1860,16 @@ export class WorkflowExecutor {
           events,
           attemptIndex,
           runIndex
+        );
+      }
+
+      if (context.historyFilePath && context.outputHistoryManager) {
+        void context.outputHistoryManager.appendStreamingEvents(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          runIndex,
+          attemptIndex,
+          events
         );
       }
     });

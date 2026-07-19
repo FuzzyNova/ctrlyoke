@@ -135,6 +135,10 @@ export class CliExecutionRunner {
    * a fresh PTY session.
    */
   private lastInteractiveContext?: InteractiveInjectContext;
+  private readonly persistedSessionIds = new WeakMap<
+    CliExecutionSession,
+    string
+  >();
 
   constructor(private readonly deps: CliExecutionRunnerDeps) {}
 
@@ -143,7 +147,7 @@ export class CliExecutionRunner {
     baseArgs: string[]
   ): Promise<boolean> {
     const result = await this.executeInTerminal(baseArgs, session);
-    session.setExtractedSessionId(result.sessionId);
+    await this.persistResolvedSessionId(session, result.sessionId);
 
     if (
       result.success &&
@@ -156,7 +160,7 @@ export class CliExecutionRunner {
         this.deps.runtimeState.getWorkspaceRoot()
       );
       if (logSessionId) {
-        session.setExtractedSessionId(logSessionId);
+        await this.persistResolvedSessionId(session, logSessionId);
         Log.debug(`📝 Session ID from logs (interactive): ${logSessionId}`);
       }
     }
@@ -309,6 +313,10 @@ export class CliExecutionRunner {
     );
 
     try {
+      await this.persistResolvedSessionId(
+        session,
+        this.lastInteractiveContext.sessionId ?? undefined
+      );
       const result = await this.monitorLogFile(
         this.lastInteractiveContext.logPath,
         session,
@@ -318,7 +326,8 @@ export class CliExecutionRunner {
         }
       );
 
-      session.setExtractedSessionId(
+      await this.persistResolvedSessionId(
+        session,
         result.sessionId ?? this.lastInteractiveContext.sessionId ?? undefined
       );
 
@@ -603,6 +612,11 @@ export class CliExecutionRunner {
         spawnedWithSessionId: session.resolvedSessionId,
       };
 
+      await this.persistResolvedSessionId(
+        session,
+        discovery.sessionId ?? undefined
+      );
+
       const result = await this.monitorLogFile(discovery.logPath, session, {
         sessionId: discovery.sessionId,
         startTime,
@@ -659,6 +673,8 @@ export class CliExecutionRunner {
     if (result.failureKind || result.failureMessage) {
       session.updateFailure(result.failureKind, result.failureMessage);
     }
+
+    await this.persistResolvedSessionId(session, result.sessionId);
 
     if (result.failureKind === FAILURE_KINDS.PROCESS_EXIT) {
       const exitCode = result.processExited?.exitCode ?? -1;
@@ -727,6 +743,11 @@ export class CliExecutionRunner {
       });
 
       session.recordHeadlessResponse(collected);
+      await this.persistResolvedSessionId(
+        session,
+        collected.extractedSessionId ??
+          collected.parsedOutput?.metadata.sessionId
+      );
       if (!collected.success) {
         if (collected.failureKind === FAILURE_KINDS.PROCESS_EXIT) {
           this.deps.runtimeState.setFailureReason(
@@ -798,5 +819,32 @@ export class CliExecutionRunner {
 
   private async delay(ms: number): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async persistResolvedSessionId(
+    session: CliExecutionSession,
+    sessionId: string | undefined
+  ): Promise<void> {
+    if (!sessionId) {
+      return;
+    }
+
+    session.setExtractedSessionId(sessionId);
+    if (this.persistedSessionIds.get(session) === sessionId) {
+      return;
+    }
+
+    const context = session.workflowContext;
+    const persistence = context?.workingFilePersistence;
+    if (context && persistence?.persistSessionId) {
+      try {
+        await persistence.persistSessionId(context.promptIndex, sessionId);
+        Log.debug(`💾 Persisted live session ID: ${sessionId}`);
+      } catch (error) {
+        Log.warn(`Failed to persist live session ID ${sessionId}:`, error);
+        return;
+      }
+    }
+    this.persistedSessionIds.set(session, sessionId);
   }
 }

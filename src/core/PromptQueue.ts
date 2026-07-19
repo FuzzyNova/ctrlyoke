@@ -834,6 +834,38 @@ export class PromptQueue {
   }
 
   /**
+   * Persist a harness session ID as soon as startup/log discovery resolves it.
+   * `promptIndex === steps.length` addresses the workflow finalStep.
+   */
+  async persistSessionId(
+    promptIndex: number,
+    sessionId: string
+  ): Promise<void> {
+    const prompt = this.state.steps[promptIndex];
+    if (prompt) {
+      if (prompt._runtime?.sessionId === sessionId) {
+        return;
+      }
+      await this.persistRuntimeMetadata(promptIndex, { sessionId });
+      return;
+    }
+
+    const finalStep = this.workflowFile?.finalStep;
+    if (promptIndex !== this.state.steps.length || !finalStep) {
+      return;
+    }
+    if (finalStep._runtime?.sessionId === sessionId) {
+      return;
+    }
+    finalStep._runtime = {
+      startedAt: Date.now(),
+      ...finalStep._runtime,
+      sessionId,
+    };
+    await this.updateWorkingFile();
+  }
+
+  /**
    * Append follow-up text to a queue step's stored `responseText`.
    *
    * Used by `SessionActivityWatcher` attribution: when a harness auto-resumes a

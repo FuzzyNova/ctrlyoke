@@ -1996,6 +1996,22 @@ export class WorkflowOrchestrator {
   // Dispose
   // ─────────────────────────────────────────────────────────────────────────
 
+  /** Gracefully stop active instances and flush durable state before disposal. */
+  async shutdown(): Promise<void> {
+    const instances = new Set([
+      ...this.instances.values(),
+      ...this.retiredInstances.values(),
+    ]);
+    const results = await Promise.allSettled(
+      [...instances].map((instance) => instance.shutdown())
+    );
+    for (const result of results) {
+      if (result.status === "rejected") {
+        Log.warn("Workflow shutdown did not settle cleanly:", result.reason);
+      }
+    }
+  }
+
   dispose(): void {
     // Dispose all retired instances (completed/stopped, not in main map)
     for (const instance of this.retiredInstances.values()) {
@@ -2350,8 +2366,26 @@ export class WorkflowOrchestrator {
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
     try {
-      activeCliPaths =
+      const normalized =
         await WorkflowLockManager.normalizeStaleLocks(workingDir);
+      activeCliPaths = normalized.activeCliPaths;
+
+      const historyManager = new OutputHistoryManager(workspaceFolderPath);
+      for (const recoveredPath of normalized.recoveredPaths) {
+        let stepCount = 0;
+        try {
+          const recoveredWorkingFile = JSON.parse(
+            await fs.promises.readFile(recoveredPath, "utf8")
+          ) as { steps?: unknown[] };
+          stepCount = recoveredWorkingFile.steps?.length ?? 0;
+        } catch {
+          // The history manifest can still be finalized without a step count.
+        }
+        await historyManager.recoverInterruptedRun(
+          OutputHistoryManager.extractWorkflowId(recoveredPath),
+          stepCount
+        );
+      }
     } catch (err) {
       Log.warn(
         "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",

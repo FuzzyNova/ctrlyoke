@@ -1,4 +1,5 @@
 import {
+  EXECUTION_STATES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
 } from "../../types/DashboardConstants";
@@ -8,6 +9,8 @@ import type {
   StepOutput,
   WorkflowOutputHistory,
 } from "../../types/OutputHistoryTypes";
+import type { OrderedCliHistoryEntry } from "../../types/OutputHistoryTypes";
+import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import {
   TIMELINE_EVENT_TYPES,
   type WorkflowRunManifest,
@@ -44,7 +47,7 @@ export class OutputHistoryTimelineAdapter {
       orderedEntries: [],
     };
     const orderedEntries: OrderedHistoryEntry[] = [];
-    const cliEntriesByKey = new Map<string, OrderedHistoryEntry>();
+    const cliEntriesByKey = new Map<string, OrderedCliHistoryEntry>();
 
     for (const event of [...events].sort(compareTimelineEvents)) {
       switch (event.eventType) {
@@ -71,6 +74,45 @@ export class OutputHistoryTimelineAdapter {
               sequence: event.sequence,
             }
           );
+          break;
+        }
+        case TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED: {
+          const existing = cliEntriesByKey.get(
+            getCliEntryKey(
+              event.target,
+              event.runIndex ?? 0,
+              event.attemptIndex
+            )
+          );
+          if (existing) {
+            existing.cliOutput = {
+              ...existing.cliOutput,
+              response: existing.cliOutput.response + event.payload.chunk,
+            };
+          }
+          break;
+        }
+        case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED: {
+          const existing = cliEntriesByKey.get(
+            getCliEntryKey(
+              event.target,
+              event.runIndex ?? 0,
+              event.attemptIndex
+            )
+          );
+          if (existing) {
+            existing.cliOutput = {
+              ...existing.cliOutput,
+              structured: {
+                ...existing.cliOutput.structured,
+                events: normalizeCliEvents([
+                  ...(existing.cliOutput.structured?.events ?? []),
+                  ...event.payload.events,
+                ]),
+                metadata: existing.cliOutput.structured?.metadata ?? {},
+              },
+            };
+          }
           break;
         }
         case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
@@ -100,6 +142,17 @@ export class OutputHistoryTimelineAdapter {
       ...orderedEntries,
       ...cliEntriesByKey.values(),
     ].sort(compareOrderedHistoryEntries);
+
+    if (manifest.executionState !== EXECUTION_STATES.RUNNING) {
+      for (const entry of history.orderedEntries) {
+        if (
+          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          entry.cliOutput.isStreaming
+        ) {
+          entry.cliOutput = { ...entry.cliOutput, isStreaming: false };
+        }
+      }
+    }
 
     if (
       history.finalStepOutputs &&

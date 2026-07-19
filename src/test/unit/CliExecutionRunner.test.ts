@@ -96,6 +96,7 @@ function createRunner(options?: {
   collectedHeadlessResponse?: {
     success: boolean;
     error?: string;
+    sessionId?: string;
   };
 }) {
   const failureTracker = new CliFailureTracker();
@@ -138,6 +139,7 @@ function createRunner(options?: {
         collectHeadlessResponse: async () => ({
           success: options?.collectedHeadlessResponse?.success ?? true,
           parsedOutput: { events: [], metadata: {} },
+          extractedSessionId: options?.collectedHeadlessResponse?.sessionId,
           cliResult: {
             success: options?.collectedHeadlessResponse?.success ?? true,
             response: "",
@@ -302,6 +304,37 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(success, false);
     assert.strictEqual(getFailureReason(), "Stopped by user");
+  });
+
+  test("should persist a resolved session ID through the live working-file seam", async () => {
+    const { runner } = createRunner({
+      collectedHeadlessResponse: {
+        success: true,
+        sessionId: "session-live-123",
+      },
+    });
+    const persisted: Array<{ promptIndex: number; sessionId: string }> = [];
+    const session = new CliExecutionSession({
+      prompt: { prompt: "just say hi" },
+      workflowContext: {
+        promptIndex: 0,
+        allPrompts: [{ prompt: "just say hi" }],
+        workingFilePersistence: {
+          updateWorkingFile: async () => {},
+          persistSessionId: async (promptIndex, sessionId) => {
+            persisted.push({ promptIndex, sessionId });
+          },
+        },
+      },
+    });
+
+    const success = await runner.executeHeadless(session, []);
+
+    assert.strictEqual(success, true);
+    assert.strictEqual(session.effectiveSessionId, "session-live-123");
+    assert.deepStrictEqual(persisted, [
+      { promptIndex: 0, sessionId: "session-live-123" },
+    ]);
   });
 
   test("should classify log monitor timeouts without throwing", async () => {

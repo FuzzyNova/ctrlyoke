@@ -1304,6 +1304,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 export async function deactivate(): Promise<void> {
   Log.debug("ctrlyoke: Extension deactivating...");
 
+  await workflowOrchestrator?.shutdown();
   await getPtyProcessManager()?.gracefulShutdownAllAiCliSessions();
 
   hostedServer?.dispose();

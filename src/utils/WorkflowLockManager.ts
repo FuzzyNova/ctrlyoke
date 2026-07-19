@@ -5,6 +5,9 @@ import {
   RUNNER_IDS,
   LOCK_STATUS,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  PROMPT_TERMINAL_STATUS,
+  STEP_STATUS,
 } from "../types/DashboardConstants";
 import type { LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
@@ -157,23 +160,27 @@ export class WorkflowLockManager {
    * Normalize stale locks on extension startup.
    *
    * Scans all *.ctrlyoke.json files in queueDir. For each file whose
-   * _runtime.executionState is "running":
+   * _runtime.executionState is active (running/pausing/cancelling):
    *   - "none" or "stale" lock  → writes "stopped" to _runtime.executionState,
    *     cleans up any stale lock file
    *   - "active-vscode"         → this shouldn't happen on startup (we just started);
    *     treat as stale and normalize to "stopped"
    *   - "active-cli"            → preserves RUNNING; returns this path as a CLI-managed entry
    *
-   * Returns array of working file paths that are actively managed by the CLI.
+   * Returns active CLI paths plus files recovered from an interrupted owner.
    */
-  static async normalizeStaleLocks(queueDir: string): Promise<string[]> {
+  static async normalizeStaleLocks(queueDir: string): Promise<{
+    activeCliPaths: string[];
+    recoveredPaths: string[];
+  }> {
     const activeCli: string[] = [];
+    const recoveredPaths: string[] = [];
 
     let entries: string[];
     try {
       entries = await fs.promises.readdir(queueDir);
     } catch {
-      return activeCli;
+      return { activeCliPaths: activeCli, recoveredPaths };
     }
 
     const workingFiles = entries.filter((f) => f.endsWith(".ctrlyoke.json"));
@@ -181,7 +188,22 @@ export class WorkflowLockManager {
     for (const fileName of workingFiles) {
       const workingFilePath = path.join(queueDir, fileName);
       let workingFile: {
-        _runtime?: { executionState?: string };
+        _runtime?: {
+          executionState?: string;
+          currentIndex?: number;
+          finalStep?: {
+            phase?: string;
+            status?: string;
+            completedAt?: number;
+          };
+        };
+        steps?: Array<{
+          _runtime?: {
+            startedAt?: number;
+            completedAt?: number;
+            terminalStatus?: string;
+          };
+        }>;
         [key: string]: unknown;
       };
 
@@ -193,7 +215,12 @@ export class WorkflowLockManager {
         continue;
       }
 
-      if (workingFile._runtime?.executionState !== EXECUTION_STATES.RUNNING) {
+      const executionState = workingFile._runtime?.executionState;
+      if (
+        executionState !== EXECUTION_STATES.RUNNING &&
+        executionState !== EXECUTION_STATES.PAUSING &&
+        executionState !== EXECUTION_STATES.CANCELLING
+      ) {
         continue;
       }
 
@@ -209,12 +236,38 @@ export class WorkflowLockManager {
 
       // "none", "stale", or "active-vscode" (we just started — can't be us)
       Log.info(
-        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${fileName} from running → stopped (lock=${status})`
+        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${fileName} from ${executionState} → stopped (lock=${status})`
       );
 
       // Normalize the working file to "stopped"
       if (workingFile._runtime) {
         workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
+        const currentIndex = workingFile._runtime.currentIndex ?? 0;
+        const interruptedStep = workingFile.steps?.[currentIndex];
+        if (
+          interruptedStep?._runtime?.startedAt &&
+          !interruptedStep._runtime.completedAt
+        ) {
+          const stoppedAt = Date.now();
+          interruptedStep._runtime = {
+            startedAt: interruptedStep._runtime?.startedAt ?? stoppedAt,
+            ...interruptedStep._runtime,
+            completedAt: stoppedAt,
+            terminalStatus: PROMPT_TERMINAL_STATUS.CANCELLED,
+          };
+          workingFile._runtime.currentIndex = currentIndex + 1;
+        } else if (
+          currentIndex >= (workingFile.steps?.length ?? 0) &&
+          workingFile._runtime.finalStep?.phase ===
+            FINAL_STEP_PHASES.FINAL_STEP &&
+          workingFile._runtime.finalStep.status !== STEP_STATUS.COMPLETED
+        ) {
+          workingFile._runtime.finalStep = {
+            ...workingFile._runtime.finalStep,
+            status: STEP_STATUS.CANCELLED,
+            completedAt: Date.now(),
+          };
+        }
       }
       try {
         const tmpPath = workingFilePath + ".tmp";
@@ -224,6 +277,7 @@ export class WorkflowLockManager {
           "utf8"
         );
         await fs.promises.rename(tmpPath, workingFilePath);
+        recoveredPaths.push(workingFilePath);
       } catch (writeErr) {
         Log.warn(
           `[WorkflowLockManager] normalizeStaleLocks: failed to normalize ${fileName}:`,
@@ -232,12 +286,10 @@ export class WorkflowLockManager {
       }
 
       // Clean up any stale lock file
-      if (status === LOCK_STATUS.STALE) {
-        await WorkflowLockManager.releaseLock(workingFilePath);
-      }
+      await WorkflowLockManager.releaseLock(workingFilePath);
     }
 
-    return activeCli;
+    return { activeCliPaths: activeCli, recoveredPaths };
   }
 }
 

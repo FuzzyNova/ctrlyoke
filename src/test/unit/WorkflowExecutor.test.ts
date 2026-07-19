@@ -706,6 +706,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     };
     context.historyFilePath = "history.json";
     context.outputHistoryManager = {
+      startStreamingExecutionOutput: async () => {
+        historyCallOrder.push("start");
+      },
       appendStatusMessage: async (
         _historyFilePath: string,
         target: unknown,
@@ -764,7 +767,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       appendedStatusMessages[0].statusMessage.message,
       /Stopping workflow/
     );
-    assert.deepStrictEqual(historyCallOrder, ["status", "output"]);
+    assert.deepStrictEqual(historyCallOrder, ["start", "status", "output"]);
     assert.deepStrictEqual(historySaves[0].target, {
       kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
