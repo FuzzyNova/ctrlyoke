@@ -34,7 +34,7 @@ import {
   forceLinting,
   type Diagnostic,
 } from "@codemirror/lint";
-import { RangeSetBuilder, StateEffect } from "@codemirror/state";
+import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
 import {
@@ -90,9 +90,9 @@ interface CodeMirrorEditorProps {
   className?: string;
   minHeightClassName?: string;
   maxHeightClassName?: string;
-  /** Called when Alt+Enter is pressed. */
+  /** Called when Ctrl+Enter is pressed. */
   onRun?: () => void;
-  /** Called when Alt+Shift+Enter is pressed. */
+  /** Called when Ctrl+Shift+Enter is pressed. */
   onQueue?: () => void;
   /** Number of steps that precede the currently-edited prompt (for $prior-context validation). */
   stepCount?: number;
@@ -1191,27 +1191,34 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
+        // Highest precedence: minimalSetup's defaultKeymap already binds
+        // Mod-Enter (= Ctrl-Enter on Windows/Linux) to insertBlankLine, which
+        // would otherwise swallow Ctrl-Enter before it reaches onRun.
+        Prec.highest(
+          keymap.of([
+            {
+              key: "Ctrl-Shift-Enter",
+              run: () => {
+                if (!onQueueRef.current) return false;
+                onQueueRef.current();
+                return true;
+              },
+            },
+            {
+              key: "Ctrl-Enter",
+              run: () => {
+                if (!onRunRef.current) return false;
+                onRunRef.current();
+                return true;
+              },
+            },
+          ])
+        ),
         keymap.of([
           ...historyKeymap,
           ...searchKeymap,
           ...completionKeymap,
           ...lintKeymap,
-          {
-            key: "Alt-Shift-Enter",
-            run: () => {
-              if (!onQueueRef.current) return false;
-              onQueueRef.current();
-              return true;
-            },
-          },
-          {
-            key: "Alt-Enter",
-            run: () => {
-              if (!onRunRef.current) return false;
-              onRunRef.current();
-              return true;
-            },
-          },
           // Fallback: insert a tab character when no completion is active.
           // completionKeymap binds Tab to acceptCompletion (returns true only
           // when a completion dropdown is open), so this only fires when there

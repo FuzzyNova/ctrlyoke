@@ -1,8 +1,8 @@
-# FlightPath Keyboard Shortcuts Reference
+# ctrlyoke Keyboard Shortcuts Reference
 
 ## Architecture Overview
 
-FlightPath has two distinct layers where keyboard shortcuts live, and they operate independently:
+ctrlyoke has two distinct layers where keyboard shortcuts live, and they operate independently:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -20,7 +20,7 @@ FlightPath has two distinct layers where keyboard shortcuts live, and they opera
 
 **Critical rule:** VS Code `package.json` keybindings **do not fire** when focus is inside the webview iframe. Keyboard events inside the webview must be handled in webview code via `postMessage` to the extension host.
 
-**Visibility rule:** Only `package.json` keybindings appear in VS Code's Keyboard Shortcuts editor (`Ctrl+K Ctrl+S`). CodeMirror `keymap.of()` bindings are invisible to VS Code — users cannot see or rebind them. For any shortcut users should be aware of, register it in `package.json` too.
+**Visibility rule:** Only `package.json` keybindings appear in VS Code's Keyboard Shortcuts editor (`Ctrl+K Ctrl+S`). CodeMirror `keymap.of()` bindings and React `onKeyDown`/`document.addEventListener` handlers are invisible to VS Code — users cannot see or rebind them there. This doc is the source of truth for those.
 
 ---
 
@@ -28,11 +28,11 @@ FlightPath has two distinct layers where keyboard shortcuts live, and they opera
 
 ### The `when` clause is the primary tool
 
-VS Code resolves conflicts by **specificity** — a more specific `when` clause wins over a more general one. All FlightPath bindings use `focusedView == 'flightpath.dashboard'`, so they only activate in context and override any global binding for the same key combination.
+VS Code resolves conflicts by **specificity** — a more specific `when` clause wins over a more general one. All ctrlyoke `package.json` bindings use `focusedView == 'ctrlyoke.dashboard'`, so they only activate in context and override any global binding for the same key combination.
 
 ```json
-// Our Ctrl+Shift+N overrides VS Code's "new window" only when FlightPath is focused
-"when": "focusedView == 'flightpath.dashboard'"
+// Our Ctrl+Shift+N overrides VS Code's "new window" only when ctrlyoke is focused
+"when": "focusedView == 'ctrlyoke.dashboard'"
 ```
 
 ### Checking for conflicts before adding a new binding
@@ -41,25 +41,19 @@ VS Code resolves conflicts by **specificity** — a more specific `when` clause 
 2. Search for the intended key combo to see all commands currently bound to it
 3. Inspect `when` clauses — if another binding uses the same key with an overlapping `when`, it's a real conflict
 
-### Useful context keys for scoping
+### `Ctrl+Enter` in the webview is not a VS Code-layer conflict
 
-```json
-// Only when NOT typing in any input (prevents stealing text-entry shortcuts)
-"when": "focusedView == 'flightpath.dashboard' && !inputFocus"
+The Prompt Editor's `Ctrl+Enter` (Run) and `Ctrl+Shift+Enter` (Queue) are wired entirely inside the CodeMirror instance in the webview iframe — they are **not** registered in `package.json`, so they never go through VS Code's command/keybinding resolution at all. There is no `when`-clause conflict to manage for them; the only thing that matters is precedence *inside* CodeMirror's own keymap facet (see below).
 
-// Only when the webview input has focus
-"when": "focusedView == 'flightpath.dashboard' && inputFocus"
-```
-
-### Known VS Code built-in conflicts to watch
+### Known VS Code built-in conflicts to watch (for future `package.json` bindings)
 
 | Key            | Built-in use                      | Our `when` clause avoids it?                   |
-| -------------- | --------------------------------- | ---------------------------------------------- |
+| -------------- | ---------------------------------- | ---------------------------------------------- |
 | `Ctrl+Shift+N` | New window (global)               | Yes — our `focusedView` clause wins in context |
-| `Ctrl+Enter`   | Copilot Chat send (`inChatInput`) | Yes — non-overlapping `when` clauses           |
+| `Ctrl+Enter`   | Copilot Chat send (`inChatInput`) | N/A — ctrlyoke's `Ctrl+Enter` is webview-only, never reaches VS Code's command layer |
 | `Ctrl+Shift+T` | Reopen closed tab (global)        | Yes — our `focusedView` clause wins in context |
 
-### Key combos with low VS Code occupancy (safe to use)
+### Key combos with low VS Code occupancy (safe to use for new `package.json` bindings)
 
 - `Ctrl+Shift+*` — most combinations are unbound globally
 - `Ctrl+Alt+*` — mostly free outside specific editor contexts
@@ -71,230 +65,140 @@ VS Code resolves conflicts by **specificity** — a more specific `when` clause 
 
 ### When to use this layer
 
-Use for shortcuts that should work when the FlightPath panel is focused **but focus is not inside the webview content** (e.g., keyboard navigation to the panel, command palette equivalents). Also register here any shortcut you want visible in VS Code's Keyboard Shortcuts editor, even if the primary handler is in the webview.
+Use for shortcuts that should work when the ctrlyoke panel is focused **but focus is not inside the webview content** (e.g., keyboard navigation to the panel, command palette equivalents). Also register here any shortcut you want visible in VS Code's Keyboard Shortcuts editor, even if the primary handler lives in the webview.
 
 ### How to add a VS Code keybinding
 
-**1. Register the keybinding in `package.json`:**
+**1. Register the keybinding in `package.json` (`contributes.keybindings`):**
 
 ```json
 {
-  "keybindings": [
-    {
-      "command": "flightpath.myCommand",
-      "key": "ctrl+shift+x",
-      "mac": "cmd+shift+x",
-      "when": "focusedView == 'flightpath.dashboard'"
-    }
-  ]
+  "command": "ctrlyoke.myCommand",
+  "key": "ctrl+shift+x",
+  "mac": "cmd+shift+x",
+  "when": "focusedView == 'ctrlyoke.dashboard'"
 }
 ```
 
-**2. Register the command handler in `src/extension.ts`:**
+**2. Register the command handler in `src/extension.ts`.**
 
-```typescript
-context.subscriptions.push(
-  vscode.commands.registerCommand("flightpath.myCommand", () => {
-    flightPathManager.doSomething();
-  })
-);
-```
+**3. Declare the command in `package.json` `contributes.commands`.**
 
-**3. Declare the command in `package.json` contributes.commands:**
-
-```json
-{
-  "command": "flightpath.myCommand",
-  "title": "My Command",
-  "category": "FlightPath"
-}
-```
-
-### `when` clause options for the FlightPath dashboard
+### `when` clause options for the ctrlyoke dashboard
 
 | `when` clause                                    | Fires when                                                                                    |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `focusedView == 'flightpath.dashboard'`          | FlightPath sidebar panel has keyboard focus (regardless of whether webview content has focus) |
-| `activeWebviewPanelId == 'flightpath.dashboard'` | A FlightPath webview panel is the active editor (not sidebar)                                 |
+| `focusedView == 'ctrlyoke.dashboard'`            | ctrlyoke sidebar panel has keyboard focus (regardless of whether webview content has focus)   |
+| `activeWebviewPanelId == 'ctrlyoke.dashboard'`   | A ctrlyoke webview panel is the active editor (not sidebar)                                   |
 
-**Note:** Both clauses require VS Code to have the focus — neither fires while focus is inside the webview iframe.
+**Note:** Both clauses require VS Code itself to have the focus — neither fires while focus is inside the webview iframe.
 
 ### Existing VS Code keybindings
 
-| Key (Win/Linux) | Key (Mac)     | Command                          | Action                |
-| --------------- | ------------- | -------------------------------- | --------------------- |
-| `Ctrl+Shift+N`  | `Cmd+Shift+N` | `flightpath.clearWorkflow`       | Clear workflow state  |
-| `Ctrl+Shift+T`  | `Cmd+Shift+T` | `flightpath.newWorkflow`         | New workflow          |
-| `Ctrl+Shift+L`  | `Cmd+Shift+L` | `flightpath.selectPromptFile`    | Select prompt file    |
-| `Ctrl+Shift+Q`  | `Cmd+Shift+Q` | `flightpath.appendFromDashboard` | Append from dashboard |
+| Key (Win/Linux) | Key (Mac)     | Command                       | Action                |
+| ---------------- | ------------- | ------------------------------ | ---------------------- |
+| `Ctrl+Shift+N`   | `Cmd+Shift+N` | `ctrlyoke.clearWorkflow`       | Clear workflow state  |
+| `Ctrl+Shift+T`   | `Cmd+Shift+T` | `ctrlyoke.newWorkflow`         | New workflow          |
+| `Ctrl+Shift+L`   | `Cmd+Shift+L` | `ctrlyoke.selectPromptFile`    | Select prompt file    |
+| `Ctrl+Shift+Q`   | `Cmd+Shift+Q` | `ctrlyoke.appendFromDashboard` | Append from dashboard |
+
+All scoped to `when: focusedView == 'ctrlyoke.dashboard'`. Source: `package.json` `contributes.keybindings`.
 
 ---
 
-## Layer 2: Webview Keyboard Shortcuts (React)
+## Layer 2: Webview Keyboard Shortcuts (React + CodeMirror)
 
-### When to use this layer
-
-Use for any shortcut that must work **while the user is typing or interacting inside the webview** — especially inside the CodeMirror editor. This is the correct layer for `Ctrl+Enter` to send a prompt.
-
-### Sub-layer A: Global webview shortcuts (document-level)
+### Sub-layer A: Global webview shortcuts (document/window-level)
 
 Best for shortcuts that should work regardless of which element has focus inside the webview.
 
 ```typescript
-// Pattern used in PromptEditor.tsx and Modal.tsx
+// Pattern used in PromptEditor.tsx, Modal.tsx, useUndoRedoKeyHandler.ts, OutputSection.tsx
 useEffect(() => {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape" && someCondition) {
       doAction();
     }
   };
-  document.addEventListener("keydown", handleKeyDown);
-  return () => document.removeEventListener("keydown", handleKeyDown);
+  window.addEventListener("keydown", handleKeyDown, { capture: true });
+  return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
 }, [someCondition, doAction]);
 ```
 
+Use `capture: true` when the shortcut needs to win over element-level handlers or VS Code's own webview keydown forwarding (see `Ctrl+F` in `OutputSection.tsx` and undo/redo in `useUndoRedoKeyHandler.ts`).
+
 ### Sub-layer B: Component-level shortcuts (onKeyDown prop)
 
-Best for shortcuts scoped to a specific interactive element (buttons, inputs, list items).
+Best for shortcuts scoped to a specific interactive element (buttons, inputs, list items). The dominant pattern in the codebase is `Enter`/`Space` activating a `role="button"` `div` — see Accessibility Conventions below.
 
-```tsx
-// Pattern used throughout the codebase
-<div
-  role="button"
-  tabIndex={0}
-  onKeyDown={(e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      handleClick();
-    }
-  }}
->
-```
+### Sub-layer C: CodeMirror keymap bindings (used for editor-scoped shortcuts)
 
-### Sub-layer C: CodeMirror keymap bindings (preferred for editor shortcuts)
-
-**This is the correct approach for `Ctrl+Enter` in the prompt editor.** CodeMirror's `keymap` extension intercepts keyboard events before the browser's default handling and before document-level listeners.
+CodeMirror's `keymap` extension intercepts keyboard events before the browser's default handling and before document-level listeners, as long as the CodeMirror view has focus.
 
 ```typescript
-// In CodeMirrorEditor.tsx — add to the keymap.of([...]) array in the extensions list
-import { keymap } from "@codemirror/view";
-
-keymap.of([
-  ...historyKeymap,
-  ...searchKeymap,
-  ...completionKeymap,
-  {
-    key: "Ctrl-Enter", // CodeMirror uses hyphen, not plus
-    mac: "Cmd-Enter",
-    run: (view) => {
-      onSubmit(); // Callback prop from parent
-      return true; // true = event consumed, don't propagate
-    },
-  },
-]);
+// CodeMirrorEditor.tsx — Ctrl-Enter / Ctrl-Shift-Enter live in a *separate*,
+// Prec.highest-wrapped keymap.of([...]) extension — see the gotcha below.
+Prec.highest(
+  keymap.of([
+    { key: "Ctrl-Shift-Enter", run: () => { onQueueRef.current?.(); return true; } },
+    { key: "Ctrl-Enter", run: () => { onRunRef.current?.(); return true; } },
+  ])
+);
 ```
 
 **CodeMirror key format:** Uses hyphens (`Ctrl-Enter`), not plus signs (`Ctrl+Enter`). Modifier order: `Ctrl-Alt-Shift-Meta-Key`.
 
+**Gotcha — `minimalSetup` already claims `Mod-Enter`:** `minimalSetup` (from the `codemirror` package) bundles CodeMirror's `defaultKeymap`, which binds `Mod-Enter` (`Ctrl-Enter` on Windows/Linux, `Cmd-Enter` on macOS) to `insertBlankLine`. Because `minimalSetup` is listed *before* the app's own `keymap.of([...])` in the `extensions` array passed to `EditorView`, its binding is flattened into CodeMirror's internal keymap first — so on Windows/Linux, an unboosted `Ctrl-Enter` binding added later would lose to `insertBlankLine` and just insert a newline instead of firing `onRun`. The fix is wrapping the run/queue keymap in `Prec.highest(...)`, kept as its own extension separate from the main `keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap, ...lintKeymap, ...])` array. `Tab` deliberately stays in the *unboosted* array, positioned after `...completionKeymap`, so completion-accept still wins when a dropdown is open — don't move it into the boosted keymap.
+
+`insertBlankLine` (the command we're overriding) is not the same thing as plain `Enter`: plain `Enter` (`insertNewlineAndIndent`, from `standardKeymap`, still active and unaffected) splits the line at the cursor. `insertBlankLine` ignores cursor position and inserts a fresh indented line below the current one — CodeMirror's "insert line below" convenience, not core newline behavior. That's the only functionality traded away by claiming `Ctrl-Enter`.
+
+`Ctrl-Shift-Enter` (queue) has no such conflict — checked across `defaultKeymap`, `historyKeymap`, `searchKeymap`, `completionKeymap`, and `lintKeymap`, none bind it — but it still lives in the boosted keymap for consistency with Run.
+
+**Why literal `Ctrl-Enter`, not `Mod-Enter`:** The Run shortcut intentionally uses literal `Ctrl` on every platform, including macOS (rather than `Mod-Enter`, which would map to `Cmd-Enter` there). This is a deliberate branding choice — leaning into the "ctrlyoke" name — not an oversight.
+
 ### Triggering extension host actions from the webview
 
-When a webview shortcut needs to trigger extension host logic (e.g., running a workflow), use `postMessage`:
-
-```typescript
-// Webview side — post message to extension host
-const vscode = getVsCodeApi();
-
-vscode.postMessage({
-  type: MESSAGE_TYPES.RUN_PROMPT,  // Use constants from src/types/messages.ts
-  // ...payload
-});
-
-// Extension host side — handle in FlightPathWebviewProvider.ts
-case MESSAGE_TYPES.RUN_PROMPT:
-  flightPathManager.runPrompt(message.payload);
-  break;
-```
-
----
-
-## Implementation Pattern: Ctrl+Enter to Send Prompt
-
-This is the planned implementation. Here is the correct approach end-to-end:
-
-### Step 1: Add `onSubmit` prop to `CodeMirrorEditor`
-
-```typescript
-// CodeMirrorEditor.tsx
-interface CodeMirrorEditorProps {
-  // ... existing props
-  onSubmit?: () => void; // Called when Ctrl+Enter is pressed
-}
-```
-
-### Step 2: Add CodeMirror keymap binding
-
-```typescript
-// In the extensions array inside the useEffect that initializes the editor
-keymap.of([
-  ...historyKeymap,
-  ...searchKeymap,
-  ...completionKeymap,
-  {
-    key: "Ctrl-Enter",
-    mac: "Cmd-Enter",
-    run: () => {
-      onSubmitRef.current?.();
-      return true;
-    },
-  },
-]);
-```
-
-Use a ref for `onSubmit` (like `onChangeRef`) to avoid recreating the editor on prop changes.
-
-### Step 3: Wire up in `PromptEditor.tsx`
-
-`PromptEditor` already has access to `onRun` and `onQueue` from `EditorSection`. Pass the appropriate callback down to `CodeMirrorEditor`.
-
-### Step 4: Respect disabled states
-
-Check `isCLIManaged` and `hasContent` before firing:
-
-```typescript
-run: () => {
-  if (!isCLIManaged && hasContent) {
-    onSubmitRef.current?.();
-  }
-  return true;  // Always consume the event even if we don't act
-},
-```
+When a webview shortcut needs to trigger extension host logic, use `postMessage` with constants from `src/types/messages.ts`, handled in `WebviewMessageRouter.ts`.
 
 ---
 
 ## Existing Keyboard Shortcut Inventory (Webview)
 
-| Key                     | Location                | Effect                        |
-| ----------------------- | ----------------------- | ----------------------------- |
-| `Escape`                | PromptEditor (document) | Close properties drawer       |
-| `Escape`                | Modal (document)        | Close modal                   |
-| `Escape`                | RunSelector             | Close dropdown                |
-| `Escape`                | SplitButton             | Close dropdown, restore focus |
-| `Enter`                 | SplitButton             | Select focused menu item      |
-| `Enter` / `Space`       | SplitButton             | Open dropdown or navigate     |
-| `ArrowDown` / `ArrowUp` | SplitButton             | Navigate menu items           |
-| `Tab`                   | SplitButton             | Close dropdown                |
-| `Enter`                 | SaveWorkflowDialog      | Save workflow                 |
-| `Enter`                 | WorkflowStatus          | Confirm workflow name edit    |
-| `Escape`                | WorkflowStatus          | Cancel workflow name edit     |
-| `Enter`                 | TemplateModal           | Confirm template selection    |
-| `Enter` / `Space`       | FinalStepFooter         | Select final prompt item      |
-| `Enter` / `Space`       | PromptItem              | Select prompt                 |
-| `Enter`                 | RecentWorkflows         | Select workflow               |
-| `Enter`                 | RunningWorkflowItem     | Click action                  |
-| `Enter`                 | OutputSection           | Toggle collapse               |
-| `Enter`                 | EditorSection           | Toggle collapse               |
-| `Enter`                 | PromptsPanel            | Toggle collapse               |
-| `Enter`                 | SettingsDrawer          | Close / toggle collapse       |
-| `Enter`                 | PanelBar                | Activate button               |
+### Prompt Editor (CodeMirror keymap — `CodeMirrorEditor.tsx`)
+
+| Key                 | Effect                                              |
+| -------------------- | ---------------------------------------------------- |
+| `Ctrl+Enter`         | Run — queue (if needed) and run/send the prompt      |
+| `Ctrl+Shift+Enter`   | Queue — add the prompt to the execution queue without running |
+| `Ctrl+F` / `Cmd+F`   | Open CodeMirror's search panel (editor-scoped find)  |
+| `Tab`                | Accept the active completion if a dropdown is open; otherwise insert a tab character |
+
+### Global (window/document-level, work anywhere in the webview)
+
+| Key                                    | Location                          | Effect                                                                 |
+| ---------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| `Ctrl+Z` / `Cmd+Z`                      | `useUndoRedoKeyHandler` (window)  | Undo the last workflow edit. Ignored when a text input, textarea, or CodeMirror editor has focus (they get their own undo), and blocked while a workflow is actively running. |
+| `Ctrl+Y` or `Ctrl+Shift+Z` / `Cmd` equiv | `useUndoRedoKeyHandler` (window)  | Redo — same focus/active-workflow guards as undo.                        |
+| `Ctrl+F` / `Cmd+F`                      | `OutputSection` (window, capture) | Open the output-pane find bar — only when focus is **not** inside a CodeMirror editor (which handles its own `Ctrl+F` first). |
+| `Escape`                                | `Modal`                            | Close the open modal                                                     |
+| `Escape`                                | `GlobalSettingsDrawer`            | Close the global settings drawer                                         |
+| `Escape`                                | `PromptEditor`                     | Close the properties drawer                                              |
+| `Escape`                                | `HistorySearchDrawer`             | Close the history search drawer                                          |
+| `Escape`                                | `StepContextMenu`                  | Close the open context menu                                              |
+
+### Output find bar (`useOutputFind` / `OutputFindBar`)
+
+| Key              | Effect                          |
+| ------------------ | ---------------------------------- |
+| `Enter`           | Jump to the next match             |
+| `Shift+Enter`     | Jump to the previous match         |
+| `F3`              | Next match                         |
+| `Shift+F3`        | Previous match                     |
+| `Escape`          | Close the find bar                 |
+
+### Component-scoped `Enter`/`Space` activation
+
+Standard `role="button"` accessibility pattern (see Accessibility Conventions) applied throughout the dashboard, including: `SplitButton` (also `ArrowDown`/`ArrowUp` to navigate menu items, `Escape` to close and restore focus, `Tab` to close the dropdown), `RunSelector` (`Escape` to close), `SaveWorkflowDialog` (`Enter` to save), `WorkflowStatus` (`Enter` to confirm a workflow rename, `Escape` to cancel), `TemplateModal` (`Enter` to confirm template selection), `McpManagerSection` and `AgentSkillsManagerSection` (`Enter` to confirm inline edits), `FinalStepFooter`, `PromptChipRail`, `WorkflowStep`, `OutputRow`, `OutputMinimap` (select/expand items), `PanelBar`, `EditorSection`, `OutputSection`, `WorkflowPropertiesPanel`, `OutputSectionHeader` (toggle collapse/expand).
 
 ---
 
@@ -323,10 +227,10 @@ Always handle both `Enter` and `Space` for `role="button"` elements per ARIA spe
 ## Key Formatting Cheat Sheet
 
 | Context                    | Format                            | Example                                   |
-| -------------------------- | --------------------------------- | ----------------------------------------- |
+| --------------------------- | ------------------------------------ | -------------------------------------------- |
 | `package.json` keybindings | `ctrl+key` lowercase              | `"ctrl+shift+enter"`                      |
 | `package.json` mac variant | `cmd+key` lowercase               | `"cmd+shift+enter"`                       |
 | CodeMirror `keymap.of`     | `Ctrl-Key` PascalCase with hyphen | `"Ctrl-Enter"`                            |
-| CodeMirror mac variant     | `Cmd-Key`                         | `"Cmd-Enter"`                             |
+| CodeMirror mac variant     | `Cmd-Key` (or `Mod-Key` if the combo should follow OS convention) — **not used** for Run/Queue, which stay literal `Ctrl` on every OS | `"Cmd-Enter"` |
 | React `onKeyDown`          | `e.key` values                    | `"Enter"`, `"Escape"`, `"ArrowDown"`      |
-| VS Code `when` clause      | exact view ID string              | `"focusedView == 'flightpath.dashboard'"` |
+| VS Code `when` clause      | exact view ID string              | `"focusedView == 'ctrlyoke.dashboard'"`   |
