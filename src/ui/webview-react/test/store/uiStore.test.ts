@@ -138,7 +138,11 @@ describe("history search state", () => {
       true
     );
     store().setPendingHistorySearchNavigation({
-      address: { workflowKey: "wf-1" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never },
+      address: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      },
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
     });
@@ -148,7 +152,11 @@ describe("history search state", () => {
     expect(store().historySearchResults).toHaveLength(1);
     expect(store().historySearchLoading).toBe(true);
     expect(store().pendingHistorySearchNavigation).toEqual({
-      address: { workflowKey: "wf-1" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never },
+      address: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      },
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
     });
@@ -286,6 +294,41 @@ describe("setHistoryView", () => {
   it("stores run timestamps when provided", () => {
     store().setHistoryView(0, 3, [1000, 900, 800]);
     expect(store().runTimestamps).toEqual([1000, 900, 800]);
+  });
+});
+
+describe("setDisplayedRunView", () => {
+  it("keeps pending rewind scoped to the addressed run and clears it on the next view", () => {
+    const run = {
+      workflowKey: "wf-1" as never,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      runId: 4,
+      startedAt: 1000,
+      executionState: "idle" as never,
+      stepCount: 2,
+      definitionRevision: 3,
+      hasMixedHarnesses: false,
+      hasMixedModels: false,
+    };
+    store().setDisplayedRunView(
+      { workflowKey: "wf-1" as never, kind: "run", runRef: run.runRef },
+      [run],
+      undefined,
+      { definitionRevision: 3, descriptorRevision: 8 },
+      { fromStepIndex: 1, baseDefinitionRevision: 2 }
+    );
+    expect(store().pendingRewind).toEqual({
+      fromStepIndex: 1,
+      baseDefinitionRevision: 2,
+    });
+
+    store().setDisplayedRunView(
+      { workflowKey: "wf-1" as never, kind: "draft" },
+      [run],
+      undefined,
+      { definitionRevision: 1, descriptorRevision: 9 }
+    );
+    expect(store().pendingRewind).toBeNull();
   });
 });
 

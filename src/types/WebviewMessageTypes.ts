@@ -1084,6 +1084,11 @@ export interface RunViewLoadedMessage {
   workflowProperties: Record<string, unknown>;
   /** The exact run currently bound to execution, if the lineage is active. */
   executionRunRef?: import("./CtrlYokeTypes").RunRef;
+  /** Durable continuation marker for the addressed run, if it is being rewound. */
+  pendingRewind?: {
+    fromStepIndex: number;
+    baseDefinitionRevision: number;
+  };
   /** Descriptor revision paired with this snapshot for optimistic mutations. */
   descriptorRevision: number;
 }
@@ -1099,6 +1104,59 @@ export interface LoadRunViewMessage {
   type: typeof MESSAGE_TYPES.LOAD_RUN_VIEW;
   address: WorkflowViewAddress;
   requestId?: string;
+}
+
+/** Start the currently viewed draft through its explicit address. */
+export interface ExecuteDraftMessage {
+  type: typeof MESSAGE_TYPES.EXECUTE_DRAFT;
+  address: Extract<WorkflowViewAddress, { kind: "draft" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+}
+
+/** Seed and execute a fresh RunRef from the addressed promoted run. */
+export interface SeedNewRunMessage {
+  type: typeof MESSAGE_TYPES.SEED_NEW_RUN;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+}
+
+/** Discard a pending rewind and seed a new RunRef without exposing an intermediate state. */
+export interface StartNewRunInsteadMessage {
+  type: typeof MESSAGE_TYPES.START_NEW_RUN_INSTEAD;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+  /** Set only after the caller has confirmed suffix edits will be lost. */
+  confirmEditedSuffix?: boolean;
+}
+
+/** Continue the exact addressed promoted run without inferring the latest run. */
+export interface ContinueRunMessage {
+  type: typeof MESSAGE_TYPES.CONTINUE_RUN;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+}
+
+/** Append runtime-free tail steps and continue the exact addressed promoted run. */
+export interface AppendAndContinueRunMessage {
+  type: typeof MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  tail: WorkflowStep[];
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+}
+
+/** Runtime controls always identify the executing promoted run. */
+export interface RunExecutionControlMessage {
+  type:
+    | typeof MESSAGE_TYPES.PAUSE_RUN
+    | typeof MESSAGE_TYPES.CANCEL_PAUSE_RUN
+    | typeof MESSAGE_TYPES.RESUME_RUN
+    | typeof MESSAGE_TYPES.STOP_RUN;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
 }
 
 /**

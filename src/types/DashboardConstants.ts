@@ -216,12 +216,16 @@ export const MESSAGE_TYPES = {
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
 
-  // Per-workflow targeted controls — Webview → Extension
-  RUN_WORKFLOW: "runWorkflow", // Run/restart specific workflow: { workflowId }
-  PAUSE_WORKFLOW: "pauseWorkflow", // Pause specific workflow: { workflowId }
-  CANCEL_PAUSE_WORKFLOW: "cancelPauseWorkflow", // Cancel a pending pause request: { workflowId }
-  RESUME_WORKFLOW: "resumeWorkflow", // Resume specific workflow: { workflowId }
-  STOP_WORKFLOW: "stopWorkflow", // Stop specific workflow: { workflowId }
+  // Stable run lifecycle controls — Webview → Extension
+  EXECUTE_DRAFT: "executeDraft",
+  SEED_NEW_RUN: "seedNewRun",
+  START_NEW_RUN_INSTEAD: "startNewRunInstead",
+  CONTINUE_RUN: "continueRun",
+  APPEND_AND_CONTINUE_RUN: "appendAndContinueRun",
+  PAUSE_RUN: "pauseRun",
+  CANCEL_PAUSE_RUN: "cancelPauseRun",
+  RESUME_RUN: "resumeRun",
+  STOP_RUN: "stopRun",
   STOP_CLI_RUN: "stopCliRun", // Kill the CLI process for a CLI-managed workflow: { workflowId }
 
   // Recent workflow management — Webview → Extension

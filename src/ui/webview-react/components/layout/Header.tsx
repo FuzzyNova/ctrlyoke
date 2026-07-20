@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
@@ -14,7 +14,10 @@ import { FileBrowserModal } from "../workflow/FileBrowserModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { HEADER_BUTTON_SIZES } from "../../constants";
-import { getWorkflowExecutionControls } from "@utils/status";
+import {
+  getWorkflowExecutionControls,
+  type WorkflowExecutionControlAction,
+} from "@utils/status";
 
 /**
  * Execution state badge configuration
@@ -73,12 +76,17 @@ export const Header: React.FC<{
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
   const openWorkspaceViewer = useWorkspaceViewerStore((s) => s.open);
-  const { fileName, executionState, currentStep } = useWorkflowStore();
+  const { fileName, executionState } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
   const {
     loadedWorkflows,
     activeWorkflowId,
-    activeWorkflowWorkingFilePath,
+    displayedViewAddress,
+    executionRunRef,
+    runSummaries,
+    displayedDefinitionRevision,
+    displayedDescriptorRevision,
+    pendingRewind,
     newWorkflowModalOpen,
     closeNewWorkflowModal,
     mobileStepsOpen,
@@ -95,25 +103,33 @@ export const Header: React.FC<{
     RUNNER_IDS.CLI;
 
   const hasFile = fileName !== null;
-  const {
-    isRunning,
-    isPausing,
-    isPaused,
-    isError,
-    isStopped,
-    isCancelling,
-    isIdleWithOffset,
-    canRun,
-    canPause,
-    canCancelPause,
-    canResume,
-    canStop,
-    isRerun,
-  } = getWorkflowExecutionControls({
-    executionState,
-    currentStep,
-    hasFile,
-  });
+  const executionRunSummary = executionRunRef
+    ? runSummaries.find((summary) => summary.runRef === executionRunRef)
+    : undefined;
+  const executionRunAddress = useMemo(
+    () =>
+      executionRunRef && displayedViewAddress
+        ? {
+            workflowKey: displayedViewAddress.workflowKey,
+            kind: "run" as const,
+            runRef: executionRunRef as never,
+          }
+        : null,
+    [displayedViewAddress, executionRunRef]
+  );
+  const { isRunning, isPausing, isPaused, isCancelling, slot1, slot2, slot3 } =
+    getWorkflowExecutionControls({
+      viewedExecutionState: executionState,
+      viewedKind: displayedViewAddress?.kind ?? null,
+      hasFile,
+      pendingRewind: pendingRewind !== null,
+      executionRunState: executionRunSummary?.executionState,
+      executionRunLabel: executionRunSummary
+        ? `run ${executionRunSummary.runId}`
+        : executionRunRef
+          ? "the executing run"
+          : null,
+    });
 
   const handleStopCliRun = useCallback(() => {
     if (activeWorkflowId) {
@@ -132,69 +148,87 @@ export const Header: React.FC<{
   }, [vscode, canSave]);
 
   // Handlers
-  const handleRun = useCallback(() => {
-    if (!canRun) return;
-    if (activeWorkflowId) {
+  const postViewedRunAction = useCallback(
+    (type: string) => {
+      if (
+        displayedViewAddress?.kind !== "run" ||
+        displayedDefinitionRevision === null ||
+        displayedDescriptorRevision === null
+      ) {
+        return;
+      }
       vscode.postMessage({
-        type: MESSAGE_TYPES.RUN_WORKFLOW,
-        workflowId: activeWorkflowId,
+        type,
+        address: displayedViewAddress,
+        expectedDefinitionRevision: displayedDefinitionRevision,
+        expectedDescriptorRevision: displayedDescriptorRevision,
       });
-    } else {
-      vscode.postMessage({ type: MESSAGE_TYPES.RUN });
-    }
-  }, [vscode, canRun, activeWorkflowId]);
+    },
+    [
+      displayedDefinitionRevision,
+      displayedDescriptorRevision,
+      displayedViewAddress,
+      vscode,
+    ]
+  );
 
-  const handlePauseResume = useCallback(() => {
-    if (isPaused || isStopped || isError || isIdleWithOffset) {
-      if (activeWorkflowId) {
-        vscode.postMessage({
-          type: MESSAGE_TYPES.RESUME_WORKFLOW,
-          workflowId: activeWorkflowId,
-          workingFilePath: activeWorkflowWorkingFilePath ?? undefined,
-        });
-      } else {
-        vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
+  const handleSlotAction = useCallback(
+    (action: WorkflowExecutionControlAction) => {
+      if (action === "run-draft") {
+        if (
+          displayedViewAddress?.kind === "draft" &&
+          displayedDefinitionRevision !== null &&
+          displayedDescriptorRevision !== null
+        ) {
+          vscode.postMessage({
+            type: MESSAGE_TYPES.EXECUTE_DRAFT,
+            address: displayedViewAddress,
+            expectedDefinitionRevision: displayedDefinitionRevision,
+            expectedDescriptorRevision: displayedDescriptorRevision,
+          });
+        }
+      } else if (action === "rerun") {
+        postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
+      } else if (action === "continue") {
+        postViewedRunAction(MESSAGE_TYPES.CONTINUE_RUN);
+      } else if (action === "resume") {
+        if (executionRunAddress) {
+          vscode.postMessage({
+            type: MESSAGE_TYPES.RESUME_RUN,
+            address: executionRunAddress,
+          });
+        } else {
+          postViewedRunAction(MESSAGE_TYPES.CONTINUE_RUN);
+        }
+      } else if (executionRunAddress) {
+        const type =
+          action === "pause"
+            ? MESSAGE_TYPES.PAUSE_RUN
+            : action === "cancel-pause"
+              ? MESSAGE_TYPES.CANCEL_PAUSE_RUN
+              : action === "stop"
+                ? MESSAGE_TYPES.STOP_RUN
+                : null;
+        if (type) vscode.postMessage({ type, address: executionRunAddress });
       }
-    } else if (canCancelPause) {
-      if (activeWorkflowId) {
-        vscode.postMessage({
-          type: MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW,
-          workflowId: activeWorkflowId,
-        });
-      }
-    } else if (canPause) {
-      if (activeWorkflowId) {
-        vscode.postMessage({
-          type: MESSAGE_TYPES.PAUSE_WORKFLOW,
-          workflowId: activeWorkflowId,
-        });
-      } else {
-        vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
-      }
-    }
-  }, [
-    vscode,
-    isPaused,
-    isStopped,
-    isError,
-    isIdleWithOffset,
-    canCancelPause,
-    canPause,
-    activeWorkflowId,
-    activeWorkflowWorkingFilePath,
-  ]);
+    },
+    [
+      displayedDefinitionRevision,
+      displayedDescriptorRevision,
+      displayedViewAddress,
+      executionRunAddress,
+      postViewedRunAction,
+      vscode,
+    ]
+  );
 
-  const handleStop = useCallback(() => {
-    if (!canStop) return;
-    if (activeWorkflowId) {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.STOP_WORKFLOW,
-        workflowId: activeWorkflowId,
-      });
-    } else {
-      vscode.postMessage({ type: MESSAGE_TYPES.STOP });
-    }
-  }, [vscode, canStop, activeWorkflowId]);
+  const handleStartNewRunInstead = useCallback(() => {
+    postViewedRunAction(MESSAGE_TYPES.START_NEW_RUN_INSTEAD);
+  }, [postViewedRunAction]);
+
+  const handleDiscardContinuation = useCallback(() => {
+    postViewedRunAction(MESSAGE_TYPES.DISCARD_CONTINUATION);
+  }, [postViewedRunAction]);
 
   const handleUndoRedoAction = useCallback(
     (
@@ -214,12 +248,11 @@ export const Header: React.FC<{
         executionState,
         isRunning,
         isPaused,
-        isStopped,
         isCancelling,
         ...details,
       });
     },
-    [executionState, isCancelling, isPaused, isRunning, isStopped]
+    [executionState, isCancelling, isPaused, isRunning]
   );
 
   // Action controls — mutate the workflow (Save · Undo/Redo). Rendered in a single location chosen by
@@ -274,94 +307,60 @@ export const Header: React.FC<{
       >
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            isRerun ? "font-bold" : ""
+            slot1.emphasized ? "font-bold" : ""
           } ${
-            canRun && !isCLIManaged
+            slot1.enabled && !isCLIManaged
               ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
-              : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              : "flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
           }`}
-          onClick={handleRun}
-          disabled={!canRun || isCLIManaged}
+          onClick={() => handleSlotAction(slot1.action)}
+          disabled={!slot1.enabled || isCLIManaged}
           title={
-            isCLIManaged
-              ? "Workflow is running via ctrlyoke CLI"
-              : !hasFile
-                ? "Load a workflow to run"
-                : isRerun
-                  ? "Restart from beginning"
-                  : "Run"
+            isCLIManaged ? "Workflow is running via ctrlyoke CLI" : slot1.title
           }
-          aria-label={isRerun ? "Restart from beginning" : "Run"}
+          aria-label={slot1.label}
         >
-          <i
-            className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"} ${btnSize.icon}`}
-          />
+          <i className={`codicon ${slot1.icon} ${btnSize.icon}`} />
         </button>
 
-        <div
-          className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden xs:block"}`}
-        />
+        <div className="fp-button-group-divider" />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            (canPause || canCancelPause || canResume) && !isCLIManaged
+            slot2.enabled && !isCLIManaged
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              : "flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
           }`}
-          onClick={handlePauseResume}
-          disabled={
-            (!canPause && !canCancelPause && !canResume) || isCLIManaged
-          }
+          onClick={() => handleSlotAction(slot2.action)}
+          disabled={!slot2.enabled || isCLIManaged}
           title={
-            isCLIManaged
-              ? "Workflow is running via ctrlyoke CLI"
-              : isPaused
-                ? "Resume"
-                : isStopped
-                  ? "Resume"
-                  : isError
-                    ? "Continue (retry current prompt)"
-                    : isIdleWithOffset
-                      ? "Resume from start position"
-                      : isPausing
-                        ? "Cancel pause"
-                        : "Pause after current step completes"
+            isCLIManaged ? "Workflow is running via ctrlyoke CLI" : slot2.title
           }
-          aria-label={
-            isPaused || isStopped || isError || isIdleWithOffset
-              ? "Resume"
-              : isPausing
-                ? "Cancel pause"
-                : "Pause"
-          }
+          aria-label={slot2.label}
         >
           <i
-            className={`codicon ${
-              isPaused || isStopped || isError || isIdleWithOffset
-                ? "codicon-debug-continue"
-                : isPausing
-                  ? "codicon-debug-pause animate-pulse-cancelling"
-                  : "codicon-debug-pause"
-            } ${btnSize.icon}`}
+            className={`codicon ${slot2.icon} ${isPausing ? "animate-pulse-cancelling" : ""} ${btnSize.icon}`}
           />
         </button>
 
-        <div
-          className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden xs:block"}`}
-        />
+        <div className="fp-button-group-divider" />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            canStop || isCLIManaged
+            slot3.enabled || isCLIManaged
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              : "flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
           }`}
-          onClick={isCLIManaged ? handleStopCliRun : handleStop}
-          disabled={!canStop && !isCLIManaged}
-          title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
-          aria-label="Stop"
+          onClick={
+            isCLIManaged
+              ? handleStopCliRun
+              : () => handleSlotAction(slot3.action)
+          }
+          disabled={!slot3.enabled && !isCLIManaged}
+          title={isCLIManaged ? "Stop CLI run" : slot3.title}
+          aria-label={slot3.label}
         >
-          <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
+          <i className={`codicon ${slot3.icon} ${btnSize.icon}`} />
         </button>
       </div>
     </div>
@@ -546,12 +545,12 @@ export const Header: React.FC<{
         </div>
 
         <div className="hidden lg:flex lg:col-start-5 lg:row-start-1 items-center justify-start min-w-0 ml-1">
-          {runControls}
+          {isWideLayout && runControls}
         </div>
 
         {/* Mobile run controls stay in their own grid column to keep the narrow row-1 layout compact. */}
         <div className="col-start-3 row-start-1 justify-self-center flex items-center sm:hidden pr-1">
-          {runControls}
+          {isMobile && runControls}
         </div>
 
         {/* Right Section: App navigation — Search / Workspace Explorer / Settings.
@@ -621,11 +620,37 @@ export const Header: React.FC<{
           <span>Workflow will pause after the current step completes</span>
           <button
             className="ml-auto text-xs underline opacity-80 hover:opacity-100"
-            onClick={handlePauseResume}
+            onClick={() => handleSlotAction(slot2.action)}
             aria-label="Cancel pause"
           >
             Cancel
           </button>
+        </div>
+      )}
+      {pendingRewind && displayedViewAddress?.kind === "run" && (
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs bg-status-warning text-btn-fg border-b border-btn-border"
+          role="status"
+          aria-label={`Continuing run from step ${pendingRewind.fromStepIndex + 1}`}
+        >
+          <i className="codicon codicon-debug-continue" aria-hidden="true" />
+          <span>
+            Continuing run from step {pendingRewind.fromStepIndex + 1}
+          </span>
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
+              onClick={handleDiscardContinuation}
+            >
+              Discard Continuation
+            </button>
+            <button
+              className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
+              onClick={handleStartNewRunInstead}
+            >
+              Start new run instead
+            </button>
+          </div>
         </div>
       )}
     </>

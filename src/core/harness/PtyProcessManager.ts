@@ -368,7 +368,7 @@ export class PtyProcessManager {
 
   /**
    * Register the client that should own the next PTY session spawned for a workflow.
-   * Called from the RUN_WORKFLOW message handler before executeWorkflow() is called,
+   * Called before an addressed execution action starts a new terminal session,
    * and from WorkflowOrchestrator when an ephemeral prompt triggers an auto-start.
    */
   setPendingController(workflowId: string, clientId: string): void {
@@ -450,7 +450,7 @@ export class PtyProcessManager {
       `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Resolve controller FIRST so we can spawn at that client's viewport: consume
-    // any one-shot pending override (set by RUN_WORKFLOW or an ephemeral-prompt
+    // any one-shot pending override (set by an addressed run action or an ephemeral-prompt
     // auto-start), then fall back to the persistent run controller so that steps
     // 2+ in a multi-step workflow inherit the same owner as step 1.
     const pendingClientId = this.consumePendingController(options.workflowId);

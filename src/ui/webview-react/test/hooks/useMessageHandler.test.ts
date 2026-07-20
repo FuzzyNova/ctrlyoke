@@ -831,11 +831,19 @@ describe("run view revision snapshots", () => {
         runSummaries: [],
         history: null,
         descriptorRevision: 11,
+        pendingRewind: {
+          fromStepIndex: 2,
+          baseDefinitionRevision: 6,
+        },
       });
     });
 
     expect(useUiStore.getState().displayedDefinitionRevision).toBe(7);
     expect(useUiStore.getState().displayedDescriptorRevision).toBe(11);
+    expect(useUiStore.getState().pendingRewind).toEqual({
+      fromStepIndex: 2,
+      baseDefinitionRevision: 6,
+    });
   });
 });
 

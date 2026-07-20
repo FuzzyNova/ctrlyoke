@@ -19,6 +19,7 @@ import {
   type WorkflowStep,
   type WorkflowKey,
   type RunRef,
+  type WorkflowRunAddress,
   type WorkflowViewAddress,
   workflowDisplayStep,
 } from "../types/CtrlYokeTypes";
@@ -1388,6 +1389,39 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().stop();
   }
 
+  /** Runtime controls resolve the live instance from its stable execution address. */
+  async pauseAtRun(address: WorkflowRunAddress): Promise<void> {
+    return this.getExecutionInstanceAtRun(address).pause();
+  }
+
+  async cancelPauseAtRun(address: WorkflowRunAddress): Promise<void> {
+    return this.getExecutionInstanceAtRun(address).cancelPause();
+  }
+
+  async resumeAtRun(address: WorkflowRunAddress): Promise<void> {
+    return this.getExecutionInstanceAtRun(address).resume();
+  }
+
+  async stopAtRun(address: WorkflowRunAddress): Promise<void> {
+    return this.getExecutionInstanceAtRun(address).stop();
+  }
+
+  private getExecutionInstanceAtRun(
+    address: WorkflowRunAddress
+  ): WorkflowInstance {
+    const instance = [...this.instances.values()].find((candidate) => {
+      const state = candidate.getQueueState();
+      return (
+        state.workflowKey === address.workflowKey &&
+        state.runRef === address.runRef
+      );
+    });
+    if (!instance) {
+      throw new Error("The requested run is no longer executing");
+    }
+    return instance;
+  }
+
   /**
    * Pause a specific workflow by ID.
    * Used by per-workflow controls in the dropdown; allows pausing non-active instances.
@@ -1766,6 +1800,7 @@ export class WorkflowOrchestrator {
       runSummaries,
       workflowProperties,
       executionRunRef,
+      pendingRewind: workingFile._runtime?.pendingRewind,
       descriptorRevision: descriptor.revision,
     };
     send(snapshot);
@@ -2253,6 +2288,127 @@ export class WorkflowOrchestrator {
     return { kind: "rewind", ...result };
   }
 
+  /** Seed a fresh RunRef from an addressed run and execute that new run. */
+  async seedAndExecuteAtRun(
+    address: WorkflowRunAddress,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<{ runRef: RunRef }> {
+    this.assertViewedRunAddress(address, clientId, "Re-run");
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+    if (this.findExecutionRunRef(address.workflowKey)) {
+      throw new Error(
+        "Cannot seed a new run while this workflow lineage is executing"
+      );
+    }
+    const seeded = await WorkingFileManager.seedNewRun(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef,
+      {},
+      this.lineageRepository,
+      {
+        definitionRevision: expectedDefinitionRevision,
+        descriptorRevision: expectedDescriptorRevision,
+      }
+    );
+    const instance = this.buildWorkflowInstance();
+    getPtyProcessManager()?.setPendingController(instance.id, clientId);
+    void instance
+      .executeSeededRun(seeded, address.workflowKey)
+      .catch((error) =>
+        Log.error(`Failed to execute seeded run: ${getErrorMessage(error)}`)
+      );
+    return { runRef: seeded.runRef };
+  }
+
+  /** Execute the exact viewed draft; promoted runs must use seedAndExecuteAtRun. */
+  async executeDraftAtAddress(
+    address: Extract<WorkflowViewAddress, { kind: "draft" }>,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    const viewed = this.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== "draft" ||
+      viewed.workflowKey !== address.workflowKey
+    ) {
+      throw new Error("Run no longer targets this client's viewed draft");
+    }
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+    const descriptor = await this.lineageRepository.readDescriptor(
+      workspaceRoot,
+      address.workflowKey
+    );
+    if (descriptor.revision !== expectedDescriptorRevision) {
+      throw new Error(
+        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
+      );
+    }
+    const draft = JSON.parse(
+      await fs.promises.readFile(
+        WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey),
+        "utf8"
+      )
+    ) as WorkingFile;
+    if ((draft.definitionRevision ?? 1) !== expectedDefinitionRevision) {
+      throw new Error("Definition revision conflict while running draft");
+    }
+    await this.getInstanceForClient(clientId).executeLoadedPromptFile();
+  }
+
+  /** One client action: restore the committed run, then seed and execute a new RunRef. */
+  async startNewRunInsteadAtRun(
+    address: WorkflowRunAddress,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    confirmEditedSuffix: boolean,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<{ runRef: RunRef } | { hasSuffixEdits: true }> {
+    this.assertViewedRunAddress(address, clientId, "Start new run instead");
+    if (this.findExecutionRunRef(address.workflowKey)) {
+      throw new Error(
+        "Cannot seed a new run while this workflow lineage is executing"
+      );
+    }
+    const discarded = await this.discardContinuationAtRun(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      confirmEditedSuffix,
+      clientId,
+      false
+    );
+    if (!discarded.discarded) return { hasSuffixEdits: true };
+    return this.seedAndExecuteAtRun(
+      address,
+      discarded.definitionRevision,
+      discarded.descriptorRevision,
+      clientId
+    );
+  }
+
+  private assertViewedRunAddress(
+    address: WorkflowRunAddress,
+    clientId: string,
+    action: string
+  ): void {
+    const viewed = this.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== "run" ||
+      viewed.workflowKey !== address.workflowKey ||
+      viewed.runRef !== address.runRef
+    ) {
+      throw new Error(`${action} no longer targets this client's viewed run`);
+    }
+  }
+
   /**
    * Explicit same-run append.  The requested view, both optimistic revisions,
    * the runner lock, and the run's persisted execution state are all checked
@@ -2446,7 +2602,8 @@ export class WorkflowOrchestrator {
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
     confirmEditedSuffix: boolean = false,
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    invalidate: boolean = true
   ): Promise<
     | { discarded: false; hasSuffixEdits: true }
     | {
@@ -2479,7 +2636,9 @@ export class WorkflowOrchestrator {
       this.lineageRepository
     );
     if (!result.discarded) return result;
-    await this.invalidateRunViews(address.workflowKey, address.runRef);
+    if (invalidate) {
+      await this.invalidateRunViews(address.workflowKey, address.runRef);
+    }
     return result;
   }
 

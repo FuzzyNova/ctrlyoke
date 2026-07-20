@@ -1756,6 +1756,7 @@ function createMessageHandlers(): MessageHandlerMap {
       runSummaries,
       workflowProperties,
       executionRunRef,
+      pendingRewind,
     } = message;
     if (!address || !workingFile) return;
     // A late response from a previous selector click must not overwrite the
@@ -1796,11 +1797,11 @@ function createMessageHandlers(): MessageHandlerMap {
         definitionRevision: workingFile.definitionRevision ?? 1,
         descriptorRevision: message.descriptorRevision,
       },
-      runtime?.pendingRewind
+      pendingRewind ?? runtime?.pendingRewind
     );
     // A rewind starts a new, suffix-only editing epoch. Re-baselining here
     // prevents zundo from crossing into the full-runtime pre-rewind state.
-    if (runtime?.pendingRewind) {
+    if (pendingRewind ?? runtime?.pendingRewind) {
       useWorkflowStore.temporal.getState().clear();
     }
     if (history) {

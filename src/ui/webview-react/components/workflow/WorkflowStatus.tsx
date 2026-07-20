@@ -826,36 +826,63 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [setRecentWorkflows, vscode]
   );
 
-  // Pause a specific workflow by ID
+  // Runtime actions target the stable run address, never an instance UUID.
   const handlePauseWorkflow = useCallback(
-    (workflowId: string) => {
-      vscode.postMessage({ type: MESSAGE_TYPES.PAUSE_WORKFLOW, workflowId });
-    },
-    [vscode]
-  );
-
-  const handleCancelPauseWorkflow = useCallback(
-    (workflowId: string) => {
+    (workflow: (typeof loadedWorkflows)[number]) => {
+      if (!workflow.workflowKey || !workflow.runRef) return;
       vscode.postMessage({
-        type: MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW,
-        workflowId,
+        type: MESSAGE_TYPES.PAUSE_RUN,
+        address: {
+          workflowKey: workflow.workflowKey,
+          kind: "run",
+          runRef: workflow.runRef,
+        },
       });
     },
     [vscode]
   );
 
-  // Resume a specific workflow by ID
-  const handleResumeWorkflow = useCallback(
-    (workflowId: string) => {
-      vscode.postMessage({ type: MESSAGE_TYPES.RESUME_WORKFLOW, workflowId });
+  const handleCancelPauseWorkflow = useCallback(
+    (workflow: (typeof loadedWorkflows)[number]) => {
+      if (!workflow.workflowKey || !workflow.runRef) return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.CANCEL_PAUSE_RUN,
+        address: {
+          workflowKey: workflow.workflowKey,
+          kind: "run",
+          runRef: workflow.runRef,
+        },
+      });
     },
     [vscode]
   );
 
-  // Stop a specific workflow by ID
+  const handleResumeWorkflow = useCallback(
+    (workflow: (typeof loadedWorkflows)[number]) => {
+      if (!workflow.workflowKey || !workflow.runRef) return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.RESUME_RUN,
+        address: {
+          workflowKey: workflow.workflowKey,
+          kind: "run",
+          runRef: workflow.runRef,
+        },
+      });
+    },
+    [vscode]
+  );
+
   const handleStopWorkflow = useCallback(
-    (workflowId: string) => {
-      vscode.postMessage({ type: MESSAGE_TYPES.STOP_WORKFLOW, workflowId });
+    (workflow: (typeof loadedWorkflows)[number]) => {
+      if (!workflow.workflowKey || !workflow.runRef) return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.STOP_RUN,
+        address: {
+          workflowKey: workflow.workflowKey,
+          kind: "run",
+          runRef: workflow.runRef,
+        },
+      });
     },
     [vscode]
   );
@@ -1246,12 +1273,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                       hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
                       isNarrow={isNarrow}
                       onClick={() => handleSwitchWorkflow(workflow.id)}
-                      onPause={() => handlePauseWorkflow(workflow.id)}
-                      onCancelPause={() =>
-                        handleCancelPauseWorkflow(workflow.id)
-                      }
-                      onResume={() => handleResumeWorkflow(workflow.id)}
-                      onStop={() => handleStopWorkflow(workflow.id)}
+                      onPause={() => handlePauseWorkflow(workflow)}
+                      onCancelPause={() => handleCancelPauseWorkflow(workflow)}
+                      onResume={() => handleResumeWorkflow(workflow)}
+                      onStop={() => handleStopWorkflow(workflow)}
                     />
                   )}
                 />

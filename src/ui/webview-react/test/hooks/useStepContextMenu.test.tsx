@@ -4,7 +4,13 @@ import { useStepContextMenu } from "@hooks/useStepContextMenu";
 import { EXECUTION_STATES, STEP_TYPES } from "@/types/messages";
 import type { WorkflowStep } from "@store/workflowStore";
 
-function TestHarness({ step }: { step: WorkflowStep }) {
+function TestHarness({
+  step,
+  pendingRewind,
+}: {
+  step: WorkflowStep;
+  pendingRewind?: { fromStepIndex: number };
+}) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
     isCLIManaged: false,
     canChangeStartPosition: true,
@@ -13,6 +19,7 @@ function TestHarness({ step }: { step: WorkflowStep }) {
     confirmResetOperations: false,
     totalSteps: 2,
     currentStep: 0,
+    pendingRewind,
   });
 
   return (
@@ -100,5 +107,19 @@ describe("useStepContextMenu", () => {
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
+  });
+
+  it("adds discard continuation only at the rewind boundary", () => {
+    render(
+      <TestHarness
+        step={{ prompt: "Boundary prompt" }}
+        pendingRewind={{ fromStepIndex: 0 }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("button", { name: "Discard Continuation" })
+    ).toBeInTheDocument();
   });
 });

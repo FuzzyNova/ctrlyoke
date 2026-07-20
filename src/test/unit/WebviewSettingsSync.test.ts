@@ -1102,3 +1102,86 @@ suite("WebviewSettingsSync", () => {
     });
   });
 });
+
+suite("WebviewMessageRouter stable run actions", () => {
+  const runAddress = {
+    workflowKey: "workflow-a" as never,
+    kind: "run" as const,
+    runRef: "run-2026-07-20T10-30-00-000Z" as never,
+  };
+
+  function makeRouter(calls: string[]) {
+    const orchestrator = {
+      executeDraftAtAddress: async () => calls.push("draft"),
+      seedAndExecuteAtRun: async () => {
+        calls.push("seed");
+        return { runRef: "run-2026-07-20T11-00-00-000Z" as never };
+      },
+      startNewRunInsteadAtRun: async () => {
+        calls.push("start-instead");
+        return { runRef: "run-2026-07-20T11-00-00-000Z" as never };
+      },
+      continueAtRun: async () => calls.push("continue"),
+      appendAndContinueAtRun: async () => calls.push("append"),
+      pauseAtRun: async () => calls.push("pause"),
+      cancelPauseAtRun: async () => calls.push("cancel-pause"),
+      resumeAtRun: async () => calls.push("resume"),
+      stopAtRun: async () => calls.push("stop"),
+    } as any;
+    return new WebviewMessageRouter(
+      () => {},
+      {} as any,
+      {} as any,
+      () => orchestrator,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+  }
+
+  test("routes every stable-address run action without an instance-id alias", async () => {
+    const calls: string[] = [];
+    const router = makeRouter(calls);
+    const revision = {
+      address: runAddress,
+      expectedDefinitionRevision: 2,
+      expectedDescriptorRevision: 5,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.EXECUTE_DRAFT,
+      ...revision,
+      address: { workflowKey: runAddress.workflowKey, kind: "draft" },
+    });
+    await router.route({ type: MESSAGE_TYPES.SEED_NEW_RUN, ...revision });
+    await router.route({
+      type: MESSAGE_TYPES.START_NEW_RUN_INSTEAD,
+      ...revision,
+    });
+    await router.route({ type: MESSAGE_TYPES.CONTINUE_RUN, ...revision });
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN,
+      ...revision,
+      tail: [{ prompt: "tail" }],
+    });
+    await router.route({ type: MESSAGE_TYPES.PAUSE_RUN, address: runAddress });
+    await router.route({
+      type: MESSAGE_TYPES.CANCEL_PAUSE_RUN,
+      address: runAddress,
+    });
+    await router.route({ type: MESSAGE_TYPES.RESUME_RUN, address: runAddress });
+    await router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runAddress });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(calls, [
+      "draft",
+      "seed",
+      "start-instead",
+      "continue",
+      "append",
+      "pause",
+      "cancel-pause",
+      "resume",
+      "stop",
+    ]);
+  });
+});

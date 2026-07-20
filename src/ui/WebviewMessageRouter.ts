@@ -59,6 +59,12 @@ import type {
   DeleteMcpRegistryServerMessage,
   ExportMcpToHarnessMessage,
   InsertWorkflowStepMessage,
+  ExecuteDraftMessage,
+  SeedNewRunMessage,
+  StartNewRunInsteadMessage,
+  ContinueRunMessage,
+  AppendAndContinueRunMessage,
+  RunExecutionControlMessage,
   SetStartPositionMessage,
   DiscardContinuationMessage,
   RequestMcpRegistrySearchMessage,
@@ -1339,66 +1345,41 @@ export class WebviewMessageRouter {
       }
     });
 
-    // ── Per-workflow targeted controls ────────────────────────────────────
-    table.set(MESSAGE_TYPES.RUN_WORKFLOW, (message) => {
-      const { workflowId } = message;
-      if (workflowId) {
-        // Register this client as the controller for the next terminal session spawned
-        // for this workflow. The pending controller is consumed in PtyProcessManager.spawnPty().
-        getPtyProcessManager()?.setPendingController(
-          workflowId as string,
-          this.clientId
-        );
-        // Fire-and-forget: executeWorkflow runs the entire workflow loop and must
-        // not be awaited here — awaiting would block the routeQueue for the full
-        // duration of the run, preventing stop/pause/switch-workflow/terminal-input
-        // messages from ever being processed.
-        void this.getOrchestrator()?.executeWorkflow(workflowId);
-      }
+    // ── Stable-address run lifecycle controls ──────────────────────────────
+    table.set(MESSAGE_TYPES.EXECUTE_DRAFT, (message) => {
+      void this.handleExecuteDraft(message as ExecuteDraftMessage);
     });
-
-    table.set(MESSAGE_TYPES.PAUSE_WORKFLOW, async (message) => {
-      const { workflowId } = message;
-      if (workflowId) {
-        Log.debug(
-          `[WebviewMessageRouter] PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`
-        );
-        await this.getOrchestrator()?.pauseWorkflow(workflowId);
-      }
+    table.set(MESSAGE_TYPES.SEED_NEW_RUN, (message) => {
+      void this.handleSeedNewRun(message as SeedNewRunMessage);
     });
-
-    table.set(MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW, async (message) => {
-      const { workflowId } = message;
-      if (workflowId) {
-        Log.debug(
-          `[WebviewMessageRouter] CANCEL_PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`
-        );
-        await this.getOrchestrator()?.cancelPauseWorkflow(workflowId);
-      }
+    table.set(MESSAGE_TYPES.START_NEW_RUN_INSTEAD, (message) => {
+      void this.handleStartNewRunInstead(message as StartNewRunInsteadMessage);
     });
-
-    table.set(MESSAGE_TYPES.RESUME_WORKFLOW, (message) => {
-      const { workflowId, workingFilePath } = message;
-      if (workflowId) {
-        Log.debug(
-          `[WebviewMessageRouter] RESUME_WORKFLOW received: inst:${workflowId.slice(0, 8)}`
-        );
-        // Fire-and-forget: resumeWorkflow can call executeLoadedPromptFile which
-        // awaits the entire workflow execution loop. Awaiting here would block
-        // routeQueue for the full run duration, preventing stop/pause/switch-workflow
-        // messages from being processed — same reason RUN_WORKFLOW uses void.
-        void this.getOrchestrator()?.resumeWorkflow(
-          workflowId,
-          workingFilePath as string | undefined
-        );
-      }
+    table.set(MESSAGE_TYPES.CONTINUE_RUN, (message) => {
+      void this.handleContinueRun(message as ContinueRunMessage);
     });
-
-    table.set(MESSAGE_TYPES.STOP_WORKFLOW, async (message) => {
-      const { workflowId } = message;
-      if (workflowId) {
-        await this.getOrchestrator()?.stopWorkflow(workflowId);
-      }
+    table.set(MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN, (message) => {
+      void this.handleAppendAndContinue(message as AppendAndContinueRunMessage);
+    });
+    table.set(MESSAGE_TYPES.PAUSE_RUN, (message) => {
+      void this.handleRunExecutionControl(
+        message as RunExecutionControlMessage
+      );
+    });
+    table.set(MESSAGE_TYPES.CANCEL_PAUSE_RUN, (message) => {
+      void this.handleRunExecutionControl(
+        message as RunExecutionControlMessage
+      );
+    });
+    table.set(MESSAGE_TYPES.RESUME_RUN, (message) => {
+      void this.handleRunExecutionControl(
+        message as RunExecutionControlMessage
+      );
+    });
+    table.set(MESSAGE_TYPES.STOP_RUN, (message) => {
+      void this.handleRunExecutionControl(
+        message as RunExecutionControlMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.STOP_CLI_RUN, async (message) => {
@@ -1860,6 +1841,120 @@ export class WebviewMessageRouter {
         this.clientId
       );
     }
+  }
+
+  private async handleExecuteDraft(
+    message: ExecuteDraftMessage
+  ): Promise<void> {
+    try {
+      await this.getOrchestrator()?.executeDraftAtAddress(
+        message.address,
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        this.clientId
+      );
+    } catch (error) {
+      this.showRunActionFailure("run draft", error);
+    }
+  }
+
+  private async handleSeedNewRun(message: SeedNewRunMessage): Promise<void> {
+    try {
+      await this.getOrchestrator()?.seedAndExecuteAtRun(
+        message.address,
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        this.clientId
+      );
+    } catch (error) {
+      this.showRunActionFailure("re-run", error);
+    }
+  }
+
+  private async handleStartNewRunInstead(
+    message: StartNewRunInsteadMessage
+  ): Promise<void> {
+    try {
+      const result = await this.getOrchestrator()?.startNewRunInsteadAtRun(
+        message.address,
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        message.confirmEditedSuffix === true,
+        this.clientId
+      );
+      if (result && "hasSuffixEdits" in result) {
+        const confirmation = await vscode.window.showWarningMessage(
+          "Discard continuation edits and start a new run? Your changes to the rewound suffix will be lost.",
+          { modal: true },
+          "Start New Run"
+        );
+        if (confirmation === "Start New Run") {
+          await this.handleStartNewRunInstead({
+            ...message,
+            confirmEditedSuffix: true,
+          });
+        }
+      }
+    } catch (error) {
+      this.showRunActionFailure("start new run", error);
+    }
+  }
+
+  private async handleContinueRun(message: ContinueRunMessage): Promise<void> {
+    try {
+      await this.getOrchestrator()?.continueAtRun(
+        message.address,
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        this.clientId
+      );
+    } catch (error) {
+      this.showRunActionFailure("continue run", error);
+    }
+  }
+
+  private async handleAppendAndContinue(
+    message: AppendAndContinueRunMessage
+  ): Promise<void> {
+    try {
+      await this.getOrchestrator()?.appendAndContinueAtRun(
+        message.address,
+        message.tail,
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        this.clientId
+      );
+    } catch (error) {
+      this.showRunActionFailure("append and continue", error);
+    }
+  }
+
+  private async handleRunExecutionControl(
+    message: RunExecutionControlMessage
+  ): Promise<void> {
+    try {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator)
+        throw new Error("WorkflowOrchestrator not initialized");
+      if (message.type === MESSAGE_TYPES.PAUSE_RUN) {
+        await orchestrator.pauseAtRun(message.address);
+      } else if (message.type === MESSAGE_TYPES.CANCEL_PAUSE_RUN) {
+        await orchestrator.cancelPauseAtRun(message.address);
+      } else if (message.type === MESSAGE_TYPES.RESUME_RUN) {
+        await orchestrator.resumeAtRun(message.address);
+      } else {
+        await orchestrator.stopAtRun(message.address);
+      }
+    } catch (error) {
+      this.showRunActionFailure("control execution", error);
+    }
+  }
+
+  private showRunActionFailure(action: string, error: unknown): void {
+    Log.error(`Failed to ${action}:`, error);
+    void vscode.window.showErrorMessage(
+      `Failed to ${action}: ${getErrorMessage(error)}`
+    );
   }
 
   private async handleSetStartPosition(

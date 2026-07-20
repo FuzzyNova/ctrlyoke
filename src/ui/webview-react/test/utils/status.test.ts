@@ -212,66 +212,83 @@ describe("canStopExecution", () => {
 describe("getWorkflowExecutionControls", () => {
   const getControls = (
     executionState: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES],
-    overrides: { currentStep?: number; hasFile?: boolean } = {}
+    overrides: {
+      viewedKind?: "draft" | "run" | null;
+      hasFile?: boolean;
+      pendingRewind?: boolean;
+      executionRunState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
+      executionRunLabel?: string;
+    } = {}
   ) =>
     getWorkflowExecutionControls({
-      executionState,
-      currentStep: overrides.currentStep ?? 0,
+      viewedExecutionState: executionState,
+      viewedKind: overrides.viewedKind ?? "run",
       hasFile: overrides.hasFile ?? true,
+      pendingRewind: overrides.pendingRewind ?? false,
+      executionRunState: overrides.executionRunState,
+      executionRunLabel: overrides.executionRunLabel,
     });
 
-  it("allows run from idle when a workflow file is loaded", () => {
-    expect(getControls(EXECUTION_STATES.IDLE).canRun).toBe(true);
+  it("uses slot 1 Run for a draft", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      viewedKind: "draft",
+    });
+    expect(controls.slot1).toMatchObject({
+      action: "run-draft",
+      label: "Run",
+      enabled: true,
+    });
+    expect(controls.slot2.enabled).toBe(false);
+    expect(controls.slot3.enabled).toBe(false);
   });
 
-  it("blocks run when no workflow file is loaded", () => {
-    expect(getControls(EXECUTION_STATES.IDLE, { hasFile: false }).canRun).toBe(
-      false
-    );
+  it("uses slot 1 Re-run for an idle promoted run", () => {
+    expect(getControls(EXECUTION_STATES.IDLE).slot1).toMatchObject({
+      action: "rerun",
+      label: "Re-run",
+      icon: "codicon-refresh",
+      enabled: true,
+    });
   });
 
-  it("allows pause and stop while running", () => {
-    const controls = getControls(EXECUTION_STATES.RUNNING);
-
-    expect(controls.canRun).toBe(false);
-    expect(controls.canPause).toBe(true);
-    expect(controls.canStop).toBe(true);
+  it("uses slot 2 Resume only for resumable promoted work", () => {
+    const controls = getControls(EXECUTION_STATES.STOPPED);
+    expect(controls.slot1.action).toBe("rerun");
+    expect(controls.slot2).toMatchObject({
+      action: "resume",
+      label: "Resume",
+      enabled: true,
+    });
   });
 
-  it("allows cancelling a pending pause", () => {
-    const controls = getControls(EXECUTION_STATES.PAUSING);
-
-    expect(controls.canRun).toBe(false);
-    expect(controls.canCancelPause).toBe(true);
-    expect(controls.canStop).toBe(true);
+  it("uses slot 1 Continue during a pending rewind", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      pendingRewind: true,
+    });
+    expect(controls.slot1).toMatchObject({
+      action: "continue",
+      label: "Continue",
+      enabled: true,
+    });
+    expect(controls.slot2.enabled).toBe(false);
   });
 
-  it("allows resume and rerun from paused, stopped, or errored states", () => {
-    for (const state of [
-      EXECUTION_STATES.PAUSED,
-      EXECUTION_STATES.STOPPED,
-      EXECUTION_STATES.ERROR,
-    ]) {
-      const controls = getControls(state);
-
-      expect(controls.canRun).toBe(true);
-      expect(controls.canResume).toBe(true);
-      expect(controls.isRerun).toBe(true);
-    }
+  it("keeps all three slots while executing and targets the execution label", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      executionRunState: EXECUTION_STATES.RUNNING,
+      executionRunLabel: "run 9",
+    });
+    expect(controls.slot1.enabled).toBe(false);
+    expect(controls.slot2).toMatchObject({ action: "pause", enabled: true });
+    expect(controls.slot2.title).toContain("run 9");
+    expect(controls.slot3).toMatchObject({ action: "stop", enabled: true });
   });
 
-  it("allows resume from idle only when the current step has an offset", () => {
-    expect(getControls(EXECUTION_STATES.IDLE).canResume).toBe(false);
-    expect(
-      getControls(EXECUTION_STATES.IDLE, { currentStep: 1 }).canResume
-    ).toBe(true);
-  });
-
-  it("blocks run and resume while cancelling but keeps stop available", () => {
-    const controls = getControls(EXECUTION_STATES.CANCELLING);
-
-    expect(controls.canRun).toBe(false);
-    expect(controls.canResume).toBe(false);
-    expect(controls.canStop).toBe(true);
+  it("keeps pause cancellation and stop in slots 2 and 3", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      executionRunState: EXECUTION_STATES.PAUSING,
+    });
+    expect(controls.slot2.action).toBe("cancel-pause");
+    expect(controls.slot3.action).toBe("stop");
   });
 });

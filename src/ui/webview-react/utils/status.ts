@@ -249,28 +249,42 @@ export function canStopExecution(state: ExecutionState): boolean {
   );
 }
 
+export type WorkflowExecutionControlAction =
+  | "run-draft"
+  | "rerun"
+  | "continue"
+  | "pause"
+  | "cancel-pause"
+  | "resume"
+  | "stop"
+  | "none";
+
+export interface WorkflowExecutionControlSlot {
+  action: WorkflowExecutionControlAction;
+  label: string;
+  icon: string;
+  enabled: boolean;
+  title: string;
+  emphasized?: boolean;
+}
+
 export interface WorkflowExecutionControlsState {
+  slot1: WorkflowExecutionControlSlot;
+  slot2: WorkflowExecutionControlSlot;
+  slot3: WorkflowExecutionControlSlot;
   isRunning: boolean;
   isPausing: boolean;
   isPaused: boolean;
-  isCompleted: boolean;
-  isError: boolean;
-  isStopped: boolean;
   isCancelling: boolean;
-  isIdle: boolean;
-  isIdleWithOffset: boolean;
-  canRun: boolean;
-  canPause: boolean;
-  canCancelPause: boolean;
-  canResume: boolean;
-  canStop: boolean;
-  isRerun: boolean;
 }
 
 export interface WorkflowExecutionControlsInput {
-  executionState: ExecutionState;
-  currentStep: number;
+  viewedExecutionState: ExecutionState;
+  viewedKind: "draft" | "run" | null;
   hasFile: boolean;
+  pendingRewind: boolean;
+  executionRunState?: ExecutionState | null;
+  executionRunLabel?: string | null;
 }
 
 /**
@@ -280,43 +294,146 @@ export interface WorkflowExecutionControlsInput {
  * resumable, cancellable, and restartable execution states.
  */
 export function getWorkflowExecutionControls({
-  executionState,
-  currentStep,
+  viewedExecutionState,
+  viewedKind,
   hasFile,
+  pendingRewind,
+  executionRunState,
+  executionRunLabel,
 }: WorkflowExecutionControlsInput): WorkflowExecutionControlsState {
+  const executionState = executionRunState ?? viewedExecutionState;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const isPausing = executionState === EXECUTION_STATES.PAUSING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
-  const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
-  const isError = executionState === EXECUTION_STATES.ERROR;
-  const isStopped = executionState === EXECUTION_STATES.STOPPED;
   const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
-  const isIdle = executionState === EXECUTION_STATES.IDLE;
-  const isIdleWithOffset = isIdle && currentStep > 0;
+  const executionActive = isRunning || isPausing || isPaused || isCancelling;
+  const targetSuffix = executionRunLabel ? ` for ${executionRunLabel}` : "";
+  const disabled = (label: string, icon: string, title: string) => ({
+    action: "none" as const,
+    label,
+    icon,
+    enabled: false,
+    title,
+  });
 
-  const canRun = hasFile && !isRunning && !isPausing && !isCancelling;
-  const canPause = isRunning && !isCancelling;
-  const canCancelPause = isPausing && !isCancelling;
-  const canResume = isPaused || isStopped || isError || isIdleWithOffset;
-  const canStop = isRunning || isPausing || isPaused || isCancelling;
-  const isRerun = isCompleted || isError || isPaused || isStopped;
+  if (executionActive) {
+    const slot1 =
+      viewedKind === "draft"
+        ? disabled(
+            "Run",
+            "codicon-debug-start",
+            `Execution is active${targetSuffix}`
+          )
+        : pendingRewind
+          ? disabled(
+              "Continue",
+              "codicon-debug-continue",
+              `Execution is active${targetSuffix}`
+            )
+          : disabled(
+              "Re-run",
+              "codicon-refresh",
+              `Execution is active${targetSuffix}`
+            );
+    const slot2 = isPaused
+      ? {
+          action: "resume" as const,
+          label: "Resume",
+          icon: "codicon-debug-continue",
+          enabled: true,
+          title: `Resume${targetSuffix}`,
+        }
+      : isPausing
+        ? {
+            action: "cancel-pause" as const,
+            label: "Cancel pause",
+            icon: "codicon-debug-pause",
+            enabled: true,
+            title: `Cancel pause${targetSuffix}`,
+          }
+        : {
+            action: "pause" as const,
+            label: "Pause",
+            icon: "codicon-debug-pause",
+            enabled: isRunning,
+            title: `Pause after the current step completes${targetSuffix}`,
+          };
+    return {
+      slot1,
+      slot2,
+      slot3: {
+        action: "stop",
+        label: "Stop",
+        icon: "codicon-debug-stop",
+        enabled: true,
+        title: `Stop${targetSuffix}`,
+      },
+      isRunning,
+      isPausing,
+      isPaused,
+      isCancelling,
+    };
+  }
 
+  if (!hasFile || viewedKind === null) {
+    return {
+      slot1: disabled("Run", "codicon-debug-start", "Load a workflow to run"),
+      slot2: disabled("Resume", "codicon-debug-continue", "No resumable run"),
+      slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
+      isRunning,
+      isPausing,
+      isPaused,
+      isCancelling,
+    };
+  }
+
+  const slot1 =
+    viewedKind === "draft"
+      ? {
+          action: "run-draft" as const,
+          label: "Run",
+          icon: "codicon-debug-start",
+          enabled: true,
+          title: "Run draft",
+        }
+      : pendingRewind
+        ? {
+            action: "continue" as const,
+            label: "Continue",
+            icon: "codicon-debug-continue",
+            enabled: true,
+            title: "Continue this run",
+            emphasized: true,
+          }
+        : {
+            action: "rerun" as const,
+            label: "Re-run",
+            icon: "codicon-refresh",
+            enabled: true,
+            title: "Seed and run a new run from this definition",
+            emphasized: true,
+          };
+  const resumable =
+    viewedKind === "run" &&
+    (viewedExecutionState === EXECUTION_STATES.PAUSED ||
+      viewedExecutionState === EXECUTION_STATES.STOPPED ||
+      viewedExecutionState === EXECUTION_STATES.ERROR);
   return {
+    slot1,
+    slot2: resumable
+      ? {
+          action: "resume",
+          label: "Resume",
+          icon: "codicon-debug-continue",
+          enabled: true,
+          title: "Resume this run",
+        }
+      : disabled("Resume", "codicon-debug-continue", "No resumable work"),
+    slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
     isRunning,
     isPausing,
     isPaused,
-    isCompleted,
-    isError,
-    isStopped,
     isCancelling,
-    isIdle,
-    isIdleWithOffset,
-    canRun,
-    canPause,
-    canCancelPause,
-    canResume,
-    canStop,
-    isRerun,
   };
 }
 
