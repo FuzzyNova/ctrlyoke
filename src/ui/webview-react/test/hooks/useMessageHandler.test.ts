@@ -80,6 +80,7 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
+  useUiStore.setState({ displayedViewAddress: null, executionRunRef: null });
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   handleCompletionNotificationEventMock.mockReset();
@@ -179,15 +180,17 @@ describe("FILE_SELECTED", () => {
     });
   });
 
-  it("requests the pending history run after the workflow loads", () => {
+  it("does not route a history search through a mutable run index", () => {
     const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
       typeof vi.fn
     >;
     postMessageMock.mockClear();
     useUiStore.getState().setPendingHistorySearchNavigation({
-      workflowId: "wf-1",
-      workflowFilePath: "C:\\history.ctrlyoke.yaml",
-      runIndex: 2,
+      address: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      },
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
     });
@@ -201,10 +204,7 @@ describe("FILE_SELECTED", () => {
       });
     });
 
-    expect(postMessageMock).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-      runIndex: 2,
-    });
+    expect(postMessageMock).not.toHaveBeenCalled();
   });
 
   it("clears cached edit drafts for the previous workflow while preserving the new-prompt draft", () => {
@@ -776,16 +776,26 @@ describe("OUTPUT_HISTORY_LOADED", () => {
 
     act(() => {
       useUiStore.getState().setPendingHistorySearchNavigation({
-        workflowId: "wf-1",
-        workflowFilePath: "C:\\history.ctrlyoke.yaml",
-        runIndex: 1,
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: "run",
+          runRef: "run-2026-07-20T10-30-00-000Z" as never,
+        },
         findQuery: "needle",
         target: { kind: "queue", stepIndex: 0 },
       });
     });
 
     act(() => {
-      dispatch(MESSAGE_TYPES.OUTPUT_HISTORY_LOADED, {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: "run",
+          runRef: "run-2026-07-20T10-30-00-000Z" as never,
+        },
+        workingFile: { workflowName: "History", steps: [] },
+        workflowProperties: {},
+        runSummaries: [],
         history: {
           runId: 2,
           startedAt: 1000,
@@ -794,10 +804,6 @@ describe("OUTPUT_HISTORY_LOADED", () => {
           orderedEntries: [],
           promptOutputs: {},
         },
-        availableRuns: 2,
-        currentRunIndex: 1,
-        runTimestamps: [1500, 1000],
-        runStates: [EXECUTION_STATES.RUNNING, EXECUTION_STATES.COMPLETED],
       });
     });
 
@@ -830,17 +836,16 @@ describe("history search messages", () => {
         query: "needle",
         results: [
           {
-            workflowId: "wf-1",
+            workflowKey: "wf-1" as never,
+            runRef: "run-2026-07-20T10-30-00-000Z" as never,
             workflowName: "Search Workflow",
             runId: 3,
-            runIndex: 0,
             startedAt: 1000,
             executionState: EXECUTION_STATES.COMPLETED,
             target: { kind: "queue", stepIndex: 0 },
             matchType: "response",
             matchSnippet: "needle found here",
             matchContext: "Prompt 1",
-            workflowFilePath: "C:\\history.ctrlyoke.yaml",
           },
         ],
         hasMore: false,
@@ -857,17 +862,16 @@ describe("history search messages", () => {
         query: "stale",
         results: [
           {
-            workflowId: "wf-2",
+            workflowKey: "wf-2" as never,
+            runRef: "run-2026-07-20T10-31-00-000Z" as never,
             workflowName: "Stale Workflow",
             runId: 4,
-            runIndex: 0,
             startedAt: 2000,
             executionState: EXECUTION_STATES.COMPLETED,
             target: { kind: "queue", stepIndex: 1 },
             matchType: "prompt",
             matchSnippet: "stale result",
             matchContext: "Prompt 2",
-            workflowFilePath: "C:\\stale.ctrlyoke.yaml",
           },
         ],
         hasMore: false,

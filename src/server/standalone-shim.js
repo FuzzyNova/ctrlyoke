@@ -98,7 +98,7 @@
   let reactReady = false;
   let pageUnloading = false;
   let readySentForSocket = false;
-  let lastSentReadyPreferredWorkingFilePath;
+  let lastSentReadyPreferredViewAddress;
   let lastReadyMessage;
   let hiddenAtMs;
   let lastForegroundRefreshAt = 0;
@@ -145,7 +145,7 @@
     }
     if (msg && msg.type === "ready") {
       readySentForSocket = true;
-      lastSentReadyPreferredWorkingFilePath = msg.preferredWorkingFilePath;
+      lastSentReadyPreferredViewAddress = JSON.stringify(msg.preferredViewAddress);
     }
     return true;
   }
@@ -174,19 +174,24 @@
     }
   }
 
-  function getUrlWorkingFilePath() {
-    const workflow = new URLSearchParams(location.search).get("workflow");
-    return workflow && workflow.trim() ? workflow : undefined;
+  function getUrlViewAddress() {
+    const params = new URLSearchParams(location.search);
+    const workflowKey = params.get("workflowKey");
+    const runRef = params.get("runRef");
+    if (!workflowKey || !workflowKey.trim()) return undefined;
+    return runRef && runRef.trim()
+      ? { workflowKey, kind: "run", runRef }
+      : { workflowKey, kind: "draft" };
   }
 
   function buildReadyMessage() {
-    const preferredWorkingFilePath = getUrlWorkingFilePath();
+    const preferredViewAddress = getUrlViewAddress();
     const baseReadyMessage = lastReadyMessage || { type: "ready" };
-    const { preferredWorkingFilePath: _ignored, ...readyMessage } =
+    const { preferredViewAddress: _ignored, ...readyMessage } =
       baseReadyMessage;
     return {
       ...readyMessage,
-      ...(preferredWorkingFilePath ? { preferredWorkingFilePath } : {}),
+      ...(preferredViewAddress ? { preferredViewAddress } : {}),
     };
   }
 
@@ -465,7 +470,7 @@
   function connect() {
     if (pageUnloading || isSocketActive() || connectionBannerShown) return;
     readySentForSocket = false;
-    lastSentReadyPreferredWorkingFilePath = undefined;
+    lastSentReadyPreferredViewAddress = undefined;
     // Track whether THIS socket instance ever reached OPEN. Closed without ever
     // opening counts as a connection failure (cert rejection, server unreachable).
     let socketOpened = false;
@@ -744,8 +749,8 @@
         queueMicrotask(flushInbound);
         const duplicateReady =
           readySentForSocket &&
-          msg.preferredWorkingFilePath ===
-            lastSentReadyPreferredWorkingFilePath;
+          JSON.stringify(msg.preferredViewAddress) ===
+            lastSentReadyPreferredViewAddress;
         if (duplicateReady) return;
       }
       if (ws && ws.readyState === WebSocket.OPEN) sendNow(ws, msg);

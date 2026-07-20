@@ -11,7 +11,7 @@ export function currentSourceState(): RouteSourceState {
   const ui = useUiStore.getState();
   const wv = useWorkspaceViewerStore.getState();
   return {
-    activeWorkflowWorkingFilePath: ui.activeWorkflowWorkingFilePath,
+    displayedViewAddress: ui.displayedViewAddress,
     isOpen: wv.isOpen,
     activeTab: wv.activeTab,
     selectedFilePath: wv.selectedFilePath,

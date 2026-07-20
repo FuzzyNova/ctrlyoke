@@ -43,7 +43,7 @@ suite("HistorySearchService", () => {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   });
 
-  test("returns newest matches first with queue metadata and run indexes", async () => {
+  test("returns newest matches first with queue metadata and stable run addresses", async () => {
     const workflowId = "demo-2026-06-09T17-00-00";
     await writeWorkingFile(workflowId, {
       workflowName: "Demo Workflow",
@@ -79,21 +79,15 @@ suite("HistorySearchService", () => {
     assert.strictEqual(response.hasMore, false);
     assert.strictEqual(response.indexState, "ready");
     assert.strictEqual(results[0]?.startedAt, 2000);
-    assert.strictEqual(results[0]?.runIndex, 0);
+    assert.strictEqual(results[0]?.workflowKey, workflowId);
+    assert.strictEqual(results[0]?.runRef, WorkflowPaths.formatRunRef(2000));
     assert.strictEqual(results[0]?.workflowName, "Demo Workflow");
-    assert.strictEqual(
-      results[0]?.workflowFilePath,
-      WorkflowPaths.runFilePath(
-        workspaceRoot,
-        workflowId as WorkflowKey,
-        WorkflowPaths.formatRunRef(2000)
-      )
-    );
     assert.strictEqual(results[0]?.matchType, "status");
     assert.strictEqual(results[0]?.matchContext, "Prompt 2");
 
     assert.strictEqual(results[1]?.startedAt, 1000);
-    assert.strictEqual(results[1]?.runIndex, 1);
+    assert.strictEqual(results[1]?.workflowKey, workflowId);
+    assert.strictEqual(results[1]?.runRef, WorkflowPaths.formatRunRef(1000));
     assert.strictEqual(results[1]?.matchType, "response");
     assert.strictEqual(results[1]?.matchContext, "Prompt 1");
   });

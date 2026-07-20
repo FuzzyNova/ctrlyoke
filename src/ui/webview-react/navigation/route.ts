@@ -8,7 +8,7 @@
  * browser History sync layer and the in-memory navigation stack.
  *
  * URL scheme (query params, carried alongside the existing `?token=`):
- *   workflow=<workingFilePath>            workflow selection (stable file path)
+ *   workflowKey=<key>&runRef=<ref>         stable workflow/run selection
  *   viewer=explorer|scm                   workspace viewer open + active tab
  *   file=<relPath>                        explorer file, or scm diff file
  *   dir=<relPath>                         explorer directory (when no file)
@@ -20,12 +20,14 @@
  * while Route stays aligned with the workspace-viewer store types.
  */
 
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
 export type ViewerTab = "explorer" | "sourceControl";
 
 export interface Route {
-  /** Active workflow's working file path (forward-slash, workspace-stable). */
-  workflow?: string;
+  /** Active lineage draft or promoted run, addressed without a filesystem path. */
+  workflow?: WorkflowViewAddress;
   /** Open workspace viewer tab; absent means the viewer is closed. */
   viewer?: ViewerTab;
   /** Explorer-selected file, or (in scm) the diff file. */
@@ -40,7 +42,7 @@ export interface Route {
 
 /** Plain snapshot of the store fields that determine the current Route. */
 export interface RouteSourceState {
-  activeWorkflowWorkingFilePath: string | null;
+  displayedViewAddress: WorkflowViewAddress | null;
   isOpen: boolean;
   activeTab: ViewerTab;
   selectedFilePath: string | null;
@@ -80,6 +82,29 @@ function linesEqual(
   return a[0] === b[0] && a[1] === b[1];
 }
 
+function normalizeWorkflowAddress(
+  address: WorkflowViewAddress | undefined
+): WorkflowViewAddress | undefined {
+  if (!address || !address.workflowKey.trim()) return undefined;
+  if (address.kind === "run") {
+    return address.runRef.trim()
+      ? { workflowKey: address.workflowKey, kind: "run", runRef: address.runRef }
+      : undefined;
+  }
+  return { workflowKey: address.workflowKey, kind: "draft" };
+}
+
+function workflowAddressesEqual(
+  a: WorkflowViewAddress | undefined,
+  b: WorkflowViewAddress | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.workflowKey !== b.workflowKey || a.kind !== b.kind) {
+    return false;
+  }
+  return a.kind === "draft" || (b.kind === "run" && a.runRef === b.runRef);
+}
+
 /**
  * Enforce the nesting rules so equality and serialization are reliable
  * regardless of how a Route was constructed:
@@ -90,7 +115,8 @@ function linesEqual(
  */
 export function normalizeRoute(route: Route): Route {
   const out: Route = {};
-  if (route.workflow) out.workflow = fwd(route.workflow);
+  const workflow = normalizeWorkflowAddress(route.workflow);
+  if (workflow) out.workflow = workflow;
 
   if (!route.viewer) return out;
   out.viewer = route.viewer;
@@ -128,7 +154,14 @@ export function parseRoute(search: string): Route {
         : undefined;
 
   return normalizeRoute({
-    workflow: clean(params.get("workflow")),
+    workflow: (() => {
+      const workflowKey = clean(params.get("workflowKey"));
+      const runRef = clean(params.get("runRef"));
+      if (!workflowKey) return undefined;
+      return runRef
+        ? { workflowKey: workflowKey as WorkflowViewAddress["workflowKey"], kind: "run" as const, runRef: runRef as Extract<WorkflowViewAddress, { kind: "run" }>["runRef"] }
+        : { workflowKey: workflowKey as WorkflowViewAddress["workflowKey"], kind: "draft" as const };
+    })(),
     viewer,
     file: clean(params.get("file")),
     dir: clean(params.get("dir")),
@@ -149,7 +182,12 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
   const token = new URLSearchParams(currentSearch).get("token");
   if (token) params.set("token", token);
 
-  if (normalized.workflow) params.set("workflow", normalized.workflow);
+  if (normalized.workflow) {
+    params.set("workflowKey", normalized.workflow.workflowKey);
+    if (normalized.workflow.kind === "run") {
+      params.set("runRef", normalized.workflow.runRef);
+    }
+  }
 
   if (normalized.viewer) {
     params.set("viewer", normalized.viewer === "explorer" ? "explorer" : "scm");
@@ -182,7 +220,7 @@ export function sameNavigation(a: Route, b: Route): boolean {
   const na = normalizeRoute(a);
   const nb = normalizeRoute(b);
   return (
-    na.workflow === nb.workflow &&
+    workflowAddressesEqual(na.workflow, nb.workflow) &&
     na.viewer === nb.viewer &&
     na.file === nb.file &&
     na.dir === nb.dir &&
@@ -195,7 +233,7 @@ export function routesEqual(a: Route, b: Route): boolean {
   const na = normalizeRoute(a);
   const nb = normalizeRoute(b);
   return (
-    na.workflow === nb.workflow &&
+    workflowAddressesEqual(na.workflow, nb.workflow) &&
     na.viewer === nb.viewer &&
     na.file === nb.file &&
     na.dir === nb.dir &&
@@ -213,8 +251,8 @@ export function routesEqual(a: Route, b: Route): boolean {
  */
 export function deriveRoute(s: RouteSourceState): Route {
   const raw: Route = {};
-  if (s.activeWorkflowWorkingFilePath) {
-    raw.workflow = s.activeWorkflowWorkingFilePath;
+  if (s.displayedViewAddress) {
+    raw.workflow = s.displayedViewAddress;
   }
 
   if (s.isOpen) {

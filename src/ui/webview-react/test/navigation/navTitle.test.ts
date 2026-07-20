@@ -6,9 +6,9 @@ describe("routeTitle", () => {
     expect(routeTitle({})).toBe("ctrlyoke");
   });
 
-  it("uses the workflow basename when no viewer is open", () => {
-    expect(routeTitle({ workflow: "src/flows/main.yaml" })).toBe(
-      "main.yaml — ctrlyoke"
+  it("uses the stable run label when no viewer is open", () => {
+    expect(routeTitle({ workflow: { workflowKey: "main" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never } })).toBe(
+      "Run run-2026-07-20T10-30-00-000Z — ctrlyoke"
     );
   });
 

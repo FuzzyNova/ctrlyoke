@@ -50,7 +50,7 @@ import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceVie
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
 import { UxSnapshotButton } from "./components/dev/UxSnapshotButton";
 import { useNavigationSync } from "./navigation/useNavigationSync";
-import { getReadyPreferredWorkingFilePath } from "./navigation/readyRoute";
+import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
 
 function isIosWebKitBrowser(): boolean {
@@ -566,7 +566,7 @@ function App() {
   useEffect(() => {
     vscode.postMessage({
       type: MESSAGE_TYPES.READY,
-      preferredWorkingFilePath: getReadyPreferredWorkingFilePath(),
+      preferredViewAddress: getReadyPreferredViewAddress(),
     });
     // In standalone (browser) mode the server is the authoritative source of theme
     // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind

@@ -1578,7 +1578,7 @@ export class WorkflowOrchestrator {
     send: (msg: unknown) => void,
     options?: {
       skipTerminalReplay?: boolean;
-      preferredWorkingFilePath?: string;
+      preferredViewAddress?: WorkflowViewAddress;
     }
   ): Promise<void> {
     this.registerClient(clientId);
@@ -1594,14 +1594,12 @@ export class WorkflowOrchestrator {
       !this._autoLoadHasSettled &&
       this.panelStartupReplayedWorkflowId !== null;
 
-    if (options?.preferredWorkingFilePath) {
+    if (options?.preferredViewAddress) {
       try {
-        await fs.promises.access(options.preferredWorkingFilePath);
-        await this.loadWorkflowForClient(
-          options.preferredWorkingFilePath,
+        await this.loadRunViewForClient(
+          options.preferredViewAddress,
           send,
-          clientId,
-          { skipReplay: skipPanelStartupReplay }
+          clientId
         );
         // Record the replayed workflowId after the first successful panel startup replay.
         if (
@@ -1619,7 +1617,7 @@ export class WorkflowOrchestrator {
         return;
       } catch (error) {
         Log.warn(
-          `handleClientReady: preferred working file not available, falling back: ${options.preferredWorkingFilePath}`,
+          `handleClientReady: preferred view is not available, falling back: ${JSON.stringify(options.preferredViewAddress)}`,
           error
         );
       }

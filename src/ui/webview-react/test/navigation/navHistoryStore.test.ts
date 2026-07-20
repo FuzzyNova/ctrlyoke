@@ -14,7 +14,7 @@ function store() {
   return useNavHistoryStore.getState();
 }
 
-const A: Route = { workflow: "a.yaml" };
+const A: Route = { workflow: { workflowKey: "a" as never, kind: "draft" } };
 const B: Route = { viewer: "explorer", file: "src/a.ts" };
 const C: Route = { viewer: "sourceControl", ref: "abc123" };
 
@@ -46,7 +46,7 @@ describe("record", () => {
 
   it("is a no-op when recording the current route again", () => {
     store().record(A);
-    store().record({ workflow: "a.yaml" });
+    store().record({ workflow: { workflowKey: "a" as never, kind: "draft" } });
     expect(store().past).toEqual([]);
     expect(store().current).toEqual(A);
   });

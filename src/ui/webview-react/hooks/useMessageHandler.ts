@@ -58,7 +58,7 @@ import {
   handleCompletionNotificationEvent,
 } from "@utils/browserNotifications";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
-import { getReadyPreferredWorkingFilePath } from "@/navigation/readyRoute";
+import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 
 // ============================================================================
 // Types
@@ -457,7 +457,7 @@ function createMessageHandlers(): MessageHandlerMap {
     });
     getVsCodeApi().postMessage({
       type: MESSAGE_TYPES.READY,
-      preferredWorkingFilePath: getReadyPreferredWorkingFilePath(),
+      preferredViewAddress: getReadyPreferredViewAddress(),
     });
     // schedulePanelReconnectReloadWatchdog() is a no-op when this is a fresh
     // page load that already sent READY via BootstrapApp (freshPageReadySent=true).
@@ -511,14 +511,6 @@ function createMessageHandlers(): MessageHandlerMap {
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
     applyWorkflowPropertiesFromMessage(message);
-    const pendingNavigation =
-      useUiStore.getState().pendingHistorySearchNavigation;
-    if (pendingNavigation) {
-      getVsCodeApi().postMessage({
-        type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-        runIndex: pendingNavigation.runIndex,
-      });
-    }
   };
 
   // --------------------------------------------------------------------------
@@ -546,14 +538,6 @@ function createMessageHandlers(): MessageHandlerMap {
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
     applyWorkflowPropertiesFromMessage(message);
-    const pendingNavigation =
-      useUiStore.getState().pendingHistorySearchNavigation;
-    if (pendingNavigation) {
-      getVsCodeApi().postMessage({
-        type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-        runIndex: pendingNavigation.runIndex,
-      });
-    }
   };
 
   // --------------------------------------------------------------------------
@@ -1727,14 +1711,6 @@ function createMessageHandlers(): MessageHandlerMap {
         uiStore.setRunTimestamps(runTimestamps ?? []);
         uiStore.setRunStates(runStates ?? []);
         useUiStore.setState({ availableRuns });
-        const pendingNavigation = uiStore.pendingHistorySearchNavigation;
-        if (pendingNavigation?.findQuery) {
-          uiStore.setPendingFindRequest({
-            query: pendingNavigation.findQuery,
-            preferredTarget: pendingNavigation.target,
-          });
-          uiStore.setPendingHistorySearchNavigation(null);
-        }
         return;
       }
 
@@ -1750,15 +1726,6 @@ function createMessageHandlers(): MessageHandlerMap {
       }
     }
 
-    const uiStore = useUiStore.getState();
-    const pendingNavigation = uiStore.pendingHistorySearchNavigation;
-    if (pendingNavigation?.findQuery) {
-      uiStore.setPendingFindRequest({
-        query: pendingNavigation.findQuery,
-        preferredTarget: pendingNavigation.target,
-      });
-      uiStore.setPendingHistorySearchNavigation(null);
-    }
   };
 
   // --------------------------------------------------------------------------
@@ -1817,6 +1784,14 @@ function createMessageHandlers(): MessageHandlerMap {
           )
         )
       );
+    }
+    const pendingNavigation = ui.pendingHistorySearchNavigation;
+    if (pendingNavigation?.findQuery) {
+      ui.setPendingFindRequest({
+        query: pendingNavigation.findQuery,
+        preferredTarget: pendingNavigation.target,
+      });
+      ui.setPendingHistorySearchNavigation(null);
     }
   };
 

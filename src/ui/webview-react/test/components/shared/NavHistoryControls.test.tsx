@@ -5,7 +5,7 @@ import { useNavHistoryStore } from "@/navigation/navHistoryStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { Route } from "@/navigation/route";
 
-const A: Route = { workflow: "a.yaml" };
+const A: Route = { workflow: { workflowKey: "a" as never, kind: "draft" } };
 const B: Route = { viewer: "explorer", file: "src/a.ts" };
 
 beforeEach(() => {

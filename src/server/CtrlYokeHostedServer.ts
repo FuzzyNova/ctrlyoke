@@ -1456,7 +1456,7 @@ export class CtrlYokeHostedServer
           if (msg?.type === MESSAGE_TYPES.READY) {
             sawReady = true;
             Log.debug(
-              `[hosted-server] WebSocket READY clientId=${clientTag} afterMs=${Date.now() - connectedAt} preferredWorkingFilePath=${typeof msg.preferredWorkingFilePath === "string" ? msg.preferredWorkingFilePath : ""}`
+              `[hosted-server] WebSocket READY clientId=${clientTag} afterMs=${Date.now() - connectedAt} preferredViewAddress=${JSON.stringify(msg.preferredViewAddress ?? null)}`
             );
           }
           void this.webviewProvider

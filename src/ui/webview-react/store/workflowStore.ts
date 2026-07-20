@@ -754,6 +754,11 @@ export const useWorkflowStore = create<
             retryStates: {},
             streamingChunks: {},
             finalStepStreamingChunks: {},
+            liveContextWindow: {},
+            workspaceSnapshots: {},
+            finalStepWorkspaceSnapshots: {},
+            undoResults: {},
+            undoRecords: {},
           })
         );
         useWorkflowStore.temporal.getState().clear();

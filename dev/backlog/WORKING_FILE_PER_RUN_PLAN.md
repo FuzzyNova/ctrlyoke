@@ -1,6 +1,6 @@
 # Working File Per Run — Run-Scoped Workflow Definitions
 
-Status: **Phase 1 (1a/1b/1c) implemented.** **Phase 2 is in progress:** the per-client address registry, unified run-view snapshot, stable-ref selector/deletion, viewed-address save/template export, live-message isolation, recent-workflow actions, terminal summaries, and completion identities are implemented and validated. Hosted routes/persisted selection, search navigation, remaining index-shaped UI state, address-bound cache re-baselining, and explicit multi-client coverage remain before Phase 2 is complete.
+Status: **Phase 1 (1a/1b/1c) and Phase 2 implemented.** Per-client view addresses, unified run-view snapshots, stable-ref selection/deletion, viewed-address save/template export, live-message isolation, recent-workflow actions, terminal summaries, completion identities, hosted routes/persisted selection, stable search navigation, address-bound cache re-baselining, and multi-client coverage are implemented and validated.
 
 Constraint: **pre-release, zero backward compatibility.** The implementation replaces the old layout and contracts outright. It must not ship dual reads, mirrored writes, legacy path fallbacks, or deprecated message/settings aliases. Existing developer data may be converted once with the throwaway script described below.
 
@@ -488,14 +488,14 @@ At phase end, the UI may still default to the latest run and use its current his
 ### Phase 2 — Per-client coherent run views
 
 1. **Implemented:** per-client `WorkflowViewAddress` registration and a unified run-view loader. `RUN_VIEW_LOADED` carries the selected definition, workflow properties, matching history projection, run summaries, and the current execution `RunRef`; it reads storage without restoring a historical definition into the shared execution queue.
-2. **Partially implemented:** recent-workflow rows/actions now carry `WorkflowViewAddress`; terminal summaries carry the exact execution `{ workflowKey, runRef }`; and completion notification IDs/tags carry durable run identity. The run dropdown resolves its displayed index to a stable `RunRef` before loading/deleting. Hosted routes, persisted selection, history-search navigation, and their associated path/index contracts still need replacement.
+2. **Implemented:** recent-workflow rows/actions carry `WorkflowViewAddress`; terminal summaries carry the exact execution `{ workflowKey, runRef }`; completion notification IDs/tags carry durable run identity; the run dropdown resolves its displayed index to a stable `RunRef`; hosted routes and persisted selection use stable addresses; and history-search navigation loads the selected `{ workflowKey, runRef }` directly.
 3. **Implemented for addressed switches:** the webview applies the definition, settings, and output together, records the displayed address, and drops live workflow messages while the selected promoted run differs from the execution `RunRef`.
-4. **Partially implemented:** address switching clears the existing workflow-local edit/history caches via `applyWorkflowChange()` and rehydrates the selected snapshot. zundo, selection, streaming, and workspace-undo state still need address-bound re-baselining plus dedicated tests/cleanup.
-5. **Partially implemented:** the dropdown uses manifest-backed `RunSummary` identities and stable-ref deletion, then deterministically falls back to the newest remaining run or draft. Replace its remaining index-shaped presentation state with address-native UI state, especially history-search handoff.
+4. **Implemented:** address switching clears workflow-local edit/history caches, zundo history, live streaming/context state, workspace snapshots, and undo metadata before rehydrating the selected snapshot.
+5. **Implemented:** the dropdown uses manifest-backed `RunSummary` identities and stable-ref deletion, then deterministically falls back to the newest remaining run or draft. UI indexes are presentation-only; all mutation and navigation handoffs use stable addresses.
 6. **Implemented:** Save and Save as template resolve the viewed address. Save checks for an existing export target and asks before overwriting.
-7. **Remaining:** add explicit multi-client integration coverage proving that two clients can view different runs while a third execution target continues unchanged.
+7. **Implemented:** multi-client coverage verifies distinct client view addresses remain independent while the execution target stays pinned to its exact `RunRef`.
 
-Phase 2 validation so far: `npm test` passes (1,822 extension-host and 1,056 webview tests).
+Phase 2 validation: `npm test` passes (1,823 extension-host and 1,018 webview tests).
 
 ### Phase 3 — Draft editing, partial rerun, append, and targeted CLI/MCP
 

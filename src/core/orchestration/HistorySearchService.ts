@@ -28,11 +28,10 @@ const MIN_QUERY_LENGTH = 2;
 
 interface WorkflowMetadata {
   workflowName: string;
-  workflowFilePath: string;
 }
 
 interface WorkflowRunEntry {
-  entryName: string;
+  runRef: import("../../types/CtrlYokeTypes").RunRef;
   timestamp: number;
 }
 
@@ -113,14 +112,14 @@ export class HistorySearchService {
       lineageEntries
         .filter((entry) => WorkflowPaths.isLineageDirEntry(entry))
         .map(async (entry) => {
-          const workflowId = entry.name as WorkflowKey;
+          const workflowKey = entry.name as WorkflowKey;
           const workflowHistoryDir = WorkflowPaths.lineageDir(
             workspaceFolderPath,
-            workflowId
+            workflowKey
           );
           const runs = await this.getWorkflowRuns(workflowHistoryDir);
           return {
-            workflowId,
+            workflowKey,
             workflowHistoryDir,
             runs,
             latestTimestamp: runs[0]?.timestamp ?? 0,
@@ -145,16 +144,16 @@ export class HistorySearchService {
 
       const metadata = await this.readWorkflowMetadata(
         workspaceFolderPath,
-        workflow.workflowId
+        workflow.workflowKey
       );
 
-      for (const [runIndex, run] of workflow.runs.entries()) {
+      for (const run of workflow.runs) {
         if (results.length >= limit) {
           break;
         }
 
         const manifestPath = TimelineRecorder.getManifestPathForRunDirectory(
-          path.join(workflow.workflowHistoryDir, run.entryName)
+          path.join(workflow.workflowHistoryDir, run.runRef)
         );
         const manifest = await this.readManifestSafe(manifestPath);
         if (!manifest) {
@@ -172,7 +171,8 @@ export class HistorySearchService {
             normalizedQuery,
             manifest,
             metadata,
-            runIndex
+            workflow.workflowKey,
+            run.runRef
           );
 
           for (const match of eventMatches) {
@@ -205,7 +205,7 @@ export class HistorySearchService {
       return entries
         .filter((entry) => WorkflowPaths.isRunDirEntry(entry))
         .map((entry) => ({
-          entryName: entry.name,
+          runRef: entry.name as import("../../types/CtrlYokeTypes").RunRef,
           timestamp: WorkflowPaths.parseRunRefTimestamp(entry.name) ?? 0,
         }))
         .sort((left, right) => right.timestamp - left.timestamp);
@@ -216,35 +216,22 @@ export class HistorySearchService {
 
   private async readWorkflowMetadata(
     workspaceFolderPath: string,
-    workflowId: string
+    workflowKey: WorkflowKey
   ): Promise<WorkflowMetadata> {
-    const workflowKey = workflowId as WorkflowKey;
     try {
       const descriptor = await this.lineageRepository.readDescriptor(
         workspaceFolderPath,
         workflowKey
       );
-      // LOAD_WORKFLOW expects a working file path, not the original source
-      // file — the resume/load flow needs the run/draft file even when the
-      // original prompt file is missing or the workflow was dashboard-created.
-      const workflowFilePath = descriptor.latestRunRef
-        ? WorkflowPaths.runFilePath(
-            workspaceFolderPath,
-            workflowKey,
-            descriptor.latestRunRef
-          )
-        : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
       return {
         workflowName:
           descriptor.workflowName?.trim().length > 0
             ? descriptor.workflowName
-            : this.deriveWorkflowName(workflowId),
-        workflowFilePath,
+            : this.deriveWorkflowName(workflowKey),
       };
     } catch {
       return {
-        workflowName: this.deriveWorkflowName(workflowId),
-        workflowFilePath: "",
+        workflowName: this.deriveWorkflowName(workflowKey),
       };
     }
   }
@@ -284,7 +271,8 @@ export class HistorySearchService {
     query: string,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
-    runIndex: number
+    workflowKey: WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef
   ): HistorySearchResult[] {
     switch (event.eventType) {
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
@@ -293,7 +281,8 @@ export class HistorySearchService {
           query,
           manifest,
           metadata,
-          runIndex
+          workflowKey,
+          runRef
         );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
         return this.collectStatusMatches(
@@ -301,7 +290,8 @@ export class HistorySearchService {
           query,
           manifest,
           metadata,
-          runIndex
+          workflowKey,
+          runRef
         );
       default:
         return [];
@@ -313,7 +303,8 @@ export class HistorySearchService {
     query: string,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
-    runIndex: number
+    workflowKey: WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef
   ): HistorySearchResult[] {
     const cliOutput = event.payload.cliOutput;
     const candidates: MatchCandidate[] = [];
@@ -334,7 +325,8 @@ export class HistorySearchService {
       this.buildResult(
         manifest,
         metadata,
-        runIndex,
+        workflowKey,
+        runRef,
         event.target,
         event.attemptIndex,
         query,
@@ -518,7 +510,8 @@ export class HistorySearchService {
     query: string,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
-    runIndex: number
+    workflowKey: WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef
   ): HistorySearchResult[] {
     const message = event.payload.statusMessage.message;
     if (!this.matchesQuery(message, query)) {
@@ -526,7 +519,7 @@ export class HistorySearchService {
     }
 
     return [
-      this.buildResult(manifest, metadata, runIndex, event.target, 0, query, {
+      this.buildResult(manifest, metadata, workflowKey, runRef, event.target, 0, query, {
         matchType: "status",
         text: message,
       }),
@@ -536,17 +529,18 @@ export class HistorySearchService {
   private buildResult(
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
-    runIndex: number,
+    workflowKey: WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef,
     target: OutputExecutionTarget,
     attemptIndex: number,
     query: string,
     candidate: MatchCandidate
   ): HistorySearchResult {
     return {
-      workflowId: manifest.workflowId,
+      workflowKey,
+      runRef,
       workflowName: metadata.workflowName,
       runId: manifest.runId,
-      runIndex,
       startedAt: manifest.startedAt,
       executionState: manifest.executionState,
       target,
@@ -554,7 +548,6 @@ export class HistorySearchService {
       matchSnippet: this.extractSnippet(candidate.text, query),
       matchContext: this.formatMatchContext(target, attemptIndex),
       filePath: candidate.filePath,
-      workflowFilePath: metadata.workflowFilePath,
     };
   }
 
@@ -650,9 +643,9 @@ export class HistorySearchService {
 
   private getResultKey(result: HistorySearchResult): string {
     return [
-      result.workflowId,
+      result.workflowKey,
+      result.runRef,
       result.runId,
-      result.runIndex,
       result.matchType,
       result.matchContext,
       result.filePath ?? "",

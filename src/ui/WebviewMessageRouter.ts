@@ -241,9 +241,13 @@ export class WebviewMessageRouter {
           this.scopedPostMessage,
           {
             skipTerminalReplay: this.clientId === PANEL_CLIENT_ID,
-            preferredWorkingFilePath:
-              typeof message.preferredWorkingFilePath === "string"
-                ? message.preferredWorkingFilePath
+            preferredViewAddress:
+              message.preferredViewAddress &&
+              typeof message.preferredViewAddress.workflowKey === "string" &&
+              (message.preferredViewAddress.kind === "draft" ||
+                (message.preferredViewAddress.kind === "run" &&
+                  typeof message.preferredViewAddress.runRef === "string"))
+                ? message.preferredViewAddress
                 : undefined,
           }
         );

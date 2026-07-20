@@ -79,10 +79,10 @@ export interface RunSummary {
 }
 
 export interface HistorySearchResult {
-  workflowId: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
   workflowName: string;
   runId: number;
-  runIndex: number;
   startedAt: number;
   executionState: string;
   target: OutputExecutionTarget;
@@ -97,7 +97,6 @@ export interface HistorySearchResult {
   matchSnippet: string;
   matchContext: string;
   filePath?: string;
-  workflowFilePath: string;
 }
 
 export type HistorySearchIndexState = "ready" | "building" | "fallback";
@@ -108,7 +107,7 @@ export interface HistorySearchQuery {
   cursor?: string;
   filters?: {
     matchTypes?: HistorySearchResult["matchType"][];
-    workflowIds?: string[];
+    workflowKeys?: WorkflowKey[];
     since?: number;
     until?: number;
   };
@@ -125,11 +124,10 @@ export interface HistorySearchResponse {
 
 export interface HistorySearchDocument {
   id: string;
-  workflowId: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
   workflowName: string;
-  workflowFilePath: string;
   runId: number;
-  runIndex: number;
   startedAt: number;
   executionState: string;
   target: OutputExecutionTarget;

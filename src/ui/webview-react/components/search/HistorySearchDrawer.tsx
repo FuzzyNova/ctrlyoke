@@ -105,15 +105,21 @@ export function HistorySearchDrawer() {
     (result: HistorySearchResult) => {
       closeHistorySearch();
       setPendingHistorySearchNavigation({
-        workflowId: result.workflowId,
-        workflowFilePath: result.workflowFilePath,
-        runIndex: result.runIndex,
+        address: {
+          workflowKey: result.workflowKey,
+          kind: "run",
+          runRef: result.runRef,
+        },
         findQuery: query.trim(),
         target: result.target,
       });
       vscode.postMessage({
-        type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath: result.workflowFilePath ?? "",
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: {
+          workflowKey: result.workflowKey,
+          kind: "run",
+          runRef: result.runRef,
+        },
       });
     },
     [closeHistorySearch, query, setPendingHistorySearchNavigation, vscode]
@@ -263,7 +269,7 @@ export function HistorySearchDrawer() {
 
               return (
                 <button
-                  key={`${result.workflowId}:${result.runId}:${result.target.kind}:${result.matchType}:${index}`}
+                  key={`${result.workflowKey}:${result.runRef}:${result.target.kind}:${result.matchType}:${index}`}
                   type="button"
                   onClick={() => navigateToResult(result)}
                   className="w-full rounded-md border border-transparent px-3 py-3 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none"

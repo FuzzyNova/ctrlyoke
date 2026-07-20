@@ -22,20 +22,19 @@ interface PostMessageApi {
 
 let applying = false;
 
-/**
- * Compare two paths ignoring separator style. Routes are forward-slash
- * normalized (for shareable URLs), but `loadedWorkflows` / instance summaries
- * carry native paths (backslashes on Windows). A raw `===` between the two
- * misses on Windows, so back/forward navigation to a *running* workflow would
- * fall through to a fresh disk load (which restores as STOPPED) instead of
- * switching to the live instance.
- */
-function samePath(
-  a: string | null | undefined,
-  b: string | null | undefined
+/** Compare two stable client view addresses. */
+function sameAddress(
+  a: import("@root/types/CtrlYokeTypes").WorkflowViewAddress | null | undefined,
+  b: import("@root/types/CtrlYokeTypes").WorkflowViewAddress | null | undefined
 ): boolean {
-  if (a == null || b == null) return a === b;
-  return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+  return (
+    a === b ||
+    (!!a &&
+      !!b &&
+      a.workflowKey === b.workflowKey &&
+      a.kind === b.kind &&
+      (a.kind === "draft" || (b.kind === "run" && a.runRef === b.runRef)))
+  );
 }
 
 /** True while {@link applyRoute} is mutating stores; gates the nav recorder. */
@@ -58,24 +57,12 @@ function applyWorkflow(route: Route, vscode: PostMessageApi): void {
   if (!target) return;
 
   const ui = useUiStore.getState();
-  if (samePath(target, ui.activeWorkflowWorkingFilePath)) return;
+  if (sameAddress(target, ui.displayedViewAddress)) return;
 
-  // Optimistically set the working file path (mirrors WorkflowStatus's switch
-  // handlers) so the derived route settles immediately; the host confirms the
-  // switch asynchronously.
-  ui.setActiveWorkflowWorkingFilePath(target);
-
-  const loaded = ui.loadedWorkflows.find((w) =>
-    samePath(w.workingFilePath, target)
-  );
-  if (loaded) {
-    vscode.postMessage({
-      type: MESSAGE_TYPES.SWITCH_WORKFLOW,
-      workflowId: loaded.id,
-    });
-  } else {
-    vscode.postMessage({ type: MESSAGE_TYPES.LOAD_WORKFLOW, filePath: target });
-  }
+  // Optimistically record the address so a response for an older browser
+  // history entry cannot overwrite this navigation while storage is loading.
+  ui.setDisplayedRunView(target, ui.runSummaries, ui.executionRunRef ?? undefined);
+  vscode.postMessage({ type: MESSAGE_TYPES.LOAD_RUN_VIEW, address: target });
 }
 
 function applyViewer(route: Route): void {

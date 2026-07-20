@@ -175,9 +175,7 @@ interface UiState {
   historySearchHasMore: boolean;
   historySearchIndexState: HistorySearchIndexState;
   pendingHistorySearchNavigation: {
-    workflowId: string;
-    workflowFilePath: string;
-    runIndex: number;
+    address: Extract<WorkflowViewAddress, { kind: "run" }>;
     findQuery: string;
     target: OutputExecutionTarget;
   } | null;
@@ -351,9 +349,7 @@ interface UiActions {
   ) => void;
   setPendingHistorySearchNavigation: (
     nav: {
-      workflowId: string;
-      workflowFilePath: string;
-      runIndex: number;
+      address: Extract<WorkflowViewAddress, { kind: "run" }>;
       findQuery: string;
       target: OutputExecutionTarget;
     } | null
@@ -593,7 +589,7 @@ const persistedFields = [
   "terminalRailCollapsed",
   "terminalRailSizePx",
   "globalSettingsActiveTab",
-  "activeWorkflowWorkingFilePath",
+  "displayedViewAddress",
   "mobileStepsOpen",
   "mobileStepsMode",
   "uxSnapshotButtonVisible",

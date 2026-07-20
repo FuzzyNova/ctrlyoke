@@ -123,25 +123,22 @@ describe("history search state", () => {
     store().setHistorySearchResults(
       [
         {
-          workflowId: "wf-1",
+          workflowKey: "wf-1" as never,
+          runRef: "run-2026-07-20T10-30-00-000Z" as never,
           workflowName: "Search Workflow",
           runId: 3,
-          runIndex: 1,
           startedAt: 1234,
           executionState: "completed",
           target: { kind: "queue", stepIndex: 0 },
           matchType: "response",
           matchSnippet: "needle found here",
           matchContext: "Prompt 1",
-          workflowFilePath: "C:\\workflow.ctrlyoke.yaml",
         },
       ],
       true
     );
     store().setPendingHistorySearchNavigation({
-      workflowId: "wf-1",
-      workflowFilePath: "C:\\workflow.ctrlyoke.yaml",
-      runIndex: 1,
+      address: { workflowKey: "wf-1" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never },
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
     });
@@ -151,9 +148,7 @@ describe("history search state", () => {
     expect(store().historySearchResults).toHaveLength(1);
     expect(store().historySearchLoading).toBe(true);
     expect(store().pendingHistorySearchNavigation).toEqual({
-      workflowId: "wf-1",
-      workflowFilePath: "C:\\workflow.ctrlyoke.yaml",
-      runIndex: 1,
+      address: { workflowKey: "wf-1" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never },
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
     });

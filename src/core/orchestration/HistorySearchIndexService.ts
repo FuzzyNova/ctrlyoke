@@ -68,14 +68,13 @@ interface HistorySearchIndexManifest {
 
 interface WorkflowMetadata {
   workflowName: string;
-  workflowFilePath: string;
 }
 
 interface WorkflowRunSource {
-  workflowId: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
   manifestPath: string;
   eventsPath: string;
-  runIndex: number;
 }
 
 interface MatchCandidate {
@@ -128,8 +127,8 @@ export class HistorySearchIndexService {
           : true
       )
       .filter((document) =>
-        filters?.workflowIds
-          ? filters.workflowIds.includes(document.workflowId)
+        filters?.workflowKeys
+          ? filters.workflowKeys.includes(document.workflowKey)
           : true
       )
       .filter((document) =>
@@ -279,14 +278,15 @@ export class HistorySearchIndexService {
           const events = await this.readEventsSafe(source.manifestPath);
           const metadata = await this.readWorkflowMetadata(
             workspaceFolderPath,
-            source.workflowId
+            source.workflowKey
           );
 
           for (const document of this.buildRunDocuments(
             manifest,
             events,
             metadata,
-            source.runIndex
+            source.workflowKey,
+            source.runRef
           )) {
             retained?.push(document);
             if (!stream.write(JSON.stringify(document) + "\n")) {
@@ -432,21 +432,21 @@ export class HistorySearchIndexService {
         }))
         .sort((left, right) => right.timestamp - left.timestamp);
 
-      for (const [runIndex, run] of runs.entries()) {
+      for (const run of runs) {
         const manifestPath = WorkflowPaths.manifestPath(
           workspaceFolderPath,
           workflowKey,
           run.runRef
         );
         sources.push({
-          workflowId: workflowKey,
+          workflowKey,
+          runRef: run.runRef,
           manifestPath,
           eventsPath: WorkflowPaths.eventsPath(
             workspaceFolderPath,
             workflowKey,
             run.runRef
           ),
-          runIndex,
         });
       }
     }
@@ -458,7 +458,8 @@ export class HistorySearchIndexService {
     manifest: WorkflowRunManifest,
     events: WorkflowTimelineEvent[],
     metadata: WorkflowMetadata,
-    runIndex: number
+    workflowKey: WorkflowKey,
+    runRef: RunRef
   ): HistorySearchDocument[] {
     return events.flatMap((event) => {
       const candidates = this.collectEventCandidates(event);
@@ -468,17 +469,17 @@ export class HistorySearchIndexService {
       }
       return candidates.map((candidate, candidateIndex) => ({
         id: [
-          manifest.workflowId,
+          workflowKey,
+          runRef,
           manifest.runId,
           event.sequence,
           candidate.matchType,
           candidateIndex,
         ].join(":"),
-        workflowId: manifest.workflowId,
+        workflowKey,
+        runRef,
         workflowName: metadata.workflowName,
-        workflowFilePath: metadata.workflowFilePath,
         runId: manifest.runId,
-        runIndex,
         startedAt: manifest.startedAt,
         executionState: manifest.executionState,
         target,
@@ -664,10 +665,10 @@ export class HistorySearchIndexService {
     query: string
   ): HistorySearchResult {
     return {
-      workflowId: document.workflowId,
+      workflowKey: document.workflowKey,
+      runRef: document.runRef,
       workflowName: document.workflowName,
       runId: document.runId,
-      runIndex: document.runIndex,
       startedAt: document.startedAt,
       executionState: document.executionState,
       target: document.target,
@@ -678,7 +679,6 @@ export class HistorySearchIndexService {
         document.attemptIndex
       ),
       filePath: document.filePath,
-      workflowFilePath: document.workflowFilePath,
     };
   }
 
@@ -695,32 +695,22 @@ export class HistorySearchIndexService {
 
   private async readWorkflowMetadata(
     workspaceFolderPath: string,
-    workflowId: string
+    workflowKey: WorkflowKey
   ): Promise<WorkflowMetadata> {
-    const workflowKey = workflowId as WorkflowKey;
     try {
       const descriptor = await this.lineageRepository.readDescriptor(
         workspaceFolderPath,
         workflowKey
       );
-      const workflowFilePath = descriptor.latestRunRef
-        ? WorkflowPaths.runFilePath(
-            workspaceFolderPath,
-            workflowKey,
-            descriptor.latestRunRef
-          )
-        : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
       return {
         workflowName:
           descriptor.workflowName?.trim().length > 0
             ? descriptor.workflowName
-            : this.deriveWorkflowName(workflowId),
-        workflowFilePath,
+            : this.deriveWorkflowName(workflowKey),
       };
     } catch {
       return {
-        workflowName: this.deriveWorkflowName(workflowId),
-        workflowFilePath: "",
+        workflowName: this.deriveWorkflowName(workflowKey),
       };
     }
   }

@@ -74,6 +74,43 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 });
 
 suite("WorkflowOrchestrator handleClientReady", () => {
+  test("keeps client run views independent from the execution target", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "demo" as never;
+    const executingRun = "run-2026-07-20T10-30-00-000Z" as never;
+    const viewedRun = "run-2026-07-20T09-30-00-000Z" as never;
+
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey, kind: "run", runRef: executingRun }],
+      ["client-b", { workflowKey, kind: "run", runRef: viewedRun }],
+    ]);
+    internal.instances = new Map([
+      [
+        "execution-instance",
+        {
+          getQueueState: () => ({ workflowKey, runRef: executingRun }),
+          getExecutionRunRef: () => executingRun,
+        },
+      ],
+    ]);
+    internal.cliSessions = new Map();
+
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+      workflowKey,
+      kind: "run",
+      runRef: executingRun,
+    });
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
+      workflowKey,
+      kind: "run",
+      runRef: viewedRun,
+    });
+    assert.strictEqual(internal.findExecutionRunRef(workflowKey), executingRun);
+  });
+
   test("loads the current most-recent working file for a first-time browser client", async () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype

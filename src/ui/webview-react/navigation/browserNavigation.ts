@@ -9,7 +9,7 @@
  *  - keeps `document.title` in sync.
  *
  * The deep-linked workflow is threaded through `READY`'s
- * `preferredWorkingFilePath` rather than a `LOAD_WORKFLOW` round-trip, so the
+ * `preferredViewAddress` rather than a `LOAD_RUN_VIEW` round-trip, so the
  * server restores the right workflow with no visible default-then-switch flash.
  * Only the viewer portion of the initial route is applied locally.
  */
@@ -59,12 +59,14 @@ export function setupBrowserNavigation(): () => void {
   const vscode = getVsCodeApi();
   const initialRoute = parseRoute(window.location.search);
 
-  // Hand the deep-linked workflow to READY (sent by a later App effect that
+  // Hand the deep-linked workflow address to READY (sent by a later App effect that
   // reads this via getState()), avoiding a default-workflow flash.
   if (initialRoute.workflow) {
-    useUiStore
-      .getState()
-      .setActiveWorkflowWorkingFilePath(initialRoute.workflow);
+    useUiStore.getState().setDisplayedRunView(
+      initialRoute.workflow,
+      [],
+      undefined
+    );
   }
 
   // Canonicalize the entry URL and stamp it as index 0.
@@ -74,7 +76,7 @@ export function setupBrowserNavigation(): () => void {
 
   let lastRoute: Route = initialRoute;
   const startedWithImplicitRecentWorkflow = !initialRoute.workflow;
-  let implicitRecentWorkingFilePath: string | null = null;
+  let implicitRecentAddress: Route["workflow"];
   let hasResolvedImplicitRecentWorkflow = false;
   let preserveImplicitRecentWorkflow = startedWithImplicitRecentWorkflow;
 
@@ -86,10 +88,17 @@ export function setupBrowserNavigation(): () => void {
   const routeForHistory = (route: Route): Route => {
     if (!preserveImplicitRecentWorkflow || !route.workflow) return route;
     if (!hasResolvedImplicitRecentWorkflow) {
-      implicitRecentWorkingFilePath = route.workflow;
+      implicitRecentAddress = route.workflow;
       hasResolvedImplicitRecentWorkflow = true;
     }
-    if (route.workflow === implicitRecentWorkingFilePath) {
+    if (
+      route.workflow?.workflowKey === implicitRecentAddress?.workflowKey &&
+      route.workflow?.kind === implicitRecentAddress?.kind &&
+      (route.workflow?.kind === "draft" ||
+        (route.workflow?.kind === "run" &&
+          implicitRecentAddress?.kind === "run" &&
+          route.workflow.runRef === implicitRecentAddress.runRef))
+    ) {
       return { ...route, workflow: undefined };
     }
 
@@ -138,9 +147,9 @@ export function setupBrowserNavigation(): () => void {
       .getState()
       .setIdx(typeof state?.idx === "number" ? state.idx : 0);
     applyRoute(
-      route.workflow || !implicitRecentWorkingFilePath
+      route.workflow || !implicitRecentAddress
         ? route
-        : { ...route, workflow: implicitRecentWorkingFilePath },
+        : { ...route, workflow: implicitRecentAddress },
       vscode
     );
     if (sameNavigation(routeForHistory(deriveCurrentRoute()), route)) {

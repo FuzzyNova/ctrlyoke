@@ -29,7 +29,11 @@ function locationLabel(route: Route): string | undefined {
     if (route.file) return `${basename(route.file)} (diff)`;
     return "Source Control";
   }
-  if (route.workflow) return basename(route.workflow);
+  if (route.workflow) {
+    return route.workflow.kind === "run"
+      ? `Run ${route.workflow.runRef}`
+      : "Draft";
+  }
   return undefined;
 }
 

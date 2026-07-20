@@ -35,16 +35,13 @@ function captureAndSendThemeVars(
 
 export default function BootstrapApp() {
   const vscode = useVsCodeApi();
-  const preferredWorkingFilePath = useUiStore(
-    (s) => s.activeWorkflowWorkingFilePath
-  );
-  const initialPreferredWorkingFilePathRef = useRef(preferredWorkingFilePath);
+  const preferredViewAddress = useUiStore((s) => s.displayedViewAddress);
+  const initialPreferredViewAddressRef = useRef(preferredViewAddress);
   const [DashboardApp, setDashboardApp] =
     useState<DashboardAppComponent | null>(null);
 
   useEffect(() => {
-    const initialPreferredWorkingFilePath =
-      initialPreferredWorkingFilePathRef.current;
+    const initialPreferredViewAddress = initialPreferredViewAddressRef.current;
     // In standalone (browser) mode the shim sends READY at WebSocket open for
     // server registration, and App.tsx sends it again after useMessageHandler
     // mounts its window listener (to flush buffered inbound messages).
@@ -61,7 +58,7 @@ export default function BootstrapApp() {
     if (!isStandalone) {
       vscode.postMessage({
         type: MESSAGE_TYPES.READY,
-        preferredWorkingFilePath: initialPreferredWorkingFilePath,
+        preferredViewAddress: initialPreferredViewAddress,
       });
       // Mark that this fresh page load has already sent READY so the RECONNECT
       // handler won't schedule a premature reload watchdog while the extension
