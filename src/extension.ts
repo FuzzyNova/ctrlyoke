@@ -288,7 +288,8 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 }
 
 // Publisher/name must match package.json; walkthrough id must match contributes.walkthroughs.
-const GETTING_STARTED_WALKTHROUGH_ID = "fuzzynova.ctrlyoke#ctrlyoke.gettingStarted";
+const GETTING_STARTED_WALKTHROUGH_ID =
+  "fuzzynova.ctrlyoke#ctrlyoke.gettingStarted";
 const GETTING_STARTED_SHOWN_KEY = "ctrlyoke.gettingStartedShown";
 
 function openGettingStartedWalkthrough(): void {
@@ -1304,8 +1305,14 @@ function registerCommands(context: vscode.ExtensionContext) {
 export async function deactivate(): Promise<void> {
   Log.debug("ctrlyoke: Extension deactivating...");
 
-  await workflowOrchestrator?.shutdown();
-  await getPtyProcessManager()?.gracefulShutdownAllAiCliSessions();
+  // Run concurrently: the Ctrl+C sweep tells every AI CLI session to stop while
+  // workflow instances cancel and flush their durable state. Sequencing these
+  // would put the full settle window in front of the terminal shutdown for no
+  // benefit — each signals a different layer of the same exit.
+  await Promise.all([
+    getPtyProcessManager()?.gracefulShutdownAllAiCliSessions(),
+    workflowOrchestrator?.shutdown(),
+  ]);
 
   hostedServer?.dispose();
   hostedServer = undefined;

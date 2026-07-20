@@ -169,6 +169,13 @@ export class WorkflowInstance {
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   private executionSettledPromise: Promise<void> = Promise.resolve();
   private resolveExecutionSettled: (() => void) | undefined;
+  /**
+   * How long `shutdown()` lets an already-cancelled run settle after durable
+   * state is flushed. Deliberately short: VS Code's exit path should not stall
+   * on a harness that is slow to acknowledge cancellation, and startup recovery
+   * already repairs a run that never settled.
+   */
+  private static readonly SHUTDOWN_SETTLE_TIMEOUT_MS = 1_500;
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
@@ -570,8 +577,21 @@ export class WorkflowInstance {
   }
 
   /**
-   * Stop an active run and wait for its working-file/history writes to settle.
-   * Used by process shutdown; ordinary view disposal remains synchronous.
+   * Stop an active run and get its durable state onto disk.
+   *
+   * Ordering matters on the VS Code exit path: cancel the harness, flush
+   * immediately, and only then allow a brief settle window. Flushing first is
+   * what makes exit fast — the streamed output and working-file metadata are
+   * the parts that must survive, and they are already written by the time we
+   * wait on anything.
+   *
+   * The settle window is a small bonus, not a guarantee: if the run finishes
+   * cancelling in time we persist its final aggregate and terminal status here.
+   * Anything that misses it is repaired on the next startup by
+   * `WorkflowLockManager.normalizeStaleLocks` plus
+   * `OutputHistoryManager.recoverInterruptedRun`.
+   *
+   * Ordinary view disposal remains synchronous.
    */
   async shutdown(): Promise<void> {
     const status = this.workflowRuntime.status;
@@ -588,18 +608,28 @@ export class WorkflowInstance {
       );
     }
 
-    const shutdownTimeoutMs = 12_000;
+    await this.flushDurableState();
+
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       this.executionSettledPromise,
       new Promise<void>((resolve) => {
-        timeoutHandle = setTimeout(resolve, shutdownTimeoutMs);
+        timeoutHandle = setTimeout(
+          resolve,
+          WorkflowInstance.SHUTDOWN_SETTLE_TIMEOUT_MS
+        );
       }),
     ]);
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
     }
 
+    // Persist whatever the settle window produced (final aggregate, terminal status).
+    await this.flushDurableState();
+  }
+
+  /** Write pending history/working-file state for this instance. */
+  private async flushDurableState(): Promise<void> {
     await this.pendingRuntimeTransitionHistoryWrite;
     await this.outputHistoryManager.flushPendingWrites(
       this.activeHistoryFilePath || undefined
