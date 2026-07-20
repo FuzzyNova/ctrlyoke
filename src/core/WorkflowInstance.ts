@@ -1,6 +1,7 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
+import { WorkingFileManager } from "./WorkingFileManager";
 import {
   buildDefinitionSnapshot,
   sanitizeClipboardWorkflowStep,
@@ -2070,6 +2071,61 @@ export class WorkflowInstance {
       this.dashboardSink.notifyStartPositionSet(promptsWithStatus, toIndex);
     }
     Log.info(`WorkflowInstance.setStartPosition: Complete`);
+  }
+
+  /**
+   * Begins an addressed same-run rewind for the run already loaded by this
+   * instance. This is intentionally separate from the legacy implicit
+   * `setStartPosition`: callers that address another historical run use the
+   * static WorkingFileManager transaction and never rebind this executor.
+   */
+  async beginPendingRewind(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    fromStepIndex: number,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number
+  ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
+    const state = this.promptQueue.getState();
+    if (state.workflowKey !== workflowKey || state.runRef !== runRef) {
+      throw new Error(
+        "Pending rewind target is not loaded by this workflow instance"
+      );
+    }
+    const executionState = this.getAuthoritativeExecutionState();
+    if (
+      executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.PAUSING ||
+      executionState === EXECUTION_STATES.CANCELLING
+    ) {
+      throw new Error(
+        `Cannot set start position while in state ${executionState}`
+      );
+    }
+    const workspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+    const result = await WorkingFileManager.beginPendingRewind(
+      workspaceRoot,
+      workflowKey,
+      runRef,
+      fromStepIndex,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
+    this.promptQueue.applyPendingRewind(
+      fromStepIndex,
+      expectedDefinitionRevision,
+      result.definitionRevision,
+      executionState === EXECUTION_STATES.PAUSED
+    );
+    this.syncCurrentPromptFileFromQueue();
+    return {
+      definitionRevision: result.definitionRevision,
+      descriptorRevision: result.descriptorRevision,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

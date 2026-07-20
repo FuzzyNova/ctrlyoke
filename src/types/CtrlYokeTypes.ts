@@ -307,6 +307,14 @@ export interface WorkingFileRuntime {
   currentIndex: number;
   executionState: ExecutionState;
   finalStep?: FinalStepRuntimeState;
+  /**
+   * Durable marker for an in-place, nonzero rewind. The full pre-rewind file is
+   * kept beside the run until the continuation is committed or discarded.
+   */
+  pendingRewind?: {
+    fromStepIndex: number;
+    baseDefinitionRevision: number;
+  };
 }
 
 /**
@@ -567,6 +575,11 @@ export interface QueueState extends WorkflowRuntimeState {
   runRef?: RunRef;
   /** Mirrors `WorkingFile.definitionRevision`; see that field's doc comment. */
   definitionRevision: number;
+  /** Present only while this promoted run has an editable rewound suffix. */
+  pendingRewind?: {
+    fromStepIndex: number;
+    baseDefinitionRevision: number;
+  };
 }
 
 /**

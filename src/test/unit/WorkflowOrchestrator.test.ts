@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
+import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -431,5 +432,81 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
       workflowId: "live-1",
     });
     assert.strictEqual(replayedId, "live-1");
+  });
+});
+
+suite("WorkflowOrchestrator addressed start position", () => {
+  test("rewinds an explicit historical run without touching the descriptor's latest run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-addressed-rewind-")
+    );
+    try {
+      const sourceAccess = {
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "prefix" }, { prompt: "suffix" }],
+        getCurrentIndex: () => 2,
+        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Addressed",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      };
+      const sourceManager = new WorkingFileManager(sourceAccess);
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "addressed",
+        sourceAccess.getSteps(),
+        workspace,
+        "Addressed"
+      );
+      const historical = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const latest = await WorkingFileManager.seedNewRun(
+        workspace,
+        workflowKey,
+        historical.runRef
+      );
+      const latestBefore = await fs.readFile(latest.workingFilePath, "utf8");
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.viewAddressRegistry = new Map([
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey, kind: "run", runRef: historical.runRef },
+        ],
+      ]);
+      internal.lineageRepository = new WorkflowLineageRepository();
+
+      const result = await orchestrator.setStartPositionAtRun(
+        { workflowKey, runRef: historical.runRef },
+        1,
+        1,
+        3,
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(result.kind, "rewind");
+      assert.strictEqual(
+        await fs.readFile(latest.workingFilePath, "utf8"),
+        latestBefore
+      );
+      const rewound = JSON.parse(
+        await fs.readFile(historical.workingFilePath, "utf8")
+      );
+      assert.strictEqual(rewound._runtime.pendingRewind.fromStepIndex, 1);
+      assert.strictEqual(rewound.steps[1]._runtime, undefined);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });

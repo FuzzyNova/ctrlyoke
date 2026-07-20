@@ -36,7 +36,10 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
-import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
+import {
+  stripStepRuntime,
+  stripViewOnlyWorkflowStepFields,
+} from "./WorkflowStepSanitizer";
 
 /** Effective retry settings resolved from an end condition, including smart defaults. */
 interface RetrySettings {
@@ -110,6 +113,7 @@ export class PromptQueue {
         this.mergeDiskSteps(diskSteps),
       emitStateChange: () => this.emitStateChange(),
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
+      getPendingRewind: () => this.state.pendingRewind,
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
       getDefinitionRevision: () => this.state.definitionRevision,
@@ -313,6 +317,7 @@ export class PromptQueue {
       workflowKey: this.state.workflowKey,
       runRef: this.state.runRef,
       definitionRevision: this.state.definitionRevision, // Preserve across reloads (restoreFromWorkingFile sets the authoritative value)
+      pendingRewind: this.state.pendingRewind,
     };
 
     // Store complete workflow file for property resolution
@@ -426,6 +431,7 @@ export class PromptQueue {
         workflowKey: lineageAddress?.workflowKey,
         runRef: lineageAddress?.runRef,
         definitionRevision: workingFile.definitionRevision ?? 1,
+        pendingRewind: runtime?.pendingRewind,
       };
 
       // Store complete workflow file for property resolution
@@ -1274,6 +1280,7 @@ export class PromptQueue {
     if (!isEmptyInsert && !isValidExistingIndex) {
       throw new Error(`Invalid insert index: ${afterIndex}`);
     }
+    this.assertPendingRewindSuffixIndex(afterIndex + 1, "insert");
 
     await this.workingFileManager.runInQueue(async () => {
       const insertIndex = afterIndex + 1;
@@ -1420,6 +1427,44 @@ export class PromptQueue {
   }
 
   /**
+   * Applies a durable rewind already written by `WorkingFileManager` to the
+   * live queue. It deliberately does not persist: the manager has just made
+   * the disk transition atomically under the lineage/working-file locks.
+   */
+  public applyPendingRewind(
+    fromStepIndex: number,
+    baseDefinitionRevision: number,
+    definitionRevision: number,
+    preservePausedState: boolean
+  ): void {
+    this.state.steps.forEach((step, index) => {
+      if (index >= fromStepIndex) {
+        this.archiveStepRuntime(step, index, "beginPendingRewind");
+      }
+    });
+    this.state.steps = this.state.steps.map((step, index) =>
+      index < fromStepIndex
+        ? stripViewOnlyWorkflowStepFields(step)
+        : stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+    );
+    this.state.results = this.state.results.map((result, index) =>
+      index < fromStepIndex
+        ? result
+        : { ...result, status: STEP_STATUS.PENDING }
+    );
+    this.state.currentIndex = fromStepIndex;
+    this.state.completedIndices = new Set<string>(
+      Array.from({ length: fromStepIndex }, (_, index) => String(index))
+    );
+    this.state.definitionRevision = definitionRevision;
+    this.state.pendingRewind = { fromStepIndex, baseDefinitionRevision };
+    if (!preservePausedState) {
+      this.stateMachine.reset();
+    }
+    this.emitStateChange();
+  }
+
+  /**
    * Persist runtime state for workflow-level finalStep execution.
    * responseTexts accumulated via storeFinalStepResponseText are preserved
    * when the incoming runtime does not explicitly include them.
@@ -1539,6 +1584,7 @@ export class PromptQueue {
     if (index < 0 || index >= this.state.steps.length) {
       throw new Error(`Invalid prompt index: ${index}`);
     }
+    this.assertPendingRewindSuffixIndex(index, "update");
 
     // Merge updates into existing step
     this.state.steps[index] = {
@@ -1569,6 +1615,7 @@ export class PromptQueue {
     if (index < 0 || index >= this.state.steps.length) {
       throw new Error(`Invalid prompt index: ${index}`);
     }
+    this.assertPendingRewindSuffixIndex(index, "replace");
     this.state.steps[index] = step;
     this.bumpDefinitionRevision();
     await this.updateWorkingFile(true);
@@ -1585,6 +1632,7 @@ export class PromptQueue {
     if (index < 0 || index >= this.state.steps.length) {
       throw new Error(`Invalid prompt index: ${index}`);
     }
+    this.assertPendingRewindSuffixIndex(index, "delete");
 
     // Don't allow deleting the prompt that is actively being processed.
     // When the workflow is idle, stopped, or completed nothing is executing, so
@@ -1648,6 +1696,7 @@ export class PromptQueue {
    * @param workflowName - New workflow name
    */
   public async updateWorkflowName(workflowName: string): Promise<void> {
+    this.assertNoPendingRewindWorkflowMutation("rename the workflow");
     // Update in-memory state (always allow this)
     this.state.workflowName = workflowName;
 
@@ -1744,6 +1793,7 @@ export class PromptQueue {
    * The working file watcher ignores changes in non-running states, so no re-broadcast occurs.
    */
   public async syncStepsForUndoRedo(newSteps: WorkflowStep[]): Promise<void> {
+    this.assertPendingRewindUndoRedoSuffix(newSteps);
     let restoredFromArchive = 0;
     const incomingWithRuntime = newSteps.filter((step) => step._runtime).length;
 
@@ -1819,6 +1869,49 @@ export class PromptQueue {
       (step) => step._runtime?.completedAt === undefined
     );
     return firstPendingIndex === -1 ? steps.length : firstPendingIndex;
+  }
+
+  private assertPendingRewindSuffixIndex(
+    index: number,
+    operation: string
+  ): void {
+    const boundary = this.state.pendingRewind?.fromStepIndex;
+    if (boundary !== undefined && index < boundary) {
+      throw new Error(
+        `Cannot ${operation} a preserved prefix step while a continuation is pending`
+      );
+    }
+  }
+
+  private assertNoPendingRewindWorkflowMutation(operation: string): void {
+    if (this.state.pendingRewind) {
+      throw new Error(
+        `Cannot ${operation} while a continuation is pending; create a draft instead`
+      );
+    }
+  }
+
+  private assertPendingRewindUndoRedoSuffix(newSteps: WorkflowStep[]): void {
+    const boundary = this.state.pendingRewind?.fromStepIndex;
+    if (boundary === undefined) {
+      return;
+    }
+    if (newSteps.length < boundary) {
+      throw new Error(
+        "Cannot remove a preserved prefix step while a continuation is pending"
+      );
+    }
+    for (let index = 0; index < boundary; index++) {
+      const current = stripStepRuntime([this.state.steps[index]])[0];
+      const incoming = stripStepRuntime([
+        stripViewOnlyWorkflowStepFields(newSteps[index]),
+      ])[0];
+      if (JSON.stringify(current) !== JSON.stringify(incoming)) {
+        throw new Error(
+          "Cannot modify a preserved prefix step while a continuation is pending"
+        );
+      }
+    }
   }
 
   private getStepIdentityKey(step: WorkflowStep): string {

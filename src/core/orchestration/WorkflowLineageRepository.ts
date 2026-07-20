@@ -113,7 +113,8 @@ export class WorkflowLineageRepository {
    */
   async allocateRun(
     workspaceRoot: string,
-    workflowKey: WorkflowKey
+    workflowKey: WorkflowKey,
+    expectedDescriptorRevision?: number
   ): Promise<AllocatedRun> {
     const descriptorPath = WorkflowPaths.descriptorPath(
       workspaceRoot,
@@ -122,6 +123,14 @@ export class WorkflowLineageRepository {
 
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      if (
+        expectedDescriptorRevision !== undefined &&
+        descriptor.revision !== expectedDescriptorRevision
+      ) {
+        throw new Error(
+          `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
+        );
+      }
       const isFirstRun = !descriptor.latestRunRef;
 
       const maxAttempts = 25;

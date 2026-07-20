@@ -243,6 +243,34 @@ export function runFilePath(
   );
 }
 
+/** Recovery directory owned by a promoted run while a same-run rewind is edited. */
+export function pendingRewindDir(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): string {
+  const dir = path.join(
+    runDir(workspaceRoot, workflowKey, runRef),
+    "pending-rewind"
+  );
+  assertContained(workspaceRoot, dir);
+  return dir;
+}
+
+/** Full pre-rewind recovery snapshot; never use this as an execution definition. */
+export function pendingRewindBaseFilePath(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): string {
+  const filePath = path.join(
+    pendingRewindDir(workspaceRoot, workflowKey, runRef),
+    "base.ctrlyoke.json"
+  );
+  assertContained(workspaceRoot, filePath);
+  return filePath;
+}
+
 export function manifestPath(
   workspaceRoot: string,
   workflowKey: WorkflowKey,

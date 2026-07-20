@@ -1213,6 +1213,81 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
+  suite("pending rewind", () => {
+    test("preserves the prefix and permits definition edits only in the rewound suffix", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "prefix",
+            _runtime: {
+              startedAt: 1,
+              completedAt: 2,
+              sessionId: "prefix-session",
+            },
+          },
+          {
+            prompt: "suffix",
+            _runtime: {
+              startedAt: 3,
+              completedAt: 4,
+              sessionId: "suffix-session",
+            },
+          },
+        ])
+      );
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.results[1].status = STEP_STATUS.COMPLETED;
+
+      queue.applyPendingRewind(1, 4, 5, false);
+
+      assert.strictEqual(queue.getState().currentIndex, 1);
+      assert.strictEqual(queue.getState().definitionRevision, 5);
+      assert.deepStrictEqual(queue.getState().pendingRewind, {
+        fromStepIndex: 1,
+        baseDefinitionRevision: 4,
+      });
+      assert.strictEqual(
+        queue.getState().steps[0]._runtime?.sessionId,
+        "prefix-session"
+      );
+      assert.strictEqual(queue.getState().steps[1]._runtime, undefined);
+      assert.strictEqual(
+        queue.getState().results[1].status,
+        STEP_STATUS.PENDING
+      );
+
+      await assert.rejects(
+        () => queue.updatePrompt(0, { prompt: "edited prefix" }),
+        /preserved prefix/i
+      );
+      await queue.updatePrompt(1, { prompt: "edited suffix" });
+      assert.strictEqual(
+        (queue.getState().steps[1] as PromptStep).prompt,
+        "edited suffix"
+      );
+      await assert.rejects(
+        () => queue.updateWorkflowName("not allowed"),
+        /continuation is pending/i
+      );
+    });
+
+    test("keeps PAUSED state when applying an addressed paused-run rewind", () => {
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "prefix" }, { prompt: "suffix" }])
+      );
+      queue.getRuntimeStateMachine().restore({
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        totalPausedDuration: 0,
+      });
+
+      queue.applyPendingRewind(1, 1, 2, true);
+
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
+      assert.strictEqual(queue.getState().currentIndex, 1);
+    });
+  });
+
   suite("reorderPendingPrompts", () => {
     test("should keep done-prefix unchanged and reorder pending section", async () => {
       const steps: PromptStep[] = [

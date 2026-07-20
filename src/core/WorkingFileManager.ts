@@ -70,6 +70,23 @@ async function writeWorkingFileAtomicTo(
   await withFileLock(workingFilePath, writeAction);
 }
 
+/** Atomically writes an opaque snapshot without reserializing its JSON bytes. */
+async function writeSnapshotAtomic(
+  snapshotPath: string,
+  content: Buffer
+): Promise<void> {
+  const tempPath = `${snapshotPath}.tmp`;
+  try {
+    await fs.writeFile(tempPath, content);
+    await fs.rename(tempPath, snapshotPath);
+  } catch (error) {
+    await fs.unlink(tempPath).catch(() => {});
+    throw new Error(
+      `Failed to write pending rewind snapshot: ${getErrorMessage(error)}`
+    );
+  }
+}
+
 /**
  * Interface providing queue state access for working file persistence operations.
  * Implemented as an adapter by PromptQueue to decouple file I/O from queue state management.
@@ -104,6 +121,11 @@ export interface IWorkingFileQueueAccess {
 
   /** Runtime metadata for workflow-level finalStep execution */
   getFinalStepRuntime(): FinalStepRuntimeState | undefined;
+
+  /** Durable same-run rewind marker, when the queue is editing a suffix. */
+  getPendingRewind?():
+    | { fromStepIndex: number; baseDefinitionRevision: number }
+    | undefined;
 
   /** Update a workflow property in cached workflow file */
   updateWorkflowProperty(key: string, value: unknown): void;
@@ -402,7 +424,11 @@ export class WorkingFileManager {
     workflowKey: WorkflowKey,
     fromRunRef: RunRef,
     overrides: { harness?: HarnessId; model?: string } = {},
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    expected?: {
+      definitionRevision?: number;
+      descriptorRevision?: number;
+    }
   ): Promise<{
     workingFilePath: string;
     runRef: RunRef;
@@ -416,10 +442,38 @@ export class WorkingFileManager {
       fromRunRef
     );
     const source = await readWorkingFileFromDisk(sourceFilePath);
+    const sourceRevision = source.definitionRevision ?? 1;
+    if (
+      expected?.definitionRevision !== undefined &&
+      sourceRevision !== expected.definitionRevision
+    ) {
+      throw new Error(
+        `Definition revision conflict: expected ${expected.definitionRevision}, found ${sourceRevision}`
+      );
+    }
+
+    const sourceDescriptor = await lineageRepository.readDescriptor(
+      workspaceFolderPath,
+      workflowKey
+    );
+    if (sourceDescriptor.pendingEdit) {
+      throw new Error(
+        "A draft or continuation is already being prepared for this workflow"
+      );
+    }
+    if (
+      expected?.descriptorRevision !== undefined &&
+      sourceDescriptor.revision !== expected.descriptorRevision
+    ) {
+      throw new Error(
+        `Descriptor revision conflict: expected ${expected.descriptorRevision}, found ${sourceDescriptor.revision}`
+      );
+    }
 
     const allocation = await lineageRepository.allocateRun(
       workspaceFolderPath,
-      workflowKey
+      workflowKey,
+      sourceDescriptor.revision
     );
     const descriptor = await lineageRepository.readDescriptor(
       workspaceFolderPath,
@@ -470,6 +524,126 @@ export class WorkingFileManager {
       runDir: allocation.runDir,
       startedAt,
     };
+  }
+
+  /**
+   * Begins a durable, in-place continuation for a promoted run. Lock ordering is
+   * descriptor -> working file throughout this operation, matching draft seeding;
+   * the lineage lock makes `pendingEdit` and the snapshot/file transition visible
+   * as one transaction to other preparation requests.
+   */
+  public static async beginPendingRewind(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    fromStepIndex: number,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    if (!Number.isInteger(fromStepIndex) || fromStepIndex <= 0) {
+      throw new Error("A pending rewind must start at a nonzero step index");
+    }
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    const snapshotPath = WorkflowPaths.pendingRewindBaseFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    return lineageRepository.mutateDescriptorAtRevision(
+      workspaceFolderPath,
+      workflowKey,
+      expectedDescriptorRevision,
+      async (descriptor) => {
+        if (descriptor.pendingEdit) {
+          throw new Error(
+            "A draft or continuation is already being prepared for this workflow"
+          );
+        }
+        return withFileLock(runFilePath, async () => {
+          const sourceBytes = await fs.readFile(runFilePath);
+          const source = JSON.parse(
+            sourceBytes.toString("utf8")
+          ) as WorkingFile;
+          const sourceRevision = source.definitionRevision ?? 1;
+          if (sourceRevision !== expectedDefinitionRevision) {
+            throw new Error(
+              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
+            );
+          }
+          const steps = source.steps ?? [];
+          if (fromStepIndex >= steps.length) {
+            throw new Error(
+              `Invalid rewind index ${fromStepIndex}; expected a suffix within ${steps.length} step(s)`
+            );
+          }
+
+          // Snapshot first. A crash after this point is recoverable; a crash before
+          // it leaves the untouched run and descriptor without a pending marker.
+          await fs.mkdir(
+            WorkflowPaths.pendingRewindDir(
+              workspaceFolderPath,
+              workflowKey,
+              runRef
+            ),
+            { recursive: true }
+          );
+          await writeSnapshotAtomic(snapshotPath, sourceBytes);
+          const now = Date.now();
+          const pendingRewind = {
+            fromStepIndex,
+            baseDefinitionRevision: sourceRevision,
+          };
+          const workingFile: WorkingFile = {
+            ...source,
+            lastModifiedAt: now,
+            definitionRevision: sourceRevision + 1,
+            steps: steps.map((step, index) =>
+              index < fromStepIndex
+                ? stripViewOnlyWorkflowStepFields(step)
+                : stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+            ),
+            _runtime: {
+              ...source._runtime,
+              currentIndex: fromStepIndex,
+              executionState:
+                source._runtime?.executionState === EXECUTION_STATES.PAUSED
+                  ? EXECUTION_STATES.PAUSED
+                  : EXECUTION_STATES.IDLE,
+              pendingRewind,
+            },
+          };
+          await writeWorkingFileAtomicTo(runFilePath, workingFile, {
+            skipLock: true,
+          });
+          return {
+            value: {
+              workingFile,
+              definitionRevision: workingFile.definitionRevision,
+              descriptorRevision: expectedDescriptorRevision + 1,
+            },
+            descriptor: {
+              ...descriptor,
+              pendingEdit: {
+                kind: "rewind",
+                runRef,
+                fromStepIndex,
+                baseDefinitionRevision: sourceRevision,
+              },
+            },
+          };
+        });
+      }
+    );
   }
 
   /**
@@ -565,6 +739,9 @@ export class WorkingFileManager {
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
         ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
+        ...(this.queueAccess.getPendingRewind?.()
+          ? { pendingRewind: this.queueAccess.getPendingRewind() }
+          : {}),
       };
 
       // Write atomically while holding lock
@@ -600,6 +777,12 @@ export class WorkingFileManager {
       await withFileLock(workingFilePath, async () => {
         const workingFile = await this.readWorkingFile(workingFilePath);
         this.assertExpectedDefinitionRevision(workingFile);
+
+        if (workingFile._runtime?.pendingRewind) {
+          throw new Error(
+            "Cannot change workflow-level properties while a continuation is pending; create a draft instead"
+          );
+        }
 
         let modified = false;
         for (const [key, value] of Object.entries(properties)) {

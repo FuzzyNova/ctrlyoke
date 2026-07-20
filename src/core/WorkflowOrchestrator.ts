@@ -2088,6 +2088,160 @@ export class WorkflowOrchestrator {
     return this.getInstanceForClient(clientId).setStartPosition(toIndex);
   }
 
+  /**
+   * Addressed Phase-3 start-position operation. It never infers a run from
+   * "latest": the caller's addressed view, revision pair, and RunRef must all
+   * agree. UI/message contracts will call this once they carry that context.
+   */
+  async setStartPositionAtRun(
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    toIndex: number,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.PANEL_CLIENT_ID,
+    send?: (message: unknown) => void
+  ): Promise<
+    | {
+        kind: "seeded";
+        runRef: RunRef;
+        definitionRevision: number;
+        descriptorRevision: number;
+      }
+    | {
+        kind: "rewind";
+        definitionRevision: number;
+        descriptorRevision: number;
+      }
+  > {
+    if (!Number.isInteger(toIndex) || toIndex < 0) {
+      throw new Error("Start position must be a non-negative integer");
+    }
+    const viewed = this.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== "run" ||
+      viewed.workflowKey !== address.workflowKey ||
+      viewed.runRef !== address.runRef
+    ) {
+      throw new Error(
+        "Set start position no longer targets this client's viewed run"
+      );
+    }
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+
+    const activeForLineage = [...this.instances.values()].find((instance) => {
+      const state = instance.getQueueState();
+      return (
+        state.workflowKey === address.workflowKey &&
+        (state.status === EXECUTION_STATES.RUNNING ||
+          state.status === EXECUTION_STATES.PAUSING ||
+          state.status === EXECUTION_STATES.PAUSED ||
+          state.status === EXECUTION_STATES.CANCELLING)
+      );
+    });
+    if (
+      activeForLineage &&
+      activeForLineage.getExecutionRunRef() !== address.runRef
+    ) {
+      throw new Error("Another run in this workflow lineage is executing");
+    }
+
+    if (toIndex === 0) {
+      if (activeForLineage) {
+        throw new Error(
+          "Cannot seed a new run while this workflow lineage is executing"
+        );
+      }
+      const seeded = await WorkingFileManager.seedNewRun(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef,
+        {},
+        this.lineageRepository,
+        {
+          definitionRevision: expectedDefinitionRevision,
+          descriptorRevision: expectedDescriptorRevision,
+        }
+      );
+      return {
+        kind: "seeded",
+        runRef: seeded.runRef,
+        definitionRevision: 1,
+        descriptorRevision: expectedDescriptorRevision + 1,
+      };
+    }
+
+    const targetPath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef
+    );
+    const target = JSON.parse(
+      await fs.promises.readFile(targetPath, "utf8")
+    ) as WorkingFile;
+    if (toIndex >= (target.steps?.length ?? 0)) {
+      throw new Error(
+        "Start position must leave at least one suffix step to run"
+      );
+    }
+    const targetState =
+      target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
+    if (
+      targetState === EXECUTION_STATES.RUNNING ||
+      targetState === EXECUTION_STATES.PAUSING ||
+      targetState === EXECUTION_STATES.CANCELLING
+    ) {
+      throw new Error(
+        `Cannot set start position while in state ${targetState}`
+      );
+    }
+    if (targetState === EXECUTION_STATES.PAUSED && !activeForLineage) {
+      throw new Error(
+        "Cannot rewind a paused run without its live execution owner"
+      );
+    }
+
+    const loadedTarget = [...this.instances.values()].find((instance) => {
+      const state = instance.getQueueState();
+      return (
+        state.workflowKey === address.workflowKey &&
+        state.runRef === address.runRef
+      );
+    });
+    const result = loadedTarget
+      ? await loadedTarget.beginPendingRewind(
+          address.workflowKey,
+          address.runRef,
+          toIndex,
+          expectedDefinitionRevision,
+          expectedDescriptorRevision
+        )
+      : await WorkingFileManager.beginPendingRewind(
+          workspaceRoot,
+          address.workflowKey,
+          address.runRef,
+          toIndex,
+          expectedDefinitionRevision,
+          expectedDescriptorRevision,
+          this.lineageRepository
+        );
+    if (send) {
+      await this.loadRunViewForClient(
+        {
+          workflowKey: address.workflowKey,
+          kind: "run",
+          runRef: address.runRef,
+        },
+        send,
+        clientId
+      );
+    }
+    return { kind: "rewind", ...result };
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,

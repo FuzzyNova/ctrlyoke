@@ -5,8 +5,10 @@ import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "../../core/WorkingFileManager";
+import { PromptQueue } from "../../core/PromptQueue";
 import type { PromptStep, WorkingFile } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────
 
@@ -476,6 +478,176 @@ suite("WorkingFileManager", () => {
       ) as WorkingFile;
 
       assert.strictEqual(content.definitionRevision, 1);
+    });
+  });
+
+  suite("beginPendingRewind", () => {
+    let tmpWorkspace: string;
+
+    afterEach(async () => {
+      if (tmpWorkspace) {
+        await fs
+          .rm(tmpWorkspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    async function makeCompletedRun(): Promise<{
+      workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
+      runRef: import("../../types/CtrlYokeTypes").RunRef;
+      runFilePath: string;
+    }> {
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-rewind-"));
+      const manager = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await manager.createWorkingFile(
+        "rewind-source",
+        [
+          { prompt: "prefix", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "suffix", _runtime: { startedAt: 3, completedAt: 4 } },
+          { prompt: "tail", _runtime: { startedAt: 5, completedAt: 6 } },
+        ],
+        tmpWorkspace,
+        "Rewind source"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => [
+        { prompt: "prefix", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "suffix", _runtime: { startedAt: 3, completedAt: 4 } },
+        { prompt: "tail", _runtime: { startedAt: 5, completedAt: 6 } },
+      ];
+      access.getCurrentIndex = () => 3;
+      access.getStatus = () => EXECUTION_STATES.COMPLETED;
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        tmpWorkspace,
+        workflowKey,
+        Date.now()
+      );
+      return {
+        workflowKey,
+        runRef: promoted.runRef,
+        runFilePath: promoted.workingFilePath,
+      };
+    }
+
+    test("atomically snapshots the source and clears only the requested suffix", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const before = await fs.readFile(runFilePath);
+
+      const result = await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      const after = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      const snapshot = await fs.readFile(
+        WorkflowPaths.pendingRewindBaseFilePath(
+          tmpWorkspace,
+          workflowKey,
+          runRef
+        )
+      );
+      const descriptor = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.descriptorPath(tmpWorkspace, workflowKey),
+          "utf8"
+        )
+      );
+      assert.deepStrictEqual(
+        snapshot,
+        before,
+        "recovery snapshot must retain exact source bytes"
+      );
+      assert.strictEqual(after.definitionRevision, 2);
+      assert.ok(after.steps![0]._runtime?.completedAt);
+      assert.strictEqual(after.steps![1]._runtime, undefined);
+      assert.strictEqual(after.steps![2]._runtime, undefined);
+      assert.deepStrictEqual(after._runtime?.pendingRewind, {
+        fromStepIndex: 1,
+        baseDefinitionRevision: 1,
+      });
+      assert.deepStrictEqual(descriptor.pendingEdit, {
+        kind: "rewind",
+        runRef,
+        fromStepIndex: 1,
+        baseDefinitionRevision: 1,
+      });
+      assert.strictEqual(result.definitionRevision, 2);
+      assert.strictEqual(result.descriptorRevision, 3);
+    });
+
+    test("rejects stale revision pairs without changing the source run", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const before = await fs.readFile(runFilePath, "utf8");
+
+      await assert.rejects(
+        () =>
+          WorkingFileManager.beginPendingRewind(
+            tmpWorkspace,
+            workflowKey,
+            runRef,
+            1,
+            2,
+            2
+          ),
+        /definition revision conflict/i
+      );
+      await assert.rejects(
+        () =>
+          WorkingFileManager.beginPendingRewind(
+            tmpWorkspace,
+            workflowKey,
+            runRef,
+            1,
+            1,
+            1
+          ),
+        /descriptor revision conflict/i
+      );
+      assert.strictEqual(await fs.readFile(runFilePath, "utf8"), before);
+      await assert.rejects(
+        () =>
+          WorkingFileManager.seedNewRun(
+            tmpWorkspace,
+            workflowKey,
+            runRef,
+            {},
+            undefined,
+            { definitionRevision: 2, descriptorRevision: 2 }
+          ),
+        /definition revision conflict/i
+      );
+    });
+
+    test("restores the durable pending rewind state after a process restart", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      const restartedQueue = new PromptQueue();
+      await restartedQueue.restoreFromWorkingFile(runFilePath);
+
+      assert.deepStrictEqual(restartedQueue.getState().pendingRewind, {
+        fromStepIndex: 1,
+        baseDefinitionRevision: 1,
+      });
+      assert.strictEqual(restartedQueue.getState().currentIndex, 1);
+      assert.ok(restartedQueue.getState().steps[0]._runtime?.completedAt);
+      assert.strictEqual(
+        restartedQueue.getState().steps[1]._runtime,
+        undefined
+      );
     });
   });
 
