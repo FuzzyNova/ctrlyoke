@@ -271,4 +271,186 @@ suite("WorkingFileManager", () => {
       );
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("seedNewRun", () => {
+    let tmpWorkspace: string;
+
+    async function makeTmpWorkspace(): Promise<string> {
+      const ws = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-seed-"));
+      tempPaths.push(ws);
+      return ws;
+    }
+
+    afterEach(async () => {
+      if (tmpWorkspace) {
+        await fs
+          .rm(tmpWorkspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    /** Creates a lineage and promotes it to a first run with the given steps + status. */
+    async function makeSourceRun(
+      workspace: string,
+      steps: WorkingFile["steps"],
+      status: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES]
+    ): Promise<{ workflowKey: string; runRef: string }> {
+      const access = makeMockAccess();
+      const manager = new WorkingFileManager(access);
+      const { workflowKey } = await manager.createWorkingFile(
+        "source-workflow",
+        steps ?? [],
+        workspace,
+        "Source Workflow"
+      );
+
+      const promotingAccess = makeMockAccess();
+      promotingAccess.getSteps = () => steps ?? [];
+      promotingAccess.getStatus = () => status;
+      promotingAccess.getCurrentIndex = () => steps?.length ?? 0;
+      const promotingManager = new WorkingFileManager(promotingAccess);
+      const { runRef } = await promotingManager.promoteToNewRun(
+        workspace,
+        workflowKey as any,
+        Date.now()
+      );
+      return { workflowKey, runRef };
+    }
+
+    test("seeds a new run from an existing run's persisted definition", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const steps: WorkingFile["steps"] = [
+        { prompt: "first step", _runtime: { startedAt: 1, completedAt: 2 } },
+      ] as WorkingFile["steps"];
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        steps,
+        EXECUTION_STATES.COMPLETED
+      );
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+
+      assert.notStrictEqual(seeded.runRef, runRef);
+      const content = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(content.steps!.length, 1);
+      assert.strictEqual(content.startedAt, seeded.startedAt);
+      assert.strictEqual(
+        (content.steps![0] as PromptStep).prompt,
+        "first step"
+      );
+    });
+
+    test("strips execution runtime from the workflow and every step", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const steps: WorkingFile["steps"] = [
+        {
+          prompt: "step one",
+          _runtime: { startedAt: 1, completedAt: 2, responseText: "done" },
+        },
+      ] as WorkingFile["steps"];
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        steps,
+        EXECUTION_STATES.COMPLETED
+      );
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      const content = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      ) as WorkingFile;
+
+      assert.strictEqual(content._runtime!.currentIndex, 0);
+      assert.strictEqual(
+        content._runtime!.executionState,
+        EXECUTION_STATES.IDLE
+      );
+      assert.strictEqual((content.steps![0] as PromptStep)._runtime, undefined);
+    });
+
+    test("leaves the source run's file byte-for-byte unchanged", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const steps: WorkingFile["steps"] = [
+        { prompt: "step one" },
+      ] as WorkingFile["steps"];
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        steps,
+        EXECUTION_STATES.COMPLETED
+      );
+      const sourcePath = path.join(
+        tmpWorkspace,
+        ".ctrlyoke",
+        ".runs",
+        workflowKey,
+        runRef,
+        "workflow.ctrlyoke.json"
+      );
+      const before = await fs.readFile(sourcePath, "utf-8");
+
+      await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+
+      const after = await fs.readFile(sourcePath, "utf-8");
+      assert.strictEqual(after, before);
+    });
+
+    test("applies harness/model overrides to the seeded run", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const steps: WorkingFile["steps"] = [
+        { prompt: "step one" },
+      ] as WorkingFile["steps"];
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        steps,
+        EXECUTION_STATES.COMPLETED
+      );
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any,
+        { harness: "claude-cli" as any, model: "opus" }
+      );
+      const content = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      ) as WorkingFile;
+
+      assert.strictEqual(content.harness, "claude-cli");
+      assert.strictEqual(content.model, "opus");
+    });
+
+    test("seeded run starts at definitionRevision 1", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        [{ prompt: "step" }] as WorkingFile["steps"],
+        EXECUTION_STATES.COMPLETED
+      );
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      const content = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      ) as WorkingFile;
+
+      assert.strictEqual(content.definitionRevision, 1);
+    });
+  });
 });

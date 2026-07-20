@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
 import { PromptQueue } from "../core/PromptQueue";
 import {
@@ -162,6 +165,43 @@ suite("PromptQueue State Machine Tests", () => {
       const state = queue.getState();
       assert.strictEqual(state.steps[0].enabled, false);
       assert.strictEqual(state.steps[1].enabled, undefined);
+    });
+
+    test("should preserve workflowKey/runRef already on the queue (createWorkingFile always runs immediately before this in production)", () => {
+      (queue as any).state.workflowKey = "some-workflow-key";
+      (queue as any).state.runRef = "run-2026-07-20T00-00-00-000Z";
+
+      queue.loadPrompts(createPromptFile(samplePrompts));
+
+      const state = queue.getState();
+      assert.strictEqual(state.workflowKey, "some-workflow-key");
+      assert.strictEqual(state.runRef, "run-2026-07-20T00-00-00-000Z");
+    });
+
+    test("promotes a fresh draft after loadPrompts preserves its lineage identity", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-promotion-")
+      );
+
+      try {
+        await queue.createWorkingFile(
+          "fresh-workflow",
+          [{ prompt: "fresh step" }],
+          workspace
+        );
+        const workflowKey = queue.getState().workflowKey;
+
+        queue.loadPrompts(createPromptFile([{ prompt: "fresh step" }]));
+        const promotion = await queue.promoteToNewRun(workspace, Date.now());
+
+        assert.ok(workflowKey);
+        assert.ok(promotion);
+        assert.strictEqual(queue.getState().workflowKey, workflowKey);
+        assert.strictEqual(queue.getState().runRef, promotion!.runRef);
+        await assert.doesNotReject(() => fs.access(promotion!.workingFilePath));
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
     });
   });
 

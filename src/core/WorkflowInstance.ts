@@ -34,6 +34,7 @@ import {
   ToolPermissionsOverride,
   ErrorBehavior,
   type RunRef,
+  type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -893,11 +894,58 @@ export class WorkflowInstance {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Executes a run already allocated and written by `WorkingFileManager.seedNewRun`
+   * (Re-run / CLI `rerun`) — a brand-new `RunRef` whose definition was seeded from an
+   * older run that is not necessarily the one this instance currently has loaded.
+   *
+   * This is deliberately NOT `loadWorkingFile(...)` followed by a plain
+   * `executeLoadedPromptFile(harnessOverride)` call: that method's fresh-execution-start
+   * branch has no way to tell "this run was already promoted" from "this is a draft/older
+   * run that still needs promoting" — it would call `promptQueue.promoteToNewRun()` again
+   * (minting a second, unwanted run) and would skip initializing the seeded run's
+   * manifest/events (violating the invariant that every promoted run has all three run
+   * artifacts). Instead: load the seeded file, initialize ITS timeline directly, then
+   * execute with `continueFromCurrent=true` so `executeLoadedPromptFile` treats it purely
+   * as "run exactly what's loaded" — no restart, no re-promotion.
+   */
+  async executeSeededRun(
+    seeded: {
+      workingFilePath: string;
+      runRef: RunRef;
+      runId: number;
+      runDir: string;
+      startedAt: number;
+    },
+    workflowKey: WorkflowKey,
+    harnessOverride?: HarnessId
+  ): Promise<void> {
+    await this.loadWorkingFile(seeded.workingFilePath);
+    const historyInit = await this.outputHistoryManager.initializeRunAt(
+      workflowKey,
+      seeded.runRef,
+      seeded.runDir,
+      seeded.runId,
+      seeded.startedAt
+    );
+    if (!historyInit.filePath) {
+      throw new Error(
+        `Failed to initialize timeline for seeded run ${workflowKey}/${seeded.runRef}`
+      );
+    }
+    await this.executeLoadedPromptFile(
+      harnessOverride,
+      true,
+      historyInit.filePath
+    );
+  }
+
+  /**
    * Execute the currently loaded prompt file.
    */
   async executeLoadedPromptFile(
     modeOverride?: HarnessId,
-    continueFromCurrent: boolean = false
+    continueFromCurrent: boolean = false,
+    preinitializedHistoryFilePath: string = ""
   ): Promise<void> {
     if (!this.currentPromptFile) {
       const queueState = this.promptQueue.getState();
@@ -958,7 +1006,7 @@ export class WorkflowInstance {
 
     // Declared outside try so the catch block can finalize history on early errors
     // (errors thrown before startWorkflowExecution, which has its own finally block).
-    let historyFilePath = "";
+    let historyFilePath = preinitializedHistoryFilePath;
 
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
@@ -1016,6 +1064,13 @@ export class WorkflowInstance {
         }
         this.workflowRuntime.fail();
         await this.promptQueue.commitRuntimeTransition();
+        if (historyFilePath) {
+          await this.outputHistoryManager.finalizeRun(
+            historyFilePath,
+            EXECUTION_STATES.ERROR,
+            preflightStepCount
+          );
+        }
         return;
       }
 
@@ -1179,7 +1234,10 @@ export class WorkflowInstance {
         }
       } else if (continueFromCurrent && workflowKey) {
         historyFilePath =
-          await this.outputHistoryManager.getLatestHistoryFilePath(workflowKey);
+          historyFilePath ||
+          (await this.outputHistoryManager.getLatestHistoryFilePath(
+            workflowKey
+          ));
         Log.debug(
           `🟢 [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
         );

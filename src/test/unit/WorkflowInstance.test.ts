@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   HarnessIntegration,
   HarnessStatus,
@@ -1539,5 +1540,145 @@ suite("WorkflowInstance append-and-continue", () => {
     );
 
     assert.strictEqual(claudeIntegration.closeTerminalCalls, 0);
+  });
+});
+
+suite("WorkflowInstance executeSeededRun", () => {
+  test("executes an already-seeded run without re-promoting or restarting, and initializes its own timeline", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-seeded-run-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const platform = new MockPlatform();
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      // Build a source lineage + first run the same way a normal fresh execution
+      // start would (draft -> promoteToNewRun), independent of executeSeededRun.
+      // createWorkingFile only writes the draft to disk and sets workflowKey;
+      // it does not hydrate in-memory queue steps (that's loadPrompts, which
+      // replaces the whole queue state — including workflowKey/runRef — so it
+      // isn't usable here). Set steps directly instead.
+      await instance.promptQueue.createWorkingFile(
+        "source-workflow",
+        [{ prompt: "source step" }],
+        tempWorkspace
+      );
+      (instance.promptQueue as any).state.steps = [{ prompt: "source step" }];
+      const sourcePromotion = await instance.promptQueue.promoteToNewRun(
+        tempWorkspace,
+        Date.now()
+      );
+      assert.ok(sourcePromotion, "expected the source run to promote");
+      const workflowKey = instance.promptQueue.getState().workflowKey!;
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tempWorkspace,
+        workflowKey,
+        sourcePromotion!.runRef
+      );
+
+      let promoteToNewRunCalls = 0;
+      const originalPromoteToNewRun = instance.promptQueue.promoteToNewRun.bind(
+        instance.promptQueue
+      );
+      (instance.promptQueue as any).promoteToNewRun = async (
+        ...args: unknown[]
+      ) => {
+        promoteToNewRunCalls += 1;
+        return (originalPromoteToNewRun as any)(...args);
+      };
+
+      let restartCalled = false;
+      const originalRestart = instance.promptQueue.restart.bind(
+        instance.promptQueue
+      );
+      (instance.promptQueue as any).restart = async (...args: unknown[]) => {
+        restartCalled = true;
+        return (originalRestart as any)(...args);
+      };
+
+      let executionHistoryFilePath: string | undefined;
+      (instance as any).startWorkflowExecution = async (
+        _integration: unknown,
+        historyFilePath: string
+      ) => {
+        executionHistoryFilePath = historyFilePath;
+      };
+      (instance.getOutputHistoryManager() as any).getLatestHistoryFilePath =
+        async () => {
+          throw new Error(
+            "executeSeededRun must use the seeded run's exact manifest path"
+          );
+        };
+
+      await instance.executeSeededRun(seeded, workflowKey);
+
+      assert.strictEqual(
+        promoteToNewRunCalls,
+        0,
+        "executeSeededRun must not promote a second new run — the seeded run is already promoted"
+      );
+      assert.strictEqual(
+        restartCalled,
+        false,
+        "executeSeededRun must not restart() the already-fresh seeded run"
+      );
+      assert.strictEqual(instance.promptQueue.getState().runRef, seeded.runRef);
+      assert.strictEqual(
+        (instance.promptQueue.getState().steps[0] as PromptStep).prompt,
+        "source step"
+      );
+
+      await assert.doesNotReject(
+        () => fs.access(path.join(seeded.runDir, "manifest.json")),
+        "seeded run should have its own manifest.json"
+      );
+      await assert.doesNotReject(
+        () => fs.access(path.join(seeded.runDir, "events.jsonl")),
+        "seeded run should have its own events.jsonl"
+      );
+      const seededWorkingFile = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      );
+      const seededManifest = JSON.parse(
+        await fs.readFile(path.join(seeded.runDir, "manifest.json"), "utf-8")
+      );
+      assert.strictEqual(
+        seededManifest.startedAt,
+        seededWorkingFile.startedAt,
+        "the seeded working file and manifest must share one run start timestamp"
+      );
+      assert.strictEqual(
+        executionHistoryFilePath,
+        path.join(seeded.runDir, "manifest.json"),
+        "execution must write to the seeded run's manifest, not re-resolve the latest run"
+      );
+
+      const lineageDir = WorkflowPaths.lineageDir(tempWorkspace, workflowKey);
+      const entries = await fs.readdir(lineageDir, { withFileTypes: true });
+      const runDirs = entries.filter(
+        (entry) => entry.isDirectory() && entry.name.startsWith("run-")
+      );
+      assert.strictEqual(
+        runDirs.length,
+        2,
+        `expected exactly the source run + the seeded run, found: ${runDirs.map((e) => e.name).join(", ")}`
+      );
+    } finally {
+      // initializeRunAt triggers a fire-and-forget search-index refresh; without
+      // waiting for it, deleting the workspace can race it (ENOTEMPTY on .search-index).
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
   });
 });

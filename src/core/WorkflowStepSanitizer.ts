@@ -14,6 +14,20 @@ import type {
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
 
 /**
+ * Removes per-step `_runtime` (session/response/attempt metadata) from every step.
+ * Used wherever a definition must be recorded or seeded independent of what has
+ * already executed: timeline snapshots, and seeding a new run from an existing one.
+ */
+export function stripStepRuntime(steps: WorkflowStep[]): WorkflowStep[] {
+  return steps.map((step) => {
+    const { _runtime: _omitted, ...rest } = step as WorkflowStep & {
+      _runtime?: unknown;
+    };
+    return rest as WorkflowStep;
+  });
+}
+
+/**
  * Builds the execution-relevant definition snapshot committed to the timeline
  * before a definition revision's first output (`DEFINITION_REVISION_COMMITTED`).
  * Strips per-step `_runtime` — the snapshot records what will execute, not what already has.
@@ -24,12 +38,7 @@ export function buildDefinitionSnapshot(
 ): WorkflowDefinitionSnapshot {
   return {
     workflowName,
-    steps: steps.map((step) => {
-      const { _runtime: _omitted, ...rest } = step as WorkflowStep & {
-        _runtime?: unknown;
-      };
-      return rest as WorkflowStep;
-    }),
+    steps: stripStepRuntime(steps),
   };
 }
 

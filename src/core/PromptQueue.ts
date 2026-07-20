@@ -305,6 +305,13 @@ export class PromptQueue {
       queueExtensions: 0,
       workingFilePath,
       workflowName: this.state.workflowName, // Preserve workflow name across reloads
+      // Preserve lineage identity across reloads. createWorkingFile() sets these just
+      // before loadPrompts() is called (PromptFileLoader.loadParsedPromptFile); without
+      // preserving them here, a freshly loaded prompt file's first execution could never
+      // satisfy executeLoadedPromptFile's fresh-start guard (`... && workflowKey`) and
+      // would silently keep writing to the draft forever instead of promoting a run.
+      workflowKey: this.state.workflowKey,
+      runRef: this.state.runRef,
       definitionRevision: this.state.definitionRevision, // Preserve across reloads (restoreFromWorkingFile sets the authoritative value)
     };
 

@@ -16,8 +16,59 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
-import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
+import {
+  stripStepRuntime,
+  stripViewOnlyWorkflowStepFields,
+} from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+
+/**
+ * Read a working file straight off disk. Free function (rather than an instance method)
+ * so `WorkingFileManager.seedNewRun` can read an arbitrary run's file — one that may not
+ * be the one currently loaded into any live queue — without needing an `IWorkingFileQueueAccess`.
+ */
+async function readWorkingFileFromDisk(
+  workingFilePath: string
+): Promise<WorkingFile> {
+  try {
+    const content = await fs.readFile(workingFilePath, "utf-8");
+    return JSON.parse(content) as WorkingFile;
+  } catch (error) {
+    throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
+  }
+}
+
+/** Write a working file atomically (temp + rename), optionally under `withFileLock`. */
+async function writeWorkingFileAtomicTo(
+  workingFilePath: string,
+  workingFile: WorkingFile,
+  options: { skipLock?: boolean } = {}
+): Promise<void> {
+  const tempPath = `${workingFilePath}.tmp`;
+
+  const writeAction = async () => {
+    try {
+      await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
+      await fs.rename(tempPath, workingFilePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+
+      throw new Error(
+        `Failed to write working file: ${getErrorMessage(error)}`
+      );
+    }
+  };
+
+  if (options.skipLock) {
+    await writeAction();
+    return;
+  }
+
+  await withFileLock(workingFilePath, writeAction);
+}
 
 /**
  * Interface providing queue state access for working file persistence operations.
@@ -88,13 +139,7 @@ export class WorkingFileManager {
    * @returns Parsed working file
    */
   public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
-    try {
-      const content = await fs.readFile(workingFilePath, "utf-8");
-      const parsed = JSON.parse(content) as WorkingFile;
-      return parsed;
-    } catch (error) {
-      throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
-    }
+    return readWorkingFileFromDisk(workingFilePath);
   }
 
   /**
@@ -107,33 +152,7 @@ export class WorkingFileManager {
     workingFile: WorkingFile,
     options: { skipLock?: boolean } = {}
   ): Promise<void> {
-    const tempPath = `${workingFilePath}.tmp`;
-
-    const writeAction = async () => {
-      try {
-        // Write to temp file
-        await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
-
-        // Atomic rename
-        await fs.rename(tempPath, workingFilePath);
-      } catch (error) {
-        // Clean up temp file on error
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-
-        throw new Error(
-          `Failed to write working file: ${getErrorMessage(error)}`
-        );
-      }
-    };
-
-    if (options.skipLock) {
-      await writeAction();
-      return;
-    }
-
-    await withFileLock(workingFilePath, writeAction);
+    return writeWorkingFileAtomicTo(workingFilePath, workingFile, options);
   }
 
   // ==================== Higher-Level Operations ====================
@@ -250,6 +269,93 @@ export class WorkingFileManager {
       runRef: allocation.runRef,
       runId: allocation.runId,
       runDir: allocation.runDir,
+    };
+  }
+
+  /**
+   * Seeds a brand-new run from an existing run's *persisted* definition (Re-run / CLI
+   * `rerun`). Unlike `promoteToNewRun`, this never reads a live queue's in-memory state —
+   * `fromRunRef` may not be the run currently loaded into any queue (the lineage can be
+   * idle while a client views/re-runs an older run), so the source definition is read
+   * straight off disk. Strips all execution runtime (workflow-level `_runtime` and every
+   * step's `_runtime`) so the new run starts fresh, applies optional harness/model
+   * overrides, and leaves `fromRunRef`'s own file byte-for-byte untouched.
+   *
+   * Static because it has no per-queue state to coordinate with — the destination run
+   * is brand new and nothing is currently writing to it.
+   */
+  public static async seedNewRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    fromRunRef: RunRef,
+    overrides: { harness?: HarnessId; model?: string } = {},
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFilePath: string;
+    runRef: RunRef;
+    runId: number;
+    runDir: string;
+    startedAt: number;
+  }> {
+    const sourceFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      fromRunRef
+    );
+    const source = await readWorkingFileFromDisk(sourceFilePath);
+
+    const allocation = await lineageRepository.allocateRun(
+      workspaceFolderPath,
+      workflowKey
+    );
+    const descriptor = await lineageRepository.readDescriptor(
+      workspaceFolderPath,
+      workflowKey
+    );
+
+    const startedAt = Date.now();
+    const workingFile: WorkingFile = {
+      ...source,
+      ...(descriptor.originalFile
+        ? { originalFile: descriptor.originalFile }
+        : {}),
+      workflowName: source.workflowName ?? descriptor.workflowName,
+      startedAt,
+      lastModifiedAt: startedAt,
+      isFavorite: descriptor.isFavorite,
+      definitionRevision: 1,
+      steps: stripStepRuntime(source.steps ?? []).map(
+        stripViewOnlyWorkflowStepFields
+      ),
+      ...(overrides.harness ? { harness: overrides.harness } : {}),
+      ...(overrides.model ? { model: overrides.model } : {}),
+      _runtime: {
+        currentIndex: 0,
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    };
+
+    await writeWorkingFileAtomicTo(allocation.runFilePath, workingFile);
+
+    if (allocation.draftFilePathToRemove) {
+      await fs
+        .rm(allocation.draftFilePathToRemove, { force: true })
+        .catch((error) =>
+          Log.warn(
+            `[WorkingFileManager] Failed to remove promoted draft: ${getErrorMessage(error)}`
+          )
+        );
+    }
+
+    Log.info(
+      ` Seeded lineage ${workflowKey} run ${fromRunRef} into new run ${allocation.runRef}`
+    );
+    return {
+      workingFilePath: allocation.runFilePath,
+      runRef: allocation.runRef,
+      runId: allocation.runId,
+      runDir: allocation.runDir,
+      startedAt,
     };
   }
 
