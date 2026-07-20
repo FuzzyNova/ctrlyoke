@@ -1,0 +1,34 @@
+import { useUiStore } from "../store/uiStore";
+import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
+
+interface MessageTarget {
+  postMessage: (message: unknown) => void;
+}
+
+/** Stable address and optimistic revisions for generic definition mutations. */
+export function getWorkflowDefinitionMutation():
+  | WorkflowDefinitionMutation
+  | undefined {
+  const state = useUiStore.getState();
+  if (
+    !state.displayedViewAddress ||
+    state.displayedDefinitionRevision === null ||
+    state.displayedDescriptorRevision === null
+  ) {
+    return undefined;
+  }
+  return {
+    address: state.displayedViewAddress,
+    expectedDefinitionRevision: state.displayedDefinitionRevision,
+    expectedDescriptorRevision: state.displayedDescriptorRevision,
+  };
+}
+
+/** Attach the shared mutation context for controls that post directly to VS Code. */
+export function postWorkflowDefinitionMutation(
+  target: MessageTarget,
+  message: Record<string, unknown>
+): void {
+  const mutation = getWorkflowDefinitionMutation();
+  target.postMessage({ ...message, ...(mutation ? { mutation } : {}) });
+}

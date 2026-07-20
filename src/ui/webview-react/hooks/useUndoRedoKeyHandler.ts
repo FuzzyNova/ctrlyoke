@@ -9,6 +9,7 @@ import {
   type StepStatus,
 } from "../types/messages";
 import { getVsCodeApi } from "./useVsCodeApi";
+import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
 
 type RuntimeDecoratedStep = WorkflowStep & {
   status?: StepStatus;
@@ -235,7 +236,7 @@ export function useUndoRedoKeyHandler() {
       const workflowProperties = ws.undoWorkflowProperties;
       // Sync workflowProperties back to settingsStore so UI reflects the restored state
       useSettingsStore.getState().setWorkflowProperties(workflowProperties);
-      getVsCodeApi().postMessage({
+      postWorkflowDefinitionMutation(getVsCodeApi(), {
         type: MESSAGE_TYPES.UNDO_REDO_SYNC,
         steps: mergedSteps,
         finalStep: ws.finalStep,

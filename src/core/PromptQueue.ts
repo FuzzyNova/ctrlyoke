@@ -1505,6 +1505,11 @@ export class PromptQueue {
     );
   }
 
+  /** Guard the next definition write against a stale addressed client snapshot. */
+  public expectDefinitionRevision(revision: number): void {
+    this.workingFileManager.expectDefinitionRevision(revision);
+  }
+
   /**
    * Emit state change event
    */

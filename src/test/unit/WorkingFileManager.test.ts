@@ -232,6 +232,31 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(parsed.definitionRevision, 3);
     });
 
+    test("rejects a stale expected definition revision without writing", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const { workingFilePath } = await new WorkingFileManager(
+        makeMockAccess()
+      ).createWorkingFile(
+        "conflict",
+        [{ prompt: "disk" }],
+        tmpWorkspace,
+        "Conflict"
+      );
+      const access = makeMockAccess(workingFilePath);
+      access.getSteps = () => [{ prompt: "stale client" }];
+      access.getDefinitionRevision = () => 3;
+      const manager = new WorkingFileManager(access);
+      const before = await fs.readFile(workingFilePath, "utf8");
+
+      manager.expectDefinitionRevision(2);
+      await assert.rejects(
+        () => manager.updateWorkingFile(true),
+        /definition revision conflict/i
+      );
+
+      assert.strictEqual(await fs.readFile(workingFilePath, "utf8"), before);
+    });
+
     test("workflowKey is sanitized — spaces and special chars replaced with hyphens", async () => {
       tmpWorkspace = await makeTmpWorkspace();
 
@@ -451,6 +476,115 @@ suite("WorkingFileManager", () => {
       ) as WorkingFile;
 
       assert.strictEqual(content.definitionRevision, 1);
+    });
+  });
+
+  suite("seedDraftFromRun", () => {
+    let tmpWorkspace: string;
+
+    afterEach(async () => {
+      if (tmpWorkspace) {
+        await fs
+          .rm(tmpWorkspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    test("copies an addressed run into a runtime-free draft without changing its source", async () => {
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-draft-"));
+      const sourceManager = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "draft-source",
+        [{ prompt: "source", _runtime: { startedAt: 1 } }],
+        tmpWorkspace,
+        "Draft Source"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => [
+        { prompt: "source", _runtime: { startedAt: 1 } },
+      ];
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        tmpWorkspace,
+        workflowKey,
+        Date.now()
+      );
+      const sourcePath = promoted.workingFilePath;
+      const sourceBefore = await fs.readFile(sourcePath, "utf8");
+
+      const draft = await WorkingFileManager.seedDraftFromRun(
+        tmpWorkspace,
+        workflowKey,
+        promoted.runRef,
+        1,
+        2
+      );
+      const content = JSON.parse(
+        await fs.readFile(draft.workingFilePath, "utf8")
+      ) as WorkingFile;
+      const descriptor = JSON.parse(
+        await fs.readFile(
+          path.join(
+            tmpWorkspace,
+            ".ctrlyoke",
+            ".runs",
+            workflowKey,
+            "workflow.json"
+          ),
+          "utf8"
+        )
+      );
+
+      assert.strictEqual((content.steps![0] as PromptStep)._runtime, undefined);
+      assert.strictEqual(
+        content._runtime?.executionState,
+        EXECUTION_STATES.IDLE
+      );
+      assert.deepStrictEqual(descriptor.pendingEdit, { kind: "draft" });
+      assert.strictEqual(descriptor.revision, 3);
+      assert.strictEqual(await fs.readFile(sourcePath, "utf8"), sourceBefore);
+    });
+
+    test("rejects stale descriptor or source definition revisions", async () => {
+      tmpWorkspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "fp-ws-draft-conflict-")
+      );
+      const manager = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await manager.createWorkingFile(
+        "draft-conflict",
+        [{ prompt: "source" }],
+        tmpWorkspace,
+        "Draft Conflict"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => [{ prompt: "source" }];
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        tmpWorkspace,
+        workflowKey,
+        Date.now()
+      );
+
+      await assert.rejects(
+        () =>
+          WorkingFileManager.seedDraftFromRun(
+            tmpWorkspace,
+            workflowKey,
+            promoted.runRef,
+            2,
+            2
+          ),
+        /definition revision conflict/i
+      );
+      await assert.rejects(
+        () =>
+          WorkingFileManager.seedDraftFromRun(
+            tmpWorkspace,
+            workflowKey,
+            promoted.runRef,
+            1,
+            1
+          ),
+        /descriptor revision conflict/i
+      );
     });
   });
 });

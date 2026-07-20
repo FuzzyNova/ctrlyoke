@@ -5,6 +5,7 @@ import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
+import { WorkingFileManager } from "./WorkingFileManager";
 import { PromptQueue } from "./PromptQueue";
 import {
   QueueState,
@@ -43,6 +44,7 @@ import type {
   CliOutput,
   ActiveTerminalWorkflowRef,
   RunViewLoadedMessage,
+  WorkflowDefinitionMutation,
 } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -1721,7 +1723,7 @@ export class WorkflowOrchestrator {
     const content = await fs.promises.readFile(filePath, "utf-8");
     const workingFile = JSON.parse(content) as WorkingFile;
     const historyManager = new OutputHistoryManager(workspaceRoot);
-    const [history, runSummaries] = await Promise.all([
+    const [history, runSummaries, descriptor] = await Promise.all([
       address.kind === "run"
         ? historyManager.loadHistory(
             historyManager.getHistoryFilePath(
@@ -1731,6 +1733,7 @@ export class WorkflowOrchestrator {
           )
         : Promise.resolve(null),
       historyManager.getRunSummaries(address.workflowKey),
+      this.lineageRepository.readDescriptor(workspaceRoot, address.workflowKey),
     ]);
     const executionRunRef = this.findExecutionRunRef(address.workflowKey);
     const { prompt, steps, finalStep, ...workflowProperties } = workingFile;
@@ -1747,8 +1750,104 @@ export class WorkflowOrchestrator {
       runSummaries,
       workflowProperties,
       executionRunRef,
+      descriptorRevision: descriptor.revision,
     };
     send(snapshot);
+  }
+
+  /**
+   * Resolves a definition mutation against the requesting client's addressed
+   * view. A promoted run is copied to the shared lineage draft under descriptor
+   * revision control, then only this client is rebound to a draft instance.
+   * The source instance remains untouched, including any active executor.
+   */
+  async prepareDefinitionMutation(
+    mutation: WorkflowDefinitionMutation | undefined,
+    send: (message: unknown) => void,
+    clientId: string
+  ): Promise<void> {
+    const viewed = this.getViewAddress(clientId);
+    // A brand-new, as-yet-unaddressed editor still uses the ephemeral workflow
+    // path. Once a client is viewing a persisted draft/run, revision context is
+    // mandatory so a stale UI cannot silently alter a promoted definition.
+    if (!mutation) {
+      if (viewed?.kind === "run" || viewed?.kind === "draft") {
+        throw new Error(
+          "Definition mutation is missing its addressed revision context"
+        );
+      }
+      return;
+    }
+    if (
+      !viewed ||
+      viewed.workflowKey !== mutation.address.workflowKey ||
+      viewed.kind !== mutation.address.kind ||
+      (viewed.kind === "run" &&
+        mutation.address.kind === "run" &&
+        viewed.runRef !== mutation.address.runRef)
+    ) {
+      throw new Error(
+        "Definition mutation no longer targets this client's viewed run"
+      );
+    }
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+
+    if (mutation.address.kind === "run") {
+      const draft = await WorkingFileManager.seedDraftFromRun(
+        workspaceRoot,
+        mutation.address.workflowKey,
+        mutation.address.runRef,
+        mutation.expectedDefinitionRevision,
+        mutation.expectedDescriptorRevision,
+        this.lineageRepository
+      );
+      await this.loadFreshInstanceAndReplay(
+        draft.workingFilePath,
+        clientId,
+        send
+      );
+      await this.loadRunViewForClient(
+        { workflowKey: mutation.address.workflowKey, kind: "draft" },
+        send,
+        clientId
+      );
+      this.getInstanceForClient(clientId).expectDefinitionRevision(
+        mutation.expectedDefinitionRevision
+      );
+      return;
+    }
+
+    const [descriptor, draft] = await Promise.all([
+      this.lineageRepository.readDescriptor(
+        workspaceRoot,
+        mutation.address.workflowKey
+      ),
+      fs.promises.readFile(
+        WorkflowPaths.draftFilePath(
+          workspaceRoot,
+          mutation.address.workflowKey
+        ),
+        "utf8"
+      ),
+    ]);
+    const draftRevision =
+      (JSON.parse(draft) as WorkingFile).definitionRevision ?? 1;
+    if (descriptor.revision !== mutation.expectedDescriptorRevision) {
+      throw new Error(
+        `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
+      );
+    }
+    if (draftRevision !== mutation.expectedDefinitionRevision) {
+      throw new Error(
+        `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${draftRevision}`
+      );
+    }
+    this.getInstanceForClient(clientId).expectDefinitionRevision(
+      mutation.expectedDefinitionRevision
+    );
   }
 
   private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {

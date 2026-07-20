@@ -16,6 +16,7 @@ import { MESSAGE_TYPES } from "../../types/messages";
 import { STEP_STATUS } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { HEADER_BUTTON_SIZES } from "@/constants";
+import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 
 interface UndoRedoControlProps {
   isRunning: boolean;
@@ -363,7 +364,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     const workflowProperties = ws.undoWorkflowProperties;
     // Sync workflowProperties back to settingsStore so the UI reflects the restored state
     useSettingsStore.getState().setWorkflowProperties(workflowProperties);
-    vscode.postMessage({
+    postWorkflowDefinitionMutation(vscode, {
       type: MESSAGE_TYPES.UNDO_REDO_SYNC,
       steps: ws.steps,
       finalStep: ws.finalStep,

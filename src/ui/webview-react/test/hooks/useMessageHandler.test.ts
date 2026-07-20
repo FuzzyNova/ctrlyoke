@@ -815,6 +815,30 @@ describe("OUTPUT_HISTORY_LOADED", () => {
   });
 });
 
+describe("run view revision snapshots", () => {
+  it("stores definition and descriptor revisions for the next addressed edit", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: { workflowKey: "wf-1" as never, kind: "draft" },
+        workingFile: {
+          workflowName: "Draft",
+          definitionRevision: 7,
+          steps: [],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 11,
+      });
+    });
+
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(7);
+    expect(useUiStore.getState().displayedDescriptorRevision).toBe(11);
+  });
+});
+
 describe("history search messages", () => {
   it("opens the history search drawer when requested", () => {
     renderHook(() => useMessageHandler());

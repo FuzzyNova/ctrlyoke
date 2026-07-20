@@ -1084,6 +1084,15 @@ export interface RunViewLoadedMessage {
   workflowProperties: Record<string, unknown>;
   /** The exact run currently bound to execution, if the lineage is active. */
   executionRunRef?: import("./CtrlYokeTypes").RunRef;
+  /** Descriptor revision paired with this snapshot for optimistic mutations. */
+  descriptorRevision: number;
+}
+
+/** Stable target and optimistic revisions required for a definition mutation. */
+export interface WorkflowDefinitionMutation {
+  address: WorkflowViewAddress;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
 }
 
 export interface LoadRunViewMessage {
@@ -1108,6 +1117,7 @@ export interface InsertWorkflowStepMessage {
   type: typeof MESSAGE_TYPES.INSERT_WORKFLOW_STEP;
   afterIndex: number;
   step: WorkflowStep;
+  mutation?: WorkflowDefinitionMutation;
 }
 
 /**
@@ -1128,6 +1138,7 @@ export interface SetStartPositionConfirmedMessage {
 export interface ReorderPromptsMessage {
   type: typeof MESSAGE_TYPES.REORDER_PROMPTS;
   newPendingOrder: number[];
+  mutation?: WorkflowDefinitionMutation;
 }
 
 // ============================================================================

@@ -190,6 +190,9 @@ interface UiState {
   runSummaries: RunSummary[];
   displayedViewAddress: WorkflowViewAddress | null;
   executionRunRef: string | null;
+  /** Optimistic revisions paired with the current addressed definition snapshot. */
+  displayedDefinitionRevision: number | null;
+  displayedDescriptorRevision: number | null;
 
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;
@@ -443,7 +446,8 @@ interface UiActions {
   setDisplayedRunView: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
-    executionRunRef?: string
+    executionRunRef?: string,
+    revisions?: { definitionRevision: number; descriptorRevision: number }
   ) => void;
 
   // Dropdown hide feature
@@ -556,6 +560,8 @@ const initialState: UiState = {
   runSummaries: [],
   displayedViewAddress: null,
   executionRunRef: null,
+  displayedDefinitionRevision: null,
+  displayedDescriptorRevision: null,
   footerOpenPicker: null,
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
@@ -951,10 +957,12 @@ export const useUiStore = create<UiState & UiActions>()(
       clearHistoryView: () =>
         set({ isViewingHistory: false, viewingRunIndex: 0 }),
 
-      setDisplayedRunView: (address, summaries, executionRunRef) =>
+      setDisplayedRunView: (address, summaries, executionRunRef, revisions) =>
         set({
           displayedViewAddress: address,
           executionRunRef: executionRunRef ?? null,
+          displayedDefinitionRevision: revisions?.definitionRevision ?? null,
+          displayedDescriptorRevision: revisions?.descriptorRevision ?? null,
           runSummaries: summaries,
           availableRuns: summaries.length,
           runTimestamps: summaries.map((summary) => summary.startedAt),

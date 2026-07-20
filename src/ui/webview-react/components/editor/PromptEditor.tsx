@@ -28,6 +28,7 @@ import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
+import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -478,7 +479,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         if (!command) return;
 
         lastSubmittedTextRef.current = command;
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.EXECUTE_PROMPT,
           text: command,
           properties: {
@@ -569,7 +570,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       const clearProperties = stepEnabled ? ["enabled"] : undefined;
 
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_PROMPT,
           index: selectionTarget.index,
           text: command,
@@ -619,7 +620,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       getPropertyValues(true);
 
     if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_PROMPT,
         index: selectionTarget.index,
         text,
@@ -635,7 +636,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         });
       }
     } else if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
         finalStep: {
           ...propertyValues,
@@ -674,12 +675,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (!globalSettings.confirmDeleteOperations) {
       // Skip modal — user opted out of delete confirmation
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.DELETE_PROMPT,
           index: selectionTarget.index,
         });
       } else {
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
           finalStep: null,
         });
@@ -700,12 +701,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) return;
 
     if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.DELETE_PROMPT,
         index: selectionTarget.index,
       });
     } else {
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
         finalStep: null,
       });

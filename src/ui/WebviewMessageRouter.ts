@@ -535,13 +535,16 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
+      await this.prepareDefinitionMutation(message);
       await this.getOrchestrator()?.reorderPendingPrompts(
         message.newPendingOrder as number[],
         this.clientId
       );
+      await this.refreshDefinitionMutationView();
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
+      await this.prepareDefinitionMutation(message);
       await this.getOrchestrator()?.syncStepsForUndoRedo(
         message.steps,
         message.finalStep ?? null,
@@ -571,13 +574,14 @@ export class WebviewMessageRouter {
           Object.entries(raw).filter(([, v]) => v !== undefined)
         );
         if (Object.keys(workflowProperties).length > 0) {
-          this.settingsSync.handleUpdateWorkflowProperties(
+          await this.settingsSync.handleUpdateWorkflowProperties(
             workflowProperties,
             this.getCurrentPostMessage(),
             this.clientId
           );
         }
       }
+      await this.refreshDefinitionMutationView();
     });
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
@@ -1217,20 +1221,11 @@ export class WebviewMessageRouter {
 
     // ── Settings — Workflow Properties ───────────────────────────────────
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY, (message) => {
-      this.settingsSync.handleUpdateWorkflowProperty(
-        message.property,
-        message.value,
-        this.getCurrentPostMessage(),
-        this.clientId
-      );
+      return this.handleUpdateWorkflowProperty(message);
     });
 
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message) => {
-      this.settingsSync.handleUpdateWorkflowProperties(
-        message.properties,
-        this.getCurrentPostMessage(),
-        this.clientId
-      );
+      return this.handleUpdateWorkflowProperties(message);
     });
 
     table.set(MESSAGE_TYPES.SET_AS_DEFAULT, (message) => {
@@ -1698,6 +1693,8 @@ export class WebviewMessageRouter {
       return;
     }
 
+    await this.prepareDefinitionMutation(message);
+
     const { index, text, properties, clearProperties, promptName } = message;
 
     try {
@@ -1709,6 +1706,7 @@ export class WebviewMessageRouter {
         clearProperties,
         this.clientId
       );
+      await this.refreshDefinitionMutationView();
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
@@ -1726,12 +1724,15 @@ export class WebviewMessageRouter {
       return;
     }
 
+    await this.prepareDefinitionMutation(message);
+
     try {
       await orchestrator.insertWorkflowStepAfterIndex(
         message.afterIndex,
         message.step,
         this.clientId
       );
+      await this.refreshDefinitionMutationView();
     } catch (error) {
       Log.error("Failed to insert workflow step:", error);
       vscode.window.showErrorMessage(
@@ -1747,12 +1748,15 @@ export class WebviewMessageRouter {
       return;
     }
 
+    await this.prepareDefinitionMutation(message);
+
     try {
       await orchestrator.updateFinalStepInQueue(
         message.finalStep ?? null,
         message.clearProperties,
         this.clientId
       );
+      await this.refreshDefinitionMutationView();
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
       vscode.window.showErrorMessage(
@@ -1768,10 +1772,13 @@ export class WebviewMessageRouter {
       return;
     }
 
+    await this.prepareDefinitionMutation(message);
+
     const { index } = message;
 
     try {
       await orchestrator.deletePromptFromQueue(index, this.clientId);
+      await this.refreshDefinitionMutationView();
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
@@ -1793,6 +1800,56 @@ export class WebviewMessageRouter {
       Log.error("Failed to reset workflow state:", error);
       vscode.window.showErrorMessage(
         `Failed to reset workflow state: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  private async handleUpdateWorkflowProperty(message: any): Promise<void> {
+    await this.prepareDefinitionMutation(message);
+    await this.settingsSync.handleUpdateWorkflowProperty(
+      message.property,
+      message.value,
+      this.getCurrentPostMessage(),
+      this.clientId
+    );
+    await this.refreshDefinitionMutationView();
+  }
+
+  private async handleUpdateWorkflowProperties(message: any): Promise<void> {
+    await this.prepareDefinitionMutation(message);
+    await this.settingsSync.handleUpdateWorkflowProperties(
+      message.properties,
+      this.getCurrentPostMessage(),
+      this.clientId
+    );
+    await this.refreshDefinitionMutationView();
+  }
+
+  /** Fork a promoted run before its generic mutation reaches a queue instance. */
+  private async prepareDefinitionMutation(message: {
+    mutation?: unknown;
+  }): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      throw new Error("WorkflowOrchestrator not initialized");
+    }
+    await orchestrator.prepareDefinitionMutation(
+      message.mutation as
+        | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
+        | undefined,
+      this.scopedPostMessage,
+      this.clientId
+    );
+  }
+
+  private async refreshDefinitionMutationView(): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    const address = orchestrator?.getViewAddress(this.clientId);
+    if (orchestrator && address) {
+      await orchestrator.loadRunViewForClient(
+        address,
+        this.scopedPostMessage,
+        this.clientId
       );
     }
   }

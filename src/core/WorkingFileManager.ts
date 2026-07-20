@@ -121,6 +121,7 @@ export interface IWorkingFileQueueAccess {
  */
 export class WorkingFileManager {
   private operationQueue: Promise<void> = Promise.resolve();
+  private expectedDefinitionRevision: number | undefined;
   private readonly lineageRepository: WorkflowLineageRepository;
 
   constructor(
@@ -129,6 +130,97 @@ export class WorkingFileManager {
   ) {
     this.lineageRepository =
       lineageRepository ?? new WorkflowLineageRepository();
+  }
+
+  /**
+   * Forks an immutable promoted run into the lineage's one mutable draft. This
+   * holds the descriptor lock across the source revision check, draft write, and
+   * pending-edit update so a second client cannot redirect or overwrite it.
+   */
+  public static async seedDraftFromRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    fromRunRef: RunRef,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFilePath: string;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    const draftFilePath = WorkflowPaths.draftFilePath(
+      workspaceFolderPath,
+      workflowKey
+    );
+    return lineageRepository.mutateDescriptorAtRevision(
+      workspaceFolderPath,
+      workflowKey,
+      expectedDescriptorRevision,
+      async (descriptor) => {
+        if (descriptor.pendingEdit) {
+          throw new Error(
+            "A draft or continuation is already being prepared for this workflow"
+          );
+        }
+        const source = await readWorkingFileFromDisk(
+          WorkflowPaths.runFilePath(
+            workspaceFolderPath,
+            workflowKey,
+            fromRunRef
+          )
+        );
+        const sourceRevision = source.definitionRevision ?? 1;
+        if (sourceRevision !== expectedDefinitionRevision) {
+          throw new Error(
+            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
+          );
+        }
+
+        const now = Date.now();
+        const draft: WorkingFile = {
+          ...source,
+          ...(descriptor.originalFile
+            ? { originalFile: descriptor.originalFile }
+            : {}),
+          workflowName: source.workflowName ?? descriptor.workflowName,
+          startedAt: now,
+          lastModifiedAt: now,
+          isFavorite: descriptor.isFavorite,
+          definitionRevision: sourceRevision,
+          steps: stripStepRuntime(source.steps ?? []).map(
+            stripViewOnlyWorkflowStepFields
+          ),
+          ...(source.finalStep
+            ? {
+                finalStep: stripViewOnlyWorkflowStepFields(
+                  stripStepRuntime([source.finalStep])[0]
+                ),
+              }
+            : {}),
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.IDLE,
+          },
+        };
+        await fs.mkdir(
+          WorkflowPaths.draftDir(workspaceFolderPath, workflowKey),
+          {
+            recursive: true,
+          }
+        );
+        await writeWorkingFileAtomicTo(draftFilePath, draft);
+
+        return {
+          value: {
+            workingFilePath: draftFilePath,
+            definitionRevision: sourceRevision,
+            descriptorRevision: expectedDescriptorRevision + 1,
+          },
+          descriptor: { ...descriptor, pendingEdit: { kind: "draft" } },
+        };
+      }
+    );
   }
 
   // ==================== Pure File Operations ====================
@@ -140,6 +232,27 @@ export class WorkingFileManager {
    */
   public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
     return readWorkingFileFromDisk(workingFilePath);
+  }
+
+  /** Applies to the next definition write only; runtime persistence remains unguarded. */
+  public expectDefinitionRevision(revision: number): void {
+    this.expectedDefinitionRevision = revision;
+  }
+
+  private assertExpectedDefinitionRevision(workingFile: WorkingFile): void {
+    if (this.expectedDefinitionRevision === undefined) {
+      return;
+    }
+    const actual = workingFile.definitionRevision ?? 1;
+    if (actual !== this.expectedDefinitionRevision) {
+      throw new Error(
+        `Definition revision conflict: expected ${this.expectedDefinitionRevision}, found ${actual}`
+      );
+    }
+  }
+
+  private consumeExpectedDefinitionRevision(): void {
+    this.expectedDefinitionRevision = undefined;
   }
 
   /**
@@ -370,17 +483,14 @@ export class WorkingFileManager {
     }
 
     // Serialize operation to prevent race conditions
-    this.operationQueue = this.operationQueue
-      .then(async () => {
-        await this.updateWorkingFileDirect(skipMerge);
-      })
-      .catch((err) => {
-        Log.error(
-          `operationQueue: updateWorkingFile failed: ${getErrorMessage(err)}`
-        );
-      });
-
-    await this.operationQueue;
+    const operation = this.operationQueue.then(() =>
+      this.updateWorkingFileDirect(skipMerge)
+    );
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    await operation;
   }
 
   /**
@@ -396,79 +506,73 @@ export class WorkingFileManager {
       return; // No working file to update
     }
 
-    try {
-      await withFileLock(workingFilePath, async () => {
-        // Read current working file from disk
-        const workingFile = await this.readWorkingFile(workingFilePath);
+    await withFileLock(workingFilePath, async () => {
+      // Read current working file from disk
+      const workingFile = await this.readWorkingFile(workingFilePath);
+      this.assertExpectedDefinitionRevision(workingFile);
 
-        // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
-        // This preserves MCP-appended steps that may have been added while we were running
-        // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
-        if (!skipMerge) {
-          const diskSteps = workingFile.steps || [];
+      // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
+      // This preserves MCP-appended steps that may have been added while we were running
+      // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
+      if (!skipMerge) {
+        const diskSteps = workingFile.steps || [];
 
-          const newStepsFromDisk = this.queueAccess.mergeDiskSteps(diskSteps);
+        const newStepsFromDisk = this.queueAccess.mergeDiskSteps(diskSteps);
 
-          // If disk has new steps, log and emit state change
-          if (newStepsFromDisk.length > 0) {
-            Log.info(
-              `updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
-            );
+        // If disk has new steps, log and emit state change
+        if (newStepsFromDisk.length > 0) {
+          Log.info(
+            `updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
+          );
 
-            // Emit state change so dashboard updates
-            this.queueAccess.emitStateChange();
-          }
-        } // End skipMerge check
-
-        // Now write back the steps array (merged or direct from memory)
-        // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.steps = this.queueAccess
-          .getSteps()
-          .map(stripViewOnlyWorkflowStepFields);
-        // Count steps with _runtime metadata (Phase 4: Session Management)
-        const stepsWithRuntime = workingFile.steps.filter(
-          (p) => p._runtime
-        ).length;
-        Log.debug(
-          `updateWorkingFile - Writing ${workingFile.steps.length} steps to ${workingFilePath}, ` +
-            `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
-        );
-
-        // Update workflow name if set in state
-        const workflowName = this.queueAccess.getWorkflowName();
-        if (workflowName) {
-          workingFile.workflowName = workflowName;
+          // Emit state change so dashboard updates
+          this.queueAccess.emitStateChange();
         }
+      } // End skipMerge check
 
-        // Update last modified timestamp
-        workingFile.lastModifiedAt = Date.now();
-
-        // Definition revision is bumped by the queue's definition-mutating methods
-        // (append/insert/replace/delete/reorder); this just serializes the current
-        // in-memory value. Not bumped here — pure runtime persistence must not advance it.
-        workingFile.definitionRevision =
-          this.queueAccess.getDefinitionRevision();
-
-        // Update workflow-level runtime state
-        // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
-        const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
-        workingFile._runtime = {
-          currentIndex: this.queueAccess.getCurrentIndex(),
-          executionState: this.queueAccess.getStatus(),
-          ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
-        };
-
-        // Write atomically while holding lock
-        await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
-          skipLock: true,
-        });
-      });
-    } catch (error) {
-      Log.error(
-        `ctrlyoke: Failed to update working file: ${getErrorMessage(error)}`
+      // Now write back the steps array (merged or direct from memory)
+      // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
+      workingFile.steps = this.queueAccess
+        .getSteps()
+        .map(stripViewOnlyWorkflowStepFields);
+      // Count steps with _runtime metadata (Phase 4: Session Management)
+      const stepsWithRuntime = workingFile.steps.filter(
+        (p) => p._runtime
+      ).length;
+      Log.debug(
+        `updateWorkingFile - Writing ${workingFile.steps.length} steps to ${workingFilePath}, ` +
+          `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );
-      // Don't throw - this is a background operation
-    }
+
+      // Update workflow name if set in state
+      const workflowName = this.queueAccess.getWorkflowName();
+      if (workflowName) {
+        workingFile.workflowName = workflowName;
+      }
+
+      // Update last modified timestamp
+      workingFile.lastModifiedAt = Date.now();
+
+      // Definition revision is bumped by the queue's definition-mutating methods
+      // (append/insert/replace/delete/reorder); this just serializes the current
+      // in-memory value. Not bumped here — pure runtime persistence must not advance it.
+      workingFile.definitionRevision = this.queueAccess.getDefinitionRevision();
+
+      // Update workflow-level runtime state
+      // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
+      const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
+      workingFile._runtime = {
+        currentIndex: this.queueAccess.getCurrentIndex(),
+        executionState: this.queueAccess.getStatus(),
+        ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
+      };
+
+      // Write atomically while holding lock
+      await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
+        skipLock: true,
+      });
+      this.consumeExpectedDefinitionRevision();
+    });
   }
 
   /**
@@ -490,86 +594,85 @@ export class WorkingFileManager {
     let result: { workingFile: WorkingFile; appliedKeys: string[] } | null =
       null;
 
-    this.operationQueue = this.operationQueue
-      .then(async () => {
-        const appliedKeys: string[] = [];
+    const operation = this.operationQueue.then(async () => {
+      const appliedKeys: string[] = [];
 
-        await withFileLock(workingFilePath, async () => {
-          const workingFile = await this.readWorkingFile(workingFilePath);
+      await withFileLock(workingFilePath, async () => {
+        const workingFile = await this.readWorkingFile(workingFilePath);
+        this.assertExpectedDefinitionRevision(workingFile);
 
-          let modified = false;
-          for (const [key, value] of Object.entries(properties)) {
-            if (value === undefined) {
-              if (
-                options.allowDeletes &&
-                (workingFile as any)[key] !== undefined
-              ) {
-                delete (workingFile as any)[key];
-                modified = true;
-                appliedKeys.push(key);
-              }
-              continue;
-            }
-
+        let modified = false;
+        for (const [key, value] of Object.entries(properties)) {
+          if (value === undefined) {
             if (
-              options.onlyIfUndefined &&
+              options.allowDeletes &&
               (workingFile as any)[key] !== undefined
             ) {
-              continue;
-            }
-
-            if ((workingFile as any)[key] !== value) {
-              (workingFile as any)[key] = value;
+              delete (workingFile as any)[key];
               modified = true;
               appliedKeys.push(key);
             }
+            continue;
           }
 
-          if (options.ensureHarnessAndModel) {
-            if (!workingFile.harness) {
-              workingFile.harness = ConfigurationUtils.getIntegrationMode();
-              modified = true;
-              appliedKeys.push("harness");
-            }
-
-            if (!workingFile.model) {
-              workingFile.model = this.getDefaultModelForHarness(
-                workingFile.harness
-              );
-              modified = true;
-              appliedKeys.push("model");
-            }
+          if (
+            options.onlyIfUndefined &&
+            (workingFile as any)[key] !== undefined
+          ) {
+            continue;
           }
 
-          if (modified) {
-            workingFile.lastModifiedAt = Date.now();
-            workingFile.definitionRevision =
-              (workingFile.definitionRevision ?? 1) + 1;
-            await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
-              skipLock: true,
-            });
-            this.queueAccess.setDefinitionRevision(
-              workingFile.definitionRevision
+          if ((workingFile as any)[key] !== value) {
+            (workingFile as any)[key] = value;
+            modified = true;
+            appliedKeys.push(key);
+          }
+        }
+
+        if (options.ensureHarnessAndModel) {
+          if (!workingFile.harness) {
+            workingFile.harness = ConfigurationUtils.getIntegrationMode();
+            modified = true;
+            appliedKeys.push("harness");
+          }
+
+          if (!workingFile.model) {
+            workingFile.model = this.getDefaultModelForHarness(
+              workingFile.harness
             );
+            modified = true;
+            appliedKeys.push("model");
           }
+        }
 
-          for (const key of appliedKeys) {
-            this.queueAccess.updateWorkflowProperty(
-              key,
-              (workingFile as any)[key]
-            );
-          }
+        if (modified) {
+          workingFile.lastModifiedAt = Date.now();
+          workingFile.definitionRevision =
+            (workingFile.definitionRevision ?? 1) + 1;
+          await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
+            skipLock: true,
+          });
+          this.queueAccess.setDefinitionRevision(
+            workingFile.definitionRevision
+          );
+          this.consumeExpectedDefinitionRevision();
+        }
 
-          result = { workingFile, appliedKeys };
-        });
-      })
-      .catch((err) => {
-        Log.error(
-          `operationQueue: updateWorkingFileProperties failed: ${getErrorMessage(err)}`
-        );
+        for (const key of appliedKeys) {
+          this.queueAccess.updateWorkflowProperty(
+            key,
+            (workingFile as any)[key]
+          );
+        }
+
+        result = { workingFile, appliedKeys };
       });
-
-    await this.operationQueue;
+    });
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    await operation;
     return result;
   }
 

@@ -59,6 +59,7 @@ import {
 } from "@utils/browserNotifications";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
+import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
 
 // ============================================================================
 // Types
@@ -85,7 +86,24 @@ export function sendMessage(
   payload?: Record<string, unknown>
 ): void {
   const vscode = getVsCodeApi();
-  vscode.postMessage({ type, ...payload });
+  const definitionMutationTypes = new Set<string>([
+    MESSAGE_TYPES.UPDATE_PROMPT,
+    MESSAGE_TYPES.INSERT_WORKFLOW_STEP,
+    MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+    MESSAGE_TYPES.DELETE_PROMPT,
+    MESSAGE_TYPES.REORDER_PROMPTS,
+    MESSAGE_TYPES.UNDO_REDO_SYNC,
+  ]);
+  const mutation = getWorkflowDefinitionMutation();
+  vscode.postMessage({
+    type,
+    ...payload,
+    ...(definitionMutationTypes.has(type) &&
+    !("mutation" in (payload ?? {})) &&
+    mutation
+      ? { mutation }
+      : {}),
+  });
 }
 
 // ============================================================================
@@ -1725,7 +1743,6 @@ function createMessageHandlers(): MessageHandlerMap {
         uiStore.setRunStates(runStates);
       }
     }
-
   };
 
   // --------------------------------------------------------------------------
@@ -1771,7 +1788,10 @@ function createMessageHandlers(): MessageHandlerMap {
     useSettingsStore.getState().setWorkflowProperties(normalized);
     useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
     const ui = useUiStore.getState();
-    ui.setDisplayedRunView(address, runSummaries, executionRunRef);
+    ui.setDisplayedRunView(address, runSummaries, executionRunRef, {
+      definitionRevision: workingFile.definitionRevision ?? 1,
+      descriptorRevision: message.descriptorRevision,
+    });
     if (history) {
       useWorkflowStore.getState().loadHistoryRun(
         history,

@@ -50,6 +50,7 @@ import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
+import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import {
   agentWarning,
   modelWarning,
@@ -402,7 +403,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           useSettingsStore.getState().workflowProperties
         );
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES,
         properties: updates,
       });
@@ -465,7 +466,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("model", model);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "model",
         value: model,
@@ -483,7 +484,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("agent", agent);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "agent",
         value: agent,
@@ -501,7 +502,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("skills", skills);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "skills",
         value: skills,
@@ -550,7 +551,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("sessionId", parsedValue);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "sessionId",
         value: parsedValue,
@@ -568,7 +569,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       );
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "mcpServers",
         value: newValue,
@@ -586,7 +587,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       );
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "hooks",
         value: newValue,
@@ -601,7 +602,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("toolPermissions", value);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "toolPermissions",
         value: value,
@@ -619,7 +620,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("additionalArgs", value);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "additionalArgs",
         value: value,
@@ -634,7 +635,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       settingsStore.updateWorkflowProperty("priorContext", value);
       syncWorkflowPropertiesForUndo();
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "priorContext",
         value: value,
@@ -654,7 +655,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         // inherit the global default again for a newly-created workflow.
         settingsStore.updateWorkflowProperty("endCondition", null);
         syncWorkflowPropertiesForUndo();
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
           value: null,
@@ -672,7 +673,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           defaultEndCondition
         );
         syncWorkflowPropertiesForUndo();
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
           value: defaultEndCondition,
@@ -690,7 +691,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         updated as WorkflowProperties["endCondition"]
       );
       syncWorkflowPropertiesForUndo();
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "endCondition",
         value: updated,
@@ -720,7 +721,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         // inherit the global default again for a newly-created workflow.
         settingsStore.updateWorkflowProperty("preCondition", null);
         syncWorkflowPropertiesForUndo();
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "preCondition",
           value: null,
@@ -739,7 +740,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           defaultPreCondition
         );
         syncWorkflowPropertiesForUndo();
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "preCondition",
           value: defaultPreCondition,
@@ -758,7 +759,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           updated as import("@root/types/CtrlYokeTypes").PreCondition
         );
       syncWorkflowPropertiesForUndo();
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "preCondition",
         value: updated,
@@ -776,7 +777,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           updated as WorkflowProperties["errorBehavior"]
         );
       syncWorkflowPropertiesForUndo();
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "errorBehavior",
         value: updated,

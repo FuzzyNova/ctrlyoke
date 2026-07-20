@@ -1673,6 +1673,11 @@ export class WorkflowInstance {
     this.promptQueue.updateWorkflowProperty(property, value);
   }
 
+  /** Guard the next user definition mutation with its client-observed revision. */
+  expectDefinitionRevision(revision: number): void {
+    this.promptQueue.expectDefinitionRevision(revision);
+  }
+
   async updateWorkingFileProperties(
     properties: Record<string, unknown>,
     options: {

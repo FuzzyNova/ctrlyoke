@@ -204,6 +204,42 @@ export class WorkflowLineageRepository {
     });
   }
 
+  /**
+   * Runs a short lineage mutation while holding the descriptor lock. The caller may
+   * persist a coupled working-file change in `mutate`; this repository remains the
+   * sole descriptor writer. `expectedRevision` makes client-side descriptor views
+   * optimistic rather than silently overwriting another client's draft preparation.
+   */
+  async mutateDescriptorAtRevision<T>(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    expectedRevision: number,
+    mutate: (
+      descriptor: WorkflowLineageDescriptor
+    ) => Promise<{ value: T; descriptor: WorkflowLineageDescriptor }>
+  ): Promise<T> {
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    return withFileLock(descriptorPath, async () => {
+      const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      if (descriptor.revision !== expectedRevision) {
+        throw new Error(
+          `Descriptor revision conflict: expected ${expectedRevision}, found ${descriptor.revision}`
+        );
+      }
+      const result = await mutate(descriptor);
+      const updated = {
+        ...result.descriptor,
+        lastModifiedAt: Date.now(),
+        revision: descriptor.revision + 1,
+      };
+      await this.writeDescriptorDirect(workspaceRoot, workflowKey, updated);
+      return result.value;
+    });
+  }
+
   /** Lists every valid lineage directory's `WorkflowKey` directly under `.runs/`. */
   async listLineageKeys(workspaceRoot: string): Promise<WorkflowKey[]> {
     const root = WorkflowPaths.runsRoot(workspaceRoot);

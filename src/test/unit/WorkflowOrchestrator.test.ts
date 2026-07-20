@@ -1,6 +1,10 @@
-import * as assert from "assert";
 import { suite, test } from "mocha";
+import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -186,6 +190,117 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.deepStrictEqual(sent, [
       { type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: [] },
     ]);
+  });
+});
+
+suite("WorkflowOrchestrator draft mutation preparation", () => {
+  test("forks only the requesting client's promoted run view and leaves execution/source untouched", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-view-")
+    );
+    try {
+      const sourceManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "source", _runtime: { startedAt: 1 } }],
+        getCurrentIndex: () => 1,
+        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Source",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "source",
+        [{ prompt: "source", _runtime: { startedAt: 1 } }],
+        workspace,
+        "Source"
+      );
+      const promoted = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const sourceBefore = await fs.readFile(promoted.workingFilePath, "utf8");
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewerRegistry = new Map([
+        ["client-a", "source-instance"],
+        ["client-b", "execution-instance"],
+      ]);
+      internal.viewAddressRegistry = new Map([
+        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+        ["client-b", { workflowKey, kind: "run", runRef: promoted.runRef }],
+      ]);
+      internal.instances = new Map([
+        [
+          "execution-instance",
+          {
+            getQueueState: () => ({ workflowKey, runRef: promoted.runRef }),
+            getExecutionRunRef: () => promoted.runRef,
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+
+      let loadedFor: string | undefined;
+      internal.loadFreshInstanceAndReplay = async (
+        draftPath: string,
+        clientId: string
+      ) => {
+        loadedFor = clientId;
+        assert.match(draftPath, /draft[\\/]workflow\.ctrlyoke\.json$/);
+        internal.viewerRegistry.set(clientId, "draft-instance");
+        internal.instances.set("draft-instance", {
+          expectDefinitionRevision: () => undefined,
+        });
+      };
+      internal.loadRunViewForClient = async (
+        address: unknown,
+        _send: unknown,
+        clientId: string
+      ) => {
+        internal.viewAddressRegistry.set(clientId, address);
+      };
+
+      await orchestrator.prepareDefinitionMutation(
+        {
+          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: 2,
+        },
+        () => undefined,
+        "client-a"
+      );
+
+      assert.strictEqual(loadedFor, "client-a");
+      assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+        workflowKey,
+        kind: "draft",
+      });
+      assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
+        workflowKey,
+        kind: "run",
+        runRef: promoted.runRef,
+      });
+      assert.strictEqual(
+        internal.findExecutionRunRef(workflowKey),
+        promoted.runRef
+      );
+      assert.strictEqual(
+        await fs.readFile(promoted.workingFilePath, "utf8"),
+        sourceBefore
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });
 
