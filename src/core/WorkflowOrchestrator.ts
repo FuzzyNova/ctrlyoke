@@ -6,6 +6,7 @@ import { CliIntegration } from "./harness/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
 import { WorkingFileManager } from "./WorkingFileManager";
+import { buildDefinitionSnapshot } from "./WorkflowStepSanitizer";
 import { PromptQueue } from "./PromptQueue";
 import {
   QueueState,
@@ -155,6 +156,11 @@ export class WorkflowOrchestrator {
   private readonly viewAddressRegistry = new Map<
     string,
     WorkflowViewAddress | null
+  >();
+  /** Per-client addressed-view transport, used for targeted invalidation. */
+  private readonly viewMessageSinks = new Map<
+    string,
+    (message: unknown) => void
   >();
 
   /** Retired instances keyed by workflowId — held until no client views them. */
@@ -1695,6 +1701,15 @@ export class WorkflowOrchestrator {
     return (partial.viewAddressRegistry ??= new Map());
   }
 
+  private getViewMessageSinks(): Map<string, (message: unknown) => void> {
+    const initialized = this.viewMessageSinks;
+    if (initialized) return initialized;
+    const partial = this as unknown as {
+      viewMessageSinks?: Map<string, (message: unknown) => void>;
+    };
+    return (partial.viewMessageSinks ??= new Map());
+  }
+
   /**
    * Loads one addressed definition and its matching timeline as a single
    * client-local snapshot. It never calls loadWorkingFile(), so a client
@@ -1741,6 +1756,7 @@ export class WorkflowOrchestrator {
     void steps;
     void finalStep;
     this.getViewAddressRegistry().set(clientId, address);
+    this.getViewMessageSinks().set(clientId, send);
     const snapshot: RunViewLoadedMessage = {
       type: MESSAGE_TYPES.RUN_VIEW_LOADED,
       requestId,
@@ -2098,8 +2114,7 @@ export class WorkflowOrchestrator {
     toIndex: number,
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
-    clientId: string = this.PANEL_CLIENT_ID,
-    send?: (message: unknown) => void
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<
     | {
         kind: "seeded";
@@ -2228,18 +2243,108 @@ export class WorkflowOrchestrator {
           expectedDescriptorRevision,
           this.lineageRepository
         );
-    if (send) {
-      await this.loadRunViewForClient(
-        {
-          workflowKey: address.workflowKey,
-          kind: "run",
-          runRef: address.runRef,
-        },
-        send,
-        clientId
+    await this.commitPendingRewindRevision(
+      address.workflowKey,
+      address.runRef,
+      result.definitionRevision,
+      JSON.parse(await fs.promises.readFile(targetPath, "utf8")) as WorkingFile
+    );
+    await this.invalidateRunViews(address.workflowKey, address.runRef);
+    return { kind: "rewind", ...result };
+  }
+
+  /** One lifecycle operation shared by dashboard actions and startup recovery. */
+  async discardContinuationAtRun(
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    confirmEditedSuffix: boolean = false,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<
+    | { discarded: false; hasSuffixEdits: true }
+    | {
+        discarded: true;
+        hasSuffixEdits: boolean;
+        definitionRevision: number;
+        descriptorRevision: number;
+      }
+  > {
+    const viewed = this.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== "run" ||
+      viewed.workflowKey !== address.workflowKey ||
+      viewed.runRef !== address.runRef
+    ) {
+      throw new Error(
+        "Discard continuation no longer targets this client's viewed run"
       );
     }
-    return { kind: "rewind", ...result };
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+    const result = await WorkingFileManager.discardPendingRewind(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      confirmEditedSuffix,
+      this.lineageRepository
+    );
+    if (!result.discarded) return result;
+    await this.invalidateRunViews(address.workflowKey, address.runRef);
+    return result;
+  }
+
+  private async commitPendingRewindRevision(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    definitionRevision: number,
+    workingFile: WorkingFile
+  ): Promise<void> {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+    await new OutputHistoryManager(workspaceRoot).commitDefinitionRevision(
+      WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef),
+      {
+        definitionRevision,
+        definition: buildDefinitionSnapshot(
+          workingFile.workflowName ?? "",
+          workingFile.steps ?? [],
+          workingFile._runtime?.pendingRewind?.fromStepIndex
+        ),
+      }
+    );
+  }
+
+  /** Refresh every connected client viewing the changed stable run identity. */
+  private async invalidateRunViews(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<void> {
+    const targets = [...this.getViewAddressRegistry().entries()].filter(
+      ([, address]) =>
+        address?.kind === "run" &&
+        address.workflowKey === workflowKey &&
+        address.runRef === runRef
+    );
+    await Promise.all(
+      targets.map(async ([clientId]) => {
+        const send = this.getViewMessageSinks().get(clientId);
+        if (!send) return;
+        try {
+          await this.loadRunViewForClient(
+            { workflowKey, kind: "run", runRef },
+            send,
+            clientId
+          );
+        } catch (error) {
+          Log.warn(
+            `[WorkflowOrchestrator] Failed to invalidate run view for ${clientId}: ${getErrorMessage(error)}`
+          );
+        }
+      })
+    );
   }
 
   async executeEphemeralPrompt(
@@ -2564,6 +2669,7 @@ export class WorkflowOrchestrator {
     );
     this.viewerRegistry.delete(clientId);
     this.getViewAddressRegistry().delete(clientId);
+    this.getViewMessageSinks().delete(clientId);
 
     if (!workflowId) return;
 

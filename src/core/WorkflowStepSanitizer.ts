@@ -34,11 +34,13 @@ export function stripStepRuntime(steps: WorkflowStep[]): WorkflowStep[] {
  */
 export function buildDefinitionSnapshot(
   workflowName: string,
-  steps: WorkflowStep[]
+  steps: WorkflowStep[],
+  rewindBoundary?: number
 ): WorkflowDefinitionSnapshot {
   return {
     workflowName,
     steps: stripStepRuntime(steps),
+    ...(rewindBoundary !== undefined ? { rewindBoundary } : {}),
   };
 }
 

@@ -1107,6 +1107,20 @@ export interface LoadRunViewMessage {
 export interface SetStartPositionMessage {
   type: typeof MESSAGE_TYPES.SET_START_POSITION;
   toIndex: number;
+  /** Start-position is always an explicit promoted-run operation. */
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+}
+
+/** Restore a run from its durable pending-rewind base snapshot. */
+export interface DiscardContinuationMessage {
+  type: typeof MESSAGE_TYPES.DISCARD_CONTINUATION;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+  /** Set only after the caller has confirmed suffix edits will be lost. */
+  confirmEditedSuffix?: boolean;
 }
 
 /**

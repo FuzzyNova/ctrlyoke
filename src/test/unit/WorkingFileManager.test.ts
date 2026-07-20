@@ -649,6 +649,85 @@ suite("WorkingFileManager", () => {
         undefined
       );
     });
+
+    test("discards an unedited continuation by restoring the exact base snapshot", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const before = await fs.readFile(runFilePath, "utf8");
+      await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      const result = await WorkingFileManager.discardPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        2,
+        3
+      );
+      assert.strictEqual(result.discarded, true);
+      assert.strictEqual(await fs.readFile(runFilePath, "utf8"), before);
+      await assert.rejects(
+        fs.readFile(
+          WorkflowPaths.pendingRewindBaseFilePath(
+            tmpWorkspace,
+            workflowKey,
+            runRef
+          )
+        )
+      );
+      const descriptor = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.descriptorPath(tmpWorkspace, workflowKey),
+          "utf8"
+        )
+      );
+      assert.strictEqual(descriptor.pendingEdit, undefined);
+    });
+
+    test("requires confirmation before discarding edited suffix content", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+      const edited = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      (edited.steps![1] as { prompt: string }).prompt = "edited suffix";
+      edited.definitionRevision = 3;
+      await fs.writeFile(runFilePath, JSON.stringify(edited, null, 2));
+
+      const declined = await WorkingFileManager.discardPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        3,
+        3
+      );
+      assert.deepStrictEqual(declined, {
+        discarded: false,
+        hasSuffixEdits: true,
+      });
+      const accepted = await WorkingFileManager.discardPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        3,
+        3,
+        true
+      );
+      assert.strictEqual(accepted.discarded, true);
+      assert.ok(accepted.hasSuffixEdits);
+    });
   });
 
   suite("seedDraftFromRun", () => {

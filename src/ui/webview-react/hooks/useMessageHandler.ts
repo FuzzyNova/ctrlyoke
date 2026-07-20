@@ -1788,10 +1788,21 @@ function createMessageHandlers(): MessageHandlerMap {
     useSettingsStore.getState().setWorkflowProperties(normalized);
     useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
     const ui = useUiStore.getState();
-    ui.setDisplayedRunView(address, runSummaries, executionRunRef, {
-      definitionRevision: workingFile.definitionRevision ?? 1,
-      descriptorRevision: message.descriptorRevision,
-    });
+    ui.setDisplayedRunView(
+      address,
+      runSummaries,
+      executionRunRef,
+      {
+        definitionRevision: workingFile.definitionRevision ?? 1,
+        descriptorRevision: message.descriptorRevision,
+      },
+      runtime?.pendingRewind
+    );
+    // A rewind starts a new, suffix-only editing epoch. Re-baselining here
+    // prevents zundo from crossing into the full-runtime pre-rewind state.
+    if (runtime?.pendingRewind) {
+      useWorkflowStore.temporal.getState().clear();
+    }
     if (history) {
       useWorkflowStore.getState().loadHistoryRun(
         history,

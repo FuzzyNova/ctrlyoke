@@ -20,6 +20,7 @@ import {
   writeClipboardText,
 } from "@utils/stepClipboard";
 import { useUiStore } from "@store/uiStore";
+import { postRunLifecycleMutation } from "../utils/workflowMutation";
 
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
@@ -29,6 +30,7 @@ interface UseStepContextMenuOptions {
   confirmResetOperations: boolean;
   totalSteps: number;
   currentStep: number;
+  pendingRewind?: { fromStepIndex: number };
 }
 
 interface OpenContextMenuParams {
@@ -44,6 +46,16 @@ interface OpenContextMenuParams {
   outputText?: string;
 }
 
+const lifecycleMessageTarget = {
+  postMessage: (message: unknown) => {
+    const { type, ...payload } = message as { type: string } & Record<
+      string,
+      unknown
+    >;
+    sendMessage(type, payload);
+  },
+};
+
 export function useStepContextMenu({
   isCLIManaged,
   canChangeStartPosition,
@@ -52,6 +64,7 @@ export function useStepContextMenu({
   confirmResetOperations,
   totalSteps,
   currentStep,
+  pendingRewind,
 }: UseStepContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
@@ -61,7 +74,10 @@ export function useStepContextMenu({
   const handleSetStartPosition = useCallback(
     (target: number) => {
       if (!confirmResetOperations) {
-        sendMessage(MESSAGE_TYPES.SET_START_POSITION, { toIndex: target });
+        postRunLifecycleMutation(lifecycleMessageTarget, {
+          type: MESSAGE_TYPES.SET_START_POSITION,
+          toIndex: target,
+        });
       } else {
         setSetPositionIndex(target);
       }
@@ -159,6 +175,21 @@ export function useStepContextMenu({
               : "Cannot change start position while workflow is running",
             onClick: () => handleSetStartPosition(setPositionTarget),
           },
+          ...(pendingRewind?.fromStepIndex === deleteIndex
+            ? [
+                {
+                  label: "Discard Continuation",
+                  icon: "codicon-discard",
+                  disabled: isCLIManaged,
+                  disabledTitle:
+                    "Read-only — workflow is running via ctrlyoke CLI",
+                  onClick: () =>
+                    postRunLifecycleMutation(lifecycleMessageTarget, {
+                      type: MESSAGE_TYPES.DISCARD_CONTINUATION,
+                    }),
+                },
+              ]
+            : []),
           { type: "divider" },
           {
             label: stepToggleLabel,
@@ -197,12 +228,14 @@ export function useStepContextMenu({
       executionState,
       handleSetStartPosition,
       isCLIManaged,
+      pendingRewind?.fromStepIndex,
     ]
   );
 
   const handleSetPositionConfirm = useCallback(() => {
     if (setPositionIndex === null) return;
-    sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
+    postRunLifecycleMutation(lifecycleMessageTarget, {
+      type: MESSAGE_TYPES.SET_START_POSITION,
       toIndex: setPositionIndex,
     });
     setSetPositionIndex(null);

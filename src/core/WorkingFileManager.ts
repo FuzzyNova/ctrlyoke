@@ -87,6 +87,25 @@ async function writeSnapshotAtomic(
   }
 }
 
+/** Restores opaque recovery bytes without reserializing a working file. */
+async function restoreSnapshotAtomic(
+  workingFilePath: string,
+  content: Buffer
+): Promise<void> {
+  const tempPath = `${workingFilePath}.tmp`;
+  try {
+    await fs.writeFile(tempPath, content);
+    await fs.rename(tempPath, workingFilePath);
+  } catch (error) {
+    await fs.unlink(tempPath).catch(() => {});
+    throw new Error(
+      `Failed to restore pending rewind snapshot: ${getErrorMessage(error)}`
+    );
+  }
+}
+
+class DiscardConfirmationRequiredError extends Error {}
+
 /**
  * Interface providing queue state access for working file persistence operations.
  * Implemented as an adapter by PromptQueue to decouple file I/O from queue state management.
@@ -644,6 +663,136 @@ export class WorkingFileManager {
         });
       }
     );
+  }
+
+  /**
+   * Restores a durable pre-rewind definition. This is deliberately the sole
+   * rollback path: the in-memory runtime archive is not crash-safe and must
+   * never be used to reconstruct a discarded suffix.
+   */
+  public static async discardPendingRewind(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    confirmEditedSuffix: boolean = false,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<
+    | { discarded: false; hasSuffixEdits: true }
+    | {
+        discarded: true;
+        hasSuffixEdits: boolean;
+        workingFile: WorkingFile;
+        definitionRevision: number;
+        descriptorRevision: number;
+      }
+  > {
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    const snapshotPath = WorkflowPaths.pendingRewindBaseFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    try {
+      return await lineageRepository.mutateDescriptorAtRevision<
+        | { discarded: false; hasSuffixEdits: true }
+        | {
+            discarded: true;
+            hasSuffixEdits: boolean;
+            workingFile: WorkingFile;
+            definitionRevision: number;
+            descriptorRevision: number;
+          }
+      >(
+        workspaceFolderPath,
+        workflowKey,
+        expectedDescriptorRevision,
+        async (descriptor) => {
+          const pending = descriptor.pendingEdit;
+          if (pending?.kind !== "rewind" || pending.runRef !== runRef) {
+            throw new Error(
+              "This run does not have a pending continuation to discard"
+            );
+          }
+          return withFileLock(runFilePath, async () => {
+            const current = await readWorkingFileFromDisk(runFilePath);
+            const currentRevision = current.definitionRevision ?? 1;
+            if (currentRevision !== expectedDefinitionRevision) {
+              throw new Error(
+                `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${currentRevision}`
+              );
+            }
+            const snapshotBytes = await fs.readFile(snapshotPath);
+            const base = JSON.parse(
+              snapshotBytes.toString("utf8")
+            ) as WorkingFile;
+            if (
+              (base.definitionRevision ?? 1) !== pending.baseDefinitionRevision
+            ) {
+              throw new Error(
+                "Pending continuation snapshot does not match its descriptor"
+              );
+            }
+            const boundary = pending.fromStepIndex;
+            const currentSuffix = (current.steps ?? [])
+              .slice(boundary)
+              .map(
+                (step) =>
+                  stripStepRuntime([stripViewOnlyWorkflowStepFields(step)])[0]
+              );
+            const baseSuffix = (base.steps ?? [])
+              .slice(boundary)
+              .map(
+                (step) =>
+                  stripStepRuntime([stripViewOnlyWorkflowStepFields(step)])[0]
+              );
+            const hasSuffixEdits =
+              JSON.stringify(currentSuffix) !== JSON.stringify(baseSuffix);
+            if (hasSuffixEdits && !confirmEditedSuffix) {
+              throw new DiscardConfirmationRequiredError();
+            }
+
+            await restoreSnapshotAtomic(runFilePath, snapshotBytes);
+            // Never recursively remove this directory: a damaged/foreign entry
+            // must survive for investigation rather than being silently erased.
+            await fs.unlink(snapshotPath);
+            await fs
+              .rmdir(
+                WorkflowPaths.pendingRewindDir(
+                  workspaceFolderPath,
+                  workflowKey,
+                  runRef
+                )
+              )
+              .catch((error: NodeJS.ErrnoException) => {
+                if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+                  throw error;
+              });
+            return {
+              value: {
+                discarded: true as const,
+                hasSuffixEdits,
+                workingFile: base,
+                definitionRevision: base.definitionRevision ?? 1,
+                descriptorRevision: expectedDescriptorRevision + 1,
+              },
+              descriptor: { ...descriptor, pendingEdit: undefined },
+            };
+          });
+        }
+      );
+    } catch (error) {
+      if (error instanceof DiscardConfirmationRequiredError) {
+        return { discarded: false, hasSuffixEdits: true };
+      }
+      throw error;
+    }
   }
 
   /**

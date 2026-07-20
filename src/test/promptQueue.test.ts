@@ -1423,6 +1423,32 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("syncStepsForUndoRedo", () => {
+    test("does not restore archived or incoming suffix runtime during a pending rewind", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "prefix", _runtime: { startedAt: 0, completedAt: 1 } },
+          {
+            prompt: "suffix",
+            _runtime: { sessionId: "stale", startedAt: 1, completedAt: 2 },
+          },
+        ])
+      );
+      queue.applyPendingRewind(1, 1, 2, false);
+
+      await queue.syncStepsForUndoRedo([
+        { prompt: "prefix", _runtime: { startedAt: 0, completedAt: 1 } },
+        {
+          prompt: "suffix edited",
+          _runtime: { sessionId: "stale", startedAt: 1, completedAt: 2 },
+        },
+      ] as any);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0]._runtime?.completedAt, 1);
+      assert.strictEqual(state.steps[1]._runtime, undefined);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+    });
+
     test("should restore runtime from a redone step and strip webview-only fields", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "p0" }]));
 

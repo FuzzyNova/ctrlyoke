@@ -256,6 +256,7 @@ export const MESSAGE_TYPES = {
 
   // Queue Position Control — Webview → Extension
   SET_START_POSITION: "setStartPosition",
+  DISCARD_CONTINUATION: "discardContinuation",
   REORDER_PROMPTS: "reorderPrompts",
   UPDATE_CONFIRM_RESET: "updateConfirmReset",
 

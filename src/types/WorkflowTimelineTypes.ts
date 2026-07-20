@@ -173,6 +173,8 @@ export interface WorkflowRuntimeTransitionPayload {
 export interface WorkflowDefinitionSnapshot {
   workflowName: string;
   steps: WorkflowStep[];
+  /** Present for the mutable suffix revision created by a same-run rewind. */
+  rewindBoundary?: number;
 }
 
 export interface DefinitionRevisionCommittedEventDraft extends RunTimelineEventDraftBase {

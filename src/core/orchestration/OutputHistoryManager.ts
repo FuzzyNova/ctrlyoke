@@ -213,6 +213,24 @@ export class OutputHistoryManager {
     }
   }
 
+  /** Commit a definition transition that occurs before any new output exists. */
+  async commitDefinitionRevision(
+    historyFilePath: string,
+    context: DefinitionRevisionContext
+  ): Promise<void> {
+    if (!historyFilePath) {
+      throw new Error(
+        "Cannot commit a definition revision without a manifest path"
+      );
+    }
+    await this.timelineRecorder.commitDefinitionRevisionIfNewer(
+      historyFilePath,
+      context.definitionRevision,
+      context.definition,
+      Date.now()
+    );
+  }
+
   /**
    * Buffer a raw text delta for an in-flight attempt. Written on a semantic
    * boundary rather than immediately — see {@link StreamingHistoryBuffer}.
@@ -703,7 +721,14 @@ export class OutputHistoryManager {
     }
 
     // runs is newest-first; slice(maxRuns) gives the oldest entries to delete
-    const toDelete = runs.slice(maxRuns);
+    const protectedRunRef = await this.getProtectedRunRef(workflowKey);
+    const toDelete = runs.slice(maxRuns).filter((runRef) => {
+      if (runRef !== protectedRunRef) return true;
+      Log.warn(
+        `Skipping protected pending-continuation run ${runRef} during pruning`
+      );
+      return false;
+    });
     for (const runRef of toDelete) {
       const entryPath = WorkflowPaths.runDir(
         this._workspaceFolderPath,
@@ -736,6 +761,9 @@ export class OutputHistoryManager {
       );
       return runs.length;
     }
+    if ((await this.getProtectedRunRef(workflowKey)) === runRef) {
+      throw new Error("Cannot delete a run with a pending continuation");
+    }
 
     const entryPath = WorkflowPaths.runDir(
       this._workspaceFolderPath,
@@ -757,6 +785,9 @@ export class OutputHistoryManager {
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): Promise<number> {
+    if ((await this.getProtectedRunRef(workflowKey)) === runRef) {
+      throw new Error("Cannot delete a run with a pending continuation");
+    }
     const runs = await this.getRunsForWorkflow(workflowKey);
     if (!runs.includes(runRef)) {
       throw new Error(
@@ -772,6 +803,24 @@ export class OutputHistoryManager {
     );
     this.refreshSearchIndex();
     return (await this.getRunsForWorkflow(workflowKey)).length;
+  }
+
+  private async getProtectedRunRef(
+    workflowKey: WorkflowKey
+  ): Promise<RunRef | undefined> {
+    try {
+      const descriptor = JSON.parse(
+        await fs.promises.readFile(
+          WorkflowPaths.descriptorPath(this._workspaceFolderPath, workflowKey),
+          "utf8"
+        )
+      ) as import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor;
+      return descriptor.pendingEdit?.kind === "rewind"
+        ? descriptor.pendingEdit.runRef
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**

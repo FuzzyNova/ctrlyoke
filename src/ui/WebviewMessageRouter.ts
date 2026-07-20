@@ -59,6 +59,8 @@ import type {
   DeleteMcpRegistryServerMessage,
   ExportMcpToHarnessMessage,
   InsertWorkflowStepMessage,
+  SetStartPositionMessage,
+  DiscardContinuationMessage,
   RequestMcpRegistrySearchMessage,
   SaveMcpRegistryServerMessage,
   UndoPromptChangesMessage,
@@ -531,7 +533,13 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.SET_START_POSITION, async (message) => {
-      await this.handleSetStartPosition(message.toIndex as number);
+      await this.handleSetStartPosition(message as SetStartPositionMessage);
+    });
+
+    table.set(MESSAGE_TYPES.DISCARD_CONTINUATION, async (message) => {
+      await this.handleDiscardContinuation(
+        message as DiscardContinuationMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
@@ -1854,7 +1862,9 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleSetStartPosition(toIndex: number): Promise<void> {
+  private async handleSetStartPosition(
+    message: SetStartPositionMessage
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");
@@ -1862,11 +1872,57 @@ export class WebviewMessageRouter {
     }
 
     try {
-      await orchestrator.setStartPosition(toIndex, this.clientId);
+      await orchestrator.setStartPositionAtRun(
+        {
+          workflowKey: message.address.workflowKey,
+          runRef: message.address.runRef,
+        },
+        message.toIndex,
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        this.clientId
+      );
     } catch (error) {
       Log.error("Failed to set start position:", error);
       vscode.window.showErrorMessage(
         `Failed to set start position: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  private async handleDiscardContinuation(
+    message: DiscardContinuationMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) throw new Error("WorkflowOrchestrator not initialized");
+    try {
+      const result = await orchestrator.discardContinuationAtRun(
+        {
+          workflowKey: message.address.workflowKey,
+          runRef: message.address.runRef,
+        },
+        message.expectedDefinitionRevision,
+        message.expectedDescriptorRevision,
+        message.confirmEditedSuffix,
+        this.clientId
+      );
+      if (!result.discarded && result.hasSuffixEdits) {
+        const confirmation = await vscode.window.showWarningMessage(
+          "Discard continuation edits? Your changes to the rewound suffix will be lost.",
+          { modal: true },
+          "Discard Continuation"
+        );
+        if (confirmation === "Discard Continuation") {
+          await this.handleDiscardContinuation({
+            ...message,
+            confirmEditedSuffix: true,
+          });
+        }
+      }
+    } catch (error) {
+      Log.error("Failed to discard continuation:", error);
+      vscode.window.showErrorMessage(
+        `Failed to discard continuation: ${getErrorMessage(error)}`
       );
     }
   }

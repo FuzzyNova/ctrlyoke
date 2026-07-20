@@ -193,6 +193,11 @@ interface UiState {
   /** Optimistic revisions paired with the current addressed definition snapshot. */
   displayedDefinitionRevision: number | null;
   displayedDescriptorRevision: number | null;
+  /** Durable rewind marker from the addressed run snapshot. */
+  pendingRewind: {
+    fromStepIndex: number;
+    baseDefinitionRevision: number;
+  } | null;
 
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;
@@ -447,7 +452,8 @@ interface UiActions {
     address: WorkflowViewAddress,
     summaries: RunSummary[],
     executionRunRef?: string,
-    revisions?: { definitionRevision: number; descriptorRevision: number }
+    revisions?: { definitionRevision: number; descriptorRevision: number },
+    pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number }
   ) => void;
 
   // Dropdown hide feature
@@ -562,6 +568,7 @@ const initialState: UiState = {
   executionRunRef: null,
   displayedDefinitionRevision: null,
   displayedDescriptorRevision: null,
+  pendingRewind: null,
   footerOpenPicker: null,
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
@@ -957,12 +964,19 @@ export const useUiStore = create<UiState & UiActions>()(
       clearHistoryView: () =>
         set({ isViewingHistory: false, viewingRunIndex: 0 }),
 
-      setDisplayedRunView: (address, summaries, executionRunRef, revisions) =>
+      setDisplayedRunView: (
+        address,
+        summaries,
+        executionRunRef,
+        revisions,
+        pendingRewind
+      ) =>
         set({
           displayedViewAddress: address,
           executionRunRef: executionRunRef ?? null,
           displayedDefinitionRevision: revisions?.definitionRevision ?? null,
           displayedDescriptorRevision: revisions?.descriptorRevision ?? null,
+          pendingRewind: pendingRewind ?? null,
           runSummaries: summaries,
           availableRuns: summaries.length,
           runTimestamps: summaries.map((summary) => summary.startedAt),

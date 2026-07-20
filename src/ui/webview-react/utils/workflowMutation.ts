@@ -32,3 +32,30 @@ export function postWorkflowDefinitionMutation(
   const mutation = getWorkflowDefinitionMutation();
   target.postMessage({ ...message, ...(mutation ? { mutation } : {}) });
 }
+
+/** Post an explicitly addressed promoted-run lifecycle mutation. */
+export function postRunLifecycleMutation(
+  target: MessageTarget,
+  message: Record<string, unknown>
+): boolean {
+  const state = useUiStore.getState();
+  const address = state.displayedViewAddress;
+  if (
+    address?.kind !== "run" ||
+    state.displayedDefinitionRevision === null ||
+    state.displayedDescriptorRevision === null
+  ) {
+    state.showToast(
+      "Select a saved run before changing its start position",
+      "warning"
+    );
+    return false;
+  }
+  target.postMessage({
+    ...message,
+    address,
+    expectedDefinitionRevision: state.displayedDefinitionRevision,
+    expectedDescriptorRevision: state.displayedDescriptorRevision,
+  });
+  return true;
+}

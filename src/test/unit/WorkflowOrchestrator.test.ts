@@ -6,6 +6,7 @@ import * as path from "path";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -239,6 +240,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
         ["client-b", { workflowKey, kind: "run", runRef: promoted.runRef }],
       ]);
+      internal.viewMessageSinks = new Map();
       internal.instances = new Map([
         [
           "execution-instance",
@@ -466,6 +468,13 @@ suite("WorkflowOrchestrator addressed start position", () => {
         workflowKey,
         Date.now()
       );
+      await new OutputHistoryManager(workspace).initializeRunAt(
+        workflowKey,
+        historical.runRef,
+        historical.runDir,
+        historical.runId,
+        Date.now()
+      );
       const latest = await WorkingFileManager.seedNewRun(
         workspace,
         workflowKey,
@@ -484,6 +493,14 @@ suite("WorkflowOrchestrator addressed start position", () => {
           PANEL_CLIENT_ID,
           { workflowKey, kind: "run", runRef: historical.runRef },
         ],
+        [
+          "browser:rewind",
+          { workflowKey, kind: "run", runRef: historical.runRef },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map([
+        [PANEL_CLIENT_ID, () => undefined],
+        ["browser:rewind", () => undefined],
       ]);
       internal.lineageRepository = new WorkflowLineageRepository();
 
@@ -505,6 +522,14 @@ suite("WorkflowOrchestrator addressed start position", () => {
       );
       assert.strictEqual(rewound._runtime.pendingRewind.fromStepIndex, 1);
       assert.strictEqual(rewound.steps[1]._runtime, undefined);
+      const events = (
+        await fs.readFile(path.join(historical.runDir, "events.jsonl"), "utf8")
+      )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      assert.deepStrictEqual(events[0].payload.definition.rewindBoundary, 1);
+      assert.strictEqual(events[0].payload.definitionRevision, 2);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

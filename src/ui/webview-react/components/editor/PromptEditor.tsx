@@ -29,6 +29,7 @@ import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { postRunLifecycleMutation } from "../../utils/workflowMutation";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -579,7 +580,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           promptName: promptName.trim(),
         });
         if (isPromptCompleted) {
-          vscode.postMessage({
+          postRunLifecycleMutation(vscode, {
             type: MESSAGE_TYPES.SET_START_POSITION,
             toIndex: selectionTarget.index,
           });
@@ -630,7 +631,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       });
       // If editing a completed prompt, reset execution back to this step so it can be re-run
       if (isPromptCompleted) {
-        vscode.postMessage({
+        postRunLifecycleMutation(vscode, {
           type: MESSAGE_TYPES.SET_START_POSITION,
           toIndex: selectionTarget.index,
         });

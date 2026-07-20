@@ -1807,28 +1807,37 @@ export class PromptQueue {
     // counterpart, so its runtime must come from the redo snapshot.
     this.state.steps = newSteps.map((newStep, i) => {
       const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
+      const suppressSuffixRuntime =
+        this.state.pendingRewind !== undefined &&
+        i >= this.state.pendingRewind.fromStepIndex;
+      const runtimeSafeStep = suppressSuffixRuntime
+        ? stripStepRuntime([persistableStep])[0]
+        : persistableStep;
       const existing = this.state.steps[i];
       const existingRuntime =
+        !suppressSuffixRuntime &&
         existing &&
         this.getStepIdentityKey(existing) ===
-          this.getStepIdentityKey(persistableStep)
+          this.getStepIdentityKey(runtimeSafeStep)
           ? existing._runtime
           : undefined;
-      const archivedRuntime = this.getArchivedRuntime(persistableStep, i);
+      const archivedRuntime = suppressSuffixRuntime
+        ? undefined
+        : this.getArchivedRuntime(runtimeSafeStep, i);
       const runtime = this.mergeRuntimeMetadata(
         archivedRuntime,
-        persistableStep._runtime,
+        suppressSuffixRuntime ? undefined : runtimeSafeStep._runtime,
         existingRuntime
       );
       const persistableRuntime =
         this.stripHistoryOnlyRuntimeFieldsForUndoRedo(runtime);
-      if (!existingRuntime && !persistableStep._runtime && archivedRuntime) {
+      if (!existingRuntime && !runtimeSafeStep._runtime && archivedRuntime) {
         restoredFromArchive++;
       }
       if (persistableRuntime) {
-        return { ...persistableStep, _runtime: persistableRuntime };
+        return { ...runtimeSafeStep, _runtime: persistableRuntime };
       }
-      return persistableStep;
+      return runtimeSafeStep;
     });
 
     const restoredCurrentIndex = this.getCurrentIndexFromRuntime(
@@ -1951,6 +1960,10 @@ export class PromptQueue {
     step: WorkflowStep,
     index: number
   ): PromptRuntimeMetadata | undefined {
+    const boundary = this.state.pendingRewind?.fromStepIndex;
+    if (boundary !== undefined && index >= boundary) {
+      return undefined;
+    }
     for (const key of this.getStepRuntimeArchiveKeys(step, index)) {
       const runtime = this.runtimeArchive.get(key);
       if (runtime) {
