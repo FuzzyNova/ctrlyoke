@@ -42,6 +42,8 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
+  WorkflowViewAddress,
+  WorkingFile,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -63,7 +65,9 @@ import type {
 import type {
   HistorySearchQuery,
   HistorySearchResponse,
+  RunSummary,
 } from "./WorkflowTimelineTypes";
+import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -1063,6 +1067,25 @@ export interface OutputHistoryLoadedMessage {
   runTimestamps?: (number | undefined)[];
   runStates?: (string | undefined)[];
   workflowId?: string;
+}
+
+/** One coherent, client-local view of either a lineage draft or a promoted run. */
+export interface RunViewLoadedMessage {
+  type: typeof MESSAGE_TYPES.RUN_VIEW_LOADED;
+  requestId?: string;
+  address: WorkflowViewAddress;
+  workingFile: WorkingFile;
+  history: WorkflowOutputHistory | null;
+  runSummaries: RunSummary[];
+  workflowProperties: Record<string, unknown>;
+  /** The exact run currently bound to execution, if the lineage is active. */
+  executionRunRef?: import("./CtrlYokeTypes").RunRef;
+}
+
+export interface LoadRunViewMessage {
+  type: typeof MESSAGE_TYPES.LOAD_RUN_VIEW;
+  address: WorkflowViewAddress;
+  requestId?: string;
 }
 
 /**

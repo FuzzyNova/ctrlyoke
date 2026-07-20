@@ -16,6 +16,8 @@ import {
   type PromptStep,
   type WorkflowStep,
   type WorkflowKey,
+  type RunRef,
+  type WorkflowViewAddress,
   workflowDisplayStep,
 } from "../types/CtrlYokeTypes";
 import {
@@ -40,6 +42,7 @@ import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import type {
   CliOutput,
   ActiveTerminalWorkflowRef,
+  RunViewLoadedMessage,
 } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -144,6 +147,13 @@ export class WorkflowOrchestrator {
 
   /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
   private viewerRegistry = new Map<string, string | null>();
+
+  /** Client-local displayed address. This is intentionally separate from the
+   * instance registry: changing it must never rebind a shared PromptQueue. */
+  private readonly viewAddressRegistry = new Map<
+    string,
+    WorkflowViewAddress | null
+  >();
 
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
@@ -632,6 +642,20 @@ export class WorkflowOrchestrator {
             }
           }
         }
+      }
+      const queueState = instance.getQueueState();
+      if (queueState.workflowKey) {
+        await this.loadRunViewForClient(
+          queueState.runRef
+            ? {
+                workflowKey: queueState.workflowKey,
+                kind: "run",
+                runRef: queueState.runRef,
+              }
+            : { workflowKey: queueState.workflowKey, kind: "draft" },
+          send,
+          clientId
+        );
       }
       // setViewedWorkflowId already called before awaits above.
       return;
@@ -1645,6 +1669,95 @@ export class WorkflowOrchestrator {
     return this.getInstanceForClient(clientId).getQueueState();
   }
 
+  getViewAddress(clientId: string): WorkflowViewAddress | null {
+    return this.getViewAddressRegistry().get(clientId) ?? null;
+  }
+
+  /** Defensive for lightweight unit-test instances created without constructors. */
+  private getViewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
+    const initialized = this.viewAddressRegistry;
+    if (initialized) {
+      return initialized;
+    }
+    const partial = this as unknown as {
+      viewAddressRegistry?: Map<string, WorkflowViewAddress | null>;
+    };
+    return (partial.viewAddressRegistry ??= new Map());
+  }
+
+  /**
+   * Loads one addressed definition and its matching timeline as a single
+   * client-local snapshot. It never calls loadWorkingFile(), so a client
+   * browsing an older run cannot change the queue, watcher, lock, or harness
+   * environment of an execution in this lineage.
+   */
+  async loadRunViewForClient(
+    address: WorkflowViewAddress,
+    send: (message: unknown) => void,
+    clientId: string,
+    requestId?: string
+  ): Promise<void> {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+
+    const filePath =
+      address.kind === "draft"
+        ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
+        : WorkflowPaths.runFilePath(
+            workspaceRoot,
+            address.workflowKey,
+            address.runRef
+          );
+    const content = await fs.promises.readFile(filePath, "utf-8");
+    const workingFile = JSON.parse(content) as WorkingFile;
+    const historyManager = new OutputHistoryManager(workspaceRoot);
+    const [history, runSummaries] = await Promise.all([
+      address.kind === "run"
+        ? historyManager.loadHistory(
+            historyManager.getHistoryFilePath(
+              address.workflowKey,
+              address.runRef
+            )
+          )
+        : Promise.resolve(null),
+      historyManager.getRunSummaries(address.workflowKey),
+    ]);
+    const executionRunRef = this.findExecutionRunRef(address.workflowKey);
+    const { prompt, steps, finalStep, ...workflowProperties } = workingFile;
+    void prompt;
+    void steps;
+    void finalStep;
+    this.getViewAddressRegistry().set(clientId, address);
+    const snapshot: RunViewLoadedMessage = {
+      type: MESSAGE_TYPES.RUN_VIEW_LOADED,
+      requestId,
+      address,
+      workingFile,
+      history,
+      runSummaries,
+      workflowProperties,
+      executionRunRef,
+    };
+    send(snapshot);
+  }
+
+  private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {
+    for (const instance of this.instances.values()) {
+      const state = instance.getQueueState();
+      if (state.workflowKey === workflowKey) {
+        return instance.getExecutionRunRef() ?? state.runRef;
+      }
+    }
+    const cli = this.cliSessions.get(workflowKey);
+    return cli
+      ? WorkflowPaths.parseWorkingFileAddressFromPath(
+          cli.summary.workingFilePath ?? ""
+        )?.runRef
+      : undefined;
+  }
+
   clearWorkingFilePath(clientId: string): void {
     this.getInstanceForClient(clientId).clearWorkingFilePath();
   }
@@ -2170,6 +2283,10 @@ export class WorkflowOrchestrator {
     if (!this.viewerRegistry.has(clientId)) {
       this.viewerRegistry.set(clientId, null);
     }
+    const viewAddresses = this.getViewAddressRegistry();
+    if (!viewAddresses.has(clientId)) {
+      viewAddresses.set(clientId, null);
+    }
   }
 
   unregisterClient(clientId: string): void {
@@ -2185,6 +2302,7 @@ export class WorkflowOrchestrator {
         `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false}, activePty=${ptyCount})`
     );
     this.viewerRegistry.delete(clientId);
+    this.getViewAddressRegistry().delete(clientId);
 
     if (!workflowId) return;
 

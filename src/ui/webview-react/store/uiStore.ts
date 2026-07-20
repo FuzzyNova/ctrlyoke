@@ -7,7 +7,9 @@ import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
   HistorySearchIndexState,
   HistorySearchResult,
+  RunSummary,
 } from "@root/types/WorkflowTimelineTypes";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 /**
@@ -186,6 +188,10 @@ interface UiState {
   availableRuns: number; // Total runs saved for this workflow
   runTimestamps: (number | undefined)[]; // startedAt timestamps, index 0 = most recent
   runStates: (string | undefined)[]; // executionState for each run, index 0 = most recent
+  /** Stable identities backing the run selector; indices are display-only. */
+  runSummaries: RunSummary[];
+  displayedViewAddress: WorkflowViewAddress | null;
+  executionRunRef: string | null;
 
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;
@@ -438,6 +444,11 @@ interface UiActions {
   setRunTimestamps: (timestamps: (number | undefined)[]) => void;
   setRunStates: (states: (string | undefined)[]) => void;
   clearHistoryView: () => void;
+  setDisplayedRunView: (
+    address: WorkflowViewAddress,
+    summaries: RunSummary[],
+    executionRunRef?: string
+  ) => void;
 
   // Dropdown hide feature
   hideDropdownOption: (namespace: string, value: string) => void;
@@ -546,6 +557,9 @@ const initialState: UiState = {
   availableRuns: 0,
   runTimestamps: [],
   runStates: [],
+  runSummaries: [],
+  displayedViewAddress: null,
+  executionRunRef: null,
   footerOpenPicker: null,
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
@@ -940,6 +954,24 @@ export const useUiStore = create<UiState & UiActions>()(
 
       clearHistoryView: () =>
         set({ isViewingHistory: false, viewingRunIndex: 0 }),
+
+      setDisplayedRunView: (address, summaries, executionRunRef) =>
+        set({
+          displayedViewAddress: address,
+          executionRunRef: executionRunRef ?? null,
+          runSummaries: summaries,
+          availableRuns: summaries.length,
+          runTimestamps: summaries.map((summary) => summary.startedAt),
+          runStates: summaries.map((summary) => summary.executionState),
+          isViewingHistory: address.kind === "run",
+          viewingRunIndex:
+            address.kind === "run"
+              ? Math.max(
+                  0,
+                  summaries.findIndex((run) => run.runRef === address.runRef)
+                )
+              : 0,
+        }),
 
       // ============================================================================
       // DROPDOWN HIDE FEATURE

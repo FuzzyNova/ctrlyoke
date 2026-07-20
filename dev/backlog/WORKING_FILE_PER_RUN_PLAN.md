@@ -1,6 +1,6 @@
 # Working File Per Run — Run-Scoped Workflow Definitions
 
-Status: **Phase 1 (1a/1b/1c) implemented.** Phase 2 (per-client coherent run views) not started.
+Status: **Phase 1 (1a/1b/1c) implemented.** **Phase 2 is in progress:** the per-client address registry, unified run-view snapshot, stable-ref selector/deletion, viewed-address save/template export, and live-message isolation are implemented and validated. Route/search/recent/terminal/completion-contract replacement and explicit multi-client coverage remain before Phase 2 is complete.
 
 Constraint: **pre-release, zero backward compatibility.** The implementation replaces the old layout and contracts outright. It must not ship dual reads, mirrored writes, legacy path fallbacks, or deprecated message/settings aliases. Existing developer data may be converted once with the throwaway script described below.
 
@@ -487,13 +487,13 @@ At phase end, the UI may still default to the latest run and use its current his
 
 ### Phase 2 — Per-client coherent run views
 
-1. Add per-client `WorkflowViewAddress` registration and the unified run-view loader.
-2. Replace path/index message contracts, hosted routes, persisted selection, search navigation, recent rows, terminal summaries, and completion labels.
-3. Replace output-only history overlay state with the unified displayed view and run-address filtering for live messages.
-4. Re-baseline editor/zundo/selection/streaming/workspace-undo state on every address switch.
-5. Build the manifest-backed run dropdown with stable deletion and invalidation fallback.
-6. Make Save and Save as template resolve the viewed address; add overwrite checks and run framing.
-7. Verify two clients can view different runs while a third execution target continues unchanged.
+1. **Implemented:** per-client `WorkflowViewAddress` registration and a unified run-view loader. `RUN_VIEW_LOADED` carries the selected definition, workflow properties, matching history projection, run summaries, and the current execution `RunRef`; it reads storage without restoring a historical definition into the shared execution queue.
+2. **In progress:** replace all remaining path/index contracts, hosted routes, persisted selection, search navigation, recent rows, terminal summaries, and completion labels. The run dropdown now resolves its displayed index to a stable `RunRef` before loading/deleting; the remaining surfaces still use legacy workflow/path/index contracts.
+3. **Implemented for addressed switches:** the webview applies the definition, settings, and output together, records the displayed address, and drops live workflow messages while the selected promoted run differs from the execution `RunRef`.
+4. **Partially implemented:** address switching clears the existing workflow-local edit/history caches via `applyWorkflowChange()` and rehydrates the selected snapshot. zundo, selection, streaming, and workspace-undo state still need dedicated address-bound re-baselining tests/cleanup.
+5. **Partially implemented:** the dropdown uses manifest-backed `RunSummary` identities and stable-ref deletion, then deterministically falls back to the newest remaining run or draft. Replace its remaining index-shaped presentation state with address-native UI state.
+6. **Implemented:** Save and Save as template resolve the viewed address. Save checks for an existing export target and asks before overwriting.
+7. **Remaining:** add explicit multi-client integration coverage proving that two clients can view different runs while a third execution target continues unchanged.
 
 ### Phase 3 — Draft editing, partial rerun, append, and targeted CLI/MCP
 

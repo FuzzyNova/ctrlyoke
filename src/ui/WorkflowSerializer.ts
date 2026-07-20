@@ -30,6 +30,7 @@ import {
   isScriptStep,
   type PromptStep,
   type WorkingFile,
+  type WorkflowViewAddress,
 } from "../types/CtrlYokeTypes";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
@@ -65,6 +66,28 @@ export class WorkflowSerializer {
   // Save Workflow
   // ============================================================================
 
+  /** Resolve the caller's displayed address, never the lineage's mutable/latest run. */
+  private getViewedWorkingFilePath(clientId: string): string | undefined {
+    const manager = this.getManager();
+    const address =
+      typeof manager?.getViewAddress === "function"
+        ? manager.getViewAddress(clientId)
+        : null;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    if (address && workspaceRoot) {
+      return address.kind === "draft"
+        ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
+        : WorkflowPaths.runFilePath(
+            workspaceRoot,
+            address.workflowKey,
+            address.runRef
+          );
+    }
+    return manager?.getQueueState(clientId).workingFilePath;
+  }
+
   /**
    * Handle SAVE_WORKFLOW_REQUEST from the webview.
    * Determines the default save path and format from the working file and
@@ -84,8 +107,7 @@ export class WorkflowSerializer {
       return;
     }
 
-    const queueState = manager.getQueueState(clientId);
-    const workingFilePath = queueState.workingFilePath;
+    const workingFilePath = this.getViewedWorkingFilePath(clientId);
 
     if (!workingFilePath) {
       pm({
@@ -268,8 +290,7 @@ export class WorkflowSerializer {
       return;
     }
 
-    const queueState = manager.getQueueState(clientId);
-    const workingFilePath = queueState.workingFilePath;
+    const workingFilePath = this.getViewedWorkingFilePath(clientId);
 
     if (!workingFilePath) {
       pm({
@@ -303,6 +324,17 @@ export class WorkflowSerializer {
         serialized = JSON.stringify(clean, null, 2);
       }
 
+      try {
+        await fs.access(absolutePath);
+        const overwrite = await vscode.window.showWarningMessage(
+          `Overwrite existing workflow file "${path.basename(absolutePath)}"?`,
+          { modal: true },
+          "Overwrite"
+        );
+        if (overwrite !== "Overwrite") return;
+      } catch {
+        // File does not exist; proceed with the new export.
+      }
       await fs.writeFile(absolutePath, serialized, "utf-8");
 
       Log.debug(`Saved workflow to: ${absolutePath}`);
@@ -349,8 +381,7 @@ export class WorkflowSerializer {
       return;
     }
 
-    const queueState = manager.getQueueState(clientId);
-    const workingFilePath = queueState.workingFilePath;
+    const workingFilePath = this.getViewedWorkingFilePath(clientId);
 
     if (!workingFilePath) {
       pm({
@@ -1176,6 +1207,35 @@ export class WorkflowSerializer {
       vscode.window.showErrorMessage(
         `Failed to delete run: ${getErrorMessage(error)}`
       );
+    }
+  }
+
+  /** Stable-address deletion with deterministic client fallback. */
+  async handleDeleteRunByAddress(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    const outputHistoryManager = this.getOutputHistoryManager();
+    if (!outputHistoryManager) return;
+    const manager = this.getManager();
+    await outputHistoryManager.deleteRunByRef(
+      address.workflowKey,
+      address.runRef
+    );
+    const remaining = await outputHistoryManager.getRunSummaries(
+      address.workflowKey
+    );
+    const fallback: WorkflowViewAddress = remaining[0]
+      ? {
+          workflowKey: address.workflowKey,
+          kind: "run",
+          runRef: remaining[0].runRef,
+        }
+      : { workflowKey: address.workflowKey, kind: "draft" };
+    if (manager) {
+      await manager.loadRunViewForClient(fallback, pm, clientId);
     }
   }
 }

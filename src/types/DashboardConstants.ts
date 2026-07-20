@@ -163,12 +163,14 @@ export const MESSAGE_TYPES = {
   // Output history messages
   OUTPUT_HISTORY_LOADED: "outputHistoryLoaded", // Extension -> Webview: Load history for display
   LOAD_RUN_HISTORY: "loadRunHistory", // Webview -> Extension: Request specific run
+  LOAD_RUN_VIEW: "loadRunView", // Webview -> Extension: Switch this client's displayed draft/run
   SEARCH_HISTORY: "searchHistory", // Webview -> Extension: Search global run history
   SEARCH_HISTORY_RESULTS: "searchHistoryResults", // Extension -> Webview: Return global history matches
   OPEN_HISTORY_SEARCH: "openHistorySearch", // Extension -> Webview: Open global history search UI
   CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete all run history
   DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by index
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
+  RUN_VIEW_LOADED: "runViewLoaded", // Extension -> Webview: Atomic definition/settings/output snapshot for a view address
 
   // Save Workflow - Webview <-> Extension
   SAVE_WORKFLOW_REQUEST: "saveWorkflowRequest", // Webview -> Extension: Request default save path/format

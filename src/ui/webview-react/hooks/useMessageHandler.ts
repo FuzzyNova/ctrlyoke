@@ -39,6 +39,7 @@ import type {
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
+import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import { WebviewLog } from "@utils/logger";
 import { isWorkflowActive, isWorkflowRunning } from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
@@ -1761,6 +1762,65 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // RUN_VIEW_LOADED - one addressed definition/settings/output snapshot
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.RUN_VIEW_LOADED] = (message) => {
+    const {
+      address,
+      workingFile,
+      history,
+      runSummaries,
+      workflowProperties,
+      executionRunRef,
+    } = message;
+    if (!address || !workingFile) return;
+    // A late response from a previous selector click must not overwrite the
+    // most recently requested address.
+    const requested = useUiStore.getState().displayedViewAddress;
+    if (
+      requested &&
+      (requested.workflowKey !== address.workflowKey ||
+        requested.kind !== address.kind ||
+        (requested.kind === "run" &&
+          address.kind === "run" &&
+          requested.runRef !== address.runRef))
+    ) {
+      return;
+    }
+    applyWorkflowChange();
+    const runtime = workingFile._runtime;
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: workingFile.workflowName,
+      workflowName: workingFile.workflowName,
+      steps: workingFile.steps ?? [],
+      executionState: runtime?.executionState,
+      currentStep: runtime?.currentIndex,
+      finalStep: workingFile.finalStep ?? null,
+      finalStepStatus: runtime?.finalStep?.status ?? null,
+      finalStepLoopCount: runtime?.finalStep?.loopCount ?? 0,
+      finalStepPhase: runtime?.finalStep?.phase ?? null,
+    });
+    const normalized = normalizeWorkflowProperties(workflowProperties);
+    useSettingsStore.getState().setWorkflowProperties(normalized);
+    useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
+    const ui = useUiStore.getState();
+    ui.setDisplayedRunView(address, runSummaries, executionRunRef);
+    if (history) {
+      useWorkflowStore.getState().loadHistoryRun(
+        history,
+        runSummaries.length,
+        Math.max(
+          0,
+          runSummaries.findIndex(
+            (run: RunSummary) =>
+              address.kind === "run" && run.runRef === address.runRef
+          )
+        )
+      );
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // SEARCH_HISTORY_RESULTS - Global history search matches
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
@@ -2147,6 +2207,20 @@ export function useMessageHandler(): UseMessageHandlerReturn {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
+      const view = useUiStore.getState();
+      // Live sink messages still carry an in-memory instance id today. They do
+      // not contain a run ref, so the only safe policy while browsing another
+      // promoted run is to drop them wholesale. The next RUN_VIEW_LOADED is
+      // authoritative and restores the selected definition/output together.
+      if (
+        message.workflowId &&
+        view.displayedViewAddress?.kind === "run" &&
+        view.executionRunRef !== view.displayedViewAddress.runRef &&
+        message.type !== MESSAGE_TYPES.RUN_VIEW_LOADED &&
+        message.type !== MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS
+      ) {
+        return;
+      }
       const handler = handlers[message.type];
 
       if (handler) {

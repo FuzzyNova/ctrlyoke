@@ -1067,9 +1067,19 @@ const OutputSectionInner: React.FC = () => {
   }, [activeTerminalSession, setActiveOutputTab, terminalWorkflowId]);
 
   const handleSelectRun = useCallback((runIndex: number) => {
+    const { displayedViewAddress, runSummaries, setDisplayedRunView } =
+      useUiStore.getState();
+    const selected = runSummaries[runIndex];
+    if (!displayedViewAddress || !selected) return;
+    const address = {
+      workflowKey: displayedViewAddress.workflowKey,
+      kind: "run" as const,
+      runRef: selected.runRef,
+    };
+    setDisplayedRunView(address, runSummaries);
     getVsCodeApi()?.postMessage({
-      type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-      runIndex,
+      type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+      address,
     });
   }, []);
 
@@ -1080,9 +1090,16 @@ const OutputSectionInner: React.FC = () => {
   }, []);
 
   const handleDeleteRun = useCallback((runIndex: number) => {
+    const { displayedViewAddress, runSummaries } = useUiStore.getState();
+    const selected = runSummaries[runIndex];
+    if (!displayedViewAddress || !selected) return;
     getVsCodeApi()?.postMessage({
       type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
-      runIndex,
+      address: {
+        workflowKey: displayedViewAddress.workflowKey,
+        kind: "run",
+        runRef: selected.runRef,
+      },
     });
   }, []);
 

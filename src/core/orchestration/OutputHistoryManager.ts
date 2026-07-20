@@ -752,6 +752,28 @@ export class OutputHistoryManager {
     return (await this.getRunsForWorkflow(workflowKey)).length;
   }
 
+  /** Delete one stable run identity. Callers must never resolve a display index late. */
+  async deleteRunByRef(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<number> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
+    if (!runs.includes(runRef)) {
+      throw new Error(
+        `Run ${runRef} does not exist for workflow ${workflowKey}`
+      );
+    }
+    await fs.promises.rm(
+      WorkflowPaths.runDir(this._workspaceFolderPath, workflowKey, runRef),
+      {
+        recursive: true,
+        force: false,
+      }
+    );
+    this.refreshSearchIndex();
+    return (await this.getRunsForWorkflow(workflowKey)).length;
+  }
+
   /**
    * Persist an UndoRecord for a step after undo has been applied.
    */

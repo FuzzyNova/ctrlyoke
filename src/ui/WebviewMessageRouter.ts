@@ -925,12 +925,22 @@ export class WebviewMessageRouter {
     });
 
     // ── Output History ───────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.LOAD_RUN_HISTORY, async (message) => {
-      await this.serializer.handleLoadRunHistory(
-        message.runIndex,
-        this.getCurrentPostMessage(),
-        this.clientId
-      );
+    table.set(MESSAGE_TYPES.LOAD_RUN_VIEW, async (message) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      try {
+        await orchestrator.loadRunViewForClient(
+          message.address,
+          this.scopedPostMessage,
+          this.clientId,
+          message.requestId
+        );
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+          error: `Failed to load run: ${getErrorMessage(error)}`,
+        });
+      }
     });
 
     table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message) => {
@@ -981,8 +991,11 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message) => {
-      await this.serializer.handleDeleteRunHistory(
-        message.runIndex,
+      // Phase 2 requires stable refs. Index deletion is intentionally not
+      // accepted here; old clients must refresh to the run-address contract.
+      if (!message.address || message.address.kind !== "run") return;
+      await this.serializer.handleDeleteRunByAddress(
+        message.address,
         this.getCurrentPostMessage(),
         this.clientId
       );
@@ -2531,7 +2544,8 @@ export class WebviewMessageRouter {
 
     const counts: Record<string, number> = {};
 
-    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const workspaceIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
     const trustedRoots = [
       ...getVsCodeTrustedWorkspaceRoots(),
       ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
