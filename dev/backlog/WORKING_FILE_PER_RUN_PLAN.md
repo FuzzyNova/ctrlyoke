@@ -174,7 +174,7 @@ Outside an explicit append or rewind mode, generic edit/add/delete/reorder/prope
 - `toIndex === 0`: do not mutate the selected run. Seed a draft/new run with execution runtime stripped; pressing Run promotes and executes the new `RunRef`.
 - `toIndex > 0` on an idle completed/stopped/error run: first have `WorkingFileManager` atomically copy the full current run file to `pending-rewind/base.ctrlyoke.json`; then preserve the prefix `[0, toIndex)`, archive and clear `_runtime`/results for `[toIndex, end)`, set the pending rewind marker, and keep the same `RunRef` and numeric `runId`.
 - While a rewind is pending, step-local edit/add/delete/reorder operations are permitted only inside the suffix. Workflow-level properties and prefix steps remain locked because changing inherited settings would retroactively misdescribe the preserved prefix; those changes require a draft/new run.
-- **Rewind is permitted from `PAUSED` as well as idle terminal states**, matching today's guard (blocked only for `RUNNING`, `PAUSING`, `CANCELLING`). A paused lineage still owns the lock, sessions, and PTY, so a paused rewind targets its own executing run only: the run stays the execution target, the lock and `CTRLYOKE_WORKING_FILE` never move, and Continue resumes into the same `RunRef`. Rewinding a *different* run while another is paused remains blocked. Losing pause → rewind → continue would be a user-facing regression against goal 3.
+- **Rewind is permitted from `PAUSED` as well as idle terminal states**, matching today's guard (blocked only for `RUNNING`, `PAUSING`, `CANCELLING`). A paused lineage still owns the lock, sessions, and PTY, so a paused rewind targets its own executing run only: the run stays the execution target, the lock and `CTRLYOKE_WORKING_FILE` never move, and Continue resumes into the same `RunRef`. Rewinding a _different_ run while another is paused remains blocked. Losing pause → rewind → continue would be a user-facing regression against goal 3.
 - **`runtimeArchive` and the durable base snapshot are one rollback story, not two.** `pending-rewind/base.ctrlyoke.json` is the process-crash-durable form of what `runtimeArchive` holds in memory. Definition undo inside a pending rewind must not resurrect suffix `_runtime` from the archive: restoring a suffix step's session/response metadata would re-associate it with attempts whose committed `definitionRevision` no longer describes it. Rule: while a rewind is pending, archive restoration is suppressed for indices `>= fromStepIndex`; undo there restores step text/settings only. Discarding the rewind is the sole path that restores full suffix runtime, and it does so from `base.ctrlyoke.json` through `WorkingFileManager`, not from the in-memory archive. Prefix indices retain today's archive behavior.
 - Continue commits the final suffix definition revision before executing it, preserves prefix sessions/output, appends new attempts to the same `events.jsonl`, then removes the recovery snapshot after the commit is durable. Discard restores `base.ctrlyoke.json` through `WorkingFileManager` and removes the pending marker/snapshot.
 - Skip-ahead within an incomplete run retains today's same-run skipped-step behavior and is recorded as a definition/runtime transition.
@@ -287,7 +287,7 @@ When a rewind is pending, every client viewing that run receives an address/revi
 A pending rewind is durable state that survives restart, so it needs an explicit exit. Today no such command exists — the current rewind commits immediately to the single working file and the de-facto undo is Ctrl+Z restoring `runtimeArchive`. **Discard is therefore a new run-lifecycle command.** It is unrelated to `EditorFooter`'s Cancel, which only exits per-step edit mode; do not overload that control or reuse the word “Cancel” for it.
 
 - **Primary affordance:** a pending-continuation banner modeled on the existing `isPausing` banner in `Header.tsx` (same placement directly under the header, same inline secondary-action pattern). It reads “Continuing run N from step K” and carries **Discard Continuation** plus **Start new run instead** as inline actions.
-- **Header:** the execution group stays exactly three slots. Discard is *not* added to it — that group is `aria-label="Workflow execution controls"` and means Run/Pause/Stop at every tier and on mobile; a mode-exit is not an execution control. See the control matrix below.
+- **Header:** the execution group stays exactly three slots. Discard is _not_ added to it — that group is `aria-label="Workflow execution controls"` and means Run/Pause/Stop at every tier and on mobile; a mode-exit is not an execution control. See the control matrix below.
 - **Context menu:** add **Discard Continuation** to the boundary step's menu, next to the existing “Set Start Position” item (`useStepContextMenu` already models `direction: "rewind" | "forward"`).
 - **Recovery:** the startup “reopen or discard” prompt for an interrupted rewind invokes this same command; there is one discard implementation, not a separate recovery path.
 
@@ -301,14 +301,14 @@ Two facts about today's post-rewind state drive the target design. After `setSta
 
 Target slot behavior, keeping the three-slot anatomy intact:
 
-| Viewed address / lineage state              | Slot 1                                                     | Slot 2                                       | Slot 3                     |
-| ------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------- | -------------------------- |
-| Draft, never executed                       | **Run** (play) → promote draft to a new `RunRef`           | disabled                                      | disabled                   |
-| Promoted run, lineage idle, no pending work | **Re-run** (refresh, bold) → seed a **new** run from this run | disabled                                      | disabled                   |
-| Promoted run with resumable pending work    | **Re-run** (refresh, bold) → new run                        | **Resume** → continue this run                | disabled                   |
-| Pending rewind on run N                     | **Continue** (`codicon-debug-continue`, bold) → same run N   | disabled (resume is slot 1 in this mode)      | disabled                   |
-| Lineage executing M, viewing M              | disabled                                                    | **Pause / Cancel pause**                      | **Stop**                   |
-| Lineage executing M, viewing N ≠ M          | disabled, tooltip names M                                   | **Pause**, labeled as targeting M             | **Stop**, labeled as M     |
+| Viewed address / lineage state              | Slot 1                                                        | Slot 2                                   | Slot 3                 |
+| ------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------- | ---------------------- |
+| Draft, never executed                       | **Run** (play) → promote draft to a new `RunRef`              | disabled                                 | disabled               |
+| Promoted run, lineage idle, no pending work | **Re-run** (refresh, bold) → seed a **new** run from this run | disabled                                 | disabled               |
+| Promoted run with resumable pending work    | **Re-run** (refresh, bold) → new run                          | **Resume** → continue this run           | disabled               |
+| Pending rewind on run N                     | **Continue** (`codicon-debug-continue`, bold) → same run N    | disabled (resume is slot 1 in this mode) | disabled               |
+| Lineage executing M, viewing M              | disabled                                                      | **Pause / Cancel pause**                 | **Stop**               |
+| Lineage executing M, viewing N ≠ M          | disabled, tooltip names M                                     | **Pause**, labeled as targeting M        | **Stop**, labeled as M |
 
 So Re-run remains exactly one button, and it becomes unambiguous: on any promoted run it always allocates a new `RunRef`/`runId`, including on an older run, where it seeds from that run's definition. The only state where slot 1 is not Re-run is the pending rewind, because that mode exists precisely to continue run N — and its banner still offers **Start new run instead** as a one-click escape, which discards the pending rewind and seeds a new run in a single action. Slot 2 is never overloaded with a re-run meaning; where resume is unavailable it stays disabled, as it does today.
 
@@ -481,7 +481,7 @@ Checkpoint: identical user-visible behavior on the new layout. Grep gate must pa
 
 1. Add `definitionRevision`, commit the initial/current execution-definition snapshot before output, tag all output attempts with it, and advance it for today's append continuation.
 
-Defer 1c only if phase 3 slips materially: nothing consumes revisions until rewind/re-run exists, but shipping 1c early means append attempts recorded between now and phase 3 are already auditable. Do not reorder 1c *after* phase 3.
+Defer 1c only if phase 3 slips materially: nothing consumes revisions until rewind/re-run exists, but shipping 1c early means append attempts recorded between now and phase 3 are already auditable. Do not reorder 1c _after_ phase 3.
 
 At phase end, the UI may still default to the latest run and use its current history presentation, but every backend operation already has a stable workflow/run address. There is no `boundRun` browsing behavior and no optional timeline.
 

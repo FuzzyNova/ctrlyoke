@@ -77,19 +77,22 @@ export function AdvancedPermissionsSection({
               }
               className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
             />
-            <Button variant="secondary" size="sm" onClick={handleBrowseExternalRoot}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleBrowseExternalRoot}
+            >
               Add folder…
             </Button>
           </div>
         </SettingInputRow>
         <p className="text-xs text-description-fg mt-1">
-          Absolute directories outside the workspace that ctrlyoke may read
-          for prompt attachments and open from file links, and that the
-          harness (copilot-cli, claude-cli, codex-cli, and antigravity-cli
-          via --add-dir; qwen-cli and opencode-cli via their own trust
-          mechanisms) gets tool access to. Workspace files are always
-          allowed. Entries added at workspace scope require a one-time
-          approval (VS Code prompt, or{" "}
+          Absolute directories outside the workspace that ctrlyoke may read for
+          prompt attachments and open from file links, and that the harness
+          (copilot-cli, claude-cli, codex-cli, and antigravity-cli via
+          --add-dir; qwen-cli and opencode-cli via their own trust mechanisms)
+          gets tool access to. Workspace files are always allowed. Entries added
+          at workspace scope require a one-time approval (VS Code prompt, or{" "}
           <code className="font-mono">ctrlyoke trust-external-roots</code> for
           the standalone CLI) before they take effect.
         </p>

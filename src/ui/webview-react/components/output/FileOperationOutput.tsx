@@ -239,9 +239,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           ) : undefined
         }
       >
-        {!hasDiffData && undoButton && (
-          <div className="mt-1">{undoButton}</div>
-        )}
+        {!hasDiffData && undoButton && <div className="mt-1">{undoButton}</div>}
       </FileOperationBlock>
     );
   }

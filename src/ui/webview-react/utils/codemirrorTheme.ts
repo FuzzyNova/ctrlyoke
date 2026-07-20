@@ -38,7 +38,8 @@ const SYMBOL_ICON_COLORS: Record<string, string> = {
   "symbol-text": "var(--vscode-symbolIcon-textForeground, #cccccc)",
   "symbol-method": "var(--vscode-symbolIcon-methodForeground, #b180d7)",
   "symbol-function": "var(--vscode-symbolIcon-functionForeground, #b180d7)",
-  "symbol-constructor": "var(--vscode-symbolIcon-constructorForeground, #b180d7)",
+  "symbol-constructor":
+    "var(--vscode-symbolIcon-constructorForeground, #b180d7)",
   "symbol-field": "var(--vscode-symbolIcon-fieldForeground, #75beff)",
   "symbol-variable": "var(--vscode-symbolIcon-variableForeground, #75beff)",
   "symbol-class": "var(--vscode-symbolIcon-classForeground, #ee9d28)",

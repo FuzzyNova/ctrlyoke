@@ -2589,7 +2589,9 @@ function createFencedBlockDecorationExtension() {
 }
 
 // Decorate links (@file, @dir/, #file:, #sym:)
-function createLinkDecorationExtension(referenceValidity?: Map<string, boolean>) {
+function createLinkDecorationExtension(
+  referenceValidity?: Map<string, boolean>
+) {
   const linkPlugin = ViewPlugin.fromClass(
     class {
       decorations;

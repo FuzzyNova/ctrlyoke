@@ -4,14 +4,14 @@ Harnesses are the reason ctrlyoke can keep one workflow model while talking to v
 
 ## At a glance
 
-| Harness           | Runs where      | Best for                                  | Notes                                         |
-| ----------------- | --------------- | ----------------------------------------- | --------------------------------------------- |
-| `copilot-cli`     | CLI             | Default path for GitHub users             | Good general-purpose default                  |
-| `claude-cli`      | CLI             | Long-form reasoning and coding            | Strong session continuity                     |
-| `codex-cli`       | CLI             | OpenAI Codex workflows                    | Exposes Codex-specific sandbox controls       |
-| `opencode-cli`    | CLI             | Provider-flexible OpenCode setups         | Useful when OpenCode is already your standard |
-| `qwen-cli`        | CLI             | Qwen Code users                           | Similar workflow model to other CLI harnesses |
-| `antigravity-cli` | CLI             | Google Antigravity workflows              | Uses `agy`; supports MCP config support       |
+| Harness           | Runs where | Best for                          | Notes                                         |
+| ----------------- | ---------- | --------------------------------- | --------------------------------------------- |
+| `copilot-cli`     | CLI        | Default path for GitHub users     | Good general-purpose default                  |
+| `claude-cli`      | CLI        | Long-form reasoning and coding    | Strong session continuity                     |
+| `codex-cli`       | CLI        | OpenAI Codex workflows            | Exposes Codex-specific sandbox controls       |
+| `opencode-cli`    | CLI        | Provider-flexible OpenCode setups | Useful when OpenCode is already your standard |
+| `qwen-cli`        | CLI        | Qwen Code users                   | Similar workflow model to other CLI harnesses |
+| `antigravity-cli` | CLI        | Google Antigravity workflows      | Uses `agy`; supports MCP config support       |
 
 ## Choosing a starting harness
 

@@ -104,7 +104,9 @@ export class CtrlYokeConfigService {
     scope: SettingWriteScope
   ): PartialCtrlYokeSettings[K] | undefined {
     const backend =
-      scope === SETTING_SCOPES.WORKSPACE ? this.workspaceBackend : this.userBackend;
+      scope === SETTING_SCOPES.WORKSPACE
+        ? this.workspaceBackend
+        : this.userBackend;
     return backend?.getAll()[key];
   }
 

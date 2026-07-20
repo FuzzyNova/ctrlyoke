@@ -349,18 +349,14 @@ describe("hideDropdownOption / unhideDropdownOption", () => {
     expect(store().hiddenDropdownOptions["harness"]).toContain("codex-cli");
 
     store().unhideDropdownOption("harness", "codex-cli");
-    expect(store().hiddenDropdownOptions["harness"]).not.toContain(
-      "codex-cli"
-    );
+    expect(store().hiddenDropdownOptions["harness"]).not.toContain("codex-cli");
   });
 
   it("does not duplicate hidden options", () => {
     store().hideDropdownOption("harness", "codex-cli");
     store().hideDropdownOption("harness", "codex-cli");
     expect(
-      store().hiddenDropdownOptions["harness"].filter(
-        (v) => v === "codex-cli"
-      )
+      store().hiddenDropdownOptions["harness"].filter((v) => v === "codex-cli")
     ).toHaveLength(1);
   });
 });

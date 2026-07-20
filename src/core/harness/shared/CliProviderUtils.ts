@@ -201,7 +201,8 @@ export class CliProviderUtils {
     workspaceRoots.forEach(addDirectory);
 
     // Add every external root currently approved for this workspace
-    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const workspaceIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
     const effectiveExternalRoots =
       ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
         workspaceIdentity

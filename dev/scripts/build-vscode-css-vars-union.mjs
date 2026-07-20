@@ -11,11 +11,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const referenceDir = join(__dirname, "..", "reference");
 
 const files = readdirSync(referenceDir).filter(
-  (name) => /^vscode-css-vars-.*\.json$/.test(name) && name !== "vscode-css-vars-union.json"
+  (name) =>
+    /^vscode-css-vars-.*\.json$/.test(name) &&
+    name !== "vscode-css-vars-union.json"
 );
 
 if (files.length === 0) {
-  throw new Error(`No vscode-css-vars-*.json snapshots found in ${referenceDir}`);
+  throw new Error(
+    `No vscode-css-vars-*.json snapshots found in ${referenceDir}`
+  );
 }
 
 const themes = files.map((name) => {
@@ -44,4 +48,6 @@ const output = {
 
 const outPath = join(referenceDir, "vscode-css-vars-union.json");
 writeFileSync(outPath, JSON.stringify(output, null, 2) + "\n");
-console.log(`Wrote ${sharedNames.length} shared vars (of ${Object.keys(first.vars).length} in ${first.theme}) to ${outPath}`);
+console.log(
+  `Wrote ${sharedNames.length} shared vars (of ${Object.keys(first.vars).length} in ${first.theme}) to ${outPath}`
+);

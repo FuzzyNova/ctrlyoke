@@ -487,10 +487,7 @@ export class ContextExpander {
    * for an in-progress @ reference. Keep that high-frequency case in debug
    * logs, while preserving warnings for unexpected attachment failures.
    */
-  private logAttachmentBuildFailure(
-    reference: string,
-    error: unknown
-  ): void {
+  private logAttachmentBuildFailure(reference: string, error: unknown): void {
     const errorCode = (error as NodeJS.ErrnoException | undefined)?.code;
     const message = getErrorMessage(error);
     const isUnreadableReference =
@@ -505,9 +502,7 @@ export class ContextExpander {
       return;
     }
 
-    Log.warn(
-      `[ContextExpander] Failed to attach ${reference}: ${message}`
-    );
+    Log.warn(`[ContextExpander] Failed to attach ${reference}: ${message}`);
   }
 
   /**

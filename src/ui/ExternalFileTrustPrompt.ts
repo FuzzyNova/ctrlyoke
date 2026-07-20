@@ -131,7 +131,8 @@ export async function promptBatchApprovalForPendingWorkspaceExternalRoots(
     return;
   }
 
-  const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
   const pendingRoots =
     ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
   if (pendingRoots.length === 0) {

@@ -49,7 +49,10 @@ export class ExternalRootsTrustStore {
     }
   }
 
-  private static keyFor(workspaceIdentity: string, canonicalRoot: string): string {
+  private static keyFor(
+    workspaceIdentity: string,
+    canonicalRoot: string
+  ): string {
     return `${workspaceIdentity}${DECISION_KEY_SEPARATOR}${canonicalRoot}`;
   }
 

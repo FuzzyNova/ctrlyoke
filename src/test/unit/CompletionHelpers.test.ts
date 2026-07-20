@@ -385,12 +385,7 @@ suite("findDocumentSymbolByNameAndRange", () => {
       method,
     ]);
 
-    const match = findDocumentSymbolByNameAndRange(
-      [parent],
-      "method",
-      3,
-      4
-    );
+    const match = findDocumentSymbolByNameAndRange([parent], "method", 3, 4);
 
     assert.strictEqual(match, method);
   });

@@ -174,15 +174,12 @@ A small backend service — `HarnessSessionImportService` (in `src/core/orchestr
    - `workflowId = OutputHistoryManager.extractWorkflowId(workflowFilePath)`
    - `initializeRun(workflowId)` → `historyFilePath` (creates
      `run-<ts>/manifest.json` + empty `events.jsonl`).
-   - For each turn `i`:
-     - `universal = parser.extractResponse(turn.events)`
-     - Map `universal → CliOutput` (`prompt`, `response`, `structured`, `elapsed`,
-       `tokens`, `timestampMs = turn.startedAtMs`, `workingDirectory =
+   - For each turn `i`: - `universal = parser.extractResponse(turn.events)` - Map `universal → CliOutput` (`prompt`, `response`, `structured`, `elapsed`,
+     `tokens`, `timestampMs = turn.startedAtMs`, `workingDirectory =
 summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
-       `UniversalCliOutput → CliOutput` mapping the live path uses (single-source it if
-       it isn't already a shared helper).
-     - `saveExecutionOutput(historyFilePath, { kind: queue, stepIndex: i }, [cliOutput])`
-       → appends a `cliOutputRecorded` event.
+     `UniversalCliOutput → CliOutput` mapping the live path uses (single-source it if
+     it isn't already a shared helper). - `saveExecutionOutput(historyFilePath, { kind: queue, stepIndex: i }, [cliOutput])`
+     → appends a `cliOutputRecorded` event.
    - `finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED, turns.length)`.
 5. **Timestamps.** Because history uses real `timestampMs`/`startedAt`, and
    `run-<ts>` directory names encode the start time, the imported run should be stamped

@@ -148,10 +148,7 @@ function stripRuntimeForApproximateCopy(workingFile) {
 }
 
 async function convertLineage(workflowId, report) {
-  const workingFilePath = path.join(
-    workingDir,
-    `${workflowId}.ctrlyoke.json`
-  );
+  const workingFilePath = path.join(workingDir, `${workflowId}.ctrlyoke.json`);
   const workflowKey = workflowId; // Old basename already is a valid sanitized-slug+timestamp key.
   const lineageDir = path.join(runsRoot, workflowKey);
 
@@ -207,10 +204,7 @@ async function convertLineage(workflowId, report) {
         nextRunId: 1,
         revision: 1,
       };
-      await writeJson(
-        path.join(stagingDir, DESCRIPTOR_FILE_NAME),
-        descriptor
-      );
+      await writeJson(path.join(stagingDir, DESCRIPTOR_FILE_NAME), descriptor);
       await fs.rename(stagingDir, lineageDir);
       report.successes.push(
         `${workflowId}: migrated as a draft-only lineage (no history found)`
@@ -257,10 +251,10 @@ async function convertLineage(workflowId, report) {
       }
 
       if (isNewest) {
-        await writeJson(
-          path.join(runDir, WORKING_FILE_NAME),
-          { ...workingFile, definitionRevision: 1 }
-        );
+        await writeJson(path.join(runDir, WORKING_FILE_NAME), {
+          ...workingFile,
+          definitionRevision: 1,
+        });
       } else {
         // Older runs: the old layout never stored their exact historical definition —
         // only the newest working file survived. Mark this copy as approximate.

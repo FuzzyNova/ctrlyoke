@@ -195,8 +195,7 @@ suite("CtrlYokeConfigService", () => {
         ["/home/user/logs"]
       );
       assert.deepStrictEqual(
-        service.getScoped("permissions", "workspace")
-          ?.allowedExternalFileRoots,
+        service.getScoped("permissions", "workspace")?.allowedExternalFileRoots,
         ["/shared/logs"]
       );
     });

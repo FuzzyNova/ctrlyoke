@@ -99,7 +99,7 @@ normal schema validation; that is the intended clean-break behavior.
 ## Verification
 
 - `rg -n -i "copilot-chat|copilot chat|github\.copilot\.chat|chatSessions" src
-  docs README.md package.json` returns no production references.
+docs README.md package.json` returns no production references.
 - `npm run typecheck`, `npm run lint`, and the relevant extension/UI test suites
   pass.
 - Build and inspect the VSIX: it contains no Chat harness implementation and

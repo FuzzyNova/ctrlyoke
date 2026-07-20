@@ -1004,7 +1004,8 @@ export abstract class HarnessIntegration {
     if (!workspaceRoot) {
       return [];
     }
-    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const workspaceIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
     return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
       workspaceIdentity
     );

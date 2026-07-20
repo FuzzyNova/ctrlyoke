@@ -2551,9 +2551,8 @@ suite("OpenCodeLogParser", () => {
         }
       );
 
-      const events = await parserWithExportRunner.readNewLines(
-        "ses_export_test"
-      );
+      const events =
+        await parserWithExportRunner.readNewLines("ses_export_test");
 
       assert.strictEqual(requestedSessionId, "ses_export_test");
       assert.deepStrictEqual(events, []);

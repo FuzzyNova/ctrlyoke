@@ -18,13 +18,10 @@ suite("FileAccessPolicy", () => {
   });
 
   test("allows a path inside an approved external root", () => {
-    const decision = evaluateFileAccess(
-      path.join(externalRoot, "debug.log"),
-      {
-        workspaceRoots: [workspaceRoot],
-        approvedExternalRoots: [externalRoot],
-      }
-    );
+    const decision = evaluateFileAccess(path.join(externalRoot, "debug.log"), {
+      workspaceRoots: [workspaceRoot],
+      approvedExternalRoots: [externalRoot],
+    });
     assert.strictEqual(decision.allowed, true);
     assert.strictEqual(decision.reason, "trustedExternalRoot");
     assert.strictEqual(decision.matchedRoot, externalRoot);
@@ -83,10 +80,13 @@ suite("FileAccessPolicy", () => {
 
     test("still rejects a sibling-prefix path on win32 regardless of casing", () => {
       setPlatform("win32");
-      const decision = evaluateFileAccess("C:\\Dev\\Project-Evil\\payload.ps1", {
-        workspaceRoots: ["c:\\dev\\project"],
-        approvedExternalRoots: [],
-      });
+      const decision = evaluateFileAccess(
+        "C:\\Dev\\Project-Evil\\payload.ps1",
+        {
+          workspaceRoots: ["c:\\dev\\project"],
+          approvedExternalRoots: [],
+        }
+      );
       assert.strictEqual(decision.allowed, false);
     });
 

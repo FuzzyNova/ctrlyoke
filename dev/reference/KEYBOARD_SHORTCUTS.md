@@ -43,15 +43,15 @@ VS Code resolves conflicts by **specificity** — a more specific `when` clause 
 
 ### `Ctrl+Enter` in the webview is not a VS Code-layer conflict
 
-The Prompt Editor's `Ctrl+Enter` (Run) and `Ctrl+Shift+Enter` (Queue) are wired entirely inside the CodeMirror instance in the webview iframe — they are **not** registered in `package.json`, so they never go through VS Code's command/keybinding resolution at all. There is no `when`-clause conflict to manage for them; the only thing that matters is precedence *inside* CodeMirror's own keymap facet (see below).
+The Prompt Editor's `Ctrl+Enter` (Run) and `Ctrl+Shift+Enter` (Queue) are wired entirely inside the CodeMirror instance in the webview iframe — they are **not** registered in `package.json`, so they never go through VS Code's command/keybinding resolution at all. There is no `when`-clause conflict to manage for them; the only thing that matters is precedence _inside_ CodeMirror's own keymap facet (see below).
 
 ### Known VS Code built-in conflicts to watch (for future `package.json` bindings)
 
-| Key            | Built-in use                      | Our `when` clause avoids it?                   |
-| -------------- | ---------------------------------- | ---------------------------------------------- |
-| `Ctrl+Shift+N` | New window (global)               | Yes — our `focusedView` clause wins in context |
+| Key            | Built-in use                      | Our `when` clause avoids it?                                                         |
+| -------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| `Ctrl+Shift+N` | New window (global)               | Yes — our `focusedView` clause wins in context                                       |
 | `Ctrl+Enter`   | Copilot Chat send (`inChatInput`) | N/A — ctrlyoke's `Ctrl+Enter` is webview-only, never reaches VS Code's command layer |
-| `Ctrl+Shift+T` | Reopen closed tab (global)        | Yes — our `focusedView` clause wins in context |
+| `Ctrl+Shift+T` | Reopen closed tab (global)        | Yes — our `focusedView` clause wins in context                                       |
 
 ### Key combos with low VS Code occupancy (safe to use for new `package.json` bindings)
 
@@ -86,21 +86,21 @@ Use for shortcuts that should work when the ctrlyoke panel is focused **but focu
 
 ### `when` clause options for the ctrlyoke dashboard
 
-| `when` clause                                    | Fires when                                                                                    |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `focusedView == 'ctrlyoke.dashboard'`            | ctrlyoke sidebar panel has keyboard focus (regardless of whether webview content has focus)   |
-| `activeWebviewPanelId == 'ctrlyoke.dashboard'`   | A ctrlyoke webview panel is the active editor (not sidebar)                                   |
+| `when` clause                                  | Fires when                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `focusedView == 'ctrlyoke.dashboard'`          | ctrlyoke sidebar panel has keyboard focus (regardless of whether webview content has focus) |
+| `activeWebviewPanelId == 'ctrlyoke.dashboard'` | A ctrlyoke webview panel is the active editor (not sidebar)                                 |
 
 **Note:** Both clauses require VS Code itself to have the focus — neither fires while focus is inside the webview iframe.
 
 ### Existing VS Code keybindings
 
-| Key (Win/Linux) | Key (Mac)     | Command                       | Action                |
-| ---------------- | ------------- | ------------------------------ | ---------------------- |
-| `Ctrl+Shift+N`   | `Cmd+Shift+N` | `ctrlyoke.clearWorkflow`       | Clear workflow state  |
-| `Ctrl+Shift+T`   | `Cmd+Shift+T` | `ctrlyoke.newWorkflow`         | New workflow          |
-| `Ctrl+Shift+L`   | `Cmd+Shift+L` | `ctrlyoke.selectPromptFile`    | Select prompt file    |
-| `Ctrl+Shift+Q`   | `Cmd+Shift+Q` | `ctrlyoke.appendFromDashboard` | Append from dashboard |
+| Key (Win/Linux) | Key (Mac)     | Command                        | Action                |
+| --------------- | ------------- | ------------------------------ | --------------------- |
+| `Ctrl+Shift+N`  | `Cmd+Shift+N` | `ctrlyoke.clearWorkflow`       | Clear workflow state  |
+| `Ctrl+Shift+T`  | `Cmd+Shift+T` | `ctrlyoke.newWorkflow`         | New workflow          |
+| `Ctrl+Shift+L`  | `Cmd+Shift+L` | `ctrlyoke.selectPromptFile`    | Select prompt file    |
+| `Ctrl+Shift+Q`  | `Cmd+Shift+Q` | `ctrlyoke.appendFromDashboard` | Append from dashboard |
 
 All scoped to `when: focusedView == 'ctrlyoke.dashboard'`. Source: `package.json` `contributes.keybindings`.
 
@@ -121,7 +121,8 @@ useEffect(() => {
     }
   };
   window.addEventListener("keydown", handleKeyDown, { capture: true });
-  return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  return () =>
+    window.removeEventListener("keydown", handleKeyDown, { capture: true });
 }, [someCondition, doAction]);
 ```
 
@@ -140,15 +141,27 @@ CodeMirror's `keymap` extension intercepts keyboard events before the browser's 
 // Prec.highest-wrapped keymap.of([...]) extension — see the gotcha below.
 Prec.highest(
   keymap.of([
-    { key: "Ctrl-Shift-Enter", run: () => { onQueueRef.current?.(); return true; } },
-    { key: "Ctrl-Enter", run: () => { onRunRef.current?.(); return true; } },
+    {
+      key: "Ctrl-Shift-Enter",
+      run: () => {
+        onQueueRef.current?.();
+        return true;
+      },
+    },
+    {
+      key: "Ctrl-Enter",
+      run: () => {
+        onRunRef.current?.();
+        return true;
+      },
+    },
   ])
 );
 ```
 
 **CodeMirror key format:** Uses hyphens (`Ctrl-Enter`), not plus signs (`Ctrl+Enter`). Modifier order: `Ctrl-Alt-Shift-Meta-Key`.
 
-**Gotcha — `minimalSetup` already claims `Mod-Enter`:** `minimalSetup` (from the `codemirror` package) bundles CodeMirror's `defaultKeymap`, which binds `Mod-Enter` (`Ctrl-Enter` on Windows/Linux, `Cmd-Enter` on macOS) to `insertBlankLine`. Because `minimalSetup` is listed *before* the app's own `keymap.of([...])` in the `extensions` array passed to `EditorView`, its binding is flattened into CodeMirror's internal keymap first — so on Windows/Linux, an unboosted `Ctrl-Enter` binding added later would lose to `insertBlankLine` and just insert a newline instead of firing `onRun`. The fix is wrapping the run/queue keymap in `Prec.highest(...)`, kept as its own extension separate from the main `keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap, ...lintKeymap, ...])` array. `Tab` deliberately stays in the *unboosted* array, positioned after `...completionKeymap`, so completion-accept still wins when a dropdown is open — don't move it into the boosted keymap.
+**Gotcha — `minimalSetup` already claims `Mod-Enter`:** `minimalSetup` (from the `codemirror` package) bundles CodeMirror's `defaultKeymap`, which binds `Mod-Enter` (`Ctrl-Enter` on Windows/Linux, `Cmd-Enter` on macOS) to `insertBlankLine`. Because `minimalSetup` is listed _before_ the app's own `keymap.of([...])` in the `extensions` array passed to `EditorView`, its binding is flattened into CodeMirror's internal keymap first — so on Windows/Linux, an unboosted `Ctrl-Enter` binding added later would lose to `insertBlankLine` and just insert a newline instead of firing `onRun`. The fix is wrapping the run/queue keymap in `Prec.highest(...)`, kept as its own extension separate from the main `keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap, ...lintKeymap, ...])` array. `Tab` deliberately stays in the _unboosted_ array, positioned after `...completionKeymap`, so completion-accept still wins when a dropdown is open — don't move it into the boosted keymap.
 
 `insertBlankLine` (the command we're overriding) is not the same thing as plain `Enter`: plain `Enter` (`insertNewlineAndIndent`, from `standardKeymap`, still active and unaffected) splits the line at the cursor. `insertBlankLine` ignores cursor position and inserts a fresh indented line below the current one — CodeMirror's "insert line below" convenience, not core newline behavior. That's the only functionality traded away by claiming `Ctrl-Enter`.
 
@@ -166,35 +179,35 @@ When a webview shortcut needs to trigger extension host logic, use `postMessage`
 
 ### Prompt Editor (CodeMirror keymap — `CodeMirrorEditor.tsx`)
 
-| Key                 | Effect                                              |
-| -------------------- | ---------------------------------------------------- |
-| `Ctrl+Enter`         | Run — queue (if needed) and run/send the prompt      |
-| `Ctrl+Shift+Enter`   | Queue — add the prompt to the execution queue without running |
-| `Ctrl+F` / `Cmd+F`   | Open CodeMirror's search panel (editor-scoped find)  |
-| `Tab`                | Accept the active completion if a dropdown is open; otherwise insert a tab character |
+| Key                | Effect                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `Ctrl+Enter`       | Run — queue (if needed) and run/send the prompt                                      |
+| `Ctrl+Shift+Enter` | Queue — add the prompt to the execution queue without running                        |
+| `Ctrl+F` / `Cmd+F` | Open CodeMirror's search panel (editor-scoped find)                                  |
+| `Tab`              | Accept the active completion if a dropdown is open; otherwise insert a tab character |
 
 ### Global (window/document-level, work anywhere in the webview)
 
-| Key                                    | Location                          | Effect                                                                 |
-| ---------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
-| `Ctrl+Z` / `Cmd+Z`                      | `useUndoRedoKeyHandler` (window)  | Undo the last workflow edit. Ignored when a text input, textarea, or CodeMirror editor has focus (they get their own undo), and blocked while a workflow is actively running. |
-| `Ctrl+Y` or `Ctrl+Shift+Z` / `Cmd` equiv | `useUndoRedoKeyHandler` (window)  | Redo — same focus/active-workflow guards as undo.                        |
-| `Ctrl+F` / `Cmd+F`                      | `OutputSection` (window, capture) | Open the output-pane find bar — only when focus is **not** inside a CodeMirror editor (which handles its own `Ctrl+F` first). |
-| `Escape`                                | `Modal`                            | Close the open modal                                                     |
-| `Escape`                                | `GlobalSettingsDrawer`            | Close the global settings drawer                                         |
-| `Escape`                                | `PromptEditor`                     | Close the properties drawer                                              |
-| `Escape`                                | `HistorySearchDrawer`             | Close the history search drawer                                          |
-| `Escape`                                | `StepContextMenu`                  | Close the open context menu                                              |
+| Key                                      | Location                          | Effect                                                                                                                                                                        |
+| ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ctrl+Z` / `Cmd+Z`                       | `useUndoRedoKeyHandler` (window)  | Undo the last workflow edit. Ignored when a text input, textarea, or CodeMirror editor has focus (they get their own undo), and blocked while a workflow is actively running. |
+| `Ctrl+Y` or `Ctrl+Shift+Z` / `Cmd` equiv | `useUndoRedoKeyHandler` (window)  | Redo — same focus/active-workflow guards as undo.                                                                                                                             |
+| `Ctrl+F` / `Cmd+F`                       | `OutputSection` (window, capture) | Open the output-pane find bar — only when focus is **not** inside a CodeMirror editor (which handles its own `Ctrl+F` first).                                                 |
+| `Escape`                                 | `Modal`                           | Close the open modal                                                                                                                                                          |
+| `Escape`                                 | `GlobalSettingsDrawer`            | Close the global settings drawer                                                                                                                                              |
+| `Escape`                                 | `PromptEditor`                    | Close the properties drawer                                                                                                                                                   |
+| `Escape`                                 | `HistorySearchDrawer`             | Close the history search drawer                                                                                                                                               |
+| `Escape`                                 | `StepContextMenu`                 | Close the open context menu                                                                                                                                                   |
 
 ### Output find bar (`useOutputFind` / `OutputFindBar`)
 
-| Key              | Effect                          |
-| ------------------ | ---------------------------------- |
-| `Enter`           | Jump to the next match             |
-| `Shift+Enter`     | Jump to the previous match         |
-| `F3`              | Next match                         |
-| `Shift+F3`        | Previous match                     |
-| `Escape`          | Close the find bar                 |
+| Key           | Effect                     |
+| ------------- | -------------------------- |
+| `Enter`       | Jump to the next match     |
+| `Shift+Enter` | Jump to the previous match |
+| `F3`          | Next match                 |
+| `Shift+F3`    | Previous match             |
+| `Escape`      | Close the find bar         |
 
 ### Component-scoped `Enter`/`Space` activation
 
@@ -226,11 +239,11 @@ Always handle both `Enter` and `Space` for `role="button"` elements per ARIA spe
 
 ## Key Formatting Cheat Sheet
 
-| Context                    | Format                            | Example                                   |
-| --------------------------- | ------------------------------------ | -------------------------------------------- |
-| `package.json` keybindings | `ctrl+key` lowercase              | `"ctrl+shift+enter"`                      |
-| `package.json` mac variant | `cmd+key` lowercase               | `"cmd+shift+enter"`                       |
-| CodeMirror `keymap.of`     | `Ctrl-Key` PascalCase with hyphen | `"Ctrl-Enter"`                            |
-| CodeMirror mac variant     | `Cmd-Key` (or `Mod-Key` if the combo should follow OS convention) — **not used** for Run/Queue, which stay literal `Ctrl` on every OS | `"Cmd-Enter"` |
-| React `onKeyDown`          | `e.key` values                    | `"Enter"`, `"Escape"`, `"ArrowDown"`      |
-| VS Code `when` clause      | exact view ID string              | `"focusedView == 'ctrlyoke.dashboard'"`   |
+| Context                    | Format                                                                                                                                | Example                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `package.json` keybindings | `ctrl+key` lowercase                                                                                                                  | `"ctrl+shift+enter"`                    |
+| `package.json` mac variant | `cmd+key` lowercase                                                                                                                   | `"cmd+shift+enter"`                     |
+| CodeMirror `keymap.of`     | `Ctrl-Key` PascalCase with hyphen                                                                                                     | `"Ctrl-Enter"`                          |
+| CodeMirror mac variant     | `Cmd-Key` (or `Mod-Key` if the combo should follow OS convention) — **not used** for Run/Queue, which stay literal `Ctrl` on every OS | `"Cmd-Enter"`                           |
+| React `onKeyDown`          | `e.key` values                                                                                                                        | `"Enter"`, `"Escape"`, `"ArrowDown"`    |
+| VS Code `when` clause      | exact view ID string                                                                                                                  | `"focusedView == 'ctrlyoke.dashboard'"` |

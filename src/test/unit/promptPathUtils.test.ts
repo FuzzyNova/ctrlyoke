@@ -43,7 +43,9 @@ suite("promptPathUtils", () => {
       // "@src/index.ts" matches the folder-qualified prefix shape but is a
       // ctrlyoke context reference (@file), not a standalone prompt path.
       assert.strictEqual(
-        looksLikeFilePath("@src/index.ts", { allowWorkspaceFolderPrefix: true }),
+        looksLikeFilePath("@src/index.ts", {
+          allowWorkspaceFolderPrefix: true,
+        }),
         false
       );
     });
