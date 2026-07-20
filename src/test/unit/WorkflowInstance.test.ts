@@ -22,6 +22,23 @@ import {
 } from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+
+/** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
+async function initTestRun(
+  manager: OutputHistoryManager,
+  workspaceRoot: string,
+  nameHint: string
+): Promise<{ filePath: string; runCount: number }> {
+  const workflowKey = await WorkflowPaths.allocateWorkflowKey(
+    workspaceRoot,
+    nameHint
+  );
+  const runRef = WorkflowPaths.formatRunRef(Date.now());
+  const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+  return manager.initializeRunAt(workflowKey, runRef, runDir, 1, Date.now());
+}
 
 class MockPlatform implements PlatformAdapter {
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -357,7 +374,9 @@ suite("WorkflowInstance session activity forwarding", () => {
         tempWorkspace
       );
 
-      const historyInit = await instance.outputHistoryManager.initializeRun(
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
         "wf-session-activity"
       );
       (instance as any).activeHistoryFilePath = historyInit.filePath;
@@ -913,7 +932,9 @@ suite("WorkflowInstance runtime transitions", () => {
         steps: [{ prompt: "queue-1" }],
       });
 
-      const historyInit = await instance.outputHistoryManager.initializeRun(
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
         "wf-runtime-instance"
       );
       const appendCalls: Array<{ historyFilePath: string; command: string }> =

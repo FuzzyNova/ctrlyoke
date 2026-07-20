@@ -62,13 +62,12 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 <mcpServer>
 `mcp-server.ts` is a standalone CJS/stdin-stdout process. Treat it as an external contract.
 
-- Never import `vscode` or extension-only helpers here.
-- Keep the local path constants in sync with `ConfigurationUtils.PATH_CONSTANTS`; they are duplicated on purpose to avoid a VS Code dependency.
+- Never import `vscode` or extension-only helpers here. `src/utils/WorkflowPaths.ts` and `src/core/orchestration/WorkflowLineageRepository.ts` are safe to import (both are Node-only); anything they in turn import must stay that way — do not let `Log` (which imports `vscode`) leak into this dependency chain, use `console.warn`/`console.error` instead, matching `FileLockUtils`'s convention.
 - Use file logging only (`CTRLYOKE_DIAGNOSTIC_LOGS=true` or `NODE_ENV=development`). Do not write operational logs to stdout/stderr because stdout is the MCP transport and many TUIs capture stderr.
 - The first four tools mirror the LM tools from `extension.ts`; `ctrlyoke_global_status` and `ctrlyoke_submit_commit_message` are MCP-only.
 - Active working file resolution is a two-step contract:
   1. prefer `CTRLYOKE_WORKING_FILE` so a harness session targets its exact workflow
-  2. otherwise scan `.ctrlyoke/.working/` and prefer running / recent files as a fallback
+  2. otherwise enumerate lineages via `WorkflowLineageRepository.listLineageKeys()` and resolve each one's current file (`descriptor.latestRunRef` run file, or its draft if no run has executed yet), preferring running / recently-modified ones as a fallback
 - Queue appends are protected twice on purpose:
   - `operationQueue` serializes append requests within this process
   - `withFileLock(...)` protects the working file across processes

@@ -519,7 +519,7 @@ describe("STARTUP_COMPLETE", () => {
     useUiStore
       .getState()
       .setActiveWorkflowWorkingFilePath(
-        "c:/dev/ctrlyoke/.ctrlyoke/.working/example.ctrlyoke.json"
+        "c:/dev/ctrlyoke/.ctrlyoke/.runs/example/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"
       );
 
     renderHook(() => useMessageHandler());

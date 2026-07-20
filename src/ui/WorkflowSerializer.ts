@@ -23,6 +23,8 @@ import type {
 } from "../core/TemplateManager";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import {
   isScriptStep,
@@ -47,6 +49,8 @@ import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 const LAST_EXPORT_DIR_KEY = "ctrlyoke.lastWorkflowExportDir";
 
 export class WorkflowSerializer {
+  private readonly lineageRepository = new WorkflowLineageRepository();
+
   constructor(
     private readonly postMessage: PostMessageFn,
     private readonly templateManager: TemplateManager,
@@ -748,24 +752,15 @@ export class WorkflowSerializer {
         return;
       }
 
-      const workingDir = path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR
-      );
-
-      try {
-        await fs.access(workingDir);
-      } catch {
+      const workflowKeys =
+        await this.lineageRepository.listLineageKeys(workspaceRoot);
+      if (workflowKeys.length === 0) {
         pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [],
         });
         return;
       }
-
-      const files = await fs.readdir(workingDir);
-      const workflowFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
 
       // Build a fast lookup set of working file paths that are currently active
       // in memory. Used below to normalize stale active states from disk.
@@ -783,8 +778,27 @@ export class WorkflowSerializer {
       );
 
       const workflows = await Promise.all(
-        workflowFiles.map(async (file) => {
-          const filePath = path.join(workingDir, file);
+        workflowKeys.map(async (workflowKey) => {
+          let filePath: string;
+          try {
+            const descriptor = await this.lineageRepository.readDescriptor(
+              workspaceRoot,
+              workflowKey
+            );
+            filePath = descriptor.latestRunRef
+              ? WorkflowPaths.runFilePath(
+                  workspaceRoot,
+                  workflowKey,
+                  descriptor.latestRunRef
+                )
+              : WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
+          } catch (error) {
+            Log.warn(
+              `Failed to read lineage descriptor ${workflowKey}:`,
+              error
+            );
+            return null;
+          }
 
           try {
             const workingFile = (await readJsonFile(filePath)) as WorkingFile;
@@ -811,13 +825,13 @@ export class WorkflowSerializer {
                 (await manager?.ensureCliWatchSession(filePath)) ?? false;
               if (isCli) {
                 Log.debug(
-                  `[WorkflowSerializer] getRecentWorkflows: "${file}" has active CLI lock — keeping running state (CliWatchSession registered)`
+                  `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has active CLI lock — keeping running state (CliWatchSession registered)`
                 );
                 // executionState stays "running"; the session is now in cliSessions
                 // so the next GET_WORKFLOWS_LIST will move it to the Running section.
               } else {
                 Log.debug(
-                  `[WorkflowSerializer] getRecentWorkflows: normalizing "${file}" running→stopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
+                  `[WorkflowSerializer] getRecentWorkflows: normalizing "${workflowKey}" running→stopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
                 );
                 executionState = EXECUTION_STATES.STOPPED;
               }
@@ -836,8 +850,7 @@ export class WorkflowSerializer {
 
             return {
               filePath,
-              workflowName:
-                workingFile.workflowName || file.replace(".ctrlyoke.json", ""),
+              workflowName: workingFile.workflowName || workflowKey,
               executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
@@ -846,7 +859,7 @@ export class WorkflowSerializer {
               harness,
             };
           } catch (error) {
-            Log.warn(`Failed to parse workflow file ${file}:`, error);
+            Log.warn(`Failed to parse workflow file ${workflowKey}:`, error);
             return null;
           }
         })
@@ -908,7 +921,7 @@ export class WorkflowSerializer {
   ): Promise<boolean> {
     const pm = postMessage ?? this.postMessage;
     const confirm = await vscode.window.showWarningMessage(
-      "Delete all workflow history files from .ctrlyoke/.working?",
+      "Delete all workflows and their history from .ctrlyoke/.runs?",
       { modal: true },
       "Delete All"
     );
@@ -925,33 +938,19 @@ export class WorkflowSerializer {
         return false;
       }
 
-      const workingDir = path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR
-      );
-      const historyDir = path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.HISTORY_DIR
-      );
-
       try {
-        const files = await fs.readdir(workingDir);
-        const workflowFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
+        const workflowKeys =
+          await this.lineageRepository.listLineageKeys(workspaceRoot);
 
-        for (const file of workflowFiles) {
-          await fs.unlink(path.join(workingDir, file));
-        }
-
-        try {
-          await fs.rm(historyDir, { recursive: true, force: true });
-        } catch (historyError) {
-          Log.warn("Failed to delete history directory:", historyError);
+        for (const workflowKey of workflowKeys) {
+          await fs.rm(WorkflowPaths.lineageDir(workspaceRoot, workflowKey), {
+            recursive: true,
+            force: true,
+          });
         }
 
         vscode.window.showInformationMessage(
-          `Deleted ${workflowFiles.length} workflow history files`
+          `Deleted ${workflowKeys.length} workflow lineage(s)`
         );
 
         pm({
@@ -984,56 +983,28 @@ export class WorkflowSerializer {
         return;
       }
 
-      const workingDir = path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR
-      );
-      const historyBaseDir = path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.HISTORY_DIR
-      );
-
-      const stem = path
-        .basename(filePath)
-        .replace(/\.working\.(yaml|yml|json)$/i, "")
-        .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "")
-        .replace(/\.(yaml|yml|json)$/i, "");
-
-      const files = await fs.readdir(workingDir).catch(() => [] as string[]);
-      const candidates = files.filter(
-        (f) =>
-          (f === `${stem}.ctrlyoke.json` || f.startsWith(`${stem}.`)) &&
-          f.endsWith(".ctrlyoke.json")
-      );
-
-      for (const candidate of candidates) {
-        await fs
-          .unlink(path.join(workingDir, candidate))
-          .catch((err) =>
-            Log.warn(
-              `handleRemoveWorkflowHistory: failed to delete ${candidate}:`,
-              err
-            )
-          );
-
-        const workflowId = candidate
-          .replace(/\.ctrlyoke\.json$/, "")
-          .replace(/\.ctrlyoke\.yaml$/, "");
-        const historyDir = path.join(historyBaseDir, workflowId);
-        await fs
-          .rm(historyDir, { recursive: true, force: true })
-          .catch((err) =>
-            Log.warn(
-              `handleRemoveWorkflowHistory: failed to delete history dir ${workflowId}:`,
-              err
-            )
-          );
+      const address = WorkflowPaths.parseWorkingFileAddressFromPath(filePath);
+      if (!address) {
+        Log.warn(
+          `handleRemoveWorkflowHistory: "${filePath}" is not a recognized run/draft path`
+        );
+        return;
       }
 
+      await fs
+        .rm(WorkflowPaths.lineageDir(workspaceRoot, address.workflowKey), {
+          recursive: true,
+          force: true,
+        })
+        .catch((err) =>
+          Log.warn(
+            `handleRemoveWorkflowHistory: failed to delete lineage ${address.workflowKey}:`,
+            err
+          )
+        );
+
       Log.debug(
-        `handleRemoveWorkflowHistory: removed ${candidates.length} working file(s) and history for "${stem}"`
+        `handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
       );
     } catch (error) {
       Log.error("Failed to remove workflow history entry:", error);
@@ -1060,14 +1031,11 @@ export class WorkflowSerializer {
     }
 
     try {
-      const workingFilePath =
-        this.getManager()?.getQueueState(clientId).workingFilePath ?? "";
-      if (!workingFilePath) {
+      const workflowId = this.getManager()?.getQueueState(clientId).workflowKey;
+      if (!workflowId) {
         return;
       }
 
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const runs = await outputHistoryManager.getRunsForWorkflow(workflowId);
       if (!runs.length) {
         return;
@@ -1127,21 +1095,20 @@ export class WorkflowSerializer {
     }
 
     try {
-      const workingFilePath =
-        this.getManager()?.getQueueState(clientId).workingFilePath ?? "";
-      if (!workingFilePath) {
+      const workflowId = this.getManager()?.getQueueState(clientId).workflowKey;
+      if (!workflowId) {
         return;
       }
 
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
-      const workflowHistoryDir = path.join(
-        outputHistoryManager.historyBaseDir,
-        workflowId
-      );
-
+      // Delete every run for this lineage (but not its descriptor/draft), one at
+      // a time via the tested deleteRun path rather than reaching into storage directly.
       try {
-        await fs.rm(workflowHistoryDir, { recursive: true, force: true });
+        let remaining = (
+          await outputHistoryManager.getRunsForWorkflow(workflowId)
+        ).length;
+        while (remaining > 0) {
+          remaining = await outputHistoryManager.deleteRun(workflowId, 0);
+        }
       } catch (error) {
         Log.warn("Failed to delete history directory:", error);
       }
@@ -1181,14 +1148,11 @@ export class WorkflowSerializer {
     }
 
     try {
-      const workingFilePath =
-        this.getManager()?.getQueueState(clientId).workingFilePath ?? "";
-      if (!workingFilePath) {
+      const workflowId = this.getManager()?.getQueueState(clientId).workflowKey;
+      if (!workflowId) {
         return;
       }
 
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const remaining = await outputHistoryManager.deleteRun(
         workflowId,
         runIndex

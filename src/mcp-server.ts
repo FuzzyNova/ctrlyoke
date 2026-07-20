@@ -36,12 +36,35 @@ import {
   type QueuePosition,
 } from "./types/DashboardConstants";
 import { withFileLock } from "./utils/FileLockUtils";
+import * as WorkflowPaths from "./utils/WorkflowPaths";
+import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const CTRLYOKE_DIR = ".ctrlyoke";
 const LOGS_DIR = "logs";
-const WORKING_DIR = ".working";
 const CAPABILITIES_FILE = "capabilities.json";
+
+const lineageRepository = new WorkflowLineageRepository();
+
+/** Resolves a lineage's current definition file: its latest run, or the draft if none has executed yet. */
+async function resolveLineageCurrentFilePath(
+  workspaceRoot: string,
+  workflowKey: Awaited<
+    ReturnType<typeof lineageRepository.listLineageKeys>
+  >[number]
+): Promise<string> {
+  const descriptor = await lineageRepository.readDescriptor(
+    workspaceRoot,
+    workflowKey
+  );
+  return descriptor.latestRunRef
+    ? WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        descriptor.latestRunRef
+      )
+    : WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
+}
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
 // CTRLYOKE_DIAGNOSTIC_LOGS=true is passed by the extension when
@@ -815,17 +838,25 @@ class CtrlYokeMCPServer {
    * errors caused by sibling workflows.
    */
   private async handleGlobalStatus() {
-    const workingDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, WORKING_DIR);
-    log("Scanning working file directory for all workflows:", workingDir);
+    log("Scanning .runs/ for all workflow lineages:", this.workspaceRoot);
 
     try {
-      const files = await fs.readdir(workingDir);
-      const workingFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
-      log("Found working files:", workingFiles.length);
+      const workflowKeys = await lineageRepository.listLineageKeys(
+        this.workspaceRoot
+      );
+      log("Found lineages:", workflowKeys.length);
 
       const workflows = await Promise.all(
-        workingFiles.map(async (f) => {
-          const filePath = path.join(workingDir, f);
+        workflowKeys.map(async (workflowKey) => {
+          let filePath: string;
+          try {
+            filePath = await resolveLineageCurrentFilePath(
+              this.workspaceRoot,
+              workflowKey
+            );
+          } catch {
+            return null;
+          }
           try {
             const content = await fs.readFile(filePath, "utf8");
             const data: WorkingFile = JSON.parse(content);
@@ -935,7 +966,7 @@ class CtrlYokeMCPServer {
    * Lookup order:
    * 1. CTRLYOKE_WORKING_FILE env var — set per-workflow by the MCP config generator
    *    so each AI session targets exactly its own queue file (multi-workflow safe).
-   * 2. Fallback: scan .ctrlyoke/.working/ and prefer files with executionState=running,
+   * 2. Fallback: scan .ctrlyoke/.runs/ lineages and prefer files with executionState=running,
    *    then most recently modified (single-workflow fallback).
    */
   private async findActiveWorkingFile(): Promise<string | null> {
@@ -954,26 +985,28 @@ class CtrlYokeMCPServer {
       }
     }
 
-    // 2. Scan the working file directory
-    const workingDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, WORKING_DIR);
-    log("Searching for working files in:", workingDir);
+    // 2. Scan every lineage's current definition file under .ctrlyoke/.runs/
+    log("Searching for workflow lineages in:", this.workspaceRoot);
 
     try {
-      const files = await fs.readdir(workingDir);
-      log("Files found:", files.length);
-      const workingFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
-      log("Working files found:", workingFiles.length, workingFiles);
+      const workflowKeys = await lineageRepository.listLineageKeys(
+        this.workspaceRoot
+      );
+      log("Lineages found:", workflowKeys.length);
 
-      if (workingFiles.length === 0) {
+      if (workflowKeys.length === 0) {
         log("No active working files found");
         return null;
       }
 
-      // Read each file's executionState so we can prefer RUNNING ones
+      // Read each lineage's current file's executionState so we can prefer RUNNING ones
       const fileInfos = await Promise.all(
-        workingFiles.map(async (f) => {
-          const filePath = path.join(workingDir, f);
+        workflowKeys.map(async (workflowKey) => {
           try {
+            const filePath = await resolveLineageCurrentFilePath(
+              this.workspaceRoot,
+              workflowKey
+            );
             const [content, stats] = await Promise.all([
               fs.readFile(filePath, "utf8"),
               fs.stat(filePath),

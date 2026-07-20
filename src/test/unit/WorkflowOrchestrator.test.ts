@@ -239,7 +239,8 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
 
     const nativePath =
       "c:\\dev\\ctrlyoke\\.ctrlyoke\\.working\\wf.ctrlyoke.json";
-    const routePath = "c:/dev/ctrlyoke/.ctrlyoke/.working/wf.ctrlyoke.json";
+    const routePath =
+      "c:/dev/ctrlyoke/.ctrlyoke/.runs/wf/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json";
 
     const liveInstance = {
       id: "live-1",

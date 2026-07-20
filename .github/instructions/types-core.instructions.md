@@ -5,6 +5,7 @@ applyTo: "src/types/{DashboardConstants.ts,CtrlYokeTypes.ts,WorkflowContextTypes
 <constantsAndCoreContracts>
 - `DashboardConstants.ts` is the single source of truth for shared runtime discriminants, message names, harness IDs, settings scopes, notification modes, etc. Add both the `as const` object entry and the derived helper type there; do not hardcode the same string anywhere else.
 - `CtrlYokeTypes.ts` is the workflow/runtime contract. Preserve the three-tier precedence model (prompt > workflow > settings) and the null-disable semantics on inherited execution properties.
+- `WorkflowKey`/`RunRef` are opaque branded strings (`string & { readonly __workflowKey: unique symbol }`, etc.) identifying a lineage directory and a promoted run directory under `.ctrlyoke/.runs/`. Mint or validate them only via `src/utils/WorkflowPaths.ts` — never construct one by hand or treat a plain `string` as one without going through it. `WorkflowLineageDescriptor` is the `workflow.json` shape; `WorkflowLineageRepository` (`src/core/orchestration/`) is its only writer.
 - Keep `WorkflowStep` as the canonical discriminated union for prompt vs script steps. New step-shared fields belong in the shared interfaces, not in duplicated prompt/webview shapes.
 </constantsAndCoreContracts>
 

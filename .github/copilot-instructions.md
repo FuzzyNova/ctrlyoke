@@ -17,15 +17,14 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 - `ctrlyoke-<timestamp>.log` — session log; state transitions, orchestration flow, session ID resolution. Start here for unexpected stops or state issues.
 - `ctrlyoke-<harness>-hook-debug.log` (e.g. `ctrlyoke-copilot-hook-debug.log`) — every hook/notify invocation and result. Start here when completion never fires or session IDs don't match.
 
-**Working files** (in `.ctrlyoke/.working/`):
+**Run storage** (in `.ctrlyoke/.runs/<workflowKey>/`):
 
-- `<name>.ctrlyoke.json` — live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
-- `<name>.runner.json` — runner lock; a stale file with a dead PID can cause false "already running" errors — safe to delete.
-
-**History files** (in `.ctrlyoke/.history/<name>-<timestamp>/run-<timestamp>/`):
-
-- `events.jsonl` — per-step output events (one CLI output chunk per line). Useful for comparing actual AI output vs. what an end-condition script received, or diagnosing why a retry loop triggered.
-- `manifest.json` — step metadata and run summary.
+- `workflow.json` — lineage descriptor (name, favorite, `latestRunRef`, `nextRunId`).
+- `runner.json` — runner lock, naming the exact executing `RunRef`; a stale file with a dead PID can cause false "already running" errors — safe to delete.
+- `draft/workflow.ctrlyoke.json` — the lineage's not-yet-executed definition, present before the first run.
+- `run-<timestamp>/workflow.ctrlyoke.json` — that run's live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
+- `run-<timestamp>/events.jsonl` — per-step output events (one CLI output chunk per line). Useful for comparing actual AI output vs. what an end-condition script received, or diagnosing why a retry loop triggered.
+- `run-<timestamp>/manifest.json` — step metadata and run summary.
 
 **Adding logs**: use `Log` from `src/utils/Log.ts` for extension/backend code; use `WebviewLog` from `src/ui/webview-react/utils/logger.ts` for webview/UI code. Do not use `console.log` directly.
 

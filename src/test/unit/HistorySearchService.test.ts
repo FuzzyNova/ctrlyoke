@@ -16,6 +16,12 @@ import {
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkflowLineageDescriptor,
+} from "../../types/CtrlYokeTypes";
 
 suite("HistorySearchService", () => {
   let workspaceRoot: string;
@@ -28,22 +34,9 @@ suite("HistorySearchService", () => {
     );
     service = new HistorySearchService();
     recorder = new TimelineRecorder();
-    await fs.mkdir(
-      path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR
-      ),
-      { recursive: true }
-    );
-    await fs.mkdir(
-      path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.HISTORY_DIR
-      ),
-      { recursive: true }
-    );
+    await fs.mkdir(WorkflowPaths.runsRoot(workspaceRoot), {
+      recursive: true,
+    });
   });
 
   teardown(async () => {
@@ -90,11 +83,10 @@ suite("HistorySearchService", () => {
     assert.strictEqual(results[0]?.workflowName, "Demo Workflow");
     assert.strictEqual(
       results[0]?.workflowFilePath,
-      path.join(
+      WorkflowPaths.runFilePath(
         workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR,
-        `${workflowId}.ctrlyoke.json`
+        workflowId as WorkflowKey,
+        WorkflowPaths.formatRunRef(2000)
       )
     );
     assert.strictEqual(results[0]?.matchType, "status");
@@ -277,25 +269,50 @@ suite("HistorySearchService", () => {
     assert.strictEqual(afterStaleSource.results[0]?.matchContext, "Prompt 2");
   });
 
+  /** Writes a lineage descriptor directly — the test-only equivalent of WorkflowLineageRepository.createLineage. */
   async function writeWorkingFile(
     workflowId: string,
     overrides: Partial<WorkingFile>
   ): Promise<void> {
-    const workingFile: WorkingFile = {
+    const workflowKey = workflowId as WorkflowKey;
+    await fs.mkdir(WorkflowPaths.lineageDir(workspaceRoot, workflowKey), {
+      recursive: true,
+    });
+    const descriptor: WorkflowLineageDescriptor = {
+      schemaVersion: 1,
+      workflowKey,
       workflowName: overrides.workflowName ?? workflowId,
-      startedAt: overrides.startedAt ?? 0,
       originalFile: overrides.originalFile,
-      steps: [],
+      isFavorite: false,
+      createdAt: overrides.startedAt ?? 0,
+      lastModifiedAt: overrides.startedAt ?? 0,
+      nextRunId: 1,
+      revision: 1,
     };
-
     await fs.writeFile(
-      path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR,
-        `${workflowId}.ctrlyoke.json`
-      ),
-      JSON.stringify({ ...workingFile, ...overrides }, null, 2),
+      WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
+      JSON.stringify(descriptor, null, 2),
+      "utf8"
+    );
+  }
+
+  /** Points an existing descriptor's latestRunRef at `runRef` (mimics WorkflowLineageRepository.allocateRun's bookkeeping). */
+  async function setLatestRun(
+    workflowId: string,
+    runRef: RunRef
+  ): Promise<void> {
+    const workflowKey = workflowId as WorkflowKey;
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    const descriptor = JSON.parse(
+      await fs.readFile(descriptorPath, "utf8")
+    ) as WorkflowLineageDescriptor;
+    descriptor.latestRunRef = runRef;
+    await fs.writeFile(
+      descriptorPath,
+      JSON.stringify(descriptor, null, 2),
       "utf8"
     );
   }
@@ -306,15 +323,11 @@ suite("HistorySearchService", () => {
     startedAt: number,
     events: WorkflowTimelineEventDraft[]
   ): Promise<string> {
-    const historyDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.HISTORY_DIR,
-      workflowId
-    );
-    await fs.mkdir(historyDir, { recursive: true });
-    const manifestPath = await recorder.initializeRun(
-      historyDir,
+    const workflowKey = workflowId as WorkflowKey;
+    const runRef = WorkflowPaths.formatRunRef(startedAt);
+    const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+    const manifestPath = await recorder.initializeRunAt(
+      runDir,
       workflowId,
       runId,
       startedAt,
@@ -332,6 +345,16 @@ suite("HistorySearchService", () => {
       runStepCount: 1,
       lastUpdatedAt: startedAt + 10,
     }));
+
+    // Keep the descriptor's latestRunRef current when one exists (tests that
+    // never call writeWorkingFile intentionally leave the lineage descriptor-less).
+    await fs
+      .access(WorkflowPaths.descriptorPath(workspaceRoot, workflowKey))
+      .then(
+        () => setLatestRun(workflowId, runRef),
+        () => {}
+      );
+
     return manifestPath;
   }
 

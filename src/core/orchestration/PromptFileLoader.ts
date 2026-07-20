@@ -135,7 +135,7 @@ export class PromptFileLoader {
       return undefined;
     }
 
-    // Create working file in .ctrlyoke/.working/ directory
+    // Create the lineage's draft under .ctrlyoke/.runs/<workflowKey>/draft/
     let workingFilePath: string | undefined;
     if (workspaceFolderPath) {
       try {

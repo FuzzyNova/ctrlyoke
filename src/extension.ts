@@ -853,7 +853,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Resume Session command - shows list of previous sessions from .ctrlyoke/.working
+  // Resume Session command - shows list of previous sessions from .ctrlyoke/.runs
   const resumeSessionCommand = vscode.commands.registerCommand(
     "ctrlyoke.resumeSession",
     async () => {

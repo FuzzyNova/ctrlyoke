@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
-import * as path from "path";
 import { suite, test } from "mocha";
 import {
   EXECUTION_STATES,
@@ -9,17 +8,27 @@ import {
   RUNNER_IDS,
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import * as path from "path";
 
 suite("WorkflowLockManager stale-run recovery", () => {
-  test("marks the interrupted step cancelled and removes a VS Code lock", async () => {
-    const workingDir = await fs.mkdtemp(
+  test("marks the interrupted step cancelled and removes a stale VS Code lock", async () => {
+    const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-recovery-")
     );
-    const workingFilePath = path.join(workingDir, "interrupted.ctrlyoke.json");
+    const workflowKey = "interrupted-2026-01-01T00-00-00" as WorkflowKey;
+    const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
 
     try {
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
       await fs.writeFile(
-        workingFilePath,
+        runFilePath,
         JSON.stringify({
           steps: [
             {
@@ -37,19 +46,23 @@ suite("WorkflowLockManager stale-run recovery", () => {
         }),
         "utf8"
       );
-      await WorkflowLockManager.acquireLock(workingFilePath, {
+      // A stale lock: dead PID (impossible on a live system) and a long-expired heartbeat.
+      await WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, {
+        workflowKey,
+        runRef,
         runner: RUNNER_IDS.VSCODE,
-        pid: process.pid,
-        startedAt: Date.now(),
-        lastHeartbeat: Date.now(),
+        pid: 999_999,
+        ownerToken: "old-owner-token",
         instanceId: "old-extension-host",
-        workflowId: "interrupted",
+        startedAt: 0,
+        lastHeartbeat: 0,
       });
 
-      const result = await WorkflowLockManager.normalizeStaleLocks(workingDir);
-      const recovered = JSON.parse(
-        await fs.readFile(workingFilePath, "utf8")
-      ) as {
+      const result = await WorkflowLockManager.normalizeStaleLocks(
+        workspaceRoot,
+        [workflowKey]
+      );
+      const recovered = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
         steps: Array<{
           _runtime: {
             sessionId: string;
@@ -60,8 +73,8 @@ suite("WorkflowLockManager stale-run recovery", () => {
         _runtime: { currentIndex: number; executionState: string };
       };
 
-      assert.deepStrictEqual(result.activeCliPaths, []);
-      assert.deepStrictEqual(result.recoveredPaths, [workingFilePath]);
+      assert.deepStrictEqual(result.activeCliRunFiles, []);
+      assert.deepStrictEqual(result.recoveredRunFiles, [runFilePath]);
       assert.strictEqual(
         recovered._runtime.executionState,
         EXECUTION_STATES.STOPPED
@@ -80,10 +93,130 @@ suite("WorkflowLockManager stale-run recovery", () => {
         "session-survives"
       );
       await assert.rejects(
-        fs.access(WorkflowLockManager.getLockPath(workingFilePath))
+        fs.access(WorkflowLockManager.getLockPath(workspaceRoot, workflowKey))
       );
     } finally {
-      await fs.rm(workingDir, { recursive: true, force: true });
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
+  let workspaceRoot: string;
+  const workflowKey = "exclusive-2026-01-01T00-00-00" as WorkflowKey;
+  const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+
+  function makeLock(overrides: { pid?: number; ownerToken?: string } = {}) {
+    return {
+      workflowKey,
+      runRef,
+      runner: RUNNER_IDS.VSCODE,
+      pid: overrides.pid ?? process.pid,
+      ownerToken:
+        overrides.ownerToken ?? WorkflowLockManager.generateOwnerToken(),
+      instanceId: "inst-1",
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    };
+  }
+
+  test("a live, fresh-heartbeat lock cannot be acquired by a second owner", async function () {
+    this.timeout(8000); // acquireLock retries against a live owner for up to 5s before giving up
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-exclusive-")
+    );
+    try {
+      const firstLock = makeLock();
+      await WorkflowLockManager.acquireLock(
+        workspaceRoot,
+        workflowKey,
+        firstLock
+      );
+
+      await assert.rejects(
+        WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, makeLock()),
+        /Timed out waiting for runner lock/
+      );
+
+      const stillOwned = await WorkflowLockManager.readLock(
+        workspaceRoot,
+        workflowKey
+      );
+      assert.strictEqual(stillOwned?.ownerToken, firstLock.ownerToken);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a stale owner cannot heartbeat or release a successor's lock", async () => {
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-ownertoken-")
+    );
+    try {
+      const staleToken = "stale-owner-token";
+      // Seed a stale lock directly (dead pid), then let a successor take it over.
+      const staleLockPath = WorkflowLockManager.getLockPath(
+        workspaceRoot,
+        workflowKey
+      );
+      await fs.mkdir(path.dirname(staleLockPath), { recursive: true });
+      await fs.writeFile(
+        staleLockPath,
+        JSON.stringify(
+          makeLock({ pid: 999_999, ownerToken: staleToken }),
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const successorLock = makeLock();
+      await WorkflowLockManager.acquireLock(
+        workspaceRoot,
+        workflowKey,
+        successorLock
+      );
+
+      // The stale owner's token can no longer heartbeat or release.
+      await WorkflowLockManager.updateHeartbeat(
+        workspaceRoot,
+        workflowKey,
+        staleToken
+      );
+      const afterStaleHeartbeat = await WorkflowLockManager.readLock(
+        workspaceRoot,
+        workflowKey
+      );
+      assert.strictEqual(
+        afterStaleHeartbeat?.ownerToken,
+        successorLock.ownerToken
+      );
+      assert.strictEqual(
+        afterStaleHeartbeat?.lastHeartbeat,
+        successorLock.lastHeartbeat
+      );
+
+      await WorkflowLockManager.releaseLock(
+        workspaceRoot,
+        workflowKey,
+        staleToken
+      );
+      const stillPresent = await WorkflowLockManager.readLock(
+        workspaceRoot,
+        workflowKey
+      );
+      assert.ok(stillPresent, "successor's lock must survive a stale release");
+      assert.strictEqual(stillPresent?.ownerToken, successorLock.ownerToken);
+
+      // The real owner can still release its own lock.
+      await WorkflowLockManager.releaseLock(
+        workspaceRoot,
+        workflowKey,
+        successorLock.ownerToken
+      );
+      await assert.rejects(fs.access(staleLockPath));
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 });

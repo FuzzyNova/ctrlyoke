@@ -21,6 +21,62 @@ import {
   type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
 import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type { WorkflowKey } from "../../types/CtrlYokeTypes";
+
+let nextTestRunOrdinal = 0;
+
+/**
+ * Test-only shim: allocates a workflowKey + runRef under `workspaceRoot` and
+ * initializes a run via the new WorkflowLineageRepository-driven API, returning
+ * the same `{ filePath, runCount }` shape the old single-arg `initializeRun`
+ * used to return (plus `workflowKey`/`runRef` for callers that need identity).
+ */
+async function initTestRun(
+  manager: OutputHistoryManager,
+  workspaceRoot: string,
+  nameHint: string,
+  options: { runId?: number; startedAt?: number } = {}
+): Promise<{
+  filePath: string;
+  runCount: number;
+  workflowKey: WorkflowKey;
+  runRef: ReturnType<typeof WorkflowPaths.formatRunRef>;
+}> {
+  const workflowKey = await WorkflowPaths.allocateWorkflowKey(
+    workspaceRoot,
+    nameHint
+  );
+  const runRef = WorkflowPaths.formatRunRef(Date.now() + nextTestRunOrdinal++);
+  const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+  const result = await manager.initializeRunAt(
+    workflowKey,
+    runRef,
+    runDir,
+    options.runId ?? 1,
+    options.startedAt ?? Date.now()
+  );
+  return { ...result, workflowKey, runRef };
+}
+
+/** Adds another run directly under an already-allocated workflowKey (via TimelineRecorder, bypassing WorkflowLineageRepository's descriptor bookkeeping — these tests only need the run directories to exist). */
+async function initAdditionalRun(
+  recorder: TimelineRecorder,
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runId: number,
+  startedAt: number
+): Promise<void> {
+  const runRef = WorkflowPaths.formatRunRef(startedAt + nextTestRunOrdinal++);
+  const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+  await recorder.initializeRunAt(
+    runDir,
+    workflowKey,
+    runId,
+    startedAt,
+    EXECUTION_STATES.COMPLETED
+  );
+}
 
 suite("OutputHistoryManager timeline-backed storage", () => {
   let tempWorkspace: string;
@@ -39,7 +95,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("initializes new runs as manifest plus events.jsonl storage", async () => {
-    const historyInit = await manager.initializeRun("wf-test");
+    const historyInit = await initTestRun(manager, tempWorkspace, "wf-test");
 
     assert.strictEqual(historyInit.runCount, 1);
     assert.strictEqual(
@@ -52,7 +108,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     ) as WorkflowRunManifest;
 
     assert.strictEqual(manifest.storageKind, TIMELINE_STORAGE_KIND);
-    assert.strictEqual(manifest.workflowId, "wf-test");
+    assert.strictEqual(manifest.workflowId, historyInit.workflowKey);
     assert.strictEqual(manifest.runId, 1);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.RUNNING);
     assert.strictEqual(manifest.eventCount, 0);
@@ -63,7 +119,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("projects timeline events back into WorkflowOutputHistory shape", async () => {
-    const historyInit = await manager.initializeRun("wf-test");
+    const historyInit = await initTestRun(manager, tempWorkspace, "wf-test");
     const historyFilePath = historyInit.filePath;
 
     await manager.appendStatusMessage(
@@ -232,7 +288,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("durably projects in-flight chunks and parsed events on graceful shutdown", async () => {
-    const { filePath } = await manager.initializeRun("wf-streaming");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-streaming"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
@@ -282,7 +342,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("coalesces token-cadence deltas into one timeline event", async () => {
-    const { filePath } = await manager.initializeRun("wf-coalescing");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-coalescing"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
@@ -327,7 +391,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("does not re-append streamed deltas once the completed aggregate lands", async () => {
-    const { filePath } = await manager.initializeRun("wf-streaming-complete");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-streaming-complete"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     // The completed aggregate carries the attempt's *start* timestamp, so it
     // sorts ahead of the deltas it supersedes. Mirror that ordering exactly.
@@ -386,7 +454,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("records authoritative workflow runtime transitions without affecting history projection", async () => {
-    const historyInit = await manager.initializeRun("wf-runtime");
+    const historyInit = await initTestRun(manager, tempWorkspace, "wf-runtime");
     const historyFilePath = historyInit.filePath;
 
     await manager.appendRuntimeTransition(historyFilePath, {
@@ -464,7 +532,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("finalizes the newest running manifest during crash recovery", async () => {
-    const { filePath } = await manager.initializeRun("wf-interrupted");
+    const { filePath, workflowKey } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-interrupted"
+    );
     await manager.startStreamingExecutionOutput(
       filePath,
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
@@ -477,7 +549,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       }
     );
 
-    await manager.recoverInterruptedRun("wf-interrupted", 3);
+    await manager.recoverInterruptedRun(workflowKey, 3);
 
     const manifest = await recorder.readManifest(filePath);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
@@ -492,7 +564,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("orders canonical history entries by timestamp and sequence", async () => {
-    const historyInit = await manager.initializeRun("wf-canonical-order");
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-canonical-order"
+    );
     const historyFilePath = historyInit.filePath;
 
     await recorder.appendEvents(historyFilePath, [
@@ -554,7 +630,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("stores status messages as discrete timeline events in sequence order", async () => {
-    const historyInit = await manager.initializeRun("wf-status-sequence");
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-status-sequence"
+    );
     const historyFilePath = historyInit.filePath;
 
     await manager.appendStatusMessage(
@@ -615,7 +695,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("ignores compatibility status snapshots when saving timeline cli output", async () => {
-    const historyInit = await manager.initializeRun("wf-status-canonical");
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-status-canonical"
+    );
     const historyFilePath = historyInit.filePath;
 
     await manager.appendStatusMessage(
@@ -666,7 +750,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("ignores unhandled timeline event kinds during projection", async () => {
-    const historyInit = await manager.initializeRun("wf-compat");
+    const historyInit = await initTestRun(manager, tempWorkspace, "wf-compat");
     const historyFilePath = historyInit.filePath;
 
     await recorder.appendEvents(historyFilePath, [
@@ -693,68 +777,46 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("deleteRun removes a single run by index (newest = 0)", async () => {
-    const workflowId = "wf-delete";
-    const historyDir = path.join(manager.historyBaseDir, workflowId);
-    await fs.mkdir(historyDir, { recursive: true });
+    const workflowKey = await WorkflowPaths.allocateWorkflowKey(
+      tempWorkspace,
+      "wf-delete"
+    );
 
     // Three runs with explicit, increasing startedAt so ordering is deterministic.
-    await recorder.initializeRun(
-      historyDir,
-      workflowId,
-      1,
-      1000,
-      EXECUTION_STATES.COMPLETED
-    );
-    await recorder.initializeRun(
-      historyDir,
-      workflowId,
-      2,
-      2000,
-      EXECUTION_STATES.COMPLETED
-    );
-    await recorder.initializeRun(
-      historyDir,
-      workflowId,
-      3,
-      3000,
-      EXECUTION_STATES.COMPLETED
-    );
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 1, 1000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 2, 2000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 3, 3000);
 
     assert.strictEqual(
-      (await manager.getRunsForWorkflow(workflowId)).length,
+      (await manager.getRunsForWorkflow(workflowKey)).length,
       3
     );
 
     // Delete the newest run (index 0) — the accidental-restart recovery case.
-    const remaining = await manager.deleteRun(workflowId, 0);
+    const remaining = await manager.deleteRun(workflowKey, 0);
     assert.strictEqual(remaining, 2);
 
-    const runs = await manager.getRunsForWorkflow(workflowId);
+    const runs = await manager.getRunsForWorkflow(workflowKey);
     assert.strictEqual(runs.length, 2);
 
     // The newest remaining run is now run 2 (startedAt 2000); run 3 is gone.
     const newest = await recorder.readManifest(
-      manager.getHistoryFilePath(workflowId, runs[0])
+      manager.getHistoryFilePath(workflowKey, runs[0])
     );
     assert.strictEqual(newest.runId, 2);
   });
 
   test("deleteRun is a no-op for an out-of-range index", async () => {
-    const workflowId = "wf-delete-oob";
-    const historyDir = path.join(manager.historyBaseDir, workflowId);
-    await fs.mkdir(historyDir, { recursive: true });
-    await recorder.initializeRun(
-      historyDir,
-      workflowId,
-      1,
-      1000,
-      EXECUTION_STATES.COMPLETED
+    const workflowKey = await WorkflowPaths.allocateWorkflowKey(
+      tempWorkspace,
+      "wf-delete-oob"
     );
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 1, 1000);
 
-    const remaining = await manager.deleteRun(workflowId, 5);
+    const remaining = await manager.deleteRun(workflowKey, 5);
     assert.strictEqual(remaining, 1);
     assert.strictEqual(
-      (await manager.getRunsForWorkflow(workflowId)).length,
+      (await manager.getRunsForWorkflow(workflowKey)).length,
       1
     );
   });
@@ -777,7 +839,7 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
   async function saveSnapshotAndLoad(
     snapshot: WorkspaceSnapshot
   ): Promise<WorkspaceSnapshot | undefined> {
-    const { filePath } = await manager.initializeRun("wf-enrich");
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-enrich");
     await manager.saveSnapshotForTarget(
       filePath,
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },

@@ -23,7 +23,7 @@ suite("QueueOperations", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(
         queue,
-        "/workspace/.ctrlyoke/.working/my-workflow-2024-12-23T15-30-00.ctrlyoke.json"
+        "/workspace/.ctrlyoke/.runs/my-workflow-2024-12-23T15-30-00/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"
       );
       assert.strictEqual(status.metadata.workflowName, "my-workflow");
     });

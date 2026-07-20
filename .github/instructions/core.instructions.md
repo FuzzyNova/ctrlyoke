@@ -12,7 +12,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 - `WorkflowInstance` owns one workflow's runtime state and composes queue, executor, history, watchers, and execution integrations.
 - `WorkflowStateMachine` is the **only** owner of execution status/timing/attempt state.
 - `PromptQueue` owns queue topology/runtime metadata, but delegates status transitions to `WorkflowStateMachine`.
-- `WorkingFileManager` is the only place that should write `.ctrlyoke/.working/*.ctrlyoke.json`.
+- `WorkingFileManager` is the only place that should write a run/draft `workflow.ctrlyoke.json` under `.ctrlyoke/.runs/<workflowKey>/`. `WorkflowLineageRepository` (in `src/core/orchestration/`) owns the lineage descriptor (`workflow.json`), `WorkflowKey`/`RunRef` allocation, and run-directory promotion — see `orchestration.instructions.md`.
 
 </boundaries>
 

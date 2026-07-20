@@ -57,4 +57,4 @@ finalStep:
 
 ## After the first run
 
-Open the working file under `.ctrlyoke/.working/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.
+Open the run's working file under `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.

@@ -1,9 +1,7 @@
 import * as fs from "fs";
-import * as path from "path";
-import {
-  PATH_CONSTANTS,
-  ConfigurationUtils,
-} from "../../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   WorkflowOutputHistory,
   OutputExecutionTarget,
@@ -39,17 +37,18 @@ import {
  * RESPONSIBILITY: Workflow Output History Storage & Retrieval
  *
  * Manages per-run output history for workflows. Runs are stored as
- * manifest.json + events.jsonl timeline data under .ctrlyoke/.history/<workflow-id>/.
+ * manifest.json + events.jsonl timeline data under `.ctrlyoke/.runs/<workflowKey>/<runRef>/`.
+ * `WorkflowLineageRepository` owns the `RunRef` directory itself (created together with
+ * the run's `workflow.ctrlyoke.json` at promotion time); this class only populates and
+ * maintains the manifest/events pair inside it.
  *
  * Key design decisions:
- * - The .history/<workflow-id>/ directory is the single source of truth
+ * - History is always on — there is no longer a way to disable it.
  * - Working files do NOT track outputHistory — disk is always authoritative
  * - Outputs stored using existing CliOutput format (zero new types for storage)
  * - History is a self-contained snapshot (renders independently of current prompts)
  */
 export class OutputHistoryManager {
-  /** Absolute path to .ctrlyoke/.history/ */
-  readonly historyBaseDir: string;
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
@@ -63,80 +62,48 @@ export class OutputHistoryManager {
   /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
   private pendingIndexRefresh: Promise<void> = Promise.resolve();
 
-  constructor(private _workspaceFolderPath: string) {
-    this.historyBaseDir = path.join(
+  constructor(private _workspaceFolderPath: string) {}
+
+  /** Get the manifest path for an already-known run. */
+  getHistoryFilePath(workflowKey: WorkflowKey, runRef: RunRef): string {
+    return WorkflowPaths.manifestPath(
       this._workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.HISTORY_DIR
-    );
-  }
-
-  /** Check if history is enabled via settings */
-  isHistoryEnabled(): boolean {
-    return ConfigurationUtils.isSaveOutputHistoryEnabled();
-  }
-
-  /**
-   * Extract workflow ID from working file path.
-   * "workflow-2024-01-21T10-30-00.ctrlyoke.json" → "workflow-2024-01-21T10-30-00"
-   */
-  static extractWorkflowId(workingFilePath: string): string {
-    const basename = path.basename(workingFilePath);
-    return basename
-      .replace(/\.ctrlyoke\.json$/, "")
-      .replace(/\.ctrlyoke\.yaml$/, "")
-      .replace(/\.ctrlyoke\.yml$/, "");
-  }
-
-  /** Get absolute path to a history file */
-  getHistoryFilePath(workflowId: string, historyFileName: string): string {
-    const workflowHistoryPath = path.join(this.historyBaseDir, workflowId);
-    return TimelineRecorder.getManifestPathForRunDirectory(
-      path.join(workflowHistoryPath, historyFileName)
+      workflowKey,
+      runRef
     );
   }
 
   /**
-   * Initialize a new run for a workflow.
-   * Returns { filePath, runCount } where filePath is the new history file path
-   * (or "" if history is disabled) and runCount is the total runs after initialization
+   * Populate manifest.json/events.jsonl inside a run directory that
+   * `WorkflowLineageRepository.allocateRun` (via `WorkingFileManager.promoteToNewRun`)
+   * has already created alongside the run's `workflow.ctrlyoke.json`.
+   * Returns { filePath, runCount } where runCount is the total runs after initialization
    * (capped at maxHistoryRuns after pruning).
-   *
-   * The .history/<workflow-id>/ directory is the single source of truth —
-   * nothing is written to the working file.
-   *
-   * Steps:
-   * 1. Creates the .history/<workflow-id>/ directory
-   * 2. Determines the next sequential run ID from existing files on disk
-   * 3. Creates the initial (incomplete) history file
-   * 4. Prunes old runs beyond maxHistoryRuns limit
    */
-  async initializeRun(
-    workflowId: string
+  async initializeRunAt(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    runDir: string,
+    runId: number,
+    startedAt: number
   ): Promise<{ filePath: string; runCount: number }> {
-    if (!this.isHistoryEnabled()) {
-      return { filePath: "", runCount: 0 };
-    }
-
+    Log.debug(
+      `[OutputHistoryManager] initializeRunAt: ${workflowKey}/${runRef} (runId=${runId})`
+    );
     try {
-      const historyDir = path.join(this.historyBaseDir, workflowId);
-      await fs.promises.mkdir(historyDir, { recursive: true });
-
-      const existingRuns = await this.getRunsForWorkflow(workflowId);
-      const startedAt = Date.now();
-      const filePath = await this.timelineRecorder.initializeRun(
-        historyDir,
-        workflowId,
-        existingRuns.length + 1,
+      const filePath = await this.timelineRecorder.initializeRunAt(
+        runDir,
+        workflowKey,
+        runId,
         startedAt,
         EXECUTION_STATES.RUNNING
       );
 
       // Prune old runs if needed (disk-only operation)
       const maxRuns = ConfigurationUtils.getMaxHistoryRuns();
-      await this.pruneOldRuns(workflowId, maxRuns);
+      await this.pruneOldRuns(workflowKey, maxRuns);
 
-      const runCount = (await this.getRunsForWorkflow(workflowId)).length;
+      const runCount = (await this.getRunsForWorkflow(workflowKey)).length;
       this.refreshSearchIndex();
 
       return { filePath, runCount };
@@ -420,14 +387,14 @@ export class OutputHistoryManager {
 
   /** Finalize the newest still-running run after startup detects a dead owner. */
   async recoverInterruptedRun(
-    workflowId: string,
+    workflowKey: WorkflowKey,
     runStepCount: number
   ): Promise<void> {
-    const [latestRun] = await this.getRunsForWorkflow(workflowId);
+    const [latestRun] = await this.getRunsForWorkflow(workflowKey);
     if (!latestRun) {
       return;
     }
-    const historyFilePath = this.getHistoryFilePath(workflowId, latestRun);
+    const historyFilePath = this.getHistoryFilePath(workflowKey, latestRun);
     try {
       const manifest =
         await this.timelineRecorder.readManifest(historyFilePath);
@@ -455,24 +422,27 @@ export class OutputHistoryManager {
   }
 
   /**
-   * Get all run filenames for a workflow (sorted newest first).
-   * Returns empty array if directory does not exist or is empty.
+   * Get all run refs for a workflow (sorted newest first).
+   * Returns empty array if the lineage directory does not exist or has no runs.
    */
-  async getRunsForWorkflow(workflowId: string): Promise<string[]> {
-    const historyDir = path.join(this.historyBaseDir, workflowId);
+  async getRunsForWorkflow(workflowKey: WorkflowKey): Promise<RunRef[]> {
+    const lineageDir = WorkflowPaths.lineageDir(
+      this._workspaceFolderPath,
+      workflowKey
+    );
 
     try {
-      const entries = await fs.promises.readdir(historyDir, {
+      const entries = await fs.promises.readdir(lineageDir, {
         withFileTypes: true,
       });
       const runEntries = entries
-        .filter((entry) => TimelineRecorder.isRunEntry(entry))
-        .map((entry) => entry.name);
+        .filter((entry) => WorkflowPaths.isRunDirEntry(entry))
+        .map((entry) => entry.name as RunRef);
 
       return runEntries.sort(
         (a, b) =>
-          TimelineRecorder.extractRunTimestamp(b) -
-          TimelineRecorder.extractRunTimestamp(a)
+          (WorkflowPaths.parseRunRefTimestamp(b) ?? 0) -
+          (WorkflowPaths.parseRunRefTimestamp(a) ?? 0)
       );
     } catch {
       return [];
@@ -481,22 +451,18 @@ export class OutputHistoryManager {
 
   /**
    * Get the most recent history file path for a workflow.
-   * Returns empty string if no history exists for this workflow.
+   * Returns empty string if no run exists for this workflow.
    * Used for append-to-completed scenarios where we want to continue
    * writing to the existing run instead of creating a new one.
    */
-  async getLatestHistoryFilePath(workflowId: string): Promise<string> {
-    if (!this.isHistoryEnabled()) {
-      return "";
-    }
-
-    const runs = await this.getRunsForWorkflow(workflowId);
+  async getLatestHistoryFilePath(workflowKey: WorkflowKey): Promise<string> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
     if (runs.length === 0) {
       return "";
     }
 
     // runs[0] is the most recent (sorted newest first)
-    return this.getHistoryFilePath(workflowId, runs[0]);
+    return this.getHistoryFilePath(workflowKey, runs[0]);
   }
 
   /**
@@ -504,12 +470,14 @@ export class OutputHistoryManager {
    * Matches the order of getRunsForWorkflow() (index 0 = most recent run).
    * Returns undefined for any run whose file cannot be read or lacks startedAt.
    */
-  async getRunTimestamps(workflowId: string): Promise<(number | undefined)[]> {
-    const runs = await this.getRunsForWorkflow(workflowId);
+  async getRunTimestamps(
+    workflowKey: WorkflowKey
+  ): Promise<(number | undefined)[]> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
     const timestamps = await Promise.all(
-      runs.map(async (fileName) => {
+      runs.map(async (runRef) => {
         try {
-          const filePath = this.getHistoryFilePath(workflowId, fileName);
+          const filePath = this.getHistoryFilePath(workflowKey, runRef);
           const metadata = await this.readRunMetadata(filePath);
           return metadata.startedAt;
         } catch {
@@ -525,12 +493,14 @@ export class OutputHistoryManager {
    * Matches the order of getRunsForWorkflow() (index 0 = most recent run).
    * Returns undefined for any run whose file cannot be read.
    */
-  async getRunStates(workflowId: string): Promise<(string | undefined)[]> {
-    const runs = await this.getRunsForWorkflow(workflowId);
+  async getRunStates(
+    workflowKey: WorkflowKey
+  ): Promise<(string | undefined)[]> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
     const states = await Promise.all(
-      runs.map(async (fileName) => {
+      runs.map(async (runRef) => {
         try {
-          const filePath = this.getHistoryFilePath(workflowId, fileName);
+          const filePath = this.getHistoryFilePath(workflowKey, runRef);
           const metadata = await this.readRunMetadata(filePath);
           return metadata.executionState as string;
         } catch {
@@ -543,32 +513,31 @@ export class OutputHistoryManager {
 
   /**
    * Prune runs beyond maxRuns limit (oldest first).
-   * Disk-only: deletes the oldest history files, no working file changes.
+   * Disk-only: deletes the oldest run directories, no working file changes.
    */
-  async pruneOldRuns(workflowId: string, maxRuns: number): Promise<void> {
+  async pruneOldRuns(workflowKey: WorkflowKey, maxRuns: number): Promise<void> {
     // -1 or 0 means keep all runs
     if (maxRuns <= 0) {
       return;
     }
 
-    const runs = await this.getRunsForWorkflow(workflowId);
+    const runs = await this.getRunsForWorkflow(workflowKey);
     if (runs.length <= maxRuns) {
       return;
     }
 
     // runs is newest-first; slice(maxRuns) gives the oldest entries to delete
     const toDelete = runs.slice(maxRuns);
-    for (const fileName of toDelete) {
-      const entryPath = path.join(this.historyBaseDir, workflowId, fileName);
+    for (const runRef of toDelete) {
+      const entryPath = WorkflowPaths.runDir(
+        this._workspaceFolderPath,
+        workflowKey,
+        runRef
+      );
       try {
-        const stats = await fs.promises.stat(entryPath);
-        if (stats.isDirectory()) {
-          await fs.promises.rm(entryPath, { recursive: true, force: true });
-        } else {
-          await fs.promises.unlink(entryPath);
-        }
+        await fs.promises.rm(entryPath, { recursive: true, force: true });
       } catch (error) {
-        Log.warn(`Failed to delete old history file ${fileName}:`, error);
+        Log.warn(`Failed to delete old run ${runRef}:`, error);
       }
     }
     this.refreshSearchIndex();
@@ -582,30 +551,29 @@ export class OutputHistoryManager {
    * Because continue/append always reuse getLatestHistoryFilePath() (newest run),
    * deleting an accidental newest run lets the prior run resume seamlessly.
    */
-  async deleteRun(workflowId: string, runIndex: number): Promise<number> {
-    const runs = await this.getRunsForWorkflow(workflowId);
-    const fileName = runs[runIndex];
-    if (!fileName) {
+  async deleteRun(workflowKey: WorkflowKey, runIndex: number): Promise<number> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
+    const runRef = runs[runIndex];
+    if (!runRef) {
       Log.warn(
-        `deleteRun: no run at index ${runIndex} for workflow ${workflowId}`
+        `deleteRun: no run at index ${runIndex} for workflow ${workflowKey}`
       );
       return runs.length;
     }
 
-    const entryPath = path.join(this.historyBaseDir, workflowId, fileName);
+    const entryPath = WorkflowPaths.runDir(
+      this._workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
     try {
-      const stats = await fs.promises.stat(entryPath);
-      if (stats.isDirectory()) {
-        await fs.promises.rm(entryPath, { recursive: true, force: true });
-      } else {
-        await fs.promises.unlink(entryPath);
-      }
+      await fs.promises.rm(entryPath, { recursive: true, force: true });
     } catch (error) {
-      Log.warn(`Failed to delete run ${fileName}:`, error);
+      Log.warn(`Failed to delete run ${runRef}:`, error);
     }
 
     this.refreshSearchIndex();
-    return (await this.getRunsForWorkflow(workflowId)).length;
+    return (await this.getRunsForWorkflow(workflowKey)).length;
   }
 
   /**

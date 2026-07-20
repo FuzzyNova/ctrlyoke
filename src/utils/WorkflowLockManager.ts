@@ -1,6 +1,11 @@
 import * as fs from "fs";
+import * as crypto from "crypto";
 import * as path from "path";
-import { WorkflowRunnerLock } from "../types/CtrlYokeTypes";
+import {
+  WorkflowRunnerLock,
+  type RunRef,
+  type WorkflowKey,
+} from "../types/CtrlYokeTypes";
 import {
   RUNNER_IDS,
   LOCK_STATUS,
@@ -11,65 +16,139 @@ import {
 } from "../types/DashboardConstants";
 import type { LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
+import * as WorkflowPaths from "./WorkflowPaths";
 
 export type { LockStatus };
 
 /** Heartbeat staleness threshold in milliseconds (30 seconds) */
 const STALE_HEARTBEAT_MS = 30_000;
+const ACQUIRE_TIMEOUT_MS = 5_000;
+const ACQUIRE_RETRY_DELAY_MS = 50;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * WorkflowLockManager
  *
- * Atomic lock file CRUD for workflow process coordination.
- * Lock files live at {queueDir}/{workflowId}.runner.json alongside working files.
+ * Exclusive, owner-token-safe runner-lock CRUD for workflow process coordination.
+ * Lock files live at `.ctrlyoke/.runs/<workflowKey>/runner.json` — one per lineage, naming
+ * the exact `RunRef` currently executing (never merely the viewed run).
  *
- * All writes are atomic: content is written to a .tmp file first, then renamed
- * into place so readers never see a partial file.
+ * Acquire is a true `fs.open(path, "wx")` exclusive create (mirroring `FileLockUtils`),
+ * with a bounded retry against a stale owner. Heartbeat and release both read the lock
+ * first and compare `ownerToken` before writing/deleting, so a stale process can never
+ * refresh or unlink a successor's lock.
  */
 export class WorkflowLockManager {
-  /**
-   * Derive the lock file path from a working file path.
-   * "workflow-name.ctrlyoke.json" → "workflow-name.runner.json"
-   */
-  static getLockPath(workingFilePath: string): string {
-    const dir = path.dirname(workingFilePath);
-    const base = path
-      .basename(workingFilePath)
-      .replace(/\.ctrlyoke\.json$/, "");
-    return path.join(dir, `${base}.runner.json`);
+  static getLockPath(workspaceRoot: string, workflowKey: WorkflowKey): string {
+    return WorkflowPaths.runnerLockPath(workspaceRoot, workflowKey);
+  }
+
+  /** Generates a fresh per-acquire ownership token. */
+  static generateOwnerToken(): string {
+    return crypto.randomUUID();
   }
 
   /**
-   * Acquire a lock by writing the lock file atomically.
-   * Writes to a .tmp file first, then renames to the final path.
+   * Exclusively acquires the lineage's runner lock. Retries for up to
+   * `ACQUIRE_TIMEOUT_MS` if the existing lock is stale (dead PID or heartbeat older
+   * than 30s); throws if a live owner holds it or the timeout elapses.
    */
   static async acquireLock(
-    workingFilePath: string,
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
     lock: WorkflowRunnerLock
   ): Promise<void> {
-    const lockPath = WorkflowLockManager.getLockPath(workingFilePath);
-    const tmpPath = lockPath + ".tmp";
-    await fs.promises.writeFile(tmpPath, JSON.stringify(lock, null, 2), "utf8");
-    await fs.promises.rename(tmpPath, lockPath);
-    Log.debug(`[WorkflowLockManager] acquireLock: ${path.basename(lockPath)}`);
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
+    await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
+    const content = JSON.stringify(lock, null, 2);
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < ACQUIRE_TIMEOUT_MS) {
+      try {
+        const handle = await fs.promises.open(lockPath, "wx");
+        try {
+          await handle.writeFile(content, "utf8");
+        } finally {
+          await handle.close();
+        }
+        Log.debug(
+          `[WorkflowLockManager] acquireLock: ${workflowKey} → ${lock.runRef}`
+        );
+        return;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+          throw error;
+        }
+
+        const existing = await WorkflowLockManager.readLock(
+          workspaceRoot,
+          workflowKey
+        );
+        const stale =
+          !existing ||
+          !isPidAlive(existing.pid) ||
+          Date.now() - existing.lastHeartbeat > STALE_HEARTBEAT_MS;
+
+        if (stale) {
+          try {
+            await fs.promises.unlink(lockPath);
+          } catch (unlinkError) {
+            if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") {
+              throw unlinkError;
+            }
+          }
+          continue;
+        }
+
+        await sleep(ACQUIRE_RETRY_DELAY_MS);
+      }
+    }
+
+    throw new Error(
+      `Timed out waiting for runner lock: ${workflowKey} (held by a live owner)`
+    );
   }
 
   /**
-   * Release a lock by deleting the lock file.
-   * Swallows ENOENT (already deleted is fine).
+   * Release a lock, but only if `ownerToken` matches the current holder — a stale
+   * process can never unlink a successor's lock. Swallows ENOENT (already gone).
    */
-  static async releaseLock(workingFilePath: string): Promise<void> {
-    const lockPath = WorkflowLockManager.getLockPath(workingFilePath);
+  static async releaseLock(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    ownerToken: string
+  ): Promise<void> {
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
     try {
-      await fs.promises.unlink(lockPath);
-      Log.debug(
-        `[WorkflowLockManager] releaseLock: ${path.basename(lockPath)}`
+      const existing = await WorkflowLockManager.readLock(
+        workspaceRoot,
+        workflowKey
       );
+      if (!existing) {
+        return;
+      }
+      if (existing.ownerToken !== ownerToken) {
+        Log.warn(
+          `[WorkflowLockManager] releaseLock: ownerToken mismatch for ${workflowKey} — refusing to release a successor's lock`
+        );
+        return;
+      }
+      await fs.promises.unlink(lockPath);
+      Log.debug(`[WorkflowLockManager] releaseLock: ${workflowKey}`);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") {
         Log.warn(
-          `[WorkflowLockManager] releaseLock: failed to delete ${path.basename(lockPath)}:`,
+          `[WorkflowLockManager] releaseLock: failed to delete ${workflowKey}:`,
           err
         );
       }
@@ -77,20 +156,40 @@ export class WorkflowLockManager {
   }
 
   /**
-   * Update the heartbeat timestamp in the lock file atomically.
-   * Reads the existing lock, updates lastHeartbeat, writes atomically.
-   * No-ops silently if the lock file is gone (ENOENT).
+   * Update the heartbeat timestamp, but only if `ownerToken` matches the current
+   * holder. No-ops silently if the lock file is gone (ENOENT) or owned by someone else.
    */
-  static async updateHeartbeat(workingFilePath: string): Promise<void> {
-    const lockPath = WorkflowLockManager.getLockPath(workingFilePath);
+  static async updateHeartbeat(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    ownerToken: string
+  ): Promise<void> {
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
     try {
-      const content = await fs.promises.readFile(lockPath, "utf8");
-      const lock = JSON.parse(content) as WorkflowRunnerLock;
-      lock.lastHeartbeat = Date.now();
-      const tmpPath = lockPath + ".tmp";
+      const existing = await WorkflowLockManager.readLock(
+        workspaceRoot,
+        workflowKey
+      );
+      if (!existing) {
+        return;
+      }
+      if (existing.ownerToken !== ownerToken) {
+        Log.warn(
+          `[WorkflowLockManager] updateHeartbeat: ownerToken mismatch for ${workflowKey} — refusing to touch a successor's lock`
+        );
+        return;
+      }
+      const updated: WorkflowRunnerLock = {
+        ...existing,
+        lastHeartbeat: Date.now(),
+      };
+      const tmpPath = `${lockPath}.tmp`;
       await fs.promises.writeFile(
         tmpPath,
-        JSON.stringify(lock, null, 2),
+        JSON.stringify(updated, null, 2),
         "utf8"
       );
       await fs.promises.rename(tmpPath, lockPath);
@@ -98,7 +197,7 @@ export class WorkflowLockManager {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") {
         Log.warn(
-          `[WorkflowLockManager] updateHeartbeat: failed for ${path.basename(lockPath)}:`,
+          `[WorkflowLockManager] updateHeartbeat: failed for ${workflowKey}:`,
           err
         );
       }
@@ -106,13 +205,17 @@ export class WorkflowLockManager {
   }
 
   /**
-   * Read the raw lock data for a given working file.
+   * Read the raw lock data for a lineage.
    * Returns null if the lock file does not exist or cannot be parsed.
    */
   static async readLock(
-    workingFilePath: string
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
   ): Promise<WorkflowRunnerLock | null> {
-    const lockPath = WorkflowLockManager.getLockPath(workingFilePath);
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
     try {
       const content = await fs.promises.readFile(lockPath, "utf8");
       return JSON.parse(content) as WorkflowRunnerLock;
@@ -122,7 +225,7 @@ export class WorkflowLockManager {
   }
 
   /**
-   * Check the status of the lock for a given working file.
+   * Check the status of the lock for a lineage.
    *
    * Returns:
    *   "none"          — no lock file or parse error
@@ -130,13 +233,12 @@ export class WorkflowLockManager {
    *   "active-vscode" — live VS Code Extension Host holds the lock
    *   "active-cli"    — live CLI process holds the lock
    */
-  static async checkLock(workingFilePath: string): Promise<LockStatus> {
-    const lockPath = WorkflowLockManager.getLockPath(workingFilePath);
-    let lock: WorkflowRunnerLock;
-    try {
-      const content = await fs.promises.readFile(lockPath, "utf8");
-      lock = JSON.parse(content) as WorkflowRunnerLock;
-    } catch {
+  static async checkLock(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<LockStatus> {
+    const lock = await WorkflowLockManager.readLock(workspaceRoot, workflowKey);
+    if (!lock) {
       return LOCK_STATUS.NONE;
     }
 
@@ -159,35 +261,42 @@ export class WorkflowLockManager {
   /**
    * Normalize stale locks on extension startup.
    *
-   * Scans all *.ctrlyoke.json files in queueDir. For each file whose
-   * _runtime.executionState is active (running/pausing/cancelling):
-   *   - "none" or "stale" lock  → writes "stopped" to _runtime.executionState,
+   * Scans every lineage directory under `.ctrlyoke/.runs/`. For each lineage whose
+   * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
+   *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
    *     cleans up any stale lock file
    *   - "active-vscode"         → this shouldn't happen on startup (we just started);
    *     treat as stale and normalize to "stopped"
-   *   - "active-cli"            → preserves RUNNING; returns this path as a CLI-managed entry
+   *   - "active-cli"            → preserves RUNNING; returns this lineage as CLI-managed
    *
-   * Returns active CLI paths plus files recovered from an interrupted owner.
+   * Returns the exact run file paths recovered/still-active, keyed by lineage.
    */
-  static async normalizeStaleLocks(queueDir: string): Promise<{
-    activeCliPaths: string[];
-    recoveredPaths: string[];
+  static async normalizeStaleLocks(
+    workspaceRoot: string,
+    workflowKeys: WorkflowKey[]
+  ): Promise<{
+    activeCliRunFiles: string[];
+    recoveredRunFiles: string[];
   }> {
     const activeCli: string[] = [];
-    const recoveredPaths: string[] = [];
+    const recoveredRunFiles: string[] = [];
 
-    let entries: string[];
-    try {
-      entries = await fs.promises.readdir(queueDir);
-    } catch {
-      return { activeCliPaths: activeCli, recoveredPaths };
-    }
+    for (const workflowKey of workflowKeys) {
+      const lock = await WorkflowLockManager.readLock(
+        workspaceRoot,
+        workflowKey
+      );
+      if (!lock) {
+        continue;
+      }
 
-    const workingFiles = entries.filter((f) => f.endsWith(".ctrlyoke.json"));
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        lock.runRef as RunRef
+      );
 
-    for (const fileName of workingFiles) {
-      const workingFilePath = path.join(queueDir, fileName);
-      let workingFile: {
+      let runningFile: {
         _runtime?: {
           executionState?: string;
           currentIndex?: number;
@@ -208,14 +317,14 @@ export class WorkflowLockManager {
       };
 
       try {
-        const content = await fs.promises.readFile(workingFilePath, "utf8");
-        workingFile = JSON.parse(content);
+        const content = await fs.promises.readFile(runFilePath, "utf8");
+        runningFile = JSON.parse(content);
       } catch {
-        // Race condition: file being written mid-read — skip safely
+        // Race condition: file being written mid-read, or already gone — skip safely
         continue;
       }
 
-      const executionState = workingFile._runtime?.executionState;
+      const executionState = runningFile._runtime?.executionState;
       if (
         executionState !== EXECUTION_STATES.RUNNING &&
         executionState !== EXECUTION_STATES.PAUSING &&
@@ -224,26 +333,28 @@ export class WorkflowLockManager {
         continue;
       }
 
-      const status = await WorkflowLockManager.checkLock(workingFilePath);
+      const status = await WorkflowLockManager.checkLock(
+        workspaceRoot,
+        workflowKey
+      );
 
       if (status === LOCK_STATUS.ACTIVE_CLI) {
         Log.info(
-          `[WorkflowLockManager] normalizeStaleLocks: ${fileName} is active-cli — preserving RUNNING`
+          `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} is active-cli — preserving RUNNING`
         );
-        activeCli.push(workingFilePath);
+        activeCli.push(runFilePath);
         continue;
       }
 
       // "none", "stale", or "active-vscode" (we just started — can't be us)
       Log.info(
-        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${fileName} from ${executionState} → stopped (lock=${status})`
+        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} → stopped (lock=${status})`
       );
 
-      // Normalize the working file to "stopped"
-      if (workingFile._runtime) {
-        workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-        const currentIndex = workingFile._runtime.currentIndex ?? 0;
-        const interruptedStep = workingFile.steps?.[currentIndex];
+      if (runningFile._runtime) {
+        runningFile._runtime.executionState = EXECUTION_STATES.STOPPED;
+        const currentIndex = runningFile._runtime.currentIndex ?? 0;
+        const interruptedStep = runningFile.steps?.[currentIndex];
         if (
           interruptedStep?._runtime?.startedAt &&
           !interruptedStep._runtime.completedAt
@@ -255,41 +366,52 @@ export class WorkflowLockManager {
             completedAt: stoppedAt,
             terminalStatus: PROMPT_TERMINAL_STATUS.CANCELLED,
           };
-          workingFile._runtime.currentIndex = currentIndex + 1;
+          runningFile._runtime.currentIndex = currentIndex + 1;
         } else if (
-          currentIndex >= (workingFile.steps?.length ?? 0) &&
-          workingFile._runtime.finalStep?.phase ===
+          currentIndex >= (runningFile.steps?.length ?? 0) &&
+          runningFile._runtime.finalStep?.phase ===
             FINAL_STEP_PHASES.FINAL_STEP &&
-          workingFile._runtime.finalStep.status !== STEP_STATUS.COMPLETED
+          runningFile._runtime.finalStep.status !== STEP_STATUS.COMPLETED
         ) {
-          workingFile._runtime.finalStep = {
-            ...workingFile._runtime.finalStep,
+          runningFile._runtime.finalStep = {
+            ...runningFile._runtime.finalStep,
             status: STEP_STATUS.CANCELLED,
             completedAt: Date.now(),
           };
         }
       }
       try {
-        const tmpPath = workingFilePath + ".tmp";
+        const tmpPath = runFilePath + ".tmp";
         await fs.promises.writeFile(
           tmpPath,
-          JSON.stringify(workingFile, null, 2),
+          JSON.stringify(runningFile, null, 2),
           "utf8"
         );
-        await fs.promises.rename(tmpPath, workingFilePath);
-        recoveredPaths.push(workingFilePath);
+        await fs.promises.rename(tmpPath, runFilePath);
+        recoveredRunFiles.push(runFilePath);
       } catch (writeErr) {
         Log.warn(
-          `[WorkflowLockManager] normalizeStaleLocks: failed to normalize ${fileName}:`,
+          `[WorkflowLockManager] normalizeStaleLocks: failed to normalize ${workflowKey}:`,
           writeErr
         );
       }
 
-      // Clean up any stale lock file
-      await WorkflowLockManager.releaseLock(workingFilePath);
+      // Clean up the stale lock file directly (no live owner token to check against).
+      try {
+        await fs.promises.unlink(
+          WorkflowLockManager.getLockPath(workspaceRoot, workflowKey)
+        );
+      } catch (unlinkErr) {
+        if ((unlinkErr as NodeJS.ErrnoException).code !== "ENOENT") {
+          Log.warn(
+            `[WorkflowLockManager] normalizeStaleLocks: failed to remove stale lock for ${workflowKey}:`,
+            unlinkErr
+          );
+        }
+      }
     }
 
-    return { activeCliPaths: activeCli, recoveredPaths };
+    return { activeCliRunFiles: activeCli, recoveredRunFiles };
   }
 }
 

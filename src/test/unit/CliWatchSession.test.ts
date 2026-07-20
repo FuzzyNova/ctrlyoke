@@ -1,61 +1,52 @@
 import * as assert from "assert";
-import * as path from "path";
 import { suite, test } from "mocha";
-import {
-  getHistoryRunTimestamp,
-  isNewerHistoryRunPath,
-} from "../../core/orchestration/CliWatchSession";
-import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { CliWatchSession } from "../../core/orchestration/CliWatchSession";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 
-suite("CliWatchSession run selection helpers", () => {
-  test("extracts run timestamps from legacy files, timeline manifests, and run directories", () => {
-    const legacyRunPath = path.join(
-      "history",
-      "wf-cli-watch",
-      "run-9-2026-03-31T10-00-00-000Z.json"
+suite("CliWatchSession", () => {
+  test("pins its manifest path to the exact constructed workflowKey/runRef, never 'newest'", () => {
+    const workspaceFolderPath = "C:\\dev\\some-workspace";
+    const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;
+    const runRef = "run-2026-07-20T10-30-00-000Z" as RunRef;
+    const workingFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
     );
-    const timelineManifestPath = path.join(
-      "history",
-      "wf-cli-watch",
-      "run-10-2026-03-31T11-00-00-000Z",
-      TimelineRecorder.MANIFEST_FILE_NAME
+
+    const session = new CliWatchSession(
+      workingFilePath,
+      workflowKey,
+      runRef,
+      workspaceFolderPath,
+      () => {},
+      () => {},
+      () => {}
     );
-    const timelineRunDirectory = path.dirname(timelineManifestPath);
 
     assert.strictEqual(
-      getHistoryRunTimestamp(legacyRunPath),
-      Date.parse("2026-03-31T10:00:00.000Z")
-    );
-    assert.strictEqual(
-      getHistoryRunTimestamp(timelineManifestPath),
-      Date.parse("2026-03-31T11:00:00.000Z")
-    );
-    assert.strictEqual(
-      getHistoryRunTimestamp(timelineRunDirectory),
-      Date.parse("2026-03-31T11:00:00.000Z")
+      session.getActiveHistoryFilePath(),
+      WorkflowPaths.manifestPath(workspaceFolderPath, workflowKey, runRef)
     );
   });
 
-  test("prefers the newer run across mixed legacy and timeline names", () => {
-    const olderLegacyRunPath = path.join(
-      "history",
-      "wf-cli-watch",
-      "run-9-2026-03-31T10-00-00-000Z.json"
-    );
-    const newerTimelineManifestPath = path.join(
-      "history",
-      "wf-cli-watch",
-      "run-10-2026-03-31T11-00-00-000Z",
-      TimelineRecorder.MANIFEST_FILE_NAME
+  test("tracks last-known output count per step independently", () => {
+    const workspaceFolderPath = "C:\\dev\\some-workspace";
+    const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;
+    const runRef = "run-2026-07-20T10-30-00-000Z" as RunRef;
+    const session = new CliWatchSession(
+      WorkflowPaths.runFilePath(workspaceFolderPath, workflowKey, runRef),
+      workflowKey,
+      runRef,
+      workspaceFolderPath,
+      () => {},
+      () => {},
+      () => {}
     );
 
-    assert.strictEqual(
-      isNewerHistoryRunPath(newerTimelineManifestPath, olderLegacyRunPath),
-      true
-    );
-    assert.strictEqual(
-      isNewerHistoryRunPath(olderLegacyRunPath, newerTimelineManifestPath),
-      false
-    );
+    assert.strictEqual(session.getAndUpdateLastKnownOutputCount(0, 3), 0);
+    assert.strictEqual(session.getAndUpdateLastKnownOutputCount(0, 5), 3);
+    assert.strictEqual(session.getAndUpdateLastKnownOutputCount(1, 1), 0);
   });
 });

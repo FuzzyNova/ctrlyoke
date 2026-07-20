@@ -240,6 +240,65 @@ export interface FinalStepRuntimeState {
 }
 
 /**
+ * Stable identity for a workflow lineage directory: `.ctrlyoke/.runs/<workflowKey>/`.
+ * A sanitized name plus creation timestamp, minted once by `WorkflowLineageRepository`
+ * and never re-derived from a mutable file path. Opaque — always go through
+ * `WorkflowPaths`/`WorkflowLineageRepository` to mint or validate one.
+ */
+export type WorkflowKey = string & { readonly __workflowKey: unique symbol };
+
+/**
+ * Stable identity for one promoted run directory: `.ctrlyoke/.runs/<workflowKey>/run-<ts>/`.
+ * The run directory name itself (`run-<UTC-ms-timestamp>`). Opaque — always go through
+ * `WorkflowPaths`/`WorkflowLineageRepository` to mint or validate one.
+ */
+export type RunRef = string & { readonly __runRef: unique symbol };
+
+/** A client's addressed view into a lineage: either the mutable draft or one promoted run. */
+export type WorkflowViewAddress =
+  | { workflowKey: WorkflowKey; kind: "draft" }
+  | { workflowKey: WorkflowKey; kind: "run"; runRef: RunRef };
+
+/** Addresses exactly one promoted run within a lineage. */
+export interface WorkflowRunAddress {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+}
+
+/**
+ * Authoritative lineage metadata and allocation state, persisted at
+ * `.ctrlyoke/.runs/<workflowKey>/workflow.json`. `WorkflowLineageRepository` is the only writer.
+ */
+export interface WorkflowLineageDescriptor {
+  schemaVersion: number;
+  workflowKey: WorkflowKey;
+  workflowName: string;
+  /** Path to the source prompt file, if any (undefined for ephemeral/dashboard-created lineages). */
+  originalFile?: string;
+  isFavorite: boolean;
+  createdAt: number;
+  lastModifiedAt: number;
+  /** Repairable hint, not the storage source of truth — validate against manifests before trusting. */
+  latestRunRef?: RunRef;
+  /** Monotonic; never decremented after deletion. */
+  nextRunId: number;
+  /**
+   * The lineage's one mutable preparation target. Always `undefined` through phase 1 —
+   * draft/rewind editing is introduced in phase 3.
+   */
+  pendingEdit?:
+    | { kind: "draft" }
+    | {
+        kind: "rewind";
+        runRef: RunRef;
+        fromStepIndex: number;
+        baseDefinitionRevision: number;
+      };
+  /** Optimistic-concurrency counter for descriptor metadata/allocation changes. */
+  revision: number;
+}
+
+/**
  * Runtime metadata for working files (optional, not required for user-created files)
  * Tracks workflow execution state only - does NOT include execution properties
  * (those are tracked at workflow root and per-prompt _runtime)
@@ -309,8 +368,8 @@ export interface WorkflowAttemptTransition {
 }
 
 /**
- * Working file format - same schema as PromptFile with optional runtime metadata
- * Stored in .ctrlyoke/.working/ directory
+ * Working file format - same schema as PromptFile with optional runtime metadata.
+ * Stored at `.ctrlyoke/.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json`.
  */
 export interface WorkingFile extends PromptFile {
   originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)
@@ -318,6 +377,12 @@ export interface WorkingFile extends PromptFile {
   startedAt: number; // Timestamp when workflow started
   lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
   isFavorite?: boolean; // Whether the workflow should be pinned to the top of recent workflow history
+  /**
+   * Monotonic counter bumped by `WorkingFileManager` on every definition-changing write
+   * (draft edit, appended tail, or a rewind's suffix edit). Not bumped for pure runtime
+   * persistence. Starts at 1. Fully wired to output-event tagging in phase 1c.
+   */
+  definitionRevision: number;
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
 }
 
@@ -491,6 +556,10 @@ export interface QueueState extends WorkflowRuntimeState {
   lastReloadTime?: number; // Timestamp of last reload
   workingFilePath?: string; // Path to working file (source of truth)
   workflowName?: string; // Custom workflow name (from working file)
+  /** Stable lineage identity for the loaded workflow; set once by WorkingFileManager.createWorkingFile. */
+  workflowKey?: WorkflowKey;
+  /** The run this working file currently addresses (undefined while still a draft, pre-first-execution). */
+  runRef?: RunRef;
 }
 
 /**
@@ -540,23 +609,30 @@ export const workflowDisplayStep = (
 ): number => s.currentStep + 1;
 
 /**
- * Process lock file written alongside the working file while a workflow is running.
+ * Process lock file written at the lineage root while one of its runs is executing.
  * Enables the VS Code extension and CLI to coexist without stomping on each other's state.
- * Lock file path: {queueDir}/{workflowId}.runner.json
+ * Lock file path: `.ctrlyoke/.runs/<workflowKey>/runner.json`.
  */
 export interface WorkflowRunnerLock {
+  /** Lineage this lock belongs to. */
+  workflowKey: WorkflowKey;
+  /** The exact run this lock is executing — never merely the viewed run. */
+  runRef: RunRef;
   /** Which runner created this lock */
   runner: RunnerId;
   /** OS process ID of the runner (Extension Host PID for vscode, CLI process PID for cli) */
   pid: number;
+  /**
+   * Random token generated fresh on every acquire. Heartbeat/release must present a matching
+   * token, so a stale process can never refresh or unlink a successor's lock.
+   */
+  ownerToken: string;
+  /** UUID generated once at extension activation (vscode) or CLI startup (cli) */
+  instanceId?: string;
   /** Unix ms timestamp when execution started */
   startedAt: number;
   /** Unix ms timestamp updated every 5s while running — guards against PID recycling */
   lastHeartbeat: number;
-  /** UUID generated once at extension activation (vscode) or CLI startup (cli) */
-  instanceId: string;
-  /** WorkflowInstance.id — matches the workflowId portion of the working file name */
-  workflowId: string;
 }
 
 // Re-export constants for convenience

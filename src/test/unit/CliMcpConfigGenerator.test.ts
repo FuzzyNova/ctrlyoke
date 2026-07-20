@@ -68,12 +68,12 @@ suite("CliMcpConfigGenerator", () => {
         "out/mcp-server.js",
         "/workspace",
         undefined,
-        "/workspace/.ctrlyoke/.working/active.yaml"
+        "/workspace/.ctrlyoke/.runs/active/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"
       );
       const config = JSON.parse(json);
       assert.strictEqual(
         config.mcpServers.ctrlyoke.env.CTRLYOKE_WORKING_FILE,
-        "/workspace/.ctrlyoke/.working/active.yaml"
+        "/workspace/.ctrlyoke/.runs/active/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"
       );
     });
 
@@ -203,11 +203,11 @@ suite("CliMcpConfigGenerator", () => {
         "ctrlyoke",
         "out/mcp-server.js",
         "/workspace",
-        "/workspace/.ctrlyoke/.working/active.yaml"
+        "/workspace/.ctrlyoke/.runs/active/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"
       );
       assert.ok(
         toml.includes(
-          "CTRLYOKE_WORKING_FILE='/workspace/.ctrlyoke/.working/active.yaml'"
+          "CTRLYOKE_WORKING_FILE='/workspace/.ctrlyoke/.runs/active/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json'"
         )
       );
     });

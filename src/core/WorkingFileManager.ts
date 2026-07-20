@@ -1,6 +1,10 @@
 import * as fs from "fs/promises";
-import * as path from "path";
-import type { WorkflowStep, WorkingFile } from "../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkflowStep,
+  WorkingFile,
+} from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
@@ -10,12 +14,10 @@ import {
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
+import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 
 /**
  * Interface providing queue state access for working file persistence operations.
@@ -51,7 +53,7 @@ export interface IWorkingFileQueueAccess {
 }
 
 /**
- * Manages working file (.ctrlyoke/.working/*.ctrlyoke.json) persistence.
+ * Manages run/draft working file (.ctrlyoke/.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json) persistence.
  *
  * Extracted from PromptQueue to separate file I/O concerns from queue state management.
  * All serialized operations go through an internal operation queue to prevent races.
@@ -62,46 +64,17 @@ export interface IWorkingFileQueueAccess {
  */
 export class WorkingFileManager {
   private operationQueue: Promise<void> = Promise.resolve();
+  private readonly lineageRepository: WorkflowLineageRepository;
 
-  constructor(private readonly queueAccess: IWorkingFileQueueAccess) {}
+  constructor(
+    private readonly queueAccess: IWorkingFileQueueAccess,
+    lineageRepository?: WorkflowLineageRepository
+  ) {
+    this.lineageRepository =
+      lineageRepository ?? new WorkflowLineageRepository();
+  }
 
   // ==================== Pure File Operations ====================
-
-  /**
-   * Generate working file path in .ctrlyoke/.working/ directory
-   */
-  private async generateWorkingFilePath(
-    originalFilePath: string,
-    workspaceFolderPath: string
-  ): Promise<string> {
-    const fileName = path.basename(
-      originalFilePath,
-      path.extname(originalFilePath)
-    );
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .substring(0, 19);
-    const workingDir = path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.WORKING_DIR
-    );
-
-    // Ensure directory exists
-    await fs.mkdir(workingDir, { recursive: true });
-
-    // Sanitize filename to avoid spaces/special chars in generated working file path
-    const sanitizedFileName =
-      (fileName || "workflow")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") || "workflow";
-    return path.join(
-      workingDir,
-      `${sanitizedFileName}-${timestamp}.ctrlyoke.json`
-    );
-  }
 
   /**
    * Read working file from disk
@@ -160,14 +133,15 @@ export class WorkingFileManager {
   // ==================== Higher-Level Operations ====================
 
   /**
-   * Create working file from original prompt file
-   * @param nameForFile Display name or file path used to generate the working file's filename
-   * @param steps Steps to store in working file
+   * Create a new lineage and its mutable draft working file, ahead of the lineage's
+   * first execution.
+   * @param nameForFile Display name or file path used to generate the lineage's WorkflowKey
+   * @param steps Steps to store in the draft
    * @param workspaceFolder Current workspace folder
    * @param workflowName Computed workflow name for the working file
    * @param originalFilePath The true source file path (if any). Only set for file-based workflows;
    *   leave undefined for ephemeral/dashboard-created workflows so the save dialog defaults correctly.
-   * @returns Path to created working file
+   * @returns The draft's path and the lineage's new WorkflowKey
    */
   public async createWorkingFile(
     nameForFile: string,
@@ -175,17 +149,21 @@ export class WorkingFileManager {
     workspaceFolderPath: string,
     workflowName: string,
     originalFilePath?: string
-  ): Promise<string> {
-    const workingFilePath = await this.generateWorkingFilePath(
-      nameForFile,
-      workspaceFolderPath
-    );
+  ): Promise<{ workingFilePath: string; workflowKey: WorkflowKey }> {
+    const { workflowKey, draftFilePath } =
+      await this.lineageRepository.createLineage(
+        workspaceFolderPath,
+        nameForFile,
+        workflowName,
+        originalFilePath
+      );
 
     const workingFile: WorkingFile = {
       ...(originalFilePath ? { originalFile: originalFilePath } : {}),
       workflowName,
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
+      definitionRevision: 1,
       steps: steps.map(stripViewOnlyWorkflowStepFields),
       _runtime: {
         currentIndex: 0,
@@ -194,10 +172,79 @@ export class WorkingFileManager {
     };
 
     // Write atomically (temp + rename)
-    await this.writeWorkingFileAtomic(workingFilePath, workingFile);
+    await this.writeWorkingFileAtomic(draftFilePath, workingFile);
 
-    Log.info(` Created working file: ${workingFilePath}`);
-    return workingFilePath;
+    Log.info(` Created draft working file: ${draftFilePath}`);
+    return { workingFilePath: draftFilePath, workflowKey };
+  }
+
+  /**
+   * Promotes the lineage's current definition (the draft, or the previous run if one
+   * already exists) into a freshly allocated run, using the queue's CURRENT in-memory
+   * state as the new run's starting definition/runtime. This is the moment a "fresh
+   * execution start" (not continue/append/idle-continuation) mints a new `RunRef` —
+   * mirroring the pre-refactor behavior where every such start created a new history run
+   * while the single working file kept being reused.
+   */
+  public async promoteToNewRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    startedAt: number
+  ): Promise<{
+    workingFilePath: string;
+    runRef: RunRef;
+    runId: number;
+    runDir: string;
+  }> {
+    const allocation = await this.lineageRepository.allocateRun(
+      workspaceFolderPath,
+      workflowKey
+    );
+    const descriptor = await this.lineageRepository.readDescriptor(
+      workspaceFolderPath,
+      workflowKey
+    );
+
+    const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
+    const workingFile: WorkingFile = {
+      ...(descriptor.originalFile
+        ? { originalFile: descriptor.originalFile }
+        : {}),
+      workflowName:
+        this.queueAccess.getWorkflowName() ?? descriptor.workflowName,
+      startedAt,
+      lastModifiedAt: startedAt,
+      isFavorite: descriptor.isFavorite,
+      definitionRevision: 1,
+      steps: this.queueAccess.getSteps().map(stripViewOnlyWorkflowStepFields),
+      _runtime: {
+        currentIndex: this.queueAccess.getCurrentIndex(),
+        executionState: this.queueAccess.getStatus(),
+        ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
+      },
+    };
+
+    await this.writeWorkingFileAtomic(allocation.runFilePath, workingFile);
+
+    if (allocation.draftFilePathToRemove) {
+      await fs
+        .rm(allocation.draftFilePathToRemove, { force: true })
+        .catch((error) =>
+          Log.warn(
+            `[WorkingFileManager] Failed to remove promoted draft: ${getErrorMessage(error)}`
+          )
+        );
+    }
+
+    Log.info(
+      ` Promoted lineage ${workflowKey} to new run ${allocation.runRef}`
+    );
+    return {
+      workingFilePath: allocation.runFilePath,
+      runRef: allocation.runRef,
+      runId: allocation.runId,
+      runDir: allocation.runDir,
+    };
   }
 
   /**

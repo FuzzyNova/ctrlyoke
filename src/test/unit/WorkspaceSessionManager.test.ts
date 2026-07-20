@@ -5,39 +5,61 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { WorkspaceSessionManager } from "../../core/orchestration/WorkspaceSessionManager";
 import { PromptFileParser } from "../../core/PromptFileParser";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type {
+  WorkflowKey,
+  WorkflowLineageDescriptor,
+} from "../../types/CtrlYokeTypes";
+
+async function writeDraftLineage(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  workflowName: string,
+  startedAt: number,
+  lastModifiedAt: number
+): Promise<void> {
+  await fs.mkdir(WorkflowPaths.draftDir(workspaceRoot, workflowKey), {
+    recursive: true,
+  });
+  const descriptor: WorkflowLineageDescriptor = {
+    schemaVersion: 1,
+    workflowKey,
+    workflowName,
+    isFavorite: false,
+    createdAt: startedAt,
+    lastModifiedAt,
+    nextRunId: 1,
+    revision: 1,
+  };
+  await fs.writeFile(
+    WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
+    JSON.stringify(descriptor, null, 2),
+    "utf8"
+  );
+  await fs.writeFile(
+    WorkflowPaths.draftFilePath(workspaceRoot, workflowKey),
+    JSON.stringify({
+      workflowName,
+      startedAt,
+      lastModifiedAt,
+      definitionRevision: 1,
+      steps: [],
+    }),
+    "utf8"
+  );
+}
 
 suite("WorkspaceSessionManager", () => {
   test("uses lastModifiedAt instead of filename order for recent session discovery", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-workspace-session-manager-")
     );
-    const workingDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.WORKING_DIR
-    );
-    await fs.mkdir(workingDir, { recursive: true });
 
     try {
-      await fs.writeFile(
-        path.join(workingDir, "older-name.ctrlyoke.json"),
-        JSON.stringify({
-          workflowName: "older-name",
-          startedAt: 100,
-          lastModifiedAt: 5000,
-          steps: [],
-        })
-      );
-      await fs.writeFile(
-        path.join(workingDir, "newer-name.ctrlyoke.json"),
-        JSON.stringify({
-          workflowName: "newer-name",
-          startedAt: 200,
-          lastModifiedAt: 1000,
-          steps: [],
-        })
-      );
+      const olderKey = "older-name-2026-01-01T00-00-00" as WorkflowKey;
+      const newerKey = "newer-name-2026-01-02T00-00-00" as WorkflowKey;
+      await writeDraftLineage(workspaceRoot, olderKey, "older-name", 100, 5000);
+      await writeDraftLineage(workspaceRoot, newerKey, "newer-name", 200, 1000);
 
       const manager = new WorkspaceSessionManager(
         new PromptFileParser(),
@@ -50,7 +72,7 @@ suite("WorkspaceSessionManager", () => {
 
       assert.strictEqual(
         mostRecentPath,
-        path.join(workingDir, "older-name.ctrlyoke.json")
+        WorkflowPaths.draftFilePath(workspaceRoot, olderKey)
       );
       assert.strictEqual(sessions[0]?.label, "⏸ older-name");
       assert.strictEqual(sessions[1]?.label, "⏸ newer-name");

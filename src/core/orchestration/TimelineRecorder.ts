@@ -19,11 +19,6 @@ export class TimelineRecorder {
     Promise<void>
   >();
 
-  static createRunDirectoryName(timestampMs: number): string {
-    const timestamp = new Date(timestampMs).toISOString().replace(/[:.]/g, "-");
-    return `run-${timestamp}`;
-  }
-
   static isLegacyRunFile(entryName: string): boolean {
     return /^run-.*\.json$/.test(entryName);
   }
@@ -63,15 +58,18 @@ export class TimelineRecorder {
     return Number.isNaN(timestampMs) ? 0 : timestampMs;
   }
 
-  async initializeRun(
-    historyDir: string,
+  /**
+   * Initializes manifest.json/events.jsonl inside an already-allocated run directory.
+   * The directory itself is created (exclusively) by `WorkflowLineageRepository.allocateRun`;
+   * this only populates the two timeline files within it.
+   */
+  async initializeRunAt(
+    runDirectoryPath: string,
     workflowId: string,
     runId: number,
     startedAt: number,
     executionState: ExecutionState
   ): Promise<string> {
-    const runDirectoryName = TimelineRecorder.createRunDirectoryName(startedAt);
-    const runDirectoryPath = path.join(historyDir, runDirectoryName);
     const manifestPath =
       TimelineRecorder.getManifestPathForRunDirectory(runDirectoryPath);
     const manifest: WorkflowRunManifest = {

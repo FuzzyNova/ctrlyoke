@@ -11,6 +11,7 @@ import {
   WorkflowStep,
   isScriptStep,
   PromptRuntimeMetadata,
+  type RunRef,
 } from "../types/CtrlYokeTypes";
 import {
   PROMPT_TERMINAL_STATUS,
@@ -31,6 +32,7 @@ import {
 import { Log } from "../utils/Log";
 import { hashPromptContent } from "../utils/PromptIdentity";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
@@ -314,7 +316,7 @@ export class PromptQueue {
 
   /**
    * Restore queue state from a working file (including runtime state)
-   * This is used when resuming a previous session from .ctrlyoke/.working
+   * This is used when resuming a previous session from .ctrlyoke/.runs
    * @param workingFilePath Path to the working file
    */
   async restoreFromWorkingFile(
@@ -388,6 +390,9 @@ export class PromptQueue {
         );
       }
 
+      const lineageAddress =
+        WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+
       // Restore prompts and basic state
       // CRITICAL: Preserve _runtime metadata during load (Phase 4: Per-Prompt Session Management)
       // Each prompt's _runtime contains: harness, model, agent, sessionId, startedAt, completedAt
@@ -404,6 +409,8 @@ export class PromptQueue {
         queueExtensions: 0,
         workingFilePath,
         workflowName: workingFile.workflowName, // Restore workflow name from working file
+        workflowKey: lineageAddress?.workflowKey,
+        runRef: lineageAddress?.runRef,
       };
 
       // Store complete workflow file for property resolution
@@ -1312,19 +1319,58 @@ export class PromptQueue {
       this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile);
     this.state.workflowName = computedWorkflowName;
 
-    const workingFilePath = await this.workingFileManager.createWorkingFile(
-      nameForFile,
-      prompts,
-      workspaceFolderPath,
-      computedWorkflowName,
-      originalFilePath
-    );
+    const { workingFilePath, workflowKey } =
+      await this.workingFileManager.createWorkingFile(
+        nameForFile,
+        prompts,
+        workspaceFolderPath,
+        computedWorkflowName,
+        originalFilePath
+      );
 
-    // Update queue state with working file path
+    // Update queue state with working file path and lineage identity
     this.state.workingFilePath = workingFilePath;
+    this.state.workflowKey = workflowKey;
+    this.state.runRef = undefined;
     this.emitStateChange();
 
     return workingFilePath;
+  }
+
+  /**
+   * Promotes the lineage's draft (or previous run) into a freshly allocated run, using
+   * the queue's current in-memory definition/runtime as the new run's starting state.
+   * Returns `null` if this queue has no lineage yet (e.g. a manual-run source file that
+   * was never loaded through `createWorkingFile`).
+   */
+  public async promoteToNewRun(
+    workspaceFolderPath: string,
+    startedAt: number
+  ): Promise<{
+    workingFilePath: string;
+    runRef: RunRef;
+    runId: number;
+  } | null> {
+    const workflowKey = this.state.workflowKey;
+    if (!workflowKey) {
+      return null;
+    }
+
+    const result = await this.workingFileManager.promoteToNewRun(
+      workspaceFolderPath,
+      workflowKey,
+      startedAt
+    );
+
+    this.state.workingFilePath = result.workingFilePath;
+    this.state.runRef = result.runRef;
+    this.emitStateChange();
+
+    return {
+      workingFilePath: result.workingFilePath,
+      runRef: result.runRef,
+      runId: result.runId,
+    };
   }
 
   /**

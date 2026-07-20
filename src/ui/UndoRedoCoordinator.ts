@@ -5,7 +5,6 @@ import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
 } from "../types/DashboardConstants";
-import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import type {
@@ -319,12 +318,9 @@ export class UndoRedoCoordinator {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return "";
       const outputHistoryManager = orchestrator.getOutputHistoryManager();
-      const workingFilePath =
-        orchestrator.getQueueState(clientId).workingFilePath ?? "";
-      if (!workingFilePath) return "";
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
-      return await outputHistoryManager.getLatestHistoryFilePath(workflowId);
+      const workflowKey = orchestrator.getQueueState(clientId).workflowKey;
+      if (!workflowKey) return "";
+      return await outputHistoryManager.getLatestHistoryFilePath(workflowKey);
     } catch {
       return "";
     }

@@ -4,9 +4,9 @@ import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
-import type { WorkingFile } from "../../types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
+import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputRecordedEvent,
@@ -17,10 +17,11 @@ import {
   type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
 import { getErrorMessage } from "../../utils/ErrorUtils";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 const MAX_RESULTS = 50;
 const MIN_QUERY_LENGTH = 2;
@@ -44,6 +45,7 @@ interface MatchCandidate {
 export class HistorySearchService {
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly indexService = new HistorySearchIndexService();
+  private readonly lineageRepository = new WorkflowLineageRepository();
 
   async search(
     query: string | HistorySearchQuery,
@@ -89,15 +91,11 @@ export class HistorySearchService {
       return [];
     }
 
-    const historyRoot = path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.HISTORY_DIR
-    );
+    const runsRoot = WorkflowPaths.runsRoot(workspaceFolderPath);
 
-    let workflowEntries: fs.Dirent[];
+    let lineageEntries: fs.Dirent[];
     try {
-      workflowEntries = await fs.promises.readdir(historyRoot, {
+      lineageEntries = await fs.promises.readdir(runsRoot, {
         withFileTypes: true,
       });
     } catch (error) {
@@ -106,17 +104,20 @@ export class HistorySearchService {
         return [];
       }
       Log.warn(
-        `[HistorySearchService] Failed to read history directory: ${getErrorMessage(error)}`
+        `[HistorySearchService] Failed to read runs directory: ${getErrorMessage(error)}`
       );
       return [];
     }
 
     const workflowRuns = await Promise.all(
-      workflowEntries
-        .filter((entry) => entry.isDirectory())
+      lineageEntries
+        .filter((entry) => WorkflowPaths.isLineageDirEntry(entry))
         .map(async (entry) => {
-          const workflowId = entry.name;
-          const workflowHistoryDir = path.join(historyRoot, workflowId);
+          const workflowId = entry.name as WorkflowKey;
+          const workflowHistoryDir = WorkflowPaths.lineageDir(
+            workspaceFolderPath,
+            workflowId
+          );
           const runs = await this.getWorkflowRuns(workflowHistoryDir);
           return {
             workflowId,
@@ -202,14 +203,10 @@ export class HistorySearchService {
         withFileTypes: true,
       });
       return entries
-        .filter(
-          (entry) =>
-            entry.isDirectory() &&
-            TimelineRecorder.isTimelineRunDirectory(entry.name)
-        )
+        .filter((entry) => WorkflowPaths.isRunDirEntry(entry))
         .map((entry) => ({
           entryName: entry.name,
-          timestamp: TimelineRecorder.extractRunTimestamp(entry.name),
+          timestamp: WorkflowPaths.parseRunRefTimestamp(entry.name) ?? 0,
         }))
         .sort((left, right) => right.timestamp - left.timestamp);
     } catch {
@@ -221,27 +218,28 @@ export class HistorySearchService {
     workspaceFolderPath: string,
     workflowId: string
   ): Promise<WorkflowMetadata> {
-    const workingFilePath = path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.WORKING_DIR,
-      `${workflowId}.ctrlyoke.json`
-    );
-
+    const workflowKey = workflowId as WorkflowKey;
     try {
-      const content = await fs.promises.readFile(workingFilePath, "utf8");
-      const workingFile = JSON.parse(content) as WorkingFile;
+      const descriptor = await this.lineageRepository.readDescriptor(
+        workspaceFolderPath,
+        workflowKey
+      );
+      // LOAD_WORKFLOW expects a working file path, not the original source
+      // file — the resume/load flow needs the run/draft file even when the
+      // original prompt file is missing or the workflow was dashboard-created.
+      const workflowFilePath = descriptor.latestRunRef
+        ? WorkflowPaths.runFilePath(
+            workspaceFolderPath,
+            workflowKey,
+            descriptor.latestRunRef
+          )
+        : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
       return {
         workflowName:
-          typeof workingFile.workflowName === "string" &&
-          workingFile.workflowName.trim().length > 0
-            ? workingFile.workflowName
+          descriptor.workflowName?.trim().length > 0
+            ? descriptor.workflowName
             : this.deriveWorkflowName(workflowId),
-        // LOAD_WORKFLOW expects the working file path, not the original
-        // source file. The working file is what we just read, so it's known
-        // to exist regardless of whether originalFile is set (e.g. dashboard-
-        // created workflows have no original prompt file).
-        workflowFilePath: workingFilePath,
+        workflowFilePath,
       };
     } catch {
       return {

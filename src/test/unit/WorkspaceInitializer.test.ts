@@ -35,9 +35,8 @@ suite("WorkspaceInitializer", () => {
     );
     const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
 
-    assert.match(gitignoreContent, /^\.history\/$/m);
+    assert.match(gitignoreContent, /^\.runs\/$/m);
     assert.match(gitignoreContent, /^\.search-index\/$/m);
-    assert.match(gitignoreContent, /^\.working\/$/m);
     assert.match(gitignoreContent, /^logs\/$/m);
     assert.match(gitignoreContent, /^temp\/$/m);
     assert.match(gitignoreContent, /^capabilities\.json$/m);

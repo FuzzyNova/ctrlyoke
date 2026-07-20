@@ -43,6 +43,7 @@ import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { configService } from "../config/CtrlYokeConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
@@ -1039,7 +1040,12 @@ export class CtrlYokeWebviewProvider
 
     try {
       const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
+        WorkflowPaths.parseWorkingFileAddressFromPath(
+          workingFilePath
+        )?.workflowKey;
+      if (!workflowId) {
+        return;
+      }
       const runs =
         await this.outputHistoryManager.getRunsForWorkflow(workflowId);
       if (!runs.length) {

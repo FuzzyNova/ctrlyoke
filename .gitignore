@@ -16,9 +16,8 @@ package.json.backup
 
 # ctrlyoke temp files (prompt files for CLI execution)
 .ctrlyoke/temp/
-.ctrlyoke/.working/
+.ctrlyoke/.runs/
 .ctrlyoke/logs/
-.ctrlyoke/.history/
 .ctrlyoke/.search-index/
 .ctrlyoke/capabilities.json
 .ctrlyoke/snapshots/

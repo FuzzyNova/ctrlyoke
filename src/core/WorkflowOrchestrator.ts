@@ -15,6 +15,7 @@ import {
   type PromptFile,
   type PromptStep,
   type WorkflowStep,
+  type WorkflowKey,
   workflowDisplayStep,
 } from "../types/CtrlYokeTypes";
 import {
@@ -50,6 +51,8 @@ import {
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { CliWatchSession } from "./orchestration/CliWatchSession";
 import {
   getPtyProcessManager,
@@ -110,6 +113,7 @@ export class WorkflowOrchestrator {
   /** Instance registry — running/paused instances plus idle instances loaded via browser client.
    * Keyed by WorkflowInstance.id (UUID). */
   private readonly instances: Map<string, WorkflowInstance> = new Map();
+  private readonly lineageRepository = new WorkflowLineageRepository();
 
   /** CLI-managed workflows being watched (keyed by workflowId) */
   private readonly cliSessions: Map<
@@ -723,7 +727,9 @@ export class WorkflowOrchestrator {
     }
   ): Promise<void> {
     // Parse working file path to get workflowId (used for CLI session lookup)
-    const workflowId = OutputHistoryManager.extractWorkflowId(filePath);
+    const workflowId =
+      WorkflowPaths.parseWorkingFileAddressFromPath(filePath)?.workflowKey ??
+      "";
 
     // Check for CLI-managed session first
     const cliEntry = this.cliSessions.get(workflowId);
@@ -830,7 +836,12 @@ export class WorkflowOrchestrator {
    *          false if no active-cli lock exists or the session could not be started.
    */
   async ensureCliWatchSession(workingFilePath: string): Promise<boolean> {
-    const workflowId = OutputHistoryManager.extractWorkflowId(workingFilePath);
+    const workflowId =
+      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath)
+        ?.workflowKey ?? "";
+    if (!workflowId) {
+      return false;
+    }
 
     // Already tracked — nothing to do
     if (this.cliSessions.has(workflowId)) {
@@ -842,7 +853,10 @@ export class WorkflowOrchestrator {
       return false;
     }
 
-    const lockStatus = await WorkflowLockManager.checkLock(workingFilePath);
+    const lockStatus = await WorkflowLockManager.checkLock(
+      workspaceFolderPath,
+      workflowId
+    );
     Log.debug(
       `[WorkflowOrchestrator] ensureCliWatchSession: "${workflowId}" lockStatus=${lockStatus}`
     );
@@ -1172,8 +1186,14 @@ export class WorkflowOrchestrator {
             // The CliWatchSession was already created in setupCliWatching(), so the
             // workflow is already visible in the Running section — auto-loading it
             // as a VS Code instance would create a conflicting viewedInstance.
-            const lockStatus =
-              await WorkflowLockManager.checkLock(workingFilePath);
+            const address =
+              WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+            const lockStatus = address
+              ? await WorkflowLockManager.checkLock(
+                  this.currentWorkspaceFolder!.uri.fsPath,
+                  address.workflowKey
+                )
+              : LOCK_STATUS.NONE;
             if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
               Log.debug(
                 `triggerAutoLoad: skipping CLI-managed workflow "${path.basename(workingFilePath)}"`
@@ -1438,9 +1458,13 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const lock = await WorkflowLockManager.readLock(
-      entry.summary.workingFilePath ?? ""
-    );
+    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const lock = workspaceFolderPath
+      ? await WorkflowLockManager.readLock(
+          workspaceFolderPath,
+          workflowId as WorkflowKey
+        )
+      : null;
     if (!lock) {
       Log.warn(
         `stopCliSession: no lock file found for workflowId="${workflowId}"`
@@ -1645,7 +1669,9 @@ export class WorkflowOrchestrator {
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
-    const workflowId = OutputHistoryManager.extractWorkflowId(filePath);
+    const workflowId =
+      WorkflowPaths.parseWorkingFileAddressFromPath(filePath)?.workflowKey ??
+      "";
 
     // If already tracked as a CLI session, switch the panel view to it (Entry Point 2)
     const existingCliEntry = this.cliSessions.get(workflowId);
@@ -1665,7 +1691,14 @@ export class WorkflowOrchestrator {
     }
 
     // Check for an active CLI lock before creating a VS Code instance (Entry Point 2)
-    const lockStatus = await WorkflowLockManager.checkLock(filePath);
+    const workspaceFolderPathForLock = this.currentWorkspaceFolder?.uri.fsPath;
+    const lockStatus =
+      workflowId && workspaceFolderPathForLock
+        ? await WorkflowLockManager.checkLock(
+            workspaceFolderPathForLock,
+            workflowId
+          )
+        : LOCK_STATUS.NONE;
     if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
       const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
       if (workspaceFolderPath) {
@@ -2357,20 +2390,20 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const workingDir = path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.WORKING_DIR
-    );
+    const runsRootDir = WorkflowPaths.runsRoot(workspaceFolderPath);
 
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
     let recoveredPaths: string[];
     try {
-      const normalized =
-        await WorkflowLockManager.normalizeStaleLocks(workingDir);
-      activeCliPaths = normalized.activeCliPaths;
-      recoveredPaths = normalized.recoveredPaths;
+      const workflowKeys =
+        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
+      const normalized = await WorkflowLockManager.normalizeStaleLocks(
+        workspaceFolderPath,
+        workflowKeys
+      );
+      activeCliPaths = normalized.activeCliRunFiles;
+      recoveredPaths = normalized.recoveredRunFiles;
     } catch (err) {
       Log.warn(
         "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",
@@ -2386,6 +2419,13 @@ export class WorkflowOrchestrator {
     try {
       const historyManager = new OutputHistoryManager(workspaceFolderPath);
       for (const recoveredPath of recoveredPaths) {
+        const recoveredAddress = WorkflowPaths.parseRunFilePath(
+          workspaceFolderPath,
+          recoveredPath
+        );
+        if (!recoveredAddress) {
+          continue;
+        }
         let stepCount = 0;
         try {
           const recoveredWorkingFile = JSON.parse(
@@ -2396,7 +2436,7 @@ export class WorkflowOrchestrator {
           // The history manifest can still be finalized without a step count.
         }
         await historyManager.recoverInterruptedRun(
-          OutputHistoryManager.extractWorkflowId(recoveredPath),
+          recoveredAddress.workflowKey,
           stepCount
         );
       }
@@ -2412,8 +2452,8 @@ export class WorkflowOrchestrator {
       await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
     }
 
-    // Entry Point 3: Watch for new *.runner.json files created while VS Code is open
-    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, workingDir);
+    // Entry Point 3: Watch for new runner.json files created while VS Code is open
+    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, runsRootDir);
   }
 
   /**
@@ -2422,14 +2462,14 @@ export class WorkflowOrchestrator {
    */
   private setupRunnerJsonCreateWatcher(
     workspaceFolderPath: string,
-    workingDir: string
+    runsRootDir: string
   ): void {
-    const queueRelative = path
-      .relative(workspaceFolderPath, workingDir)
+    const runsRootRelative = path
+      .relative(workspaceFolderPath, runsRootDir)
       .replace(/\\/g, "/");
     const pattern = new vscode.RelativePattern(
       workspaceFolderPath,
-      `${queueRelative}/*.runner.json`
+      `${runsRootRelative}/*/runner.json`
     );
     this.runnerJsonCreateWatcher =
       vscode.workspace.createFileSystemWatcher(pattern);
@@ -2469,14 +2509,13 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Derive the working file path from the lock path
-    const workingFilePath = lockFilePath.replace(
-      /\.runner\.json$/,
-      ".ctrlyoke.json"
+    // The lock itself names the exact lineage/run — no path-basename derivation needed.
+    const workflowId = lock.workflowKey;
+    const workingFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      lock.workflowKey,
+      lock.runRef
     );
-
-    // Check if there is already an active CliWatchSession for this workflow
-    const workflowId = OutputHistoryManager.extractWorkflowId(workingFilePath);
 
     Log.debug(
       `[WorkflowOrchestrator] handleRunnerJsonEvent: CLI lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
@@ -2490,7 +2529,10 @@ export class WorkflowOrchestrator {
     }
 
     // Verify the lock is truly active before creating a session
-    const status = await WorkflowLockManager.checkLock(workingFilePath);
+    const status = await WorkflowLockManager.checkLock(
+      workspaceFolderPath,
+      workflowId
+    );
     if (status !== LOCK_STATUS.ACTIVE_CLI) {
       Log.debug(
         `[WorkflowOrchestrator] handleRunnerJsonEvent: lock status is "${status}" for "${workflowId}" — skipping`
@@ -2509,7 +2551,16 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     workspaceFolderPath: string
   ): Promise<void> {
-    const workflowId = OutputHistoryManager.extractWorkflowId(workingFilePath);
+    const address =
+      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+    if (!address?.runRef) {
+      Log.warn(
+        `[WorkflowOrchestrator] startCliWatchSession: "${workingFilePath}" is not a promoted run file — skipping`
+      );
+      return;
+    }
+    const { workflowKey, runRef } = address;
+    const workflowId = workflowKey;
 
     // Retire any existing VS Code WorkflowInstance tracking this same working file.
     // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
@@ -2565,7 +2616,8 @@ export class WorkflowOrchestrator {
 
     const session = new CliWatchSession(
       workingFilePath,
-      workflowId,
+      workflowKey,
+      runRef,
       workspaceFolderPath,
       (partialSummary) => {
         // Merge partial update into stored summary

@@ -1,74 +1,26 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { WorkflowSummary, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
+import {
+  WorkflowSummary,
+  EXECUTION_STATES,
+  type RunRef,
+  type WorkflowKey,
+} from "../../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
-import { TimelineRecorder } from "./TimelineRecorder";
-
-function getRunEntryNameForHistoryPath(historyFilePath: string): string {
-  const baseName = path.basename(historyFilePath);
-
-  if (
-    baseName === TimelineRecorder.MANIFEST_FILE_NAME ||
-    baseName === TimelineRecorder.EVENTS_FILE_NAME
-  ) {
-    return path.basename(path.dirname(historyFilePath));
-  }
-
-  return baseName;
-}
-
-export function getHistoryRunTimestamp(historyFilePath: string): number {
-  if (!historyFilePath) {
-    return 0;
-  }
-
-  return TimelineRecorder.extractRunTimestamp(
-    getRunEntryNameForHistoryPath(historyFilePath)
-  );
-}
-
-function compareHistoryRunPaths(
-  leftHistoryFilePath: string,
-  rightHistoryFilePath: string
-): number {
-  const timestampDifference =
-    getHistoryRunTimestamp(rightHistoryFilePath) -
-    getHistoryRunTimestamp(leftHistoryFilePath);
-  if (timestampDifference !== 0) {
-    return timestampDifference;
-  }
-
-  return rightHistoryFilePath.localeCompare(leftHistoryFilePath);
-}
-
-export function isNewerHistoryRunPath(
-  candidateHistoryFilePath: string,
-  activeHistoryFilePath: string
-): boolean {
-  if (!candidateHistoryFilePath) {
-    return false;
-  }
-
-  if (!activeHistoryFilePath) {
-    return true;
-  }
-
-  return (
-    compareHistoryRunPaths(candidateHistoryFilePath, activeHistoryFilePath) < 0
-  );
-}
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 /**
  * CliWatchSession
  *
- * Owns three file watchers for a single CLI-managed workflow:
- *   1. Working file watcher — tracks step progress (currentIndex, executionState)
- *   2. History file watcher — streams CLI output chunks to the dashboard
- *   3. Lock file watcher   — detects when the CLI finishes (lock deleted)
+ * Owns three file watchers for a single CLI-managed workflow, all pinned to the exact
+ * `RunRef` named by the lineage's runner lock — never "the newest run" — so a client
+ * browsing a different (older) run of the same lineage can never redirect this watcher:
+ *   1. Run file watcher     — tracks step progress (currentIndex, executionState)
+ *   2. Manifest/events watcher — streams CLI output chunks to the dashboard
+ *   3. Lock file watcher    — detects when the CLI finishes (lock deleted)
  *
  * Also runs a 10-second heartbeat staleness poll as a fallback for CLI crashes
  * (lock file exists but heartbeat has gone stale).
@@ -81,12 +33,12 @@ export class CliWatchSession implements vscode.Disposable {
   private heartbeatPollInterval: ReturnType<typeof setInterval> | undefined;
   /** stepIndex → last number of outputs sent to the dashboard for that step */
   private lastKnownOutputByStep: Record<number, number> = {};
-  /** Absolute path to the active history file being watched */
-  private activeHistoryFilePath: string = "";
+  private readonly manifestPath: string;
 
   constructor(
     private readonly workingFilePath: string,
-    private readonly workflowId: string,
+    private readonly workflowKey: WorkflowKey,
+    private readonly runRef: RunRef,
     private readonly workspaceFolderPath: string,
     /**
      * Called when the working file changes: partial WorkflowSummary update
@@ -94,8 +46,8 @@ export class CliWatchSession implements vscode.Disposable {
      */
     private readonly onUpdate: (summary: Partial<WorkflowSummary>) => void,
     /**
-     * Called when the active history file changes.
-     * Passes the absolute path to the history file so the caller can read
+     * Called when the run's manifest/events change.
+     * Passes the absolute path to the manifest file so the caller can read
      * and diff outputs.
      */
     private readonly onOutput: (historyFilePath: string) => void,
@@ -103,7 +55,13 @@ export class CliWatchSession implements vscode.Disposable {
      * Called when the CLI has finished (lock deleted or heartbeat stale).
      */
     private readonly onFinished: () => void
-  ) {}
+  ) {
+    this.manifestPath = WorkflowPaths.manifestPath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Lifecycle
@@ -111,7 +69,7 @@ export class CliWatchSession implements vscode.Disposable {
 
   async start(): Promise<void> {
     Log.debug(
-      `[CliWatchSession] start: workflowId="${this.workflowId}" workingFile="${path.basename(this.workingFilePath)}"`
+      `[CliWatchSession] start: workflowKey="${this.workflowKey}" runRef="${this.runRef}"`
     );
 
     this.setupWorkingFileWatcher();
@@ -129,7 +87,9 @@ export class CliWatchSession implements vscode.Disposable {
       d.dispose();
     }
     this.disposables = [];
-    Log.debug(`[CliWatchSession] disposed: workflowId="${this.workflowId}"`);
+    Log.debug(
+      `[CliWatchSession] disposed: workflowKey="${this.workflowKey}" runRef="${this.runRef}"`
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -210,7 +170,10 @@ export class CliWatchSession implements vscode.Disposable {
     const lockRelativePath = path
       .relative(
         this.workspaceFolderPath,
-        WorkflowLockManager.getLockPath(this.workingFilePath)
+        WorkflowLockManager.getLockPath(
+          this.workspaceFolderPath,
+          this.workflowKey
+        )
       )
       .replace(/\\/g, "/");
 
@@ -223,7 +186,7 @@ export class CliWatchSession implements vscode.Disposable {
     this.disposables.push(
       watcher.onDidDelete(() => {
         Log.debug(
-          `[CliWatchSession] lock file deleted — CLI finished for workflowId="${this.workflowId}"`
+          `[CliWatchSession] lock file deleted — CLI finished for workflowKey="${this.workflowKey}"`
         );
         this.onFinished();
       })
@@ -232,101 +195,24 @@ export class CliWatchSession implements vscode.Disposable {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // History file watcher
+  // Manifest/events watcher — pinned to this session's exact RunRef
   // ─────────────────────────────────────────────────────────────────────────
 
   private setupHistoryWatcher(): void {
-    const historyDir = path.join(
-      this.workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.HISTORY_DIR,
-      this.workflowId
-    );
-
-    // Find the latest existing run file synchronously on startup
-    try {
-      const latest = this.findLatestHistoryFileSync(historyDir);
-      if (latest) {
-        this.activeHistoryFilePath = latest;
-        this.watchHistoryFile(latest);
-      }
-    } catch {
-      // History directory may not exist yet — that's fine
-    }
-
-    // Watch for new run files appearing in the history directory
-    this.watchForNewRunFiles(historyDir);
-  }
-
-  private findLatestHistoryFileSync(historyDir: string): string | undefined {
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(historyDir, { withFileTypes: true });
-    } catch {
-      return undefined;
-    }
-
-    const historyFilePaths = entries
-      .filter((entry) => TimelineRecorder.isRunEntry(entry))
-      .map((entry) => {
-        const runEntryPath = path.join(historyDir, entry.name);
-        return entry.isDirectory()
-          ? TimelineRecorder.getManifestPathForRunDirectory(runEntryPath)
-          : runEntryPath;
-      })
-      .sort(compareHistoryRunPaths);
-
-    return historyFilePaths[0];
-  }
-
-  private watchHistoryFile(historyFilePath: string): void {
     Log.debug(
-      `[CliWatchSession] watching history file: ${path.basename(historyFilePath)}`
+      `[CliWatchSession] watching run: ${this.workflowKey}/${this.runRef}`
     );
     const pattern = new vscode.RelativePattern(
       this.workspaceFolderPath,
       path
-        .relative(this.workspaceFolderPath, historyFilePath)
+        .relative(this.workspaceFolderPath, this.manifestPath)
         .replace(/\\/g, "/")
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.disposables.push(
       watcher.onDidChange(() => {
-        this.onOutput(historyFilePath);
-      })
-    );
-    this.disposables.push(watcher);
-  }
-
-  private watchForNewRunFiles(historyDir: string): void {
-    const historyDirRelative = path
-      .relative(this.workspaceFolderPath, historyDir)
-      .replace(/\\/g, "/");
-
-    this.watchForNewRunPattern(`${historyDirRelative}/run-*.json`);
-    this.watchForNewRunPattern(
-      `${historyDirRelative}/run-*/${TimelineRecorder.MANIFEST_FILE_NAME}`
-    );
-  }
-
-  private watchForNewRunPattern(patternText: string): void {
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(this.workspaceFolderPath, patternText)
-    );
-
-    this.disposables.push(
-      watcher.onDidCreate((uri) => {
-        const newFilePath = uri.fsPath;
-        Log.debug(
-          `[CliWatchSession] new history run file: ${path.basename(newFilePath)}`
-        );
-
-        if (isNewerHistoryRunPath(newFilePath, this.activeHistoryFilePath)) {
-          this.lastKnownOutputByStep = {};
-          this.activeHistoryFilePath = newFilePath;
-          this.watchHistoryFile(newFilePath);
-        }
+        this.onOutput(this.manifestPath);
       })
     );
     this.disposables.push(watcher);
@@ -338,11 +224,11 @@ export class CliWatchSession implements vscode.Disposable {
 
   private startHeartbeatPoll(): void {
     this.heartbeatPollInterval = setInterval(() => {
-      WorkflowLockManager.checkLock(this.workingFilePath)
+      WorkflowLockManager.checkLock(this.workspaceFolderPath, this.workflowKey)
         .then((status) => {
           if (status === LOCK_STATUS.NONE || status === LOCK_STATUS.STALE) {
             Log.debug(
-              `[CliWatchSession] heartbeat poll: lock is ${status} for workflowId="${this.workflowId}" — calling onFinished`
+              `[CliWatchSession] heartbeat poll: lock is ${status} for workflowKey="${this.workflowKey}" — calling onFinished`
             );
             this.onFinished();
           }
@@ -357,9 +243,9 @@ export class CliWatchSession implements vscode.Disposable {
   // Accessors
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Returns the absolute path to the currently-watched history file, or empty string. */
+  /** Returns the absolute path to this session's manifest file. */
   getActiveHistoryFilePath(): string {
-    return this.activeHistoryFilePath;
+    return this.manifestPath;
   }
 
   /** Returns and updates the last-known output count for a step (used for diffing). */

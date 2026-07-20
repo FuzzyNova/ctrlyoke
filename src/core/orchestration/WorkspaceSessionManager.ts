@@ -1,11 +1,12 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { WorkflowStep, WorkingFile } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 /**
  * WorkspaceSessionManager
@@ -13,19 +14,21 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
  * RESPONSIBILITY: Session Persistence & Recovery
  *
  * Handles session management including:
- * - Auto-loading most recent session from .ctrlyoke/.working/
+ * - Auto-loading most recent session from .ctrlyoke/.runs/
  * - Discovering prompt files in workspace
- * - Finding and sorting working files by timestamp
+ * - Finding and sorting each lineage's current definition file by recency
  * - Session continuity after VS Code restart or crash
  */
 export class WorkspaceSessionManager {
+  private readonly lineageRepository = new WorkflowLineageRepository();
+
   constructor(
     private promptFileParser: PromptFileParser,
     _platform: PlatformAdapter
   ) {}
 
   /**
-   * Auto-load the most recent workflow session from .ctrlyoke/.working/
+   * Auto-load the most recent workflow session from .ctrlyoke/.runs/
    * This enables seamless resume after VS Code restarts or crashes
    *
    * @param workspaceFolder Current workspace folder
@@ -48,7 +51,7 @@ export class WorkspaceSessionManager {
 
       // Extract workflow name from filename for logging
       const workflowName = this.extractWorkflowName(
-        path.basename(workingFilePath)
+        path.basename(path.dirname(path.dirname(workingFilePath)))
       );
 
       Log.debug(
@@ -66,20 +69,16 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Resolve the current most-recent working file from .ctrlyoke/.working/.
-   * Reads queue metadata from disk each time so reconnecting clients always
+   * Resolve the current most-recent working file from .ctrlyoke/.runs/.
+   * Reads lineage metadata from disk each time so reconnecting clients always
    * use fresh recency data rather than a startup snapshot.
    */
   async getMostRecentWorkingFilePath(
     workspaceFolderPath: string
   ): Promise<string | undefined> {
     try {
-      const workingDir = path.join(
-        workspaceFolderPath,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR
-      );
-      const workingFiles = await this.listWorkingFilesByRecency(workingDir);
+      const workingFiles =
+        await this.listWorkingFilesByRecency(workspaceFolderPath);
       return workingFiles[0]?.filePath;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -112,94 +111,80 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Read all working files in the queue directory, sorted by recency.
-   * Uses lastModifiedAt when available, falling back to startedAt.
+   * Resolve each lineage's CURRENT definition file — the descriptor's
+   * `latestRunRef` file if a run has ever executed, otherwise the draft — and
+   * sort them by recency (lastModifiedAt, falling back to startedAt).
    *
-   * @param workingDir Path to .ctrlyoke/.working/ directory
+   * @param workspaceFolderPath Path to the workspace root
    */
-  private async listWorkingFilesByRecency(workingDir: string): Promise<
+  private async listWorkingFilesByRecency(workspaceFolderPath: string): Promise<
     Array<{
-      filename: string;
       filePath: string;
       workingFile: WorkingFile;
       timestamp: number;
     }>
   > {
-    try {
-      await fs.stat(workingDir);
-
-      // Read directory contents
-      const entries = await fs.readdir(workingDir, { withFileTypes: true });
-
-      // Filter to .ctrlyoke.json files
-      const workingFiles = entries
-        .filter(
-          (entry) => entry.isFile() && entry.name.endsWith(".ctrlyoke.json")
-        )
-        .map((entry) => entry.name);
-
-      if (workingFiles.length === 0) {
-        return [];
-      }
-
-      // Read each file to get lastModifiedAt timestamp
-      const filesWithTimestamps = await Promise.all(
-        workingFiles.map(async (filename) => {
-          const filePath = path.join(workingDir, filename);
-          try {
-            const content = await fs.readFile(filePath, "utf8");
-            const workingFile = JSON.parse(content) as WorkingFile;
-
-            // Use lastModifiedAt if available, fall back to startedAt
-            const timestamp =
-              workingFile.lastModifiedAt || workingFile.startedAt || 0;
-
-            return { filename, filePath, workingFile, timestamp };
-          } catch (error) {
-            Log.warn(`Failed to read ${filename}:`, error);
-            return undefined;
-          }
-        })
-      );
-
-      // Sort by timestamp (newest first)
-      return filesWithTimestamps
-        .filter(
-          (
-            entry
-          ): entry is {
-            filename: string;
-            filePath: string;
-            workingFile: WorkingFile;
-            timestamp: number;
-          } => entry !== undefined
-        )
-        .sort((a, b) => b.timestamp - a.timestamp);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return [];
-      }
-      Log.error("ctrlyoke: Failed to find most recent working file:", error);
+    const workflowKeys =
+      await this.lineageRepository.listLineageKeys(workspaceFolderPath);
+    if (workflowKeys.length === 0) {
       return [];
     }
+
+    const filesWithTimestamps = await Promise.all(
+      workflowKeys.map(async (workflowKey) => {
+        try {
+          const descriptor = await this.lineageRepository.readDescriptor(
+            workspaceFolderPath,
+            workflowKey
+          );
+          const filePath = descriptor.latestRunRef
+            ? WorkflowPaths.runFilePath(
+                workspaceFolderPath,
+                workflowKey,
+                descriptor.latestRunRef
+              )
+            : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
+
+          const content = await fs.readFile(filePath, "utf8");
+          const workingFile = JSON.parse(content) as WorkingFile;
+          const timestamp =
+            workingFile.lastModifiedAt || workingFile.startedAt || 0;
+
+          return { filePath, workingFile, timestamp };
+        } catch (error) {
+          Log.warn(`Failed to read lineage ${workflowKey}:`, error);
+          return undefined;
+        }
+      })
+    );
+
+    return filesWithTimestamps
+      .filter(
+        (
+          entry
+        ): entry is {
+          filePath: string;
+          workingFile: WorkingFile;
+          timestamp: number;
+        } => entry !== undefined
+      )
+      .sort((a, b) => b.timestamp - a.timestamp);
   }
 
   /**
-   * Extract workflow name from working file filename
-   * Removes timestamp and extension
+   * Extract a display workflow name from a lineage's WorkflowKey.
+   * Removes the trailing creation-timestamp segment.
    *
-   * @param filename Working file filename (e.g., "workflow-2024-12-22T15-30-00.ctrlyoke.json")
+   * @param workflowKey e.g. "workflow-2024-12-22T15-30-00"
    * @returns Workflow name (e.g., "workflow")
    */
-  private extractWorkflowName(filename: string): string {
-    return filename
-      .replace(/\.ctrlyoke\.json$/, "")
-      .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
+  private extractWorkflowName(workflowKey: string): string {
+    return workflowKey.replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
   }
 
   /**
-   * Discover all available sessions in .ctrlyoke/.working
-   * Returns session metadata for UI display
+   * Discover all available sessions under .ctrlyoke/.runs/.
+   * Returns session metadata for UI display.
    *
    * @param workspaceFolder Current workspace folder
    * @returns Array of session info objects or empty array if none found
@@ -213,20 +198,8 @@ export class WorkspaceSessionManager {
     }>
   > {
     try {
-      const workingDir = path.join(
-        workspaceFolderPath,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        PATH_CONSTANTS.WORKING_DIR
-      );
-
-      // Check if working directory exists
-      try {
-        await fs.stat(workingDir);
-      } catch {
-        return []; // No working directory
-      }
-
-      const workingFiles = await this.listWorkingFilesByRecency(workingDir);
+      const workingFiles =
+        await this.listWorkingFilesByRecency(workspaceFolderPath);
 
       if (workingFiles.length === 0) {
         return [];

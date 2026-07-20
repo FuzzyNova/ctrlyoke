@@ -75,7 +75,8 @@ export const CONFIG_KEYS = {
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
-  PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS: "permissions.allowedExternalFileRoots",
+  PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS:
+    "permissions.allowedExternalFileRoots",
   UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
@@ -95,8 +96,13 @@ export const PATH_CONSTANTS = {
   /** Root ctrlyoke directory name (default: ".ctrlyoke") */
   CTRLYOKE_DIR: ".ctrlyoke",
 
-  /** Working file directory name (subdirectory of CTRLYOKE_DIR) */
-  WORKING_DIR: ".working",
+  /**
+   * Run storage root (subdirectory of CTRLYOKE_DIR). Holds one directory per workflow
+   * lineage (`<workflowKey>/`), each containing its descriptor, optional draft, and
+   * promoted `run-<timestamp>/` directories. See `WorkflowPaths.ts`, the sole authority
+   * for every deeper path under this root.
+   */
+  RUNS_DIR: ".runs",
 
   /** Scripts directory name (subdirectory of CTRLYOKE_DIR) */
   SCRIPTS_DIR: "scripts",
@@ -125,9 +131,6 @@ export const PATH_CONSTANTS = {
    * Kept separate from LOGS_DIR so log rotation never deletes captured snapshots.
    */
   SNAPSHOTS_DIR: "snapshots",
-
-  /** History directory name (subdirectory of CTRLYOKE_DIR) */
-  HISTORY_DIR: ".history",
 
   /** Persistent search index directory name (subdirectory of CTRLYOKE_DIR) */
   SEARCH_INDEX_DIR: ".search-index",
@@ -425,10 +428,8 @@ export const ConfigurationUtils = {
           ?.allowedExternalFileRoots
       ),
       workspace: toStringArray(
-        configService.getScoped(
-          CONFIG_KEYS.PERMISSIONS,
-          CONFIG_SCOPE.WORKSPACE
-        )?.allowedExternalFileRoots
+        configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.WORKSPACE)
+          ?.allowedExternalFileRoots
       ),
     };
   },
@@ -684,7 +685,9 @@ export const ConfigurationUtils = {
    * Prompt-level and workflow-level additionalArgs take precedence via PropertyResolver.
    */
   getAdditionalArgsForHarness(harness: HarnessId): string {
-    return configService.get(CONFIG_KEYS.DEFAULTS).additionalArgs[harness] ?? "";
+    return (
+      configService.get(CONFIG_KEYS.DEFAULTS).additionalArgs[harness] ?? ""
+    );
   },
 
   /**

@@ -32,8 +32,10 @@ import {
   PreCondition,
   ToolPermissionsOverride,
   ErrorBehavior,
+  type RunRef,
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
@@ -167,6 +169,10 @@ export class WorkflowInstance {
     null;
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  /** Ownership token for the currently-held runner lock, if any (see WorkflowLockManager). */
+  private currentLockOwnerToken: string | undefined;
+  /** The RunRef this instance is currently executing, if any. Distinct from any client's viewed run. */
+  private executionRunRef: RunRef | undefined;
   private executionSettledPromise: Promise<void> = Promise.resolve();
   private resolveExecutionSettled: (() => void) | undefined;
   /**
@@ -460,17 +466,15 @@ export class WorkflowInstance {
    * Unlike sendRunHistoryToDashboard(), this sends to the provided sink directly.
    */
   async replayRunHistoryTo(sink: IDashboardSink): Promise<void> {
-    const workingFilePath = this.promptQueue.getState().workingFilePath;
-    if (!workingFilePath) {
+    const workflowKey = this.promptQueue.getState().workflowKey;
+    if (!workflowKey) {
       return;
     }
     try {
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const [runs, runTimestamps, runStates] = await Promise.all([
-        this.outputHistoryManager.getRunsForWorkflow(workflowId),
-        this.outputHistoryManager.getRunTimestamps(workflowId),
-        this.outputHistoryManager.getRunStates(workflowId),
+        this.outputHistoryManager.getRunsForWorkflow(workflowKey),
+        this.outputHistoryManager.getRunTimestamps(workflowKey),
+        this.outputHistoryManager.getRunStates(workflowKey),
       ]);
       if (runs.length > 0) {
         sink.notifyRunHistoryUpdated(runs.length, runTimestamps, runStates);
@@ -481,20 +485,19 @@ export class WorkflowInstance {
   }
 
   async replayOutputHistoryTo(send: (msg: unknown) => void): Promise<void> {
-    const workingFilePath = this.promptQueue.getState().workingFilePath;
-    if (!workingFilePath) {
+    const workflowKey = this.promptQueue.getState().workflowKey;
+    if (!workflowKey) {
       return;
     }
     try {
       const om = this.outputHistoryManager;
-      const fileId = OutputHistoryManager.extractWorkflowId(workingFilePath);
-      const runs = await om.getRunsForWorkflow(fileId);
+      const runs = await om.getRunsForWorkflow(workflowKey);
       if (runs.length > 0) {
-        const historyPath = om.getHistoryFilePath(fileId, runs[0]);
+        const historyPath = om.getHistoryFilePath(workflowKey, runs[0]);
         const [history, runTimestamps, runStates] = await Promise.all([
           om.loadHistory(historyPath),
-          om.getRunTimestamps(fileId),
-          om.getRunStates(fileId),
+          om.getRunTimestamps(workflowKey),
+          om.getRunStates(workflowKey),
         ]);
         send({
           type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
@@ -520,17 +523,15 @@ export class WorkflowInstance {
    * Must NOT put the UI into history-view mode — only updates the counter.
    */
   async sendRunHistoryToDashboard(): Promise<void> {
-    const workingFilePath = this.promptQueue.getState().workingFilePath;
-    if (!workingFilePath) {
+    const workflowKey = this.promptQueue.getState().workflowKey;
+    if (!workflowKey) {
       return;
     }
     try {
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const [runs, runTimestamps, runStates] = await Promise.all([
-        this.outputHistoryManager.getRunsForWorkflow(workflowId),
-        this.outputHistoryManager.getRunTimestamps(workflowId),
-        this.outputHistoryManager.getRunStates(workflowId),
+        this.outputHistoryManager.getRunsForWorkflow(workflowKey),
+        this.outputHistoryManager.getRunTimestamps(workflowKey),
+        this.outputHistoryManager.getRunStates(workflowKey),
       ]);
       if (runs.length > 0) {
         this.dashboardSink?.notifyRunHistoryUpdated(
@@ -730,6 +731,11 @@ export class WorkflowInstance {
 
   getOutputHistoryManager(): OutputHistoryManager {
     return this.outputHistoryManager;
+  }
+
+  /** The RunRef this instance is currently executing, if any (undefined while idle). */
+  getExecutionRunRef(): RunRef | undefined {
+    return this.executionRunRef;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1053,34 +1059,52 @@ export class WorkflowInstance {
       const currentQueueState = this.promptQueue.getState();
       const totalSteps = currentQueueState.steps.length;
 
-      const workingFilePath = currentQueueState.workingFilePath ?? "";
+      let workingFilePath = currentQueueState.workingFilePath ?? "";
+      const workflowKey = currentQueueState.workflowKey;
       if (
         !continueFromCurrent &&
         !isAppendContinuation &&
         !isIdleContinuation &&
-        workingFilePath
+        workflowKey
       ) {
-        const workflowId =
-          OutputHistoryManager.extractWorkflowId(workingFilePath);
-        const historyInit =
-          await this.outputHistoryManager.initializeRun(workflowId);
-        historyFilePath = historyInit.filePath;
-        if (historyInit.runCount > 0) {
-          const [runTimestamps, runStates] = await Promise.all([
-            this.outputHistoryManager.getRunTimestamps(workflowId),
-            this.outputHistoryManager.getRunStates(workflowId),
-          ]);
-          this.dashboardSink?.notifyRunHistoryUpdated(
-            historyInit.runCount,
-            runTimestamps,
-            runStates
+        const runWorkspaceRoot =
+          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot() ?? "";
+        const startedAt = Date.now();
+        const promoted = await this.promptQueue.promoteToNewRun(
+          runWorkspaceRoot,
+          startedAt
+        );
+        if (promoted) {
+          workingFilePath = promoted.workingFilePath;
+          this.executionRunRef = promoted.runRef;
+          const runDir = WorkflowPaths.runDir(
+            runWorkspaceRoot,
+            workflowKey,
+            promoted.runRef
           );
+          const historyInit = await this.outputHistoryManager.initializeRunAt(
+            workflowKey,
+            promoted.runRef,
+            runDir,
+            promoted.runId,
+            startedAt
+          );
+          historyFilePath = historyInit.filePath;
+          if (historyInit.runCount > 0) {
+            const [runTimestamps, runStates] = await Promise.all([
+              this.outputHistoryManager.getRunTimestamps(workflowKey),
+              this.outputHistoryManager.getRunStates(workflowKey),
+            ]);
+            this.dashboardSink?.notifyRunHistoryUpdated(
+              historyInit.runCount,
+              runTimestamps,
+              runStates
+            );
+          }
         }
-      } else if (isAppendContinuation && workingFilePath) {
-        const workflowId =
-          OutputHistoryManager.extractWorkflowId(workingFilePath);
+      } else if (isAppendContinuation && workflowKey) {
         historyFilePath =
-          await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+          await this.outputHistoryManager.getLatestHistoryFilePath(workflowKey);
         Log.debug(
           `🟢 [APPEND-DEBUG] Reusing existing history file for append continuation: ${historyFilePath}`
         );
@@ -1147,19 +1171,15 @@ export class WorkflowInstance {
             );
           }
         }
-      } else if (continueFromCurrent && workingFilePath) {
-        const workflowId =
-          OutputHistoryManager.extractWorkflowId(workingFilePath);
+      } else if (continueFromCurrent && workflowKey) {
         historyFilePath =
-          await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+          await this.outputHistoryManager.getLatestHistoryFilePath(workflowKey);
         Log.debug(
           `🟢 [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
         );
-      } else if (isIdleContinuation && workingFilePath) {
-        const workflowId =
-          OutputHistoryManager.extractWorkflowId(workingFilePath);
+      } else if (isIdleContinuation && workflowKey) {
         historyFilePath =
-          await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+          await this.outputHistoryManager.getLatestHistoryFilePath(workflowKey);
         Log.debug(
           `🟢 [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
         );
@@ -2718,29 +2738,49 @@ export class WorkflowInstance {
     // "vscode" so the VS Code extension detects the lock and registers a
     // CliWatchSession.  Use isCli() rather than checking dashboardSink so a
     // future TUI dashboard implementation doesn't accidentally flip the value.
-    if (workingFilePath) {
+    const workflowKey = this.promptQueue.getState().workflowKey;
+    const runRef = this.promptQueue.getState().runRef;
+    this.executionRunRef = runRef;
+    const lockWorkspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (workingFilePath && workflowKey && runRef && lockWorkspaceRoot) {
       const runner = isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE;
+      const ownerToken = WorkflowLockManager.generateOwnerToken();
       const lock: WorkflowRunnerLock = {
+        workflowKey,
+        runRef,
         runner,
         pid: process.pid,
+        ownerToken,
+        instanceId: this.id,
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
-        instanceId: this.id,
-        workflowId: OutputHistoryManager.extractWorkflowId(workingFilePath),
       };
       Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: acquiring ${runner} lock for "${path.basename(workingFilePath)}"`
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: acquiring ${runner} lock for "${workflowKey}"`
       );
-      await WorkflowLockManager.acquireLock(workingFilePath, lock).catch(
-        (err) =>
-          Log.warn(
-            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to acquire lock:`,
-            err
-          )
-      );
+      try {
+        await WorkflowLockManager.acquireLock(
+          lockWorkspaceRoot,
+          workflowKey,
+          lock
+        );
+        this.currentLockOwnerToken = ownerToken;
+      } catch (err) {
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to acquire lock:`,
+          err
+        );
+      }
       // Heartbeat every 5 seconds
       this.heartbeatInterval = setInterval(() => {
-        WorkflowLockManager.updateHeartbeat(workingFilePath).catch(() => {});
+        if (this.currentLockOwnerToken) {
+          WorkflowLockManager.updateHeartbeat(
+            lockWorkspaceRoot,
+            workflowKey,
+            this.currentLockOwnerToken
+          ).catch(() => {});
+        }
       }, 5_000);
     }
 
@@ -2793,8 +2833,14 @@ export class WorkflowInstance {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = undefined;
       }
-      if (workingFilePath) {
-        await WorkflowLockManager.releaseLock(workingFilePath).catch((err) =>
+      if (workflowKey && lockWorkspaceRoot && this.currentLockOwnerToken) {
+        const ownerToken = this.currentLockOwnerToken;
+        this.currentLockOwnerToken = undefined;
+        await WorkflowLockManager.releaseLock(
+          lockWorkspaceRoot,
+          workflowKey,
+          ownerToken
+        ).catch((err) =>
           Log.warn(
             `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
             err

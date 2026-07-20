@@ -25,7 +25,7 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 ## `run` data flow gotchas
 
 - `WorkflowInstance` is created without a dashboard sink. Headless output must subscribe on the instance, not the detector integration, because the real execution integration is created later by the factory.
-- Prompt loading happens before lock acquisition so `workingFilePath` exists; the CLI then maintains its own `WorkflowLockManager` heartbeat and must release it on success, error, SIGINT/SIGTERM, and process exit.
+- Runner-lock acquire/heartbeat/release is owned entirely by `WorkflowInstance.startWorkflowExecution` (same code path for CLI and extension — see `core.instructions.md`/`utils.instructions.md`); `cli.ts` does not duplicate it. On SIGINT/SIGTERM the CLI calls `instance.shutdown()`, not just `instance.stop()` — `shutdown()` requests a stop and then awaits (with a bounded timeout) the in-flight execution's settle promise, which is what guarantees the lock has actually been released before the process exits.
 - `--var` overrides are merged into `workflowFile.vars` **after** loading so workflow defaults are present first.
 - Session overrides mutate `promptQueue.getState().steps` directly. That getter is only a shallow copy, so step-object mutations intentionally write through into queue state.
 

@@ -39,6 +39,7 @@ function makeMinimalWorkingFile(): WorkingFile {
     workflowName: "test-workflow",
     startedAt: Date.now(),
     lastModifiedAt: Date.now(),
+    definitionRevision: 1,
     steps: [{ prompt: "do the thing" }],
     _runtime: {
       currentIndex: 0,
@@ -148,88 +149,99 @@ suite("WorkingFileManager", () => {
 
   // ──────────────────────────────────────────────────────────────────────────
   suite("createWorkingFile", () => {
-    test("creates file in queueDir and returns a valid path", async () => {
-      const tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-"));
-      tempPaths.push(tmpWorkspace);
+    let tmpWorkspace: string;
+
+    async function makeTmpWorkspace(): Promise<string> {
+      const ws = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-"));
+      tempPaths.push(ws);
+      return ws;
+    }
+
+    afterEach(async () => {
+      if (tmpWorkspace) {
+        await fs
+          .rm(tmpWorkspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    test("creates a draft file in .ctrlyoke/.runs/<workflowKey>/draft/ and returns its path + workflowKey", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
 
       const manager = new WorkingFileManager(makeMockAccess());
-      const wfPath = await manager.createWorkingFile(
+      const { workingFilePath, workflowKey } = await manager.createWorkingFile(
         "my-workflow",
         [{ prompt: "hello" }],
         tmpWorkspace,
         "my-workflow"
       );
-      tempPaths.push(wfPath);
 
       // File should exist
-      await assert.doesNotReject(() => fs.access(wfPath));
+      await assert.doesNotReject(() => fs.access(workingFilePath));
       assert.ok(
-        wfPath.endsWith(".ctrlyoke.json"),
-        `Expected .ctrlyoke.json extension: ${wfPath}`
+        workingFilePath.endsWith("workflow.ctrlyoke.json"),
+        `Expected workflow.ctrlyoke.json: ${workingFilePath}`
+      );
+      assert.ok(
+        workingFilePath.includes(path.join(".runs", workflowKey, "draft")),
+        `Expected path under .runs/${workflowKey}/draft: ${workingFilePath}`
       );
     });
 
-    test("created file is valid JSON with expected workflow name", async () => {
-      const tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-"));
-      tempPaths.push(tmpWorkspace);
+    test("created file is valid JSON with expected workflow name and definitionRevision", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
 
       const manager = new WorkingFileManager(makeMockAccess());
-      const wfPath = await manager.createWorkingFile(
+      const { workingFilePath } = await manager.createWorkingFile(
         "test-run",
         [{ prompt: "step" }],
         tmpWorkspace,
         "test-workflow"
       );
-      tempPaths.push(wfPath);
 
-      const content = await fs.readFile(wfPath, "utf-8");
+      const content = await fs.readFile(workingFilePath, "utf-8");
       const parsed = JSON.parse(content) as WorkingFile;
       assert.strictEqual(parsed.workflowName, "test-workflow");
       assert.strictEqual(parsed.steps!.length, 1);
+      assert.strictEqual(parsed.definitionRevision, 1);
     });
 
-    test("filename is sanitized — spaces and special chars replaced with hyphens", async () => {
-      const tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-"));
-      tempPaths.push(tmpWorkspace);
+    test("workflowKey is sanitized — spaces and special chars replaced with hyphens", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
 
       const manager = new WorkingFileManager(makeMockAccess());
-      const wfPath = await manager.createWorkingFile(
+      const { workflowKey } = await manager.createWorkingFile(
         "My Workflow! With Spaces",
         [],
         tmpWorkspace,
         "My Workflow"
       );
-      tempPaths.push(wfPath);
 
-      const fileName = path.basename(wfPath);
       assert.ok(
-        !/\s/.test(fileName),
-        `Filename should not contain whitespace: ${fileName}`
+        !/\s/.test(workflowKey),
+        `workflowKey should not contain whitespace: ${workflowKey}`
       );
       assert.ok(
-        !/[!]/.test(fileName),
-        `Filename should not contain special chars: ${fileName}`
+        !/[!]/.test(workflowKey),
+        `workflowKey should not contain special chars: ${workflowKey}`
       );
     });
 
-    test("filename includes a timestamp segment", async () => {
-      const tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-"));
-      tempPaths.push(tmpWorkspace);
+    test("workflowKey includes a timestamp segment", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
 
       const manager = new WorkingFileManager(makeMockAccess());
-      const wfPath = await manager.createWorkingFile(
+      const { workflowKey } = await manager.createWorkingFile(
         "timestamped",
         [],
         tmpWorkspace,
         "Timestamped"
       );
-      tempPaths.push(wfPath);
 
-      const fileName = path.basename(wfPath);
-      // Format: <sanitized-name>-YYYY-MM-DDTHH-MM-SS.ctrlyoke.json
+      // Format: <sanitized-name>-YYYY-MM-DDTHH-MM-SS
       assert.ok(
-        /\d{4}-\d{2}-\d{2}T/.test(fileName),
-        `Expected timestamp in filename: ${fileName}`
+        /\d{4}-\d{2}-\d{2}T/.test(workflowKey),
+        `Expected timestamp in workflowKey: ${workflowKey}`
       );
     });
   });

@@ -7,9 +7,9 @@ import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
-import type { WorkingFile } from "../../types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
+import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputRecordedEvent,
@@ -21,11 +21,13 @@ import {
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 const INDEX_SCHEMA_VERSION = "2.0.0" as const;
 const MANIFEST_FILE_NAME = "manifest.json";
@@ -90,6 +92,7 @@ interface CursorPayload {
 
 export class HistorySearchIndexService {
   private readonly timelineRecorder = new TimelineRecorder();
+  private readonly lineageRepository = new WorkflowLineageRepository();
   private loadedWorkspacePath?: string;
   private loadedManifest?: HistorySearchIndexManifest;
   private documents: HistorySearchDocument[] = [];
@@ -315,7 +318,7 @@ export class HistorySearchIndexService {
         builtAt,
         workspaceRootHash: this.hashPath(workspaceFolderPath),
         historyRootMtimeMs: (
-          await this.statOptional(this.getHistoryRoot(workspaceFolderPath))
+          await this.statOptional(WorkflowPaths.runsRoot(workspaceFolderPath))
         )?.mtimeMs,
         indexedRuns,
       };
@@ -390,10 +393,10 @@ export class HistorySearchIndexService {
   private async listRunSources(
     workspaceFolderPath: string
   ): Promise<WorkflowRunSource[]> {
-    const historyRoot = this.getHistoryRoot(workspaceFolderPath);
-    let workflowEntries: fs.Dirent[];
+    const runsRoot = WorkflowPaths.runsRoot(workspaceFolderPath);
+    let lineageEntries: fs.Dirent[];
     try {
-      workflowEntries = await fs.promises.readdir(historyRoot, {
+      lineageEntries = await fs.promises.readdir(runsRoot, {
         withFileTypes: true,
       });
     } catch (error) {
@@ -404,14 +407,17 @@ export class HistorySearchIndexService {
     }
 
     const sources: WorkflowRunSource[] = [];
-    for (const workflowEntry of workflowEntries.filter((entry) =>
-      entry.isDirectory()
+    for (const lineageEntry of lineageEntries.filter((entry) =>
+      WorkflowPaths.isLineageDirEntry(entry)
     )) {
-      const workflowId = workflowEntry.name;
-      const workflowHistoryDir = path.join(historyRoot, workflowId);
+      const workflowKey = lineageEntry.name as WorkflowKey;
+      const lineageDirPath = WorkflowPaths.lineageDir(
+        workspaceFolderPath,
+        workflowKey
+      );
       let runEntries: fs.Dirent[];
       try {
-        runEntries = await fs.promises.readdir(workflowHistoryDir, {
+        runEntries = await fs.promises.readdir(lineageDirPath, {
           withFileTypes: true,
         });
       } catch {
@@ -419,26 +425,27 @@ export class HistorySearchIndexService {
       }
 
       const runs = runEntries
-        .filter(
-          (entry) =>
-            entry.isDirectory() &&
-            TimelineRecorder.isTimelineRunDirectory(entry.name)
-        )
+        .filter((entry) => WorkflowPaths.isRunDirEntry(entry))
         .map((entry) => ({
-          entryName: entry.name,
-          timestamp: TimelineRecorder.extractRunTimestamp(entry.name),
+          runRef: entry.name as RunRef,
+          timestamp: WorkflowPaths.parseRunRefTimestamp(entry.name) ?? 0,
         }))
         .sort((left, right) => right.timestamp - left.timestamp);
 
       for (const [runIndex, run] of runs.entries()) {
-        const manifestPath = TimelineRecorder.getManifestPathForRunDirectory(
-          path.join(workflowHistoryDir, run.entryName)
+        const manifestPath = WorkflowPaths.manifestPath(
+          workspaceFolderPath,
+          workflowKey,
+          run.runRef
         );
         sources.push({
-          workflowId,
+          workflowId: workflowKey,
           manifestPath,
-          eventsPath:
-            TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
+          eventsPath: WorkflowPaths.eventsPath(
+            workspaceFolderPath,
+            workflowKey,
+            run.runRef
+          ),
           runIndex,
         });
       }
@@ -690,23 +697,25 @@ export class HistorySearchIndexService {
     workspaceFolderPath: string,
     workflowId: string
   ): Promise<WorkflowMetadata> {
-    const workingFilePath = path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.WORKING_DIR,
-      `${workflowId}.ctrlyoke.json`
-    );
-
+    const workflowKey = workflowId as WorkflowKey;
     try {
-      const content = await fs.promises.readFile(workingFilePath, "utf8");
-      const workingFile = JSON.parse(content) as WorkingFile;
+      const descriptor = await this.lineageRepository.readDescriptor(
+        workspaceFolderPath,
+        workflowKey
+      );
+      const workflowFilePath = descriptor.latestRunRef
+        ? WorkflowPaths.runFilePath(
+            workspaceFolderPath,
+            workflowKey,
+            descriptor.latestRunRef
+          )
+        : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
       return {
         workflowName:
-          typeof workingFile.workflowName === "string" &&
-          workingFile.workflowName.trim().length > 0
-            ? workingFile.workflowName
+          descriptor.workflowName?.trim().length > 0
+            ? descriptor.workflowName
             : this.deriveWorkflowName(workflowId),
-        workflowFilePath: workingFilePath,
+        workflowFilePath,
       };
     } catch {
       return {
@@ -919,14 +928,6 @@ export class HistorySearchIndexService {
     return workflowId.replace(
       /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
       ""
-    );
-  }
-
-  private getHistoryRoot(workspaceFolderPath: string): string {
-    return path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.HISTORY_DIR
     );
   }
 

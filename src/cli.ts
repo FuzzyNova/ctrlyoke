@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
-import * as crypto from "crypto";
 import * as readline from "readline";
 import { access } from "fs/promises";
 
@@ -30,10 +29,9 @@ import {
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
-import type { QueueState, WorkflowRunnerLock } from "./types/CtrlYokeTypes";
+import type { QueueState } from "./types/CtrlYokeTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
-import { WorkflowLockManager } from "./utils/WorkflowLockManager";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
@@ -356,7 +354,8 @@ async function runCommand(
   // been reviewed yet — see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
   // User-scope roots need no such gate (the user already approved them by
   // editing their own settings).
-  const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
   const pendingExternalRoots =
     ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
   if (pendingExternalRoots.length > 0) {
@@ -466,30 +465,18 @@ async function runCommand(
     });
   }
 
-  // Generate a unique instance ID for this CLI run
-  const instanceId = crypto.randomUUID();
+  // Runner-lock acquire/heartbeat/release is owned entirely by
+  // WorkflowInstance.startWorkflowExecution (single owner across CLI and
+  // extension — see WorkflowLockManager). The CLI no longer duplicates it here.
 
-  // Lock management state
-  let cliWorkingFilePath: string | undefined;
-  let cliHeartbeatInterval: ReturnType<typeof setInterval> | undefined;
-
-  const releaseLockAndCleanup = async (): Promise<void> => {
-    if (cliHeartbeatInterval !== undefined) {
-      clearInterval(cliHeartbeatInterval);
-      cliHeartbeatInterval = undefined;
-    }
-    if (cliWorkingFilePath) {
-      await WorkflowLockManager.releaseLock(cliWorkingFilePath).catch(() => {});
-    }
-  };
-
-  // Handle Ctrl+C gracefully
+  // Handle Ctrl+C gracefully — shutdown() requests a stop and waits (with a
+  // bounded timeout) for the in-flight execution to actually settle, which is
+  // what guarantees the runner lock has been released before we exit.
   const cleanup = async (): Promise<void> => {
     if (!options.quiet) {
       console.log(chalk.yellow("\n\nInterrupted. Stopping workflow..."));
     }
-    await instance.stop();
-    await releaseLockAndCleanup();
+    await instance.shutdown();
     process.exit(5);
   };
   process.on("SIGINT", () => {
@@ -497,21 +484,6 @@ async function runCommand(
   });
   process.on("SIGTERM", () => {
     void cleanup();
-  });
-  // Best-effort lock release on any exit (covers process.exit() in non-signal paths)
-  process.on("exit", () => {
-    if (cliHeartbeatInterval !== undefined) {
-      clearInterval(cliHeartbeatInterval);
-    }
-    // Synchronous file deletion is best-effort — failures are acceptable here
-    if (cliWorkingFilePath) {
-      try {
-        const lockPath = WorkflowLockManager.getLockPath(cliWorkingFilePath);
-        require("fs").unlinkSync(lockPath);
-      } catch {
-        // Ignore errors on exit
-      }
-    }
   });
 
   try {
@@ -526,36 +498,6 @@ async function runCommand(
     if (Object.keys(config.vars).length > 0) {
       const workflowFile = instance.promptQueue.getWorkflowFile();
       workflowFile.vars = { ...(workflowFile.vars ?? {}), ...config.vars };
-    }
-
-    // Acquire the process lock after loading so workingFilePath is available
-    const queueStateAfterLoad = instance.promptQueue.getState();
-    cliWorkingFilePath = queueStateAfterLoad.workingFilePath;
-    if (cliWorkingFilePath) {
-      const workflowId = path
-        .basename(cliWorkingFilePath)
-        .replace(/\.ctrlyoke\.json$/, "");
-      const lock: WorkflowRunnerLock = {
-        runner: "cli",
-        pid: process.pid,
-        startedAt: Date.now(),
-        lastHeartbeat: Date.now(),
-        instanceId,
-        workflowId,
-      };
-      await WorkflowLockManager.acquireLock(cliWorkingFilePath, lock).catch(
-        (err) => {
-          Log.warn(`[CLI] Failed to acquire lock: ${err}`);
-        }
-      );
-      // Heartbeat every 5 seconds
-      cliHeartbeatInterval = setInterval(() => {
-        if (cliWorkingFilePath) {
-          WorkflowLockManager.updateHeartbeat(cliWorkingFilePath).catch(
-            () => {}
-          );
-        }
-      }, 5_000);
     }
 
     // Apply --resume / --new-session overrides to the first prompt before execution.
@@ -622,11 +564,9 @@ async function runCommand(
       }
     }
 
-    await releaseLockAndCleanup();
     process.exit(exitCode);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await releaseLockAndCleanup();
     if (options.json) {
       console.log(JSON.stringify({ status: "error", error: message }));
     } else {
@@ -704,7 +644,8 @@ async function trustExternalRootsCommand(
   configService.setUserBackend(userBackend);
   configService.setWorkspaceBackend(workspaceBackend);
 
-  const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
   const pendingRoots =
     ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
 
