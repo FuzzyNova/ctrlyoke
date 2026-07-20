@@ -810,19 +810,16 @@ export class WorkflowSerializer {
 
       const workflows = await Promise.all(
         workflowKeys.map(async (workflowKey) => {
-          let filePath: string;
+          let address: WorkflowViewAddress;
+          let descriptor;
           try {
-            const descriptor = await this.lineageRepository.readDescriptor(
+            descriptor = await this.lineageRepository.readDescriptor(
               workspaceRoot,
               workflowKey
             );
-            filePath = descriptor.latestRunRef
-              ? WorkflowPaths.runFilePath(
-                  workspaceRoot,
-                  workflowKey,
-                  descriptor.latestRunRef
-                )
-              : WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
+            address = descriptor.latestRunRef
+              ? { workflowKey, kind: "run", runRef: descriptor.latestRunRef }
+              : { workflowKey, kind: "draft" };
           } catch (error) {
             Log.warn(
               `Failed to read lineage descriptor ${workflowKey}:`,
@@ -830,6 +827,15 @@ export class WorkflowSerializer {
             );
             return null;
           }
+
+          const filePath =
+            address.kind === "run"
+              ? WorkflowPaths.runFilePath(
+                  workspaceRoot,
+                  address.workflowKey,
+                  address.runRef
+                )
+              : WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey);
 
           try {
             const workingFile = (await readJsonFile(filePath)) as WorkingFile;
@@ -880,12 +886,12 @@ export class WorkflowSerializer {
             );
 
             return {
-              filePath,
+              address,
               workflowName: workingFile.workflowName || workflowKey,
               executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
-              isFavorite: workingFile.isFavorite ?? false,
+              isFavorite: descriptor.isFavorite,
               totalSteps: steps.length,
               harness,
             };
@@ -926,21 +932,16 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleToggleFavorite(filePath: string): Promise<void> {
+  async handleToggleFavorite(address: WorkflowViewAddress): Promise<void> {
     try {
-      const workingFile = (await readJsonFile(filePath)) as WorkingFile;
-      if (!workingFile || typeof workingFile !== "object") {
-        Log.warn(
-          `handleToggleFavorite: invalid working file payload for "${filePath}"`
-        );
-        return;
-      }
-
-      workingFile.isFavorite = !(workingFile.isFavorite ?? false);
-      await fs.writeFile(
-        filePath,
-        JSON.stringify(workingFile, null, 2),
-        "utf-8"
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
+      if (!workspaceRoot) return;
+      await this.lineageRepository.updateDescriptor(
+        workspaceRoot,
+        address.workflowKey,
+        (descriptor) => ({ ...descriptor, isFavorite: !descriptor.isFavorite })
       );
     } catch (error) {
       Log.error("Failed to toggle workflow favorite:", error);
@@ -1005,20 +1006,14 @@ export class WorkflowSerializer {
    * Handle REMOVE_WORKFLOW_HISTORY: delete the .ctrlyoke.json working file and associated
    * .history/<workflowId>/ directory for a single entry.
    */
-  async handleRemoveWorkflowHistory(filePath: string): Promise<void> {
+  async handleRemoveWorkflowHistory(
+    address: WorkflowViewAddress
+  ): Promise<void> {
     try {
       const workspaceRoot = vscode.workspace.workspaceFolders?.length
         ? getVsCodeWorkspaceRoot()
         : undefined;
       if (!workspaceRoot) {
-        return;
-      }
-
-      const address = WorkflowPaths.parseWorkingFileAddressFromPath(filePath);
-      if (!address) {
-        Log.warn(
-          `handleRemoveWorkflowHistory: "${filePath}" is not a recognized run/draft path`
-        );
         return;
       }
 

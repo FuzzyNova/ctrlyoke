@@ -594,7 +594,12 @@ export interface PromptResult {
  * lightweight status information without leaking the full WorkflowInstance.
  */
 export interface WorkflowSummary {
+  /** In-memory instance identity, retained only for live execution/terminal ownership. */
   id: string;
+  /** Stable lineage identity for navigation and persisted selection. */
+  workflowKey?: WorkflowKey;
+  /** Exact promoted run being executed, when this summary represents a run. */
+  runRef?: RunRef;
   workflowName: string;
   filePath: string;
   workingFilePath?: string; // Path to .ctrlyoke.json working file (for dedup with recent workflows list)

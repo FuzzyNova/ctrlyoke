@@ -685,9 +685,9 @@ export class WorkflowOrchestrator {
 
   /**
    * Build the global set of workflows that currently have at least one running
-   * PTY session, each paired with its working file path so clients can match
-   * both loaded rows (by workflowId) and recent-list rows (by working file
-   * path). Source of truth is the PtyProcessManager, resolved against live,
+   * PTY session, each paired with its stable execution address so clients can
+   * match both loaded and recent rows without a mutable working-file path.
+   * Source of truth is the PtyProcessManager, resolved against live,
    * retired, and CLI-managed instances for path lookup.
    */
   getActiveTerminalWorkflowRefs(): ActiveTerminalWorkflowRef[] {
@@ -695,14 +695,24 @@ export class WorkflowOrchestrator {
     if (!ptyManager) {
       return [];
     }
-    return ptyManager.getWorkflowIdsWithRunningSessions().map((workflowId) => {
-      const instance =
-        this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
-      const workingFilePath =
-        instance?.getSummary().workingFilePath ??
-        this.cliSessions.get(workflowId)?.summary.workingFilePath;
-      return { workflowId, workingFilePath };
-    });
+    return ptyManager
+      .getWorkflowIdsWithRunningSessions()
+      .map((workflowId) => {
+        const instance =
+          this.instances.get(workflowId) ??
+          this.retiredInstances.get(workflowId);
+        const summary =
+          instance?.getSummary() ?? this.cliSessions.get(workflowId)?.summary;
+        if (!summary?.workflowKey || !summary.runRef) {
+          return undefined;
+        }
+        return {
+          workflowId,
+          workflowKey: summary.workflowKey,
+          runRef: summary.runRef,
+        };
+      })
+      .filter((ref): ref is ActiveTerminalWorkflowRef => ref !== undefined);
   }
 
   /**

@@ -38,9 +38,23 @@ beforeEach(() => {
   postMessageSpy.mockClear();
 });
 
-function setRecentWorkflows(workflows: RecentWorkflow[]): void {
+function setRecentWorkflows(
+  workflows: Array<
+    Omit<RecentWorkflow, "address"> & {
+      address?: RecentWorkflow["address"];
+      filePath?: string;
+    }
+  >
+): void {
   act(() => {
-    useUiStore.getState().setRecentWorkflows(workflows);
+    useUiStore.getState().setRecentWorkflows(
+      workflows.map(({ filePath: _filePath, ...workflow }, index) => ({
+        ...workflow,
+        address:
+          workflow.address ??
+          ({ workflowKey: `test-${index}` as never, kind: "draft" } as const),
+      }))
+    );
   });
 }
 
@@ -192,9 +206,9 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("closes the dropdown without reloading when selecting the current workflow", async () => {
     const user = userEvent.setup();
-    useUiStore
-      .getState()
-      .setActiveWorkflowWorkingFilePath("/workspace/my-workflow.ctrlyoke.yaml");
+    useUiStore.setState({
+      displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
+    });
     setRecentWorkflows([
       {
         workflowName: "My Workflow",
@@ -209,14 +223,14 @@ describe("WorkflowStatus — loaded state", () => {
     });
     await user.click(dropdownTrigger);
     await user.click(
-      within(
-        screen.getByTitle("/workspace/my-workflow.ctrlyoke.yaml")
-      ).getByRole("button", { name: "My Workflow" })
+      within(screen.getByTitle("test-0")).getByRole("button", {
+        name: "My Workflow",
+      })
     );
 
     expect(postMessageSpy).not.toHaveBeenCalledWith({
       type: MESSAGE_TYPES.LOAD_WORKFLOW,
-      filePath: "/workspace/my-workflow.ctrlyoke.yaml",
+      address: { workflowKey: "test-0", kind: "draft" },
     });
     expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
       "pointer-events-none"
@@ -226,10 +240,10 @@ describe("WorkflowStatus — loaded state", () => {
   it("keeps a completed workflow selected after it leaves Running Workflows", async () => {
     const user = userEvent.setup();
     const workingFilePath = "C:\\workspace\\.ctrlyoke\\workflow.ctrlyoke.json";
-    const recentFilePath = "C:/workspace/.ctrlyoke/workflow.ctrlyoke.json";
     useUiStore.setState({
       activeWorkflowId: "workflow-1",
       activeWorkflowWorkingFilePath: workingFilePath,
+      displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
       loadedWorkflows: [
         {
           id: "workflow-1",
@@ -252,16 +266,14 @@ describe("WorkflowStatus — loaded state", () => {
       useUiStore.getState().setLoadedWorkflows([]);
       useUiStore.getState().setRecentWorkflows([
         {
+          address: { workflowKey: "test-0" as never, kind: "draft" },
           workflowName: "My Workflow",
-          filePath: recentFilePath,
           executionState: EXECUTION_STATES.COMPLETED,
         },
       ]);
     });
 
-    expect(screen.getByTitle(recentFilePath)).toHaveClass(
-      "fp-dropdown-row-selected"
-    );
+    expect(screen.getByTitle("test-0")).toHaveClass("fp-dropdown-row-selected");
   });
 
   it("sorts favorite workflows to the top of recent workflows", async () => {
@@ -334,7 +346,7 @@ describe("WorkflowStatus — loaded state", () => {
 
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
-      filePath: "/path/a.yaml",
+      address: { workflowKey: "test-0", kind: "draft" },
     });
     expect(
       screen.getByRole("button", { name: "Remove from favorites" })
@@ -368,7 +380,8 @@ describe("WorkflowStatus — loaded state", () => {
       activeTerminalWorkflows: [
         {
           workflowId: "workflow-1",
-          workingFilePath: "/workspace/running.ctrlyoke.yaml",
+          workflowKey: "test-0" as never,
+          runRef: "run-2026-01-01T00-00-00-000Z" as never,
         },
       ],
     });
@@ -427,7 +440,8 @@ describe("WorkflowStatus — loaded state", () => {
       activeTerminalWorkflows: [
         {
           workflowId: "workflow-1",
-          workingFilePath: "/workspace/my-workflow.ctrlyoke.yaml",
+          workflowKey: "test-0" as never,
+          runRef: "run-2026-01-01T00-00-00-000Z" as never,
         },
       ],
     });

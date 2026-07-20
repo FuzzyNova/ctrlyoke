@@ -20,7 +20,8 @@ import {
   TERMINAL_SESSION_STATUS,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
-import { areWorkflowPathsEqual, RecentWorkflows } from "./RecentWorkflows";
+import { areWorkflowAddressesEqual, RecentWorkflows } from "./RecentWorkflows";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
@@ -172,12 +173,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     loadedWorkflows,
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
+    displayedViewAddress,
     recentWorkflows,
     setRecentWorkflows,
     setActiveWorkflowWorkingFilePath,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
-  const currentWorkflowFilePath = activeWorkflowWorkingFilePath ?? fileName;
   // Global set of workflows with a running PTY, broadcast by the extension. This
   // is complete for every workflow on every client (including hosted browser
   // tabs) — unlike the per-workflow `sessions` map, which a client only hydrates
@@ -191,12 +192,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     () => new Set(activeTerminalWorkflows.map((w) => w.workflowId)),
     [activeTerminalWorkflows]
   );
-  const activeTerminalWorkflowPaths = useMemo(
+  const activeTerminalRunAddresses = useMemo(
     () =>
       new Set(
-        activeTerminalWorkflows
-          .map((w) => w.workingFilePath)
-          .filter((p): p is string => !!p)
+        activeTerminalWorkflows.map((w) => `${w.workflowKey}:${w.runRef}`)
       ),
     [activeTerminalWorkflows]
   );
@@ -224,6 +223,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       !loadedWorkflows.some((w) => w.id === activeWorkflowId)
         ? {
             id: activeWorkflowId,
+            workflowKey: undefined,
             workflowName:
               workflowName ||
               (fileName
@@ -258,21 +258,18 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   const recentWorkflowHasActiveTerminal = useCallback(
     (workflow: RecentWorkflow) =>
-      // RecentWorkflow.filePath is the working file path, so it matches the
-      // working file paths carried in the global active-terminal set directly —
-      // even for completed workflows with a lingering shell that are no longer
-      // loaded. Fall back to resolving via a loaded workflow for the rare case
-      // where the row is keyed by the source prompt path instead.
-      activeTerminalWorkflowPaths.has(workflow.filePath) ||
+      (workflow.address.kind === "run" &&
+        activeTerminalRunAddresses.has(
+          `${workflow.address.workflowKey}:${workflow.address.runRef}`
+        )) ||
       effectiveLoadedWorkflows.some(
         (w) =>
-          (w.filePath === workflow.filePath ||
-            w.workingFilePath === workflow.filePath) &&
+          w.workflowKey === workflow.address.workflowKey &&
           activeTerminalWorkflowIds.has(w.id)
       ),
     [
       activeTerminalWorkflowIds,
-      activeTerminalWorkflowPaths,
+      activeTerminalRunAddresses,
       effectiveLoadedWorkflows,
     ]
   );
@@ -300,9 +297,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     useState<WorkflowDateFilter>(DEFAULT_WORKFLOW_DATE_FILTER);
   const [favoriteWorkflowsOnly, setFavoriteWorkflowsOnly] = useState(false);
   // Pending workflow path waiting for delete confirmation
-  const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(
-    null
-  );
+  const [pendingDeleteAddress, setPendingDeleteAddress] =
+    useState<WorkflowViewAddress | null>(null);
   const sortedRecentWorkflows = useMemo(
     () => sortRecentWorkflows(recentWorkflows),
     [recentWorkflows]
@@ -731,25 +727,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Load workflow from recent list
   const handleSelectWorkflow = useCallback(
-    (filePath: string) => {
-      if (areWorkflowPathsEqual(filePath, currentWorkflowFilePath)) {
+    (address: WorkflowViewAddress) => {
+      if (areWorkflowAddressesEqual(address, displayedViewAddress)) {
         closeDropdown();
         return;
       }
 
-      setActiveWorkflowWorkingFilePath(filePath);
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath,
+        address,
       });
       closeDropdown();
     },
-    [
-      closeDropdown,
-      currentWorkflowFilePath,
-      setActiveWorkflowWorkingFilePath,
-      vscode,
-    ]
+    [closeDropdown, displayedViewAddress, vscode]
   );
 
   // Clear workflow history
@@ -761,56 +751,60 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(
-    (filePath: string) => {
+    (address: WorkflowViewAddress) => {
       if (!globalSettings.confirmDeleteOperations) {
         // Skip modal — user opted out of delete confirmation
         vscode.postMessage({
           type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-          filePath,
+          address,
         });
         setRecentWorkflows(
           useUiStore
             .getState()
-            .recentWorkflows.filter((w) => w.filePath !== filePath)
+            .recentWorkflows.filter(
+              (w) => w.address.workflowKey !== address.workflowKey
+            )
         );
         return;
       }
       // Show confirmation modal
-      setPendingDeletePath(filePath);
+      setPendingDeleteAddress(address);
     },
     [globalSettings.confirmDeleteOperations, setRecentWorkflows, vscode]
   );
 
   // Confirmed: actually remove the workflow history entry
   const handleRemoveWorkflowConfirm = useCallback(() => {
-    if (!pendingDeletePath) return;
+    if (!pendingDeleteAddress) return;
     vscode.postMessage({
       type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-      filePath: pendingDeletePath,
+      address: pendingDeleteAddress,
     });
     setRecentWorkflows(
       useUiStore
         .getState()
-        .recentWorkflows.filter((w) => w.filePath !== pendingDeletePath)
+        .recentWorkflows.filter(
+          (w) => w.address.workflowKey !== pendingDeleteAddress.workflowKey
+        )
     );
-    setPendingDeletePath(null);
-  }, [pendingDeletePath, setRecentWorkflows, vscode]);
+    setPendingDeleteAddress(null);
+  }, [pendingDeleteAddress, setRecentWorkflows, vscode]);
 
   const handleRemoveWorkflowCancel = useCallback(() => {
-    setPendingDeletePath(null);
+    setPendingDeleteAddress(null);
   }, []);
 
   const handleToggleFavorite = useCallback(
-    (filePath: string) => {
+    (address: WorkflowViewAddress) => {
       vscode.postMessage({
         type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
-        filePath,
+        address,
       });
 
       setRecentWorkflows(
         sortRecentWorkflows(
           useUiStore.getState().recentWorkflows.map((workflow) =>
-            workflow.filePath === filePath
+            workflow.address.workflowKey === address.workflowKey
               ? {
                   ...workflow,
                   isFavorite: !(workflow.isFavorite ?? false),
@@ -876,20 +870,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     workflow: Pick<
       RecentWorkflow,
       | "workflowName"
-      | "filePath"
       | "executionState"
       | "harness"
       | "lastModifiedAt"
       | "startedAt"
       | "isFavorite"
-    > & { workingFilePath?: string; completedAt?: number }
+    > & {
+      workflowKey?: string;
+      filePath?: string;
+      workingFilePath?: string;
+      completedAt?: number;
+    }
   ) => {
     const isFavorite =
       workflow.isFavorite ??
       sortedRecentWorkflows.some(
         (recentWorkflow) =>
-          (recentWorkflow.filePath === workflow.filePath ||
-            recentWorkflow.filePath === workflow.workingFilePath) &&
+          recentWorkflow.address.workflowKey === workflow.workflowKey &&
           (recentWorkflow.isFavorite ?? false)
       );
 
@@ -932,7 +929,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
     return [
       workflow.workflowName,
-      workflow.filePath,
+      workflow.workflowKey,
       workflow.workingFilePath,
       workflow.executionState,
     ].some((value) => value?.toLowerCase().includes(normalizedWorkflowSearch));
@@ -946,7 +943,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       workflowMatchesSearch(recentWorkflow) &&
       !effectiveLoadedWorkflows.some(
         (loadedWorkflow) =>
-          loadedWorkflow.workingFilePath === recentWorkflow.filePath
+          loadedWorkflow.workflowKey === recentWorkflow.address.workflowKey
       )
   );
   const showRunningWorkflowsSection = effectiveLoadedWorkflows.length > 0;
@@ -1259,7 +1256,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         <div className="flex-1 min-h-0 overflow-clip flex flex-col">
           <RecentWorkflows
             workflows={filteredRecentWorkflows}
-            currentFilePath={currentWorkflowFilePath}
+            currentAddress={displayedViewAddress}
             hasActiveTerminal={recentWorkflowHasActiveTerminal}
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
@@ -1288,11 +1285,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
       {/* Delete workflow history confirmation modal */}
       <DeleteConfirmModal
-        isOpen={pendingDeletePath !== null}
+        isOpen={pendingDeleteAddress !== null}
         onCancel={handleRemoveWorkflowCancel}
         onConfirm={handleRemoveWorkflowConfirm}
         title="Delete Workflow History"
-        message={`Remove "${pendingDeletePath ? getWorkflowNameFromPath(pendingDeletePath) : ""}" from history?`}
+        message={`Remove "${pendingDeleteAddress ? pendingDeleteAddress.workflowKey : ""}" from history?`}
         detail="This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
       />
     </div>

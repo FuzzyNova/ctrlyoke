@@ -660,6 +660,8 @@ export class WorkflowInstance {
     );
     return {
       id: this.id,
+      workflowKey: state.workflowKey,
+      runRef: state.runRef,
       workflowName: this.workflowName || state.workflowName || "",
       filePath: this.filePath,
       workingFilePath: state.workingFilePath || undefined,

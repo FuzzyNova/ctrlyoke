@@ -590,7 +590,7 @@ suite("WebviewSettingsSync", () => {
   // ────────────────────────────────────────────────────────────────────────────
   // Regression: LOAD_WORKFLOW must repopulate WorkflowPropertiesPanel
   //
-  // FILE_SELECTED (emitted by loadWorkflowForClient) triggers applyWorkflowChange()
+  // RUN_VIEW_LOADED (emitted by loadRunViewForClient) triggers applyWorkflowChange()
   // in the webview which calls clearWorkflowProperties().  Without a follow-up
   // sendWorkflowPropertiesToSettings() call the properties panel stays blank after
   // switching to an existing workflow via the recent workflows dropdown.
@@ -609,7 +609,7 @@ suite("WebviewSettingsSync", () => {
       } as any;
 
       const mockOrchestrator = {
-        loadWorkflowForClient: async () => {
+        loadRunViewForClient: async () => {
           /* no-op */
         },
       } as any;
@@ -625,8 +625,11 @@ suite("WebviewSettingsSync", () => {
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath:
-          "/workspace/.ctrlyoke/.runs/my-workflow/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json",
+        address: {
+          workflowKey: "my-workflow" as never,
+          kind: "run",
+          runRef: "run-2026-01-01T00-00-00-000Z" as never,
+        },
       });
 
       assert.ok(
@@ -661,8 +664,11 @@ suite("WebviewSettingsSync", () => {
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath:
-          "/workspace/.ctrlyoke/.runs/my-workflow/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json",
+        address: {
+          workflowKey: "my-workflow" as never,
+          kind: "run",
+          runRef: "run-2026-01-01T00-00-00-000Z" as never,
+        },
       });
 
       assert.strictEqual(

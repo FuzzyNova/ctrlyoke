@@ -43,6 +43,8 @@ import type {
   UserHookConfig,
   WorkflowStep,
   WorkflowViewAddress,
+  WorkflowKey,
+  RunRef,
   WorkingFile,
 } from "./CtrlYokeTypes";
 import type {
@@ -781,8 +783,8 @@ export interface OpenNewWorkflowModalMessage {
 export interface RecentWorkflowsMessage {
   type: typeof MESSAGE_TYPES.RECENT_WORKFLOWS;
   workflows: Array<{
+    address: WorkflowViewAddress;
     workflowName: string;
-    filePath: string;
     executionState: string;
     lastModifiedAt?: number;
     startedAt?: number;
@@ -796,12 +798,14 @@ export interface RecentWorkflowsMessage {
  * Reference to a workflow that currently has at least one running PTY session.
  * Broadcast globally so every client (panel + browser tabs) can render the
  * dropdown terminal icon for any workflow, not just the one it is viewing.
- * `workingFilePath` lets recent-list rows (keyed by working file path) match
- * without depending on the client having previously hydrated that workflow.
+ * The stable execution address lets recent-list rows match without relying on
+ * a mutable working-file path or a client having hydrated the workflow.
  */
 export interface ActiveTerminalWorkflowRef {
+  /** In-memory identity used only to attach to an existing PTY session. */
   workflowId: string;
-  workingFilePath?: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
 }
 
 /**

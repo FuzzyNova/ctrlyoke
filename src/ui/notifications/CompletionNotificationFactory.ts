@@ -13,7 +13,11 @@ import {
   type StepStatus,
   HOOK_EVENT_METADATA,
 } from "../../types/DashboardConstants";
-import type { WorkflowSummary, WorkflowStep } from "../../types/CtrlYokeTypes";
+import type {
+  WorkflowRunAddress,
+  WorkflowSummary,
+  WorkflowStep,
+} from "../../types/CtrlYokeTypes";
 import type { CtrlYokeNotificationSettings } from "../../types/CtrlYokeSettings";
 
 export interface CtrlYokeNotificationEvent {
@@ -21,6 +25,8 @@ export interface CtrlYokeNotificationEvent {
   kind: NotificationKind;
   severity: CompletionNotificationSeverity;
   workflowId: string;
+  /** Stable execution target when the event came from a promoted run. */
+  address?: WorkflowRunAddress;
   stepIndex?: number;
   title: string;
   body: string;
@@ -74,6 +80,13 @@ interface PromptNotificationInput {
   };
   settings: CtrlYokeNotificationSettings;
   url?: string;
+}
+
+/** Uses durable storage identity whenever an execution has been promoted to a run. */
+function notificationIdentity(summary: WorkflowSummary): string {
+  return summary.workflowKey && summary.runRef
+    ? `${summary.workflowKey}:${summary.runRef}`
+    : summary.id;
 }
 
 export function buildTestNotificationEvent(
@@ -137,15 +150,19 @@ export function buildWorkflowCompletionNotification(
   const body = buildWorkflowBody(summary, settings, state);
 
   return {
-    id: `${summary.id}:workflow:${state}`,
+    id: `${notificationIdentity(summary)}:workflow:${state}`,
     kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
     severity: isFailure
       ? COMPLETION_NOTIFICATION_SEVERITY.ERROR
       : COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: summary.id,
+    address:
+      summary.workflowKey && summary.runRef
+        ? { workflowKey: summary.workflowKey, runRef: summary.runRef }
+        : undefined,
     title,
     body,
-    tag: `ctrlyoke-workflow-${summary.id}`,
+    tag: `ctrlyoke-workflow-${notificationIdentity(summary)}`,
     url,
   };
 }
@@ -185,16 +202,20 @@ export function buildPromptCompletionNotification(
   );
 
   return {
-    id: `${summary.id}:prompt:${stepIndex}:${stepStatus.state}`,
+    id: `${notificationIdentity(summary)}:prompt:${stepIndex}:${stepStatus.state}`,
     kind: COMPLETION_NOTIFICATION_KINDS.PROMPT,
     severity: isFailure
       ? COMPLETION_NOTIFICATION_SEVERITY.ERROR
       : COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: summary.id,
+    address:
+      summary.workflowKey && summary.runRef
+        ? { workflowKey: summary.workflowKey, runRef: summary.runRef }
+        : undefined,
     stepIndex,
     title,
     body,
-    tag: `ctrlyoke-prompt-${summary.id}-${stepIndex}`,
+    tag: `ctrlyoke-prompt-${notificationIdentity(summary)}-${stepIndex}`,
     url,
   };
 }

@@ -311,15 +311,15 @@ describe("setRecentWorkflows", () => {
   it("replaces recent workflows list", () => {
     store().setRecentWorkflows([
       {
+        address: { workflowKey: "wf1" as never, kind: "draft" },
         workflowName: "wf1",
-        filePath: "/path/wf1.yaml",
         executionState: "idle",
         lastModifiedAt: 1000,
         isFavorite: true,
       },
       {
+        address: { workflowKey: "wf2" as never, kind: "draft" },
         workflowName: "wf2",
-        filePath: "/path/wf2.yaml",
         executionState: "completed",
         lastModifiedAt: 900,
       },

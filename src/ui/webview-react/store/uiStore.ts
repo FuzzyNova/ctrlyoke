@@ -68,8 +68,8 @@ export interface FileBrowserRequest {
  * Recent workflow entry
  */
 export interface RecentWorkflow {
+  address: WorkflowViewAddress;
   workflowName: string;
-  filePath: string;
   executionState: string;
   lastModifiedAt?: number;
   startedAt?: number;

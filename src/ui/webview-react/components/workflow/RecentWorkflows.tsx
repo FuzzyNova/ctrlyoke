@@ -9,15 +9,16 @@ import { HarnessIcon } from "../shared/HarnessIcon";
 import { VirtualizedDropdownList } from "../shared";
 import { HARNESS_INFO } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
 interface RecentWorkflowsProps {
   workflows: RecentWorkflow[];
-  currentFilePath: string | null;
+  currentAddress: WorkflowViewAddress | null;
   hasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
-  onSelect: (filePath: string) => void;
+  onSelect: (address: WorkflowViewAddress) => void;
   onClearHistory: () => void;
-  onRemove?: (filePath: string) => void;
-  onToggleFavorite?: (filePath: string) => void;
+  onRemove?: (address: WorkflowViewAddress) => void;
+  onToggleFavorite?: (address: WorkflowViewAddress) => void;
   onNewWorkflow?: () => void;
   onClose?: () => void;
   showCloseButton?: boolean;
@@ -36,35 +37,40 @@ interface RecentWorkflowsProps {
 
 interface WorkflowRowProps {
   workflow: RecentWorkflow;
-  currentFilePath: string | null;
+  currentAddress: WorkflowViewAddress | null;
   hasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
   isNarrow: boolean;
-  onSelect: (filePath: string) => void;
-  onToggleFavorite?: (filePath: string) => void;
-  onRemove?: (filePath: string) => void;
+  onSelect: (address: WorkflowViewAddress) => void;
+  onToggleFavorite?: (address: WorkflowViewAddress) => void;
+  onRemove?: (address: WorkflowViewAddress) => void;
 }
 
 /** Compare workflow paths across VS Code and hosted-client path formats. */
-export function areWorkflowPathsEqual(
-  left: string | null | undefined,
-  right: string | null | undefined
+export function areWorkflowAddressesEqual(
+  left: WorkflowViewAddress | null | undefined,
+  right: WorkflowViewAddress | null | undefined
 ): boolean {
-  if (typeof left !== "string" || typeof right !== "string") return false;
-  if (!left || !right) return false;
-
-  return left.trim().replace(/\\/g, "/") === right.trim().replace(/\\/g, "/");
+  return (
+    !!left &&
+    !!right &&
+    left.workflowKey === right.workflowKey &&
+    left.kind === right.kind &&
+    (left.kind !== "run" ||
+      right.kind !== "run" ||
+      left.runRef === right.runRef)
+  );
 }
 
 const WorkflowRow: React.FC<WorkflowRowProps> = ({
   workflow,
-  currentFilePath,
+  currentAddress,
   hasActiveTerminal,
   isNarrow,
   onSelect,
   onToggleFavorite,
   onRemove,
 }) => {
-  const isCurrent = areWorkflowPathsEqual(workflow.filePath, currentFilePath);
+  const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
     typeof workflow.totalSteps === "number" && workflow.totalSteps > 0;
@@ -74,7 +80,7 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
 
   return (
     <div
-      title={workflow.filePath}
+      title={workflow.address.workflowKey}
       className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
@@ -83,7 +89,7 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
     >
       <button
         type="button"
-        onClick={() => onSelect(workflow.filePath)}
+        onClick={() => onSelect(workflow.address)}
         className={`workflow-row-primary workflow-row-primary-recent min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${isNarrow ? "workflow-row-primary-narrow" : ""}`}
       >
         {/* Harness icon */}
@@ -166,7 +172,7 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
           }
           onClick={(e) => {
             e.stopPropagation();
-            onToggleFavorite(workflow.filePath);
+            onToggleFavorite(workflow.address);
           }}
           className={`flex-shrink-0 p-0.5 rounded transition-colors ${
             workflow.isFavorite
@@ -188,7 +194,7 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
           aria-label="Remove from history"
           onClick={(e) => {
             e.stopPropagation();
-            onRemove(workflow.filePath);
+            onRemove(workflow.address);
           }}
           className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
         >
@@ -213,7 +219,7 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
  */
 export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   workflows,
-  currentFilePath,
+  currentAddress,
   hasActiveTerminal,
   onSelect,
   onClearHistory,
@@ -278,12 +284,14 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
           // the default estimated height in VirtualizedDropdownList is fine.
           <VirtualizedDropdownList
             items={workflows}
-            getItemKey={(workflow) => workflow.filePath}
+            getItemKey={(workflow) =>
+              `${workflow.address.workflowKey}:${workflow.address.kind}:${workflow.address.kind === "run" ? workflow.address.runRef : "draft"}`
+            }
             scrollContainerRef={scrollContainerRef}
             renderItem={(workflow) => (
               <WorkflowRow
                 workflow={workflow}
-                currentFilePath={currentFilePath}
+                currentAddress={currentAddress}
                 hasActiveTerminal={hasActiveTerminal}
                 isNarrow={isNarrow}
                 onSelect={onSelect}
