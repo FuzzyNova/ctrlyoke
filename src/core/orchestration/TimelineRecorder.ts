@@ -269,6 +269,29 @@ export class TimelineRecorder {
     );
   }
 
+  /**
+   * Reopen an existing run for an explicit continuation.  Unlike
+   * {@link initializeRunAt}, this deliberately retains the run's identity and
+   * append-only timeline counters: a continuation is another execution of the
+   * same durable run, not a new run.
+   */
+  async reopenRun(
+    manifestPath: string,
+    executionState: ExecutionState,
+    definitionRevision: number,
+    stepCount: number,
+    timestampMs: number = Date.now()
+  ): Promise<WorkflowRunManifest> {
+    return this.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      completedAt: undefined,
+      executionState,
+      definitionRevision,
+      stepCount,
+      lastUpdatedAt: Math.max(manifest.lastUpdatedAt, timestampMs),
+    }));
+  }
+
   async flushPendingOperations(manifestPath?: string): Promise<void> {
     if (manifestPath) {
       await (TimelineRecorder.manifestOperationQueues.get(

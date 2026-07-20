@@ -666,6 +666,96 @@ export class WorkingFileManager {
   }
 
   /**
+   * Appends a new, runtime-free tail to one explicitly addressed promoted run.
+   * The descriptor lock is acquired before the definition lock, matching the
+   * other addressed definition transactions.  Existing steps are copied
+   * untouched so their execution/session metadata remains associated with the
+   * historical prefix.
+   */
+  public static async appendTailToRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    tail: WorkflowStep[],
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    allowInterruptedRun: boolean = false
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    if (tail.length === 0) {
+      throw new Error("Append continuation requires at least one tail step");
+    }
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    return lineageRepository.mutateDescriptorAtRevision(
+      workspaceFolderPath,
+      workflowKey,
+      expectedDescriptorRevision,
+      async (descriptor) => {
+        if (descriptor.pendingEdit) {
+          throw new Error(
+            "Cannot append while this workflow has a draft or pending continuation"
+          );
+        }
+        return withFileLock(runFilePath, async () => {
+          const source = await readWorkingFileFromDisk(runFilePath);
+          const sourceRevision = source.definitionRevision ?? 1;
+          if (sourceRevision !== expectedDefinitionRevision) {
+            throw new Error(
+              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
+            );
+          }
+          const sourceState = source._runtime?.executionState;
+          if (
+            !allowInterruptedRun &&
+            (sourceState === EXECUTION_STATES.RUNNING ||
+              sourceState === EXECUTION_STATES.PAUSING ||
+              sourceState === EXECUTION_STATES.CANCELLING)
+          ) {
+            throw new Error(
+              `Cannot append while run is in state ${sourceState}`
+            );
+          }
+
+          const now = Date.now();
+          const workingFile: WorkingFile = {
+            ...source,
+            lastModifiedAt: now,
+            definitionRevision: sourceRevision + 1,
+            // Preserve the exact existing prefix, including `_runtime`; only
+            // incoming tail definitions are sanitized and runtime-free.
+            steps: [
+              ...(source.steps ?? []),
+              ...tail.map((step) =>
+                stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+              ),
+            ],
+          };
+          await writeWorkingFileAtomicTo(runFilePath, workingFile, {
+            skipLock: true,
+          });
+          return {
+            value: {
+              workingFile,
+              definitionRevision: workingFile.definitionRevision,
+              descriptorRevision: expectedDescriptorRevision + 1,
+            },
+            descriptor,
+          };
+        });
+      }
+    );
+  }
+
+  /**
    * Restores a durable pre-rewind definition. This is deliberately the sole
    * rollback path: the in-memory runtime archive is not crash-safe and must
    * never be used to reconstruct a discarded suffix.

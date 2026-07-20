@@ -1614,13 +1614,6 @@ suite("WorkflowInstance executeSeededRun", () => {
       ) => {
         executionHistoryFilePath = historyFilePath;
       };
-      (instance.getOutputHistoryManager() as any).getLatestHistoryFilePath =
-        async () => {
-          throw new Error(
-            "executeSeededRun must use the seeded run's exact manifest path"
-          );
-        };
-
       await instance.executeSeededRun(seeded, workflowKey);
 
       assert.strictEqual(

@@ -460,6 +460,26 @@ export class OutputHistoryManager {
     }
   }
 
+  /** Reopen one known manifest for an explicit same-run continuation. */
+  async reopenRun(
+    historyFilePath: string,
+    executionState: ExecutionState,
+    definitionRevision: number,
+    stepCount: number
+  ): Promise<void> {
+    if (!historyFilePath) {
+      throw new Error("Cannot reopen a run without a manifest path");
+    }
+    await this.streamingBuffer.flush(historyFilePath);
+    await this.timelineRecorder.reopenRun(
+      historyFilePath,
+      executionState,
+      definitionRevision,
+      stepCount
+    );
+    this.refreshSearchIndex();
+  }
+
   /** Finalize the newest still-running run after startup detects a dead owner. */
   async recoverInterruptedRun(
     workflowKey: WorkflowKey,
@@ -522,22 +542,6 @@ export class OutputHistoryManager {
     } catch {
       return [];
     }
-  }
-
-  /**
-   * Get the most recent history file path for a workflow.
-   * Returns empty string if no run exists for this workflow.
-   * Used for append-to-completed scenarios where we want to continue
-   * writing to the existing run instead of creating a new one.
-   */
-  async getLatestHistoryFilePath(workflowKey: WorkflowKey): Promise<string> {
-    const runs = await this.getRunsForWorkflow(workflowKey);
-    if (runs.length === 0) {
-      return "";
-    }
-
-    // runs[0] is the most recent (sorted newest first)
-    return this.getHistoryFilePath(workflowKey, runs[0]);
   }
 
   /**
@@ -749,8 +753,8 @@ export class OutputHistoryManager {
    * ordering of getRunsForWorkflow(). Disk-only: removes the one run directory,
    * no working file changes. Returns the number of runs remaining afterward.
    *
-   * Because continue/append always reuse getLatestHistoryFilePath() (newest run),
-   * deleting an accidental newest run lets the prior run resume seamlessly.
+   * Continuation operations are explicitly addressed by RunRef, so deletion
+   * never retargets a later continuation to a different run.
    */
   async deleteRun(workflowKey: WorkflowKey, runIndex: number): Promise<number> {
     const runs = await this.getRunsForWorkflow(workflowKey);

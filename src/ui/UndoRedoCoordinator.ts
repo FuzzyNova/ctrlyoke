@@ -317,10 +317,11 @@ export class UndoRedoCoordinator {
     try {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return "";
-      const outputHistoryManager = orchestrator.getOutputHistoryManager();
-      const workflowKey = orchestrator.getQueueState(clientId).workflowKey;
-      if (!workflowKey) return "";
-      return await outputHistoryManager.getLatestHistoryFilePath(workflowKey);
+      const address = orchestrator.getViewAddress(clientId);
+      if (!address || address.kind !== "run") return "";
+      return orchestrator
+        .getOutputHistoryManager()
+        .getHistoryFilePath(address.workflowKey, address.runRef);
     } catch {
       return "";
     }

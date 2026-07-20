@@ -2253,6 +2253,193 @@ export class WorkflowOrchestrator {
     return { kind: "rewind", ...result };
   }
 
+  /**
+   * Explicit same-run append.  The requested view, both optimistic revisions,
+   * the runner lock, and the run's persisted execution state are all checked
+   * before the instance is allowed to bind this run for execution.
+   */
+  async appendAndContinueAtRun(
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    tail: WorkflowStep[],
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
+    const { workspaceRoot, activeInstance, allowInterruptedRun } =
+      await this.validateExplicitContinuationTarget(
+        address,
+        expectedDefinitionRevision,
+        expectedDescriptorRevision,
+        clientId
+      );
+    const appended = await WorkingFileManager.appendTailToRun(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef,
+      tail,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      this.lineageRepository,
+      allowInterruptedRun
+    );
+    const instance = activeInstance ?? this.buildWorkflowInstance();
+    await instance.executeContinuationAtRun(
+      address.workflowKey,
+      address.runRef,
+      appended.definitionRevision
+    );
+    await this.invalidateRunViews(address.workflowKey, address.runRef);
+    return {
+      definitionRevision: appended.definitionRevision,
+      descriptorRevision: appended.descriptorRevision,
+    };
+  }
+
+  /** Continue an unchanged addressed run; no target is inferred from recency. */
+  async continueAtRun(
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    const { activeInstance } = await this.validateExplicitContinuationTarget(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId
+    );
+    const instance = activeInstance ?? this.buildWorkflowInstance();
+    await instance.executeContinuationAtRun(
+      address.workflowKey,
+      address.runRef,
+      expectedDefinitionRevision
+    );
+    await this.invalidateRunViews(address.workflowKey, address.runRef);
+  }
+
+  private async validateExplicitContinuationTarget(
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string
+  ): Promise<{
+    workspaceRoot: string;
+    activeInstance: WorkflowInstance | undefined;
+    allowInterruptedRun: boolean;
+  }> {
+    const viewed = this.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== "run" ||
+      viewed.workflowKey !== address.workflowKey ||
+      viewed.runRef !== address.runRef
+    ) {
+      throw new Error(
+        "Continuation no longer targets this client's viewed run"
+      );
+    }
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+
+    const descriptor = await this.lineageRepository.readDescriptor(
+      workspaceRoot,
+      address.workflowKey
+    );
+    if (descriptor.revision !== expectedDescriptorRevision) {
+      throw new Error(
+        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
+      );
+    }
+    if (descriptor.pendingEdit) {
+      throw new Error("This workflow has a draft or pending continuation");
+    }
+
+    const activeInstance = [...this.instances.values()].find((instance) => {
+      const state = instance.getQueueState();
+      return (
+        state.workflowKey === address.workflowKey &&
+        (state.status === EXECUTION_STATES.RUNNING ||
+          state.status === EXECUTION_STATES.PAUSING ||
+          state.status === EXECUTION_STATES.PAUSED ||
+          state.status === EXECUTION_STATES.CANCELLING)
+      );
+    });
+    if (
+      activeInstance &&
+      activeInstance.getExecutionRunRef() !== address.runRef
+    ) {
+      throw new Error("Another run in this workflow lineage is executing");
+    }
+    if (
+      activeInstance &&
+      activeInstance.getQueueState().status !== EXECUTION_STATES.PAUSED
+    ) {
+      throw new Error("Cannot continue while this run is actively executing");
+    }
+
+    const lock = await WorkflowLockManager.readLock(
+      workspaceRoot,
+      address.workflowKey
+    );
+    const lockStatus = await WorkflowLockManager.checkLock(
+      workspaceRoot,
+      address.workflowKey
+    );
+    if (
+      lock &&
+      lockStatus !== LOCK_STATUS.STALE &&
+      lock.runRef !== address.runRef
+    ) {
+      throw new Error("Another run in this workflow lineage is executing");
+    }
+    if (lock && lockStatus !== LOCK_STATUS.STALE && !activeInstance) {
+      throw new Error("The requested run is executing in another process");
+    }
+
+    const target = JSON.parse(
+      await fs.promises.readFile(
+        WorkflowPaths.runFilePath(
+          workspaceRoot,
+          address.workflowKey,
+          address.runRef
+        ),
+        "utf8"
+      )
+    ) as WorkingFile;
+    if ((target.definitionRevision ?? 1) !== expectedDefinitionRevision) {
+      throw new Error(
+        `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${target.definitionRevision ?? 1}`
+      );
+    }
+    const targetState =
+      target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
+    const activeTarget =
+      activeInstance?.getExecutionRunRef() === address.runRef;
+    const interruptedRun =
+      targetState === EXECUTION_STATES.RUNNING &&
+      !activeTarget &&
+      (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
+    if (
+      targetState === EXECUTION_STATES.PAUSING ||
+      targetState === EXECUTION_STATES.CANCELLING ||
+      (targetState === EXECUTION_STATES.RUNNING &&
+        !activeTarget &&
+        !interruptedRun)
+    ) {
+      throw new Error(`Cannot continue while run is in state ${targetState}`);
+    }
+    if (targetState === EXECUTION_STATES.PAUSED && !activeTarget) {
+      throw new Error(
+        "Cannot continue a paused run without its live execution owner"
+      );
+    }
+    return {
+      workspaceRoot,
+      activeInstance,
+      allowInterruptedRun: interruptedRun,
+    };
+  }
+
   /** One lifecycle operation shared by dashboard actions and startup recovery. */
   async discardContinuationAtRun(
     address: { workflowKey: WorkflowKey; runRef: RunRef },

@@ -730,6 +730,94 @@ suite("WorkingFileManager", () => {
     });
   });
 
+  suite("appendTailToRun", () => {
+    let workspace: string;
+
+    afterEach(async () => {
+      if (workspace) {
+        await fs
+          .rm(workspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    test("preserves the exact executed prefix and appends only a runtime-free tail", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-append-"));
+      const draft = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await draft.createWorkingFile(
+        "append-source",
+        [
+          {
+            prompt: "prefix",
+            _runtime: {
+              sessionId: "session-prefix",
+              startedAt: 1,
+              completedAt: 2,
+            },
+          },
+        ],
+        workspace,
+        "Append source"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => [
+        {
+          prompt: "prefix",
+          _runtime: {
+            sessionId: "session-prefix",
+            startedAt: 1,
+            completedAt: 2,
+          },
+        },
+      ];
+      access.getCurrentIndex = () => 1;
+      access.getStatus = () => EXECUTION_STATES.COMPLETED;
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const before = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf8")
+      ) as WorkingFile;
+
+      const appended = await WorkingFileManager.appendTailToRun(
+        workspace,
+        workflowKey,
+        promoted.runRef,
+        [
+          {
+            prompt: "new tail",
+            _runtime: { sessionId: "must-not-copy", startedAt: 1 },
+          },
+        ],
+        1,
+        2
+      );
+
+      const after = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(after.steps![0], before.steps![0]);
+      assert.strictEqual(after.steps!.length, 2);
+      assert.strictEqual((after.steps![1]! as PromptStep).prompt, "new tail");
+      assert.strictEqual(after.steps![1]!._runtime, undefined);
+      assert.strictEqual(appended.definitionRevision, 2);
+      await assert.rejects(
+        () =>
+          WorkingFileManager.appendTailToRun(
+            workspace,
+            workflowKey,
+            promoted.runRef,
+            [{ prompt: "conflict" }],
+            1,
+            3
+          ),
+        /Definition revision conflict/
+      );
+    });
+  });
+
   suite("seedDraftFromRun", () => {
     let tmpWorkspace: string;
 

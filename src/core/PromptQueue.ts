@@ -14,6 +14,7 @@ import {
   type RunRef,
 } from "../types/CtrlYokeTypes";
 import {
+  FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
 } from "../types/DashboardConstants";
@@ -1424,6 +1425,29 @@ export class PromptQueue {
    */
   public getFinalStepRuntime(): FinalStepRuntimeState | undefined {
     return this.finalStepRuntime ? { ...this.finalStepRuntime } : undefined;
+  }
+
+  /**
+   * Persist the next final-step loop number before an explicit continuation
+   * reaches the final phase.  The response/session array is deliberately
+   * retained: it belongs to the preserved prefix of this run.
+   */
+  public async prepareFinalStepContinuation(
+    nextLoopIndex: number
+  ): Promise<void> {
+    if (
+      !this.finalStepRuntime ||
+      nextLoopIndex <= this.finalStepRuntime.loopCount
+    ) {
+      return;
+    }
+    this.finalStepRuntime = {
+      ...this.finalStepRuntime,
+      phase: FINAL_STEP_PHASES.QUEUE,
+      loopCount: nextLoopIndex,
+      status: STEP_STATUS.COMPLETED,
+    };
+    await this.updateWorkingFile();
   }
 
   /**

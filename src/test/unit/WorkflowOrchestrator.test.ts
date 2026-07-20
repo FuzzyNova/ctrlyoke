@@ -535,3 +535,208 @@ suite("WorkflowOrchestrator addressed start position", () => {
     }
   });
 });
+
+suite("WorkflowOrchestrator explicit append and continue", () => {
+  async function createRun(workspace: string): Promise<{
+    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
+    runRef: import("../../types/CtrlYokeTypes").RunRef;
+    workingFilePath: string;
+  }> {
+    const manager = new WorkingFileManager({
+      getWorkingFilePath: () => undefined,
+      getSteps: () => [{ prompt: "prefix" }],
+      getCurrentIndex: () => 1,
+      getStatus: () => EXECUTION_STATES.COMPLETED,
+      getDefinitionRevision: () => 1,
+      setDefinitionRevision: () => undefined,
+      getWorkflowName: () => "Continuation",
+      mergeDiskSteps: () => [],
+      emitStateChange: () => undefined,
+      getFinalStepRuntime: () => undefined,
+      updateWorkflowProperty: () => undefined,
+    });
+    const { workflowKey } = await manager.createWorkingFile(
+      "continuation",
+      [{ prompt: "prefix" }],
+      workspace,
+      "Continuation"
+    );
+    const promoted = await manager.promoteToNewRun(
+      workspace,
+      workflowKey,
+      Date.now()
+    );
+    return { workflowKey, ...promoted };
+  }
+
+  function createHarness(
+    workspace: string,
+    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef,
+    instance?: any
+  ): { orchestrator: WorkflowOrchestrator; internal: any } {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.instances = new Map(instance ? [["active", instance]] : []);
+    internal.viewAddressRegistry = new Map([
+      [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef }],
+    ]);
+    internal.viewMessageSinks = new Map();
+    internal.lineageRepository = new WorkflowLineageRepository();
+    internal.invalidateRunViews = async () => undefined;
+    return { orchestrator, internal };
+  }
+
+  test("targets a historical run explicitly rather than mutating the latest run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-explicit-append-")
+    );
+    try {
+      const historical = await createRun(workspace);
+      const latest = await WorkingFileManager.seedNewRun(
+        workspace,
+        historical.workflowKey,
+        historical.runRef
+      );
+      const latestBefore = await fs.readFile(latest.workingFilePath, "utf8");
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        historical.workflowKey,
+        historical.runRef
+      );
+      let executed: [string, string, number] | undefined;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async (...args: [string, string, number]) => {
+          executed = args;
+        },
+      });
+
+      await orchestrator.appendAndContinueAtRun(
+        { workflowKey: historical.workflowKey, runRef: historical.runRef },
+        [{ prompt: "tail" }],
+        1,
+        3,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(executed, [
+        historical.workflowKey,
+        historical.runRef,
+        2,
+      ]);
+      assert.strictEqual(
+        await fs.readFile(latest.workingFilePath, "utf8"),
+        latestBefore
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("permits paused continuation only when the live owner targets the same run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-paused-continue-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const paused = {
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          status: EXECUTION_STATES.PAUSED,
+        }),
+        getExecutionRunRef: () => run.runRef,
+        executeContinuationAtRun: async () => undefined,
+      };
+      const file = JSON.parse(await fs.readFile(run.workingFilePath, "utf8"));
+      file._runtime.executionState = EXECUTION_STATES.PAUSED;
+      await fs.writeFile(run.workingFilePath, JSON.stringify(file), "utf8");
+      const { orchestrator } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        paused
+      );
+
+      await assert.doesNotReject(() =>
+        orchestrator.continueAtRun(
+          { workflowKey: run.workflowKey, runRef: run.runRef },
+          1,
+          2,
+          PANEL_CLIENT_ID
+        )
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a continuation while another run in the lineage owns execution", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-busy-continue-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const busy = {
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          status: EXECUTION_STATES.PAUSED,
+        }),
+        getExecutionRunRef: () => "run-other",
+      };
+      const { orchestrator } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        busy
+      );
+      await assert.rejects(
+        () =>
+          orchestrator.continueAtRun(
+            { workflowKey: run.workflowKey, runRef: run.runRef },
+            1,
+            2,
+            PANEL_CLIENT_ID
+          ),
+        /Another run in this workflow lineage is executing/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("allows an interrupted running file to be rebound only through explicit continuation", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-crash-continue-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const file = JSON.parse(await fs.readFile(run.workingFilePath, "utf8"));
+      file._runtime.executionState = EXECUTION_STATES.RUNNING;
+      await fs.writeFile(run.workingFilePath, JSON.stringify(file), "utf8");
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let called = false;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async () => {
+          called = true;
+        },
+      });
+
+      await orchestrator.continueAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        1,
+        2,
+        PANEL_CLIENT_ID
+      );
+      assert.strictEqual(called, true);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+});

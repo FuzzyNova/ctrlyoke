@@ -123,4 +123,31 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.completedAt, 200);
     assert.strictEqual(manifest.lastUpdatedAt, 200);
   });
+
+  test("reopens a completed manifest without resetting its durable identity or event counters", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "first"),
+      createStatusEventDraft(111, "second"),
+    ]);
+    await recorder.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      completedAt: 200,
+      executionState: EXECUTION_STATES.COMPLETED,
+      definitionRevision: 2,
+      stepCount: 2,
+      lastUpdatedAt: 200,
+    }));
+
+    await recorder.reopenRun(manifestPath, EXECUTION_STATES.RUNNING, 3, 4, 210);
+
+    const manifest = await recorder.readManifest(manifestPath);
+    assert.strictEqual(manifest.startedAt, 100);
+    assert.strictEqual(manifest.completedAt, undefined);
+    assert.strictEqual(manifest.executionState, EXECUTION_STATES.RUNNING);
+    assert.strictEqual(manifest.definitionRevision, 3);
+    assert.strictEqual(manifest.stepCount, 4);
+    assert.strictEqual(manifest.eventCount, 2);
+    assert.strictEqual(manifest.nextSequence, 3);
+    assert.strictEqual(manifest.lastUpdatedAt, 210);
+  });
 });

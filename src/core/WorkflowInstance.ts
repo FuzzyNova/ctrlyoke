@@ -941,6 +941,69 @@ export class WorkflowInstance {
   }
 
   /**
+   * Bind and execute one already-promoted run as an explicit continuation.
+   * Callers must have already validated that this is the lineage's permitted
+   * execution target; this method never discovers a "latest" run.
+   */
+  async executeContinuationAtRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision: number
+  ): Promise<void> {
+    const workspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+    const workingFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
+
+    // Binding is intentionally done only here, as part of an explicit action.
+    await this.loadWorkingFile(workingFilePath);
+    const state = this.promptQueue.getState();
+    if (state.workflowKey !== workflowKey || state.runRef !== runRef) {
+      throw new Error("Continuation target did not bind to the requested run");
+    }
+    if (state.definitionRevision !== expectedDefinitionRevision) {
+      throw new Error(
+        `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${state.definitionRevision}`
+      );
+    }
+
+    const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
+      workflowKey,
+      runRef
+    );
+    await this.prepareFinalStepContinuation(historyFilePath);
+    // Commit before reopening: a newer definition must have its immutable
+    // snapshot in events.jsonl before any continuation output can be written.
+    await this.outputHistoryManager.commitDefinitionRevision(
+      historyFilePath,
+      this.getDefinitionRevisionContext()
+    );
+    await this.outputHistoryManager.reopenRun(
+      historyFilePath,
+      EXECUTION_STATES.RUNNING,
+      state.definitionRevision,
+      state.steps.length
+    );
+
+    if (this.getAuthoritativeExecutionState() === EXECUTION_STATES.PAUSED) {
+      const targetRunIndices = await this.computeTargetRunIndices(
+        historyFilePath,
+        true
+      );
+      await this.resume(historyFilePath, targetRunIndices);
+      return;
+    }
+
+    await this.executeLoadedPromptFile(undefined, true, historyFilePath);
+  }
+
+  /**
    * Execute the currently loaded prompt file.
    */
   async executeLoadedPromptFile(
@@ -1165,10 +1228,18 @@ export class WorkflowInstance {
           }
         }
       } else if (isAppendContinuation && workflowKey) {
-        historyFilePath =
-          await this.outputHistoryManager.getLatestHistoryFilePath(workflowKey);
+        const runRef = currentQueueState.runRef;
+        if (!runRef) {
+          throw new Error(
+            "Append continuation requires an explicit promoted run"
+          );
+        }
+        historyFilePath = this.outputHistoryManager.getHistoryFilePath(
+          workflowKey,
+          runRef
+        );
         Log.debug(
-          `🟢 [APPEND-DEBUG] Reusing existing history file for append continuation: ${historyFilePath}`
+          `🟢 [APPEND-DEBUG] Reusing explicit history file for append continuation: ${historyFilePath}`
         );
 
         // Cache historical step outputs in completedStepOutputs so they can be
@@ -1234,17 +1305,27 @@ export class WorkflowInstance {
           }
         }
       } else if (continueFromCurrent && workflowKey) {
+        const runRef = currentQueueState.runRef;
+        if (!runRef) {
+          throw new Error("Continuation requires an explicit promoted run");
+        }
         historyFilePath =
           historyFilePath ||
-          (await this.outputHistoryManager.getLatestHistoryFilePath(
-            workflowKey
-          ));
+          this.outputHistoryManager.getHistoryFilePath(workflowKey, runRef);
         Log.debug(
           `🟢 [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
         );
       } else if (isIdleContinuation && workflowKey) {
-        historyFilePath =
-          await this.outputHistoryManager.getLatestHistoryFilePath(workflowKey);
+        const runRef = currentQueueState.runRef;
+        if (!runRef) {
+          throw new Error(
+            "Idle continuation requires an explicit promoted run"
+          );
+        }
+        historyFilePath = this.outputHistoryManager.getHistoryFilePath(
+          workflowKey,
+          runRef
+        );
         Log.debug(
           `🟢 [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
         );
@@ -1317,11 +1398,7 @@ export class WorkflowInstance {
       }
       const targetRunIndices = await this.computeTargetRunIndices(
         historyFilePath,
-        {
-          continueFromCurrent,
-          isAppendContinuation,
-          isIdleContinuation,
-        }
+        continueFromCurrent || isAppendContinuation || isIdleContinuation
       );
       Log.debug(
         `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
@@ -1380,7 +1457,10 @@ export class WorkflowInstance {
   /**
    * Resume execution from paused state.
    */
-  async resume(): Promise<void> {
+  async resume(
+    historyFilePath?: string,
+    targetRunIndices?: Map<string, number>
+  ): Promise<void> {
     // IDLE with currentIndex > 0 = user stopped, then used "set start position" to reposition.
     // Treat as a continuation from the set position so existing outputs are preserved.
     if (
@@ -1425,7 +1505,12 @@ export class WorkflowInstance {
     }
 
     Log.info("▶️ Resuming workflow from paused position");
-    await this.startWorkflowExecution();
+    await this.startWorkflowExecution(
+      undefined,
+      historyFilePath ?? this.activeHistoryFilePath,
+      this.promptQueue.getState().workingFilePath,
+      targetRunIndices
+    );
   }
 
   /**
@@ -2448,17 +2533,9 @@ export class WorkflowInstance {
 
   private async computeTargetRunIndices(
     historyFilePath: string,
-    options: {
-      continueFromCurrent: boolean;
-      isAppendContinuation: boolean;
-      isIdleContinuation: boolean;
-    }
+    isContinuation: boolean
   ): Promise<Map<string, number>> {
-    if (
-      !historyFilePath ||
-      (!options.continueFromCurrent && !options.isIdleContinuation) ||
-      options.isAppendContinuation
-    ) {
+    if (!historyFilePath || !isContinuation) {
       return new Map();
     }
 
@@ -2519,6 +2596,34 @@ export class WorkflowInstance {
       nextRunIndexByTarget.set(key, maxRunIndex + 1);
     }
     return nextRunIndexByTarget;
+  }
+
+  /** Advance a completed final-step loop before it is reached again in this run. */
+  private async prepareFinalStepContinuation(
+    historyFilePath: string
+  ): Promise<void> {
+    const runtime = this.promptQueue.getFinalStepRuntime();
+    if (
+      !runtime ||
+      runtime.phase !== FINAL_STEP_PHASES.FINAL_STEP ||
+      (runtime.status !== STEP_STATUS.COMPLETED &&
+        runtime.status !== STEP_STATUS.SKIPPED)
+    ) {
+      return;
+    }
+    const history =
+      await this.outputHistoryManager.loadHistory(historyFilePath);
+    let maxLoopIndex = runtime.loopCount;
+    for (const entry of history.orderedEntries) {
+      if (
+        entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ) {
+        maxLoopIndex = Math.max(maxLoopIndex, entry.target.loopIndex);
+      }
+    }
+    await this.promptQueue.prepareFinalStepContinuation(maxLoopIndex + 1);
+    this.syncCurrentPromptFileFromQueue();
   }
 
   /**
