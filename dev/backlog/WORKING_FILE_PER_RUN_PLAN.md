@@ -1,205 +1,635 @@
 # Working File Per Run — Run-Scoped Workflow Definitions
 
-Status: proposed (analysis complete, not started)
+Status: **ready for implementation** (source inventory and design review complete; implementation not started)
 
-Constraint: **pre-release, zero backward compatibility.** The design contains no dual-format support, no mirroring, no legacy fallbacks. Existing local data is handled by a throwaway dev migration script (see bottom) that is deleted once the refactor lands.
+Constraint: **pre-release, zero backward compatibility.** The implementation replaces the old layout and contracts outright. It must not ship dual reads, mirrored writes, legacy path fallbacks, or deprecated message/settings aliases. Existing developer data may be converted once with the throwaway script described below.
 
-## Problem
+## Goal
 
-Four user-facing problems share one root cause:
+Make a run the durable unit of workflow definition and output so that:
 
-1. **Steps panel doesn't match the viewed run.** History browsing (`LOAD_RUN_HISTORY` → `OUTPUT_HISTORY_LOADED` → `workflowStore.loadHistoryRun`) swaps only the OutputSection's data source (`historyOutputs` + `uiStore.isViewingHistory`). `WorkflowStepsPanel`, the editor, and every Header control stay bound to the live working file. Step-click → output navigation across runs is best-effort and breaks when step counts differ.
-2. **No way to append to a previous run.** `PromptQueue.restart()` strips `_runtime` from every step (sessionId, responseText, harness, model) before a re-run, so the working file only ever describes the *latest* run. The only durable record of an old run's session IDs is buried in its `events.jsonl` CLI output metadata.
-3. **No way to re-run a historical run as-is (or with a different harness).** The history timeline (`WorkflowTimelineTypes.ts`) stores CLI outputs, status messages, snapshots, and runtime transitions — but **not the workflow definition**. The steps/settings that produced run N are unrecoverable once the working file has been edited or restarted.
-4. **Controls are ambiguous while viewing history.** Save / undo-redo / add-step / run / pause / stop all apply to the single working file, regardless of which run the user is looking at.
+1. the steps, editor, settings, and output always describe the same viewed run;
+2. a completed run can be re-run from its exact definition;
+3. a suffix of any idle run can be rewound, edited, and continued into the same run, preserving the existing “Set step as start position” behavior and resumable harness sessions;
+4. new steps can be appended to an old run without losing its resumable harness sessions;
+5. controls have an explicit run target; and
+6. storage, locks, search, CLI, MCP, recovery, and hosted navigation use stable workflow/run identities rather than reconstructing identity from a mutable file path.
 
-The root cause: **a "run" has no durable identity for its definition.** The working file is a mutable singleton; history runs are output-only.
+## Verified current architecture
 
-## Current architecture (verified inventory)
+- `.ctrlyoke/.working/<slug>-<createdTs>.ctrlyoke.json` is the mutable singleton. `WorkingFileManager` is its only writer.
+- `.ctrlyoke/.history/<workflowId>/run-<timestamp>/manifest.json` and `events.jsonl` store output, but not the definition that produced it. `TimelineRecorder` owns serialized timeline writes.
+- `history.saveOutput` can disable history completely. That is incompatible with a run directory being the persistence unit.
+- `PromptQueue.restart()` strips step `_runtime`; the singleton therefore describes only the newest execution state.
+- `PromptQueue.setStartPosition(k)` intentionally has different run semantics at the boundary: rewinding to `k > 0` clears `_runtime` and results for the suffix, then Continue appends new attempts to the same history run; rewinding to `k === 0` makes the next Run initialize a new history run. This partial-rerun workflow is common and must survive the refactor for latest and historical runs. Verified mechanism: `setStartPosition` archives+strips `_runtime` for `[k, end)`, sets those results `PENDING`, sets `currentIndex = k`, and calls `stateMachine.reset()` (→ `IDLE`); the run boundary is then decided solely by `WorkflowInstance.executeLoadedPromptFile`'s `isIdleContinuation`, which requires `prevQueueState.currentIndex > 0`. So `k > 0` reuses the latest history run and `k === 0` allocates a fresh one.
+- `setStartPosition` is guarded only against `RUNNING`, `PAUSING`, and `CANCELLING`. **`PAUSED` is permitted today**, so pause → rewind → continue is an existing supported flow, not an edge case.
+- `PromptQueue.runtimeArchive` retains the stripped `_runtime` in memory keyed per step, and `syncStepsForUndoRedo` restores from it. It is what makes definition undo after a rewind (or delete/reinsert) recover session metadata rather than silently dropping it.
+- `WorkflowInstance` owns one `PromptQueue`, watcher, execution runtime, and active history file. `WorkflowOrchestrator` owns one shared instance per loaded lineage, but multiple dashboard clients can view that same instance.
+- History selection is client-local today: `LOAD_RUN_HISTORY` returns output only to the requesting client. Rebinding the shared queue during a history switch would leak one client's selection into other clients and could redirect a running executor, watcher, lock, or MCP process to the wrong run.
+- `workingFilePath` is also used by recent-workflow rows, active-terminal matching, completion notifications, save/template export, workspace session recovery, hosted routes, persisted webview selection, undo-record lookup, CLI watch, harness process keys, and `CTRLYOKE_WORKING_FILE`.
+- Run indices are volatile: inserting, pruning, or deleting a run changes the index. Search results and navigation currently persist that volatile index.
+- `CliWatchSession` follows the newest history directory instead of the exact run named by the active CLI lock.
+- Manifest `runId` allocation is count-based. It can reuse a display number after deletion.
+- Run directory names have millisecond precision but creation is not exclusive, so two initializations in the same millisecond can overwrite one directory.
+- The runner-lock write is not a sufficient exclusive-acquire primitive, and heartbeat/release do not prove ownership. A stale process could update or remove a successor's lock.
+- `_runtime.responseText`, script output, and final-step response arrays duplicate timeline data, but the timeline does not yet contain every structured value needed to replace those fields safely.
+- The webview has two unrelated undo systems: zundo for definition edits and timeline `UndoRecord`s for workspace file changes. Both currently resolve through the singleton/current-latest path.
 
-- **Working file**: `.ctrlyoke/.working/<slug>-<createdTs>.ctrlyoke.json`, written only by `WorkingFileManager` (`src/core/WorkingFileManager.ts`).
-- **History**: `.ctrlyoke/.history/<workflowId>/run-<ts>/manifest.json` + `events.jsonl` (`TimelineRecorder`, projected back by `OutputHistoryTimelineAdapter`). New run dir created by `OutputHistoryManager.initializeRun()` from `WorkflowInstance.executeLoadedPromptFile` only for fresh runs; append/resume/idle continuations reuse `getLatestHistoryFilePath()`.
-- **History is optional**: `history.saveOutput` (settings-schema.json) gates all of it (`OutputHistoryManager.isHistoryEnabled()`); `history.maxRuns` prunes oldest run dirs.
-- **responseText duplication**: `WorkflowExecutor` stores each response on `step._runtime.responseText` (and `finalStepRuntime.responseTexts[]`) for priorContext, *and* the same text lands in history as `CliOutput.response`. Prior context (`PriorContextPreviewBuilder`, `CliPromptRuntimeCoordinator`, executor) reads only the in-memory/working-file copy.
-- **Locks**: one `<workflowId>.runner.json` per working file (`WorkflowLockManager.getLockPath` derives it from the working-file basename), heartbeat-based, coordinates extension vs CLI runner.
-- **Sessions/recents**: `WorkspaceSessionManager` and `WorkflowSerializer.getRecentWorkflows` scan `.working/*.ctrlyoke.json` — one entry per working file.
-- **Watching**: `PromptFileWatcher` watches the working file path; `CliWatchSession` follows the *newest* `run-<ts>` dir for CLI-managed workflows.
-- **Undo/redo**: webview temporal store (zundo `pastStates` in `UndoRedoControl`) over step edits, synced to the backend working file. Separate from history `UndoRecord`s (file-change undo).
+## Non-negotiable invariants
 
-## Identity model — untangling `workflowId`
+1. A **workflow lineage** has one stable `workflowKey` and zero or more runs.
+2. A **run** has one stable `RunRef`, one current definition head, an immutable sequence of executed definition revisions, one manifest, and one event log.
+3. At most one run in a lineage executes at a time.
+4. Client view state is independent from execution state. Viewing run N must never rebind an executor running run M.
+5. Every mutation is addressed by `{ workflowKey, runRef | draft }`; run indices are display/navigation conveniences only.
+6. A committed definition revision is immutable, but a run may deliberately advance its definition head in place in two ways: append a tail, or rewind from a start index greater than zero and replace that suffix. Rewinding from step zero always seeds a new run.
+7. `WorkingFileManager` remains the only writer of `workflow.ctrlyoke.json`. `TimelineRecorder` remains the only writer of `manifest.json` and `events.jsonl`.
+8. History is always on. A valid promoted run always has all three run artifacts.
+9. `CTRLYOKE_WORKING_FILE`, harness process keys, the prompt watcher, and the runner lock always refer to the executing run, never merely the viewed run.
+10. All storage-derived paths are validated for workspace containment; no caller constructs `.runs` paths ad hoc.
 
-There are **three** identity notions in the codebase today; the refactor changes only one of them.
+## Identity and addressing
 
-| Identity | Today | Used by | After refactor |
-| --- | --- | --- | --- |
-| `WorkflowInstance.id` | Random UUID per instance (`crypto.randomUUID()` in `WorkflowInstance`) | Orchestrator `instances` registry key, dashboard messages / `WorkflowTaggedSink`, `loadedWorkflows[].id` in the webview | **Unchanged.** Dashboard/webview identity stays UUID-based; no message contracts change. |
-| `workflowId` (the conflated one) | Working-file **basename**, derived ad hoc via `OutputHistoryManager.extractWorkflowId()` at ~20 call sites (`WorkflowInstance` ×9, `WorkflowOrchestrator` ×6, `WorkflowSerializer` ×3, `UndoRedoCoordinator`, `CtrlYokeWebviewProvider`) | History dir name, search-index key, lock-file basename, session recovery, CLI | Becomes **`workflowKey`** — the lineage directory name `.runs/<workflowKey>/`. Same slug+createdTs format, but it now names a *directory that owns everything* instead of being parsed out of a mutable file's basename. |
-| `workingFilePath` | Full path; doubles as instance lookup key (`WorkflowOrchestrator` finds instances by path, line ~753) and watcher/lock target | Orchestrator path lookup, `PromptFileWatcher`, locks | Splits into `workflowKey` (lineage lookup) + `RunRef` (which run). A run file path *encodes both positionally*: `.runs/<workflowKey>/run-<ts>/workflow.ctrlyoke.json`. |
+The current `workflowId` name conflates three identities. The refactor makes them explicit.
 
-### The solution: one canonical path/identity module
+| Identity              | Meaning                                     | Lifetime and use                                                                                                   |
+| --------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `WorkflowInstance.id` | Random UUID for one in-memory instance      | Retained for orchestrator registration, live dashboard routing, and terminal ownership.                            |
+| `workflowKey`         | Stable lineage directory name               | Used by recents, recovery, routes, search, CLI/MCP, lineage lookup, and locks.                                     |
+| `RunRef`              | Stable promoted-run directory name          | Used by run loading, mutation, deletion, search hits, output events, and CLI/MCP selectors.                        |
+| `draft`               | Mutable next-run definition, not a `RunRef` | Used before first execution or while preparing a fork. It never appears in run summaries/history search.           |
+| manifest `runId`      | Monotonic human-facing ordinal              | Display only. It is never accepted as durable storage identity without resolving it to a `RunRef` at request time. |
 
-New `src/utils/WorkflowPaths.ts` (single source of truth, same spirit as `PATH_CONSTANTS`):
+Use branded or opaque types rather than interchangeable strings:
 
 ```ts
-type RunRef = string;                       // "run-2026-07-19T10-30-00" (dir name)
-interface WorkflowRunAddress { workflowKey: string; runRef: RunRef; }
+type WorkflowKey = string & { readonly __workflowKey: unique symbol };
+type RunRef = string & { readonly __runRef: unique symbol };
 
-WorkflowPaths.lineageDir(root, key)         // .ctrlyoke/.runs/<key>/
-WorkflowPaths.descriptorPath(root, key)     // .../<key>/workflow.json
-WorkflowPaths.runDir(root, key, runRef)     // .../<key>/run-<ts>/
-WorkflowPaths.runFilePath(root, key, runRef)// .../run-<ts>/workflow.ctrlyoke.json
-WorkflowPaths.manifestPath / eventsPath     // .../run-<ts>/manifest.json | events.jsonl
-WorkflowPaths.lockPath(root, key)           // .../<key>/runner.json
-WorkflowPaths.parseRunFilePath(path): WorkflowRunAddress | null   // inverse
+type WorkflowViewAddress =
+  | { workflowKey: WorkflowKey; kind: "draft" }
+  | { workflowKey: WorkflowKey; kind: "run"; runRef: RunRef };
+
+interface WorkflowRunAddress {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+}
 ```
 
-- **Delete `extractWorkflowId()` entirely.** Every call site either (a) already has the instance/queue in hand — read `instance.workflowKey` / `queueState.address` instead of re-deriving from a path, or (b) genuinely starts from a path (session recovery, search, CLI) — use `parseRunFilePath()`. No basename string-munging survives outside `WorkflowPaths`.
-- **`WorkflowInstance` gains two fields**: `workflowKey` (fixed at load) and `boundRun: RunRef` (which run's file the queue is bound to; changes on run switch). `PromptQueue`/`WorkingFileManager` keep operating on "the working file path" — it's just `runFilePath(key, boundRun)` now. `IWorkingFileQueueAccess.getWorkingFilePath()` is untouched.
-- **Orchestrator lookup**: "find instance by working file path" becomes "find instance by `workflowKey`" (one lineage ⇒ at most one instance — this is the single-execution rule made structural). Duplicate detection, retired-instance reuse, and CLI-session lookup all key off `workflowKey`.
-- **Locks**: `WorkflowLockManager.getLockPath(workingFilePath)` → `WorkflowPaths.lockPath(key)`. Lock scope is the lineage (matches the single-execution contract), lives inside the lineage dir — no more sibling-file basename derivation. `runner.json` records which `runRef` it is executing.
-- **Search**: `HistorySearchService`/`HistorySearchIndexService` already key by history-dir name — that *is* `workflowKey` now, unchanged structurally. Bonus: `readWorkflowMetadata()`'s fragile reverse-mapping (workflowId → reconstructed `.working/<id>.ctrlyoke.json` path) becomes lossless: search hits carry `{workflowKey, runRef}` and resolve to `runFilePath()`, which is guaranteed to exist because it's the same dir the match came from.
-- **CLI/MCP**: commands address `workflowKey` (+ optional run selector, default = latest run). `CliWatchSession` already follows newest `run-<ts>` dir per workflow — only its root moves to `.runs/`.
-- **`TimelineRecorder.isRunEntry` / `extractRunTimestamp`** stay the run-dir authorities; `RunRef` is deliberately the dir name so no second run-id scheme appears (manifest's numeric `runId` remains a display ordinal only).
+`WorkflowInstance` gains a fixed `workflowKey` and an `executionRunRef?: RunRef`. It does **not** gain a client-driven `boundRun`. The instance queue, watcher, execution context, live integrations, and harness environment bind only to `executionRunRef` (or the draft while idle and editing before promotion).
 
-## Proposed model
+`WorkflowOrchestrator` keeps per-client view addresses alongside the existing UUID registry. A run switch updates only the requesting client's view address and sends that client a run snapshot. It never calls `PromptQueue.restoreFromWorkingFile()` on the shared execution queue merely to browse history.
 
-### Core contract
+## Canonical path module
 
-> **A run is the unit of definition + output. A workflow is a named lineage of runs. At most one run of a lineage executes at a time.**
+Add a VS Code-free `src/utils/WorkflowPaths.ts` as the only authority for layout, validation, parsing, and containment:
 
-### Storage layout
-
-`.working/` and `.history/` merge into `.runs/`:
-
+```ts
+WorkflowPaths.runsRoot(workspaceRoot);
+WorkflowPaths.lineageDir(workspaceRoot, workflowKey);
+WorkflowPaths.descriptorPath(workspaceRoot, workflowKey);
+WorkflowPaths.draftDir(workspaceRoot, workflowKey);
+WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
+WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+WorkflowPaths.runFilePath(workspaceRoot, workflowKey, runRef);
+WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef);
+WorkflowPaths.eventsPath(workspaceRoot, workflowKey, runRef);
+WorkflowPaths.runnerLockPath(workspaceRoot, workflowKey);
+WorkflowPaths.parseRunFilePath(workspaceRoot, filePath);
+WorkflowPaths.parseRunArtifactPath(workspaceRoot, filePath);
+WorkflowPaths.assertValidWorkflowKey(value);
+WorkflowPaths.assertValidRunRef(value);
 ```
+
+Rules:
+
+- `workflowKey` remains a sanitized name plus creation timestamp, with an exclusive lineage-directory create and suffix retry for collisions.
+- `RunRef` remains the run directory name (`run-<UTC timestamp with milliseconds>`). Allocation occurs under the lineage metadata lock: reserve a uniquely named hidden staging directory, choose an absent final name, and promote with a no-overwrite rename. If the final name appears before promotion, advance/retry the timestamp. This preserves the existing sortable timestamp grammar without exposing an empty “reserved” run.
+- Validators reject separators, traversal, empty/dot segments, platform-reserved names, unexpected extensions, and paths outside the resolved `.ctrlyoke/.runs` root. Windows comparisons are case-insensitive.
+- Directory scans accept only valid direct-child lineage/run directories and ignore descriptor files, `draft`, locks, temp entries, search-index data, and symlinks.
+- Delete `OutputHistoryManager.extractWorkflowId()`. Callers that already hold an instance/address use it directly; recovery-only callers parse with `WorkflowPaths`.
+- Remove `PATH_CONSTANTS.WORKING_DIR` and `PATH_CONSTANTS.HISTORY_DIR`. Add only the `.runs` root constant; every deeper join goes through `WorkflowPaths`.
+- `src/mcp-server.ts` may import this module because it is Node-only and VS Code-free; remove its rogue `.working` duplicate without pulling extension-only code into the MCP entrypoint.
+
+## Storage model
+
+```text
 .ctrlyoke/.runs/<workflowKey>/
-  workflow.json              ← lineage descriptor: workflowName, originalFile,
-                                isFavorite, createdAt, latestRunRef
-  runner.json                ← execution lock (only while running)
-  run-<ts>/
-    workflow.ctrlyoke.json   ← this run's full definition incl. per-step _runtime
-    manifest.json            ← unchanged (runId, startedAt, executionState, …)
-    events.jsonl             ← unchanged
+  workflow.json
+  runner.json                         # only while an execution owns the lineage
   draft/
-    workflow.ctrlyoke.json   ← definition edited before the first run (promoted to
-                                run-<ts>/ on first Run; dir absent afterwards)
+    workflow.ctrlyoke.json            # optional mutable next-run definition
+  run-<timestamp>/
+    workflow.ctrlyoke.json            # definition + resumable runtime for this run
+    manifest.json                     # authoritative lightweight run summary
+    events.jsonl                      # append-only output/timeline
+    pending-rewind/                    # only while a nonzero rewind is being edited
+      base.ctrlyoke.json               # pre-rewind recovery snapshot
 ```
 
-- The run definition file keeps today's `WorkingFile` schema. `WorkingFileManager` stays the only writer; it points at the bound run's file (or the draft).
-- The lineage descriptor exists so `getRecentWorkflows` / `WorkspaceSessionManager` / search metadata read one small file per workflow instead of scanning run dirs. `latestRunRef` is updated by `initializeRun()` under the same write discipline as manifests.
+### Lineage descriptor
 
-### Runtime semantics
+`workflow.json` is authoritative for lineage metadata and allocation state:
 
-| Action (while viewing run N) | Workflow idle | Workflow running run M |
-| --- | --- | --- |
-| Steps panel / editor | Shows run N's definition | Shows run N's definition, read-only |
-| Edit / add / delete / reorder steps | Mutates run N's `workflow.ctrlyoke.json` | Blocked — prompt editor overlay: "Viewing run N while run M is executing…" |
-| Append + continue | Appends to run N, resumes run N's sessions (its `_runtime.sessionId`s are intact — never wiped) and appends to run N's `events.jsonl` | Blocked (switch back to run M to append) |
-| Run ▶ | Seeds a **new** run N+1 from run N's definition (fresh `_runtime`), executes it | Blocked |
-| Pause / Stop | Applies to the executing run only | Applies to run M |
-| Save 💾 | Export via the existing save dialog, defaulting to `originalFile` (see resolved decisions) | Same |
-| Undo/redo | Temporal store re-baselines on every run switch (`loadHistoryRun` already clears `undoRecords`) | Disabled for non-executing runs |
+```ts
+interface WorkflowLineageDescriptor {
+  schemaVersion: number;
+  workflowKey: WorkflowKey;
+  workflowName: string;
+  originalFile?: string;
+  isFavorite: boolean;
+  createdAt: number;
+  lastModifiedAt: number;
+  latestRunRef?: RunRef;
+  nextRunId: number;
+  pendingEdit?:
+    | { kind: "draft" }
+    | {
+        kind: "rewind";
+        runRef: RunRef;
+        fromStepIndex: number;
+        baseDefinitionRevision: number;
+      };
+  revision: number;
+}
+```
 
-Key change to restart semantics: **`PromptQueue.restart()`'s `_runtime` wipe disappears.** "Restart" becomes `seedNewRun()` — copy the viewed run's definition minus `_runtime` into a fresh `run-<ts>/`, bind, execute. Old runs are immutable-by-default records that remain append-able. This is what makes append-to-old-run and re-run-with-different-harness fall out for free.
+- Do not duplicate `originalFile`, favorite state, or current lineage name in every run definition. Export/recents read the descriptor.
+- `latestRunRef` is a repairable hint, not the storage source of truth. Readers validate that it exists; if not, they scan manifests, repair it atomically, and continue.
+- `nextRunId` is monotonic and never decremented after deletion. Recovery repairs it to `max(existing manifest.runId) + 1` if necessary.
+- `lastModifiedAt` changes for draft/run definition mutations, append/execution activity, rename, and favorite changes. Workspace auto-load sorts descriptors by this value.
+- `pendingEdit` makes the one mutable preparation target per lineage explicit, protects it from deletion/pruning, and lets recovery reopen or discard an interrupted rewind. Preparing a normal rerun uses `draft`; preparing a same-run partial rerun uses `rewind`.
+- `revision` supports optimistic concurrency for descriptor metadata and allocation changes. It is distinct from definition revision below.
 
-### What this buys
+### Run definition
 
-- Steps panel always matches the viewed run (problem 1) — the run switcher becomes "bind the instance to run N's definition," not "overlay some outputs."
-- Append-to-old-run (problem 2) — run N's sessionIds live in its own file forever.
-- Re-run historical / different harness (problem 3) — seed new run from any run's definition; change harness before pressing Run.
-- Unambiguous controls (problem 4) — everything targets the viewed run.
-- Foundation for **cross-run/cross-workflow priorContext** (`PriorContext` in `CtrlYokeTypes.ts`): `WorkflowRunAddress` + stepIndex is exactly the address a cross-run reference needs. Design the resolver seam for this now; implement later (phase 5).
+The run file retains the current executable workflow fields and resumable `_runtime` during phases 1–3 and adds a top-level `definitionRevision`. A pending same-run rewind also persists `{ fromStepIndex, baseDefinitionRevision }` in run runtime so a restart cannot mistake unexecuted edits for a completed definition revision. Lineage-only metadata moves to the descriptor. Manifest timestamps/state are authoritative for run-list metadata.
 
-### History always-on + responseText single-sourcing
+`WorkingFileManager` increments `definitionRevision` for each definition change (draft edit, appended tail, rewind, or edit inside a rewound suffix), not for ordinary runtime persistence. Definition-changing commands include the expected definition revision and fail with a conflict response if it changed. Descriptor mutations independently use the expected descriptor revision.
 
-- **Remove `history.saveOutput`.** The run directory *is* the workflow's persistence now; it can't be optional without forking the storage model. Users delete runs (existing `deleteRun` / `clearRunHistory`) if they want them gone. Retention policy is resolved below (keep `maxRuns`, default `-1`).
-- **Phase out `_runtime.responseText`** (and `scriptOutput`, `finalStep.responseTexts`): with a guaranteed 1:1 `workflow.ctrlyoke.json` ↔ `events.jsonl`, prior context can hydrate from the run's own events (`OutputHistoryTimelineAdapter` already projects final per-attempt `CliOutput.response` per step). Do this **last** — it touches the executor, both prior-context builders, pause/resume restore, and preview UX — and only after always-on history has soaked. Duplication is bounded (each run file holds only its own responses), so there's no urgency.
+Outside an explicit append or rewind mode, generic edit/add/delete/reorder/property changes against a promoted run create/update a draft seeded from that run.
+
+“Set step as start position” is the deliberate same-run exception:
+
+- `toIndex === 0`: do not mutate the selected run. Seed a draft/new run with execution runtime stripped; pressing Run promotes and executes the new `RunRef`.
+- `toIndex > 0` on an idle completed/stopped/error run: first have `WorkingFileManager` atomically copy the full current run file to `pending-rewind/base.ctrlyoke.json`; then preserve the prefix `[0, toIndex)`, archive and clear `_runtime`/results for `[toIndex, end)`, set the pending rewind marker, and keep the same `RunRef` and numeric `runId`.
+- While a rewind is pending, step-local edit/add/delete/reorder operations are permitted only inside the suffix. Workflow-level properties and prefix steps remain locked because changing inherited settings would retroactively misdescribe the preserved prefix; those changes require a draft/new run.
+- **Rewind is permitted from `PAUSED` as well as idle terminal states**, matching today's guard (blocked only for `RUNNING`, `PAUSING`, `CANCELLING`). A paused lineage still owns the lock, sessions, and PTY, so a paused rewind targets its own executing run only: the run stays the execution target, the lock and `CTRLYOKE_WORKING_FILE` never move, and Continue resumes into the same `RunRef`. Rewinding a *different* run while another is paused remains blocked. Losing pause → rewind → continue would be a user-facing regression against goal 3.
+- **`runtimeArchive` and the durable base snapshot are one rollback story, not two.** `pending-rewind/base.ctrlyoke.json` is the process-crash-durable form of what `runtimeArchive` holds in memory. Definition undo inside a pending rewind must not resurrect suffix `_runtime` from the archive: restoring a suffix step's session/response metadata would re-associate it with attempts whose committed `definitionRevision` no longer describes it. Rule: while a rewind is pending, archive restoration is suppressed for indices `>= fromStepIndex`; undo there restores step text/settings only. Discarding the rewind is the sole path that restores full suffix runtime, and it does so from `base.ctrlyoke.json` through `WorkingFileManager`, not from the in-memory archive. Prefix indices retain today's archive behavior.
+- Continue commits the final suffix definition revision before executing it, preserves prefix sessions/output, appends new attempts to the same `events.jsonl`, then removes the recovery snapshot after the commit is durable. Discard restores `base.ctrlyoke.json` through `WorkingFileManager` and removes the pending marker/snapshot.
+- Skip-ahead within an incomplete run retains today's same-run skipped-step behavior and is recorded as a definition/runtime transition.
+
+Every execution-capable definition revision is snapshotted in a `DEFINITION_REVISION_COMMITTED` timeline event before any output for that revision. The snapshot contains the execution-relevant workflow definition with transient runtime removed, plus `definitionRevision`, the rewind boundary (if any), and the prior revision. Output events carry the `definitionRevision` that produced them. This keeps earlier attempts auditable even after the run's current definition head changes; the temporary full-runtime base file exists only for rollback/recovery and is not historical truth.
+
+### Manifest and summary
+
+Standardize one manifest field set rather than retaining both `runStepCount` and `stepCount`:
+
+```ts
+interface RunSummary {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  runId: number;
+  startedAt: number;
+  completedAt?: number;
+  executionState: ExecutionState;
+  definitionRevision: number;
+  stepCount: number;
+  primaryHarness?: HarnessName;
+  primaryModel?: string;
+  hasMixedHarnesses: boolean;
+  hasMixedModels: boolean;
+}
+```
+
+- `primaryHarness`/`primaryModel` come from the first enabled AI step's effective settings. The mixed flags prevent one icon/model label from implying that all steps used the same configuration. Script-only runs omit harness/model. `stepCount` means queue-step count; the final step remains a separately identified phase as it is today.
+- The manifest is updated on every authoritative execution-state transition, not only initialize/finalize, so manifest-only run lists correctly show paused, pausing, cancelling, stopped, error, and completed states.
+- Append or nonzero rewind continuation reopens the same manifest: clear `completedAt`, update `definitionRevision`/`stepCount`, set the transition state, append events, and finalize again. `runId`, `runRef`, and `startedAt` do not change.
+- `getRunSummaries(workflowKey)` reads manifests only, returns newest first, and treats malformed/incomplete directories as recovery candidates rather than valid rows.
+
+### Artifact ownership and atomicity
+
+Add a `WorkflowLineageRepository` (or equivalently named orchestration service) to coordinate lineage lifecycle. Ownership remains strict:
+
+- `WorkflowLineageRepository`: descriptor reads/writes, allocation, draft/run lifecycle, listing, deletion, retention, and recovery.
+- `WorkingFileManager`: definition-file reads/writes only.
+- `TimelineRecorder`: manifest/event initialization and all subsequent timeline writes.
+- `RunOutputResolver` (phase 4): read-only event projection.
+
+Creating/promoting a run is staged in a hidden `.creating-*` sibling directory. The repository asks the two artifact owners to populate it, fsyncs/closes their writes, then atomically renames it to the final `RunRef`. Only after the rename does it update the descriptor. Draft promotion copies rather than moves until the final directory is visible; the draft is removed after descriptor commit. Recovery reconciles a crash between those steps without exposing a partial run.
+
+Descriptor writes use temp-file + rename under a short lineage-metadata lock. The descriptor and run directory cannot be one filesystem transaction, so code must not claim they are atomic together; directory enumeration plus repair is authoritative.
+
+## Execution state versus client view state
+
+The backend exposes a read model for a client-selected address:
+
+```ts
+interface WorkflowRunView {
+  address: WorkflowViewAddress;
+  descriptorRevision: number;
+  definitionRevision: number;
+  definition: PromptFile;
+  runtime: WorkingFileRuntime | null;
+  output: WorkflowOutputHistory;
+  summary?: RunSummary;
+  runSummaries: RunSummary[];
+  executingRunRef?: RunRef;
+  pendingRewind?: {
+    fromStepIndex: number;
+    baseDefinitionRevision: number;
+  };
+  editable: boolean;
+}
+```
+
+The view loader reads the selected definition and output without mutating the shared `PromptQueue`. For the executing run it may merge the persisted timeline with the instance's `OutputCaptureBuffer` so a switch during streaming does not lose unflushed chunks.
+
+An explicit mutation/execution action is different from browsing. When the lineage is idle and a client starts a nonzero rewind, append, resume, or continue against historical run N, the orchestrator validates the addressed revision, establishes N as the instance's execution target, and only then restores/binds the execution queue to N. Other clients' view addresses do not change. A plain `LOAD_RUN_VIEW` can never perform this binding.
+
+All live run-scoped dashboard messages include `workflowKey` and `runRef` in addition to the instance UUID. The webview applies a message to the displayed definition/output only when both the lineage and run match. If another run is executing in the background, the client may update a lightweight status/unread indicator, but it must not contaminate the viewed run.
+
+The webview stores one unified displayed `WorkflowRunView`; it does not keep a definition from the live queue plus a separate `historyOutputs` overlay. Switching lineage/run replaces definition, runtime, output, and summary together and explicitly clears/re-baselines:
+
+- zundo past/future states and any runtime merge cache;
+- pending step/property edits;
+- selected step/output target and streaming chunks;
+- workspace-file undo/redo presentation; and
+- stale save-path and run-action requests.
+
+Ignoring unrelated live messages is safe because switching back loads an authoritative backend snapshot.
+
+## User-visible action semantics
+
+| Action while viewing address N               | Lineage idle                                                                                                                                         | Lineage executing run M                                                                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| View steps/settings/output                   | Shows one coherent snapshot for N.                                                                                                                   | Same; N may differ from M.                                                                                                                     |
+| Generic edit of a promoted run               | Fork/update a draft seeded from N, then switch this client to the draft.                                                                             | Draft preparation is allowed only if it cannot affect M's queue/harness state; otherwise return a revision/busy conflict. M remains untouched. |
+| Set start position to step 1 (`index === 0`) | Seed a draft/new run from N; leave N unchanged. Run executes the new `RunRef`.                                                                       | Draft may be prepared, but launch waits until M terminates.                                                                                    |
+| Set start position to step K (`index > 0`)   | Enter same-run rewind mode for N: preserve the prefix, clear suffix runtime/results, and permit suffix-only edits. Continue appends attempts to N.   | Blocked for every N while M executes; browsing remains allowed.                                                                                |
+| Resume unchanged pending work                | Resume N only if N is stopped/paused and owns resumable runtime.                                                                                     | Blocked unless N is M and the action is valid for M's state.                                                                                   |
+| Append + continue                            | Atomically append new tail steps to N, commit a definition revision, reopen N, and continue its sessions. Existing prefix is preserved.              | Blocked when N is not M. Appending to M while paused follows the existing safe pause/append rules.                                             |
+| Run / Re-run                                 | Draft: promote and launch. Promoted run without a pending rewind: seed a new run from N with execution runtime stripped. Pending rewind: Continue N. | Blocked by the single-execution rule.                                                                                                          |
+| Harness/model override for re-run            | Applied to the draft/new run before promotion. Step-local overrides inside a rewound suffix apply only to that suffix revision.                      | May be prepared in a draft, but launch waits until M terminates.                                                                               |
+| Pause/Stop                                   | Disabled when nothing executes.                                                                                                                      | Always targets M and labels that target explicitly even when viewing N.                                                                        |
+| Save / Save as template                      | Exports the viewed definition head through the existing sanitizing serializer.                                                                       | Same; never exports M merely because M is executing.                                                                                           |
+| Definition undo/redo                         | Scoped to the current draft or pending-rewind suffix editing session. Re-baselined on every address switch.                                          | Disabled for a read-only run view; draft edits remain client/revision scoped.                                                                  |
+| Workspace-file undo/redo                     | Reads/writes timeline records for the explicitly viewed/executing run and output target.                                                             | Never falls back to “latest.”                                                                                                                  |
+
+Appending or partially rewinding a completed run preserves previous events and resumable prefix session metadata. It clears only the selected suffix runtime and terminal completion markers needed to reopen execution. If a final step already ran, the final phase runs again after the new suffix/tail; its next `loopIndex` is allocated after the maximum existing final-step loop index so old output addresses are never reused or overwritten. Queue-step attempt indices likewise continue after the maximum existing attempt for the target across the whole `RunRef`; `definitionRevision` identifies which definition produced each attempt.
+
+The run view shows the current definition head. Older output attempts retain their committed definition revision and recorded prompt/settings, so changed or removed suffix steps are not falsely presented as having been produced by the new text. The output UI groups attempts under the current step when the revision mapping is still compatible and otherwise labels them as an earlier revision.
+
+When a rewind is pending, every client viewing that run receives an address/revision invalidation and reloads the pending head. The UI keeps prefix steps locked, visually marks the rewind boundary, shows “Continuing run N from step K,” and presents **Continue** rather than **Run/Re-run**. “Set start position” remains available on any idle historical run under the same state rules as the latest run.
+
+### Discard-continuation UX
+
+A pending rewind is durable state that survives restart, so it needs an explicit exit. Today no such command exists — the current rewind commits immediately to the single working file and the de-facto undo is Ctrl+Z restoring `runtimeArchive`. **Discard is therefore a new run-lifecycle command.** It is unrelated to `EditorFooter`'s Cancel, which only exits per-step edit mode; do not overload that control or reuse the word “Cancel” for it.
+
+- **Primary affordance:** a pending-continuation banner modeled on the existing `isPausing` banner in `Header.tsx` (same placement directly under the header, same inline secondary-action pattern). It reads “Continuing run N from step K” and carries **Discard Continuation** plus **Start new run instead** as inline actions.
+- **Header:** the execution group stays exactly three slots. Discard is *not* added to it — that group is `aria-label="Workflow execution controls"` and means Run/Pause/Stop at every tier and on mobile; a mode-exit is not an execution control. See the control matrix below.
+- **Context menu:** add **Discard Continuation** to the boundary step's menu, next to the existing “Set Start Position” item (`useStepContextMenu` already models `direction: "rewind" | "forward"`).
+- **Recovery:** the startup “reopen or discard” prompt for an interrupted rewind invokes this same command; there is one discard implementation, not a separate recovery path.
+
+Undo interaction — **beginning a rewind is a zundo barrier, not an undoable edit.** Because archive restoration is suppressed for indices `>= fromStepIndex`, an ordinary undo across the rewind boundary would produce a half state (restored text, still-cleared runtime). Re-baseline the undo stack when the rewind begins, exactly as on an address switch: undo inside the mode covers suffix edits only, undo at the mode's baseline is a no-op, and Discard is the sole exit back to the pre-rewind definition and runtime.
+
+### Header execution-control matrix
+
+Today's three slots are derived by `getWorkflowExecutionControls`: slot 1 Run/Re-run (`isRerun = isCompleted || isError || isPaused || isStopped` swaps the icon to `codicon-refresh` and bolds it), slot 2 Pause/Resume (`canResume = isPaused || isStopped || isError || isIdleWithOffset`), slot 3 Stop (`canStop` — running/pausing/paused/cancelling only).
+
+Two facts about today's post-rewind state drive the target design. After `setStartPosition(k > 0)` the state machine resets to `IDLE` with `currentStep = k`, so `isRerun` is **false**: slot 1 renders as plain **Run** with the play icon, not the re-run refresh icon. And because `isIdleContinuation` only requires `IDLE && currentIndex > 0`, both slot 1 (Run) and slot 2 (Resume) continue into the **same** history run — the play icon implies a fresh start that does not happen. There is currently no one-click “start a new run number” from a rewound state; the only route is rewinding to step 1 first, which resets `currentIndex` to 0 and makes the next Run allocate a fresh run. Removing that ambiguity is a goal of this work, not a regression to preserve.
+
+Target slot behavior, keeping the three-slot anatomy intact:
+
+| Viewed address / lineage state              | Slot 1                                                     | Slot 2                                       | Slot 3                     |
+| ------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------- | -------------------------- |
+| Draft, never executed                       | **Run** (play) → promote draft to a new `RunRef`           | disabled                                      | disabled                   |
+| Promoted run, lineage idle, no pending work | **Re-run** (refresh, bold) → seed a **new** run from this run | disabled                                      | disabled                   |
+| Promoted run with resumable pending work    | **Re-run** (refresh, bold) → new run                        | **Resume** → continue this run                | disabled                   |
+| Pending rewind on run N                     | **Continue** (`codicon-debug-continue`, bold) → same run N   | disabled (resume is slot 1 in this mode)      | disabled                   |
+| Lineage executing M, viewing M              | disabled                                                    | **Pause / Cancel pause**                      | **Stop**                   |
+| Lineage executing M, viewing N ≠ M          | disabled, tooltip names M                                   | **Pause**, labeled as targeting M             | **Stop**, labeled as M     |
+
+So Re-run remains exactly one button, and it becomes unambiguous: on any promoted run it always allocates a new `RunRef`/`runId`, including on an older run, where it seeds from that run's definition. The only state where slot 1 is not Re-run is the pending rewind, because that mode exists precisely to continue run N — and its banner still offers **Start new run instead** as a one-click escape, which discards the pending rewind and seeds a new run in a single action. Slot 2 is never overloaded with a re-run meaning; where resume is unavailable it stays disabled, as it does today.
+
+Confirmation follows what is actually at risk. Discarding an unedited rewind only restores what was cleared, so it needs no prompt. Discarding after suffix edits destroys authored text, so prompt when `definitionRevision > baseDefinitionRevision`, gated by `confirmDeleteOperations` (losing authored steps is a delete, not a start-position reset). Entering a rewind keeps its existing `confirmResetOperations` gate.
+
+Deleting a run is rejected while it is executing, has a pending rewind, or is the source/target of an in-flight seed/append transaction. Deleting a viewed run broadcasts invalidation; each affected client falls back to the current draft, otherwise the latest remaining run, otherwise unloads the deleted lineage. Deleting the last run removes the lineage only when no draft remains. “Remove workflow history” becomes an explicit delete-lineage operation.
+
+## Message, navigation, search, and summary contracts
+
+This is a breaking contract update; do not keep old path/index fields as aliases.
+
+- `READY.preferredWorkingFilePath` → `preferredWorkflowKey`.
+- `activeWorkflowWorkingFilePath` → `activeWorkflowKey` in persisted UI state.
+- Hosted/browser routes use `workflowKey` and optional `runRef`; they never expose a workspace-local working-file path.
+- `LOAD_WORKFLOW` accepts `workflowKey`. `LOAD_RUN_HISTORY`/`OUTPUT_HISTORY_LOADED` become run-addressed `LOAD_RUN_VIEW`/`RUN_VIEW_LOADED` messages carrying the unified view above.
+- Run load/delete/re-run/append/set-start-position/continue/save/template/undo requests carry a stable `RunRef` or `draft` address. `SET_START_POSITION` also carries `toIndex` and the expected definition revision. They do not carry `runIndex` as the target.
+- Beginning, editing, discarding, or committing a rewind broadcasts a run-view invalidation with the new `definitionRevision` to all clients viewing that `RunRef`; clients reload instead of applying suffix mutations to a stale local definition.
+- Search documents/results store `{ workflowKey, runRef, target }`; pending navigation keeps the same stable address. Search may show `runId`, but it never reconstructs `.working` paths.
+- Recent-workflow rows are keyed by `workflowKey` and include `latestRunRef`; favorite/remove/load operations use the key.
+- Active-terminal summaries include `workflowKey` and `runRef`. UUID remains the live terminal/instance routing identifier.
+- Completion notifications derive the display name from the lineage descriptor, not `path.basename(workingFilePath)`.
+- `WorkflowSummary` replaces user-facing/path-dedup `workingFilePath` with `workflowKey`, `viewedRunRef`, and `executingRunRef` as appropriate. Internal execution contexts may retain a run file path where a process genuinely needs it.
+
+The run switcher keeps previous/next shortcuts and adds a RecentWorkflows-style dropdown backed by `RunSummary`. Extract shared row cells (harness icon, name/count, state badge, time) instead of duplicating row markup. The displayed run label uses manifest `runId`, so deletion gaps remain visible and new runs never renumber old ones.
+
+## Save and template export
+
+Save remains export, not an implicit mutation of the lineage:
+
+- Resolve the definition from the requesting client's `WorkflowViewAddress`, not the instance queue.
+- Default to descriptor `originalFile`; otherwise derive a safe filename from the descriptor name.
+- Apply the existing runtime-stripping allowlist to both Save and Save as template.
+- Frame the dialog as “Save draft” or “Save run N (<date>)”.
+- Add `CHECK_SAVE_PATH { requestId, path }`; validate with the same workspace/path rules used by the final save and ignore stale responses.
+- Show a non-blocking overwrite warning as the user edits. The final save handler still rechecks the target immediately before writing.
+
+## Locks, concurrency, and recovery
+
+### Execution lock
+
+`runner.json` is lineage-scoped and contains at least:
+
+```ts
+interface WorkflowRunnerLock {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  runner: "extension" | "cli";
+  pid: number;
+  ownerToken: string;
+  instanceId?: string;
+  startedAt: number;
+  lastHeartbeat: number;
+}
+```
+
+- Acquire uses an OS-exclusive create (`wx`/equivalent) followed by stale-owner validation and a bounded retry; temp rename alone is not exclusive acquisition.
+- Heartbeat and release compare `ownerToken`. An old process cannot refresh or unlink a successor's lock.
+- Extension and CLI use the same acquire path. Remove the current duplicate CLI + `WorkflowInstance` acquisition; exactly one layer owns acquire/heartbeat/release.
+- A lock identifies the exact executing `runRef`. `CliWatchSession` watches that run's definition/events and never follows “newest.”
+- Stale-lock recovery repairs only the run named in the stale lock, then removes it with ownership checks. Lineage scans replace the current flat `.working/*.ctrlyoke.json` scan.
+
+### Short metadata mutations
+
+Descriptor allocation/update, draft promotion, retention, and deletion use a separate short-lived lineage metadata lock. Define and test one lock order (metadata lock before definition-file lock when both are needed) and never hold it while waiting for harness execution or streaming events.
+
+Each mutation includes the relevant expected descriptor and/or definition revision. UI, extension, CLI, and MCP surface a deterministic conflict rather than last-write-wins data loss.
+
+### Recovery
+
+On startup/recent-list load:
+
+1. enumerate valid lineage directories;
+2. parse descriptors independently so one corrupt lineage cannot abort the list;
+3. reconcile/remove stale `.creating-*` entries;
+4. validate `latestRunRef` and `nextRunId` against valid manifests;
+5. validate `pendingEdit`; for a rewind, require the addressed run, pending marker, and `pending-rewind/base.ctrlyoke.json`, then reopen the edit or offer discard. Repair a half-cleared commit from the durable definition-revision event, and restore/quarantine inconsistent state rather than guessing;
+6. normalize the exact stale-locked run to stopped/error as current semantics require;
+7. exclude malformed partial runs and log an actionable warning; and
+8. auto-load the valid lineage with the greatest descriptor `lastModifiedAt`.
+
+## Always-on history and retention
+
+Always-on history is a phase-1 storage invariant, not a phase-4 cleanup:
+
+- Remove `history.saveOutput`, `OutputHistoryManager.isHistoryEnabled()`, and all empty-history-path branches in phase 1.
+- Rename settings `history` → `runs` in `schemas/settings-schema.json`, `CtrlYokeSettings`, `ConfigurationUtils`, settings sync, General settings UI, fixtures, and tests.
+- Keep `runs.maxRuns`, default `-1`. Its description must say: “Deletes entire runs—definition and output—oldest first. -1 keeps all runs.”
+- Pruning allocates by stable `RunRef`, runs only after the new run is safely visible, and explicitly excludes the executing run, a run with a pending rewind, plus any source/target protected by an in-flight transaction. It must not assume the executing, rewind, or append target is newest.
+- If pruning deletes a client-viewed run, use the same invalidation/fallback behavior as manual deletion.
+- Search-index removal/flush occurs before the run directory is deleted. Descriptor hints are repaired afterward.
+
+Update `.gitignore`, `.ctrlyoke/.gitignore`, `WorkspaceInitializer.GITIGNORE_CONTENT`, initializer tests, `.github/copilot-instructions.md`, and the generated tech-support agent template to describe `.runs`. Current user docs that teach inspection/troubleshooting of `.working`/`.history` must be updated in the same implementation. Historical design documents need not be rewritten.
+
+## CLI and MCP contract
+
+Keep source-based CLI behavior and add explicit lineage operations:
+
+```text
+ctrlyoke run [file] [--prompt <text>]                       # new lineage/draft → run
+ctrlyoke rerun --workflow <key> [--from <ref|runId>]        # default source: latest
+ctrlyoke append --workflow <key> --run <ref|runId>
+                ([file] | --prompt <text>)                  # append tail and continue
+ctrlyoke continue --workflow <key> --run <ref|runId>        # unchanged pending work
+```
+
+`--from/--run` accepts a stable `RunRef` or a numeric display `runId` resolved once under the metadata lock. It does not accept volatile list indices. Existing harness/model CLI overrides apply to the newly seeded rerun only. Argument combinations are mutually exclusive and validated before any run allocation.
+
+MCP rules:
+
+- A harness-launched MCP server remains pinned by `CTRLYOKE_WORKING_FILE` to the exact execution run.
+- Fallback/global discovery scans lineage locks and descriptors, returning at most one active run per lineage.
+- Queue append/status/output tools return and accept `{ workflowKey, runRef }` where targeting is required.
+- MCP append honors the lineage execution lock and append-prefix invariant; it cannot silently choose “latest” when another run is active.
+- Phase 4 changes `read_output` to `RunOutputResolver`; it must not regress to `_runtime.responseText`.
+
+## Response text single-sourcing (phase 4)
+
+Do not delete persisted response fields until the timeline can reproduce all current semantics.
+
+Building on the definition-revision events introduced in phase 1, extend the canonical event schema so it losslessly represents:
+
+- the authoritative AI response for each queue/final target, loop, and retry/attempt;
+- follow-up/resumed text appended after the initial result;
+- structured script stdout, stderr, combined display response, exit code, and command metadata;
+- failed, cancelled, and stopped results; and
+- workspace `UndoRecord` updates.
+
+Then add a streaming `RunOutputResolver` that selects the latest authoritative aggregate for a target without loading an unbounded `events.jsonl` into memory. It may stream and index offsets, but it must not truncate response semantics; the search index's document cap is not a valid prior-context source.
+
+Update every response consumer, including:
+
+- executor prior-context construction;
+- `PriorContextPreviewBuilder` and `WebviewMessageRouter` preview requests;
+- `CliPromptRuntimeCoordinator` and harness resume/recovery;
+- MCP output reads;
+- final-step loop handling;
+- script output rendering/context; and
+- save/sanitization/tests.
+
+The response event must be durably committed before a following step builds prior context. On restore, hydrate only requested prior-context targets and cache them in memory for the active execution. Keep session IDs and other resume-critical runtime until a separate design proves they too can be derived.
+
+Only after parity tests pass should persisted `_runtime.responseText`, `scriptOutput`, and `finalStep.responseTexts` be removed. This phase must not introduce a new response-size cap as an accidental behavior change.
 
 ## Implementation phases
 
-No compatibility shims between phases — each phase converts the codebase fully to its new state; the migration script handles local data once, before phase 1 ships.
+Each phase leaves the repository internally consistent and shippable. No compatibility shims bridge phases.
 
-### Phase 1 — Storage + identity flip (the big one)
+### Phase 1 — Storage, identity, locks, and always-on runs
 
-- Add `WorkflowPaths` and the `.runs/` layout; delete `.working`/`.history` path constants and `extractWorkflowId()`.
-- `WorkflowInstance` gains `workflowKey` + `boundRun`; orchestrator registries/lookups keyed by `workflowKey` per the identity table above; locks move to `lockPath(key)`.
-- `WorkingFileManager` writes the bound run's file (or draft); `initializeRun()` creates the run dir *and* its `workflow.ctrlyoke.json` (promoting the draft or seeding from the previously bound run) and updates `latestRunRef`.
-- `restart()` → `seedNewRun()`; remove the `_runtime` wipe.
-- Update `WorkspaceSessionManager`, `getRecentWorkflows`, `HistorySearchService`/`IndexService`, `CliWatchSession`, `cli.ts`, MCP queue ops to the new paths/identity.
-- `PromptFileWatcher` watches the bound run's file.
-- Extend `manifest.json` with `harness`, `model`, `stepCount` (written at `initializeRun` and on append); collapse `getRunTimestamps`/`getRunStates` into `getRunSummaries(workflowKey)`.
-- Behavior at the end of phase 1 is intentionally identical to today for the user (latest run bound, history browsing still overlay-only) — this phase is pure structure. Tests: `WorkflowPaths` round-trip, run seeding, lock scope, recovery, search resolution.
+This is the largest phase and must not be attempted as one commit. Split it into three internally consistent checkpoints; each compiles, passes the suites, and leaves the app usable.
 
-### Phase 2 — Bind the view to the run
+**Phase 1a — layout and identity (no behavior change).**
 
-- Run switching loads run N's definition into the instance (`PromptQueue.restoreFromWorkingFile` against `runFilePath(key, N)`), rebinding `boundRun`, the watcher, and the undo baseline. `WorkflowStepsPanel`, editor, and Header controls now naturally show/target run N — delete the `historyOutputs` overlay split (`uiStore.isViewingHistory` becomes "bound run ≠ latest run").
-- While executing, switching to a non-executing run is view-only: steps panel + editor read-only with the "run M is executing" overlay; Run/Pause/Stop stay wired to the executing run.
-- Step-click → output navigation becomes exact (same run, same indices).
-- Promote the run switcher to the RecentWorkflows-style run list (see resolved decisions), rendered from `getRunSummaries()`.
-- Save dialog updates: default path = viewed run's `originalFile`, `pathExists` overwrite warning, "Save run N" framing (see resolved decisions).
+1. Add opaque identity/address types and `WorkflowPaths`, including collision, validation, parser, and containment tests.
+2. Add `WorkflowLineageRepository`, descriptor schema, atomic staging/promotion, revisions, recovery, and artifact-ownership tests.
+3. Move working/history artifacts into `.runs`; update `WorkingFileManager`, `TimelineRecorder`, `OutputHistoryManager`, `PromptFileLoader`, queue operations, session recovery, recents, search/index, serializer, undo coordinator, and cleanup paths.
+4. Replace basename-derived identity in `WorkflowInstance`, `WorkflowOrchestrator`, extension, CLI, MCP, hosted server, notifications, harness integration, and lock code.
+5. Write and run `dev/migrate-runs-layout.mjs` here — it is the first real exercise of `WorkflowPaths` and the descriptor against actual data.
+6. Update gitignore/bootstrap instructions, current docs/templates, schemas, fixtures, and tests.
 
-### Phase 3 — Re-run and append-to-run
+Checkpoint: identical user-visible behavior on the new layout. Grep gate must pass.
 
-- "Re-run this run" action (run switcher context menu): `seedNewRun(fromRunRef)` with optional harness/model override before launch (reuse the workflow-properties editor against the seeded definition).
-- Append + continue on a historical run: existing append-continuation path generalized — `getLatestHistoryFilePath()` → `getHistoryFilePathForRun(runRef)`; session resume uses run N's intact `_runtime.sessionId`s.
-- CLI: `--run <ref|index>` selector for append/re-run targeting.
+**Phase 1b — correctness primitives.**
 
-### Phase 4 — Always-on history + responseText single-sourcing
+1. Make locks exclusive and owner-token safe; pin CLI watch to lock `runRef`; remove duplicate acquisition.
+2. Make history always on and rename the settings group to `runs`.
+3. Standardize manifests and `getRunSummaries`; allocate monotonic `runId`; update every state transition and append reopen.
 
-- Remove `history.saveOutput` from settings-schema.json, `ConfigurationUtils`, `OutputHistoryManager.isHistoryEnabled()` and its `filePath: ""` fallbacks throughout `WorkflowInstance`; rename the settings section `history` → `runs` (leaving `runs.maxRuns`, default `-1`, with the explicit deletes-entire-runs description).
-- Prior context hydrates from the bound run's events on load (lazy, per-step, capped) instead of `_runtime.responseText`; then drop `responseText`/`scriptOutput`/`finalStep.responseTexts` from persisted `_runtime` (keep in-memory for the live run). Update `PriorContextPreviewBuilder`, `CliPromptRuntimeCoordinator`, `WorkflowExecutor`, `WorkflowStepSanitizer` + tests.
+**Phase 1c — definition revisions.**
 
-### Phase 5 (follow-up feature) — Cross-run / cross-workflow priorContext
+1. Add `definitionRevision`, commit the initial/current execution-definition snapshot before output, tag all output attempts with it, and advance it for today's append continuation.
 
-- Extend `PriorContext` grammar with run/workflow addressing (e.g. `{ workflow?, run?, steps }`) resolved via `WorkflowRunAddress` through the phase-4 hydration path. Separate design doc when picked up.
+Defer 1c only if phase 3 slips materially: nothing consumes revisions until rewind/re-run exists, but shipping 1c early means append attempts recorded between now and phase 3 are already auditable. Do not reorder 1c *after* phase 3.
 
-## Dev migration script (throwaway)
+At phase end, the UI may still default to the latest run and use its current history presentation, but every backend operation already has a stable workflow/run address. There is no `boundRun` browsing behavior and no optional timeline.
 
-`dev/migrate-runs-layout.mjs` — one-shot, run manually per workspace (`node dev/migrate-runs-layout.mjs [workspaceRoot]`), deleted after the refactor lands. Not shipped, not wired into the extension. Logic:
+### Phase 2 — Per-client coherent run views
 
-1. For each `.ctrlyoke/.working/<id>.ctrlyoke.json`:
-   - Create `.ctrlyoke/.runs/<id>/workflow.json` descriptor from its `workflowName`, `originalFile`, `isFavorite`, `startedAt`.
-   - Move `.ctrlyoke/.history/<id>/run-*/` → `.ctrlyoke/.runs/<id>/run-*/`.
-   - Copy the working file into the **newest** run dir as `workflow.ctrlyoke.json` (its `_runtime` describes that run); set `latestRunRef`.
-   - Older run dirs get a `_runtime`-stripped copy as a best-effort definition (pre-migration history never recorded definitions, so this is approximate — acceptable for dev-only data).
-   - No runs? Working file becomes `.runs/<id>/draft/workflow.ctrlyoke.json`.
-2. Orphaned `.history/<id>/` dirs with no working file: move as-is (view-only lineage, no descriptor `originalFile`).
-3. Delete `.working/`, `.history/`, and any stale `*.runner.json`.
+1. Add per-client `WorkflowViewAddress` registration and the unified run-view loader.
+2. Replace path/index message contracts, hosted routes, persisted selection, search navigation, recent rows, terminal summaries, and completion labels.
+3. Replace output-only history overlay state with the unified displayed view and run-address filtering for live messages.
+4. Re-baseline editor/zundo/selection/streaming/workspace-undo state on every address switch.
+5. Build the manifest-backed run dropdown with stable deletion and invalidation fallback.
+6. Make Save and Save as template resolve the viewed address; add overwrite checks and run framing.
+7. Verify two clients can view different runs while a third execution target continues unchanged.
 
-## Resolved decisions
+### Phase 3 — Draft editing, partial rerun, append, and targeted CLI/MCP
 
-### Run retention (`maxRuns`): keep the setting, default `-1` (unbounded)
+1. Implement “Edit as draft”/automatic draft fork with optimistic revisions.
+2. Implement draft promotion and `seedNewRun(fromRunRef)` with execution runtime stripped and optional pre-launch harness/model overrides.
+3. Generalize set-start-position to an explicit `RunRef`: index zero seeds a new run; a nonzero rewind creates a pending same-run definition revision with a preserved prefix and editable suffix.
+4. Commit the rewound definition through phase 1's `DEFINITION_REVISION_COMMITTED` path and make discard/recovery restore the pre-rewind base snapshot.
+5. Generalize append/continue to an explicit `RunRef`, preserve the committed prefix, reopen manifests, preserve sessions, and allocate queue/final attempt indices monotonically.
+6. Add the CLI commands/selectors above and run-addressed MCP operations.
+7. Add retention/deletion race tests around draft, seed source, pending rewind, append target, executing run, and multi-client invalidation.
 
-- The default is **already `-1`** (`CtrlYokeSettings.ts` history defaults) and `pruneOldRuns` already treats `<= 0` as keep-all — so "unbounded by default" costs nothing.
-- **Keep the setting** rather than removing it: `events.jsonl` growth is real disk pressure, and opt-in auto-cleanup is legitimately useful. The consent model is clean: a user who explicitly sets a finite `maxRuns` has explicitly asked us to delete their oldest runs. No confirmation dialogs, no favorited-run exemptions — that complexity isn't warranted for an opt-in destructive setting (mirrors the absence of a `maxWorkflows`).
-- With `saveOutput` removed, the `history` settings section contains only `maxRuns` — rename the section to `runs` (`runs.maxRuns`) to match the `.runs/` storage model, and update its description to be explicit: *"Deletes entire runs — definitions and output — oldest first. -1 (default) keeps all runs."*
-- Guardrail: pruning never deletes the bound or executing run (structurally already true — both are newest — but assert it).
+### Phase 4 — Timeline as the response source of truth
 
-### Concurrent runs of one workflow: no
+1. Extend events for lossless response/script/follow-up semantics.
+2. Implement the streaming `RunOutputResolver` and parity tests for every terminal state, retry, resumed session, script, and final-step loop.
+3. Move all response/prior-context/MCP consumers to the resolver and hydrate active execution caches on restore.
+4. Remove duplicated persisted response fields only after full parity and crash/restart tests pass.
 
-Single-execution-per-lineage is the contract; it keeps locks, PTY reuse (`liveInjectIntegrations`), and dashboard identity sane. If parallel runs are ever wanted, that's the worktree feature's territory (`WORKTREE_SUPPORT_PLAN.md`).
+### Phase 5 — Separate follow-up: cross-run/cross-workflow prior context
 
-### Save on a historical run: always the dialog, default `originalFile`, overwrite warning
+Extend `PriorContext` with `WorkflowRunAddress` and resolve through the phase-4 reader. This requires its own UX and authorization design; it is not part of phases 1–4.
 
-Save is really **export**, and the current flow already matches: `SAVE_WORKFLOW_REQUEST` never writes — it replies with `SAVE_WORKFLOW_DIALOG_DATA` (defaultPath/defaultFormat) and `SaveWorkflowDialog` lets the user confirm location/name/format before `SAVE_WORKFLOW` writes. Changes needed:
+## Test and acceptance matrix
 
-- Default path = the **viewed run's** `originalFile` (from the lineage descriptor), falling back to the current name-derived default for dashboard-created workflows.
-- Add an overwrite indicator: extension includes `pathExists` for the default path in the dialog data, and the dialog re-checks as the user edits (lightweight `CHECK_SAVE_PATH` request or revalidate-on-change). Inline warning text, non-blocking: *"⚠ This will overwrite `<file>`"*. Since source files aren't gitignored, git provides the safety net after an intentional overwrite.
-- Dialog title/subtitle notes what's being exported when viewing history: *"Save run N (Jul 12) to file"*.
+### Paths and storage
 
-### Run switcher: promote to a RecentWorkflows-style run list
+- Workflow key and run-ref collision allocation; Windows case handling; traversal/reserved-name/symlink rejection; parser round trips.
+- First draft promotion, rerun seed, append reopen, descriptor-repair windows, partial `.creating-*` recovery, corrupt descriptor/manifest isolation.
+- No `.working`/`.history` literals or `WORKING_DIR`/`HISTORY_DIR` references remain outside the migration script and historical documentation.
+- A promoted run is never visible without definition, manifest, and events artifacts.
 
-Today's prev/next arrows + timestamp in OutputSection stay for quick stepping, but the run label becomes a dropdown mirroring the `RecentWorkflows` row anatomy (`RecentWorkflows.tsx`): container = `WorkflowDropdownHeader` + `VirtualizedDropdownList`; per-row = `HarnessIcon`, run label ("Run 7"), step count, execution-state badge (`getExecutionStateBadgeClass/Icon`), relative time (`formatRelativeTimeVerbose`), hover-revealed delete (existing `DELETE_RUN_HISTORY`), plus a hover "Re-run" action (phase 3's `seedNewRun`). Extract the shared row cells (icon/name/count/badge/time grid) into a shared component rather than duplicating `WorkflowRow` (DRY).
+### Identity and concurrency
 
-Data source: extend `manifest.json` with `harness`, `model`, and `stepCount` (written at `initializeRun` and on append) so the run list renders from manifests alone — no opening N `workflow.ctrlyoke.json` files. `getRunTimestamps`/`getRunStates` collapse into one `getRunSummaries(workflowKey)` returning the row model.
+- Two dashboard clients select different runs without changing each other's view or the instance queue.
+- Run M continues while a client browses N; watcher, lock, PTY/session key, output events, and `CTRLYOKE_WORKING_FILE` remain pinned to M.
+- Simultaneous lock acquire has one winner; stale owner heartbeat/release cannot affect the winner.
+- Conflicting descriptor/draft edits reject on revision mismatch.
+- CLI watch follows lock `runRef` even if a newer draft/run appears.
 
-## Risks
+### Actions
 
-- **Phase 1 is wide but mechanical**: ~20 `extractWorkflowId` call sites plus path constants, all funneled through one new module. The risk is missed ad-hoc path joins — grep for `WORKING_DIR`/`.working`/`.history` literals must come up empty outside `WorkflowPaths` and the migration script when it lands. Measured (2026-07-19): the `".working"`/`".history"` literals exist in exactly 3 places — `PATH_CONSTANTS` (canonical) and a **rogue duplicate `WORKING_DIR = ".working"` in `mcp-server.ts`** that bypasses `PATH_CONSTANTS`; `PATH_CONSTANTS.WORKING_DIR/HISTORY_DIR` has 28 uses across 13 files. The `.ctrlyoke.json` *suffix* appears ~124 times across 45 files, but the run file keeps that suffix (`workflow.ctrlyoke.json`) so most survive — only basename→identity parsing changes.
-- **Search index**: adding `workflow.ctrlyoke.json` to run dirs must not regress `HistorySearchIndexService`'s bounded/streamed behavior; `TimelineRecorder.isRunEntry` filtering must ignore non-run entries (`workflow.json`, `draft/`, `runner.json`).
+- Re-run produces a new `RunRef`/`runId`, strips execution runtime, and leaves the source byte-for-byte unchanged.
+- Append preserves existing prefix/session metadata/events, adds only a tail, reopens/finalizes the same manifest, and never reuses final loop indices.
+- Setting start position to index zero leaves the source unchanged and produces a new run on execution.
+- Setting start position to index K > 0 on the latest or an older idle run keeps its `RunRef`/`runId`, clears only `[K, end)`, permits suffix edits, and appends new attempts to that run on Continue.
+- A pending rewind survives restart, can be discarded back to the last committed definition, blocks delete/prune, and rejects prefix/workflow-property edits.
+- Rewinding a `PAUSED` run keeps that run as the execution target: lock, watcher, `CTRLYOKE_WORKING_FILE`, and harness session keys do not move, and Continue resumes into the same `RunRef`. Rewinding a different run while one is paused is rejected.
+- Definition undo inside a pending rewind restores suffix step text/settings without resurrecting archived suffix `_runtime`; prefix archive behavior is unchanged; discard restores full suffix runtime from `base.ctrlyoke.json`.
+- Undo cannot cross the rewind-begin barrier: the stack is re-baselined on entry, and Discard Continuation is the only path back to the pre-rewind definition and runtime.
+- Discard is reachable from the pending-continuation banner, the boundary step's context menu, and the startup recovery prompt, and all three invoke one implementation. It prompts only when suffix edits would be lost.
+- The execution group stays three slots in every state; Discard never enters it. Slot 1 is Re-run (new `RunRef`) on any promoted run and Continue only during a pending rewind. Slot 2 is never repurposed as a re-run action.
+- “Start new run instead” on the banner discards the pending rewind and seeds a new run in one action, leaving run N's committed definition and events untouched.
+- Every old attempt resolves against its committed definition revision after suffix text, order, or length changes.
+- Generic edit of a promoted run outside rewind mode creates a draft and never mutates the source.
+- Delete/prune rejects protected runs, repairs descriptor hints, removes search documents, and gives every affected client a deterministic fallback.
+- Finite `runs.maxRuns` handles gaps and an old append target without deleting the executing/source run.
 
-## Alternatives considered
+### UI and contracts
 
-1. **"Checkout" model (lighter)**: keep single working file; switching to a historical run while idle replaces working-file steps/`_runtime` from a stored snapshot. Rejected — it still needs per-run definition snapshots to be lossless (you can't restore "latest" after checkout without one), at which point per-run files are the same work with a worse invariant (one file whose meaning silently changes).
-2. **Multiple concurrent runs per workflow**: rejected (see risks) — breaks lock/PTY/dashboard identity assumptions for marginal benefit; worktrees are the better vehicle.
-3. **Derive everything from events.jsonl, no run definition file**: rejected — the timeline captures outputs, not step definitions/settings; reconstructing a definition from prompt text in `CliOutput` would lose harness/model/overrides/scripts and all workflow-level properties.
+- Definition, settings, step selection, output, and run label switch as one snapshot.
+- Stale/mismatched live messages and save-path responses are ignored by address/request ID.
+- zundo past/future and runtime caches cannot cross run/draft boundaries.
+- Search and hosted deep links still open the same run after newer runs are added or older runs are deleted.
+- Save and Save as template export the viewed definition, strip runtime, default from the descriptor, and recheck overwrite at commit.
+- A pending rewind is framed explicitly as “Save run N — pending continuation” so exporting the unexecuted suffix revision is intentional.
+
+### Response-source cutover
+
+- Prior-context and preview output match pre-cutover behavior for AI, script, follow-up, retry, failure/cancel/stop, pause/restart, and final-step loop cases.
+- Very large event logs are streamed with bounded working memory and no response truncation.
+- Timeline write completes before the next dependent prompt is constructed.
+
+### Required validation per phase
+
+- Focused unit/integration tests for touched areas.
+- Webview tests for contracts, stores, navigation, and multi-client filtering.
+- CLI/MCP tests for selectors, exact-run watch, environment pinning, and conflicts.
+- Full `npm run compile`, lint/format checks, unit tests, and webview test suite before phase completion.
+- Regenerate any checked-in schemas/agent files using the repository scripts rather than hand-maintaining generated output.
+
+## Expected source surface
+
+Implementation must inventory with `rg` again at phase start, but the verified surface includes:
+
+- Core: `WorkingFileManager`, `PromptQueue`, `WorkflowInstance`, `WorkflowOrchestrator`, `WorkflowExecutor`, queue operations, output capture, harness integration, and prompt loading.
+- Orchestration: `OutputHistoryManager`, `TimelineRecorder`, timeline adapter, history search/index, CLI watch, workspace initializer/session recovery, streaming history, and lock utilities.
+- Entrypoints: `cli.ts`, `extension.ts`, `mcp-server.ts`, hosted-server routing, and standalone shims where contracts cross the boundary.
+- UI/backend: `CtrlYokeWebviewProvider`, `WebviewMessageRouter`, `WorkflowSerializer`, `UndoRedoCoordinator`, completion notifications, and shared message/summary/history types.
+- Webview: app/bootstrap READY payload, message handler, workflow/UI stores, navigation routes/state, recent workflows, history search, output/steps/editor/header/status controls, settings, save dialog, undo hooks, and tests.
+- Configuration/bootstrap/docs: settings schema/types/defaults/utils/sync/UI, both gitignore sources, `WorkspaceInitializer`, project instructions, current user docs, and the generated tech-support template.
+- Tests and fixtures containing old paths, settings, volatile run indices, or working-file keyed summaries.
+
+## Throwaway developer-data migration
+
+Create `dev/migrate-runs-layout.mjs`, run it manually per workspace, verify its report, and remove it after local pre-release data no longer needs conversion. It is not bundled or invoked by the extension.
+
+For each `.ctrlyoke/.working/<id>.ctrlyoke.json`:
+
+1. exclusively create `.ctrlyoke/.runs/<workflowKey>` and its descriptor;
+2. move matching history run directories into staged new run directories;
+3. copy the old working file to the newest run as its best-known exact definition/runtime;
+4. give older history runs a runtime-stripped copy marked only in the migration report as approximate (the old format cannot recover their exact definitions);
+5. create a draft instead when no history run exists;
+6. derive monotonic `runId`/`nextRunId`, summaries, and `latestRunRef`; and
+7. verify every destination before removing old files and stale runner locks.
+
+An orphan history lineage with no working file cannot satisfy the new run invariant. Move it to a clearly reported `.ctrlyoke/.migration-rejected/` quarantine rather than exposing an invalid lineage or inventing an empty definition.
+
+The script must be idempotent until final cleanup, refuse to overwrite an existing destination, and print a per-lineage success/warning/failure summary.
+
+## Settled decisions
+
+- **No concurrent execution within one lineage.** Browsing and draft preparation may be concurrent because they do not rebind the executor.
+- **Committed definition revisions are immutable; a run's head may advance.** Generic edits fork a draft, while append and nonzero set-start-position are explicit same-run continuation operations. Setting the start position to index zero always creates a new run.
+- **History is always on from phase 1.** Optional history cannot coexist with the new storage invariant.
+- **Retention stays opt-in and unbounded by default.** `runs.maxRuns = -1`; a finite value authorizes deletion of complete runs.
+- **Stable refs target operations.** Numeric `runId` is display/select convenience; list index is never identity.
+- **Descriptor hints are repairable caches.** Valid run directories/manifests are storage truth.
+- **Save exports the viewed address.** It always uses the dialog and warns before overwrite.
+- **The run list is manifest-only.** Mixed harnesses are disclosed instead of implying one harness describes every step.
+- **Response de-duplication is last.** Structured event parity precedes removal of runtime response fields.
+
+## Main risks and mitigations
+
+- **Wide identity migration:** grep gates and a single canonical path module prevent surviving basename/path reconstruction.
+- **Shared-instance client leaks:** execution binding and per-client view addresses are separate by construction and covered by multi-client tests.
+- **Cross-process races:** exclusive lock creation, owner tokens, short metadata locks, optimistic revisions, and staged run promotion cover distinct race classes.
+- **Partial filesystem transactions:** hidden staging plus descriptor repair avoids treating multi-file writes as one atomic operation.
+- **Historical definition corruption:** committed definition snapshots and revision-tagged attempts preserve what produced old output, while rewind mode constrains mutations to the selected suffix.
+- **Timeline cutover data loss:** lossless event extensions and parity tests precede deletion of duplicated response fields.
+- **Unbounded disk use:** default remains non-destructive, while explicit `runs.maxRuns` and manual deletion operate on complete, addressable run units.
+
+## Alternatives rejected
+
+1. **Rebind the shared `PromptQueue` when any client selects history.** Rejected because it redirects other clients and can corrupt an active executor/watch/lock target.
+2. **Checkout a historical snapshot into one mutable working file.** Rejected because it still requires lossless snapshots and makes the file's meaning change silently.
+3. **Allow unscoped generic edits directly on completed runs.** Rejected because existing output step indices and settings would no longer match the recorded definition. The supported exception is explicit nonzero rewind mode, with a locked prefix and revision-tagged definition snapshots/output.
+4. **Allow parallel runs in one lineage.** Rejected because it breaks current PTY/session/lock/instance assumptions; worktrees are the intended isolation boundary.
+5. **Derive definitions from events only.** Rejected because events do not encode the complete workflow definition and execution settings.
