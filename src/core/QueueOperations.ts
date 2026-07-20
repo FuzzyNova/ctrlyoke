@@ -17,6 +17,7 @@ import {
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 
 /**
  * Queue status response (single source for both MCP and Language Model Tools)
@@ -117,11 +118,16 @@ export function getQueueStatus(
   let workflowName: string | null = null;
   if (workingFilePath || state.workingFilePath) {
     const filePath = workingFilePath || state.workingFilePath!;
-    const fileName = filePath.split(/[/\\]/).pop() || "";
-    // Remove timestamp and extension: "workflow-2024-12-23T15-30-00.ctrlyoke.json" -> "workflow"
-    workflowName = fileName
-      .replace(/\.ctrlyoke\.json$/, "")
-      .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
+    const address = WorkflowPaths.parseWorkingFileAddressFromPath(filePath);
+    if (address) {
+      workflowName = WorkflowPaths.workflowNameFromKey(address.workflowKey);
+    } else {
+      const fileName = filePath.split(/[/\\]/).pop() || "";
+      // Legacy working files encoded the workflow name in the filename.
+      workflowName = fileName
+        .replace(/\.ctrlyoke\.json$/, "")
+        .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
+    }
   }
 
   const workflowFile = queue.getWorkflowFile();

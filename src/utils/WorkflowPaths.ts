@@ -27,6 +27,8 @@ const CREATING_PREFIX = ".creating-";
 const RUN_REF_PREFIX = "run-";
 /** Matches `run-<ISO timestamp with `:`/`.` replaced by `-`>`, e.g. `run-2026-07-20T10-30-00-000Z`. */
 const RUN_REF_PATTERN = /^run-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)$/;
+const WORKFLOW_KEY_TIMESTAMP_SUFFIX =
+  /-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?$/;
 
 // Windows reserved device names (case-insensitive), rejected as any path segment.
 const WINDOWS_RESERVED_NAMES = new Set([
@@ -149,12 +151,20 @@ export function parseRunRefTimestamp(runRef: string): number | undefined {
 }
 
 function sanitizeNameForKey(nameHint: string): string {
-  const base = path.basename(nameHint, path.extname(nameHint));
-  const sanitized = base
+  const fileName = path.basename(nameHint);
+  const base = fileName.replace(/\.ctrlyoke\.(?:json|ya?ml)$/i, "");
+  const nameWithoutExtension =
+    base === fileName ? path.basename(fileName, path.extname(fileName)) : base;
+  const sanitized = nameWithoutExtension
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return sanitized || "workflow";
+}
+
+/** Returns the user-facing name encoded in a timestamped workflow key. */
+export function workflowNameFromKey(workflowKey: string): string {
+  return workflowKey.replace(WORKFLOW_KEY_TIMESTAMP_SUFFIX, "");
 }
 
 // ---- Root/lineage/run path construction ----
@@ -428,7 +438,7 @@ export async function allocateWorkflowKey(
     const timestamp = new Date(now() + attempt)
       .toISOString()
       .replace(/[:.]/g, "-")
-      .substring(0, 19);
+      .replace(/Z$/, "");
     const candidate = `${slug}-${timestamp}`;
     assertValidWorkflowKey(candidate);
     const dir = path.join(root, candidate);
