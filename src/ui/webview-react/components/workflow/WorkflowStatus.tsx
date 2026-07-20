@@ -733,8 +733,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         return;
       }
 
+      // Record the requested address before the asynchronous load. RUN_VIEW_LOADED
+      // discards stale responses by comparing against this value, so posting first
+      // would make the valid response for a newly selected recent workflow look stale.
+      const ui = useUiStore.getState();
+      ui.setDisplayedRunView(
+        address,
+        ui.runSummaries,
+        ui.executionRunRef ?? undefined
+      );
       vscode.postMessage({
-        type: MESSAGE_TYPES.LOAD_WORKFLOW,
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
         address,
       });
       closeDropdown();

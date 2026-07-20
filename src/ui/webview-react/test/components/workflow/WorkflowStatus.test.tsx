@@ -229,12 +229,48 @@ describe("WorkflowStatus — loaded state", () => {
     );
 
     expect(postMessageSpy).not.toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.LOAD_WORKFLOW,
+      type: MESSAGE_TYPES.LOAD_RUN_VIEW,
       address: { workflowKey: "test-0", kind: "draft" },
     });
     expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
       "pointer-events-none"
     );
+  });
+
+  it("selects a recent workflow through the run-view loader", async () => {
+    const user = userEvent.setup();
+    const address = {
+      workflowKey: "test-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T12-00-00-000Z" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
+      runSummaries: [],
+    });
+    setRecentWorkflows([
+      {
+        address,
+        workflowName: "Another Workflow",
+        executionState: EXECUTION_STATES.COMPLETED,
+      },
+    ]);
+    render(<WorkflowStatus />);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(
+      within(screen.getByTitle("test-1")).getByRole("button", {
+        name: "Another Workflow",
+      })
+    );
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+      address,
+    });
+    expect(useUiStore.getState().displayedViewAddress).toEqual(address);
   });
 
   it("keeps a completed workflow selected after it leaves Running Workflows", async () => {

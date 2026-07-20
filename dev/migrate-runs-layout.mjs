@@ -1,410 +1,421 @@
 #!/usr/bin/env node
 /**
- * dev/migrate-runs-layout.mjs
+ * One-time migration for ctrlyoke's pre-run-scoped developer data.
  *
- * THROWAWAY, MANUAL-RUN-ONLY migration script for the "working file per run"
- * refactor (dev/backlog/WORKING_FILE_PER_RUN_PLAN.md). Converts a workspace's
- * pre-refactor `.ctrlyoke/.working/*.ctrlyoke.json` + `.ctrlyoke/.history/<id>/`
- * layout into the new `.ctrlyoke/.runs/<workflowKey>/` layout.
+ * Usage:
+ *   node migrate-runs-layout.mjs [repository-path] [--apply]
  *
- * Not bundled, not invoked by the extension. Run manually per workspace:
- *
- *   node dev/migrate-runs-layout.mjs <workspaceRoot> [--dry-run] [--cleanup]
- *
- * Phases:
- *   1. (default) Convert: create `.runs/<workflowKey>/` lineages from `.working/`
- *      + `.history/`, without touching or deleting the old directories. Prints a
- *      per-lineage success/warning/failure report. Safe to re-run — it refuses to
- *      overwrite an existing `.runs/<workflowKey>` destination.
- *   2. `--cleanup`: after you've verified the new `.runs/` layout looks correct,
- *      re-run with this flag to delete the old `.working/`/`.history/` directories
- *      (and stale `.runner.json` locks). This is the only destructive step.
- *
- * An orphan `.history/<id>/` directory with no matching `.working/<id>.ctrlyoke.json`
- * cannot satisfy the new run invariant (a run needs a definition file). Those are
- * moved to `.ctrlyoke/.migration-rejected/<id>/` instead of being silently dropped
- * or given an invented empty definition.
+ * With no repository path, the current directory is used. The default is a
+ * no-write dry run; pass --apply only after reviewing its report. This script
+ * has no project imports, so it may be copied to another ctrlyoke workspace.
  */
-
 import * as fs from "node:fs/promises";
-import * as fsSync from "node:fs";
 import * as path from "node:path";
 
-const CTRLYOKE_DIR = ".ctrlyoke";
-const WORKING_DIR = ".working";
-const HISTORY_DIR = ".history";
-const RUNS_DIR = ".runs";
-const REJECTED_DIR = ".migration-rejected";
-const WORKING_FILE_NAME = "workflow.ctrlyoke.json";
+const WORKING_FILE_SUFFIX = ".ctrlyoke.json";
+const RUN_FILE_NAME = "workflow.ctrlyoke.json";
 const DESCRIPTOR_FILE_NAME = "workflow.json";
-const RUNNER_LOCK_FILE_NAME = "runner.json";
-const DRAFT_DIR_NAME = "draft";
 const MANIFEST_FILE_NAME = "manifest.json";
+const EVENTS_FILE_NAME = "events.jsonl";
+const RUNNER_LOCK_SUFFIX = ".runner.json";
+const DESCRIPTOR_SCHEMA_VERSION = 1;
+const TIMELINE_SCHEMA_VERSION = "2.2.0";
+const EXECUTION_STATE_FALLBACK = "completed";
+const RESERVED_WINDOWS_NAMES = new Set([
+  "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5",
+  "com6", "com7", "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5",
+  "lpt6", "lpt7", "lpt8", "lpt9",
+]);
 
-function usageAndExit(message) {
-  if (message) console.error(`Error: ${message}`);
-  console.error(
-    "Usage: node dev/migrate-runs-layout.mjs <workspaceRoot> [--dry-run] [--cleanup]"
-  );
-  process.exit(message ? 2 : 0);
+function usage(error) {
+  if (error) console.error(`Error: ${error}\n`);
+  console.log("Usage: node migrate-runs-layout.mjs [repository-path] [--apply]");
+  process.exit(error ? 1 : 0);
 }
 
-const args = process.argv.slice(2);
-const workspaceRoot = args.find((a) => !a.startsWith("--"));
-const dryRun = args.includes("--dry-run");
-const cleanup = args.includes("--cleanup");
-
-if (!workspaceRoot) usageAndExit("workspaceRoot is required");
-const resolvedRoot = path.resolve(workspaceRoot);
-if (!fsSync.existsSync(resolvedRoot)) {
-  usageAndExit(`workspaceRoot does not exist: ${resolvedRoot}`);
+function parseArguments(argv) {
+  let apply = false;
+  let repositoryPath;
+  for (const argument of argv) {
+    if (argument === "--apply") {
+      apply = true;
+    } else if (argument === "--help" || argument === "-h") {
+      usage();
+    } else if (argument.startsWith("-")) {
+      usage(`Unknown option: ${argument}`);
+    } else if (repositoryPath) {
+      usage("Only one repository path may be supplied.");
+    } else {
+      repositoryPath = argument;
+    }
+  }
+  return { apply, workspaceRoot: path.resolve(repositoryPath ?? process.cwd()) };
 }
 
-const ctrlyokeDir = path.join(resolvedRoot, CTRLYOKE_DIR);
-const workingDir = path.join(ctrlyokeDir, WORKING_DIR);
-const historyBaseDir = path.join(ctrlyokeDir, HISTORY_DIR);
-const runsRoot = path.join(ctrlyokeDir, RUNS_DIR);
-const rejectedRoot = path.join(ctrlyokeDir, REJECTED_DIR);
-
-/** Mirrors TimelineRecorder.extractRunTimestamp / WorkflowPaths.parseRunRefTimestamp. */
-function extractRunTimestamp(entryName) {
-  const match = entryName.match(
-    /^run-(?:\d+-)?(\d{4}-\d{2}-\d{2}T[\d-]+Z?)(?:\.json)?$/
-  );
-  if (!match) return 0;
-  const restored = match[1].replace(
-    /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})-(\d{3}Z?)$/,
-    "$1$2:$3:$4.$5"
-  );
-  const ms = new Date(restored).getTime();
-  return Number.isNaN(ms) ? 0 : ms;
+function workflowKeyFromLegacyId(legacyId) {
+  const sanitized = legacyId
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "workflow";
+  const base = RESERVED_WINDOWS_NAMES.has(sanitized.split(".")[0])
+    ? `workflow-${sanitized}`
+    : sanitized;
+  return base;
 }
 
 function formatRunRef(timestampMs) {
   return `run-${new Date(timestampMs).toISOString().replace(/[:.]/g, "-")}`;
 }
 
-async function pathExists(p) {
+function parseLegacyRunTimestamp(name) {
+  const match = /^run-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?Z?)/.exec(name);
+  if (!match) return undefined;
+  const restored = match[1].replace(
+    /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})(?:-(\d{3}))?(Z?)$/,
+    (_all, prefix, hours, minutes, seconds, milliseconds = "000", z = "Z") =>
+      `${prefix}${hours}:${minutes}:${seconds}.${milliseconds}${z || "Z"}`
+  );
+  const timestamp = new Date(restored).getTime();
+  return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+function removeRuntime(value) {
+  if (Array.isArray(value)) return value.map(removeRuntime);
+  if (!value || typeof value !== "object") return value;
+  const clone = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key !== "_runtime") clone[key] = removeRuntime(child);
+  }
+  return clone;
+}
+
+function approximateDefinition(working) {
+  return {
+    ...removeRuntime(working),
+    _migrationNote:
+      "APPROXIMATE: reconstructed from the lineage's final working file; " +
+      "this run's exact historical definition was not recoverable from the pre-run layout.",
+  };
+}
+
+async function exists(candidate) {
   try {
-    await fs.access(p);
+    await fs.access(candidate);
     return true;
   } catch {
     return false;
   }
 }
 
-async function readJson(p) {
-  return JSON.parse(await fs.readFile(p, "utf8"));
-}
-
-async function writeJson(p, data) {
-  await fs.mkdir(path.dirname(p), { recursive: true });
-  await fs.writeFile(p, JSON.stringify(data, null, 2), "utf8");
-}
-
-function extractWorkflowId(workingFileName) {
-  return workingFileName
-    .replace(/\.ctrlyoke\.json$/, "")
-    .replace(/\.ctrlyoke\.yaml$/, "")
-    .replace(/\.ctrlyoke\.yml$/, "");
-}
-
-/** Lists a `.history/<id>/` directory's run entries, newest first, alongside their manifest paths. */
-async function listHistoryRuns(historyDir) {
-  let entries;
+async function realDirectoryEntries(directory) {
+  if (!directory) return [];
   try {
-    entries = await fs.readdir(historyDir, { withFileTypes: true });
-  } catch {
-    return [];
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const result = [];
+    for (const entry of entries) {
+      const fullPath = path.join(directory, entry.name);
+      const stat = await fs.lstat(fullPath);
+      if (!stat.isSymbolicLink()) result.push({ entry, fullPath });
+    }
+    return result;
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
   }
-  const runs = entries
-    .filter(
-      (e) =>
-        (e.isDirectory() && /^run-/.test(e.name)) ||
-        (e.isFile() && /^run-.*\.json$/.test(e.name))
-    )
-    .map((e) => ({
-      name: e.name,
-      isDirectory: e.isDirectory(),
-      timestamp: extractRunTimestamp(e.name),
-      sourcePath: path.join(historyDir, e.name),
-      manifestPath: e.isDirectory()
-        ? path.join(historyDir, e.name, MANIFEST_FILE_NAME)
-        : path.join(historyDir, e.name),
-    }))
-    .sort((a, b) => b.timestamp - a.timestamp);
-  return runs;
 }
 
-/** Runtime-strips a working-file-shaped object for use as an "approximate" older-run definition copy. */
-function stripRuntimeForApproximateCopy(workingFile) {
-  const { _runtime, steps, ...rest } = workingFile;
-  return {
-    ...rest,
-    steps: Array.isArray(steps)
-      ? steps.map(({ _runtime: _stepRuntime, ...stepRest }) => stepRest)
-      : steps,
+async function readJson(filePath, label) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Cannot read ${label} (${filePath}): ${error.message}`);
+  }
+}
+
+async function allocateWorkflowKey(runsRoot, legacyId, reservedKeys) {
+  const base = workflowKeyFromLegacyId(legacyId);
+  for (let ordinal = 1; ordinal <= 1000; ordinal += 1) {
+    const candidate = ordinal === 1 ? base : `${base}-${ordinal}`;
+    const collisionKey = process.platform === "win32" ? candidate.toLowerCase() : candidate;
+    if (reservedKeys.has(collisionKey)) continue;
+    if (await exists(path.join(runsRoot, candidate))) continue;
+    reservedKeys.add(collisionKey);
+    return candidate;
+  }
+  throw new Error(`Could not allocate a workflow key for ${legacyId}`);
+}
+
+async function countTimelineEvents(eventsPath) {
+  if (!(await exists(eventsPath))) return { eventCount: 0, nextSequence: 1 };
+  const lines = (await fs.readFile(eventsPath, "utf8"))
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  let maxSequence = 0;
+  for (const line of lines) {
+    try {
+      const event = JSON.parse(line);
+      if (typeof event.sequence === "number") maxSequence = Math.max(maxSequence, event.sequence);
+    } catch {
+      // Preserve malformed historical content. Runtime readers already tolerate a
+      // truncated final event; the report marks this run as approximate.
+    }
+  }
+  return { eventCount: lines.length, nextSequence: maxSequence + 1 };
+}
+
+async function normalizeManifest({ runDirectory, workflowKey, runId, startedAt, stepCount }) {
+  const manifestPath = path.join(runDirectory, MANIFEST_FILE_NAME);
+  const existing = (await exists(manifestPath))
+    ? await readJson(manifestPath, "legacy manifest")
+    : {};
+  const eventsPath = path.join(runDirectory, EVENTS_FILE_NAME);
+  if (!(await exists(eventsPath))) await fs.writeFile(eventsPath, "", "utf8");
+  const { eventCount, nextSequence } = await countTimelineEvents(eventsPath);
+  const normalized = {
+    schemaVersion: TIMELINE_SCHEMA_VERSION,
+    storageKind: "timeline",
+    workflowId: workflowKey,
+    runId,
+    startedAt: Number.isFinite(existing.startedAt) ? existing.startedAt : startedAt,
+    ...(Number.isFinite(existing.completedAt) ? { completedAt: existing.completedAt } : {}),
+    executionState: typeof existing.executionState === "string"
+      ? existing.executionState
+      : EXECUTION_STATE_FALLBACK,
+    definitionRevision: 1,
+    stepCount: Number.isFinite(existing.stepCount) ? existing.stepCount : stepCount,
+    eventCount,
+    nextSequence,
+    lastUpdatedAt: Number.isFinite(existing.lastUpdatedAt)
+      ? existing.lastUpdatedAt
+      : startedAt,
   };
+  await fs.writeFile(manifestPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
 }
 
-async function convertLineage(workflowId, report) {
-  const workingFilePath = path.join(workingDir, `${workflowId}.ctrlyoke.json`);
-  const workflowKey = workflowId; // Old basename already is a valid sanitized-slug+timestamp key.
-  const lineageDir = path.join(runsRoot, workflowKey);
-
-  if (await pathExists(lineageDir)) {
-    report.warnings.push(
-      `${workflowId}: destination .runs/${workflowKey} already exists — skipped (already migrated?)`
-    );
-    return;
+async function verifyLineage(lineageDirectory, hasRuns) {
+  const descriptor = await readJson(path.join(lineageDirectory, DESCRIPTOR_FILE_NAME), "descriptor");
+  if (!descriptor.workflowKey || !Number.isInteger(descriptor.nextRunId)) {
+    throw new Error("Descriptor is missing its workflow key or next run id.");
   }
-
-  let workingFile;
-  try {
-    workingFile = await readJson(workingFilePath);
-  } catch (error) {
-    report.failures.push(
-      `${workflowId}: failed to read working file: ${error.message}`
-    );
-    return;
+  const entries = await realDirectoryEntries(lineageDirectory);
+  const runDirectories = entries.filter(({ entry }) => entry.isDirectory() && /^run-/.test(entry.name));
+  if (hasRuns && runDirectories.length === 0) throw new Error("No promoted runs were staged.");
+  if (!hasRuns && !(await exists(path.join(lineageDirectory, "draft", RUN_FILE_NAME)))) {
+    throw new Error("Draft working file was not staged.");
   }
-
-  const historyDir = path.join(historyBaseDir, workflowId);
-  const historyRuns = await listHistoryRuns(historyDir);
-
-  if (dryRun) {
-    report.successes.push(
-      `${workflowId}: [dry-run] would create lineage with ${historyRuns.length} run(s)` +
-        (historyRuns.length === 0 ? " (draft only)" : "")
-    );
-    return;
-  }
-
-  const now = Date.now();
-  const stagingDir = path.join(runsRoot, `.creating-${workflowId}-${now}`);
-  await fs.mkdir(stagingDir, { recursive: true });
-
-  try {
-    if (historyRuns.length === 0) {
-      // No history at all — this lineage never executed. Seed a draft instead of a run.
-      await writeJson(
-        path.join(stagingDir, DRAFT_DIR_NAME, WORKING_FILE_NAME),
-        workingFile
-      );
-      const descriptor = {
-        schemaVersion: 1,
-        workflowKey,
-        workflowName: workingFile.workflowName ?? workflowId,
-        ...(workingFile.originalFile
-          ? { originalFile: workingFile.originalFile }
-          : {}),
-        isFavorite: workingFile.isFavorite ?? false,
-        createdAt: workingFile.startedAt ?? now,
-        lastModifiedAt: workingFile.lastModifiedAt ?? now,
-        nextRunId: 1,
-        revision: 1,
-      };
-      await writeJson(path.join(stagingDir, DESCRIPTOR_FILE_NAME), descriptor);
-      await fs.rename(stagingDir, lineageDir);
-      report.successes.push(
-        `${workflowId}: migrated as a draft-only lineage (no history found)`
-      );
-      return;
-    }
-
-    // Newest history run gets the exact working file (definition + runtime) —
-    // it's the one whose in-memory definition the old singleton still reflected.
-    const runRefTimestamps = new Map();
-    let nextRunId = 1;
-    for (const run of historyRuns.slice().reverse()) {
-      // oldest → newest, so runId order matches chronological order
-      const isNewest = run === historyRuns[0];
-      const runRef = formatRunRef(run.timestamp || now);
-      runRefTimestamps.set(run, runRef);
-      const runDir = path.join(stagingDir, runRef);
-      await fs.mkdir(runDir, { recursive: true });
-
-      // Copy manifest.json + events.jsonl if present (directory-form runs only;
-      // legacy bare-file runs predate the timeline format and have no companion events file).
-      if (run.isDirectory) {
-        const eventsSrc = path.join(run.sourcePath, "events.jsonl");
-        await fs
-          .copyFile(run.manifestPath, path.join(runDir, MANIFEST_FILE_NAME))
-          .catch((e) =>
-            report.warnings.push(
-              `${workflowId}/${run.name}: could not copy manifest: ${e.message}`
-            )
-          );
-        await fs
-          .copyFile(eventsSrc, path.join(runDir, "events.jsonl"))
-          .catch(() => {
-            /* legacy runs may not have events.jsonl — not fatal */
-          });
-      } else {
-        await fs
-          .copyFile(run.sourcePath, path.join(runDir, MANIFEST_FILE_NAME))
-          .catch((e) =>
-            report.warnings.push(
-              `${workflowId}/${run.name}: could not copy legacy manifest: ${e.message}`
-            )
-          );
+  for (const { fullPath } of runDirectories) {
+    for (const fileName of [RUN_FILE_NAME, MANIFEST_FILE_NAME, EVENTS_FILE_NAME]) {
+      if (!(await exists(path.join(fullPath, fileName)))) {
+        throw new Error(`Staged run is missing ${fileName}.`);
       }
-
-      if (isNewest) {
-        await writeJson(path.join(runDir, WORKING_FILE_NAME), {
-          ...workingFile,
-          definitionRevision: 1,
-        });
-      } else {
-        // Older runs: the old layout never stored their exact historical definition —
-        // only the newest working file survived. Mark this copy as approximate.
-        await writeJson(path.join(runDir, WORKING_FILE_NAME), {
-          ...stripRuntimeForApproximateCopy(workingFile),
-          definitionRevision: 1,
-          _migrationNote:
-            "APPROXIMATE: reconstructed from the lineage's final working file; " +
-            "this run's exact historical definition was not recoverable from the pre-refactor layout.",
-        });
-        report.warnings.push(
-          `${workflowId}/${run.name}: definition is APPROXIMATE (older run, exact definition not recoverable)`
-        );
-      }
-      nextRunId += 1;
     }
+    await readJson(path.join(fullPath, RUN_FILE_NAME), "staged run definition");
+    await readJson(path.join(fullPath, MANIFEST_FILE_NAME), "staged manifest");
+  }
+}
 
-    const newestRun = historyRuns[0];
-    const latestRunRef = runRefTimestamps.get(newestRun);
-
-    const descriptor = {
-      schemaVersion: 1,
+async function buildLineage({ stagingDirectory, workflowKey, workingFile, historyDirectory }) {
+  const working = await readJson(workingFile, "legacy working file");
+  const historyEntries = (await realDirectoryEntries(historyDirectory))
+    .filter(({ entry }) =>
+      (entry.isDirectory() && entry.name.startsWith("run-")) ||
+      (entry.isFile() && /^run-.*\.json$/.test(entry.name))
+    )
+    .sort((left, right) => left.entry.name.localeCompare(right.entry.name));
+  const usedRunRefs = new Set();
+  const stagedRuns = [];
+  for (let index = 0; index < historyEntries.length; index += 1) {
+    const source = historyEntries[index];
+    const sourceManifestPath = source.entry.isDirectory()
+      ? path.join(source.fullPath, MANIFEST_FILE_NAME)
+      : source.fullPath;
+    const sourceManifest = await readJson(sourceManifestPath, "legacy manifest");
+    const baseTimestamp = Number.isFinite(sourceManifest.startedAt)
+      ? sourceManifest.startedAt
+      : parseLegacyRunTimestamp(source.entry.name) ?? Date.now() + index;
+    let offset = 0;
+    let runRef = formatRunRef(baseTimestamp);
+    while (usedRunRefs.has(runRef)) runRef = formatRunRef(baseTimestamp + ++offset);
+    usedRunRefs.add(runRef);
+    const destination = path.join(stagingDirectory, runRef);
+    if (source.entry.isDirectory()) {
+      await fs.cp(source.fullPath, destination, { recursive: true, errorOnExist: true, force: false });
+    } else {
+      await fs.mkdir(destination);
+      await fs.copyFile(sourceManifestPath, path.join(destination, MANIFEST_FILE_NAME));
+    }
+    await fs.writeFile(
+      path.join(destination, RUN_FILE_NAME),
+      `${JSON.stringify(approximateDefinition(working), null, 2)}\n`,
+      "utf8"
+    );
+    await normalizeManifest({
+      runDirectory: destination,
       workflowKey,
-      workflowName: workingFile.workflowName ?? workflowId,
-      ...(workingFile.originalFile
-        ? { originalFile: workingFile.originalFile }
-        : {}),
-      isFavorite: workingFile.isFavorite ?? false,
-      createdAt: workingFile.startedAt ?? now,
-      lastModifiedAt: workingFile.lastModifiedAt ?? now,
-      latestRunRef,
-      nextRunId,
-      revision: 1,
-    };
-    await writeJson(path.join(stagingDir, DESCRIPTOR_FILE_NAME), descriptor);
-
-    // Verify every expected destination exists before promoting.
-    for (const run of historyRuns) {
-      const runRef = runRefTimestamps.get(run);
-      const runFile = path.join(stagingDir, runRef, WORKING_FILE_NAME);
-      if (!(await pathExists(runFile))) {
-        throw new Error(`verification failed: missing ${runFile}`);
-      }
-    }
-    await fs.rename(stagingDir, lineageDir);
-    report.successes.push(
-      `${workflowId}: migrated ${historyRuns.length} run(s), latest=${latestRunRef}`
-    );
-  } catch (error) {
-    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
-    report.failures.push(`${workflowId}: ${error.message}`);
-  }
-}
-
-async function quarantineOrphanHistory(workflowId, report) {
-  const historyDir = path.join(historyBaseDir, workflowId);
-  if (dryRun) {
-    report.warnings.push(
-      `${workflowId}: [dry-run] orphan history (no working file) would be quarantined to .migration-rejected/`
-    );
-    return;
-  }
-  const destination = path.join(rejectedRoot, workflowId);
-  if (await pathExists(destination)) {
-    report.warnings.push(
-      `${workflowId}: orphan history quarantine destination already exists — skipped`
-    );
-    return;
-  }
-  await fs.mkdir(rejectedRoot, { recursive: true });
-  await fs.rename(historyDir, destination);
-  report.warnings.push(
-    `${workflowId}: orphan history (no matching working file) quarantined to .migration-rejected/${workflowId}`
-  );
-}
-
-async function runConvertPhase() {
-  const report = { successes: [], warnings: [], failures: [] };
-
-  let workingFiles = [];
-  try {
-    workingFiles = (await fs.readdir(workingDir)).filter((f) =>
-      f.endsWith(".ctrlyoke.json")
-    );
-  } catch {
-    console.log(`No ${WORKING_DIR}/ directory found — nothing to convert.`);
+      runId: index + 1,
+      startedAt: baseTimestamp,
+      stepCount: Array.isArray(working.steps) ? working.steps.length : 0,
+    });
+    stagedRuns.push({ runRef, timestamp: baseTimestamp, destination });
   }
 
-  const workflowIds = new Set(workingFiles.map(extractWorkflowId));
-
-  for (const workflowId of workflowIds) {
-    await convertLineage(workflowId, report);
-  }
-
-  // Orphan history: a history lineage with no matching working file.
-  let historyLineages = [];
-  try {
-    historyLineages = await fs.readdir(historyBaseDir);
-  } catch {
-    /* no history directory at all — fine */
-  }
-  for (const workflowId of historyLineages) {
-    if (!workflowIds.has(workflowId)) {
-      await quarantineOrphanHistory(workflowId, report);
-    }
-  }
-
-  console.log("\n=== Migration report ===");
-  console.log(`Successes (${report.successes.length}):`);
-  report.successes.forEach((m) => console.log(`  ✓ ${m}`));
-  console.log(`Warnings (${report.warnings.length}):`);
-  report.warnings.forEach((m) => console.log(`  ! ${m}`));
-  console.log(`Failures (${report.failures.length}):`);
-  report.failures.forEach((m) => console.log(`  ✗ ${m}`));
-
-  if (dryRun) {
-    console.log(
-      "\nDry run only — nothing was written. Re-run without --dry-run to convert."
-    );
-  } else if (report.failures.length === 0) {
-    console.log(
-      "\nConversion complete. Verify .ctrlyoke/.runs/ looks correct, then re-run with --cleanup to remove the old .working/.history directories."
-    );
+  if (stagedRuns.length > 0) {
+    const newest = [...stagedRuns].sort((left, right) => right.timestamp - left.timestamp)[0];
+    await fs.writeFile(path.join(newest.destination, RUN_FILE_NAME), `${JSON.stringify(working, null, 2)}\n`, "utf8");
   } else {
-    console.log(
-      "\nSome lineages failed to convert — inspect them before running --cleanup."
-    );
+    const draftDirectory = path.join(stagingDirectory, "draft");
+    await fs.mkdir(draftDirectory);
+    await fs.writeFile(path.join(draftDirectory, RUN_FILE_NAME), `${JSON.stringify(working, null, 2)}\n`, "utf8");
+  }
+
+  const latest = [...stagedRuns].sort((left, right) => right.timestamp - left.timestamp)[0];
+  const createdAt = Math.min(
+    Number.isFinite(working.startedAt) ? working.startedAt : Date.now(),
+    ...stagedRuns.map((run) => run.timestamp)
+  );
+  const descriptor = {
+    schemaVersion: DESCRIPTOR_SCHEMA_VERSION,
+    workflowKey,
+    workflowName: typeof working.workflowName === "string" && working.workflowName.trim()
+      ? working.workflowName
+      : workflowKey,
+    ...(typeof working.originalFile === "string" && working.originalFile ? { originalFile: working.originalFile } : {}),
+    isFavorite: typeof working.isFavorite === "boolean" ? working.isFavorite : false,
+    createdAt,
+    lastModifiedAt: Number.isFinite(working.lastModifiedAt) ? working.lastModifiedAt : Date.now(),
+    ...(latest ? { latestRunRef: latest.runRef } : {}),
+    nextRunId: stagedRuns.length + 1,
+    revision: 1,
+  };
+  await fs.writeFile(path.join(stagingDirectory, DESCRIPTOR_FILE_NAME), `${JSON.stringify(descriptor, null, 2)}\n`, "utf8");
+  await verifyLineage(stagingDirectory, stagedRuns.length > 0);
+  return { runCount: stagedRuns.length, latestRunRef: latest?.runRef };
+}
+
+async function removeIfEmpty(directory) {
+  try {
+    await fs.rmdir(directory);
+  } catch (error) {
+    if (error?.code !== "ENOTEMPTY" && error?.code !== "ENOENT") throw error;
   }
 }
 
-async function runCleanupPhase() {
-  if (!(await pathExists(runsRoot))) {
-    usageAndExit(
-      "No .ctrlyoke/.runs/ directory found — run the convert phase first."
-    );
+async function removeMigratedLegacySources({ workingFile, historyDirectory, runnerLockFile }) {
+  const cleanupFailures = [];
+  const cleanup = async (label, operation) => {
+    try {
+      await operation();
+    } catch (error) {
+      if (error?.code !== "ENOENT") cleanupFailures.push(`${label}: ${error.message}`);
+    }
+  };
+  await cleanup("working file", () => fs.unlink(workingFile));
+  if (historyDirectory) {
+    await cleanup("history directory", () => fs.rm(historyDirectory, { recursive: true, force: false }));
   }
-  console.log(
-    `This will permanently delete:\n  ${workingDir}\n  ${historyBaseDir}\nand any stale *.runner.json locks alongside .working/ entries.`
-  );
-  if (dryRun) {
-    console.log("[dry-run] would delete the above directories.");
+  await cleanup("stale runner lock", () => fs.unlink(runnerLockFile));
+  return cleanupFailures;
+}
+
+async function migrate(options) {
+  const ctrlyokeDirectory = path.join(options.workspaceRoot, ".ctrlyoke");
+  const workingDirectory = path.join(ctrlyokeDirectory, ".working");
+  const historyRoot = path.join(ctrlyokeDirectory, ".history");
+  const runsRoot = path.join(ctrlyokeDirectory, ".runs");
+  const quarantineRoot = path.join(ctrlyokeDirectory, ".migration-rejected");
+  if (!(await exists(ctrlyokeDirectory))) throw new Error(`No .ctrlyoke directory found in ${options.workspaceRoot}`);
+
+  const workingEntries = (await realDirectoryEntries(workingDirectory))
+    .filter(({ entry }) => entry.isFile() && entry.name.endsWith(WORKING_FILE_SUFFIX));
+  const historyEntries = (await realDirectoryEntries(historyRoot))
+    .filter(({ entry }) => entry.isDirectory());
+  const historyByLegacyId = new Map(historyEntries.map(({ entry, fullPath }) => [entry.name, fullPath]));
+  const reservedKeys = new Set();
+  const reports = [];
+
+  if (workingEntries.length === 0 && historyEntries.length === 0) {
+    console.log("No legacy .working or .history data found; nothing to migrate.");
     return;
   }
-  await fs.rm(workingDir, { recursive: true, force: true }).catch(() => {});
-  await fs.rm(historyBaseDir, { recursive: true, force: true }).catch(() => {});
-  console.log("Cleanup complete.");
+
+  for (const { entry, fullPath } of workingEntries) {
+    const legacyId = entry.name.slice(0, -WORKING_FILE_SUFFIX.length);
+    const baseWorkflowKey = workflowKeyFromLegacyId(legacyId);
+    const baseDestination = path.join(runsRoot, baseWorkflowKey);
+    const historyDirectory = historyByLegacyId.get(legacyId);
+    historyByLegacyId.delete(legacyId);
+    if (await exists(baseDestination)) {
+      reports.push({
+        status: "SKIP",
+        legacyId,
+        detail: `Destination already exists; legacy files were left untouched: ${baseDestination}`,
+      });
+      continue;
+    }
+    const workflowKey = await allocateWorkflowKey(runsRoot, legacyId, reservedKeys);
+    const destination = path.join(runsRoot, workflowKey);
+    if (!options.apply) {
+      const runCount = (await realDirectoryEntries(historyDirectory)).filter(({ entry: history }) =>
+        (history.isDirectory() && history.name.startsWith("run-")) ||
+        (history.isFile() && /^run-.*\.json$/.test(history.name))
+      ).length;
+      reports.push({ status: "PLAN", legacyId, detail: `${workflowKey}: ${runCount || "draft"}` });
+      continue;
+    }
+
+    const staging = path.join(runsRoot, `.migrating-${workflowKey}-${process.pid}-${Date.now()}`);
+    try {
+      await fs.mkdir(runsRoot, { recursive: true });
+      await fs.mkdir(staging);
+      const result = await buildLineage({ stagingDirectory: staging, workflowKey, workingFile: fullPath, historyDirectory });
+      await fs.rename(staging, destination);
+      const cleanupFailures = await removeMigratedLegacySources({
+        workingFile: fullPath,
+        historyDirectory,
+        runnerLockFile: path.join(workingDirectory, `${legacyId}${RUNNER_LOCK_SUFFIX}`),
+      });
+      reports.push({
+        status: cleanupFailures.length > 0 ? "WARN" : "OK",
+        legacyId,
+        detail: `${workflowKey}: ${result.runCount || "draft"}${result.latestRunRef ? `, latest ${result.latestRunRef}` : ""}${cleanupFailures.length > 0 ? `; new lineage created but legacy cleanup failed (${cleanupFailures.join("; ")})` : ""}`,
+      });
+    } catch (error) {
+      reports.push({ status: "FAIL", legacyId, detail: error.message });
+      await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  for (const [legacyId, historyDirectory] of historyByLegacyId) {
+    const destination = path.join(quarantineRoot, `${workflowKeyFromLegacyId(legacyId)}-${Date.now()}`);
+    if (!options.apply) {
+      reports.push({ status: "QUARANTINE", legacyId, detail: `orphan history -> ${destination}` });
+      continue;
+    }
+    try {
+      await fs.mkdir(quarantineRoot, { recursive: true });
+      await fs.rename(historyDirectory, destination);
+      reports.push({ status: "QUARANTINED", legacyId, detail: destination });
+    } catch (error) {
+      reports.push({ status: "FAIL", legacyId, detail: `Could not quarantine orphan history: ${error.message}` });
+    }
+  }
+
+  if (options.apply) {
+    await removeIfEmpty(workingDirectory);
+    await removeIfEmpty(historyRoot);
+  }
+
+  console.log(`\nctrlyoke legacy layout migration (${options.apply ? "APPLIED" : "DRY RUN"})`);
+  for (const report of reports) console.log(`${report.status.padEnd(11)} ${report.legacyId} — ${report.detail}`);
+  const failed = reports.filter((report) => report.status === "FAIL").length;
+  const planned = reports.filter((report) => report.status === "PLAN").length;
+  console.log(`\n${reports.length - failed} reported, ${failed} failed.${options.apply ? "" : ` Re-run with --apply to migrate ${planned} planned lineage(s).`}`);
+  if (failed > 0) process.exitCode = 1;
 }
 
-if (cleanup) {
-  await runCleanupPhase();
-} else {
-  await runConvertPhase();
-}
+const options = parseArguments(process.argv.slice(2));
+migrate(options).catch((error) => {
+  console.error(`Migration failed: ${error.message}`);
+  process.exitCode = 1;
+});

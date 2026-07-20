@@ -884,6 +884,48 @@ describe("history search messages", () => {
 });
 
 describe("active workflow summaries", () => {
+  it("accepts a workflow binding while the displayed run's execution is unknown", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({
+      activeWorkflowId: null,
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T12-00-00-000Z" as never,
+      },
+      executionRunRef: null,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "instance-1",
+      });
+    });
+
+    expect(useUiStore.getState().activeWorkflowId).toBe("instance-1");
+  });
+
+  it("ignores live workflow messages while viewing a known different run", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({
+      activeWorkflowId: null,
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T12-00-00-000Z" as never,
+      },
+      executionRunRef: "run-2026-07-20T13-00-00-000Z",
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "instance-1",
+      });
+    });
+
+    expect(useUiStore.getState().activeWorkflowId).toBeNull();
+  });
+
   it("keeps pausing workflows in loadedWorkflows", () => {
     renderHook(() => useMessageHandler());
 

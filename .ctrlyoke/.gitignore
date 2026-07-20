@@ -10,3 +10,4 @@ notifications/
 settings.json
 .search-index/
 .working/
+.runs/

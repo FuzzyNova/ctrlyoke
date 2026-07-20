@@ -1963,7 +1963,7 @@ function createMessageHandlers(): MessageHandlerMap {
         `— current loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
     );
     if (summary && isWorkflowActive(summary.executionState)) {
-      useUiStore.getState().addLoadedWorkflow(summary);
+      uiStore.addLoadedWorkflow(summary);
     }
   };
 
@@ -2190,6 +2190,7 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       if (
         message.workflowId &&
         view.displayedViewAddress?.kind === "run" &&
+        view.executionRunRef !== null &&
         view.executionRunRef !== view.displayedViewAddress.runRef &&
         message.type !== MESSAGE_TYPES.RUN_VIEW_LOADED &&
         message.type !== MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS
