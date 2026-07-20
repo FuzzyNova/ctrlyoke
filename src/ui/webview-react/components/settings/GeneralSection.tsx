@@ -24,7 +24,7 @@ export function GeneralSection({
   const general = settings.settings.general;
   const ui = settings.settings.ui;
   const exec = settings.settings.execution;
-  const history = settings.settings.history;
+  const runs = settings.settings.runs;
   const sources = settings.sources as Record<string, SettingSource>;
   const isMultiRoot = settings.isMultiRoot;
 
@@ -245,27 +245,20 @@ export function GeneralSection({
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          History
+          Runs
         </h3>
-        <SettingToggleRow
-          label="Save output history"
-          description="Save the output of each workflow run for later review."
-          checked={history.saveOutput}
-          onChange={(v) => onUpdate("history.saveOutput", v)}
-          path="history.saveOutput"
-          {...rowProps}
-        />
         <SettingInputRow
-          label="Max history runs (-1 = unlimited)"
-          id="history-max-runs"
-          path="history.maxRuns"
+          label="Max runs to keep (-1 = unlimited)"
+          description="Deletes entire runs—definition and output—oldest first."
+          id="runs-max-runs"
+          path="runs.maxRuns"
           {...rowProps}
         >
           <LocalNumberInput
-            id="history-max-runs"
+            id="runs-max-runs"
             min={-1}
-            value={history.maxRuns}
-            onCommit={(v) => onUpdate("history.maxRuns", v)}
+            value={runs.maxRuns}
+            onCommit={(v) => onUpdate("runs.maxRuns", v)}
             parse={(v) => parseInt(v, 10) || -1}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />

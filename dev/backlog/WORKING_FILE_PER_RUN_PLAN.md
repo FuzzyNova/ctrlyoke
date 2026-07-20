@@ -1,6 +1,6 @@
 # Working File Per Run — Run-Scoped Workflow Definitions
 
-Status: **ready for implementation** (source inventory and design review complete; implementation not started)
+Status: **Phase 1 (1a/1b/1c) implemented.** Phase 2 (per-client coherent run views) not started.
 
 Constraint: **pre-release, zero backward compatibility.** The implementation replaces the old layout and contracts outright. It must not ship dual reads, mirrored writes, legacy path fallbacks, or deprecated message/settings aliases. Existing developer data may be converted once with the throwaway script described below.
 

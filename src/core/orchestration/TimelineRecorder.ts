@@ -1,9 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
+  TIMELINE_EVENT_TYPES,
   TIMELINE_SCHEMA_VERSION,
   TIMELINE_STORAGE_FILES,
   TIMELINE_STORAGE_KIND,
+  type WorkflowDefinitionSnapshot,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
   type WorkflowTimelineEventDraft,
@@ -68,7 +70,8 @@ export class TimelineRecorder {
     workflowId: string,
     runId: number,
     startedAt: number,
-    executionState: ExecutionState
+    executionState: ExecutionState,
+    definitionRevision: number = 1
   ): Promise<string> {
     const manifestPath =
       TimelineRecorder.getManifestPathForRunDirectory(runDirectoryPath);
@@ -79,7 +82,8 @@ export class TimelineRecorder {
       runId,
       startedAt,
       executionState,
-      runStepCount: 0,
+      definitionRevision,
+      stepCount: 0,
       eventCount: 0,
       nextSequence: 1,
       lastUpdatedAt: startedAt,
@@ -187,6 +191,66 @@ export class TimelineRecorder {
         });
 
         return events;
+      })
+    );
+  }
+
+  /**
+   * Commit a `DEFINITION_REVISION_COMMITTED` snapshot for `definitionRevision`, but only
+   * if it is newer than the manifest's currently recorded revision. No-ops (returns
+   * `committed: false`) for a revision the manifest already reflects, so repeated calls
+   * from every output-writing call site for the same revision are cheap and race-safe —
+   * the read-decide-write happens atomically under this manifest's serialized queue+lock,
+   * the same guarantee `appendEvents`/`updateManifest` rely on individually.
+   *
+   * `initializeRunAt` seeds the manifest at the run's actual starting `definitionRevision`
+   * (1 for a fresh run), so the initial revision never gets a redundant event here — the
+   * run's own `workflow.ctrlyoke.json`, written at promotion, is already the exact record of
+   * what that revision is. Only later revisions (definition changes after the run started)
+   * need a timeline event, because those are the ones a reader scanning only events.jsonl
+   * would otherwise have no durable record of.
+   */
+  async commitDefinitionRevisionIfNewer(
+    manifestPath: string,
+    definitionRevision: number,
+    definition: WorkflowDefinitionSnapshot,
+    timestampMs: number
+  ): Promise<{ committed: boolean; event?: WorkflowTimelineEvent }> {
+    return this.runSerializedManifestOperation(manifestPath, async () =>
+      withFileLock(manifestPath, async () => {
+        const manifest = await this.readManifest(manifestPath);
+        if (definitionRevision <= manifest.definitionRevision) {
+          return { committed: false };
+        }
+
+        const event: WorkflowTimelineEvent = {
+          eventType: TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED,
+          timestampMs,
+          workflowId: manifest.workflowId,
+          runId: manifest.runId,
+          sequence: manifest.nextSequence,
+          payload: {
+            definitionRevision,
+            priorDefinitionRevision: manifest.definitionRevision,
+            definition,
+          },
+        };
+
+        await fs.promises.appendFile(
+          TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
+          `${JSON.stringify(event)}\n`,
+          "utf8"
+        );
+
+        await this.writeManifestDirect(manifestPath, {
+          ...manifest,
+          definitionRevision,
+          eventCount: manifest.eventCount + 1,
+          nextSequence: manifest.nextSequence + 1,
+          lastUpdatedAt: Math.max(manifest.lastUpdatedAt, timestampMs),
+        });
+
+        return { committed: true, event };
       })
     );
   }

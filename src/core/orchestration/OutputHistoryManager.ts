@@ -23,7 +23,15 @@ import { TimelineRecorder } from "./TimelineRecorder";
 import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
+  type WorkflowDefinitionSnapshot,
+  type RunSummary,
 } from "../../types/WorkflowTimelineTypes";
+
+/** The definitionRevision that produced an attempt, plus the snapshot to commit before its first output. */
+export interface DefinitionRevisionContext {
+  definitionRevision: number;
+  definition: WorkflowDefinitionSnapshot;
+}
 import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import {
@@ -100,7 +108,7 @@ export class OutputHistoryManager {
       );
 
       // Prune old runs if needed (disk-only operation)
-      const maxRuns = ConfigurationUtils.getMaxHistoryRuns();
+      const maxRuns = ConfigurationUtils.getMaxRuns();
       await this.pruneOldRuns(workflowKey, maxRuns);
 
       const runCount = (await this.getRunsForWorkflow(workflowKey)).length;
@@ -119,7 +127,8 @@ export class OutputHistoryManager {
   async saveExecutionOutput(
     historyFilePath: string,
     target: OutputExecutionTarget,
-    cliOutputs: CliOutput[]
+    cliOutputs: CliOutput[],
+    definitionContext?: DefinitionRevisionContext
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -129,10 +138,17 @@ export class OutputHistoryManager {
       // Land any buffered deltas before the aggregate so events.jsonl stays a
       // faithful log; the adapter seals the attempt once the aggregate lands.
       await this.streamingBuffer.flush(historyFilePath);
+      if (definitionContext) {
+        await this.commitDefinitionRevisionIfNeeded(
+          historyFilePath,
+          definitionContext
+        );
+      }
       await this.saveTimelineExecutionOutput(
         historyFilePath,
         target,
-        cliOutputs
+        cliOutputs,
+        definitionContext?.definitionRevision
       );
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
@@ -147,12 +163,19 @@ export class OutputHistoryManager {
   async startStreamingExecutionOutput(
     historyFilePath: string,
     target: OutputExecutionTarget,
-    cliOutput: CliOutput
+    cliOutput: CliOutput,
+    definitionContext?: DefinitionRevisionContext
   ): Promise<void> {
     if (!historyFilePath) {
       return;
     }
     try {
+      if (definitionContext) {
+        await this.commitDefinitionRevisionIfNeeded(
+          historyFilePath,
+          definitionContext
+        );
+      }
       await this.timelineRecorder.appendEvents(historyFilePath, [
         {
           eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
@@ -160,11 +183,33 @@ export class OutputHistoryManager {
           target,
           runIndex: cliOutput.runIndex ?? 0,
           attemptIndex: cliOutput.attemptIndex ?? 0,
+          definitionRevision: definitionContext?.definitionRevision,
           payload: { cliOutput },
         },
       ]);
     } catch (error) {
       Log.warn("Failed to start streaming output history:", error);
+    }
+  }
+
+  /**
+   * Commit a `DEFINITION_REVISION_COMMITTED` snapshot before this attempt's first
+   * output, if the manifest does not already reflect this revision. No-ops for a
+   * revision already recorded — cheap to call from every output-writing call site.
+   */
+  private async commitDefinitionRevisionIfNeeded(
+    historyFilePath: string,
+    context: DefinitionRevisionContext
+  ): Promise<void> {
+    try {
+      await this.timelineRecorder.commitDefinitionRevisionIfNewer(
+        historyFilePath,
+        context.definitionRevision,
+        context.definition,
+        Date.now()
+      );
+    } catch (error) {
+      Log.warn("Failed to commit definition revision snapshot:", error);
     }
   }
 
@@ -306,6 +351,18 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      // Keep the manifest's executionState authoritative for every transition, not
+      // only init/finalize, so manifest-only run lists show paused/pausing/cancelling
+      // states correctly. finalizeRun (called after this for terminal transitions,
+      // serialized through the same per-manifest queue) still owns completedAt/stepCount.
+      await this.timelineRecorder.updateManifest(
+        historyFilePath,
+        (manifest) => ({
+          ...manifest,
+          executionState: transition.current.status,
+          lastUpdatedAt: transition.timestampMs,
+        })
+      );
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
@@ -360,7 +417,7 @@ export class OutputHistoryManager {
   async finalizeRun(
     historyFilePath: string,
     executionState: ExecutionState,
-    runStepCount: number
+    stepCount: number
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -375,7 +432,7 @@ export class OutputHistoryManager {
           ...manifest,
           completedAt,
           executionState,
-          runStepCount,
+          stepCount,
           lastUpdatedAt: completedAt,
         })
       );
@@ -388,7 +445,7 @@ export class OutputHistoryManager {
   /** Finalize the newest still-running run after startup detects a dead owner. */
   async recoverInterruptedRun(
     workflowKey: WorkflowKey,
-    runStepCount: number
+    stepCount: number
   ): Promise<void> {
     const [latestRun] = await this.getRunsForWorkflow(workflowKey);
     if (!latestRun) {
@@ -404,7 +461,7 @@ export class OutputHistoryManager {
       await this.finalizeRun(
         historyFilePath,
         EXECUTION_STATES.STOPPED,
-        runStepCount
+        stepCount
       );
     } catch (error) {
       Log.warn("Failed to recover interrupted history run:", error);
@@ -509,6 +566,125 @@ export class OutputHistoryManager {
       })
     );
     return states;
+  }
+
+  /**
+   * Manifest-only run listing for a lineage, newest first. Reads each run's
+   * manifest.json plus its workflow.ctrlyoke.json (for harness/model disclosure only —
+   * no output events are loaded). Runs whose manifest cannot be read are treated as
+   * recovery candidates and excluded rather than returned as malformed rows.
+   */
+  async getRunSummaries(workflowKey: WorkflowKey): Promise<RunSummary[]> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
+    const summaries = await Promise.all(
+      runs.map((runRef) => this.readRunSummary(workflowKey, runRef))
+    );
+    return summaries.filter(
+      (summary): summary is RunSummary => summary !== null
+    );
+  }
+
+  private async readRunSummary(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<RunSummary | null> {
+    const historyFilePath = this.getHistoryFilePath(workflowKey, runRef);
+    try {
+      const manifest =
+        await this.timelineRecorder.readManifest(historyFilePath);
+      const {
+        primaryHarness,
+        primaryModel,
+        hasMixedHarnesses,
+        hasMixedModels,
+      } = await this.readRunHarnessDisclosure(workflowKey, runRef);
+
+      return {
+        workflowKey,
+        runRef,
+        runId: manifest.runId,
+        startedAt: manifest.startedAt,
+        completedAt: manifest.completedAt,
+        executionState: manifest.executionState,
+        definitionRevision: manifest.definitionRevision,
+        stepCount: manifest.stepCount,
+        primaryHarness,
+        primaryModel,
+        hasMixedHarnesses,
+        hasMixedModels,
+      };
+    } catch (error) {
+      Log.warn(
+        `[OutputHistoryManager] getRunSummaries: skipping unreadable run ${workflowKey}/${runRef}:`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Best-effort harness/model disclosure for a run: the resolved value each queue
+   * step actually executed with (`_runtime.harness`/`_runtime.model`) falling back to
+   * its declared step/workflow-level override for steps that have not executed yet.
+   * Script-only runs and runs whose steps disclose nothing report both as undefined.
+   */
+  private async readRunHarnessDisclosure(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<{
+    primaryHarness?: string;
+    primaryModel?: string;
+    hasMixedHarnesses: boolean;
+    hasMixedModels: boolean;
+  }> {
+    const runFilePath = WorkflowPaths.runFilePath(
+      this._workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    try {
+      const content = await fs.promises.readFile(runFilePath, "utf8");
+      const workingFile = JSON.parse(content) as {
+        harness?: string;
+        model?: string;
+        steps?: Array<{
+          type?: string;
+          harness?: string;
+          model?: string;
+          _runtime?: { harness?: string; model?: string };
+        }>;
+      };
+
+      const harnesses = new Set<string>();
+      const models = new Set<string>();
+      for (const step of workingFile.steps ?? []) {
+        if (step.type === "script") {
+          continue;
+        }
+        const harness =
+          step._runtime?.harness ?? step.harness ?? workingFile.harness;
+        const model = step._runtime?.model ?? step.model ?? workingFile.model;
+        if (harness) {
+          harnesses.add(harness);
+        }
+        if (model) {
+          models.add(model);
+        }
+      }
+
+      return {
+        primaryHarness: harnesses.values().next().value,
+        primaryModel: models.values().next().value,
+        hasMixedHarnesses: harnesses.size > 1,
+        hasMixedModels: models.size > 1,
+      };
+    } catch {
+      return {
+        hasMixedHarnesses: false,
+        hasMixedModels: false,
+      };
+    }
   }
 
   /**
@@ -722,7 +898,8 @@ export class OutputHistoryManager {
   private async saveTimelineExecutionOutput(
     historyFilePath: string,
     target: OutputExecutionTarget,
-    cliOutputs: CliOutput[]
+    cliOutputs: CliOutput[],
+    definitionRevision?: number
   ): Promise<void> {
     if (cliOutputs.length === 0) {
       return;
@@ -735,6 +912,7 @@ export class OutputHistoryManager {
         target,
         runIndex: cliOutput.runIndex ?? 0,
         attemptIndex: cliOutput.attemptIndex ?? 0,
+        definitionRevision,
         payload: { cliOutput },
       })
     );

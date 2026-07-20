@@ -358,18 +358,14 @@
         }
       }
     },
-    "history": {
+    "runs": {
       "type": "object",
-      "description": "Execution history settings.",
+      "description": "Execution run retention settings. History is always on.",
       "additionalProperties": false,
       "properties": {
-        "saveOutput": {
-          "type": "boolean",
-          "description": "Save CLI output to execution history."
-        },
         "maxRuns": {
           "type": "number",
-          "description": "Maximum number of history entries to retain. Use -1 for unlimited."
+          "description": "Deletes entire runs—definition and output—oldest first. -1 keeps all runs."
         }
       }
     },

@@ -42,7 +42,10 @@ import {
   CliOutputFormatter,
   DashboardOutput,
 } from "./harness/shared/CliOutputFormatter";
-import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
+import {
+  OutputHistoryManager,
+  type DefinitionRevisionContext,
+} from "./orchestration/OutputHistoryManager";
 import { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import {
   WorkspaceSnapshotService,
@@ -156,6 +159,12 @@ export interface WorkflowExecutionContext {
     onOutput: (chunk: string) => void;
   }) => Promise<number>;
   targetRunIndices?: Map<string, number>;
+  /**
+   * The definitionRevision producing this run's current output, plus the snapshot to
+   * commit before its first attempt. A getter so it reflects the live queue definition
+   * (append/edit can advance it mid-run), evaluated fresh on every output write.
+   */
+  getDefinitionRevisionContext?: () => DefinitionRevisionContext | undefined;
 }
 
 type ExecutionTarget = WorkflowAttemptTarget;
@@ -811,7 +820,8 @@ export class WorkflowExecutor {
       void context.outputHistoryManager.startStreamingExecutionOutput(
         context.historyFilePath,
         this.toOutputExecutionTarget(target),
-        initCliOutput
+        initCliOutput,
+        context.getDefinitionRevisionContext?.()
       );
     }
 
@@ -1253,7 +1263,8 @@ export class WorkflowExecutor {
       .saveExecutionOutput(
         context.historyFilePath,
         this.toOutputExecutionTarget(target),
-        [output]
+        [output],
+        context.getDefinitionRevisionContext?.()
       )
       .catch((err) =>
         Log.warn(`Failed to save ${logContext} to history:`, err)
@@ -1347,7 +1358,8 @@ export class WorkflowExecutor {
       void context.outputHistoryManager.startStreamingExecutionOutput(
         context.historyFilePath,
         this.toOutputExecutionTarget(target),
-        placeholder
+        placeholder,
+        context.getDefinitionRevisionContext?.()
       );
     }
   }

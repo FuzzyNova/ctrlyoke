@@ -378,9 +378,14 @@ export interface WorkingFile extends PromptFile {
   lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
   isFavorite?: boolean; // Whether the workflow should be pinned to the top of recent workflow history
   /**
-   * Monotonic counter bumped by `WorkingFileManager` on every definition-changing write
-   * (draft edit, appended tail, or a rewind's suffix edit). Not bumped for pure runtime
-   * persistence. Starts at 1. Fully wired to output-event tagging in phase 1c.
+   * Monotonic counter bumped in-memory by `PromptQueue` on every definition-changing
+   * mutation (append/insert/replace/delete/reorder/property edit, or a rewind's suffix
+   * edit — phase 3) and serialized by `WorkingFileManager`. Not bumped for pure runtime
+   * persistence. Starts at 1; a promoted run restarts its own sequence at 1.
+   * `OutputHistoryManager`/`TimelineRecorder` commit a `DEFINITION_REVISION_COMMITTED`
+   * snapshot before a revision's first output and tag `CLI_OUTPUT_RECORDED` events with
+   * the revision that produced them (revision 1 itself is not re-committed as an event —
+   * the run's own `workflow.ctrlyoke.json`, written at promotion, already is that record).
    */
   definitionRevision: number;
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
@@ -560,6 +565,8 @@ export interface QueueState extends WorkflowRuntimeState {
   workflowKey?: WorkflowKey;
   /** The run this working file currently addresses (undefined while still a draft, pre-first-execution). */
   runRef?: RunRef;
+  /** Mirrors `WorkingFile.definitionRevision`; see that field's doc comment. */
+  definitionRevision: number;
 }
 
 /**

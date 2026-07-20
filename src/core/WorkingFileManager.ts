@@ -36,6 +36,12 @@ export interface IWorkingFileQueueAccess {
   /** Current execution status */
   getStatus(): ExecutionState;
 
+  /** Current in-memory definition revision counter (see `WorkingFile.definitionRevision`) */
+  getDefinitionRevision(): number;
+
+  /** Reconcile the in-memory definition revision counter after a disk-authoritative write. */
+  setDefinitionRevision(revision: number): void;
+
   /** Current workflow name */
   getWorkflowName(): string | undefined;
 
@@ -331,6 +337,12 @@ export class WorkingFileManager {
         // Update last modified timestamp
         workingFile.lastModifiedAt = Date.now();
 
+        // Definition revision is bumped by the queue's definition-mutating methods
+        // (append/insert/replace/delete/reorder); this just serializes the current
+        // in-memory value. Not bumped here — pure runtime persistence must not advance it.
+        workingFile.definitionRevision =
+          this.queueAccess.getDefinitionRevision();
+
         // Update workflow-level runtime state
         // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
         const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
@@ -425,9 +437,14 @@ export class WorkingFileManager {
 
           if (modified) {
             workingFile.lastModifiedAt = Date.now();
+            workingFile.definitionRevision =
+              (workingFile.definitionRevision ?? 1) + 1;
             await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
               skipLock: true,
             });
+            this.queueAccess.setDefinitionRevision(
+              workingFile.definitionRevision
+            );
           }
 
           for (const key of appliedKeys) {

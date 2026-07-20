@@ -38,7 +38,7 @@ export const CONFIG_KEYS = {
   PERMISSIONS: "permissions",
   EXECUTION: "execution",
   QUEUE: "queue",
-  HISTORY: "history",
+  RUNS: "runs",
   TERMINAL: "terminal",
   UI: "ui",
   SERVER: "server",
@@ -979,21 +979,15 @@ export const ConfigurationUtils = {
   },
 
   // ============================================================
-  // OUTPUT HISTORY SETTINGS
+  // RUNS RETENTION SETTINGS
   // ============================================================
 
   /**
-   * Check if output history saving is enabled
+   * Get the maximum number of runs to retain per workflow lineage.
+   * -1 (default) keeps all runs; a finite value prunes complete runs oldest-first.
    */
-  isSaveOutputHistoryEnabled(): boolean {
-    return configService.get(CONFIG_KEYS.HISTORY).saveOutput;
-  },
-
-  /**
-   * Get the maximum number of history runs to retain per workflow
-   */
-  getMaxHistoryRuns(): number {
-    return configService.get(CONFIG_KEYS.HISTORY).maxRuns;
+  getMaxRuns(): number {
+    return configService.get(CONFIG_KEYS.RUNS).maxRuns;
   },
 
   /**

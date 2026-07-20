@@ -11,6 +11,27 @@ import type {
   UserHookConfig,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
+import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
+
+/**
+ * Builds the execution-relevant definition snapshot committed to the timeline
+ * before a definition revision's first output (`DEFINITION_REVISION_COMMITTED`).
+ * Strips per-step `_runtime` — the snapshot records what will execute, not what already has.
+ */
+export function buildDefinitionSnapshot(
+  workflowName: string,
+  steps: WorkflowStep[]
+): WorkflowDefinitionSnapshot {
+  return {
+    workflowName,
+    steps: steps.map((step) => {
+      const { _runtime: _omitted, ...rest } = step as WorkflowStep & {
+        _runtime?: unknown;
+      };
+      return rest as WorkflowStep;
+    }),
+  };
+}
 
 /**
  * Removes webview-only fields before core queue state is persisted.

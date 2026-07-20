@@ -11,6 +11,7 @@ import { EXECUTION_STATES } from "../../types/DashboardConstants";
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────
 
 function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
+  let definitionRevision = 1;
   return {
     getWorkingFilePath: () => workingFilePath,
     getSteps: () => [],
@@ -24,6 +25,10 @@ function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
     getFinalStepRuntime: () => undefined,
     updateWorkflowProperty: () => {
       /* no-op */
+    },
+    getDefinitionRevision: () => definitionRevision,
+    setDefinitionRevision: (revision: number) => {
+      definitionRevision = revision;
     },
   };
 }
@@ -204,6 +209,27 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(parsed.workflowName, "test-workflow");
       assert.strictEqual(parsed.steps!.length, 1);
       assert.strictEqual(parsed.definitionRevision, 1);
+    });
+
+    test("updateWorkingFileDirect serializes the queue's current definitionRevision, not the disk value", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+
+      const { workingFilePath } = await new WorkingFileManager(
+        makeMockAccess()
+      ).createWorkingFile(
+        "test-run",
+        [{ prompt: "step" }],
+        tmpWorkspace,
+        "test-workflow"
+      );
+
+      const access = makeMockAccess(workingFilePath);
+      access.setDefinitionRevision(3);
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const content = await fs.readFile(workingFilePath, "utf-8");
+      const parsed = JSON.parse(content) as WorkingFile;
+      assert.strictEqual(parsed.definitionRevision, 3);
     });
 
     test("workflowKey is sanitized — spaces and special chars replaced with hyphens", async () => {

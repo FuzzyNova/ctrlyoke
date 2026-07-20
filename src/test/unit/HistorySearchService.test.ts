@@ -342,7 +342,7 @@ suite("HistorySearchService", () => {
       ...manifest,
       executionState: EXECUTION_STATES.COMPLETED,
       completedAt: startedAt + 10,
-      runStepCount: 1,
+      stepCount: 1,
       lastUpdatedAt: startedAt + 10,
     }));
 

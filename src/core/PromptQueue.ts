@@ -96,6 +96,7 @@ export class PromptQueue {
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
+      definitionRevision: 1,
     };
 
     // Create WorkingFileManager with adapter that provides access to queue state
@@ -111,6 +112,10 @@ export class PromptQueue {
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
+      getDefinitionRevision: () => this.state.definitionRevision,
+      setDefinitionRevision: (revision: number) => {
+        this.state.definitionRevision = revision;
+      },
     };
     this.workingFileManager = new WorkingFileManager(queueAccess);
   }
@@ -155,6 +160,7 @@ export class PromptQueue {
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
+      definitionRevision: 1,
       // Clear working file path and workflow name
       workingFilePath: undefined,
       workflowName: undefined,
@@ -299,6 +305,7 @@ export class PromptQueue {
       queueExtensions: 0,
       workingFilePath,
       workflowName: this.state.workflowName, // Preserve workflow name across reloads
+      definitionRevision: this.state.definitionRevision, // Preserve across reloads (restoreFromWorkingFile sets the authoritative value)
     };
 
     // Store complete workflow file for property resolution
@@ -411,6 +418,7 @@ export class PromptQueue {
         workflowName: workingFile.workflowName, // Restore workflow name from working file
         workflowKey: lineageAddress?.workflowKey,
         runRef: lineageAddress?.runRef,
+        definitionRevision: workingFile.definitionRevision ?? 1,
       };
 
       // Store complete workflow file for property resolution
@@ -1221,6 +1229,7 @@ export class PromptQueue {
         `appendSteps: preserving runtime ownership (current: ${this.stateMachine.status}, completed count: ${this.state.completedIndices.size})`
       );
 
+      this.bumpDefinitionRevision();
       this.emitStateChange();
 
       // Update working file if it exists (direct call since we're already in the operation queue)
@@ -1281,6 +1290,7 @@ export class PromptQueue {
         this.state.completedIndices = updated;
       }
 
+      this.bumpDefinitionRevision();
       this.emitStateChange();
       await this.workingFileManager.updateWorkingFileDirect();
       Log.info(
@@ -1332,6 +1342,7 @@ export class PromptQueue {
     this.state.workingFilePath = workingFilePath;
     this.state.workflowKey = workflowKey;
     this.state.runRef = undefined;
+    this.state.definitionRevision = 1;
     this.emitStateChange();
 
     return workingFilePath;
@@ -1364,6 +1375,9 @@ export class PromptQueue {
 
     this.state.workingFilePath = result.workingFilePath;
     this.state.runRef = result.runRef;
+    // A promoted run starts its own definition-revision sequence (mirrors the
+    // hardcoded `definitionRevision: 1` WorkingFileManager.promoteToNewRun writes).
+    this.state.definitionRevision = 1;
     this.emitStateChange();
 
     return {
@@ -1492,6 +1506,15 @@ export class PromptQueue {
   }
 
   /**
+   * Bump the in-memory definition revision counter. Call from every step-definition
+   * mutation (append/insert/replace/delete/reorder/property edit) — never for pure
+   * runtime persistence (completion, pause/resume, session metadata).
+   */
+  private bumpDefinitionRevision(): void {
+    this.state.definitionRevision = (this.state.definitionRevision ?? 1) + 1;
+  }
+
+  /**
    * Update an existing prompt in the queue
    * @param index - Prompt index (0-based)
    * @param updates - Partial PromptStep updates to apply
@@ -1510,6 +1533,8 @@ export class PromptQueue {
       ...this.state.steps[index],
       ...updates,
     } as WorkflowStep;
+
+    this.bumpDefinitionRevision();
 
     // Persist to working file (skip merge to avoid undoing the update)
     await this.updateWorkingFile(true);
@@ -1533,6 +1558,7 @@ export class PromptQueue {
       throw new Error(`Invalid prompt index: ${index}`);
     }
     this.state.steps[index] = step;
+    this.bumpDefinitionRevision();
     await this.updateWorkingFile(true);
     this.emitStateChange();
     Log.debug(`Replaced step at index ${index}`);
@@ -1593,6 +1619,8 @@ export class PromptQueue {
     if (this.state.results.length > index) {
       this.state.results.splice(index, 1);
     }
+
+    this.bumpDefinitionRevision();
 
     // Persist to working file (skip merge to avoid undoing the delete)
     await this.updateWorkingFile(true);
@@ -1692,6 +1720,7 @@ export class PromptQueue {
     const newPendingResults = newPendingOrder.map((i) => pendingResults[i]);
     this.state.steps = [...donePrompts, ...newPending];
     this.state.results = [...doneResults, ...newPendingResults];
+    this.bumpDefinitionRevision();
     this.emitStateChange();
     await this.updateWorkingFile();
   }
@@ -1761,6 +1790,8 @@ export class PromptQueue {
       ),
       timestamp: new Date(),
     }));
+
+    this.bumpDefinitionRevision();
 
     // Persist to working file (skip merge — we know exactly what we want)
     await this.updateWorkingFile(true);

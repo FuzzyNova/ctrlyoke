@@ -553,7 +553,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const manifest = await recorder.readManifest(filePath);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
-    assert.strictEqual(manifest.runStepCount, 3);
+    assert.strictEqual(manifest.stepCount, 3);
     assert.strictEqual(typeof manifest.completedAt, "number");
     const recovered = await manager.loadHistory(filePath);
     const output = recovered.orderedEntries.find(
@@ -819,6 +819,180 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (await manager.getRunsForWorkflow(workflowKey)).length,
       1
     );
+  });
+
+  test("getRunSummaries reads manifest fields newest-first and excludes unreadable runs", async () => {
+    // getRunsForWorkflow sorts by the timestamp embedded in each run's directory
+    // name (WorkflowPaths.parseRunRefTimestamp), not by manifest.startedAt — so the
+    // "newer" run here needs a later runRef timestamp, not just a higher runId.
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-summaries",
+      { runId: 1, startedAt: 1000 }
+    );
+    await initAdditionalRun(
+      recorder,
+      tempWorkspace,
+      workflowKey,
+      2,
+      Date.now() + 1_000_000
+    );
+    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 3);
+
+    // An unreadable run directory (no manifest.json) must be skipped, not thrown.
+    const corruptRunDir = WorkflowPaths.runDir(
+      tempWorkspace,
+      workflowKey,
+      WorkflowPaths.formatRunRef(500)
+    );
+    await fs.mkdir(corruptRunDir, { recursive: true });
+
+    const summaries = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(summaries.length, 2);
+    assert.strictEqual(summaries[0]?.runId, 2);
+    assert.strictEqual(summaries[1]?.runId, 1);
+    assert.strictEqual(summaries[1]?.runRef, runRef);
+    assert.strictEqual(summaries[1]?.workflowKey, workflowKey);
+    assert.strictEqual(summaries[1]?.stepCount, 3);
+    assert.strictEqual(summaries[1]?.definitionRevision, 1);
+    assert.strictEqual(
+      summaries[1]?.executionState,
+      EXECUTION_STATES.COMPLETED
+    );
+    assert.strictEqual(summaries[1]?.hasMixedHarnesses, false);
+    assert.strictEqual(summaries[1]?.hasMixedModels, false);
+  });
+
+  test("appendRuntimeTransition keeps the manifest executionState authoritative for non-terminal transitions", async () => {
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-transition-manifest"
+    );
+
+    await manager.appendRuntimeTransition(historyInit.filePath, {
+      command: "pause",
+      previous: {
+        status: EXECUTION_STATES.RUNNING,
+        stopped: false,
+        totalPausedDuration: 0,
+      },
+      current: {
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        totalPausedDuration: 0,
+      },
+      timestampMs: 150,
+    });
+
+    const manifest = await recorder.readManifest(historyInit.filePath);
+    assert.strictEqual(manifest.executionState, EXECUTION_STATES.PAUSED);
+    assert.strictEqual(manifest.lastUpdatedAt, 150);
+  });
+
+  test("saveExecutionOutput commits a definition revision snapshot only when it advances, and tags output with it", async () => {
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-definition-revision"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshotV1 = { workflowName: "wf", steps: [{ prompt: "v1" }] };
+    const snapshotV2 = { workflowName: "wf", steps: [{ prompt: "v2" }] };
+
+    // Revision 1 matches the manifest's starting revision — no COMMITTED event expected;
+    // the run's own workflow.ctrlyoke.json is already the exact record of revision 1.
+    await manager.saveExecutionOutput(
+      historyInit.filePath,
+      target,
+      [
+        {
+          prompt: "v1",
+          response: "first",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 100,
+          attemptIndex: 0,
+        },
+      ],
+      { definitionRevision: 1, definition: snapshotV1 }
+    );
+
+    let events = await recorder.readEvents(historyInit.filePath);
+    assert.strictEqual(
+      events.filter(
+        (e) =>
+          e.eventType === TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+      ).length,
+      0
+    );
+
+    // Revision 2 is newer — expect exactly one COMMITTED event, and the output event
+    // tagged with definitionRevision: 2.
+    await manager.saveExecutionOutput(
+      historyInit.filePath,
+      target,
+      [
+        {
+          prompt: "v2",
+          response: "second",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 200,
+          attemptIndex: 1,
+        },
+      ],
+      { definitionRevision: 2, definition: snapshotV2 }
+    );
+
+    // A second attempt at the same revision must not re-commit.
+    await manager.saveExecutionOutput(
+      historyInit.filePath,
+      target,
+      [
+        {
+          prompt: "v2",
+          response: "third",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 300,
+          attemptIndex: 2,
+        },
+      ],
+      { definitionRevision: 2, definition: snapshotV2 }
+    );
+
+    events = await recorder.readEvents(historyInit.filePath);
+    const committed = events.filter(
+      (e) => e.eventType === TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    );
+    assert.strictEqual(committed.length, 1);
+    if (
+      committed[0]?.eventType !==
+      TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    ) {
+      assert.fail("expected a definition revision committed event");
+    }
+    assert.strictEqual(committed[0].payload.definitionRevision, 2);
+    assert.strictEqual(committed[0].payload.priorDefinitionRevision, 1);
+    assert.deepStrictEqual(committed[0].payload.definition, snapshotV2);
+
+    const cliOutputEvents = events.filter(
+      (e) => e.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+    );
+    assert.deepStrictEqual(
+      cliOutputEvents.map((e) =>
+        e.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+          ? e.definitionRevision
+          : undefined
+      ),
+      [1, 2, 2]
+    );
+
+    const manifest = await recorder.readManifest(historyInit.filePath);
+    assert.strictEqual(manifest.definitionRevision, 2);
   });
 });
 

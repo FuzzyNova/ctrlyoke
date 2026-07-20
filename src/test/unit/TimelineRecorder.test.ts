@@ -106,7 +106,7 @@ suite("TimelineRecorder", () => {
         ...manifest,
         completedAt: 200,
         executionState: EXECUTION_STATES.COMPLETED,
-        runStepCount: 3,
+        stepCount: 3,
         lastUpdatedAt: 200,
       })),
     ]);
@@ -119,7 +119,7 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.eventCount, 1);
     assert.strictEqual(manifest.nextSequence, 2);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.COMPLETED);
-    assert.strictEqual(manifest.runStepCount, 3);
+    assert.strictEqual(manifest.stepCount, 3);
     assert.strictEqual(manifest.completedAt, 200);
     assert.strictEqual(manifest.lastUpdatedAt, 200);
   });

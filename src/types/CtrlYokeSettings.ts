@@ -90,9 +90,8 @@ export interface CtrlYokeGlobalSettings {
     notifyOnExtension: boolean;
   };
 
-  // History
-  history: {
-    saveOutput: boolean;
+  // Runs (always-on execution history)
+  runs: {
     maxRuns: number;
   };
 
@@ -304,8 +303,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     unlimitedMode: false,
     notifyOnExtension: true,
   },
-  history: {
-    saveOutput: true,
+  runs: {
     maxRuns: -1,
   },
   terminal: {

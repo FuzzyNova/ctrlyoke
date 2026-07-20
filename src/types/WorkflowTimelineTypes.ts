@@ -2,6 +2,9 @@ import type { ExecutionState } from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
+  WorkflowKey,
+  RunRef,
+  WorkflowStep,
 } from "./CtrlYokeTypes";
 import type {
   OutputExecutionTarget,
@@ -16,7 +19,7 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = "2.1.0" as const;
+export const TIMELINE_SCHEMA_VERSION = "2.2.0" as const;
 
 export const TIMELINE_EVENT_TYPES = {
   WORKFLOW_RUNTIME_TRANSITION_RECORDED: "workflowRuntimeTransitionRecorded",
@@ -24,6 +27,7 @@ export const TIMELINE_EVENT_TYPES = {
   CLI_OUTPUT_CHUNK_APPENDED: "cliOutputChunkAppended",
   CLI_OUTPUT_EVENTS_APPENDED: "cliOutputEventsAppended",
   STATUS_MESSAGE_RECORDED: "statusMessageRecorded",
+  DEFINITION_REVISION_COMMITTED: "definitionRevisionCommitted",
   // Legacy aggregate event retained for read compatibility only.
   STATUS_MESSAGES_UPDATED: "statusMessagesUpdated",
   WORKSPACE_SNAPSHOT_CAPTURED: "workspaceSnapshotCaptured",
@@ -46,10 +50,32 @@ export interface WorkflowRunManifest {
   startedAt: number;
   completedAt?: number;
   executionState: ExecutionState;
-  runStepCount: number;
+  /** Definition revision most recently committed for this run (see `DEFINITION_REVISION_COMMITTED`). */
+  definitionRevision: number;
+  stepCount: number;
   eventCount: number;
   nextSequence: number;
   lastUpdatedAt: number;
+}
+
+/**
+ * Lightweight, manifest-only projection of a run's identity and state — the
+ * shape `OutputHistoryManager.getRunSummaries` returns for run listing/navigation
+ * without loading the run's full definition or output events.
+ */
+export interface RunSummary {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  runId: number;
+  startedAt: number;
+  completedAt?: number;
+  executionState: ExecutionState;
+  definitionRevision: number;
+  stepCount: number;
+  primaryHarness?: string;
+  primaryModel?: string;
+  hasMixedHarnesses: boolean;
+  hasMixedModels: boolean;
 }
 
 export interface HistorySearchResult {
@@ -142,6 +168,24 @@ export interface WorkflowRuntimeTransitionPayload {
   current: WorkflowRuntimeState;
 }
 
+/**
+ * Execution-relevant definition content, transient runtime removed — the
+ * durable record of exactly what a `definitionRevision` executed.
+ */
+export interface WorkflowDefinitionSnapshot {
+  workflowName: string;
+  steps: WorkflowStep[];
+}
+
+export interface DefinitionRevisionCommittedEventDraft extends RunTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED;
+  payload: {
+    definitionRevision: number;
+    priorDefinitionRevision?: number;
+    definition: WorkflowDefinitionSnapshot;
+  };
+}
+
 export interface WorkflowRuntimeTransitionRecordedEventDraft extends RunTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED;
   payload: {
@@ -153,6 +197,8 @@ export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftB
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
   runIndex?: number;
   attemptIndex: number;
+  /** The definitionRevision that produced this attempt (see `DEFINITION_REVISION_COMMITTED`). */
+  definitionRevision?: number;
   payload: {
     cliOutput: CliOutput;
   };
@@ -226,6 +272,7 @@ export interface UndoRecordUpdatedEventDraft extends TargetedTimelineEventDraftB
 }
 
 export type WorkflowTimelineEventDraft =
+  | DefinitionRevisionCommittedEventDraft
   | WorkflowRuntimeTransitionRecordedEventDraft
   | CliOutputRecordedEventDraft
   | CliOutputChunkAppendedEventDraft
@@ -242,6 +289,8 @@ export interface CliOutputRecordedEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
   runIndex?: number;
   attemptIndex: number;
+  /** The definitionRevision that produced this attempt (see `DEFINITION_REVISION_COMMITTED`). */
+  definitionRevision?: number;
   payload: {
     cliOutput: CliOutput;
   };
@@ -321,7 +370,17 @@ export interface UndoRecordUpdatedEvent extends TargetedTimelineEventBase {
   };
 }
 
+export interface DefinitionRevisionCommittedEvent extends RunTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED;
+  payload: {
+    definitionRevision: number;
+    priorDefinitionRevision?: number;
+    definition: WorkflowDefinitionSnapshot;
+  };
+}
+
 export type WorkflowTimelineEvent =
+  | DefinitionRevisionCommittedEvent
   | WorkflowRuntimeTransitionRecordedEvent
   | CliOutputRecordedEvent
   | CliOutputChunkAppendedEvent

@@ -2,6 +2,7 @@ import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
 import {
+  buildDefinitionSnapshot,
   sanitizeClipboardWorkflowStep,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
@@ -73,7 +74,10 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
 import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
-import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
+import {
+  OutputHistoryManager,
+  type DefinitionRevisionContext,
+} from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
@@ -2310,7 +2314,8 @@ export class WorkflowInstance {
       await this.outputHistoryManager.saveExecutionOutput(
         historyFilePath,
         target,
-        [merged]
+        [merged],
+        this.getDefinitionRevisionContext()
       );
     } catch (error) {
       Log.warn(
@@ -2417,6 +2422,7 @@ export class WorkflowInstance {
       get dashboardProvider() {
         return self.dashboardSink;
       },
+      getDefinitionRevisionContext: () => self.getDefinitionRevisionContext(),
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.
       shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
@@ -2954,6 +2960,18 @@ export class WorkflowInstance {
 
   private getAuthoritativeExecutionState(): QueueState["status"] {
     return this.workflowRuntime.status;
+  }
+
+  /** Current definitionRevision + snapshot to commit before this revision's first output. */
+  private getDefinitionRevisionContext(): DefinitionRevisionContext {
+    const state = this.promptQueue.getState();
+    return {
+      definitionRevision: state.definitionRevision,
+      definition: buildDefinitionSnapshot(
+        state.workflowName ?? "",
+        state.steps
+      ),
+    };
   }
 
   private reopenRuntimeForContinuationIfNeeded(
