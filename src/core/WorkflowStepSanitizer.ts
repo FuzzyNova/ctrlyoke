@@ -9,6 +9,7 @@ import type {
   ScriptStep,
   ToolPermissionsOverride,
   UserHookConfig,
+  WorkingFile,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
@@ -65,6 +66,58 @@ export function stripViewOnlyWorkflowStepFields(
     details?: unknown;
   };
   return persistableStep as WorkflowStep;
+}
+
+/**
+ * Drops response values from a working-file step without interpreting them.
+ * Pre-release cutover deliberately does not migrate or fall back to these
+ * obsolete duplicate fields; events.jsonl is the only durable response record.
+ */
+export function stripTimelineDuplicatedRuntimeOutput(
+  step: WorkflowStep
+): WorkflowStep {
+  if (!step._runtime) {
+    return step;
+  }
+  const {
+    responseText: _responseText,
+    scriptOutput: _scriptOutput,
+    ...runtime
+  } = step._runtime as typeof step._runtime & {
+    responseText?: unknown;
+    scriptOutput?: unknown;
+  };
+  return { ...step, _runtime: runtime } as WorkflowStep;
+}
+
+/** Apply the response-source cutover at every working-file read/write boundary. */
+export function stripTimelineDuplicatedWorkingFileOutput(
+  workingFile: WorkingFile
+): WorkingFile {
+  const finalRuntime = workingFile._runtime?.finalStep;
+  const { responseTexts: _responseTexts, ...finalStepRuntime } =
+    (finalRuntime ?? {}) as typeof finalRuntime & { responseTexts?: unknown };
+  return {
+    ...workingFile,
+    ...(workingFile.steps
+      ? { steps: workingFile.steps.map(stripTimelineDuplicatedRuntimeOutput) }
+      : {}),
+    ...(workingFile.finalStep
+      ? {
+          finalStep: stripTimelineDuplicatedRuntimeOutput(
+            workingFile.finalStep
+          ),
+        }
+      : {}),
+    ...(workingFile._runtime
+      ? {
+          _runtime: {
+            ...workingFile._runtime,
+            ...(finalRuntime ? { finalStep: finalStepRuntime } : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -75,7 +75,7 @@ suite("CliPromptRuntimeCoordinator", () => {
     ]);
   });
 
-  test("should persist partial cancelled output and parsed session metadata", async () => {
+  test("does not persist partial cancelled output while retaining session metadata", async () => {
     const prompt: PromptStep = {
       prompt: "cancelled after output",
     };
@@ -110,7 +110,16 @@ suite("CliPromptRuntimeCoordinator", () => {
       prompt._runtime?.sessionId,
       "session-from-partial-output"
     );
-    assert.strictEqual(prompt._runtime?.responseText, "partial answer");
+    assert.deepStrictEqual(prompt._runtime, {
+      harness: HARNESS_IDS.COPILOT_CLI,
+      model: "",
+      skills: undefined,
+      startedAt: 1234,
+      completedAt: 9999,
+      sessionId: "session-from-partial-output",
+      failureKind: undefined,
+      failureMessage: undefined,
+    });
     assert.strictEqual(updateCount, 1);
   });
 

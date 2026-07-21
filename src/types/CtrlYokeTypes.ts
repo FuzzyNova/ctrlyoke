@@ -234,9 +234,6 @@ export interface FinalStepRuntimeState {
   status?: StepStatus;
   startedAt?: number;
   completedAt?: number;
-  /** Response texts from each finalStep loop execution, indexed by loopIndex (0-based).
-   *  Used by priorContext "finalStepAll" and "finalStepPrevious" keywords. */
-  responseTexts?: string[];
 }
 
 /**
@@ -469,11 +466,6 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
   /** Retry count if applicable */
   retryCount?: number;
 
-  /** The plain-text AI response from this prompt's execution.
-   *  Stored here to enable priorContext injection in subsequent prompts.
-   *  Also persists across pause/resume cycles via the working file. */
-  responseText?: string;
-
   /** Session ID associated with the completed prompt output. */
   sessionId?: string;
 
@@ -483,10 +475,6 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
   /** Context window usage captured from the last completed output. */
   contextWindowUsed?: number;
   contextWindowSize?: number;
-
-  /** Captured stdout/stderr from a ScriptStep execution.
-   *  Stored here to enable priorContext injection for script steps. */
-  scriptOutput?: ScriptRuntimeOutput;
 
   /** Structured runtime failure classification for this prompt attempt. */
   failureKind?: FailureKind;

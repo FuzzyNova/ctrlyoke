@@ -2498,12 +2498,8 @@ export class WorkflowInstance {
       (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
     );
 
-    // Fold the resumed output into the step's persisted `responseText` so
-    // priorContext injection references the full response, not just the pre-resume
-    // portion. (Output copy is fixed separately in the UI's extractCliOutputText,
-    // which reads the merged structured events, not this field.) Independent of the
-    // history persistence below — a step can be referenced via priorContext even
-    // when history capture is unavailable.
+    // Follow-up output is persisted to the timeline before it enters the small
+    // active-only cache. Prior-context consumers always resolve the timeline.
     const followUpText = extractTextFromEvents({ events: contentEvents });
     const historyFilePath = this.activeHistoryFilePath;
     const latestContextWindowSync = [...events]
@@ -2512,8 +2508,6 @@ export class WorkflowInstance {
       ?.data as ContextWindowSyncData | undefined;
     if (historyFilePath) {
       try {
-        // Commit the immutable follow-up record before extending mutable
-        // responseText, which later phases will hydrate from this timeline.
         await this.outputHistoryManager.recordFollowUpResponse(
           historyFilePath,
           target,
@@ -2537,22 +2531,15 @@ export class WorkflowInstance {
       }
     }
     if (followUpText) {
-      try {
-        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-          await this.promptQueue.appendPromptResponseText(
-            target.stepIndex,
-            followUpText
-          );
-        } else {
-          await this.promptQueue.appendFinalStepResponseText(
-            target.loopIndex,
-            followUpText
-          );
-        }
-      } catch (error) {
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to append resumed activity to responseText:`,
-          error
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        this.promptQueue.appendPromptResponseText(
+          target.stepIndex,
+          followUpText
+        );
+      } else {
+        this.promptQueue.appendFinalStepResponseText(
+          target.loopIndex,
+          followUpText
         );
       }
     }

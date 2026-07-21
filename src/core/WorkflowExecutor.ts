@@ -544,8 +544,6 @@ export class WorkflowExecutor {
           workflowFile,
           workingFilePersistence: this.promptQueue,
           resolvePriorContextItems: context.resolvePriorContextItems,
-          getFinalStepResponseTexts: () =>
-            this.promptQueue.getFinalStepResponseTexts(),
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,
@@ -583,24 +581,6 @@ export class WorkflowExecutor {
 
     const { responseText, duration } = result;
 
-    // Store response text for priorContext injection in subsequent prompts.
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      // Queue steps: store on _runtime for "all" / "previous" / array-index access
-      if (!prompt._runtime) {
-        prompt._runtime = { startedAt: Date.now() };
-      }
-      prompt._runtime.responseText = responseText;
-      await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
-        responseText,
-      });
-    } else {
-      // finalStep loops: store indexed by loopIndex for "finalStepAll" / "finalStepPrevious"
-      await this.promptQueue.storeFinalStepResponseText(
-        target.loopIndex,
-        responseText
-      );
-    }
-
     await this.updateDashboardWithResponse(
       context,
       integration,
@@ -611,6 +591,16 @@ export class WorkflowExecutor {
       duration,
       runIndex
     );
+    // The completed response is durable in events.jsonl before it becomes
+    // visible to any active-only cache or subsequent prompt construction.
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.promptQueue.cacheRuntimeOutput(target.stepIndex, { responseText });
+    } else {
+      this.promptQueue.storeFinalStepResponseText(
+        target.loopIndex,
+        responseText
+      );
+    }
 
     // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
     // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
@@ -914,17 +904,13 @@ export class WorkflowExecutor {
 
     const succeeded = evalResult.passed;
 
-    // Persist script output to _runtime so subsequent steps can include it via priorContext.
+    // Persist lossless script data to the timeline before any dependent prompt can use it.
     const scriptRuntimeOutput: ScriptRuntimeOutput = {
       command: step.script,
       stdout: evalResult.stdout,
       stderr: evalResult.stderr,
       exitCode: evalResult.exitCode,
     };
-    await this.promptQueue.persistRuntimeMetadata(
-      stepIndex >= 0 ? stepIndex : this.promptQueue.getState().currentIndex,
-      { scriptOutput: scriptRuntimeOutput }
-    );
     if (context.historyFilePath && context.outputHistoryManager) {
       await context.outputHistoryManager.recordScriptExecution(
         context.historyFilePath,
@@ -965,6 +951,14 @@ export class WorkflowExecutor {
       finalCliOutput,
       "script step output"
     );
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
+        responseText: outputText,
+        scriptOutput: scriptRuntimeOutput,
+      });
+    } else {
+      this.promptQueue.storeFinalStepResponseText(target.loopIndex, outputText);
+    }
 
     if (evalResult.timeout) {
       await this.trackStatusMessage(
@@ -2012,8 +2006,6 @@ export class WorkflowExecutor {
           workflowFile,
           workingFilePersistence: this.promptQueue,
           resolvePriorContextItems: context.resolvePriorContextItems,
-          getFinalStepResponseTexts: () =>
-            this.promptQueue.getFinalStepResponseTexts(),
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,
@@ -2234,23 +2226,17 @@ export class WorkflowExecutor {
         context.getDefinitionRevisionContext?.()
       );
 
-      if (target.kind === FINAL_STEP_PHASES.QUEUE && stoppedOutput.response) {
-        await this.promptQueue
-          .persistRuntimeMetadata(target.stepIndex, {
+      if (stoppedOutput.response) {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
             responseText: stoppedOutput.response,
-          })
-          .catch((err) =>
-            Log.warn("Failed to persist stopped response text:", err)
+          });
+        } else {
+          this.promptQueue.storeFinalStepResponseText(
+            target.loopIndex,
+            stoppedOutput.response
           );
-      } else if (
-        target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-        stoppedOutput.response
-      ) {
-        await this.promptQueue
-          .storeFinalStepResponseText(target.loopIndex, stoppedOutput.response)
-          .catch((err) =>
-            Log.warn("Failed to persist stopped finalStep response text:", err)
-          );
+        }
       }
 
       await this.trackStatusMessage(

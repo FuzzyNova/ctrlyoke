@@ -583,11 +583,6 @@ definitions:
           retryCount:
             type: number
             description: Number of retry attempts for this prompt
-          responseText:
-            type: string
-            description: >-
-              Plain-text AI response from this prompt's execution. Written automatically during
-              workflow execution. Used by the priorContext feature to inject prior prompt outputs.
           failureKind:
             type: string
             enum:
@@ -654,14 +649,6 @@ definitions:
           completedAt:
             type: number
             description: Timestamp when final step execution completed
-          responseTexts:
-            type: array
-            items:
-              type: string
-            description: >-
-              Response texts from each final step loop execution, indexed by loop number (0-based).
-              Written automatically during workflow execution. Used by the priorContext
-              'finalStepAll' and 'finalStepPrevious' keywords.
         required:
           - phase
           - loopCount

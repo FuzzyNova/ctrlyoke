@@ -95,6 +95,15 @@ export class PromptQueue {
   private readonly workingFileManager: WorkingFileManager;
   private readonly stateMachine: WorkflowStateMachine;
   private readonly runtimeArchive = new Map<string, PromptRuntimeMetadata>();
+  /**
+   * Resolver-derived active-execution output cache. These values deliberately
+   * never live on WorkflowStep._runtime or in workflow.ctrlyoke.json.
+   */
+  private readonly runtimeOutputCache = new Map<
+    number,
+    Omit<ResolvedRuntimeOutputCacheEntry, "stepIndex">
+  >();
+  private readonly finalStepResponseCache = new Map<number, string>();
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
@@ -332,6 +341,7 @@ export class PromptQueue {
     // Store complete workflow file for property resolution
     this.workflowFile = promptFile;
     this.finalStepRuntime = undefined;
+    this.clearRuntimeOutputCache();
     this.stateMachine.restore({
       status: EXECUTION_STATES.IDLE,
       stopped: false,
@@ -357,6 +367,7 @@ export class PromptQueue {
 
       const runtime = workingFile._runtime;
       this.finalStepRuntime = runtime?.finalStep;
+      this.clearRuntimeOutputCache();
 
       const prompts = workingFile.steps ?? [];
 
@@ -846,8 +857,8 @@ export class PromptQueue {
    */
   /**
    * Persist partial runtime metadata updates for a specific prompt.
-   * Merges `updates` into the prompt's existing `_runtime` and flushes to the working file.
-   * This is the single write path for storing responseText and other per-prompt runtime data.
+   * Merges durable execution metadata into the prompt's `_runtime` and flushes
+   * to the working file. Response and script output are timeline-only.
    *
    * @param promptIndex 0-based prompt index
    * @param updates Partial metadata to merge into existing _runtime
@@ -903,31 +914,18 @@ export class PromptQueue {
   }
 
   /**
-   * Append follow-up text to a queue step's stored `responseText`.
-   *
-   * Used by `SessionActivityWatcher` attribution: when a harness auto-resumes a
-   * backgrounded task after the step's own dispatch already committed its
-   * response, the resumed output must be folded into the same `_runtime.responseText`
-   * so priorContext injection and output copy include it (not just the pre-resume
-   * portion). Concatenates directly — mirroring how `extractTextFromEvents` joins
-   * text parts within a single response — so the merged value reads as one response.
-   *
-   * @param promptIndex 0-based prompt index
-   * @param additionalText Extracted text from the resumed follow-up events
+   * Merge resolver-derived follow-up text into the active-only queue cache.
    */
-  async appendPromptResponseText(
-    promptIndex: number,
-    additionalText: string
-  ): Promise<void> {
+  appendPromptResponseText(promptIndex: number, additionalText: string): void {
     if (!additionalText) {
       return;
     }
-    const prompt = this.state.steps[promptIndex];
-    if (!prompt) {
+    if (!this.state.steps[promptIndex]) {
       return;
     }
-    const existing = prompt._runtime?.responseText ?? "";
-    await this.persistRuntimeMetadata(promptIndex, {
+    const existing =
+      this.runtimeOutputCache.get(promptIndex)?.responseText ?? "";
+    this.cacheRuntimeOutput(promptIndex, {
       responseText: existing + additionalText,
     });
   }
@@ -1497,105 +1495,76 @@ export class PromptQueue {
   }
 
   /**
-   * Persist runtime state for workflow-level finalStep execution.
-   * responseTexts accumulated via storeFinalStepResponseText are preserved
-   * when the incoming runtime does not explicitly include them.
+   * Persist durable runtime state for workflow-level finalStep execution.
    */
   public async setFinalStepRuntime(
     runtime: FinalStepRuntimeState | undefined
   ): Promise<void> {
-    if (runtime) {
-      const existingResponseTexts = this.finalStepRuntime?.responseTexts;
-      this.finalStepRuntime = {
-        ...runtime,
-        responseTexts: runtime.responseTexts ?? existingResponseTexts,
-      };
-    } else {
-      this.finalStepRuntime = undefined;
-    }
+    this.finalStepRuntime = runtime;
     await this.updateWorkingFile();
   }
 
   /**
-   * Store the response text from a single finalStep loop execution.
-   * Merges into the existing finalStepRuntime.responseTexts array and flushes to disk.
+   * Store finalStep output in the active-only cache. The timeline owns durability.
    *
    * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
    * @param text Plain-text AI response from this loop
    */
-  public async storeFinalStepResponseText(
-    loopIndex: number,
-    text: string
-  ): Promise<void> {
-    if (!this.finalStepRuntime) {
-      return;
-    }
-    const responseTexts = [...(this.finalStepRuntime.responseTexts ?? [])];
-    responseTexts[loopIndex] = text;
-    this.finalStepRuntime = { ...this.finalStepRuntime, responseTexts };
-    await this.updateWorkingFile();
+  public storeFinalStepResponseText(loopIndex: number, text: string): void {
+    this.finalStepResponseCache.set(loopIndex, text);
   }
 
   /**
-   * Append follow-up text to a finalStep loop's stored response text.
-   *
-   * finalStep counterpart to `appendPromptResponseText` — folds resumed
-   * `SessionActivityWatcher` output into the same `responseTexts[loopIndex]` slot
-   * so `finalStepAll` / `finalStepPrevious` priorContext and output copy include it.
+   * Append follow-up text to an active finalStep cache entry.
    *
    * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
    * @param additionalText Extracted text from the resumed follow-up events
    */
-  public async appendFinalStepResponseText(
+  public appendFinalStepResponseText(
     loopIndex: number,
     additionalText: string
-  ): Promise<void> {
-    if (!additionalText || !this.finalStepRuntime) {
+  ): void {
+    if (!additionalText) {
       return;
     }
-    const existing = this.finalStepRuntime.responseTexts?.[loopIndex] ?? "";
-    await this.storeFinalStepResponseText(loopIndex, existing + additionalText);
-  }
-
-  /**
-   * Get all finalStep loop response texts accumulated so far.
-   * Returns a copy indexed by loopIndex (0-based); missing loops are empty strings.
-   */
-  public getFinalStepResponseTexts(): string[] {
-    return [...(this.finalStepRuntime?.responseTexts ?? [])];
+    this.storeFinalStepResponseText(
+      loopIndex,
+      (this.finalStepResponseCache.get(loopIndex) ?? "") + additionalText
+    );
   }
 
   /**
    * Restore only the response/script values an active executor needs after a
-   * process restart. This deliberately does not write the working file: the
-   * timeline remains the read source and duplicate persisted fields stay until
-   * the Phase 4 removal is proven safe.
+   * process restart. This deliberately does not write the working file.
    */
   public hydrateActiveRuntimeOutputCache(
     queueEntries: readonly ResolvedRuntimeOutputCacheEntry[],
     finalStepResponseTexts: ReadonlyMap<number, string>
   ): void {
     for (const entry of queueEntries) {
-      const step = this.state.steps[entry.stepIndex];
-      if (!step) continue;
-      step._runtime = {
-        ...(step._runtime ?? { startedAt: Date.now() }),
-        ...(entry.responseText !== undefined
-          ? { responseText: entry.responseText }
-          : {}),
-        ...(isScriptStep(step) && entry.scriptOutput !== undefined
-          ? { scriptOutput: entry.scriptOutput }
-          : {}),
-      };
+      if (!this.state.steps[entry.stepIndex]) continue;
+      this.cacheRuntimeOutput(entry.stepIndex, entry);
     }
 
-    if (this.finalStepRuntime && finalStepResponseTexts.size > 0) {
-      const responseTexts = [...(this.finalStepRuntime.responseTexts ?? [])];
-      for (const [loopIndex, responseText] of finalStepResponseTexts) {
-        responseTexts[loopIndex] = responseText;
-      }
-      this.finalStepRuntime = { ...this.finalStepRuntime, responseTexts };
+    for (const [loopIndex, responseText] of finalStepResponseTexts) {
+      this.storeFinalStepResponseText(loopIndex, responseText);
     }
+  }
+
+  /** Cache authoritative resolver output for the currently executing process only. */
+  public cacheRuntimeOutput(
+    stepIndex: number,
+    output: Omit<ResolvedRuntimeOutputCacheEntry, "stepIndex">
+  ): void {
+    this.runtimeOutputCache.set(stepIndex, {
+      ...this.runtimeOutputCache.get(stepIndex),
+      ...output,
+    });
+  }
+
+  private clearRuntimeOutputCache(): void {
+    this.runtimeOutputCache.clear();
+    this.finalStepResponseCache.clear();
   }
 
   /**

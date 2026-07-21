@@ -813,7 +813,6 @@ export class CliIntegration extends HarnessIntegration {
       session.workflowContext,
       session.resolvedProperties,
       session.resolvedSessionId,
-      session.workflowContext?.getFinalStepResponseTexts?.(),
       injectMode
     );
 
@@ -1079,10 +1078,6 @@ export class CliIntegration extends HarnessIntegration {
         executionStartTime: session.executionStartTime,
         extractedSessionId: session.effectiveSessionId,
         parsedOutput: session.parsedOutput,
-        responseText:
-          session.result?.response !== session.result?.error
-            ? session.result?.response
-            : undefined,
         resolvedProperties: session.resolvedProperties,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
@@ -1102,10 +1097,6 @@ export class CliIntegration extends HarnessIntegration {
         executionStartTime: session.executionStartTime,
         extractedSessionId: session.effectiveSessionId,
         parsedOutput: session.parsedOutput,
-        responseText:
-          session.result?.response !== session.result?.error
-            ? session.result?.response
-            : undefined,
         failureKind:
           session.failureKind ?? this.failureTracker.getLastFailureKind(),
         failureMessage:

@@ -2,8 +2,6 @@ import * as path from "path";
 import {
   PromptStep,
   PriorContext,
-  WorkflowStep,
-  isScriptStep,
   ScriptRuntimeOutput,
   type FailureKind,
 } from "../types/CtrlYokeTypes";
@@ -30,7 +28,6 @@ import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
-  PRIOR_CONTEXT_ITEM_TYPES,
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
@@ -72,18 +69,6 @@ export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
     case "step":
       return ref.indices;
   }
-}
-
-function deduplicatePriorContextItems(
-  items: PriorContextItem[]
-): PriorContextItem[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = `${item.type ?? "queue"}:${item.index}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /**
@@ -606,166 +591,6 @@ export abstract class HarnessIntegration {
     );
   }
 
-  /**
-   * Gather prior prompt response texts based on the priorContext field.
-   *
-   * Queue-prompt keywords ("all", "previous", number[]) resolve against allPrompts._runtime.responseText.
-   * finalStep keywords ("finalStepAll", "finalStepPrevious") resolve against finalStepResponseTexts.
-   *
-   * Prompts/loops with no captured output are silently skipped.
-   *
-   * @param priorContext The resolved priorContext value
-   * @param allPrompts All queue prompts in the workflow
-   * @param currentIndex 0-based index of the prompt being built
-   * @param finalStepResponseTexts Per-loop finalStep response texts (indexed by loopIndex)
-   */
-  protected gatherPriorContextItems(
-    priorContext: PriorContext,
-    allPrompts: WorkflowStep[],
-    currentIndex: number,
-    finalStepResponseTexts: string[] = []
-  ): PriorContextItem[] {
-    if (priorContext === PRIOR_CONTEXT_KEYWORDS.NONE) {
-      return [];
-    }
-
-    // finalStep-specific keywords
-    if (priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
-      const items = finalStepResponseTexts
-        .map((text, i) => ({
-          index: i,
-          text,
-          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
-        }))
-        .filter((item) => item.text.length > 0);
-      if (items.length === 0 && finalStepResponseTexts.length > 0) {
-        Log.debug(
-          `priorContext: no captured finalStep response text available yet`
-        );
-      }
-      return items;
-    }
-
-    if (priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
-      const lastIndex = finalStepResponseTexts.length - 1;
-      if (lastIndex < 0) {
-        return [];
-      }
-      const text = finalStepResponseTexts[lastIndex];
-      if (!text) {
-        return [];
-      }
-      return [
-        {
-          index: lastIndex,
-          text,
-          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
-        },
-      ];
-    }
-
-    // Queue-prompt keywords
-    let targetIndices: number[];
-
-    if (priorContext === PRIOR_CONTEXT_KEYWORDS.ALL) {
-      targetIndices = Array.from({ length: currentIndex }, (_, i) => i);
-    } else if (priorContext === PRIOR_CONTEXT_KEYWORDS.PREVIOUS) {
-      targetIndices = currentIndex > 0 ? [currentIndex - 1] : [];
-    } else {
-      // Array of 1-based prompt numbers → 0-based indices, validated
-      const outOfRange: number[] = [];
-      targetIndices = priorContext
-        .map((n) => n - 1) // convert to 0-based
-        .filter((i) => {
-          if (i >= 0 && i < currentIndex) {
-            return true;
-          }
-          outOfRange.push(i + 1); // convert back to 1-based for logging
-          return false;
-        });
-
-      if (outOfRange.length > 0) {
-        Log.warn(
-          `priorContext: indices [${outOfRange.join(", ")}] are out of range for prompt ${currentIndex + 1} ` +
-            `(only ${currentIndex} prompt(s) have run). Skipping.`
-        );
-      }
-    }
-
-    const items = targetIndices
-      .map((i): PriorContextItem | null => {
-        const step = allPrompts[i];
-        if (!step) return null;
-        if (isScriptStep(step)) {
-          const scriptOutput = step._runtime?.scriptOutput;
-          if (!scriptOutput) return null;
-          return {
-            index: i,
-            name: step.name,
-            text: [
-              scriptOutput.stdout,
-              scriptOutput.stderr,
-              scriptOutput.exitCode !== undefined
-                ? String(scriptOutput.exitCode)
-                : "",
-            ]
-              .filter(Boolean)
-              .join("\n")
-              .trim(),
-            scriptOutput,
-          };
-        }
-        return {
-          index: i,
-          name: step.name,
-          prompt: step.prompt,
-          text: step._runtime?.responseText ?? "",
-        };
-      })
-      .filter(
-        (item): item is PriorContextItem =>
-          item !== null && item.text.length > 0
-      );
-
-    if (items.length === 0 && targetIndices.length > 0) {
-      Log.debug(
-        `priorContext: no captured response text found for any specified prompts at index ${currentIndex + 1}`
-      );
-    }
-
-    return items;
-  }
-
-  protected gatherAndMergeContextItems(
-    propertyContext: PriorContext | undefined,
-    inlineRefs: InlinePriorContextRef[],
-    allPrompts: WorkflowStep[],
-    currentIndex: number,
-    finalStepResponseTexts: string[] = []
-  ): PriorContextItem[] {
-    const propertyItems =
-      propertyContext !== undefined &&
-      propertyContext !== PRIOR_CONTEXT_KEYWORDS.NONE
-        ? this.gatherPriorContextItems(
-            propertyContext,
-            allPrompts,
-            currentIndex,
-            finalStepResponseTexts
-          )
-        : [];
-
-    const inlineItems = inlineRefs.flatMap((ref) =>
-      this.gatherPriorContextItems(
-        refToPriorContext(ref),
-        allPrompts,
-        currentIndex,
-        finalStepResponseTexts
-      )
-    );
-
-    return deduplicatePriorContextItems([...propertyItems, ...inlineItems]);
-  }
-
   protected buildPriorContextXmlFromItems(
     contextItems: PriorContextItem[]
   ): string {
@@ -778,49 +603,6 @@ export abstract class HarnessIntegration {
 
   protected stripAnsiCodes(text: string): string {
     return stripAnsiCodes(text);
-  }
-
-  /**
-   * Build the additional workflow-context text (prior context + critical instruction)
-   * for injection into the prompt file section of a categorized split.
-   *
-   * Used by integrations that build categorized prompt files and need to
-   * include workflow context in the prompt file section.
-   *
-   * @returns Assembled text block, or empty string if nothing to inject
-   */
-  protected buildWorkflowContextText(
-    promptIndex: number,
-    allPrompts: WorkflowStep[],
-    resolvedPriorContext?: PriorContext,
-    inlinePriorContextRefs: InlinePriorContextRef[] = [],
-    finalStepResponseTexts?: string[]
-  ): string {
-    if (
-      (resolvedPriorContext === undefined ||
-        resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.NONE) &&
-      inlinePriorContextRefs.length === 0
-    ) {
-      return "";
-    }
-    const contextItems = this.gatherAndMergeContextItems(
-      resolvedPriorContext,
-      inlinePriorContextRefs,
-      allPrompts,
-      promptIndex,
-      finalStepResponseTexts ?? []
-    );
-    if (contextItems.length === 0) {
-      return "";
-    }
-    const isFinalStepContext =
-      resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
-      resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
-    Log.debug(
-      `🔗 Injecting ${isFinalStepContext ? "finalStep" : "prior"} context for prompt ${promptIndex + 1}: ` +
-        `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
-    );
-    return this.buildPriorContextXmlFromItems(contextItems);
   }
 
   /**

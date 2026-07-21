@@ -76,7 +76,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           _runtime: {
             startedAt: 1,
             completedAt: 2,
-            responseText: options.responseText ?? `output-${suffix}`,
             sessionId: `session-${suffix}`,
           },
         },

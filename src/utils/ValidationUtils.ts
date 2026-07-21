@@ -127,7 +127,6 @@ export class ValidationUtils {
           completedAt: { type: "number", nullable: true },
           terminalStatus: { type: "string", nullable: true },
           retryCount: { type: "number", nullable: true },
-          responseText: { type: "string", nullable: true },
           // Runtime can also inherit ExecutionProperties
           harness: {
             type: "string",

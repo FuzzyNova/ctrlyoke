@@ -1,8 +1,6 @@
-import {
-  type PriorContextItem,
-  buildPriorContextXmlFromItems,
-} from "../core/HarnessIntegration";
-import { type WorkflowStep, isScriptStep } from "../types/CtrlYokeTypes";
+import { buildPriorContextXmlFromItems } from "../core/HarnessIntegration";
+import { type PriorContext, type WorkflowStep } from "../types/CtrlYokeTypes";
+import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
 
 /**
  * Builds the exact XML preview a user will see in the editor when they
@@ -21,19 +19,19 @@ export class PriorContextPreviewBuilder {
    * @returns XML string matching the actual injection format, or a comment when
    *          no context is available (step not yet run, or out-of-range index)
    */
-  static buildPreview(
+  static async buildPreview(
     ref: string,
     stepCount: number,
-    steps: WorkflowStep[]
-  ): string {
-    if (ref === "finalStep" || ref === "allFinalStep") {
-      return `<!-- $${ref}: final-step output is not stored in the queue working file and cannot be previewed here -->`;
-    }
-
-    const items = PriorContextPreviewBuilder.gatherItemsForRef(
-      ref,
-      stepCount,
-      steps
+    steps: readonly WorkflowStep[],
+    resolver: RunOutputResolver,
+    manifestPath: string
+  ): Promise<string> {
+    const context = PriorContextPreviewBuilder.toPriorContext(ref, stepCount);
+    const items = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [context],
+      steps,
+      stepCount
     );
 
     if (items.length === 0) {
@@ -43,50 +41,13 @@ export class PriorContextPreviewBuilder {
     return buildPriorContextXmlFromItems(items);
   }
 
-  private static gatherItemsForRef(
-    ref: string,
-    stepCount: number,
-    steps: WorkflowStep[]
-  ): PriorContextItem[] {
-    const targetIndices = PriorContextPreviewBuilder.resolveIndices(
-      ref,
-      stepCount
+  private static toPriorContext(ref: string, stepCount: number): PriorContext {
+    if (ref === "finalStep") return "finalStepPrevious";
+    if (ref === "allFinalStep") return "finalStepAll";
+    if (ref === "previous" || ref === "all") return ref;
+    return PriorContextPreviewBuilder.resolveIndices(ref, stepCount).map(
+      (index) => index + 1
     );
-
-    return targetIndices
-      .map((i): PriorContextItem | null => {
-        const step = steps[i];
-        if (!step) return null;
-
-        if (isScriptStep(step)) {
-          const scriptOutput = step._runtime?.scriptOutput;
-          if (!scriptOutput) return null;
-          return {
-            index: i,
-            name: step.name,
-            text: [
-              scriptOutput.stdout,
-              scriptOutput.stderr,
-              scriptOutput.exitCode !== undefined
-                ? String(scriptOutput.exitCode)
-                : "",
-            ]
-              .filter(Boolean)
-              .join("\n")
-              .trim(),
-            scriptOutput,
-          };
-        }
-
-        const responseText = step._runtime?.responseText ?? "";
-        return {
-          index: i,
-          name: step.name,
-          prompt: step.prompt,
-          text: responseText,
-        };
-      })
-      .filter((item): item is PriorContextItem => item !== null);
   }
 
   /** Convert a ref string to 0-based step indices. */

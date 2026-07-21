@@ -12,7 +12,11 @@ import { IntegrationFactory } from "../core/IntegrationFactory";
 import { CliIntegration } from "../core/harness/CliIntegration";
 import { WorkflowInstance } from "../core/WorkflowInstance";
 import { Log } from "../utils/Log";
-import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  FINAL_STEP_PHASES,
+  PERMISSION_MODES,
+} from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
 import { isScriptStep, type McpServerConfig } from "../types/CtrlYokeTypes";
 
@@ -309,7 +313,19 @@ export class CommitMessageGenerator {
       );
     }
 
-    const rawResponse = firstStep._runtime?.responseText;
+    const { workflowKey, runRef } = state;
+    if (!workflowKey || !runRef) {
+      throw new Error("Commit message generation did not create a run output");
+    }
+    const outputHistoryManager = instance.getOutputHistoryManager();
+    const rawResponse = (
+      await outputHistoryManager
+        .getRunOutputResolver()
+        .resolveLatestAttempts(
+          outputHistoryManager.getHistoryFilePath(workflowKey, runRef),
+          [{ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }]
+        )
+    ).get("queue:0")?.responseText;
     if (!rawResponse?.trim()) {
       throw new Error("Commit message generation produced an empty response");
     }

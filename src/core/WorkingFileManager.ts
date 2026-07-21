@@ -19,6 +19,7 @@ import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   stripStepRuntime,
+  stripTimelineDuplicatedWorkingFileOutput,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
@@ -34,7 +35,9 @@ async function readWorkingFileFromDisk(
 ): Promise<WorkingFile> {
   try {
     const content = await fs.readFile(workingFilePath, "utf-8");
-    return JSON.parse(content) as WorkingFile;
+    return stripTimelineDuplicatedWorkingFileOutput(
+      JSON.parse(content) as WorkingFile
+    );
   } catch (error) {
     throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
   }
@@ -50,7 +53,14 @@ async function writeWorkingFileAtomicTo(
 
   const writeAction = async () => {
     try {
-      await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
+      await fs.writeFile(
+        tempPath,
+        JSON.stringify(
+          stripTimelineDuplicatedWorkingFileOutput(workingFile),
+          null,
+          2
+        )
+      );
       await fs.rename(tempPath, workingFilePath);
     } catch (error) {
       try {

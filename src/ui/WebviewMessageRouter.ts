@@ -85,6 +85,7 @@ import {
   safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { HarnessFileManager } from "../utils/HarnessFileManager";
 import { HarnessMcpExporter } from "../utils/HarnessMcpExporter";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
@@ -2712,7 +2713,22 @@ export class WebviewMessageRouter {
         const workingFile = JSON.parse(raw) as { steps?: unknown[] };
         const steps = (workingFile.steps ??
           []) as import("../types/CtrlYokeTypes").WorkflowStep[];
-        return PriorContextPreviewBuilder.buildPreview(ref, stepCount, steps);
+        const address =
+          WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+        if (!address?.runRef) {
+          return `<!-- $${ref}: no executed run output is available for this draft -->`;
+        }
+        const outputHistoryManager = orchestrator.getOutputHistoryManager();
+        return await PriorContextPreviewBuilder.buildPreview(
+          ref,
+          stepCount,
+          steps,
+          outputHistoryManager.getRunOutputResolver(),
+          outputHistoryManager.getHistoryFilePath(
+            address.workflowKey,
+            address.runRef
+          )
+        );
       } catch {
         return `<!-- Could not read workflow state for $${ref} -->`;
       }

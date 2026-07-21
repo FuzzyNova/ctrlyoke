@@ -1632,7 +1632,6 @@ suite("PromptQueue State Machine Tests", () => {
               sessionId: "s-added",
               startedAt: 300,
               completedAt: 400,
-              responseText: "archived response",
               elapsed: 8.7,
               contextWindowUsed: 11424,
               contextWindowSize: 200000,
@@ -1661,10 +1660,6 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[1]._runtime?.sessionId, "s-added");
       assert.strictEqual(state.steps[1]._runtime?.startedAt, 300);
       assert.strictEqual(state.steps[1]._runtime?.completedAt, 400);
-      assert.strictEqual(
-        state.steps[1]._runtime?.responseText,
-        "archived response"
-      );
       assert.strictEqual(state.steps[1]._runtime?.elapsed, undefined);
       assert.strictEqual(state.steps[1]._runtime?.contextWindowUsed, undefined);
       assert.strictEqual(state.steps[1]._runtime?.contextWindowSize, undefined);

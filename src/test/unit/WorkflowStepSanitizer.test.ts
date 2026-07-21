@@ -5,6 +5,7 @@ import {
   parseClipboardWorkflowStep,
   sanitizeClipboardWorkflowStep,
   serializeWorkflowStepForClipboard,
+  stripTimelineDuplicatedWorkingFileOutput,
 } from "../../core/WorkflowStepSanitizer";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
@@ -147,6 +148,56 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       timeout: 45,
       onPass: CONDITION_ACTIONS.CONTINUE,
       onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+    });
+  });
+});
+
+suite("WorkflowStepSanitizer response-source cutover", () => {
+  test("drops obsolete working-file output fields without migration reads", () => {
+    const normalized = stripTimelineDuplicatedWorkingFileOutput({
+      steps: [
+        {
+          prompt: "answer",
+          _runtime: {
+            startedAt: 1,
+            completedAt: 2,
+            sessionId: "keep-session",
+            responseText: "obsolete answer",
+          },
+        },
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: "npm test",
+          _runtime: {
+            startedAt: 3,
+            scriptOutput: {
+              command: "npm test",
+              stdout: "obsolete",
+              stderr: "",
+            },
+          },
+        },
+      ],
+      _runtime: {
+        currentIndex: 1,
+        executionState: "stopped",
+        finalStep: {
+          phase: "finalStep",
+          loopCount: 2,
+          responseTexts: ["obsolete loop"],
+        },
+      },
+    } as any);
+
+    assert.deepStrictEqual(normalized.steps?.[0]._runtime, {
+      startedAt: 1,
+      completedAt: 2,
+      sessionId: "keep-session",
+    });
+    assert.deepStrictEqual(normalized.steps?.[1]._runtime, { startedAt: 3 });
+    assert.deepStrictEqual(normalized._runtime?.finalStep, {
+      phase: "finalStep",
+      loopCount: 2,
     });
   });
 });

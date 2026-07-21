@@ -4,7 +4,6 @@ import type { FailureKind, HarnessId } from "../../../types/DashboardConstants";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { Log } from "../../../utils/Log";
-import { extractTextFromEvents } from "./CliResponseTextExtractor";
 
 export interface CliPromptRuntimeCoordinatorDeps {
   getIntegrationHarness: () => HarnessId;
@@ -23,7 +22,6 @@ export class CliPromptRuntimeCoordinator {
     executionStartTime: Date;
     extractedSessionId?: string;
     parsedOutput?: UniversalCliOutput;
-    responseText?: string;
     failureKind?: FailureKind;
     failureMessage?: string;
     resolvedProperties?: ResolvedProperties;
@@ -60,12 +58,6 @@ export class CliPromptRuntimeCoordinator {
       params.prompt._runtime.sessionId = sessionId;
     }
 
-    const responseText =
-      params.responseText ??
-      (params.parsedOutput ? extractTextFromEvents(params.parsedOutput) : "");
-    if (responseText) {
-      params.prompt._runtime.responseText = responseText;
-    }
     params.prompt._runtime.failureKind = params.failureKind;
     params.prompt._runtime.failureMessage = params.failureMessage;
     params.prompt._runtime.completedAt = this.now();

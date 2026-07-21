@@ -30,12 +30,9 @@ export interface WorkflowContext {
   workflowFile?: PromptFile;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
-  /** Read-only accessor for prior-context finalStep loop responses. */
-  getFinalStepResponseTexts?: () => string[];
   /**
    * Timeline-backed prior-context projection for an executing promoted run.
-   * The queue's duplicate runtime fields remain persistence compatibility data
-   * until Phase 4 item 4, not a read source for newly constructed prompts.
+   * The timeline is the only response source; execution caches are in-memory only.
    */
   resolvePriorContextItems?: (
     contexts: readonly PriorContext[],

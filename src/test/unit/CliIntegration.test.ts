@@ -452,19 +452,16 @@ suite("CliIntegration", () => {
     assert.strictEqual(prompt._runtime?.sessionId, "session-existing");
   });
 
-  test("should use the dedicated finalStep response callback during prompt preparation", async () => {
+  test("does not pass a finalStep response callback during prompt preparation", async () => {
     const integration = createHeadlessIntegration();
     const prompt: PromptStep = { prompt: "say hi" };
-    let capturedFinalStepResponseTexts: string[] | undefined;
+    let promptPreparationArguments: any[] = [];
 
     (integration as any).promptPreparer.preparePrompt = async (
-      promptStep: PromptStep,
-      _workflowContext: unknown,
-      _resolvedProperties: unknown,
-      _resolvedSessionId: unknown,
-      finalStepResponseTexts?: string[]
+      ...args: any[]
     ) => {
-      capturedFinalStepResponseTexts = finalStepResponseTexts;
+      promptPreparationArguments = args;
+      const promptStep = args[0] as PromptStep;
       return {
         promptWithInstruction: promptStep.prompt,
         tempFilePaths: [],
@@ -501,13 +498,11 @@ suite("CliIntegration", () => {
     const success = await integration.sendPrompt(prompt, true, {
       promptIndex: 0,
       allPrompts: [prompt],
-      getFinalStepResponseTexts: () => ["final loop response"],
     } as any);
 
     assert.strictEqual(success, true);
-    assert.deepStrictEqual(capturedFinalStepResponseTexts, [
-      "final loop response",
-    ]);
+    assert.strictEqual(promptPreparationArguments.length, 5);
+    assert.strictEqual(promptPreparationArguments[4], false);
   });
 
   test("should return false and expose the failure reason when execution throws", async () => {

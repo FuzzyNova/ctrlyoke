@@ -1,8 +1,4 @@
-import type {
-  PriorContext,
-  PromptStep,
-  WorkflowStep,
-} from "../../../types/CtrlYokeTypes";
+import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,
@@ -12,10 +8,7 @@ import { TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
-import {
-  parseInlinePriorContextRefs,
-  type InlinePriorContextRef,
-} from "../../../utils/FileReferenceParser";
+import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
 import type {
   PriorContextItem,
@@ -38,14 +31,6 @@ export interface CliPromptPreparerDeps {
   extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
   isInjectablePrompt?: (promptText: string) => boolean;
-  /** Legacy test seam; production prompt construction always uses the resolver. */
-  gatherAndMergeContextItems?: (
-    propertyContext: PriorContext | undefined,
-    inlineRefs: InlinePriorContextRef[],
-    allPrompts: WorkflowStep[],
-    promptIndex: number,
-    finalStepResponseTexts: string[]
-  ) => PriorContextItem[];
   buildPriorContextXmlFromItems: (items: PriorContextItem[]) => string;
   getWorkspaceRoot: () => string | undefined;
   getTempFileSplitConfig: () => SplitConfig | undefined;
@@ -69,7 +54,6 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    finalStepResponseTexts?: string[],
     injectMode = false
   ): Promise<PromptFileResult> {
     const originalPromptText = prompt.prompt.trim();
@@ -164,13 +148,7 @@ export class CliPromptPreparer {
             allPrompts,
             promptIndex
           )
-        : (this.deps.gatherAndMergeContextItems?.(
-            resolvedPriorContext,
-            inlineRefs,
-            allPrompts,
-            promptIndex,
-            finalStepResponseTexts ?? []
-          ) ?? [])
+        : []
       : [];
     const resolvedContextContent =
       contextItems.length > 0

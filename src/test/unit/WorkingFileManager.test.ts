@@ -379,7 +379,7 @@ suite("WorkingFileManager", () => {
       const steps: WorkingFile["steps"] = [
         {
           prompt: "step one",
-          _runtime: { startedAt: 1, completedAt: 2, responseText: "done" },
+          _runtime: { startedAt: 1, completedAt: 2 },
         },
       ] as WorkingFile["steps"];
       const { workflowKey, runRef } = await makeSourceRun(

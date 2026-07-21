@@ -23,7 +23,6 @@ suite("CliPromptPreparer", () => {
       buildPromptSections: async () => createSections(),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -68,7 +67,6 @@ suite("CliPromptPreparer", () => {
       },
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -123,7 +121,6 @@ suite("CliPromptPreparer", () => {
       },
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -174,7 +171,6 @@ suite("CliPromptPreparer", () => {
         }),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => false,
-      gatherAndMergeContextItems: () => [{ index: 0, text: "hello" }],
       buildPriorContextXmlFromItems: () =>
         "<priorContext><step>hello</step></priorContext>",
       getWorkspaceRoot: () => process.cwd(),
@@ -200,10 +196,10 @@ suite("CliPromptPreparer", () => {
         workflowName: "test-workflow",
         promptIndex: 0,
         allPrompts: [{ prompt: "please inspect files" } as PromptStep],
+        resolvePriorContextItems: async () => [{ index: 0, text: "hello" }],
       } as WorkflowContext,
       { priorContext: "allPrevious" } as any,
-      undefined,
-      []
+      undefined
     );
 
     assert.ok(result.tempFilePaths.length >= 2);
@@ -219,10 +215,6 @@ suite("CliPromptPreparer", () => {
         createSections({ userPromptText: "use $previous and continue" }),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      gatherAndMergeContextItems: (_propertyContext, inlineRefs) => {
-        capturedInlineRefCount = inlineRefs.length;
-        return [{ index: 0, text: "prior output" }];
-      },
       buildPriorContextXmlFromItems: () =>
         "<priorContext><step>prior output</step></priorContext>",
       getWorkspaceRoot: () => process.cwd(),
@@ -248,6 +240,10 @@ suite("CliPromptPreparer", () => {
           { prompt: "first" } as PromptStep,
           { prompt: "use $previous and continue" } as PromptStep,
         ],
+        resolvePriorContextItems: async (contexts) => {
+          capturedInlineRefCount = contexts.length;
+          return [{ index: 0, text: "prior output" }];
+        },
       } as WorkflowContext,
       undefined,
       undefined
@@ -270,7 +266,6 @@ suite("CliPromptPreparer", () => {
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: (text) =>
         !text.includes('"') && !text.includes("$") && !text.includes("`"),
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -309,7 +304,6 @@ suite("CliPromptPreparer", () => {
       },
       extractLeadingSlashCommand: () => "/handoff",
       isSimplePrompt: () => true,
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -339,7 +333,6 @@ suite("CliPromptPreparer", () => {
         createSections({ userPromptText: "/handoff summarize the session" }),
       extractLeadingSlashCommand: () => "/handoff",
       isSimplePrompt: () => true,
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -371,7 +364,6 @@ suite("CliPromptPreparer", () => {
         }),
       extractLeadingSlashCommand: () => "/handoff",
       isSimplePrompt: () => false,
-      gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -418,7 +410,6 @@ suite("CliPromptPreparer", () => {
         extractLeadingSlashCommand: () => null,
         isSimplePrompt: (text) => text.length <= 50,
         isInjectablePrompt: (text) => !/[\x00-\x1f\x7f]/.test(text),
-        gatherAndMergeContextItems: () => [],
         buildPriorContextXmlFromItems: () => "",
         getWorkspaceRoot: () => process.cwd(),
         getTempFileSplitConfig: () => undefined,
@@ -438,7 +429,6 @@ suite("CliPromptPreparer", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
         true
       );
 
@@ -454,7 +444,6 @@ suite("CliPromptPreparer", () => {
 
       const result = await preparer.preparePrompt(
         { prompt } as PromptStep,
-        undefined,
         undefined,
         undefined,
         undefined,
@@ -484,7 +473,6 @@ suite("CliPromptPreparer", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
         true
       );
 
@@ -507,7 +495,6 @@ suite("CliPromptPreparer", () => {
 
       const result = await preparer.preparePrompt(
         { prompt } as PromptStep,
-        undefined,
         undefined,
         undefined,
         undefined,
@@ -535,7 +522,6 @@ suite("CliPromptPreparer", () => {
 
       await preparer.preparePrompt(
         { prompt } as PromptStep,
-        undefined,
         undefined,
         undefined,
         undefined,

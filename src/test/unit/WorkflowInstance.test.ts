@@ -470,7 +470,7 @@ suite("WorkflowInstance session activity forwarding", () => {
     }
   });
 
-  test("appends resumed assistant text to the step's stored responseText (priorContext/copy source)", async () => {
+  test("appends resumed assistant text only to the active queue output cache", async () => {
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(
       platform,
@@ -483,20 +483,14 @@ suite("WorkflowInstance session activity forwarding", () => {
     );
 
     instance.promptQueue.loadPrompts({ steps: [{ prompt: "queue-1" }] });
-    (instance.promptQueue as any).state.steps[0]._runtime = {
-      startedAt: Date.now(),
-      responseText: "before.",
-    };
+    instance.promptQueue.cacheRuntimeOutput(0, { responseText: "before." });
     (instance as any).lastCompletedActivityTarget = {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       runIndex: 0,
       attemptIndex: 0,
     };
 
-    // A backgrounded task auto-resuming produces genuine assistant TEXT events —
-    // these must be folded into responseText so priorContext/copy see the full
-    // response. (A USER_STEER, by contrast, is not assistant output and is not
-    // appended — covered by the history-merge test above.)
+    // A backgrounded task auto-resuming produces genuine assistant TEXT events.
     await (instance as any).handleSessionActivityResumed([
       {
         type: CLI_EVENT_TYPES.TEXT,
@@ -506,12 +500,16 @@ suite("WorkflowInstance session activity forwarding", () => {
     ]);
 
     assert.strictEqual(
-      (instance.promptQueue as any).state.steps[0]._runtime.responseText,
+      (instance.promptQueue as any).runtimeOutputCache.get(0).responseText,
       "before. and after."
+    );
+    assert.deepStrictEqual(
+      (instance.promptQueue as any).state.steps[0]._runtime,
+      undefined
     );
   });
 
-  test("appends resumed assistant text to the finalStep loop responseText", async () => {
+  test("appends resumed assistant text only to the active finalStep cache", async () => {
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(
       platform,
@@ -548,9 +546,10 @@ suite("WorkflowInstance session activity forwarding", () => {
       },
     ]);
 
-    assert.deepStrictEqual(instance.promptQueue.getFinalStepResponseTexts(), [
-      "loop-before. loop-after.",
-    ]);
+    assert.strictEqual(
+      (instance.promptQueue as any).finalStepResponseCache.get(0),
+      "loop-before. loop-after."
+    );
   });
 });
 

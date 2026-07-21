@@ -458,8 +458,8 @@ suite("RunOutputResolver", () => {
     );
   });
 
-  test("streams large logs without readEvents or response truncation", async () => {
-    const eventCount = 4096;
+  test("streams very large logs without readEvents or response truncation", async () => {
+    const eventCount = 65_536;
     const response = "x".repeat(1024 * 1024);
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const eventsPath = path.join(runDirectory, TIMELINE_STORAGE_FILES.EVENTS);
@@ -526,5 +526,108 @@ suite("RunOutputResolver", () => {
     const resolvedResponse = resolved?.responseText;
     assert.strictEqual(resolvedResponse?.length, response.length);
     assert.strictEqual(resolvedResponse, response);
+  });
+
+  test("reconstructs exactly after restart at every response persistence boundary", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const boundaries: Array<{
+      draft: WorkflowTimelineEventDraft;
+      response: string | undefined;
+      terminal?: string;
+    }> = [
+      {
+        draft: {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { kind: "ai", startReason: "initial", prompt: "recover" },
+        },
+        response: undefined,
+      },
+      {
+        draft: {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: 2,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          responseKind: "ai",
+          payload: {
+            cliOutput: {
+              prompt: "recover",
+              response: "initial",
+              elapsed: 1,
+              isStreaming: false,
+            },
+          },
+        },
+        response: "initial",
+      },
+      {
+        draft: {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+          timestampMs: 3,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { terminalState: "cancelled", reason: "restart" },
+        },
+        response: "initial",
+        terminal: "cancelled",
+      },
+      {
+        draft: {
+          eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+          timestampMs: 4,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { responseTextLength: 8, eventCount: 1 },
+        },
+        response: "initial",
+        terminal: "cancelled",
+      },
+      {
+        draft: {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: 5,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          responseKind: "ai",
+          payload: {
+            cliOutput: {
+              prompt: "recover",
+              response: "initial follow-up",
+              elapsed: 2,
+              isStreaming: false,
+            },
+          },
+        },
+        response: "initial follow-up",
+        terminal: "cancelled",
+      },
+    ];
+
+    for (const boundary of boundaries) {
+      await recorder.appendEvents(manifestPath, [boundary.draft]);
+      // A new resolver represents a process restart; it has no cache from the
+      // preceding iteration and can only use the committed timeline prefix.
+      const restored = await new RunOutputResolver(recorder).resolveAttempt(
+        manifestPath,
+        target,
+        0,
+        0
+      );
+      assert.strictEqual(restored?.responseText, boundary.response);
+      assert.strictEqual(restored?.terminalState, boundary.terminal);
+    }
   });
 });
