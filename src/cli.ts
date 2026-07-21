@@ -2,7 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
 import * as readline from "readline";
-import { access } from "fs/promises";
+import { access, readFile } from "fs/promises";
 
 import { CliAdapter } from "./platform/CliAdapter";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
@@ -22,7 +22,13 @@ import type {
   HarnessId,
   PermissionMode,
 } from "./types/DashboardConstants";
-import { isScriptStep } from "./types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type RunRef,
+  type WorkflowKey,
+  type WorkflowStep,
+  type WorkingFile,
+} from "./types/CtrlYokeTypes";
 import { configService } from "./config/CtrlYokeConfigService";
 import {
   createUserConfigBackend,
@@ -38,6 +44,21 @@ import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
 } from "./config/ExternalRootsTrustStore";
+import { WorkingFileManager } from "./core/WorkingFileManager";
+import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
+import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
+import { PromptFileParser } from "./core/PromptFileParser";
+import { WorkflowLockManager } from "./utils/WorkflowLockManager";
+import { LOCK_STATUS } from "./types/DashboardConstants";
+import * as WorkflowPaths from "./utils/WorkflowPaths";
+import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
+import {
+  registerRunScopedCommands,
+  type AppendOptions,
+  type CliExecutionOptions,
+  type ContinueOptions,
+  type RerunOptions,
+} from "./cli/CliRunCommandDefinitions";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -118,6 +139,12 @@ program
     await runCommand(file, options);
   });
 
+registerRunScopedCommands(program, {
+  rerun: rerunCommand,
+  append: appendCommand,
+  continue: continueCommand,
+});
+
 program
   .command("validate <file>")
   .description("Validate a prompt file without executing it")
@@ -158,27 +185,19 @@ program.parse();
 
 // ---- Types ----
 
-interface RunOptions {
+interface RunOptions extends CliExecutionOptions {
   harness: string;
-  model?: string;
-  cwd?: string;
-  timeout: string;
-  scriptTimeout: string;
-  headless?: boolean;
-  interactive?: boolean;
-  allowTool: string[];
-  denyTool: string[];
-  permissionMode?: string;
-  addDir: string[];
   var: Record<string, string>;
   prompt?: string;
   sessionId?: string;
   resumeSession?: boolean;
-  json?: boolean;
-  quiet?: boolean;
-  verbose?: boolean;
-  color?: boolean;
 }
+
+type CliRunOperation =
+  | { kind: "run" }
+  | { kind: "rerun"; workflow: string; from?: string }
+  | { kind: "append"; workflow: string; run: string; file?: string }
+  | { kind: "continue"; workflow: string; run: string };
 
 function collectRepeatable(value: string, previous: string[]): string[] {
   return [...previous, value];
@@ -211,7 +230,7 @@ function collectVar(
  *   4. Otherwise → headless (CI/CD, pipes, redirects)
  */
 function getExecutionMode(
-  options: Pick<RunOptions, "headless" | "interactive">
+  options: Pick<CliExecutionOptions, "headless" | "interactive">
 ): ExecutionMode {
   if (options.headless) return EXECUTION_MODES.HEADLESS;
   if (options.interactive) return EXECUTION_MODES.INTERACTIVE;
@@ -222,21 +241,58 @@ function getExecutionMode(
 
 // ---- Commands ----
 
+async function rerunCommand(options: RerunOptions): Promise<void> {
+  await runCommand(undefined, options, {
+    kind: "rerun",
+    workflow: options.workflow,
+    from: options.from,
+  });
+}
+
+async function appendCommand(
+  file: string | undefined,
+  options: AppendOptions
+): Promise<void> {
+  await runCommand(file, options, {
+    kind: "append",
+    workflow: options.workflow,
+    run: options.run,
+    file,
+  });
+}
+
+async function continueCommand(options: ContinueOptions): Promise<void> {
+  await runCommand(undefined, options, {
+    kind: "continue",
+    workflow: options.workflow,
+    run: options.run,
+  });
+}
+
 async function runCommand(
   file: string | undefined,
-  options: RunOptions
+  options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
+  operation: CliRunOperation = { kind: "run" }
 ): Promise<void> {
   if (options.color === false) {
     process.env.NO_COLOR = "1";
   }
 
-  if (!file && !options.prompt) {
+  if (
+    (operation.kind === "run" || operation.kind === "append") &&
+    !file &&
+    !options.prompt
+  ) {
     console.error(
       chalk.red("Error: Provide a file argument or --prompt <text>")
     );
     process.exit(2);
   }
-  if (file && options.prompt) {
+  if (
+    (operation.kind === "run" || operation.kind === "append") &&
+    file &&
+    options.prompt
+  ) {
     console.error(
       chalk.red("Error: --prompt cannot be used together with a file argument")
     );
@@ -487,45 +543,55 @@ async function runCommand(
   });
 
   try {
-    if (options.prompt) {
-      instance.loadPromptString(options.prompt);
+    if (operation.kind === "run") {
+      if (options.prompt) {
+        instance.loadPromptString(options.prompt);
+      } else {
+        await instance.loadPromptFile(resolvedFile!);
+      }
+
+      // Merge CLI --var flags into the workflow's vars (CLI vars take highest precedence).
+      // This must happen after loading so the workflow's own vars: defaults are already set.
+      if (Object.keys(config.vars).length > 0) {
+        const workflowFile = instance.promptQueue.getWorkflowFile();
+        workflowFile.vars = { ...(workflowFile.vars ?? {}), ...config.vars };
+      }
+
+      // Apply --resume / --new-session overrides to the first prompt before execution.
+      // getState() returns a shallow copy but prompts[] is the same array reference,
+      // so mutations to PromptStep objects propagate into the queue's internal state.
+      const queueState = instance.promptQueue.getState();
+      if (config.sessionId && queueState.steps.length > 0) {
+        const firstStep = queueState.steps[0];
+        if (!isScriptStep(firstStep)) {
+          firstStep.sessionId = config.sessionId;
+          firstStep.resumeSession = true;
+        }
+      } else if (config.resumeSession === false) {
+        for (const step of queueState.steps) {
+          if (!isScriptStep(step)) {
+            delete step.sessionId;
+            step.resumeSession = false;
+          }
+        }
+      } else if (config.resumeSession === true) {
+        for (const step of queueState.steps) {
+          if (!isScriptStep(step)) {
+            step.resumeSession = true;
+          }
+        }
+      }
+
+      await instance.executeLoadedPromptFile(harness);
     } else {
-      await instance.loadPromptFile(resolvedFile!);
+      await executeAddressedCliOperation(
+        operation,
+        options,
+        workingDir,
+        platform,
+        instance
+      );
     }
-
-    // Merge CLI --var flags into the workflow's vars (CLI vars take highest precedence).
-    // This must happen after loading so the workflow's own vars: defaults are already set.
-    if (Object.keys(config.vars).length > 0) {
-      const workflowFile = instance.promptQueue.getWorkflowFile();
-      workflowFile.vars = { ...(workflowFile.vars ?? {}), ...config.vars };
-    }
-
-    // Apply --resume / --new-session overrides to the first prompt before execution.
-    // getState() returns a shallow copy but prompts[] is the same array reference,
-    // so mutations to PromptStep objects propagate into the queue's internal state.
-    const queueState = instance.promptQueue.getState();
-    if (config.sessionId && queueState.steps.length > 0) {
-      const firstStep = queueState.steps[0];
-      if (!isScriptStep(firstStep)) {
-        firstStep.sessionId = config.sessionId;
-        firstStep.resumeSession = true;
-      }
-    } else if (config.resumeSession === false) {
-      for (const step of queueState.steps) {
-        if (!isScriptStep(step)) {
-          delete step.sessionId;
-          step.resumeSession = false;
-        }
-      }
-    } else if (config.resumeSession === true) {
-      for (const step of queueState.steps) {
-        if (!isScriptStep(step)) {
-          step.resumeSession = true;
-        }
-      }
-    }
-
-    await instance.executeLoadedPromptFile(harness);
 
     const state = instance.promptQueue.getState();
     const exitCode = getExitCode(state);
@@ -573,6 +639,204 @@ async function runCommand(
       console.error(chalk.red("Error: " + message));
     }
     process.exit(2);
+  }
+}
+
+async function executeAddressedCliOperation(
+  operation: Exclude<CliRunOperation, { kind: "run" }>,
+  options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
+  workspaceRoot: string,
+  platform: CliAdapter,
+  instance: WorkflowInstance
+): Promise<void> {
+  const workflowKey = operation.workflow;
+  WorkflowPaths.assertValidWorkflowKey(workflowKey);
+  const history = new OutputHistoryManager(workspaceRoot);
+  const lineageRepository = new WorkflowLineageRepository();
+
+  if (operation.kind === "rerun") {
+    const sourceRunRef = await resolveCliRunRefAtLineage(
+      workspaceRoot,
+      history,
+      workflowKey,
+      operation.from,
+      "--from"
+    );
+    await assertLineageAvailableForCli(workspaceRoot, workflowKey);
+    const descriptor = await lineageRepository.readDescriptor(
+      workspaceRoot,
+      workflowKey
+    );
+    const source = await readRunDefinition(
+      workspaceRoot,
+      workflowKey,
+      sourceRunRef
+    );
+    const seeded = await WorkingFileManager.seedNewRun(
+      workspaceRoot,
+      workflowKey,
+      sourceRunRef,
+      {
+        ...(options.harness ? { harness: options.harness as HarnessId } : {}),
+        ...(options.model ? { model: options.model } : {}),
+      },
+      lineageRepository,
+      {
+        definitionRevision: source.definitionRevision ?? 1,
+        descriptorRevision: descriptor.revision,
+      }
+    );
+    await instance.executeSeededRun(
+      seeded,
+      workflowKey,
+      options.harness as HarnessId | undefined
+    );
+    return;
+  }
+
+  const runRef = await resolveCliRunRefAtLineage(
+    workspaceRoot,
+    history,
+    workflowKey,
+    operation.run,
+    "--run"
+  );
+  const target = await validateCliContinuationTarget(
+    workspaceRoot,
+    workflowKey,
+    runRef,
+    lineageRepository
+  );
+
+  if (operation.kind === "append") {
+    const tail = await parseAppendTail(
+      operation,
+      options as AppendOptions,
+      platform
+    );
+    const appended = await WorkingFileManager.appendTailToRun(
+      workspaceRoot,
+      workflowKey,
+      runRef,
+      tail,
+      target.definitionRevision,
+      target.descriptorRevision,
+      lineageRepository,
+      target.allowInterruptedRun
+    );
+    await instance.executeContinuationAtRun(
+      workflowKey,
+      runRef,
+      appended.definitionRevision
+    );
+    return;
+  }
+
+  await instance.executeContinuationAtRun(
+    workflowKey,
+    runRef,
+    target.definitionRevision
+  );
+}
+
+async function parseAppendTail(
+  operation: Extract<CliRunOperation, { kind: "append" }>,
+  options: AppendOptions,
+  platform: CliAdapter
+): Promise<WorkflowStep[]> {
+  if (options.prompt) {
+    return [{ prompt: options.prompt }];
+  }
+  if (!operation.file) {
+    throw new Error("Append source was not provided");
+  }
+  const parser = new PromptFileParser(platform);
+  const parsed = await parser.parsePromptFile(path.resolve(operation.file));
+  if (!parsed?.steps?.length) {
+    throw new Error("Append source must contain at least one workflow step");
+  }
+  return parsed.steps;
+}
+
+async function assertLineageAvailableForCli(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey
+): Promise<void> {
+  const lock = await WorkflowLockManager.readLock(workspaceRoot, workflowKey);
+  const lockStatus = await WorkflowLockManager.checkLock(
+    workspaceRoot,
+    workflowKey
+  );
+  if (lock && lockStatus !== LOCK_STATUS.STALE) {
+    throw new Error("Another run in this workflow lineage is executing");
+  }
+}
+
+async function validateCliContinuationTarget(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef,
+  lineageRepository: WorkflowLineageRepository
+): Promise<{
+  definitionRevision: number;
+  descriptorRevision: number;
+  allowInterruptedRun: boolean;
+}> {
+  await assertLineageAvailableForCli(workspaceRoot, workflowKey);
+  const descriptor = await lineageRepository.readDescriptor(
+    workspaceRoot,
+    workflowKey
+  );
+  if (descriptor.pendingEdit) {
+    throw new Error("This workflow has a draft or pending continuation");
+  }
+  const target = await readRunDefinition(workspaceRoot, workflowKey, runRef);
+  const executionState =
+    target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
+  if (
+    executionState === EXECUTION_STATES.PAUSING ||
+    executionState === EXECUTION_STATES.CANCELLING
+  ) {
+    throw new Error(`Cannot continue while run is in state ${executionState}`);
+  }
+  if (executionState === EXECUTION_STATES.PAUSED) {
+    throw new Error(
+      "Cannot continue a paused run without its live execution owner"
+    );
+  }
+  const lockStatus = await WorkflowLockManager.checkLock(
+    workspaceRoot,
+    workflowKey
+  );
+  const allowInterruptedRun =
+    executionState === EXECUTION_STATES.RUNNING &&
+    (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
+  if (executionState === EXECUTION_STATES.RUNNING && !allowInterruptedRun) {
+    throw new Error(`Cannot continue while run is in state ${executionState}`);
+  }
+  return {
+    definitionRevision: target.definitionRevision ?? 1,
+    descriptorRevision: descriptor.revision,
+    allowInterruptedRun,
+  };
+}
+
+async function readRunDefinition(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): Promise<WorkingFile> {
+  try {
+    return JSON.parse(
+      await readFile(
+        WorkflowPaths.runFilePath(workspaceRoot, workflowKey, runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+  } catch (error) {
+    throw new Error(
+      `Failed to read run ${workflowKey}/${runRef}: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 

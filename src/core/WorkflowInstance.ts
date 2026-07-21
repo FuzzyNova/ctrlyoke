@@ -3003,6 +3003,7 @@ export class WorkflowInstance {
           `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to acquire lock:`,
           err
         );
+        throw err;
       }
       // Heartbeat every 5 seconds
       this.heartbeatInterval = setInterval(() => {

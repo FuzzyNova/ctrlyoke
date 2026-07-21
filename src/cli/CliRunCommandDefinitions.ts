@@ -1,0 +1,137 @@
+import { Command } from "commander";
+
+export interface CliExecutionOptions {
+  harness?: string;
+  model?: string;
+  cwd?: string;
+  timeout: string;
+  scriptTimeout: string;
+  headless?: boolean;
+  interactive?: boolean;
+  allowTool: string[];
+  denyTool: string[];
+  permissionMode?: string;
+  addDir: string[];
+  var?: Record<string, string>;
+  prompt?: string;
+  sessionId?: string;
+  resumeSession?: boolean;
+  json?: boolean;
+  quiet?: boolean;
+  verbose?: boolean;
+  color?: boolean;
+}
+
+export interface RerunOptions extends CliExecutionOptions {
+  workflow: string;
+  from?: string;
+}
+
+export interface AppendOptions extends CliExecutionOptions {
+  workflow: string;
+  run: string;
+  prompt?: string;
+}
+
+export interface ContinueOptions extends CliExecutionOptions {
+  workflow: string;
+  run: string;
+}
+
+export interface RunScopedCommandHandlers {
+  rerun(options: RerunOptions): Promise<void>;
+  append(file: string | undefined, options: AppendOptions): Promise<void>;
+  continue(options: ContinueOptions): Promise<void>;
+}
+
+/** Registers only the run-scoped CLI surface; execution stays in `cli.ts`. */
+export function registerRunScopedCommands(
+  program: Command,
+  handlers: RunScopedCommandHandlers
+): void {
+  addExecutionOptions(
+    program
+      .command("rerun")
+      .description("Seed and execute a new run from an existing workflow run")
+      .requiredOption("--workflow <key>", "Workflow lineage key")
+      .option("--from <ref|runId>", "Source run reference or numeric run ID")
+      .option(
+        "-H, --harness <harness>",
+        "Override harness for the newly seeded run"
+      )
+      .option("-m, --model <model>", "Override model for the newly seeded run")
+  ).action(async (options: RerunOptions) => handlers.rerun(options));
+
+  addExecutionOptions(
+    program
+      .command("append [file]")
+      .description("Append steps to one run and continue it")
+      .requiredOption("--workflow <key>", "Workflow lineage key")
+      .requiredOption(
+        "--run <ref|runId>",
+        "Target run reference or numeric run ID"
+      )
+      .option(
+        "-p, --prompt <text>",
+        "Inline prompt string (alternative to file)"
+      )
+  ).action(async (file: string | undefined, options: AppendOptions) =>
+    handlers.append(file, options)
+  );
+
+  addExecutionOptions(
+    program
+      .command("continue")
+      .description("Continue unchanged pending work in one run")
+      .requiredOption("--workflow <key>", "Workflow lineage key")
+      .requiredOption(
+        "--run <ref|runId>",
+        "Target run reference or numeric run ID"
+      )
+  ).action(async (options: ContinueOptions) => handlers.continue(options));
+}
+
+function addExecutionOptions(command: Command): Command {
+  return command
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
+    .option("-t, --timeout <seconds>", "Global timeout in seconds", "3600")
+    .option("--script-timeout <seconds>", "End condition script timeout", "30")
+    .option("--headless", "Force headless mode (CI/CD, no user interaction)")
+    .option(
+      "--interactive",
+      "Force interactive mode (TUI passthrough, user controls session end)"
+    )
+    .option(
+      "--allow-tool <pattern>",
+      "Allow specific tool pattern (repeatable)",
+      collectRepeatable,
+      [] as string[]
+    )
+    .option(
+      "--deny-tool <pattern>",
+      "Deny specific tool pattern (repeatable)",
+      collectRepeatable,
+      [] as string[]
+    )
+    .option(
+      "--permission-mode <mode>",
+      "Tool permission mode: dangerouslyAllowAll, allowAll, custom (default: auto-detect)"
+    )
+    .option(
+      "--add-dir <path>",
+      "Add directory to Copilot CLI allowed paths (repeatable)",
+      collectRepeatable,
+      [] as string[]
+    )
+    .option("--json", "Output results as JSON")
+    .option("-q, --quiet", "Suppress all output except errors")
+    .option("--verbose", "Show debug information")
+    .option("--no-color", "Disable colored output");
+}
+
+function collectRepeatable(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
