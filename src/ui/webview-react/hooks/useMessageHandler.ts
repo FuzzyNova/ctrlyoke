@@ -1850,6 +1850,36 @@ function createMessageHandlers(): MessageHandlerMap {
     ) {
       return;
     }
+    // Requestless snapshots are also produced by replay/invalidation paths. A
+    // snapshot can start reading a run before an append, then finish loading its
+    // timeline after STEPS_EXTENDED has already advanced the same run in the
+    // client. Request IDs cannot order those internal snapshots, so preserve the
+    // per-address monotonic definition head here. Equal revisions must not shrink
+    // the step list either: live queue growth reaches the client before the
+    // follow-up WORKFLOW_VIEW_IDENTITY is published when execution completes.
+    const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
+    const isCurrentAddress = areWorkflowAddressesEqual(
+      address,
+      uiStore.displayedViewAddress
+    );
+    const currentDefinitionRevision = uiStore.displayedDefinitionRevision;
+    const currentStepCount = useWorkflowStore.getState().steps.length;
+    const incomingStepCount = workingFile.steps?.length ?? 0;
+    if (
+      !message.requestId &&
+      isCurrentAddress &&
+      currentDefinitionRevision !== null &&
+      (incomingDefinitionRevision < currentDefinitionRevision ||
+        (incomingDefinitionRevision === currentDefinitionRevision &&
+          incomingStepCount < currentStepCount))
+    ) {
+      WebviewLog.debug(
+        `[RUN_VIEW_LOADED] ignoring regressive snapshot for ${address.workflowKey}: ` +
+          `revision ${incomingDefinitionRevision}/${currentDefinitionRevision}, ` +
+          `steps ${incomingStepCount}/${currentStepCount}`
+      );
+      return;
+    }
     const openSaveDialog = useUiStore.getState().saveWorkflowDialogData;
     if (
       openSaveDialog &&
@@ -1865,12 +1895,37 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     applyWorkflowChange();
     const runtime = workingFile._runtime;
+    // The addressed run view sends the run's own definition file, where each
+    // step's completion status lives in its own _runtime.terminalStatus
+    // rather than in a separate results array (unlike the live-queue-backed
+    // FILE_SELECTED/SESSION_RESTORED messages). Derive results from that
+    // per-step runtime so completed/failed/cancelled/skipped chips still
+    // render their status border after loading a run view.
+    const currentIndex = runtime?.currentIndex ?? 0;
+    const results = (workingFile.steps ?? []).map(
+      (step: any, index: number) => {
+        const stepRuntime = step._runtime;
+        if (stepRuntime?.completedAt !== undefined) {
+          return {
+            status: stepRuntime.terminalStatus ?? STEP_STATUS.COMPLETED,
+          };
+        }
+        if (
+          index === currentIndex &&
+          runtime?.executionState === EXECUTION_STATES.RUNNING
+        ) {
+          return { status: STEP_STATUS.SENT };
+        }
+        return { status: STEP_STATUS.PENDING };
+      }
+    );
     useWorkflowStore.getState().loadWorkflow({
       fileName: workingFile.workflowName,
       workflowName: workingFile.workflowName,
       steps: workingFile.steps ?? [],
       executionState: runtime?.executionState,
       currentStep: runtime?.currentIndex,
+      results,
       finalStep: workingFile.finalStep ?? null,
       finalStepStatus: runtime?.finalStep?.status ?? null,
       finalStepLoopCount: runtime?.finalStep?.loopCount ?? 0,

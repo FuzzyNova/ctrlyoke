@@ -2098,7 +2098,7 @@ export class WorkflowOrchestrator {
       // If a live instance already owns this exact run (executing/paused, or
       // simply loaded), prime its next definition write with the client's
       // observed revision — mirroring the draft-instance carve-out below.
-      this.findLiveInstanceForRun(
+      this.findResidentInstanceForRun(
         mutation.address.workflowKey,
         mutation.address.runRef
       )?.expectDefinitionRevision(mutation.expectedDefinitionRevision);
@@ -2195,14 +2195,20 @@ export class WorkflowOrchestrator {
    * this run's working file (executing, paused, or otherwise still resident)
    * qualifies.
    */
-  private findLiveInstanceForRun(
+  private findResidentInstanceForRun(
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): WorkflowInstance | undefined {
-    return [...this.instances.values()].find((instance) => {
+    const matches = (instance: WorkflowInstance) => {
       const state = instance.getQueueState();
       return state.workflowKey === workflowKey && state.runRef === runRef;
-    });
+    };
+    const instances = this.instances ?? new Map();
+    const retiredInstances = this.retiredInstances ?? new Map();
+    return (
+      [...instances.values()].find(matches) ??
+      [...retiredInstances.values()].find(matches)
+    );
   }
 
   private requireWorkspaceRoot(): string {
@@ -2227,7 +2233,7 @@ export class WorkflowOrchestrator {
     liveEdit: (instance: WorkflowInstance) => Promise<void>,
     staticEdit: (workspaceRoot: string) => Promise<void>
   ): Promise<void> {
-    const live = this.findLiveInstanceForRun(
+    const live = this.findResidentInstanceForRun(
       runAddress.workflowKey,
       runAddress.runRef
     );
@@ -2835,7 +2841,7 @@ export class WorkflowOrchestrator {
       );
     }
 
-    const loadedTarget = this.findLiveInstanceForRun(
+    const loadedTarget = this.findResidentInstanceForRun(
       address.workflowKey,
       address.runRef
     );
@@ -2892,14 +2898,76 @@ export class WorkflowOrchestrator {
         descriptorRevision: expectedDescriptorRevision,
       }
     );
+    await this.closeLineageTerminalsForFreshRun(address.workflowKey);
     const instance = this.buildWorkflowInstance();
     getPtyProcessManager()?.setPendingController(instance.id, clientId);
+    let prepared = false;
+    let resolvePrepared!: () => void;
+    let rejectPrepared!: (error: unknown) => void;
+    const preparedPromise = new Promise<void>((resolve, reject) => {
+      resolvePrepared = resolve;
+      rejectPrepared = reject;
+    });
     void instance
-      .executeSeededRun(seeded, address.workflowKey)
-      .catch((error) =>
-        Log.error(`Failed to execute seeded run: ${getErrorMessage(error)}`)
-      );
+      .executeSeededRun(seeded, address.workflowKey, undefined, async () => {
+        await this.switchClientToPreparedExecution(instance, clientId);
+        prepared = true;
+        resolvePrepared();
+      })
+      .catch((error) => {
+        if (!prepared) {
+          rejectPrepared(error);
+        }
+        Log.error(`Failed to execute seeded run: ${getErrorMessage(error)}`);
+      });
+    // The action is not complete until the initiating client is visibly bound
+    // to the seeded run. Execution itself continues in the background.
+    await preparedPromise;
     return { runRef: seeded.runRef };
+  }
+
+  /** A different RunRef is a fresh terminal/session boundary for the lineage. */
+  private async closeLineageTerminalsForFreshRun(
+    workflowKey: WorkflowKey
+  ): Promise<void> {
+    const residents = new Set([
+      ...this.instances.values(),
+      ...this.retiredInstances.values(),
+    ]);
+    await Promise.all(
+      [...residents]
+        .filter(
+          (instance) => instance.getQueueState().workflowKey === workflowKey
+        )
+        .map((instance) => instance.closeRetainedTerminalsForFreshRun())
+    );
+  }
+
+  /**
+   * Make the initiating client follow a run only after its working file and
+   * timeline exist, but before execution can emit any run-scoped messages.
+   */
+  private async switchClientToPreparedExecution(
+    instance: WorkflowInstance,
+    clientId: string
+  ): Promise<void> {
+    if (
+      !this.instances.has(instance.id) &&
+      !this.retiredInstances.has(instance.id)
+    ) {
+      // Keep the prepared ID discoverable during replay. The RUNNING state
+      // transition promotes it into the live registry immediately afterward.
+      this.retiredInstances.set(instance.id, instance);
+    }
+
+    const send =
+      this.getViewMessageSinks().get(clientId) ??
+      (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
+    if (!send) {
+      this.setViewedWorkflowId(clientId, instance.id);
+      return;
+    }
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
   }
 
   /** Execute the exact viewed draft; promoted runs must use seedAndExecuteAtRun. */
@@ -3016,11 +3084,15 @@ export class WorkflowOrchestrator {
       this.lineageRepository,
       allowInterruptedRun
     );
-    const instance = activeInstance ?? this.buildWorkflowInstance();
+    const instance =
+      activeInstance ??
+      this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
+      this.buildWorkflowInstance();
     await instance.executeContinuationAtRun(
       address.workflowKey,
       address.runRef,
-      appended.definitionRevision
+      appended.definitionRevision,
+      () => this.switchClientToPreparedExecution(instance, clientId)
     );
     await this.invalidateRunViews(address.workflowKey, address.runRef);
     return {
@@ -3042,11 +3114,15 @@ export class WorkflowOrchestrator {
       expectedDescriptorRevision,
       clientId
     );
-    const instance = activeInstance ?? this.buildWorkflowInstance();
+    const instance =
+      activeInstance ??
+      this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
+      this.buildWorkflowInstance();
     await instance.executeContinuationAtRun(
       address.workflowKey,
       address.runRef,
-      expectedDefinitionRevision
+      expectedDefinitionRevision,
+      () => this.switchClientToPreparedExecution(instance, clientId)
     );
     await this.invalidateRunViews(address.workflowKey, address.runRef);
   }

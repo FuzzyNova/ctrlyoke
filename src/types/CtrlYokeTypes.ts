@@ -632,10 +632,14 @@ export interface WorkflowSummary {
   harness?: HarnessId;
 }
 
-/** Returns the 1-indexed step number for display (logs, UI labels). currentStep is 0-indexed internally. */
+/**
+ * Returns the 1-indexed step number for display (logs, UI labels), bounded by
+ * the queue size. The internal cursor equals `totalSteps` after completion, so
+ * adding one without clamping would report impossible progress such as 3/2.
+ */
 export const workflowDisplayStep = (
-  s: Pick<WorkflowSummary, "currentStep">
-): number => s.currentStep + 1;
+  s: Pick<WorkflowSummary, "currentStep" | "totalSteps">
+): number => Math.max(0, Math.min(s.currentStep + 1, s.totalSteps));
 
 /**
  * Process lock file written at the lineage root while one of its runs is executing.

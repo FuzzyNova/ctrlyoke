@@ -1611,6 +1611,52 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
     assert.strictEqual(integration.disposeCalls, 1);
   });
+
+  test("closes retained terminals when a different run starts", async () => {
+    class RetainedTerminalIntegration extends MockHarnessIntegration {
+      closeCalls = 0;
+      gracefulCloseCalls = 0;
+      disposeCalls = 0;
+
+      override closeTerminal(): void {
+        this.closeCalls += 1;
+      }
+
+      override closeTerminalGracefully(): void {
+        this.gracefulCloseCalls += 1;
+      }
+
+      override dispose(): void {
+        this.disposeCalls += 1;
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const disposedPrevious = new RetainedTerminalIntegration(undefined, false);
+    const livePrevious = new RetainedTerminalIntegration(undefined, false);
+    (instance as any).lastRunIntegrations = [disposedPrevious];
+    (instance as any).liveInjectIntegrations.set(
+      HARNESS_IDS.OPENCODE_CLI,
+      livePrevious
+    );
+
+    await instance.closeRetainedTerminalsForFreshRun();
+
+    assert.strictEqual(disposedPrevious.closeCalls, 1);
+    assert.strictEqual(livePrevious.gracefulCloseCalls, 1);
+    assert.strictEqual(livePrevious.disposeCalls, 1);
+    assert.strictEqual((instance as any).lastRunIntegrations.length, 0);
+    assert.strictEqual((instance as any).liveInjectIntegrations.size, 0);
+  });
 });
 
 suite("WorkflowInstance executeSeededRun", () => {
@@ -1622,9 +1668,37 @@ suite("WorkflowInstance executeSeededRun", () => {
 
     try {
       const platform = new MockPlatform();
+      let executionStartedArgs: any[] | undefined;
+      const dashboardSink: any = {
+        updateFileSelected: async () => {},
+        updateSessionRestored: async () => {},
+        updateExecutionStarted: (...args: any[]) => {
+          executionStartedArgs = args;
+        },
+        notifyRunHistoryUpdated: () => {},
+        updateProgress: () => {},
+        updateExecutionState: () => {},
+        updateWorkflowName: () => {},
+        updateStepStatus: () => {},
+        updateRetryAttempt: () => {},
+        updateCliOutput: () => {},
+        updateCliStreamingChunk: () => {},
+        updateCliStreamingEvents: () => {},
+        updateStepsExtended: () => {},
+        updatePromptDeleted: () => {},
+        updateFinalStep: () => {},
+        updateFinalStepStatus: () => {},
+        updateFinalStepOutput: () => {},
+        updateFinalStepStreamingChunk: () => {},
+        updateFinalStepStreamingEvents: () => {},
+        updateStatusMessage: () => {},
+        notifyWorkflowStateReset: () => {},
+        notifyStartPositionSet: () => {},
+        notifyPromptsReordered: () => {},
+      };
       instance = new WorkflowInstance(
         platform,
-        undefined,
+        dashboardSink,
         new MockIntegrationFactory(platform),
         () => new MockHarnessIntegration(undefined, false),
         () => {},
@@ -1684,7 +1758,15 @@ suite("WorkflowInstance executeSeededRun", () => {
       ) => {
         executionHistoryFilePath = historyFilePath;
       };
-      await instance.executeSeededRun(seeded, workflowKey);
+      let prepared = false;
+      await instance.executeSeededRun(
+        seeded,
+        workflowKey,
+        undefined,
+        async () => {
+          prepared = true;
+        }
+      );
 
       assert.strictEqual(
         promoteToNewRunCalls,
@@ -1695,6 +1777,17 @@ suite("WorkflowInstance executeSeededRun", () => {
         restartCalled,
         false,
         "executeSeededRun must not restart() the already-fresh seeded run"
+      );
+      assert.strictEqual(prepared, true);
+      assert.deepStrictEqual(
+        executionStartedArgs?.slice(1, 3),
+        ["workflow.ctrlyoke.json", 1],
+        "a seeded run must be announced as a fresh start, not a continuation"
+      );
+      assert.strictEqual(
+        executionStartedArgs?.[3],
+        undefined,
+        "fresh execution must not carry the continuation flag"
       );
       assert.strictEqual(instance.promptQueue.getState().runRef, seeded.runRef);
       assert.strictEqual(

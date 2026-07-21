@@ -19,6 +19,7 @@ import {
   FAILURE_KINDS,
 } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
+import { Log } from "../../utils/Log";
 
 class MockPlatform implements PlatformAdapter {
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -213,6 +214,51 @@ async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
 }
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("logs the effective next-step harness instead of the default integration", async () => {
+    const queue = new PromptQueue();
+    const defaultIntegration = new MockHarnessIntegration(undefined, false);
+    const effectiveIntegration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const requestedHarnesses: Array<string | undefined> = [];
+    const messages: string[] = [];
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "uses an override",
+          harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+        },
+      ],
+    });
+    const context: WorkflowExecutionContext = {
+      ...makeContext(effectiveIntegration),
+      getIntegrationForPrompt: (_prompt, harnessOverride) => {
+        requestedHarnesses.push(harnessOverride);
+        return effectiveIntegration;
+      },
+    };
+    const originalInfo = Log.info;
+    Log.info = (message: string) => {
+      messages.push(message);
+    };
+
+    try {
+      await executor.execute(defaultIntegration, context);
+    } finally {
+      Log.info = originalInfo;
+    }
+
+    const startMessage = messages.find((message) =>
+      message.includes("Workflow started -")
+    );
+    assert.ok(startMessage);
+    assert.ok(
+      startMessage.includes(`next harness: ${HARNESS_IDS.ANTIGRAVITY_CLI}`),
+      startMessage
+    );
+    assert.deepStrictEqual(requestedHarnesses, [HARNESS_IDS.ANTIGRAVITY_CLI]);
+  });
+
   test("preserves behavior when finalStep is absent", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

@@ -221,7 +221,7 @@ export class WorkflowExecutor {
    * exactly where it left off.
    */
   async execute(
-    defaultIntegration: HarnessIntegration,
+    _defaultIntegration: HarnessIntegration,
     context: WorkflowExecutionContext
   ): Promise<void> {
     this.clearPendingState();
@@ -239,11 +239,7 @@ export class WorkflowExecutor {
 
     await this.showDashboard();
 
-    this.logWorkflowStart(
-      context,
-      defaultIntegration,
-      this.promptQueue.getProgress().total
-    );
+    this.logWorkflowStart(context, this.promptQueue.getProgress().total);
 
     const snapshotStrategy = await this.selectSnapshotStrategy(context);
 
@@ -2074,16 +2070,51 @@ export class WorkflowExecutor {
 
   private logWorkflowStart(
     context: WorkflowExecutionContext,
-    integration: HarnessIntegration,
     totalSteps: number
   ): void {
     const tag = context.instanceTag ? `${context.instanceTag} ` : "";
     const workflowName = path.basename(
       context.currentPromptFilePath ?? "unknown"
     );
+    const nextTarget = this.describeNextExecutionTarget();
     Log.info(
-      `${tag}Workflow started - ${workflowName}, ${totalSteps} step(s), harness: ${integration.getStatus().strategy}`
+      `${tag}Workflow started - ${workflowName}, ${totalSteps} step(s), ${nextTarget}`
     );
+  }
+
+  /**
+   * Describe the next enabled execution target without creating an integration.
+   * A workflow may switch harnesses per step, so its pre-created default
+   * integration is not necessarily the harness that will actually run next.
+   */
+  private describeNextExecutionTarget(): string {
+    const state = this.promptQueue.getState();
+    const workflowFile = this.promptQueue.getWorkflowFile();
+    const nextQueueStep = state.steps
+      .slice(state.currentIndex)
+      .find(isStepEnabled);
+    const nextStep =
+      nextQueueStep ??
+      (isStepEnabled(workflowFile.finalStep)
+        ? workflowFile.finalStep
+        : undefined);
+
+    if (!nextStep) {
+      return "next target: none";
+    }
+    if (isScriptStep(nextStep)) {
+      return "next target: script";
+    }
+
+    let resolvedProperties = PropertyResolver.resolve(nextStep, workflowFile);
+    const vars = workflowFile.vars;
+    if (vars && Object.keys(vars).length > 0) {
+      resolvedProperties = VarSubstitutor.applyToResolvedProperties(
+        resolvedProperties,
+        vars
+      );
+    }
+    return `next harness: ${resolvedProperties.harness}`;
   }
 
   private logWorkflowCompletion(

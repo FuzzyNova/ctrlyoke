@@ -191,7 +191,7 @@ function loadShim() {
     location,
     URLSearchParams,
     encodeURIComponent,
-    Math: { ...Math, random: () => 0.123456789 },
+    Math: { min: Math.min, random: () => 0.123456789 },
     Date: { now: () => clock.now },
     WebSocket: FakeWebSocket,
     setInterval: (callback: TimerCallback, intervalMs?: number) =>
@@ -214,6 +214,7 @@ function loadShim() {
   return {
     clock,
     document,
+    location,
     dispatchWindow(event: string) {
       for (const handler of windowListeners.get(event) ?? []) handler();
     },
@@ -263,9 +264,57 @@ suite("standalone-shim connection liveness", () => {
     clock.advance(9_000);
 
     assert.strictEqual(FakeWebSocket.instances.length, 1);
-    assert.ok(
+    assert.strictEqual(
       socket.sent.filter((message) => message.type === MESSAGE_TYPES.READY)
-        .length >= 2
+        .length,
+      1
+    );
+  });
+
+  test("foreground probe acknowledgment refreshes READY after the preferred view changes", () => {
+    const { location, dispatchWindow } = loadShim();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+
+    location.search =
+      "?token=test-token&workflowKey=workflow-1&runRef=run-2026-07-21";
+    dispatchWindow("focus");
+    const probe = socket.sent.find(
+      (message) => message.type === MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT
+    );
+    assert.ok(probe);
+
+    socket.receive({
+      type: MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT_ACK,
+      id: probe.id,
+    });
+
+    const readyMessages = socket.sent.filter(
+      (message) => message.type === MESSAGE_TYPES.READY
+    );
+    assert.strictEqual(readyMessages.length, 2);
+    assert.deepStrictEqual(readyMessages[1].preferredViewAddress, {
+      workflowKey: "workflow-1",
+      kind: "run",
+      runRef: "run-2026-07-21",
+    });
+  });
+
+  test("a replacement socket receives READY even when the preferred view is unchanged", () => {
+    const { clock } = loadShim();
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.open();
+
+    firstSocket.serverClose();
+    clock.advance(250);
+
+    const replacement = FakeWebSocket.instances[1];
+    replacement.open();
+
+    assert.strictEqual(
+      replacement.sent.filter((message) => message.type === MESSAGE_TYPES.READY)
+        .length,
+      1
     );
   });
 

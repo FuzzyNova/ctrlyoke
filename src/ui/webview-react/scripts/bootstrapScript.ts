@@ -36,6 +36,20 @@ function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
+/**
+ * Browsers surface ResizeObserver delivery deferrals through the global
+ * `error` event even though no exception escaped application code. The
+ * observer will retry delivery on the next frame, so retain the diagnostic
+ * without classifying it as an application failure.
+ */
+function isResizeObserverDeliveryWarning(message: string): boolean {
+  return (
+    message ===
+      "ResizeObserver loop completed with undelivered notifications." ||
+    message === "ResizeObserver loop limit exceeded"
+  );
+}
+
 function writeConsole(level: BootstrapLogLevel, message: string): void {
   if (level === __fpLogLevels__.ERROR) {
     console.error(message);
@@ -99,9 +113,11 @@ function installBootstrapLogger(): void {
   };
 
   window.addEventListener("error", (event) => {
+    const message = event.message || "(no message)";
+    const isDeliveryWarning = isResizeObserverDeliveryWarning(message);
     enqueueOrPost(
-      __fpLogLevels__.ERROR,
-      `window error: ${event.message || "(no message)"} at ${event.filename || "(unknown)"}:${event.lineno || 0}:${event.colno || 0}`
+      isDeliveryWarning ? __fpLogLevels__.WARN : __fpLogLevels__.ERROR,
+      `${isDeliveryWarning ? "browser warning" : "window error"}: ${message} at ${event.filename || "(unknown)"}:${event.lineno || 0}:${event.colno || 0}`
     );
   });
 

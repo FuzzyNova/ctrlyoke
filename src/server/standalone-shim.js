@@ -197,6 +197,20 @@
     };
   }
 
+  function sendReadyIfNeeded(socket) {
+    const readyMessage = buildReadyMessage();
+    const preferredViewAddress = JSON.stringify(
+      readyMessage.preferredViewAddress
+    );
+    if (
+      readySentForSocket &&
+      preferredViewAddress === lastSentReadyPreferredViewAddress
+    ) {
+      return false;
+    }
+    return sendNow(socket, readyMessage);
+  }
+
   function dispatchToReact(msg) {
     if (!reactReady) {
       pendingInbound.push(msg);
@@ -216,7 +230,7 @@
 
   function refreshReadyState() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    sendNow(ws, buildReadyMessage());
+    sendReadyIfNeeded(ws);
     flushOutbound();
   }
 
@@ -519,7 +533,7 @@
       // triggers is buffered below until React posts its own READY, so no state
       // is delivered before useMessageHandler has installed its listener.
       if (!hasQueuedReady) {
-        sendNow(socket, buildReadyMessage());
+        sendReadyIfNeeded(socket);
       }
       flushOutbound();
       connectionLog(

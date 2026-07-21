@@ -1167,6 +1167,9 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     const internal = orchestrator as any;
     internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
     internal.instances = new Map(instance ? [["active", instance]] : []);
+    internal.retiredInstances = new Map();
+    internal.cliSessions = new Map();
+    internal.viewerRegistry = new Map();
     internal.viewAddressRegistry = new Map([
       [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef }],
     ]);
@@ -1208,7 +1211,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         PANEL_CLIENT_ID
       );
 
-      assert.deepStrictEqual(executed, [
+      assert.deepStrictEqual(executed?.slice(0, 3), [
         historical.workflowKey,
         historical.runRef,
         2,
@@ -1217,6 +1220,137 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         await fs.readFile(latest.workingFilePath, "utf8"),
         latestBefore
       );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("re-run closes the source terminal and switches the initiating client before execution", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-rerun-switch-")
+    );
+    try {
+      const source = await createRun(workspace);
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        source.workflowKey
+      );
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        source.workflowKey,
+        source.runRef
+      );
+      let sourceCloseCalls = 0;
+      const sourceInstance = {
+        id: "source-instance",
+        getQueueState: () => ({
+          workflowKey: source.workflowKey,
+          runRef: source.runRef,
+        }),
+        closeRetainedTerminalsForFreshRun: async () => {
+          sourceCloseCalls += 1;
+        },
+      };
+      internal.retiredInstances.set(sourceInstance.id, sourceInstance);
+      internal.viewerRegistry.set(PANEL_CLIENT_ID, sourceInstance.id);
+      internal.viewMessageSinks.set(PANEL_CLIENT_ID, () => undefined);
+
+      const replayed: string[] = [];
+      internal.replayWorkflowStateTo = async (instanceId: string) => {
+        replayed.push(instanceId);
+      };
+      let preparedRunRef: string | undefined;
+      const executionInstance = {
+        id: "seeded-instance",
+        getQueueState: () => ({
+          workflowKey: source.workflowKey,
+          runRef: preparedRunRef,
+        }),
+        executeSeededRun: async (
+          seeded: { runRef: string },
+          _workflowKey: string,
+          _harness: unknown,
+          onPrepared: () => Promise<void>
+        ) => {
+          preparedRunRef = seeded.runRef;
+          await onPrepared();
+        },
+      };
+      internal.buildWorkflowInstance = () => executionInstance;
+
+      const result = await orchestrator.seedAndExecuteAtRun(
+        { workflowKey: source.workflowKey, runRef: source.runRef },
+        1,
+        descriptor.revision,
+        PANEL_CLIENT_ID
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      assert.strictEqual(sourceCloseCalls, 1);
+      assert.strictEqual(preparedRunRef, result.runRef);
+      assert.deepStrictEqual(replayed, [executionInstance.id]);
+      assert.strictEqual(
+        internal.retiredInstances.get(executionInstance.id),
+        executionInstance,
+        "the prepared run must be addressable during the client switch"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("same-run continuation reuses the retired run owner and switches before executing", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-continue-owner-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let executionArgs: unknown[] | undefined;
+      const resident = {
+        id: "retired-run-owner",
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+        }),
+        executeContinuationAtRun: async (...args: unknown[]) => {
+          executionArgs = args;
+          await (args[3] as () => Promise<void>)();
+        },
+      };
+      internal.retiredInstances.set(resident.id, resident);
+      internal.viewerRegistry.set(PANEL_CLIENT_ID, resident.id);
+      internal.viewMessageSinks.set(PANEL_CLIENT_ID, () => undefined);
+      internal.buildWorkflowInstance = () => {
+        throw new Error("must reuse the exact resident run owner");
+      };
+      const replayed: string[] = [];
+      internal.replayWorkflowStateTo = async (instanceId: string) => {
+        replayed.push(instanceId);
+      };
+
+      await orchestrator.appendAndContinueAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        [{ prompt: "continued tail" }],
+        1,
+        descriptor.revision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(executionArgs?.slice(0, 3), [
+        run.workflowKey,
+        run.runRef,
+        2,
+      ]);
+      assert.deepStrictEqual(replayed, [resident.id]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
@@ -1370,7 +1504,11 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       );
 
       assert.strictEqual(parsedPath, "/fake/prompts.ctrlyoke.yaml");
-      assert.deepStrictEqual(executed, [run.workflowKey, run.runRef, 2]);
+      assert.deepStrictEqual(executed?.slice(0, 3), [
+        run.workflowKey,
+        run.runRef,
+        2,
+      ]);
       const written = JSON.parse(
         await fs.readFile(run.workingFilePath, "utf8")
       );

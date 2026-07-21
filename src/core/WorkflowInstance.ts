@@ -594,6 +594,28 @@ export class WorkflowInstance {
   }
 
   /**
+   * End every terminal/integration retained from the previous run before a
+   * different RunRef starts. Same-run append/continue deliberately does not
+   * call this because its resumable session is part of that run's state.
+   */
+  async closeRetainedTerminalsForFreshRun(): Promise<void> {
+    for (const previous of this.lastRunIntegrations) {
+      previous.closeTerminal();
+    }
+    this.lastRunIntegrations = [];
+
+    for (const [harnessKey, liveIntegration] of this.liveInjectIntegrations) {
+      await this.cleanupRetainedIntegrationArtifacts(
+        harnessKey,
+        liveIntegration
+      );
+      liveIntegration.closeTerminalGracefully();
+      liveIntegration.dispose();
+    }
+    this.liveInjectIntegrations.clear();
+  }
+
+  /**
    * Stop an active run and get its durable state onto disk.
    *
    * Ordering matters on the VS Code exit path: cancel the harness, flush
@@ -1004,8 +1026,10 @@ export class WorkflowInstance {
       startedAt: number;
     },
     workflowKey: WorkflowKey,
-    harnessOverride?: HarnessId
+    harnessOverride?: HarnessId,
+    onPrepared?: () => Promise<void>
   ): Promise<void> {
+    await this.closeRetainedTerminalsForFreshRun();
     await this.loadWorkingFile(seeded.workingFilePath);
     const historyInit = await this.outputHistoryManager.initializeRunAt(
       workflowKey,
@@ -1021,10 +1045,12 @@ export class WorkflowInstance {
         `Failed to initialize timeline for seeded run ${workflowKey}/${seeded.runRef}`
       );
     }
+    await onPrepared?.();
     await this.executeLoadedPromptFile(
       harnessOverride,
-      true,
-      historyInit.filePath
+      false,
+      historyInit.filePath,
+      true
     );
   }
 
@@ -1036,7 +1062,8 @@ export class WorkflowInstance {
   async executeContinuationAtRun(
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    expectedDefinitionRevision: number
+    expectedDefinitionRevision: number,
+    onPrepared?: () => Promise<void>
   ): Promise<void> {
     const workspaceRoot =
       this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
@@ -1060,6 +1087,7 @@ export class WorkflowInstance {
         `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${state.definitionRevision}`
       );
     }
+    await onPrepared?.();
 
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
       workflowKey,
@@ -1097,7 +1125,8 @@ export class WorkflowInstance {
   async executeLoadedPromptFile(
     modeOverride?: HarnessId,
     continueFromCurrent: boolean = false,
-    preinitializedHistoryFilePath: string = ""
+    preinitializedHistoryFilePath: string = "",
+    prePromotedFreshStart: boolean = false
   ): Promise<void> {
     if (!this.currentPromptFile) {
       const queueState = this.promptQueue.getState();
@@ -1236,19 +1265,7 @@ export class WorkflowInstance {
           executionState === EXECUTION_STATES.ERROR);
 
       if (isRestartFromBeginning) {
-        // Gracefully terminate live inject integrations before creating the new
-        // execution integration. Ctrl+C gives the CLI time to clean up; dispose()
-        // then releases the event emitters and any headless process handle.
-        for (const [harnessKey, liveIntegration] of this
-          .liveInjectIntegrations) {
-          await this.cleanupRetainedIntegrationArtifacts(
-            harnessKey,
-            liveIntegration
-          );
-          liveIntegration.closeTerminalGracefully();
-          liveIntegration.dispose();
-        }
-        this.liveInjectIntegrations.clear();
+        await this.closeRetainedTerminalsForFreshRun();
       }
 
       // Create the execution integration only after passing pre-flight checks.
@@ -1283,6 +1300,7 @@ export class WorkflowInstance {
         !continueFromCurrent &&
         !isAppendContinuation &&
         !isIdleContinuation &&
+        !prePromotedFreshStart &&
         workflowKey
       ) {
         const runWorkspaceRoot =
@@ -1294,6 +1312,7 @@ export class WorkflowInstance {
         );
         if (promoted) {
           workingFilePath = promoted.workingFilePath;
+          this.syncCurrentPromptFileFromQueue(promoted.workingFilePath);
           this.executionRunRef = promoted.runRef;
           const historyInit = await this.outputHistoryManager.initializeRunAt(
             workflowKey,
@@ -3148,10 +3167,11 @@ export class WorkflowInstance {
       // paths where startWorkflowExecution() is reached before a run-specific
       // integration is chosen, plus multi-harness workflows whose first prompt
       // is not the default harness.
-      // (In the normal single-harness case this map is already empty because
-      //  executeLoadedPromptFile already called createIntegrationForMode().)
+      // The map may already be empty when executeLoadedPromptFile consumed the
+      // retained default harness. Entries for other harnesses are expected in
+      // same-run multi-harness and per-step override continuations.
       Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: liveInjectIntegrations.size=${this.liveInjectIntegrations.size} (should be 0 in normal flow)`
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: retained same-run integrations available=${this.liveInjectIntegrations.size}`
       );
       for (const [
         harness,

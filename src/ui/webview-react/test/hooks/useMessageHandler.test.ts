@@ -845,6 +845,116 @@ describe("OUTPUT_HISTORY_LOADED", () => {
 });
 
 describe("run view revision snapshots", () => {
+  it("ignores a late requestless snapshot that would regress an appended run", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Growing run",
+          definitionRevision: 1,
+          steps: [makePrompt("first"), makePrompt("second")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: {
+          runId: 1,
+          startedAt: 1000,
+          completedAt: 2000,
+          executionState: EXECUTION_STATES.COMPLETED,
+          orderedEntries: [],
+          promptOutputs: {},
+        },
+      });
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [
+          makePrompt("first"),
+          makePrompt("second"),
+          makePrompt("appended"),
+        ],
+      });
+    });
+
+    expect(useWorkflowStore.getState().steps).toHaveLength(3);
+
+    act(() => {
+      // This replay began before the append and has no selector request ID. Its
+      // equal revision is possible because the live queue update is delivered
+      // before the post-execution identity refresh.
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Growing run",
+          definitionRevision: 1,
+          steps: [makePrompt("first"), makePrompt("second")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: {
+          runId: 1,
+          startedAt: 1000,
+          completedAt: 2000,
+          executionState: EXECUTION_STATES.COMPLETED,
+          orderedEntries: [],
+          promptOutputs: {},
+        },
+      });
+    });
+
+    expect(
+      useWorkflowStore
+        .getState()
+        .steps.map((step) => ("prompt" in step ? step.prompt : undefined))
+    ).toEqual(["first", "second", "appended"]);
+    expect(useUiStore.getState().displayedViewAddress).toEqual(address);
+  });
+
+  it("ignores a requestless snapshot from an older definition revision", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Current run",
+          definitionRevision: 3,
+          steps: [makePrompt("current")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+      });
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Stale run",
+          definitionRevision: 2,
+          steps: [makePrompt("stale"), makePrompt("also stale")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+      });
+    });
+
+    expect(useWorkflowStore.getState().workflowName).toBe("Current run");
+    expect(useWorkflowStore.getState().steps[0]).toMatchObject({
+      prompt: "current",
+    });
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
+  });
+
   it("accepts an authoritative draft replay after switching to a newly loaded workflow", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({
