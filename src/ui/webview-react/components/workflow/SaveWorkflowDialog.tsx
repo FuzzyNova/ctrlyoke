@@ -63,6 +63,9 @@ export const SaveWorkflowDialog: React.FC = () => {
   const saveWorkflowDialogOpen = useUiStore((s) => s.saveWorkflowDialogOpen);
   const saveWorkflowDialogData = useUiStore((s) => s.saveWorkflowDialogData);
   const closeSaveWorkflowDialog = useUiStore((s) => s.closeSaveWorkflowDialog);
+  const savePathCheck = useUiStore((s) => s.savePathCheck);
+  const beginSavePathCheck = useUiStore((s) => s.beginSavePathCheck);
+  const clearSavePathCheck = useUiStore((s) => s.clearSavePathCheck);
   const fileBrowserState = useUiStore((s) => s.fileBrowserState);
   const openFileBrowser = useUiStore((s) => s.openFileBrowser);
   const saveLocationSelection = useUiStore((s) => s.saveLocationSelection);
@@ -71,6 +74,7 @@ export const SaveWorkflowDialog: React.FC = () => {
   );
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const pathCheckSequence = useRef(0);
 
   const [location, setLocation] = useState("");
   const [name, setName] = useState("");
@@ -152,6 +156,49 @@ export const SaveWorkflowDialog: React.FC = () => {
     []
   );
 
+  const workflowPreviewPath = joinSavePath(
+    location,
+    name.trim() || "…",
+    format
+  );
+
+  // Check overwrite state as the destination changes. The store only accepts
+  // the exact outstanding request, so responses from a prior name, dialog, or
+  // addressed view cannot repaint this warning.
+  useEffect(() => {
+    if (
+      !saveWorkflowDialogOpen ||
+      !saveWorkflowDialogData ||
+      saveAsTemplate ||
+      !name.trim() ||
+      !!nameError
+    ) {
+      clearSavePathCheck();
+      return;
+    }
+    pathCheckSequence.current += 1;
+    const requestId = `${saveWorkflowDialogData.requestId}:path:${pathCheckSequence.current}`;
+    beginSavePathCheck(requestId, workflowPreviewPath);
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CHECK_SAVE_PATH,
+      requestId,
+      path: workflowPreviewPath,
+      address: saveWorkflowDialogData.address,
+    });
+  }, [
+    beginSavePathCheck,
+    clearSavePathCheck,
+    format,
+    location,
+    name,
+    nameError,
+    saveAsTemplate,
+    saveWorkflowDialogData,
+    saveWorkflowDialogOpen,
+    vscode,
+    workflowPreviewPath,
+  ]);
+
   const handleSave = useCallback(() => {
     if (saveAsTemplate) {
       const err = validateSafeName(templateName, "Template name is required");
@@ -161,6 +208,8 @@ export const SaveWorkflowDialog: React.FC = () => {
       }
       vscode.postMessage({
         type: MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE,
+        requestId: saveWorkflowDialogData?.requestId,
+        address: saveWorkflowDialogData?.address,
         name: templateName.trim(),
         scope: templateScope,
       });
@@ -174,22 +223,31 @@ export const SaveWorkflowDialog: React.FC = () => {
     }
     vscode.postMessage({
       type: MESSAGE_TYPES.SAVE_WORKFLOW,
-      filePath: joinSavePath(location, name.trim(), format),
+      requestId: saveWorkflowDialogData?.requestId,
+      address: saveWorkflowDialogData?.address,
+      filePath: workflowPreviewPath,
       format,
     });
   }, [
     vscode,
-    location,
     name,
     format,
     saveAsTemplate,
     templateName,
     templateScope,
+    saveWorkflowDialogData,
+    workflowPreviewPath,
   ]);
 
+  const matchingPathCheck =
+    savePathCheck?.path === workflowPreviewPath ? savePathCheck : null;
+  const pathReady =
+    !!matchingPathCheck &&
+    !matchingPathCheck.checking &&
+    !matchingPathCheck.error;
   const canSave = saveAsTemplate
     ? !!templateName.trim() && !templateNameError
-    : !!name.trim() && !nameError;
+    : !!name.trim() && !nameError && pathReady;
 
   // Preview of the final file path, shown at the bottom of the dialog so
   // the user can see exactly what will be written before hitting Save.
@@ -197,7 +255,7 @@ export const SaveWorkflowDialog: React.FC = () => {
     templateScope === "user" ? "~/.ctrlyoke/templates" : ".ctrlyoke/templates";
   const previewPath = saveAsTemplate
     ? `${templateDirPreview}/${templateName.trim() || "…"}.ctrlyoke.json`
-    : joinSavePath(location, name.trim() || "…", format);
+    : workflowPreviewPath;
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -212,7 +270,7 @@ export const SaveWorkflowDialog: React.FC = () => {
     <Modal
       isOpen={saveWorkflowDialogOpen && !fileBrowserState}
       onClose={closeSaveWorkflowDialog}
-      title="Save Workflow As..."
+      title={saveWorkflowDialogData?.title ?? "Save workflow"}
       size="md"
       footer={
         <div className="flex items-center justify-between w-full">
@@ -363,6 +421,22 @@ export const SaveWorkflowDialog: React.FC = () => {
               </label>
               {nameError && (
                 <p className="mt-1 text-xs text-error-fg">{nameError}</p>
+              )}
+              {matchingPathCheck?.checking && (
+                <p className="mt-1 text-xs text-description-fg">
+                  Checking destination…
+                </p>
+              )}
+              {matchingPathCheck?.error && (
+                <p className="mt-1 text-xs text-error-fg">
+                  {matchingPathCheck.error}
+                </p>
+              )}
+              {matchingPathCheck?.exists && !matchingPathCheck.error && (
+                <p className="mt-1 text-xs text-warning-fg" role="alert">
+                  A workflow already exists at this path and will be
+                  overwritten.
+                </p>
               )}
             </div>
           </>

@@ -824,8 +824,47 @@ export interface ActiveTerminalWorkflowsMessage {
  */
 export interface SaveWorkflowDialogDataMessage {
   type: typeof MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA;
+  /** Correlates this dialog with its request and all later save responses. */
+  requestId: string;
+  /** The exact viewed definition this export is allowed to snapshot. */
+  address: WorkflowViewAddress;
+  /** User-facing framing for the addressed draft/run. */
+  title: string;
   defaultPath: string;
   defaultFormat: "yaml" | "json";
+}
+
+/** Webview → Extension: non-mutating overwrite/security preflight for an export path. */
+export interface CheckSavePathMessage {
+  type: typeof MESSAGE_TYPES.CHECK_SAVE_PATH;
+  requestId: string;
+  path: string;
+  address: WorkflowViewAddress;
+}
+
+/** Extension → Webview: addressed result of a save-path preflight. */
+export interface SavePathCheckedMessage {
+  type: typeof MESSAGE_TYPES.SAVE_PATH_CHECKED;
+  requestId: string;
+  path: string;
+  exists: boolean;
+  error?: string;
+}
+
+/** Webview → Extension: open an addressed Save workflow dialog. */
+export interface SaveWorkflowRequestMessage {
+  type: typeof MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST;
+  requestId: string;
+  address: WorkflowViewAddress;
+}
+
+/** Webview → Extension: write an addressed workflow export. */
+export interface SaveWorkflowMessage {
+  type: typeof MESSAGE_TYPES.SAVE_WORKFLOW;
+  requestId: string;
+  address: WorkflowViewAddress;
+  filePath: string;
+  format: "yaml" | "json";
 }
 
 /**
@@ -833,6 +872,7 @@ export interface SaveWorkflowDialogDataMessage {
  */
 export interface WorkflowSavedMessage {
   type: typeof MESSAGE_TYPES.WORKFLOW_SAVED;
+  requestId: string;
   filePath: string;
 }
 
@@ -841,6 +881,7 @@ export interface WorkflowSavedMessage {
  */
 export interface WorkflowSaveFailedMessage {
   type: typeof MESSAGE_TYPES.WORKFLOW_SAVE_FAILED;
+  requestId?: string;
   error: string;
 }
 
@@ -849,6 +890,8 @@ export interface WorkflowSaveFailedMessage {
  */
 export interface SaveWorkflowAsTemplateMessage {
   type: typeof MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE;
+  requestId: string;
+  address: WorkflowViewAddress;
   name: string;
   scope: "user" | "workspace";
 }
@@ -859,6 +902,7 @@ export interface SaveWorkflowAsTemplateMessage {
  */
 export interface WorkflowSavedAsTemplateMessage {
   type: typeof MESSAGE_TYPES.WORKFLOW_SAVED_AS_TEMPLATE;
+  requestId: string;
   templates: Array<{
     id: string;
     name: string;
@@ -1686,6 +1730,7 @@ export type IncomingMessage =
       counts: Record<string, number>;
     }
   | SaveWorkflowDialogDataMessage
+  | SavePathCheckedMessage
   | WorkflowSavedMessage
   | WorkflowSaveFailedMessage
   | WorkflowSavedAsTemplateMessage

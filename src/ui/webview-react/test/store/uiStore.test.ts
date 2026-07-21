@@ -190,6 +190,9 @@ describe("history search state", () => {
 describe("save workflow dialog", () => {
   it("opens with data and closes", () => {
     store().openSaveWorkflowDialog({
+      requestId: "save-1",
+      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      title: "Save draft",
       defaultPath: "/workspace/wf.ctrlyoke.yaml",
       defaultFormat: "yaml",
     });
@@ -199,6 +202,39 @@ describe("save workflow dialog", () => {
     store().closeSaveWorkflowDialog();
     expect(store().saveWorkflowDialogOpen).toBe(false);
     expect(store().saveWorkflowDialogData).toBeNull();
+  });
+
+  it("ignores stale save-path responses after the destination changes or dialog closes", () => {
+    store().openSaveWorkflowDialog({
+      requestId: "save-1",
+      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      title: "Save draft",
+      defaultPath: "/workspace/wf.ctrlyoke.yaml",
+      defaultFormat: "yaml",
+    });
+    store().beginSavePathCheck(
+      "save-1:path:1",
+      "/workspace/first.ctrlyoke.yaml"
+    );
+    store().beginSavePathCheck(
+      "save-1:path:2",
+      "/workspace/second.ctrlyoke.yaml"
+    );
+    store().resolveSavePathCheck({
+      requestId: "save-1:path:1",
+      path: "/workspace/first.ctrlyoke.yaml",
+      exists: true,
+    });
+    expect(store().savePathCheck?.checking).toBe(true);
+    expect(store().savePathCheck?.path).toBe("/workspace/second.ctrlyoke.yaml");
+
+    store().closeSaveWorkflowDialog();
+    store().resolveSavePathCheck({
+      requestId: "save-1:path:2",
+      path: "/workspace/second.ctrlyoke.yaml",
+      exists: true,
+    });
+    expect(store().savePathCheck).toBeNull();
   });
 });
 
@@ -415,6 +451,9 @@ describe("clearHiddenDropdownOptions", () => {
 describe("resetUi", () => {
   it("clears modal and transient state back to defaults", () => {
     store().openSaveWorkflowDialog({
+      requestId: "save-1",
+      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      title: "Save draft",
       defaultPath: "/wf.yaml",
       defaultFormat: "yaml",
     });

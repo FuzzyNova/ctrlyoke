@@ -1273,8 +1273,20 @@ export class WebviewMessageRouter {
     });
 
     // ── Save Workflow ────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async () => {
+    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async (message) => {
       await this.serializer.handleSaveWorkflowRequest(
+        message.requestId,
+        message.address,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
+    });
+
+    table.set(MESSAGE_TYPES.CHECK_SAVE_PATH, async (message) => {
+      await this.serializer.handleCheckSavePath(
+        message.requestId,
+        message.path,
+        message.address,
         this.getCurrentPostMessage(),
         this.clientId
       );
@@ -1282,6 +1294,8 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.SAVE_WORKFLOW, async (message) => {
       await this.serializer.handleSaveWorkflow(
+        message.requestId,
+        message.address,
         message.filePath,
         message.format,
         this.getCurrentPostMessage(),
@@ -1291,6 +1305,8 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE, async (message) => {
       await this.serializer.handleSaveWorkflowAsTemplate(
+        message.requestId,
+        message.address,
         message.name,
         message.scope,
         this.getCurrentPostMessage(),

@@ -44,8 +44,20 @@ export interface TemplateInfo {
  * Data for the Save Workflow dialog
  */
 export interface SaveWorkflowDialogData {
+  requestId: string;
+  address: WorkflowViewAddress;
+  title: string;
   defaultPath: string;
   defaultFormat: "yaml" | "json";
+}
+
+/** Transient, request-addressed save-path preflight state. */
+export interface SavePathCheck {
+  requestId: string;
+  path: string;
+  exists: boolean;
+  error?: string;
+  checking: boolean;
 }
 
 /**
@@ -202,6 +214,7 @@ interface UiState {
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;
   saveWorkflowDialogData: SaveWorkflowDialogData | null;
+  savePathCheck: SavePathCheck | null;
 
   // Web-native file/directory picker modal (standalone/hosted mode only) —
   // one canonical instance shared by every caller. Transient, not persisted.
@@ -366,6 +379,9 @@ interface UiActions {
   // Save workflow dialog
   openSaveWorkflowDialog: (data: SaveWorkflowDialogData) => void;
   closeSaveWorkflowDialog: () => void;
+  beginSavePathCheck: (requestId: string, path: string) => void;
+  resolveSavePathCheck: (result: Omit<SavePathCheck, "checking">) => void;
+  clearSavePathCheck: () => void;
 
   // File browser modal (standalone/hosted mode)
   openFileBrowser: (request: FileBrowserRequest) => void;
@@ -511,6 +527,7 @@ const initialState: UiState = {
   hiddenDropdownOptions: {},
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
+  savePathCheck: null,
   fileBrowserState: null,
   saveLocationSelection: null,
   stepsCollapsed: false,
@@ -787,10 +804,39 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       openSaveWorkflowDialog: (data) =>
-        set({ saveWorkflowDialogOpen: true, saveWorkflowDialogData: data }),
+        set({
+          saveWorkflowDialogOpen: true,
+          saveWorkflowDialogData: data,
+          savePathCheck: null,
+        }),
 
       closeSaveWorkflowDialog: () =>
-        set({ saveWorkflowDialogOpen: false, saveWorkflowDialogData: null }),
+        set({
+          saveWorkflowDialogOpen: false,
+          saveWorkflowDialogData: null,
+          savePathCheck: null,
+        }),
+
+      beginSavePathCheck: (requestId, path) =>
+        set({
+          savePathCheck: { requestId, path, exists: false, checking: true },
+        }),
+
+      resolveSavePathCheck: (result) =>
+        set((state) => {
+          const pending = state.savePathCheck;
+          if (
+            !state.saveWorkflowDialogOpen ||
+            !pending ||
+            pending.requestId !== result.requestId ||
+            pending.path !== result.path
+          ) {
+            return state;
+          }
+          return { savePathCheck: { ...result, checking: false } };
+        }),
+
+      clearSavePathCheck: () => set({ savePathCheck: null }),
 
       // ============================================================================
       // FILE BROWSER MODAL
@@ -1111,6 +1157,7 @@ export const useUiStore = create<UiState & UiActions>()(
           // Reset non-persisted state
           saveWorkflowDialogOpen: false,
           saveWorkflowDialogData: null,
+          savePathCheck: null,
           fileBrowserState: null,
           propertiesDrawerOpen: false,
           selectedOutputStep: null,

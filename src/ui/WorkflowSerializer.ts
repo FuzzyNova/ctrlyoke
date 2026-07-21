@@ -34,6 +34,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
+import { isPathWithinDirectory } from "../utils/PathSecurity";
 
 /**
  * WorkflowSerializer
@@ -66,13 +67,36 @@ export class WorkflowSerializer {
   // Save Workflow
   // ============================================================================
 
+  private static addressesEqual(
+    left: WorkflowViewAddress,
+    right: WorkflowViewAddress
+  ): boolean {
+    return (
+      left.workflowKey === right.workflowKey &&
+      left.kind === right.kind &&
+      (left.kind === "draft" ||
+        (right.kind === "run" && left.runRef === right.runRef))
+    );
+  }
+
   /** Resolve the caller's displayed address, never the lineage's mutable/latest run. */
-  private getViewedWorkingFilePath(clientId: string): string | undefined {
+  private getViewedWorkingFilePath(
+    clientId: string,
+    expectedAddress?: WorkflowViewAddress
+  ): string | undefined {
     const manager = this.getManager();
-    const address =
+    const viewedAddress =
       typeof manager?.getViewAddress === "function"
         ? manager.getViewAddress(clientId)
         : null;
+    if (
+      expectedAddress &&
+      (!viewedAddress ||
+        !WorkflowSerializer.addressesEqual(viewedAddress, expectedAddress))
+    ) {
+      return undefined;
+    }
+    const address = expectedAddress ?? viewedAddress;
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : undefined;
@@ -85,7 +109,103 @@ export class WorkflowSerializer {
             address.runRef
           );
     }
+    // Lightweight unit-test/CLI shims may not expose VS Code workspace folders;
+    // their queue path is still an already-resolved internal snapshot path.
     return manager?.getQueueState(clientId).workingFilePath;
+  }
+
+  /**
+   * Resolve an export path under the workspace and reject symlink escapes.
+   * This is shared by path checks and the final write so the advisory warning
+   * cannot have weaker security rules than the commit path.
+   */
+  private async resolveSafeExportPath(filePath: string): Promise<string> {
+    if (!filePath || !filePath.trim()) {
+      throw new Error("A save destination is required.");
+    }
+
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    const resolved = workspaceRoot
+      ? path.resolve(workspaceRoot, filePath)
+      : path.resolve(filePath);
+
+    if (!workspaceRoot) {
+      return resolved;
+    }
+
+    const root = path.resolve(workspaceRoot);
+    const contained =
+      process.platform === "win32"
+        ? isPathWithinDirectory(resolved.toLowerCase(), root.toLowerCase())
+        : isPathWithinDirectory(resolved, root);
+    if (!contained || resolved === root) {
+      throw new Error("Save location must be inside the open workspace.");
+    }
+
+    const rootRealPath = await fs.realpath(root).catch(() => root);
+    let ancestor = path.dirname(resolved);
+    while (true) {
+      try {
+        await fs.lstat(ancestor);
+        break;
+      } catch (error: any) {
+        if (error?.code !== "ENOENT") throw error;
+        const parent = path.dirname(ancestor);
+        if (parent === ancestor) {
+          throw new Error("Save location has no existing ancestor.");
+        }
+        ancestor = parent;
+      }
+    }
+    const realAncestor = await fs.realpath(ancestor);
+    const realContained =
+      process.platform === "win32"
+        ? isPathWithinDirectory(
+            realAncestor.toLowerCase(),
+            rootRealPath.toLowerCase()
+          )
+        : isPathWithinDirectory(realAncestor, rootRealPath);
+    if (!realContained) {
+      throw new Error(
+        "Save location escapes the open workspace through a symlink."
+      );
+    }
+
+    try {
+      const destination = await fs.lstat(resolved);
+      if (destination.isSymbolicLink()) {
+        throw new Error("Save destination cannot be a symbolic link.");
+      }
+      if (destination.isDirectory()) {
+        throw new Error("Save destination must be a file.");
+      }
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    return resolved;
+  }
+
+  private async pathExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private sendSaveFailure(
+    postMessage: PostMessageFn,
+    error: string,
+    requestId?: string
+  ): void {
+    postMessage({
+      type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+      ...(requestId ? { requestId } : {}),
+      error,
+    });
   }
 
   /**
@@ -94,26 +214,26 @@ export class WorkflowSerializer {
    * sends SAVE_WORKFLOW_DIALOG_DATA back so the webview can open the dialog.
    */
   async handleSaveWorkflowRequest(
+    requestId: string,
+    address: WorkflowViewAddress,
     postMessage?: PostMessageFn,
     clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: "No workflow manager available.",
-      });
+      this.sendSaveFailure(pm, "No workflow manager available.", requestId);
       return;
     }
 
-    const workingFilePath = this.getViewedWorkingFilePath(clientId);
+    const workingFilePath = this.getViewedWorkingFilePath(clientId, address);
 
     if (!workingFilePath) {
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: "No workflow loaded.",
-      });
+      this.sendSaveFailure(
+        pm,
+        "The viewed workflow changed before Save could open.",
+        requestId
+      );
       return;
     }
 
@@ -129,12 +249,22 @@ export class WorkflowSerializer {
     try {
       const rawContent = await fs.readFile(workingFilePath, "utf-8");
       const workingFile = JSON.parse(rawContent);
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
+      const descriptor = workspaceRoot
+        ? await this.lineageRepository.readDescriptor(
+            workspaceRoot,
+            address.workflowKey
+          )
+        : undefined;
 
       let defaultPath: string;
-      if (workingFile.originalFile) {
-        defaultPath = workingFile.originalFile;
+      if (descriptor?.originalFile) {
+        defaultPath = descriptor.originalFile;
       } else {
         const rawName =
+          descriptor?.workflowName ||
           workingFile.workflowName ||
           path
             .basename(workingFilePath)
@@ -153,16 +283,76 @@ export class WorkflowSerializer {
         ? "json"
         : "yaml";
 
+      let title = "Save draft";
+      if (address.kind === "run") {
+        const summary = workspaceRoot
+          ? await new OutputHistoryManager(workspaceRoot)
+              .getRunSummaries(address.workflowKey)
+              .then((summaries) =>
+                summaries.find(
+                  (candidate) => candidate.runRef === address.runRef
+                )
+              )
+          : undefined;
+        const runId = summary?.runId ?? address.runRef;
+        if (workingFile._runtime?.pendingRewind) {
+          title = `Save run ${runId} — pending continuation`;
+        } else {
+          const date = summary
+            ? new Date(summary.startedAt).toISOString().slice(0, 10)
+            : "unknown date";
+          title = `Save run ${runId} (${date})`;
+        }
+      }
+
       pm({
         type: MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA,
+        requestId,
+        address,
+        title,
         defaultPath,
         defaultFormat,
       });
     } catch (error) {
       const msg = getErrorMessage(error);
+      this.sendSaveFailure(pm, `Failed to read workflow: ${msg}`, requestId);
+    }
+  }
+
+  /** Return an addressed, non-mutating overwrite/security preflight result. */
+  async handleCheckSavePath(
+    requestId: string,
+    filePath: string,
+    address: WorkflowViewAddress,
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    if (!this.getViewedWorkingFilePath(clientId, address)) {
       pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: `Failed to read workflow: ${msg}`,
+        type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
+        requestId,
+        path: filePath,
+        exists: false,
+        error: "The viewed workflow changed.",
+      });
+      return;
+    }
+    try {
+      const absolutePath = await this.resolveSafeExportPath(filePath);
+      pm({
+        type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
+        requestId,
+        path: filePath,
+        exists: await this.pathExists(absolutePath),
+      });
+    } catch (error) {
+      pm({
+        type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
+        requestId,
+        path: filePath,
+        exists: false,
+        error: getErrorMessage(error),
       });
     }
   }
@@ -275,6 +465,8 @@ export class WorkflowSerializer {
    * requested format and path.
    */
   async handleSaveWorkflow(
+    requestId: string,
+    address: WorkflowViewAddress,
     filePath: string,
     format: "yaml" | "json",
     postMessage?: PostMessageFn,
@@ -283,20 +475,18 @@ export class WorkflowSerializer {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: "No workflow manager available.",
-      });
+      this.sendSaveFailure(pm, "No workflow manager available.", requestId);
       return;
     }
 
-    const workingFilePath = this.getViewedWorkingFilePath(clientId);
+    const workingFilePath = this.getViewedWorkingFilePath(clientId, address);
 
     if (!workingFilePath) {
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: "No workflow loaded.",
-      });
+      this.sendSaveFailure(
+        pm,
+        "The viewed workflow changed before Save completed.",
+        requestId
+      );
       return;
     }
 
@@ -304,13 +494,7 @@ export class WorkflowSerializer {
       const workingFile = await readJsonFile(workingFilePath);
       const clean = this.buildCleanWorkflow(workingFile);
 
-      let absolutePath = filePath;
-      if (!path.isAbsolute(filePath)) {
-        if (vscode.workspace.workspaceFolders?.length) {
-          absolutePath = path.join(getVsCodeWorkspaceRoot(), filePath);
-        }
-      }
-
+      let absolutePath = await this.resolveSafeExportPath(filePath);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
 
       let serialized: string;
@@ -324,16 +508,11 @@ export class WorkflowSerializer {
         serialized = JSON.stringify(clean, null, 2);
       }
 
-      try {
-        await fs.access(absolutePath);
-        const overwrite = await vscode.window.showWarningMessage(
-          `Overwrite existing workflow file "${path.basename(absolutePath)}"?`,
-          { modal: true },
-          "Overwrite"
-        );
-        if (overwrite !== "Overwrite") return;
-      } catch {
-        // File does not exist; proceed with the new export.
+      // Re-run the exact preflight immediately before the write. The dialog's
+      // warning is advisory and may now be stale; this remains the authority.
+      absolutePath = await this.resolveSafeExportPath(filePath);
+      if (!this.getViewedWorkingFilePath(clientId, address)) {
+        throw new Error("The viewed workflow changed before Save completed.");
       }
       await fs.writeFile(absolutePath, serialized, "utf-8");
 
@@ -348,15 +527,13 @@ export class WorkflowSerializer {
 
       pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVED,
+        requestId,
         filePath: absolutePath,
       });
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.error("Failed to save workflow:", error);
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: msg,
-      });
+      this.sendSaveFailure(pm, msg, requestId);
     }
   }
 
@@ -366,6 +543,8 @@ export class WorkflowSerializer {
    * `handleSaveWorkflow`) into a new custom template.
    */
   async handleSaveWorkflowAsTemplate(
+    requestId: string,
+    address: WorkflowViewAddress,
     name: string,
     scope: TemplateScope,
     postMessage?: PostMessageFn,
@@ -374,20 +553,18 @@ export class WorkflowSerializer {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: "No workflow manager available.",
-      });
+      this.sendSaveFailure(pm, "No workflow manager available.", requestId);
       return;
     }
 
-    const workingFilePath = this.getViewedWorkingFilePath(clientId);
+    const workingFilePath = this.getViewedWorkingFilePath(clientId, address);
 
     if (!workingFilePath) {
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: "No workflow loaded.",
-      });
+      this.sendSaveFailure(
+        pm,
+        "The viewed workflow changed before template export completed.",
+        requestId
+      );
       return;
     }
 
@@ -406,16 +583,14 @@ export class WorkflowSerializer {
 
       pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVED_AS_TEMPLATE,
+        requestId,
         templates: this.toWireTemplates(templates),
         templateId: created?.id,
       });
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.error("Failed to save workflow as template:", error);
-      pm({
-        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-        error: msg,
-      });
+      this.sendSaveFailure(pm, msg, requestId);
     }
   }
 

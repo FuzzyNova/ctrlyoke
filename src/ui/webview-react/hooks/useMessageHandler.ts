@@ -1772,6 +1772,19 @@ function createMessageHandlers(): MessageHandlerMap {
     ) {
       return;
     }
+    const openSaveDialog = useUiStore.getState().saveWorkflowDialogData;
+    if (
+      openSaveDialog &&
+      (openSaveDialog.address.workflowKey !== address.workflowKey ||
+        openSaveDialog.address.kind !== address.kind ||
+        (openSaveDialog.address.kind === "run" &&
+          address.kind === "run" &&
+          openSaveDialog.address.runRef !== address.runRef))
+    ) {
+      // A dialog is a snapshot action. Never let it survive an addressed view
+      // switch and accidentally apply a late path check/save response to N+1.
+      useUiStore.getState().closeSaveWorkflowDialog();
+    }
     applyWorkflowChange();
     const runtime = workingFile._runtime;
     useWorkflowStore.getState().loadWorkflow({
@@ -1914,9 +1927,35 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA] = (message) => {
     const uiStore = useUiStore.getState();
+    const displayed = uiStore.displayedViewAddress;
+    if (
+      !displayed ||
+      displayed.workflowKey !== message.address.workflowKey ||
+      displayed.kind !== message.address.kind ||
+      (displayed.kind === "run" &&
+        message.address.kind === "run" &&
+        displayed.runRef !== message.address.runRef)
+    ) {
+      return;
+    }
     uiStore.openSaveWorkflowDialog({
+      requestId: message.requestId,
+      address: message.address,
+      title: message.title,
       defaultPath: message.defaultPath,
       defaultFormat: message.defaultFormat,
+    });
+  };
+
+  // --------------------------------------------------------------------------
+  // SAVE_PATH_CHECKED - consume only the dialog's latest path request.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SAVE_PATH_CHECKED] = (message) => {
+    useUiStore.getState().resolveSavePathCheck({
+      requestId: message.requestId,
+      path: message.path,
+      exists: message.exists,
+      error: message.error,
     });
   };
 
@@ -1925,6 +1964,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_SAVED] = (message) => {
     const uiStore = useUiStore.getState();
+    if (uiStore.saveWorkflowDialogData?.requestId !== message.requestId) {
+      return;
+    }
     uiStore.closeSaveWorkflowDialog();
     // Extract filename for a concise toast
     const fileName = message.filePath.split(/[/\\]/).pop() ?? message.filePath;
@@ -1936,7 +1978,15 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_SAVE_FAILED] = (message) => {
     const uiStore = useUiStore.getState();
-    uiStore.closeSaveWorkflowDialog();
+    if (
+      message.requestId &&
+      uiStore.saveWorkflowDialogData?.requestId !== message.requestId
+    ) {
+      return;
+    }
+    if (message.requestId) {
+      uiStore.closeSaveWorkflowDialog();
+    }
     uiStore.showToast(`Save failed: ${message.error}`, "error");
   };
 
@@ -1947,6 +1997,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_SAVED_AS_TEMPLATE] = (message) => {
     const uiStore = useUiStore.getState();
+    if (uiStore.saveWorkflowDialogData?.requestId !== message.requestId) {
+      return;
+    }
     uiStore.closeSaveWorkflowDialog();
     uiStore.setTemplates(message.templates || []);
     uiStore.showToast("Saved as template", "success");

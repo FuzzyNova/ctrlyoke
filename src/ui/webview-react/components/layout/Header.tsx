@@ -19,6 +19,13 @@ import {
   type WorkflowExecutionControlAction,
 } from "@utils/status";
 
+let saveRequestSequence = 0;
+
+function nextSaveRequestId(): string {
+  saveRequestSequence += 1;
+  return `save-${Date.now()}-${saveRequestSequence}`;
+}
+
 /**
  * Execution state badge configuration
  */
@@ -143,9 +150,13 @@ export const Header: React.FC<{
   const canSave = hasFile && hasPrompts;
 
   const handleSave = useCallback(() => {
-    if (!canSave) return;
-    vscode.postMessage({ type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST });
-  }, [vscode, canSave]);
+    if (!canSave || !displayedViewAddress) return;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST,
+      requestId: nextSaveRequestId(),
+      address: displayedViewAddress,
+    });
+  }, [vscode, canSave, displayedViewAddress]);
 
   // Handlers
   const postViewedRunAction = useCallback(
