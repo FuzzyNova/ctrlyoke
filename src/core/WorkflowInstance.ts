@@ -83,7 +83,6 @@ import {
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
-  OrderedCliHistoryEntry,
   OutputExecutionTarget,
   UndoExecutionTarget,
 } from "../types/OutputHistoryTypes";
@@ -843,6 +842,7 @@ export class WorkflowInstance {
       "replace",
       true
     );
+    await this.hydrateActiveExecutionOutputCaches();
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
@@ -885,9 +885,80 @@ export class WorkflowInstance {
       "replace",
       true
     );
+    await this.hydrateActiveExecutionOutputCaches();
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
+  }
+
+  /**
+   * Rebuild the small in-memory response cache required by a resumed active
+   * executor. Historical/inactive views never hydrate this cache; they read
+   * timeline data through their own resolver consumers instead.
+   */
+  private async hydrateActiveExecutionOutputCaches(): Promise<void> {
+    const state = this.promptQueue.getState();
+    const activeExecutionStates: QueueState["status"][] = [
+      EXECUTION_STATES.RUNNING,
+      EXECUTION_STATES.PAUSED,
+      EXECUTION_STATES.PAUSING,
+      EXECUTION_STATES.CANCELLING,
+    ];
+    if (
+      !state.workflowKey ||
+      !state.runRef ||
+      !activeExecutionStates.includes(state.status)
+    ) {
+      return;
+    }
+
+    const manifestPath = this.outputHistoryManager.getHistoryFilePath(
+      state.workflowKey,
+      state.runRef
+    );
+    const resolver = this.outputHistoryManager.getRunOutputResolver();
+    const queueTargets: OutputExecutionTarget[] = Array.from(
+      { length: Math.min(state.currentIndex, state.steps.length) },
+      (_, stepIndex) => ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex })
+    );
+    try {
+      const [queueAttempts, finalStepAttempts] = await Promise.all([
+        resolver.resolveLatestAttempts(manifestPath, queueTargets),
+        resolver.resolveLatestFinalStepAttempts(manifestPath),
+      ]);
+      const queueEntries = [...queueAttempts.values()].flatMap((attempt) =>
+        attempt.target.kind === FINAL_STEP_PHASES.QUEUE
+          ? [
+              {
+                stepIndex: attempt.target.stepIndex,
+                responseText: attempt.responseText,
+                scriptOutput: attempt.scriptOutput,
+              },
+            ]
+          : []
+      );
+      const finalStepResponseTexts = new Map<number, string>();
+      for (const attempt of finalStepAttempts.values()) {
+        if (
+          attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+          attempt.responseText !== undefined
+        ) {
+          finalStepResponseTexts.set(
+            attempt.target.loopIndex,
+            attempt.responseText
+          );
+        }
+      }
+      this.promptQueue.hydrateActiveRuntimeOutputCache(
+        queueEntries,
+        finalStepResponseTexts
+      );
+    } catch (error) {
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] Failed to hydrate active output cache from timeline:`,
+        error
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2490,21 +2561,14 @@ export class WorkflowInstance {
       return;
     }
     try {
-      const history =
-        await this.outputHistoryManager.loadHistory(historyFilePath);
-      const targetKey = this.getExecutionTargetRunKey(target);
-      const existing = history.orderedEntries.find(
-        (entry): entry is OrderedCliHistoryEntry =>
-          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          (entry.runIndex ?? 0) === runIndex &&
-          entry.attemptIndex === attemptIndex &&
-          this.getExecutionTargetRunKey(entry.target) === targetKey
-      );
-      if (!existing) {
+      const existing = await this.outputHistoryManager
+        .getRunOutputResolver()
+        .resolveAttempt(historyFilePath, target, runIndex, attemptIndex);
+      if (!existing?.output) {
         return;
       }
 
-      const existingEvents = existing.cliOutput.structured?.events ?? [];
+      const existingEvents = existing.output.structured?.events ?? [];
       const hasFollowUpDivider = existingEvents.some(
         (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
       );
@@ -2524,28 +2588,28 @@ export class WorkflowInstance {
           : contentEvents;
 
       const merged: CliOutput = {
-        ...existing.cliOutput,
-        structured: existing.cliOutput.structured
+        ...existing.output,
+        structured: existing.output.structured
           ? {
-              ...existing.cliOutput.structured,
+              ...existing.output.structured,
               events: [...existingEvents, ...eventsToAppend],
             }
           : undefined,
         tokens:
-          latestContextWindowSync && existing.cliOutput.tokens
+          latestContextWindowSync && existing.output.tokens
             ? {
-                ...existing.cliOutput.tokens,
+                ...existing.output.tokens,
                 contextWindowUsed: latestContextWindowSync.used,
                 contextWindowSize: latestContextWindowSync.size,
               }
-            : existing.cliOutput.tokens,
+            : existing.output.tokens,
         // timestampMs is the attempt's *start* time (see WorkflowExecutor's
         // finalization), so re-deriving elapsed from it naturally folds in
         // follow-up time without needing a separately tracked baseline.
         elapsed:
-          existing.cliOutput.timestampMs != null
-            ? (Date.now() - existing.cliOutput.timestampMs) / 1000
-            : existing.cliOutput.elapsed,
+          existing.output.timestampMs != null
+            ? (Date.now() - existing.output.timestampMs) / 1000
+            : existing.output.elapsed,
       };
       await this.outputHistoryManager.saveExecutionOutput(
         historyFilePath,
@@ -2688,6 +2752,19 @@ export class WorkflowInstance {
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
+      resolvePriorContextItems: async (contexts, allPrompts, promptIndex) => {
+        if (!historyFilePath) {
+          return [];
+        }
+        return this.outputHistoryManager
+          .getRunOutputResolver()
+          .resolvePriorContextItems(
+            historyFilePath,
+            contexts,
+            allPrompts,
+            promptIndex
+          );
+      },
       targetRunIndices,
       getIntegrationForPrompt: (
         prompt: PromptStep,

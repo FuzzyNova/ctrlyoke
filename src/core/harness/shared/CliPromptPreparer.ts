@@ -21,6 +21,7 @@ import type {
   PriorContextItem,
   PromptSections,
 } from "../../HarnessIntegration";
+import { refToPriorContext } from "../../HarnessIntegration";
 
 export interface PromptFileResult {
   tempFilePaths: string[];
@@ -37,7 +38,8 @@ export interface CliPromptPreparerDeps {
   extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
   isInjectablePrompt?: (promptText: string) => boolean;
-  gatherAndMergeContextItems: (
+  /** Legacy test seam; production prompt construction always uses the resolver. */
+  gatherAndMergeContextItems?: (
     propertyContext: PriorContext | undefined,
     inlineRefs: InlinePriorContextRef[],
     allPrompts: WorkflowStep[],
@@ -150,25 +152,35 @@ export class CliPromptPreparer {
       };
     }
 
-    const contextContent = hasPriorContext
-      ? (() => {
-          const items = this.deps.gatherAndMergeContextItems(
+    const contextItems = hasPriorContext
+      ? workflowContext?.resolvePriorContextItems
+        ? await workflowContext.resolvePriorContextItems(
+            [
+              ...(resolvedPriorContext && resolvedPriorContext !== "none"
+                ? [resolvedPriorContext]
+                : []),
+              ...inlineRefs.map(refToPriorContext),
+            ],
+            allPrompts,
+            promptIndex
+          )
+        : (this.deps.gatherAndMergeContextItems?.(
             resolvedPriorContext,
             inlineRefs,
             allPrompts,
             promptIndex,
             finalStepResponseTexts ?? []
-          );
-          return items.length > 0
-            ? this.deps.buildPriorContextXmlFromItems(items)
-            : undefined;
-        })()
-      : undefined;
+          ) ?? [])
+      : [];
+    const resolvedContextContent =
+      contextItems.length > 0
+        ? this.deps.buildPriorContextXmlFromItems(contextItems)
+        : undefined;
 
     const preparedPrompt = await this.createCategorizedPromptFiles(
       sections,
       workflowContext,
-      contextContent
+      resolvedContextContent
     );
 
     if (!slashCommand) {

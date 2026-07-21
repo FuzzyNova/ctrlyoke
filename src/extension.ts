@@ -255,7 +255,22 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             ? (params!.indices as number[])
             : [];
 
-          const result = readQueueOutput(promptQueue, { indices });
+          const state = promptQueue.getState();
+          const outputHistoryManager =
+            workflowOrchestrator.getOutputHistoryManager();
+          const result = await readQueueOutput(
+            promptQueue,
+            { indices },
+            state.workflowKey && state.runRef
+              ? {
+                  manifestPath: outputHistoryManager.getHistoryFilePath(
+                    state.workflowKey,
+                    state.runRef
+                  ),
+                  resolver: outputHistoryManager.getRunOutputResolver(),
+                }
+              : undefined
+          );
 
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(JSON.stringify(result, null, 2)),

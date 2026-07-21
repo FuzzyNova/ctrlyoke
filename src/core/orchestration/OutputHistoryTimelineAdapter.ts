@@ -19,11 +19,16 @@ import {
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
 import { TimelineRecorder } from "./TimelineRecorder";
+import { RunOutputResolver } from "./RunOutputResolver";
 
 export class OutputHistoryTimelineAdapter {
+  private readonly outputResolver: RunOutputResolver;
+
   constructor(
     private readonly recorder: TimelineRecorder = new TimelineRecorder()
-  ) {}
+  ) {
+    this.outputResolver = new RunOutputResolver(recorder);
+  }
 
   async loadHistory(manifestPath: string): Promise<WorkflowOutputHistory> {
     const [manifest, events] = await Promise.all([
@@ -31,7 +36,83 @@ export class OutputHistoryTimelineAdapter {
       this.recorder.readEvents(manifestPath),
     ]);
 
-    return this.project(manifest, events);
+    const history = this.project(manifest, events);
+    await this.hydrateCliOutputsFromResolver(manifestPath, history);
+    return history;
+  }
+
+  /**
+   * History retains its ordered snapshot/undo projection, while every CLI
+   * response and preview is replaced with the resolver's append-order view.
+   * This removes the adapter's separate response reconstruction path.
+   */
+  private async hydrateCliOutputsFromResolver(
+    manifestPath: string,
+    history: WorkflowOutputHistory
+  ): Promise<void> {
+    const outputs = new Map<
+      string,
+      import("../../types/WebviewMessageTypes").CliOutput
+    >();
+    for await (const event of this.outputResolver.stream(manifestPath)) {
+      if (event.kind === "output") {
+        outputs.set(
+          getCliEntryKey(
+            event.attempt.target,
+            event.attempt.runIndex,
+            event.attempt.attemptIndex
+          ),
+          event.attempt.output
+        );
+      } else if (event.kind === "streamingChunk") {
+        const key = getCliEntryKey(
+          event.attempt.target,
+          event.attempt.runIndex,
+          event.attempt.attemptIndex
+        );
+        const output = outputs.get(key);
+        if (output?.isStreaming) {
+          outputs.set(key, {
+            ...output,
+            response: output.response + event.chunk,
+          });
+        }
+      } else if (event.kind === "streamingEvents") {
+        const key = getCliEntryKey(
+          event.attempt.target,
+          event.attempt.runIndex,
+          event.attempt.attemptIndex
+        );
+        const output = outputs.get(key);
+        if (output?.isStreaming) {
+          outputs.set(key, {
+            ...output,
+            structured: {
+              ...output.structured,
+              events: normalizeCliEvents([
+                ...(output.structured?.events ?? []),
+                ...event.events,
+              ]),
+              metadata: output.structured?.metadata ?? {},
+            },
+          });
+        }
+      }
+    }
+    for (const entry of history.orderedEntries) {
+      if (entry.kind !== OUTPUT_HISTORY_KINDS.CLI) continue;
+      const output = outputs.get(
+        getCliEntryKey(entry.target, entry.runIndex ?? 0, entry.attemptIndex)
+      );
+      if (output) entry.cliOutput = output;
+      if (
+        output &&
+        history.executionState !== EXECUTION_STATES.RUNNING &&
+        output.isStreaming
+      ) {
+        entry.cliOutput = { ...output, isStreaming: false };
+      }
+    }
   }
 
   project(

@@ -709,20 +709,6 @@ export class CliIntegration extends HarnessIntegration {
         this.extractLeadingSlashCommand(promptText),
       isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
       isInjectablePrompt: (promptText) => this.isInjectablePrompt(promptText),
-      gatherAndMergeContextItems: (
-        propertyContext,
-        inlineRefs,
-        allPrompts,
-        promptIndex,
-        finalStepResponseTexts
-      ) =>
-        this.gatherAndMergeContextItems(
-          propertyContext,
-          inlineRefs,
-          allPrompts,
-          promptIndex,
-          finalStepResponseTexts
-        ),
       buildPriorContextXmlFromItems: (items) =>
         this.buildPriorContextXmlFromItems(items),
       getWorkspaceRoot: () => this.getWorkspaceRoot(),

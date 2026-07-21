@@ -1,5 +1,6 @@
-import type { PromptFile, WorkflowStep } from "./CtrlYokeTypes";
+import type { PriorContext, PromptFile, WorkflowStep } from "./CtrlYokeTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
+import type { PriorContextItem } from "../core/HarnessIntegration";
 
 /** Narrow working-file persistence contract exposed to harnesses. */
 export interface WorkflowWorkingFilePersistence {
@@ -31,6 +32,16 @@ export interface WorkflowContext {
   workingFilePersistence?: WorkflowWorkingFilePersistence;
   /** Read-only accessor for prior-context finalStep loop responses. */
   getFinalStepResponseTexts?: () => string[];
+  /**
+   * Timeline-backed prior-context projection for an executing promoted run.
+   * The queue's duplicate runtime fields remain persistence compatibility data
+   * until Phase 4 item 4, not a read source for newly constructed prompts.
+   */
+  resolvePriorContextItems?: (
+    contexts: readonly PriorContext[],
+    allPrompts: readonly WorkflowStep[],
+    promptIndex: number
+  ) => Promise<PriorContextItem[]>;
   /** Session ID from the most recent finalStep execution. Consumed by SessionResolver
    *  when sessionId is the "finalStep" sentinel on any prompt (queue or finalStep phase).
    *  Note: only applies when finalStep is an AI prompt step (not a ScriptStep). */

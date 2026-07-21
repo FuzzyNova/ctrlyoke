@@ -38,6 +38,7 @@ import {
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
+import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
@@ -721,6 +722,19 @@ export class CtrlYokeMCPServer {
         ? args.indices
         : allSteps.map((_: any, i: number) => i);
 
+    const resolver = new RunOutputResolver();
+    const resolved = selected.runRef
+      ? await resolver.resolveLatestAttempts(
+          WorkflowPaths.manifestPath(
+            this.workspaceRoot,
+            selected.workflowKey,
+            selected.runRef
+          ),
+          requestedIndices
+            .filter((i) => i >= 0 && i < allSteps.length)
+            .map((stepIndex) => ({ kind: "queue" as const, stepIndex }))
+        )
+      : new Map();
     const outputs = requestedIndices
       .filter((i) => i >= 0 && i < allSteps.length)
       .map((i) => {
@@ -729,7 +743,7 @@ export class CtrlYokeMCPServer {
           index: i,
           prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
           status: this.getStepStatus(i, runtime, allSteps),
-          responseText: p._runtime?.responseText ?? null,
+          responseText: resolved.get(`queue:${i}`)?.responseText ?? null,
         };
       });
 

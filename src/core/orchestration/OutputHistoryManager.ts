@@ -22,6 +22,7 @@ import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
+import { RunOutputResolver } from "./RunOutputResolver";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_ATTEMPT_KINDS,
@@ -76,6 +77,9 @@ export class OutputHistoryManager {
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
   );
+  private readonly runOutputResolver = new RunOutputResolver(
+    this.timelineRecorder
+  );
   private readonly historySearchIndexService = new HistorySearchIndexService();
   private readonly lineageRepository = new WorkflowLineageRepository();
   /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
@@ -95,6 +99,11 @@ export class OutputHistoryManager {
       workflowKey,
       runRef
     );
+  }
+
+  /** Streaming response reader shared by active execution and read-output clients. */
+  getRunOutputResolver(): RunOutputResolver {
+    return this.runOutputResolver;
   }
 
   /**

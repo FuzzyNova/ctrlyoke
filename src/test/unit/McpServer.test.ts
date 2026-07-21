@@ -13,6 +13,8 @@ import type {
 import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
 interface RunFixture {
   workflowKey: WorkflowKey;
@@ -91,6 +93,35 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "utf8"
     );
     await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
+    const recorder = new TimelineRecorder();
+    const manifestPath = await recorder.initializeRunAt(
+      path.dirname(runFilePath),
+      workflowKey,
+      1,
+      1,
+      EXECUTION_STATES.COMPLETED,
+      1,
+      { workflowName: descriptor.workflowName, steps: workingFile.steps ?? [] }
+    );
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target: { kind: "queue", stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            prompt: options.prompt ?? `prompt-${suffix}`,
+            response: options.responseText ?? `output-${suffix}`,
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+    ]);
     return { workflowKey, runRef, runFilePath };
   }
 

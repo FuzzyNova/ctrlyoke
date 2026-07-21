@@ -9,6 +9,7 @@ import {
   PromptResult,
   EXECUTION_STATES,
   WorkflowStep,
+  ScriptRuntimeOutput,
   isScriptStep,
   PromptRuntimeMetadata,
   type RunRef,
@@ -41,6 +42,13 @@ import {
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
+
+/** Resolver-derived, in-memory execution cache restored for an active run. */
+export interface ResolvedRuntimeOutputCacheEntry {
+  stepIndex: number;
+  responseText?: string;
+  scriptOutput?: ScriptRuntimeOutput;
+}
 
 /** Effective retry settings resolved from an end condition, including smart defaults. */
 interface RetrySettings {
@@ -1555,6 +1563,39 @@ export class PromptQueue {
    */
   public getFinalStepResponseTexts(): string[] {
     return [...(this.finalStepRuntime?.responseTexts ?? [])];
+  }
+
+  /**
+   * Restore only the response/script values an active executor needs after a
+   * process restart. This deliberately does not write the working file: the
+   * timeline remains the read source and duplicate persisted fields stay until
+   * the Phase 4 removal is proven safe.
+   */
+  public hydrateActiveRuntimeOutputCache(
+    queueEntries: readonly ResolvedRuntimeOutputCacheEntry[],
+    finalStepResponseTexts: ReadonlyMap<number, string>
+  ): void {
+    for (const entry of queueEntries) {
+      const step = this.state.steps[entry.stepIndex];
+      if (!step) continue;
+      step._runtime = {
+        ...(step._runtime ?? { startedAt: Date.now() }),
+        ...(entry.responseText !== undefined
+          ? { responseText: entry.responseText }
+          : {}),
+        ...(isScriptStep(step) && entry.scriptOutput !== undefined
+          ? { scriptOutput: entry.scriptOutput }
+          : {}),
+      };
+    }
+
+    if (this.finalStepRuntime && finalStepResponseTexts.size > 0) {
+      const responseTexts = [...(this.finalStepRuntime.responseTexts ?? [])];
+      for (const [loopIndex, responseText] of finalStepResponseTexts) {
+        responseTexts[loopIndex] = responseText;
+      }
+      this.finalStepRuntime = { ...this.finalStepRuntime, responseTexts };
+    }
   }
 
   /**

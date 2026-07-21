@@ -435,6 +435,27 @@ suite("RunOutputResolver", () => {
       (resumedFinal?.definition?.step as { prompt?: string }).prompt,
       "revised final step"
     );
+
+    const latest = await resolver.resolveLatestAttempts(manifestPath, [
+      queueZero,
+      queueScript,
+    ]);
+    assert.strictEqual(
+      latest.get("queue:0")?.responseText,
+      "partial retry response",
+      "read-output and active restore use the latest run/attempt for a target"
+    );
+    const priorItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["all", "finalStepAll"],
+      revisionTwo.steps,
+      2
+    );
+    assert.deepStrictEqual(
+      priorItems.map((item) => item.text),
+      ["partial retry response", "pass\n0", finalResponse],
+      "prior context is resolved from timeline attempts, including scripts and final loops"
+    );
   });
 
   test("streams large logs without readEvents or response truncation", async () => {

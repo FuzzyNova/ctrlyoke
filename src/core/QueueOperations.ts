@@ -11,6 +11,7 @@ import { PromptQueue } from "./PromptQueue";
 import { PromptStep, EndCondition, isScriptStep } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
   type HarnessId,
@@ -18,6 +19,7 @@ import {
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { RunOutputResolver } from "./orchestration/RunOutputResolver";
 
 /**
  * Queue status response (single source for both MCP and Language Model Tools)
@@ -164,10 +166,11 @@ export function getQueueStatus(
  * @param request Indices to read (empty/undefined = all prompts)
  * @returns Output entries for each requested prompt
  */
-export function readQueueOutput(
+export async function readQueueOutput(
   queue: PromptQueue,
-  request: ReadOutputRequest
-): ReadOutputResponse {
+  request: ReadOutputRequest,
+  source?: { manifestPath: string; resolver: RunOutputResolver }
+): Promise<ReadOutputResponse> {
   const state = queue.getState();
   const allSteps = state.steps;
 
@@ -176,16 +179,26 @@ export function readQueueOutput(
       ? allSteps.map((_, i) => i)
       : request.indices;
 
+  const requestedTargets = indices
+    .filter((i) => i >= 0 && i < allSteps.length)
+    .map((stepIndex) => ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex }));
+  const resolved = source
+    ? await source.resolver.resolveLatestAttempts(
+        source.manifestPath,
+        requestedTargets
+      )
+    : new Map();
   const outputs = indices
     .filter((i) => i >= 0 && i < allSteps.length)
     .map((i) => {
       const step = allSteps[i];
       const result = state.results[i];
+      const output = resolved.get(`queue:${i}`);
       return {
         index: i,
         prompt: isScriptStep(step) ? step.script : step.prompt,
         status: result?.status || STEP_STATUS.PENDING,
-        responseText: step._runtime?.responseText ?? null,
+        responseText: output?.responseText ?? null,
       };
     });
 

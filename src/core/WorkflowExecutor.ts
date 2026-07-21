@@ -165,6 +165,8 @@ export interface WorkflowExecutionContext {
    * (append/edit can advance it mid-run), evaluated fresh on every output write.
    */
   getDefinitionRevisionContext?: () => DefinitionRevisionContext | undefined;
+  /** Timeline-backed response source for prior-context prompt construction. */
+  resolvePriorContextItems?: WorkflowContext["resolvePriorContextItems"];
 }
 
 type ExecutionTarget = WorkflowAttemptTarget;
@@ -541,6 +543,7 @@ export class WorkflowExecutor {
           resolvedProperties,
           workflowFile,
           workingFilePersistence: this.promptQueue,
+          resolvePriorContextItems: context.resolvePriorContextItems,
           getFinalStepResponseTexts: () =>
             this.promptQueue.getFinalStepResponseTexts(),
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
@@ -2008,6 +2011,7 @@ export class WorkflowExecutor {
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           workingFilePersistence: this.promptQueue,
+          resolvePriorContextItems: context.resolvePriorContextItems,
           getFinalStepResponseTexts: () =>
             this.promptQueue.getFinalStepResponseTexts(),
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as

@@ -1,11 +1,14 @@
-import {
-  FINAL_STEP_PHASES,
-  type ExecutionState,
-} from "../../types/DashboardConstants";
+import { type ExecutionState } from "../../types/DashboardConstants";
 import type {
+  PriorContext,
   ScriptRuntimeOutput,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
+import {
+  FINAL_STEP_PHASES,
+  PRIOR_CONTEXT_ITEM_TYPES,
+  PRIOR_CONTEXT_KEYWORDS,
+} from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
@@ -19,6 +22,7 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { TimelineRecorder } from "./TimelineRecorder";
+import type { PriorContextItem } from "../HarnessIntegration";
 
 /** Immutable definition and step selected for one persisted attempt. */
 export interface ResolvedAttemptDefinition {
@@ -352,6 +356,191 @@ export class RunOutputResolver {
     return value;
   }
 
+  /**
+   * Resolve the latest attempt for each selected target in one streamed pass.
+   * The retained map is bounded by the selected active targets, never by the
+   * number of historical timeline events.
+   */
+  async resolveLatestAttempts(
+    manifestPath: string,
+    targets: readonly OutputExecutionTarget[]
+  ): Promise<Map<string, ResolvedRunAttemptValue>> {
+    const requested = new Set(targets.map(getTargetKey));
+    const latest = new Map<string, ResolvedRunAttemptValue>();
+
+    for await (const event of this.stream(manifestPath)) {
+      if (
+        event.kind === "runTerminated" ||
+        event.kind === "runtimeTransition" ||
+        !requested.has(getTargetKey(event.attempt.target))
+      ) {
+        continue;
+      }
+
+      const key = getTargetKey(event.attempt.target);
+      const existing = latest.get(key);
+      if (!existing || isNewerAttempt(event.attempt, existing)) {
+        latest.set(key, { ...event.attempt });
+      }
+      const value = latest.get(key)!;
+      if (
+        !sameAttempt(
+          event.attempt,
+          value.target,
+          value.runIndex,
+          value.attemptIndex
+        )
+      ) {
+        continue;
+      }
+      value.definition = event.attempt.definition ?? value.definition;
+      switch (event.kind) {
+        case "attemptStarted":
+          value.prompt = event.prompt;
+          value.kind = event.attemptKind;
+          value.startReason = event.startReason;
+          break;
+        case "output":
+          value.output = event.attempt.output;
+          value.responseText = event.attempt.responseText;
+          value.kind = event.attempt.kind;
+          break;
+        case "scriptExecution":
+          value.scriptOutput = event.scriptOutput;
+          break;
+        case "attemptTerminated":
+          value.terminalState = event.terminalState;
+          value.terminalReason = event.reason;
+          break;
+      }
+    }
+
+    return latest;
+  }
+
+  /**
+   * Resolve prior-context items from the timeline rather than mutable working
+   * file runtime fields. Callers pass only the active prompt range, keeping the
+   * retained response set proportional to the context actually requested.
+   */
+  async resolvePriorContextItems(
+    manifestPath: string,
+    contexts: readonly PriorContext[],
+    allPrompts: readonly WorkflowStep[],
+    currentIndex: number
+  ): Promise<PriorContextItem[]> {
+    const queueIndices = new Set<number>();
+    let includeAllFinalSteps = false;
+    let includePreviousFinalStep = false;
+
+    for (const context of contexts) {
+      if (context === PRIOR_CONTEXT_KEYWORDS.ALL) {
+        for (let index = 0; index < currentIndex; index++)
+          queueIndices.add(index);
+      } else if (context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS) {
+        if (currentIndex > 0) queueIndices.add(currentIndex - 1);
+      } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
+        includeAllFinalSteps = true;
+      } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
+        includePreviousFinalStep = true;
+      } else if (Array.isArray(context)) {
+        for (const oneBasedIndex of context) {
+          const index = oneBasedIndex - 1;
+          if (index >= 0 && index < currentIndex) queueIndices.add(index);
+        }
+      }
+    }
+
+    const targets: OutputExecutionTarget[] = [
+      ...[...queueIndices].map((stepIndex) => ({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex,
+      })),
+      ...(includeAllFinalSteps || includePreviousFinalStep
+        ? await this.getFinalStepTargets(manifestPath)
+        : []),
+    ];
+    const resolved = await this.resolveLatestAttempts(manifestPath, targets);
+    const queueItems = [...queueIndices]
+      .sort((left, right) => left - right)
+      .flatMap((index): PriorContextItem[] => {
+        const step = allPrompts[index];
+        const value = resolved.get(
+          getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
+        );
+        if (!step || !value) return [];
+        if ("script" in step) {
+          const scriptOutput = value.scriptOutput;
+          const text = scriptOutput
+            ? [
+                scriptOutput.stdout,
+                scriptOutput.stderr,
+                scriptOutput.exitCode !== undefined
+                  ? String(scriptOutput.exitCode)
+                  : "",
+              ]
+                .filter(Boolean)
+                .join("\n")
+                .trim()
+            : (value.responseText ?? "");
+          return text ? [{ index, name: step.name, text, scriptOutput }] : [];
+        }
+        const text = value.responseText ?? "";
+        return text
+          ? [{ index, name: step.name, prompt: step.prompt, text }]
+          : [];
+      });
+    const finalItems = [...resolved.values()]
+      .filter((value) => value.target.kind === FINAL_STEP_PHASES.FINAL_STEP)
+      .sort(
+        (left, right) =>
+          (left.target as { loopIndex: number }).loopIndex -
+          (right.target as { loopIndex: number }).loopIndex
+      )
+      .flatMap((value): PriorContextItem[] => {
+        const index = (value.target as { loopIndex: number }).loopIndex;
+        return value.responseText
+          ? [
+              {
+                index,
+                text: value.responseText,
+                type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
+              },
+            ]
+          : [];
+      });
+    const selectedFinalItems = includePreviousFinalStep
+      ? finalItems.slice(-1)
+      : includeAllFinalSteps
+        ? finalItems
+        : [];
+    return deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]);
+  }
+
+  /** Resolve all final-step loop attempts while retaining only one value per loop. */
+  async resolveLatestFinalStepAttempts(
+    manifestPath: string
+  ): Promise<Map<string, ResolvedRunAttemptValue>> {
+    return this.resolveLatestAttempts(
+      manifestPath,
+      await this.getFinalStepTargets(manifestPath)
+    );
+  }
+
+  private async getFinalStepTargets(
+    manifestPath: string
+  ): Promise<OutputExecutionTarget[]> {
+    const targets = new Map<string, OutputExecutionTarget>();
+    for await (const event of this.stream(manifestPath)) {
+      if (event.kind === "runTerminated" || event.kind === "runtimeTransition")
+        continue;
+      if (event.attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+        targets.set(getTargetKey(event.attempt.target), event.attempt.target);
+      }
+    }
+    return [...targets.values()];
+  }
+
   private createAttemptReference(
     target: OutputExecutionTarget,
     runIndex: number,
@@ -369,6 +558,35 @@ export class RunOutputResolver {
         : undefined;
     return { target, runIndex, attemptIndex, definition };
   }
+}
+
+function getTargetKey(target: OutputExecutionTarget): string {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? `queue:${target.stepIndex}`
+    : `final:${target.loopIndex}`;
+}
+
+function isNewerAttempt(
+  candidate: ResolvedRunAttempt,
+  existing: ResolvedRunAttemptValue
+): boolean {
+  return (
+    candidate.runIndex > existing.runIndex ||
+    (candidate.runIndex === existing.runIndex &&
+      candidate.attemptIndex > existing.attemptIndex)
+  );
+}
+
+function deduplicatePriorContextItems(
+  items: PriorContextItem[]
+): PriorContextItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.type ?? "queue"}:${item.index}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function resolveStep(
