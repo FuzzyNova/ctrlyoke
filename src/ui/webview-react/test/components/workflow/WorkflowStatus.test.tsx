@@ -266,10 +266,13 @@ describe("WorkflowStatus — loaded state", () => {
       })
     );
 
-    expect(postMessageSpy).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-      address,
-    });
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address,
+        requestId: expect.any(String),
+      })
+    );
     expect(useUiStore.getState().displayedViewAddress).toEqual(address);
   });
 

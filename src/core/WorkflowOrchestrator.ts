@@ -1902,6 +1902,58 @@ export class WorkflowOrchestrator {
     );
   }
 
+  /**
+   * Workflow-level settings on the actively executing run are part of that
+   * run's current definition head. Persist them in place so subsequent steps
+   * resolve the same settings the dashboard displays. Other addressed runs
+   * keep the normal generic-edit behavior of forking a draft.
+   */
+  async prepareWorkflowPropertiesMutation(
+    mutation: WorkflowDefinitionMutation | undefined,
+    send: (message: unknown) => void,
+    clientId: string
+  ): Promise<void> {
+    const viewed = this.getViewAddress(clientId);
+    const runAddress =
+      mutation?.address.kind === "run" ? mutation.address : undefined;
+    if (
+      !mutation ||
+      !runAddress ||
+      viewed?.kind !== "run" ||
+      viewed.workflowKey !== runAddress.workflowKey ||
+      viewed.runRef !== runAddress.runRef ||
+      this.findExecutionRunRef(runAddress.workflowKey) !== runAddress.runRef
+    ) {
+      await this.prepareDefinitionMutation(mutation, send, clientId);
+      return;
+    }
+
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+
+    const descriptor = await this.lineageRepository.readDescriptor(
+      workspaceRoot,
+      runAddress.workflowKey
+    );
+    if (descriptor.revision !== mutation.expectedDescriptorRevision) {
+      throw new Error(
+        `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
+      );
+    }
+
+    const instance = this.getInstanceForClient(clientId);
+    const state = instance.getQueueState();
+    if (
+      state.workflowKey !== runAddress.workflowKey ||
+      state.runRef !== runAddress.runRef
+    ) {
+      throw new Error("Workflow properties no longer target the executing run");
+    }
+    instance.expectDefinitionRevision(mutation.expectedDefinitionRevision);
+  }
+
   private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {
     for (const instance of this.instances.values()) {
       const state = instance.getQueueState();
@@ -3205,6 +3257,14 @@ export class WorkflowOrchestrator {
 
       this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);
 
+      // A draft is promoted to a RunRef immediately before execution starts.
+      // Rebind clients viewing that instance from the draft snapshot to the
+      // executing run so subsequent dashboard property edits address and
+      // persist to the same run working file as the executor.
+      if (state.status === EXECUTION_STATES.RUNNING) {
+        this.syncExecutingRunViews(instance);
+      }
+
       // Auto-retire when a workflow completes, errors, or stops.
       // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
       // sent synchronously above, so there's nothing to wait for.
@@ -3224,6 +3284,43 @@ export class WorkflowOrchestrator {
     });
 
     return instance;
+  }
+
+  private syncExecutingRunViews(instance: WorkflowInstance): void {
+    const state = instance.getQueueState();
+    if (!state.workflowKey || !state.runRef) {
+      return;
+    }
+
+    for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
+      if (viewedInstanceId !== instance.id) {
+        continue;
+      }
+      const viewedAddress = this.getViewAddress(clientId);
+      if (
+        viewedAddress?.kind !== "draft" ||
+        viewedAddress.workflowKey !== state.workflowKey
+      ) {
+        continue;
+      }
+      const send = this.getViewMessageSinks().get(clientId);
+      if (!send) {
+        continue;
+      }
+      void this.loadRunViewForClient(
+        {
+          workflowKey: state.workflowKey,
+          kind: "run",
+          runRef: state.runRef,
+        },
+        send,
+        clientId
+      ).catch((error) =>
+        Log.warn(
+          `[WorkflowOrchestrator] Failed to switch ${clientId} to executing run: ${getErrorMessage(error)}`
+        )
+      );
+    }
   }
 
   private getDefaultIntegration(): HarnessIntegration {

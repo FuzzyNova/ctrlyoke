@@ -422,6 +422,94 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });
+
+  test("keeps workflow property edits on the actively executing run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-properties-")
+    );
+    try {
+      const sourceManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "source" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.RUNNING,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Source",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "source",
+        [{ prompt: "source" }],
+        workspace,
+        "Source"
+      );
+      const promoted = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const repository = new WorkflowLineageRepository();
+      const descriptor = await repository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      let expectedRevision: number | undefined;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.lineageRepository = repository;
+      internal.viewerRegistry = new Map([["client-a", "execution-instance"]]);
+      internal.viewAddressRegistry = new Map([
+        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+      ]);
+      internal.instances = new Map([
+        [
+          "execution-instance",
+          {
+            getQueueState: () => ({
+              workflowKey,
+              runRef: promoted.runRef,
+            }),
+            getExecutionRunRef: () => promoted.runRef,
+            expectDefinitionRevision: (revision: number) => {
+              expectedRevision = revision;
+            },
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.loadFreshInstanceAndReplay = () => {
+        throw new Error("An executing run must not fork a draft for settings");
+      };
+
+      await orchestrator.prepareWorkflowPropertiesMutation(
+        {
+          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptor.revision,
+        },
+        () => undefined,
+        "client-a"
+      );
+
+      assert.strictEqual(expectedRevision, 1);
+      assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+        workflowKey,
+        kind: "run",
+        runRef: promoted.runRef,
+      });
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
 });
 
 suite("WorkflowOrchestrator active workflow helpers", () => {

@@ -88,4 +88,30 @@ describe("Header execution controls", () => {
       expectedDescriptorRevision: 7,
     });
   });
+
+  it("shows Run, Resume, and Stop for a newly loaded draft", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-b" as never,
+        kind: "draft",
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.EXECUTE_DRAFT,
+      address: { workflowKey: "workflow-b", kind: "draft" },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 7,
+    });
+  });
 });

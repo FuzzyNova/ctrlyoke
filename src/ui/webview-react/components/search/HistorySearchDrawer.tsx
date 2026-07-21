@@ -113,13 +113,21 @@ export function HistorySearchDrawer() {
         findQuery: query.trim(),
         target: result.target,
       });
+      const ui = useUiStore.getState();
+      const address = {
+        workflowKey: result.workflowKey,
+        kind: "run" as const,
+        runRef: result.runRef,
+      };
+      const requestId = ui.requestRunViewLoad(
+        address,
+        ui.runSummaries,
+        ui.executionRunRef ?? undefined
+      );
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-        address: {
-          workflowKey: result.workflowKey,
-          kind: "run",
-          runRef: result.runRef,
-        },
+        address,
+        requestId,
       });
     },
     [closeHistorySearch, query, setPendingHistorySearchNavigation, vscode]

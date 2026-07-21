@@ -28,10 +28,13 @@ describe("applyRoute", () => {
     const api = fakeVsCode();
     applyRoute({ workflow: RUN }, api);
     expect(useUiStore.getState().displayedViewAddress).toEqual(RUN);
-    expect(api.postMessage).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-      address: RUN,
-    });
+    expect(api.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: RUN,
+        requestId: expect.any(String),
+      })
+    );
   });
 
   it("does not reload the address already displayed", () => {

@@ -1811,7 +1811,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleUpdateWorkflowProperty(message: any): Promise<void> {
-    await this.prepareDefinitionMutation(message);
+    await this.prepareWorkflowPropertiesMutation(message);
     await this.settingsSync.handleUpdateWorkflowProperty(
       message.property,
       message.value,
@@ -1822,7 +1822,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleUpdateWorkflowProperties(message: any): Promise<void> {
-    await this.prepareDefinitionMutation(message);
+    await this.prepareWorkflowPropertiesMutation(message);
     await this.settingsSync.handleUpdateWorkflowProperties(
       message.properties,
       this.getCurrentPostMessage(),
@@ -1840,6 +1840,23 @@ export class WebviewMessageRouter {
       throw new Error("WorkflowOrchestrator not initialized");
     }
     await orchestrator.prepareDefinitionMutation(
+      message.mutation as
+        | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
+        | undefined,
+      this.scopedPostMessage,
+      this.clientId
+    );
+  }
+
+  /** Keep workflow settings on an executing run's own definition head. */
+  private async prepareWorkflowPropertiesMutation(message: {
+    mutation?: unknown;
+  }): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      throw new Error("WorkflowOrchestrator not initialized");
+    }
+    await orchestrator.prepareWorkflowPropertiesMutation(
       message.mutation as
         | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
         | undefined,

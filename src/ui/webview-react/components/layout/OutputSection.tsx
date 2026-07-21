@@ -1067,7 +1067,7 @@ const OutputSectionInner: React.FC = () => {
   }, [activeTerminalSession, setActiveOutputTab, terminalWorkflowId]);
 
   const handleSelectRun = useCallback((runIndex: number) => {
-    const { displayedViewAddress, runSummaries, setDisplayedRunView } =
+    const { displayedViewAddress, runSummaries, requestRunViewLoad } =
       useUiStore.getState();
     const selected = runSummaries[runIndex];
     if (!displayedViewAddress || !selected) return;
@@ -1076,10 +1076,11 @@ const OutputSectionInner: React.FC = () => {
       kind: "run" as const,
       runRef: selected.runRef,
     };
-    setDisplayedRunView(address, runSummaries);
+    const requestId = requestRunViewLoad(address, runSummaries);
     getVsCodeApi()?.postMessage({
       type: MESSAGE_TYPES.LOAD_RUN_VIEW,
       address,
+      requestId,
     });
   }, []);
 

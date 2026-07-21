@@ -816,6 +816,41 @@ describe("OUTPUT_HISTORY_LOADED", () => {
 });
 
 describe("run view revision snapshots", () => {
+  it("accepts an authoritative draft replay after switching to a newly loaded workflow", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "previous-workflow" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      },
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "new-instance",
+      });
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: { workflowKey: "new-workflow" as never, kind: "draft" },
+        workingFile: {
+          workflowName: "New workflow",
+          definitionRevision: 1,
+          steps: [makePrompt("first")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+      });
+    });
+
+    expect(useUiStore.getState().displayedViewAddress).toEqual({
+      workflowKey: "new-workflow",
+      kind: "draft",
+    });
+    expect(useWorkflowStore.getState().workflowName).toBe("New workflow");
+  });
+
   it("stores definition and descriptor revisions for the next addressed edit", () => {
     renderHook(() => useMessageHandler());
 

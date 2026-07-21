@@ -1761,14 +1761,15 @@ function createMessageHandlers(): MessageHandlerMap {
     if (!address || !workingFile) return;
     // A late response from a previous selector click must not overwrite the
     // most recently requested address.
-    const requested = useUiStore.getState().displayedViewAddress;
+    const uiStore = useUiStore.getState();
+    // Client-initiated run switches carry a request ID, so only the latest
+    // requested snapshot may update the optimistic view. Replays caused by a
+    // newly loaded workflow have no request ID and must replace the prior
+    // workflow's address instead of being mistaken for stale selector output.
     if (
-      requested &&
-      (requested.workflowKey !== address.workflowKey ||
-        requested.kind !== address.kind ||
-        (requested.kind === "run" &&
-          address.kind === "run" &&
-          requested.runRef !== address.runRef))
+      (uiStore.pendingRunViewRequestId !== null &&
+        message.requestId !== uiStore.pendingRunViewRequestId) ||
+      (uiStore.pendingRunViewRequestId === null && message.requestId)
     ) {
       return;
     }
@@ -1812,6 +1813,7 @@ function createMessageHandlers(): MessageHandlerMap {
       },
       pendingRewind ?? runtime?.pendingRewind
     );
+    ui.clearPendingRunViewLoad();
     // A rewind starts a new, suffix-only editing epoch. Re-baselining here
     // prevents zundo from crossing into the full-runtime pre-rewind state.
     if (pendingRewind ?? runtime?.pendingRewind) {
@@ -2115,7 +2117,9 @@ function createMessageHandlers(): MessageHandlerMap {
       `[ACTIVE_WORKFLOW_CHANGED] workflowId=inst:${message.workflowId?.slice(0, 8)}`
     );
     if (message.workflowId) {
-      useUiStore.getState().setActiveWorkflowId(message.workflowId);
+      const uiStore = useUiStore.getState();
+      uiStore.setActiveWorkflowId(message.workflowId);
+      uiStore.clearPendingRunViewLoad();
     }
     if ("workingFilePath" in message) {
       persistViewedWorkingFilePath(message.workingFilePath);

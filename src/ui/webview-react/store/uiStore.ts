@@ -12,6 +12,8 @@ import type {
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
+let runViewRequestSequence = 0;
+
 /**
  * A single template variable — name plus optional UI metadata.
  * Mirrors TemplateVariable in TemplateManager.ts.
@@ -201,6 +203,8 @@ interface UiState {
   /** Stable identities backing the run selector; indices are display-only. */
   runSummaries: RunSummary[];
   displayedViewAddress: WorkflowViewAddress | null;
+  /** Latest client-initiated run-view request; not persisted across reloads. */
+  pendingRunViewRequestId: string | null;
   executionRunRef: string | null;
   /** Optimistic revisions paired with the current addressed definition snapshot. */
   displayedDefinitionRevision: number | null;
@@ -471,6 +475,12 @@ interface UiActions {
     revisions?: { definitionRevision: number; descriptorRevision: number },
     pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number }
   ) => void;
+  requestRunViewLoad: (
+    address: WorkflowViewAddress,
+    summaries: RunSummary[],
+    executionRunRef?: string
+  ) => string;
+  clearPendingRunViewLoad: () => void;
 
   // Dropdown hide feature
   hideDropdownOption: (namespace: string, value: string) => void;
@@ -582,6 +592,7 @@ const initialState: UiState = {
   runStates: [],
   runSummaries: [],
   displayedViewAddress: null,
+  pendingRunViewRequestId: null,
   executionRunRef: null,
   displayedDefinitionRevision: null,
   displayedDescriptorRevision: null,
@@ -627,7 +638,7 @@ const persistedFields = [
 
 export const useUiStore = create<UiState & UiActions>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
 
       // ============================================================================
@@ -1036,6 +1047,16 @@ export const useUiStore = create<UiState & UiActions>()(
                 )
               : 0,
         }),
+
+      requestRunViewLoad: (address, summaries, executionRunRef) => {
+        runViewRequestSequence += 1;
+        const requestId = `run-view-${Date.now()}-${runViewRequestSequence}`;
+        get().setDisplayedRunView(address, summaries, executionRunRef);
+        set({ pendingRunViewRequestId: requestId });
+        return requestId;
+      },
+
+      clearPendingRunViewLoad: () => set({ pendingRunViewRequestId: null }),
 
       // ============================================================================
       // DROPDOWN HIDE FEATURE

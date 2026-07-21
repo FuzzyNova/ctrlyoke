@@ -61,12 +61,16 @@ function applyWorkflow(route: Route, vscode: PostMessageApi): void {
 
   // Optimistically record the address so a response for an older browser
   // history entry cannot overwrite this navigation while storage is loading.
-  ui.setDisplayedRunView(
+  const requestId = ui.requestRunViewLoad(
     target,
     ui.runSummaries,
     ui.executionRunRef ?? undefined
   );
-  vscode.postMessage({ type: MESSAGE_TYPES.LOAD_RUN_VIEW, address: target });
+  vscode.postMessage({
+    type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+    address: target,
+    requestId,
+  });
 }
 
 function applyViewer(route: Route): void {
