@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import type {
   RunRef,
   WorkflowRunAddress,
@@ -22,8 +23,14 @@ export interface CreatedLineage {
 export interface AllocatedRun {
   runRef: RunRef;
   runId: number;
+  /** Hidden directory used while the three run artifacts are being written. */
+  stagingRunDir: string;
+  stagingRunFilePath: string;
+  /** Final public directory. It does not exist until `finalizeAllocatedRun`. */
   runDir: string;
   runFilePath: string;
+  /** Descriptor revision written while reserving this run ID. */
+  reservationDescriptorRevision: number;
   /** True when this is the lineage's first-ever run (a draft is being promoted). */
   isFirstRun: boolean;
   /** The draft file path to remove after the caller finishes writing the new run's definition. */
@@ -113,12 +120,11 @@ export class WorkflowLineageRepository {
   }
 
   /**
-   * Allocates a new promoted run for `workflowKey`: reserves a `RunRef` (retrying on the
-   * astronomically rare directory-name collision), exclusively creates its directory, and
-   * advances the descriptor's `latestRunRef`/`nextRunId`/`revision` — all under the lineage's
-   * short metadata lock. The caller is responsible for writing the run's `workflow.ctrlyoke.json`
-   * (via `WorkingFileManager`) and manifest/events (via `TimelineRecorder`) into `runDir`
-   * immediately afterward, and for removing `draftFilePathToRemove` once that write lands.
+   * Reserves a RunRef and a monotonic display ID in a hidden staging directory.  The
+   * public run directory and `latestRunRef` are deliberately not published here: callers
+   * must first write workflow.json, manifest.json, and events.jsonl, then call
+   * `finalizeAllocatedRun`.  This is what makes a promoted run atomically visible as a
+   * complete three-artifact unit.
    */
   async allocateRun(
     workspaceRoot: string,
@@ -145,6 +151,7 @@ export class WorkflowLineageRepository {
       const maxAttempts = 25;
       let runRef: RunRef | undefined;
       let runDir = "";
+      let stagingRunDir = "";
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const candidate = WorkflowPaths.formatRunRef(Date.now() + attempt);
         const candidateDir = WorkflowPaths.runDir(
@@ -153,9 +160,23 @@ export class WorkflowLineageRepository {
           candidate
         );
         try {
-          await fs.promises.mkdir(candidateDir);
+          await fs.promises.access(candidateDir);
+          continue;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+            throw error;
+          }
+        }
+        try {
+          const stageName = `.creating-${candidate}-${crypto.randomUUID()}`;
+          const candidateStagingDir = path.join(
+            WorkflowPaths.lineageDir(workspaceRoot, workflowKey),
+            stageName
+          );
+          await fs.promises.mkdir(candidateStagingDir);
           runRef = candidate;
           runDir = candidateDir;
+          stagingRunDir = candidateStagingDir;
           break;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
@@ -172,7 +193,6 @@ export class WorkflowLineageRepository {
       const runId = descriptor.nextRunId;
       const updatedDescriptor: WorkflowLineageDescriptor = {
         ...descriptor,
-        latestRunRef: runRef,
         nextRunId: descriptor.nextRunId + 1,
         lastModifiedAt: Date.now(),
         revision: descriptor.revision + 1,
@@ -187,16 +207,77 @@ export class WorkflowLineageRepository {
         runRef,
         runId,
         runDir,
+        stagingRunDir,
+        stagingRunFilePath: path.join(
+          stagingRunDir,
+          WorkflowPaths.WORKING_FILE_NAME
+        ),
         runFilePath: WorkflowPaths.runFilePath(
           workspaceRoot,
           workflowKey,
           runRef
         ),
+        reservationDescriptorRevision: updatedDescriptor.revision,
         isFirstRun,
         draftFilePathToRemove: isFirstRun
           ? WorkflowPaths.draftFilePath(workspaceRoot, workflowKey)
           : undefined,
       };
+    });
+  }
+
+  /**
+   * Publishes a fully initialized staged run.  The final rename happens before the
+   * descriptor hint is updated, so a crash can at worst leave an independently
+   * discoverable complete run; it can never expose a partial one.
+   */
+  async finalizeAllocatedRun(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    allocation: AllocatedRun
+  ): Promise<void> {
+    const requiredFiles = [
+      allocation.stagingRunFilePath,
+      path.join(allocation.stagingRunDir, "manifest.json"),
+      path.join(allocation.stagingRunDir, "events.jsonl"),
+    ];
+    for (const requiredFile of requiredFiles) {
+      const stat = await fs.promises.lstat(requiredFile);
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        throw new Error("Cannot publish a run without all required artifacts");
+      }
+    }
+
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    await withFileLock(descriptorPath, async () => {
+      const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      if (descriptor.revision !== allocation.reservationDescriptorRevision) {
+        throw new Error(
+          `Descriptor revision conflict while publishing run: expected ${allocation.reservationDescriptorRevision}, found ${descriptor.revision}`
+        );
+      }
+      try {
+        await fs.promises.rename(allocation.stagingRunDir, allocation.runDir);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+          throw new Error(
+            `Run ref collision while publishing ${allocation.runRef}`
+          );
+        }
+        throw error;
+      }
+      await this.writeDescriptorDirect(workspaceRoot, workflowKey, {
+        ...descriptor,
+        latestRunRef: allocation.runRef,
+        lastModifiedAt: Date.now(),
+        // Allocation already advanced the optimistic revision while reserving the
+        // monotonic run ID. Publishing completes that same transaction; exposing a
+        // second revision would invalidate a client that only observed one run create.
+        revision: descriptor.revision,
+      });
     });
   }
 

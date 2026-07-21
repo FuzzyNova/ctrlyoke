@@ -479,7 +479,8 @@ export class CtrlYokeMCPServer {
       selected.workflowKey,
       selected.runRef,
       lineageRepository,
-      "append"
+      "append",
+      true
     );
     if (
       expectedDefinitionRevision !== undefined &&

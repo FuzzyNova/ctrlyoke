@@ -989,6 +989,9 @@ export class WorkflowInstance {
       runRef: RunRef;
       runId: number;
       runDir: string;
+      stagingRunDir: string;
+      stagingWorkingFilePath: string;
+      allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
       startedAt: number;
     },
     workflowKey: WorkflowKey,
@@ -1278,21 +1281,24 @@ export class WorkflowInstance {
         if (promoted) {
           workingFilePath = promoted.workingFilePath;
           this.executionRunRef = promoted.runRef;
-          const runDir = WorkflowPaths.runDir(
-            runWorkspaceRoot,
-            workflowKey,
-            promoted.runRef
-          );
           const historyInit = await this.outputHistoryManager.initializeRunAt(
             workflowKey,
             promoted.runRef,
-            runDir,
+            promoted.runDir,
             promoted.runId,
             startedAt,
             [],
             this.getDefinitionRevisionContext().definition
           );
-          historyFilePath = historyInit.filePath;
+          if (!historyInit.filePath) {
+            throw new Error(
+              `Failed to initialize timeline for promoted run ${workflowKey}/${promoted.runRef}`
+            );
+          }
+          historyFilePath = this.outputHistoryManager.getHistoryFilePath(
+            workflowKey,
+            promoted.runRef
+          );
           if (historyInit.runCount > 0) {
             const [runTimestamps, runStates] = await Promise.all([
               this.outputHistoryManager.getRunTimestamps(workflowKey),

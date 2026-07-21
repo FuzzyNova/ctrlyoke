@@ -111,7 +111,7 @@ export class OutputHistoryManager {
    * `WorkflowLineageRepository.allocateRun` (via `WorkingFileManager.promoteToNewRun`)
    * has already created alongside the run's `workflow.ctrlyoke.json`.
    * Returns { filePath, runCount } where runCount is the total runs after initialization
-   * (capped at maxHistoryRuns after pruning).
+   * (capped at runs.maxRuns after pruning).
    */
   async initializeRunAt(
     workflowKey: WorkflowKey,

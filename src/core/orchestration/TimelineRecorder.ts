@@ -77,6 +77,24 @@ export class TimelineRecorder {
   ): Promise<string> {
     const manifestPath =
       TimelineRecorder.getManifestPathForRunDirectory(runDirectoryPath);
+    const eventsPath =
+      TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
+    try {
+      const [manifestStat, eventsStat] = await Promise.all([
+        fs.promises.lstat(manifestPath),
+        fs.promises.lstat(eventsPath),
+      ]);
+      if (
+        manifestStat.isFile() &&
+        !manifestStat.isSymbolicLink() &&
+        eventsStat.isFile() &&
+        !eventsStat.isSymbolicLink()
+      ) {
+        return manifestPath;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
     const manifest: WorkflowRunManifest = {
       schemaVersion: TIMELINE_SCHEMA_VERSION,
       storageKind: TIMELINE_STORAGE_KIND,
@@ -94,11 +112,7 @@ export class TimelineRecorder {
 
     await fs.promises.mkdir(runDirectoryPath, { recursive: true });
     await this.writeManifestDirect(manifestPath, manifest);
-    await fs.promises.writeFile(
-      TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
-      "",
-      "utf8"
-    );
+    await fs.promises.writeFile(eventsPath, "", "utf8");
 
     return manifestPath;
   }

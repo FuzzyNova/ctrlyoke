@@ -21,6 +21,7 @@ import {
   isProcessAlive as isPidAlive,
   readWorkflowLock,
 } from "./WorkflowLockInspector";
+import { withFileLock } from "./FileLockUtils";
 
 export type { LockStatus };
 
@@ -70,53 +71,53 @@ export class WorkflowLockManager {
       workflowKey
     );
     await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
-    const content = JSON.stringify(lock, null, 2);
-    const startTime = Date.now();
+    await withFileLock(lockPath, async () => {
+      const content = JSON.stringify(lock, null, 2);
+      const startTime = Date.now();
 
-    while (Date.now() - startTime < ACQUIRE_TIMEOUT_MS) {
-      try {
-        const handle = await fs.promises.open(lockPath, "wx");
+      while (Date.now() - startTime < ACQUIRE_TIMEOUT_MS) {
         try {
-          await handle.writeFile(content, "utf8");
-        } finally {
-          await handle.close();
-        }
-        Log.debug(
-          `[WorkflowLockManager] acquireLock: ${workflowKey} → ${lock.runRef}`
-        );
-        return;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-          throw error;
-        }
-
-        const existing = await WorkflowLockManager.readLock(
-          workspaceRoot,
-          workflowKey
-        );
-        const stale =
-          !existing ||
-          !isPidAlive(existing.pid) ||
-          Date.now() - existing.lastHeartbeat > STALE_HEARTBEAT_MS;
-
-        if (stale) {
+          const handle = await fs.promises.open(lockPath, "wx");
           try {
-            await fs.promises.unlink(lockPath);
-          } catch (unlinkError) {
-            if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") {
-              throw unlinkError;
-            }
+            await handle.writeFile(content, "utf8");
+          } finally {
+            await handle.close();
           }
-          continue;
+          Log.debug(
+            `[WorkflowLockManager] acquireLock: ${workflowKey} → ${lock.runRef}`
+          );
+          return;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+            throw error;
+          }
+
+          const existing = await WorkflowLockManager.readLock(
+            workspaceRoot,
+            workflowKey
+          );
+          const stale =
+            !existing ||
+            !isPidAlive(existing.pid) ||
+            Date.now() - existing.lastHeartbeat > STALE_HEARTBEAT_MS;
+
+          if (stale) {
+            await fs.promises.unlink(lockPath).catch((unlinkError) => {
+              if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") {
+                throw unlinkError;
+              }
+            });
+            continue;
+          }
+
+          await sleep(ACQUIRE_RETRY_DELAY_MS);
         }
-
-        await sleep(ACQUIRE_RETRY_DELAY_MS);
       }
-    }
 
-    throw new Error(
-      `Timed out waiting for runner lock: ${workflowKey} (held by a live owner)`
-    );
+      throw new Error(
+        `Timed out waiting for runner lock: ${workflowKey} (held by a live owner)`
+      );
+    });
   }
 
   /**
@@ -133,21 +134,21 @@ export class WorkflowLockManager {
       workflowKey
     );
     try {
-      const existing = await WorkflowLockManager.readLock(
-        workspaceRoot,
-        workflowKey
-      );
-      if (!existing) {
-        return;
-      }
-      if (existing.ownerToken !== ownerToken) {
-        Log.warn(
-          `[WorkflowLockManager] releaseLock: ownerToken mismatch for ${workflowKey} — refusing to release a successor's lock`
+      await withFileLock(lockPath, async () => {
+        const existing = await WorkflowLockManager.readLock(
+          workspaceRoot,
+          workflowKey
         );
-        return;
-      }
-      await fs.promises.unlink(lockPath);
-      Log.debug(`[WorkflowLockManager] releaseLock: ${workflowKey}`);
+        if (!existing) return;
+        if (existing.ownerToken !== ownerToken) {
+          Log.warn(
+            `[WorkflowLockManager] releaseLock: ownerToken mismatch for ${workflowKey} — refusing to release a successor's lock`
+          );
+          return;
+        }
+        await fs.promises.unlink(lockPath);
+        Log.debug(`[WorkflowLockManager] releaseLock: ${workflowKey}`);
+      });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") {
@@ -173,30 +174,30 @@ export class WorkflowLockManager {
       workflowKey
     );
     try {
-      const existing = await WorkflowLockManager.readLock(
-        workspaceRoot,
-        workflowKey
-      );
-      if (!existing) {
-        return;
-      }
-      if (existing.ownerToken !== ownerToken) {
-        Log.warn(
-          `[WorkflowLockManager] updateHeartbeat: ownerToken mismatch for ${workflowKey} — refusing to touch a successor's lock`
+      await withFileLock(lockPath, async () => {
+        const existing = await WorkflowLockManager.readLock(
+          workspaceRoot,
+          workflowKey
         );
-        return;
-      }
-      const updated: WorkflowRunnerLock = {
-        ...existing,
-        lastHeartbeat: Date.now(),
-      };
-      const tmpPath = `${lockPath}.tmp`;
-      await fs.promises.writeFile(
-        tmpPath,
-        JSON.stringify(updated, null, 2),
-        "utf8"
-      );
-      await fs.promises.rename(tmpPath, lockPath);
+        if (!existing) return;
+        if (existing.ownerToken !== ownerToken) {
+          Log.warn(
+            `[WorkflowLockManager] updateHeartbeat: ownerToken mismatch for ${workflowKey} — refusing to touch a successor's lock`
+          );
+          return;
+        }
+        const updated: WorkflowRunnerLock = {
+          ...existing,
+          lastHeartbeat: Date.now(),
+        };
+        const tmpPath = `${lockPath}.${ownerToken}.tmp`;
+        await fs.promises.writeFile(
+          tmpPath,
+          JSON.stringify(updated, null, 2),
+          "utf8"
+        );
+        await fs.promises.rename(tmpPath, lockPath);
+      });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") {

@@ -6,6 +6,7 @@ import { suite, test, afterEach } from "mocha";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "../../core/WorkingFileManager";
 import { PromptQueue } from "../../core/PromptQueue";
+import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import type { PromptStep, WorkingFile } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -76,6 +77,53 @@ suite("WorkingFileManager", () => {
       } catch {
         // best-effort cleanup
       }
+    }
+  });
+
+  test("publishes a promoted run only after all three run artifacts exist", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-staged-run-")
+    );
+    try {
+      const repository = new WorkflowLineageRepository();
+      const lineage = await repository.createLineage(
+        workspaceRoot,
+        "staged-run",
+        "Staged run"
+      );
+      const allocation = await repository.allocateRun(
+        workspaceRoot,
+        lineage.workflowKey
+      );
+
+      await assert.rejects(fs.access(allocation.runDir));
+      await fs.writeFile(allocation.stagingRunFilePath, "{}");
+      await fs.writeFile(
+        path.join(allocation.stagingRunDir, "manifest.json"),
+        "{}"
+      );
+      await fs.writeFile(
+        path.join(allocation.stagingRunDir, "events.jsonl"),
+        ""
+      );
+      await repository.finalizeAllocatedRun(
+        workspaceRoot,
+        lineage.workflowKey,
+        allocation
+      );
+
+      await Promise.all([
+        fs.access(allocation.runFilePath),
+        fs.access(path.join(allocation.runDir, "manifest.json")),
+        fs.access(path.join(allocation.runDir, "events.jsonl")),
+      ]);
+      const descriptor = await repository.readDescriptor(
+        workspaceRoot,
+        lineage.workflowKey
+      );
+      assert.strictEqual(descriptor.latestRunRef, allocation.runRef);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 
@@ -232,6 +280,37 @@ suite("WorkingFileManager", () => {
       const content = await fs.readFile(workingFilePath, "utf-8");
       const parsed = JSON.parse(content) as WorkingFile;
       assert.strictEqual(parsed.definitionRevision, 3);
+    });
+
+    test("preserves an externally appended tail's disk revision during a runtime flush", async () => {
+      const workingFilePath = tempFile("external-tail-revision");
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        definitionRevision: 5,
+        steps: [{ prompt: "first" }, { prompt: "external tail" }],
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      let memorySteps: PromptStep[] = [{ prompt: "first" }];
+      let definitionRevision = 4;
+      access.getSteps = () => memorySteps;
+      access.getDefinitionRevision = () => definitionRevision;
+      access.setDefinitionRevision = (revision: number) => {
+        definitionRevision = revision;
+      };
+      access.mergeDiskSteps = (diskSteps) => {
+        memorySteps = diskSteps as PromptStep[];
+        return [diskSteps[1]!];
+      };
+
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(definitionRevision, 5);
+      assert.strictEqual(persisted.definitionRevision, 5);
+      assert.strictEqual(persisted.steps!.length, 2);
     });
 
     test("rejects a stale expected definition revision without writing", async () => {

@@ -369,13 +369,12 @@ All settings use the `ctrlyoke.` prefix.
 
 ### Output and history
 
-| Setting                | Default | Description                                          |
-| ---------------------- | ------- | ---------------------------------------------------- |
-| `showCliOutput`        | `true`  | Show CLI output in the Output panel                  |
-| `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard        |
-| `saveOutputHistory`    | `true`  | Save per-run output history in `.ctrlyoke/.history/` |
-| `maxHistoryRuns`       | `-1`    | Max history entries per workflow (-1 = keep all)     |
-| `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.ctrlyoke/logs/`           |
+| Setting                | Default | Description                                                                                     |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `showCliOutput`        | `true`  | Show CLI output in the Output panel                                                             |
+| `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard                                                   |
+| `runs.maxRuns`         | `-1`    | Maximum completed runs retained per workflow lineage; `-1` keeps all runs in `.ctrlyoke/.runs/` |
+| `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.ctrlyoke/logs/`                                                      |
 
 ---
 

@@ -34,23 +34,31 @@ export class RunContinuationService {
     workflowKey: WorkflowKey,
     runRef: RunRef,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    action: "append" | "continue" = "continue"
+    action: "append" | "continue" = "continue",
+    allowActiveTargetAppend: boolean = false
   ): Promise<RunContinuationTarget> {
     const [lock, lockStatus, descriptor] = await Promise.all([
       readWorkflowLock(workspaceRoot, workflowKey),
       inspectWorkflowLock(workspaceRoot, workflowKey),
       lineageRepository.readDescriptor(workspaceRoot, workflowKey),
     ]);
-    if (lock && lockStatus !== LOCK_STATUS.STALE) {
+    const target = await this.readRun(workspaceRoot, workflowKey, runRef);
+    const executionState =
+      target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
+    const activeTargetAppend =
+      allowActiveTargetAppend &&
+      action === "append" &&
+      lock !== null &&
+      lockStatus !== LOCK_STATUS.STALE &&
+      lock.runRef === runRef &&
+      executionState === EXECUTION_STATES.RUNNING;
+    if (lock && lockStatus !== LOCK_STATUS.STALE && !activeTargetAppend) {
       throw new Error("Another run in this workflow lineage is executing");
     }
     if (descriptor.pendingEdit) {
       throw new Error("This workflow has a draft or pending continuation");
     }
 
-    const target = await this.readRun(workspaceRoot, workflowKey, runRef);
-    const executionState =
-      target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
     if (
       executionState === EXECUTION_STATES.PAUSING ||
       executionState === EXECUTION_STATES.CANCELLING
@@ -67,7 +75,11 @@ export class RunContinuationService {
     const allowInterruptedRun =
       executionState === EXECUTION_STATES.RUNNING &&
       (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
-    if (executionState === EXECUTION_STATES.RUNNING && !allowInterruptedRun) {
+    if (
+      executionState === EXECUTION_STATES.RUNNING &&
+      !allowInterruptedRun &&
+      !activeTargetAppend
+    ) {
       throw new Error(
         `Cannot ${action} while run is in state ${executionState}`
       );
@@ -75,7 +87,7 @@ export class RunContinuationService {
     return {
       definitionRevision: target.definitionRevision ?? 1,
       descriptorRevision: descriptor.revision,
-      allowInterruptedRun,
+      allowInterruptedRun: allowInterruptedRun || activeTargetAppend,
     };
   }
 

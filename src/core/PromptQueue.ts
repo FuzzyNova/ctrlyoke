@@ -1382,6 +1382,10 @@ export class PromptQueue {
     workingFilePath: string;
     runRef: RunRef;
     runId: number;
+    runDir: string;
+    stagingRunDir: string;
+    stagingWorkingFilePath: string;
+    allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
   } | null> {
     const workflowKey = this.state.workflowKey;
     if (!workflowKey) {
@@ -1405,6 +1409,10 @@ export class PromptQueue {
       workingFilePath: result.workingFilePath,
       runRef: result.runRef,
       runId: result.runId,
+      runDir: result.runDir,
+      stagingRunDir: result.stagingRunDir,
+      stagingWorkingFilePath: result.stagingWorkingFilePath,
+      allocation: result.allocation,
     };
   }
 

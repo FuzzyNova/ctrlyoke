@@ -243,6 +243,48 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  test("permits an MCP tail append only for its exact active execution target", async () => {
+    const server = await setup();
+    const run = await createRun("active-append", "2026-01-01T00-00-00-000Z");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      currentIndex: workingFile._runtime?.currentIndex ?? 0,
+      executionState: EXECUTION_STATES.RUNNING,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      workflowKey: run.workflowKey,
+      runRef: run.runRef,
+      runner: RUNNER_IDS.CLI,
+      pid: process.pid,
+      ownerToken: "mcp-active-append-owner",
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    });
+    try {
+      const result = responseJson(
+        await server.invokeTool("ctrlyoke_append_queue", {
+          ...run,
+          position: "end",
+          expectedDefinitionRevision: 4,
+          expectedDescriptorRevision: 3,
+          steps: [{ prompt: "active tail" }],
+        })
+      );
+      assert.strictEqual(result.stepsAdded, 1);
+      assert.strictEqual(result.definitionRevision, 5);
+    } finally {
+      await WorkflowLockManager.releaseLock(
+        workspaceRoot,
+        run.workflowKey,
+        "mcp-active-append-owner"
+      );
+    }
+  });
+
   test("rejects busy lineages and concurrent stale revisions deterministically", async () => {
     const server = await setup();
     const run = await createRun("busy", "2026-01-01T00-00-00-000Z");

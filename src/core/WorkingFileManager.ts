@@ -18,12 +18,14 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
+  buildDefinitionSnapshot,
   stripStepRuntime,
   stripTimelineDuplicatedWorkingFileOutput,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
+import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 
 /**
  * Read a working file straight off disk. Free function (rather than an instance method)
@@ -385,6 +387,9 @@ export class WorkingFileManager {
     runRef: RunRef;
     runId: number;
     runDir: string;
+    stagingRunDir: string;
+    stagingWorkingFilePath: string;
+    allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
   }> {
     const allocation = await this.lineageRepository.allocateRun(
       workspaceFolderPath,
@@ -414,17 +419,30 @@ export class WorkingFileManager {
       },
     };
 
-    await this.writeWorkingFileAtomic(allocation.runFilePath, workingFile);
-
-    if (allocation.draftFilePathToRemove) {
-      await fs
-        .rm(allocation.draftFilePathToRemove, { force: true })
-        .catch((error) =>
-          Log.warn(
-            `[WorkingFileManager] Failed to remove promoted draft: ${getErrorMessage(error)}`
-          )
-        );
-    }
+    await this.writeWorkingFileAtomic(
+      allocation.stagingRunFilePath,
+      workingFile
+    );
+    await new TimelineRecorder().initializeRunAt(
+      allocation.stagingRunDir,
+      workflowKey,
+      allocation.runId,
+      startedAt,
+      EXECUTION_STATES.RUNNING,
+      workingFile.definitionRevision ?? 1,
+      buildDefinitionSnapshot(
+        workingFile.workflowName ?? descriptor.workflowName,
+        workingFile.steps ?? [],
+        undefined,
+        workingFile.finalStep
+      )
+    );
+    await WorkingFileManager.finalizeAllocatedRun(
+      workspaceFolderPath,
+      workflowKey,
+      allocation,
+      this.lineageRepository
+    );
 
     Log.info(
       ` Promoted lineage ${workflowKey} to new run ${allocation.runRef}`
@@ -434,6 +452,9 @@ export class WorkingFileManager {
       runRef: allocation.runRef,
       runId: allocation.runId,
       runDir: allocation.runDir,
+      stagingRunDir: allocation.stagingRunDir,
+      stagingWorkingFilePath: allocation.stagingRunFilePath,
+      allocation,
     };
   }
 
@@ -465,6 +486,9 @@ export class WorkingFileManager {
     runRef: RunRef;
     runId: number;
     runDir: string;
+    stagingRunDir: string;
+    stagingWorkingFilePath: string;
+    allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
     startedAt: number;
   }> {
     const sourceFilePath = WorkflowPaths.runFilePath(
@@ -533,17 +557,27 @@ export class WorkingFileManager {
       },
     };
 
-    await writeWorkingFileAtomicTo(allocation.runFilePath, workingFile);
-
-    if (allocation.draftFilePathToRemove) {
-      await fs
-        .rm(allocation.draftFilePathToRemove, { force: true })
-        .catch((error) =>
-          Log.warn(
-            `[WorkingFileManager] Failed to remove promoted draft: ${getErrorMessage(error)}`
-          )
-        );
-    }
+    await writeWorkingFileAtomicTo(allocation.stagingRunFilePath, workingFile);
+    await new TimelineRecorder().initializeRunAt(
+      allocation.stagingRunDir,
+      workflowKey,
+      allocation.runId,
+      startedAt,
+      EXECUTION_STATES.RUNNING,
+      workingFile.definitionRevision ?? 1,
+      buildDefinitionSnapshot(
+        workingFile.workflowName ?? descriptor.workflowName,
+        workingFile.steps ?? [],
+        undefined,
+        workingFile.finalStep
+      )
+    );
+    await WorkingFileManager.finalizeAllocatedRun(
+      workspaceFolderPath,
+      workflowKey,
+      allocation,
+      lineageRepository
+    );
 
     Log.info(
       ` Seeded lineage ${workflowKey} run ${fromRunRef} into new run ${allocation.runRef}`
@@ -554,8 +588,34 @@ export class WorkingFileManager {
       runRef: allocation.runRef,
       runId: allocation.runId,
       runDir: allocation.runDir,
+      stagingRunDir: allocation.stagingRunDir,
+      stagingWorkingFilePath: allocation.stagingRunFilePath,
+      allocation,
       startedAt,
     };
+  }
+
+  /** Publishes a staged run only after TimelineRecorder created its two artifacts. */
+  public static async finalizeAllocatedRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<void> {
+    await lineageRepository.finalizeAllocatedRun(
+      workspaceFolderPath,
+      workflowKey,
+      allocation
+    );
+    if (allocation.draftFilePathToRemove) {
+      await fs
+        .rm(allocation.draftFilePathToRemove, { force: true })
+        .catch((error) =>
+          Log.warn(
+            `[WorkingFileManager] Failed to remove promoted draft: ${getErrorMessage(error)}`
+          )
+        );
+    }
   }
 
   /**
@@ -885,11 +945,17 @@ export class WorkingFileManager {
       // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
       if (!skipMerge) {
         const diskSteps = workingFile.steps || [];
+        const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
 
         const newStepsFromDisk = this.queueAccess.mergeDiskSteps(diskSteps);
 
         // If disk has new steps, log and emit state change
         if (newStepsFromDisk.length > 0) {
+          // An MCP tail append is a definition mutation made by another process.
+          // Keep its disk-authoritative revision in memory before this runtime
+          // flush writes the merged queue back, otherwise a stale local revision
+          // would erase the append's optimistic-concurrency boundary.
+          this.queueAccess.setDefinitionRevision(diskDefinitionRevision);
           Log.info(
             `updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
           );

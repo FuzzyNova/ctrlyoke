@@ -10,7 +10,6 @@ import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
 import type { WorkflowViewAddress } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
-import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 /** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
 function fakeWorkspaceState(): any {
@@ -293,7 +292,7 @@ suite("WorkflowSerializer", () => {
         } as WorkflowViewAddress;
         const startedAt = Date.UTC(2026, 6, 20);
         await fs.writeFile(
-          run.runFilePath,
+          run.stagingRunFilePath,
           JSON.stringify({
             workflowName: "Pending save",
             definitionRevision: 2,
@@ -309,11 +308,7 @@ suite("WorkflowSerializer", () => {
           })
         );
         await fs.writeFile(
-          WorkflowPaths.manifestPath(
-            workspaceRoot,
-            lineage.workflowKey,
-            run.runRef
-          ),
+          path.join(run.stagingRunDir, "manifest.json"),
           JSON.stringify({
             schemaVersion: "2.2.0",
             storageKind: "timeline",
@@ -328,13 +323,11 @@ suite("WorkflowSerializer", () => {
             lastUpdatedAt: startedAt,
           })
         );
-        await fs.writeFile(
-          WorkflowPaths.eventsPath(
-            workspaceRoot,
-            lineage.workflowKey,
-            run.runRef
-          ),
-          ""
+        await fs.writeFile(path.join(run.stagingRunDir, "events.jsonl"), "");
+        await repository.finalizeAllocatedRun(
+          workspaceRoot,
+          lineage.workflowKey,
+          run
         );
         const serializer = new WorkflowSerializer(
           (message) => messages.push(message),
