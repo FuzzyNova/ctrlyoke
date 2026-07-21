@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
-import type { WorkflowSummary, HarnessId } from "../types/messages";
+import type {
+  WorkflowSummary,
+  HarnessId,
+  ExecutionState,
+} from "../types/messages";
 import { type FooterPicker } from "../types/messages";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
@@ -480,6 +484,7 @@ interface UiActions {
     definitionRevision: number,
     descriptorRevision: number
   ) => void;
+  markExecutionRunFinished: (executionState: ExecutionState) => void;
   requestRunViewLoad: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
@@ -1066,6 +1071,26 @@ export const useUiStore = create<UiState & UiActions>()(
           displayedDefinitionRevision: definitionRevision,
           displayedDescriptorRevision: descriptorRevision,
         }),
+
+      // The live execution reached a terminal state. Nothing else refreshes the
+      // addressed snapshot at that moment, so without this the client keeps an
+      // `executionRunRef` whose summary still reads "running" and the header
+      // stays stuck on the active Pause/Stop controls instead of offering
+      // Re-run. Folding the terminal state into that run's own summary keeps the
+      // run selector honest until the next RUN_VIEW_LOADED replaces it.
+      markExecutionRunFinished: (executionState) =>
+        set((state) =>
+          state.executionRunRef === null
+            ? state
+            : {
+                executionRunRef: null,
+                runSummaries: state.runSummaries.map((summary) =>
+                  summary.runRef === state.executionRunRef
+                    ? { ...summary, executionState }
+                    : summary
+                ),
+              }
+        ),
 
       requestRunViewLoad: (address, summaries, executionRunRef) => {
         runViewRequestSequence += 1;

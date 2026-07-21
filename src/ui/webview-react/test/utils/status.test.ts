@@ -238,17 +238,41 @@ describe("getWorkflowExecutionControls", () => {
       label: "Run",
       enabled: true,
     });
-    expect(controls.slot2.enabled).toBe(false);
+    expect(controls.slot2).toMatchObject({
+      label: "Pause",
+      icon: "codicon-debug-pause",
+      enabled: false,
+    });
     expect(controls.slot3.enabled).toBe(false);
   });
 
-  it("uses slot 1 Re-run for an idle promoted run", () => {
-    expect(getControls(EXECUTION_STATES.IDLE).slot1).toMatchObject({
-      action: "rerun",
-      label: "Re-run",
-      icon: "codicon-refresh",
-      enabled: true,
-    });
+  it("falls back to a disabled Pause when there is nothing to resume", () => {
+    for (const controls of [
+      getControls(EXECUTION_STATES.IDLE),
+      getControls(EXECUTION_STATES.COMPLETED),
+      getControls(EXECUTION_STATES.IDLE, { hasFile: false, viewedKind: null }),
+    ]) {
+      expect(controls.slot2).toMatchObject({
+        action: "none",
+        label: "Pause",
+        icon: "codicon-debug-pause",
+        enabled: false,
+      });
+    }
+  });
+
+  it("uses slot 1 Re-run for an idle or completed promoted run", () => {
+    for (const state of [
+      EXECUTION_STATES.IDLE,
+      EXECUTION_STATES.COMPLETED,
+    ] as const) {
+      expect(getControls(state).slot1).toMatchObject({
+        action: "rerun",
+        label: "Re-run",
+        icon: "codicon-refresh",
+        enabled: true,
+      });
+    }
   });
 
   it("uses slot 2 Resume only for resumable promoted work", () => {

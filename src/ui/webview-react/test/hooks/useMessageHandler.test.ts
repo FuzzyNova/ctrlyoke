@@ -620,6 +620,35 @@ describe("EXECUTION_COMPLETED", () => {
     expect((prompts[1] as any).status).toBe(STEP_STATUS.COMPLETED);
     expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(0);
   });
+
+  it("releases the executing run so the header can offer Re-run immediately", () => {
+    renderHook(() => useMessageHandler());
+    const runRef = "run-2026-07-20T12-00-00-000Z";
+    useUiStore.setState({
+      executionRunRef: runRef,
+      runSummaries: [
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: runRef as never,
+          runId: 1,
+          startedAt: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_COMPLETED);
+    });
+
+    const ui = useUiStore.getState();
+    expect(ui.executionRunRef).toBeNull();
+    expect(ui.runSummaries[0].executionState).toBe(EXECUTION_STATES.COMPLETED);
+  });
 });
 
 // ---------------------------------------------------------------------------

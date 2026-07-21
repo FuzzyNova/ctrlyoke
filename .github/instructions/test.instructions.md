@@ -33,6 +33,7 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 <pathAndFixtureGotchas>
 
 - Tests execute from compiled `out/test`, not directly from `src/test`. Resolve fixture paths from `__dirname` accordingly instead of assuming `process.cwd()`.
+- **`npm run compile:extension` does not build the tests** — it runs `esbuild.js`, which bundles the extension only. Tests are compiled by `npm run compile-tests` (`tsc -p .`), which `pretest` runs for you. Running `node ./out/test/runTest.js` after only `compile:extension` silently executes the *previous* build of your test file: it passes, the suite total doesn't move, and nothing reports that your new test never ran. Compile tests (or just use `npm test`) before trusting a green run.
 - Use repo-relative resolution only when the code under test truly depends on repository layout (for example compiled CLI paths or workspace-scoped config files).
 - Never hardcode absolute, OS-specific paths (e.g. `C:\dev\ctrlyoke\...`) in fixtures or assertions — the suite runs on Windows, macOS, and Linux. Use neutral relative forward-slash paths (`src/foo.ts`) or derive real paths via `os.tmpdir()`/`path.join`. Pure parser/string inputs that merely _represent_ CLI output and never touch the filesystem may stay realistic.
 

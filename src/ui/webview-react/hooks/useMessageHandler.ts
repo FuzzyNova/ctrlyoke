@@ -27,6 +27,8 @@ import {
   SESSION_KINDS,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  WORKFLOW_PROPERTY_KEYS,
+  type WorkflowPropertyKey,
   type ExecutionState,
   type StepStatus,
   type WorkflowSummary,
@@ -41,7 +43,11 @@ import type {
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import { WebviewLog } from "@utils/logger";
-import { isWorkflowActive, isWorkflowRunning } from "../utils/status";
+import {
+  isExecutionFinished,
+  isWorkflowActive,
+  isWorkflowRunning,
+} from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { useMcpManagerStore } from "../store/useMcpManagerStore";
@@ -165,25 +171,28 @@ export function captureAndSendThemeVars(
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
 }
 
+/**
+ * Compile-time guard that the shared key list and this store's property shape
+ * stay in step. A key in one and not the other is invisible at runtime: the
+ * value round-trips to disk but is dropped on the way back, so the panel quietly
+ * shows a global default for a property the workflow has actually saved.
+ */
+type AssertNoKeyDrift<T extends never> = T;
+export type WorkflowPropertyKeysAreComplete = AssertNoKeyDrift<
+  Exclude<keyof WorkflowProperties, WorkflowPropertyKey>
+>;
+export type WorkflowPropertyKeysAreReal = AssertNoKeyDrift<
+  Exclude<WorkflowPropertyKey, keyof WorkflowProperties>
+>;
+
 function normalizeWorkflowProperties(
   workflowProperties?: Partial<WorkflowProperties>
 ): WorkflowProperties {
-  return {
-    harness: workflowProperties?.harness,
-    model: workflowProperties?.model,
-    agent: workflowProperties?.agent,
-    skills: workflowProperties?.skills,
-    resumeSession: workflowProperties?.resumeSession,
-    sessionId: workflowProperties?.sessionId,
-    mcpServers: workflowProperties?.mcpServers,
-    hooks: workflowProperties?.hooks,
-    endCondition: workflowProperties?.endCondition,
-    preCondition: workflowProperties?.preCondition,
-    errorBehavior: workflowProperties?.errorBehavior,
-    priorContext: workflowProperties?.priorContext,
-    additionalArgs: workflowProperties?.additionalArgs,
-    toolPermissions: workflowProperties?.toolPermissions,
-  };
+  // Rebuilt from the shared key list rather than a literal, so a property added
+  // to the panel cannot be persisted by the extension yet silently dropped here.
+  return Object.fromEntries(
+    WORKFLOW_PROPERTY_KEYS.map((key) => [key, workflowProperties?.[key]])
+  ) as WorkflowProperties;
 }
 
 function applyWorkflowPropertiesFromMessage(message: {
@@ -276,6 +285,21 @@ function applyTerminalSetting(path: string, value: unknown): void {
     [key]: value,
   } as TerminalSettings;
   applyTerminalSettings(nextSettings);
+}
+
+/**
+ * Single funnel for live execution-state transitions.
+ *
+ * A terminal state also ends the run this client tracks as executing. Nothing
+ * else refreshes the addressed view at that moment, so the header would keep
+ * reading the executing run's stale "running" summary and stay on Pause/Stop
+ * instead of switching to Re-run the instant the workflow finishes.
+ */
+function applyExecutionState(state: ExecutionState): void {
+  useWorkflowStore.getState().setExecutionState(state);
+  if (isExecutionFinished(state)) {
+    useUiStore.getState().markExecutionRunFinished(state);
+  }
 }
 
 function isTerminalStepStatus(status: unknown): boolean {
@@ -881,8 +905,7 @@ function createMessageHandlers(): MessageHandlerMap {
         return;
       }
     }
-    const workflowStore = useWorkflowStore.getState();
-    workflowStore.setExecutionState(message.state as ExecutionState);
+    applyExecutionState(message.state as ExecutionState);
   };
 
   // --------------------------------------------------------------------------
@@ -988,7 +1011,7 @@ function createMessageHandlers(): MessageHandlerMap {
       workflowStore.setPrompts(completedSteps);
       useWorkflowStore.temporal.getState().resume();
     }
-    workflowStore.setExecutionState(EXECUTION_STATES.COMPLETED);
+    applyExecutionState(EXECUTION_STATES.COMPLETED);
   };
 
   handlers[MESSAGE_TYPES.NOTIFICATION_EVENT] = (message) => {
@@ -1949,7 +1972,7 @@ function createMessageHandlers(): MessageHandlerMap {
     };
     store.appendLiveEntry(entry);
 
-    store.setExecutionState(EXECUTION_STATES.STOPPED);
+    applyExecutionState(EXECUTION_STATES.STOPPED);
   };
 
   // --------------------------------------------------------------------------
@@ -2116,11 +2139,7 @@ function createMessageHandlers(): MessageHandlerMap {
       } else {
         uiStore.addLoadedWorkflow(summary);
       }
-    } else if (
-      summary.executionState === EXECUTION_STATES.COMPLETED ||
-      summary.executionState === EXECUTION_STATES.ERROR ||
-      summary.executionState === EXECUTION_STATES.STOPPED
-    ) {
+    } else if (isExecutionFinished(summary.executionState)) {
       // Workflow reached a terminal state — remove from the running section
       uiStore.removeLoadedWorkflow(summary.id);
     }
@@ -2133,7 +2152,7 @@ function createMessageHandlers(): MessageHandlerMap {
       const workflowStore = useWorkflowStore.getState();
       workflowStore.setCurrentStep(summary.currentStep);
       workflowStore.setTotalSteps(summary.totalSteps);
-      workflowStore.setExecutionState(summary.executionState);
+      applyExecutionState(summary.executionState);
     }
   };
 

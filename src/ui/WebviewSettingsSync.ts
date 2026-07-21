@@ -15,6 +15,7 @@ import {
   PANEL_CLIENT_ID,
   VSCODE_COMMANDS,
   PROMPT_PROPERTIES,
+  WORKFLOW_PROPERTY_KEYS,
   type HarnessId,
   type HarnessStatusString,
   type SettingWriteScope,
@@ -304,8 +305,16 @@ export class WebviewSettingsSync {
   }
 
   /**
-   * Read workflow properties from the working file and send to the settings panel.
-   * Pass clientId to read from the correct client's working file (browser vs panel).
+   * Read workflow properties from the viewed definition and send them to the
+   * settings panel.
+   *
+   * The file must come from the client's *view address*, not from its bound
+   * instance's queue state: `loadRunViewForClient` moves a client's address
+   * without rebinding an executor, so after a workflow switch the bound
+   * instance still points at the workflow the user just left. Reading that file
+   * here republished the previous workflow's values — or, when the client had
+   * no instance-owned working file at all, returned early and left the panel
+   * showing global defaults for a workflow that has saved properties on disk.
    */
   async sendWorkflowPropertiesToSettings(
     postMessage: PostMessageFn = this.postMessage,
@@ -317,30 +326,35 @@ export class WebviewSettingsSync {
     }
 
     try {
-      const workingFilePath =
-        orchestrator.getQueueState(clientId)?.workingFilePath;
-      if (!workingFilePath) {
+      // The instance path stays as a fallback for the moments the address is
+      // momentarily behind the file on disk — most visibly right after a draft
+      // is promoted, when the draft file the address still names is gone.
+      const candidates = [
+        orchestrator.getViewFilePath(clientId),
+        orchestrator.getQueueState(clientId)?.workingFilePath,
+      ].filter((path): path is string => Boolean(path));
+      if (candidates.length === 0) {
         return;
       }
 
-      const workingFile = await readJsonFile(workingFilePath);
+      let workingFile: Record<string, unknown> | undefined;
+      for (const candidate of candidates) {
+        try {
+          workingFile = await readJsonFile(candidate);
+          break;
+        } catch {
+          // Try the next candidate; the last failure rethrows below.
+        }
+      }
+      if (!workingFile) {
+        throw new Error(
+          `No readable working file for ${clientId} (tried ${candidates.join(", ")})`
+        );
+      }
 
-      const workflowProperties = {
-        harness: workingFile.harness,
-        model: workingFile.model,
-        agent: workingFile.agent,
-        skills: workingFile.skills,
-        resumeSession: workingFile.resumeSession,
-        sessionId: workingFile.sessionId,
-        mcpServers: workingFile.mcpServers,
-        hooks: workingFile.hooks,
-        endCondition: workingFile.endCondition,
-        preCondition: workingFile.preCondition,
-        errorBehavior: workingFile.errorBehavior,
-        priorContext: workingFile.priorContext,
-        additionalArgs: workingFile.additionalArgs,
-        toolPermissions: workingFile.toolPermissions,
-      };
+      const workflowProperties = Object.fromEntries(
+        WORKFLOW_PROPERTY_KEYS.map((key) => [key, workingFile[key]])
+      );
 
       this.emitMessage(
         {
@@ -494,18 +508,24 @@ export class WebviewSettingsSync {
       return;
     }
 
-    if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
-      await orchestrator.ensureEphemeralWorkingFile(
-        { initialProperties: properties },
-        clientId
-      );
-    }
+    // An addressed run mutation writes straight to that run's file and needs no
+    // instance-owned working file. Seeding one here would create a whole extra
+    // lineage for a client whose bound instance happens to be blank — while the
+    // property itself still lands on the addressed run.
+    if (mutation?.address.kind !== "run") {
+      if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
+        await orchestrator.ensureEphemeralWorkingFile(
+          { initialProperties: properties },
+          clientId
+        );
+      }
 
-    if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
-      Log.warn(
-        `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
-      );
-      return;
+      if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
+        Log.warn(
+          `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
+        );
+        return;
+      }
     }
 
     await orchestrator.updateWorkingFileProperties(

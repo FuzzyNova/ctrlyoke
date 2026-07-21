@@ -1669,7 +1669,7 @@ export class WorkflowOrchestrator {
       preferredViewAddress?: WorkflowViewAddress;
     }
   ): Promise<void> {
-    this.registerClient(clientId);
+    this.registerClient(clientId, send);
 
     // For the panel, suppress duplicate replays after the first one during startup.
     // Multiple READY messages arrive during startup (BootstrapApp → App.tsx →
@@ -1777,22 +1777,37 @@ export class WorkflowOrchestrator {
    * caller publishes this after a write so cheap mutation paths stay addressable
    * without paying for a full `RUN_VIEW_LOADED` snapshot.
    */
-  async getViewIdentity(
-    clientId: string
-  ): Promise<WorkflowViewIdentityMessage | null> {
+  /**
+   * The definition file a client is *viewing*, which is not always the file its
+   * bound instance owns: `loadRunViewForClient` moves the address without
+   * rebinding an executor, so anything that reads a client's current definition
+   * must resolve it from the address. Reading `getQueueState(clientId)` instead
+   * returns the previously bound workflow's file — or none at all.
+   */
+  getViewFilePath(clientId: string): string | null {
     const address = this.getViewAddress(clientId);
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!address || !workspaceRoot) {
       return null;
     }
-    const filePath =
-      address.kind === "draft"
-        ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
-        : WorkflowPaths.runFilePath(
-            workspaceRoot,
-            address.workflowKey,
-            address.runRef
-          );
+    return address.kind === "draft"
+      ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
+      : WorkflowPaths.runFilePath(
+          workspaceRoot,
+          address.workflowKey,
+          address.runRef
+        );
+  }
+
+  async getViewIdentity(
+    clientId: string
+  ): Promise<WorkflowViewIdentityMessage | null> {
+    const address = this.getViewAddress(clientId);
+    const filePath = this.getViewFilePath(clientId);
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!address || !filePath || !workspaceRoot) {
+      return null;
+    }
     try {
       const [content, descriptor] = await Promise.all([
         fs.promises.readFile(filePath, "utf8"),
@@ -3507,13 +3522,24 @@ export class WorkflowOrchestrator {
     return false;
   }
 
-  registerClient(clientId: string): void {
+  /**
+   * `send` registers this client's addressed-view channel. It must be supplied
+   * by every real connection: server-initiated view pushes (`syncExecutingRunViews`,
+   * `invalidateRunViews`) silently skip clients with no sink, and a client that
+   * never explicitly loaded a run view — the whole "new workflow → queue → run"
+   * path — would otherwise never be told its draft was promoted to a run, and
+   * would keep offering "Run draft" for a run that has already finished.
+   */
+  registerClient(clientId: string, send?: (message: unknown) => void): void {
     if (!this.viewerRegistry.has(clientId)) {
       this.viewerRegistry.set(clientId, null);
     }
     const viewAddresses = this.getViewAddressRegistry();
     if (!viewAddresses.has(clientId)) {
       viewAddresses.set(clientId, null);
+    }
+    if (send) {
+      this.getViewMessageSinks().set(clientId, send);
     }
   }
 

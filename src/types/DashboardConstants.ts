@@ -1133,6 +1133,34 @@ export const PROMPT_PROPERTIES = {
   ERROR_BEHAVIOR: "errorBehavior",
 } as const;
 
+/**
+ * Every workflow-level property the dashboard's properties panel owns.
+ *
+ * Both directions of the wire read from this list — the extension when it
+ * picks properties out of a working file, and the webview when it normalizes an
+ * incoming payload — because a key present in one list and missing from the
+ * other silently reverts to a global default the moment the user switches
+ * workflows and back.
+ */
+export const WORKFLOW_PROPERTY_KEYS = [
+  PROMPT_PROPERTIES.HARNESS,
+  PROMPT_PROPERTIES.MODEL,
+  PROMPT_PROPERTIES.AGENT,
+  PROMPT_PROPERTIES.SKILLS,
+  PROMPT_PROPERTIES.RESUME_SESSION,
+  PROMPT_PROPERTIES.SESSION_ID,
+  PROMPT_PROPERTIES.MCP_SERVERS,
+  PROMPT_PROPERTIES.HOOKS,
+  PROMPT_PROPERTIES.END_CONDITION,
+  PROMPT_PROPERTIES.PRE_CONDITION,
+  PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+  PROMPT_PROPERTIES.PRIOR_CONTEXT,
+  PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+  PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+] as const;
+
+export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];
+
 // End condition property names
 export const END_CONDITION_PROPERTIES = {
   SCRIPT: "script",

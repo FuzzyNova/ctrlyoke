@@ -89,7 +89,7 @@ describe("Header execution controls", () => {
     });
   });
 
-  it("shows Run, Resume, and Stop for a newly loaded draft", () => {
+  it("shows Run, Pause, and Stop for a newly loaded draft", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
@@ -103,7 +103,7 @@ describe("Header execution controls", () => {
     render(<Header />);
 
     expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Run" }));

@@ -21,8 +21,12 @@ import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeOrchestrator(workingFilePath: string | undefined) {
+function makeOrchestrator(
+  workingFilePath: string | undefined,
+  viewFilePath: string | null = null
+) {
   return {
+    getViewFilePath: (_clientId: string) => viewFilePath,
     getQueueState: (_clientId: string) => ({ workingFilePath }),
   } as any;
 }
@@ -554,6 +558,64 @@ suite("WebviewSettingsSync", () => {
         undefined,
         "errorBehavior should be undefined when not set in working file"
       );
+    });
+
+    /**
+     * Regression: `loadRunViewForClient` moves a client's view address without
+     * rebinding its executor, so the bound instance still points at the workflow
+     * the user just left. Reading the instance's file here republished the
+     * previous workflow's properties over the ones the panel had just received.
+     */
+    test("should read the client's viewed definition, not its bound instance's working file", async () => {
+      const viewedPath = tempFile("viewed");
+      const instancePath = tempFile("bound-instance");
+      await fs.writeFile(
+        viewedPath,
+        JSON.stringify({ harness: "codex-cli", model: "gpt-5.5" }),
+        "utf-8"
+      );
+      await fs.writeFile(
+        instancePath,
+        JSON.stringify({ harness: "claude-cli", model: "claude-opus-4" }),
+        "utf-8"
+      );
+
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeOrchestrator(instancePath, viewedPath)
+      );
+
+      await sync.sendWorkflowPropertiesToSettings(postMessage, "panel");
+
+      const props = messages.find(
+        (m) => m.type === MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE
+      )?.workflowProperties;
+      assert.strictEqual(props.harness, "codex-cli");
+      assert.strictEqual(props.model, "gpt-5.5");
+    });
+
+    test("should fall back to the bound instance when the addressed file is gone", async () => {
+      const instancePath = tempFile("fallback-instance");
+      await fs.writeFile(
+        instancePath,
+        JSON.stringify({ harness: "claude-cli" }),
+        "utf-8"
+      );
+
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      // A promoted draft's file is deleted; the address can name it briefly.
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeOrchestrator(instancePath, tempFile("deleted-draft"))
+      );
+
+      await sync.sendWorkflowPropertiesToSettings(postMessage, "panel");
+
+      const props = messages.find(
+        (m) => m.type === MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE
+      )?.workflowProperties;
+      assert.strictEqual(props.harness, "claude-cli");
     });
 
     test("should send no messages when orchestrator has no working file path", async () => {

@@ -213,6 +213,20 @@ export function isWorkflowActive(state: ExecutionState): boolean {
 }
 
 /**
+ * Check if a workflow run has finished for good.
+ * Returns true for COMPLETED, ERROR, or STOPPED — the states in which a run is
+ * no longer the lineage's executing run. IDLE is deliberately excluded: it is a
+ * transient load/clear state, not the end of an execution.
+ */
+export function isExecutionFinished(state: ExecutionState): boolean {
+  return (
+    state === EXECUTION_STATES.COMPLETED ||
+    state === EXECUTION_STATES.ERROR ||
+    state === EXECUTION_STATES.STOPPED
+  );
+}
+
+/**
  * Check if execution can be started
  */
 export function canStartExecution(state: ExecutionState): boolean {
@@ -378,7 +392,7 @@ export function getWorkflowExecutionControls({
   if (!hasFile || viewedKind === null) {
     return {
       slot1: disabled("Run", "codicon-debug-start", "Load a workflow to run"),
-      slot2: disabled("Resume", "codicon-debug-continue", "No resumable run"),
+      slot2: disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
       slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
       isRunning,
       isPausing,
@@ -428,7 +442,11 @@ export function getWorkflowExecutionControls({
           enabled: true,
           title: "Resume this run",
         }
-      : disabled("Resume", "codicon-debug-continue", "No resumable work"),
+      : // Slot 2 is the pause/resume slot. Resume is only offered when this run
+        // actually has interrupted work to resume; otherwise it falls back to a
+        // disabled Pause so an idle workflow reads as Run · Pause · Stop rather
+        // than advertising a continuation that does not exist.
+        disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
     slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
     isRunning,
     isPausing,

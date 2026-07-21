@@ -118,6 +118,40 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.strictEqual(internal.findExecutionRunRef(workflowKey), executingRun);
   });
 
+  test("registers the client's view sink so draft viewers follow their promoted run", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "demo" as never;
+    const runRef = "run-2026-07-20T10-30-00-000Z" as never;
+
+    internal.viewerRegistry = new Map();
+    internal.viewAddressRegistry = new Map();
+    internal.viewMessageSinks = new Map();
+
+    // A client that never explicitly loaded a run view still has to be
+    // reachable, otherwise it never learns its draft was promoted to a run.
+    const send = () => undefined;
+    orchestrator.registerClient("client-a", send);
+    internal.viewerRegistry.set("client-a", "instance-1");
+    internal.viewAddressRegistry.set("client-a", {
+      workflowKey,
+      kind: "draft",
+    });
+
+    const loaded: unknown[] = [];
+    internal.loadRunViewForClient = async (address: unknown) => {
+      loaded.push(address);
+    };
+    internal.syncExecutingRunViews({
+      id: "instance-1",
+      getQueueState: () => ({ workflowKey, runRef }),
+    });
+
+    assert.deepStrictEqual(loaded, [{ workflowKey, kind: "run", runRef }]);
+  });
+
   test("deleting a viewed run falls every affected client back deterministically", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-delete-multiclient-")
