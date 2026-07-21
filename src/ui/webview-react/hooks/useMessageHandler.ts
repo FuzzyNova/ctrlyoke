@@ -66,6 +66,7 @@ import {
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
+import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 
 // ============================================================================
 // Types
@@ -1784,16 +1785,41 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY] = (message) => {
     const { address, definitionRevision, descriptorRevision } = message;
     if (!address) return;
-    // A run view switch that is still in flight owns the address; letting this
-    // land first would re-point the client at the run it is navigating away from.
-    if (useUiStore.getState().pendingRunViewRequestId !== null) return;
-    useUiStore
-      .getState()
-      .setDisplayedViewIdentity(
-        address,
-        definitionRevision ?? 1,
-        descriptorRevision ?? 1
-      );
+    const ui = useUiStore.getState();
+    // A run view switch that is still in flight owns the address, so identity
+    // for a *different* address would re-point the client at the run it is
+    // navigating away from. Identity for the address being switched to is the
+    // answer to that switch, not a straggler — and gating on the address rather
+    // than on "any request pending" is what keeps a lost or rejected run-view
+    // response from suppressing every later revision update.
+    if (
+      ui.pendingRunViewRequestId !== null &&
+      ui.displayedViewAddress !== null &&
+      !areWorkflowAddressesEqual(address, ui.displayedViewAddress)
+    ) {
+      return;
+    }
+    ui.setDisplayedViewIdentity(
+      address,
+      definitionRevision ?? 1,
+      descriptorRevision ?? 1
+    );
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_ACTION_FAILED - addressed view/mutation/run action was rejected
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_ACTION_FAILED] = (message) => {
+    const uiStore = useUiStore.getState();
+    // Retire the request this failure answers; otherwise the client keeps
+    // waiting for a snapshot that will never arrive.
+    if (
+      message.requestId &&
+      uiStore.pendingRunViewRequestId === message.requestId
+    ) {
+      uiStore.clearPendingRunViewLoad();
+    }
+    uiStore.showToast(`Failed to ${message.action}: ${message.error}`, "error");
   };
 
   // --------------------------------------------------------------------------

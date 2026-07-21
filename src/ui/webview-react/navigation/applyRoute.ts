@@ -14,6 +14,7 @@
 import { MESSAGE_TYPES } from "@/types/messages";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import type { Route } from "./route";
 
 interface PostMessageApi {
@@ -21,21 +22,6 @@ interface PostMessageApi {
 }
 
 let applying = false;
-
-/** Compare two stable client view addresses. */
-function sameAddress(
-  a: import("@root/types/CtrlYokeTypes").WorkflowViewAddress | null | undefined,
-  b: import("@root/types/CtrlYokeTypes").WorkflowViewAddress | null | undefined
-): boolean {
-  return (
-    a === b ||
-    (!!a &&
-      !!b &&
-      a.workflowKey === b.workflowKey &&
-      a.kind === b.kind &&
-      (a.kind === "draft" || (b.kind === "run" && a.runRef === b.runRef)))
-  );
-}
 
 /** True while {@link applyRoute} is mutating stores; gates the nav recorder. */
 export function isApplyingRoute(): boolean {
@@ -57,7 +43,7 @@ function applyWorkflow(route: Route, vscode: PostMessageApi): void {
   if (!target) return;
 
   const ui = useUiStore.getState();
-  if (sameAddress(target, ui.displayedViewAddress)) return;
+  if (areWorkflowAddressesEqual(target, ui.displayedViewAddress)) return;
 
   // Optimistically record the address so a response for an older browser
   // history entry cannot overwrite this navigation while storage is loading.

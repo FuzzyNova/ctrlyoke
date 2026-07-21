@@ -20,7 +20,8 @@ import {
   TERMINAL_SESSION_STATUS,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
-import { areWorkflowAddressesEqual, RecentWorkflows } from "./RecentWorkflows";
+import { RecentWorkflows } from "./RecentWorkflows";
+import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";

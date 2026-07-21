@@ -958,6 +958,60 @@ describe("run view revision snapshots", () => {
     });
   });
 
+  it("still applies a write identity for the address a switch is loading", () => {
+    renderHook(() => useMessageHandler());
+    const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
+
+    act(() => {
+      // A run-view request whose response was lost or rejected must not
+      // suppress revisions for the address the client is actually displaying —
+      // that is what left Run and every property edit rejected as a conflict.
+      useUiStore.setState({
+        displayedViewAddress: address,
+        displayedDefinitionRevision: 3,
+        displayedDescriptorRevision: 4,
+        pendingRunViewRequestId: "run-view-lost",
+      });
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address,
+        definitionRevision: 4,
+        descriptorRevision: 5,
+      });
+    });
+
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(4);
+    expect(useUiStore.getState().displayedDescriptorRevision).toBe(5);
+  });
+
+  it("retires the run-view request a failure answers", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({ pendingRunViewRequestId: "run-view-7" });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, {
+        action: "load run",
+        error: "boom",
+        requestId: "run-view-7",
+      });
+    });
+
+    expect(useUiStore.getState().pendingRunViewRequestId).toBeNull();
+  });
+
+  it("keeps an unrelated run-view request pending on failure", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({ pendingRunViewRequestId: "run-view-8" });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, {
+        action: "run draft",
+        error: "Definition revision conflict",
+      });
+    });
+
+    expect(useUiStore.getState().pendingRunViewRequestId).toBe("run-view-8");
+  });
+
   it("stops addressing the previous workflow when a new one is selected", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({

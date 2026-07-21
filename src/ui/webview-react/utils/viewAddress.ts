@@ -1,0 +1,25 @@
+/**
+ * Stable client view-address comparison.
+ *
+ * A `WorkflowViewAddress` is the client's editing/viewing target, and several
+ * unrelated layers need to ask "is this message about the address I am looking
+ * at?" — the recent-workflows list, route application, and the message handler
+ * that decides whether an in-flight run-view switch owns the address. Keeping
+ * one implementation here prevents those copies from drifting apart.
+ */
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+
+export function areWorkflowAddressesEqual(
+  left: WorkflowViewAddress | null | undefined,
+  right: WorkflowViewAddress | null | undefined
+): boolean {
+  return (
+    !!left &&
+    !!right &&
+    left.workflowKey === right.workflowKey &&
+    left.kind === right.kind &&
+    (left.kind !== "run" ||
+      right.kind !== "run" ||
+      left.runRef === right.runRef)
+  );
+}

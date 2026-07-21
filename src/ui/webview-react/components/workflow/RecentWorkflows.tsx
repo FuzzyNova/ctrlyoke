@@ -10,6 +10,7 @@ import { VirtualizedDropdownList } from "../shared";
 import { HARNESS_INFO } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 
 interface RecentWorkflowsProps {
   workflows: RecentWorkflow[];
@@ -43,22 +44,6 @@ interface WorkflowRowProps {
   onSelect: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   onRemove?: (address: WorkflowViewAddress) => void;
-}
-
-/** Compare workflow paths across VS Code and hosted-client path formats. */
-export function areWorkflowAddressesEqual(
-  left: WorkflowViewAddress | null | undefined,
-  right: WorkflowViewAddress | null | undefined
-): boolean {
-  return (
-    !!left &&
-    !!right &&
-    left.workflowKey === right.workflowKey &&
-    left.kind === right.kind &&
-    (left.kind !== "run" ||
-      right.kind !== "run" ||
-      left.runRef === right.runRef)
-  );
 }
 
 const WorkflowRow: React.FC<WorkflowRowProps> = ({

@@ -368,6 +368,64 @@ describe("setDisplayedRunView", () => {
   });
 });
 
+describe("requestRunViewLoad", () => {
+  const summary = {
+    workflowKey: "wf-1" as never,
+    runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    runId: 4,
+    startedAt: 1000,
+    executionState: "running" as never,
+    stepCount: 2,
+    definitionRevision: 3,
+    hasMixedHarnesses: false,
+    hasMixedModels: false,
+  };
+
+  it("carries summaries and the executing run across runs of the same lineage", () => {
+    store().setDisplayedRunView(
+      { workflowKey: "wf-1" as never, kind: "run", runRef: summary.runRef },
+      [summary],
+      summary.runRef
+    );
+
+    store().requestRunViewLoad(
+      {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-2026-07-19T10-30-00-000Z" as never,
+      },
+      [summary],
+      summary.runRef
+    );
+
+    expect(store().runSummaries).toEqual([summary]);
+    expect(store().executionRunRef).toBe(summary.runRef);
+  });
+
+  it("drops the previous lineage's summaries and executing run on a workflow switch", () => {
+    store().setDisplayedRunView(
+      { workflowKey: "wf-1" as never, kind: "run", runRef: summary.runRef },
+      [summary],
+      summary.runRef
+    );
+
+    store().requestRunViewLoad(
+      {
+        workflowKey: "wf-2" as never,
+        kind: "run",
+        runRef: "run-2026-07-21T10-30-00-000Z" as never,
+      },
+      [summary],
+      summary.runRef
+    );
+
+    // Keeping them would build a header address out of wf-2 plus wf-1's run,
+    // which is what made Stop target a foreign run and do nothing.
+    expect(store().runSummaries).toEqual([]);
+    expect(store().executionRunRef).toBeNull();
+  });
+});
+
 describe("clearHistoryView", () => {
   it("exits history mode and resets to run 0", () => {
     store().setHistoryView(2, 5);

@@ -1095,7 +1095,18 @@ export const useUiStore = create<UiState & UiActions>()(
       requestRunViewLoad: (address, summaries, executionRunRef) => {
         runViewRequestSequence += 1;
         const requestId = `run-view-${Date.now()}-${runViewRequestSequence}`;
-        get().setDisplayedRunView(address, summaries, executionRunRef);
+        // Optimistic carry-over is only meaningful inside one lineage. Carrying
+        // the previous workflow's summaries and executionRunRef across a
+        // workflow switch built a header address out of the new workflowKey and
+        // the old run — so Stop targeted a run that lineage does not own and
+        // silently did nothing.
+        const sameLineage =
+          get().displayedViewAddress?.workflowKey === address.workflowKey;
+        get().setDisplayedRunView(
+          address,
+          sameLineage ? summaries : [],
+          sameLineage ? executionRunRef : undefined
+        );
         set({ pendingRunViewRequestId: requestId });
         return requestId;
       },

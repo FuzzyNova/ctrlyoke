@@ -128,6 +128,16 @@ function sameWorkingFilePath(
  * the lineage has never executed, otherwise the run it holds open. `null` until
  * the instance has a lineage at all (a blank, never-edited new workflow).
  */
+/** Structural equality for two stable client view addresses. */
+function sameViewAddress(
+  a: WorkflowViewAddress | null | undefined,
+  b: WorkflowViewAddress | null | undefined
+): boolean {
+  if (!a || !b) return false;
+  if (a.workflowKey !== b.workflowKey || a.kind !== b.kind) return false;
+  return a.kind !== "run" || (b.kind === "run" && a.runRef === b.runRef);
+}
+
 function lineageAddressOf(
   state: QueueState | undefined
 ): WorkflowViewAddress | null {
@@ -188,6 +198,8 @@ export class WorkflowOrchestrator {
     string,
     (message: unknown) => void
   >();
+  /** Clients mid-rebind, so the replay's own run-view load cannot re-enter. */
+  private readonly lineageBindingClients = new Set<string>();
 
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
@@ -1790,6 +1802,14 @@ export class WorkflowOrchestrator {
     if (!address || !workspaceRoot) {
       return null;
     }
+    return this.resolveAddressFilePath(workspaceRoot, address);
+  }
+
+  /** The definition file an address names. Sole place layout is applied. */
+  private resolveAddressFilePath(
+    workspaceRoot: string,
+    address: WorkflowViewAddress
+  ): string {
     return address.kind === "draft"
       ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
       : WorkflowPaths.runFilePath(
@@ -1831,6 +1851,30 @@ export class WorkflowOrchestrator {
     }
   }
 
+  /**
+   * Publishes one client's authoritative identity to **every** client viewing
+   * the same address, not just the client whose action produced the write.
+   *
+   * `definitionRevision` is per-address optimistic-concurrency state, so a
+   * write made by client A supersedes the revision every other viewer of that
+   * address is holding. Publishing only to the actor left those viewers armed
+   * with a stale revision, and their next edit — or their next Run — was
+   * rejected as a conflict with no way to recover short of reloading the view.
+   */
+  async publishViewIdentityToViewers(
+    clientId: string
+  ): Promise<WorkflowViewIdentityMessage | null> {
+    const identity = await this.getViewIdentity(clientId);
+    if (!identity) return null;
+    for (const [otherId, send] of this.getViewMessageSinks()) {
+      if (otherId === clientId) continue;
+      if (sameViewAddress(this.getViewAddress(otherId), identity.address)) {
+        send(identity);
+      }
+    }
+    return identity;
+  }
+
   /** Defensive for lightweight unit-test instances created without constructors. */
   private getViewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
     const initialized = this.viewAddressRegistry;
@@ -1852,11 +1896,87 @@ export class WorkflowOrchestrator {
     return (partial.viewMessageSinks ??= new Map());
   }
 
+  /** Defensive for lightweight unit-test instances created without constructors. */
+  private getLineageBindingClients(): Set<string> {
+    const initialized = this.lineageBindingClients;
+    if (initialized) return initialized;
+    const partial = this as unknown as { lineageBindingClients?: Set<string> };
+    return (partial.lineageBindingClients ??= new Set());
+  }
+
+  /**
+   * Instances are lineage-scoped: at most one is resident per `workflowKey`,
+   * so viewing *any* run of a lineage binds to that one instance. Live wins
+   * over retired, since a retired duplicate can briefly linger while the same
+   * lineage is re-executing.
+   */
+  private findInstanceForLineage(
+    workflowKey: WorkflowKey
+  ): WorkflowInstance | undefined {
+    const matches = (instance: WorkflowInstance) =>
+      instance.getQueueState().workflowKey === workflowKey;
+    return (
+      [...this.instances.values()].find(matches) ??
+      [...this.retiredInstances.values()].find(matches)
+    );
+  }
+
+  /**
+   * Moving a client's view address is not a read-only act. Everything
+   * instance-scoped — the terminal pane's `workflowId`, live-message
+   * filtering, prompt-editor execution, and every edit that still falls
+   * through to `getInstanceForClient` — resolves through the client's *bound
+   * instance*, not its address. Leaving that binding on the previously viewed
+   * lineage is what made a switched-to workflow keep showing the old
+   * workflow's terminals and then run the old workflow's steps and settings.
+   *
+   * Binding is lineage-scoped, never run-scoped: viewing an older run of a
+   * lineage adopts the same instance that owns its executing run, so this can
+   * neither fork a second instance for one lineage nor redirect an executor to
+   * a different run. Only a lineage with no resident instance at all
+   * materializes a fresh one.
+   */
+  private async bindClientToAddressedLineage(
+    address: WorkflowViewAddress,
+    send: (message: unknown) => void,
+    clientId: string
+  ): Promise<void> {
+    const binding = this.getLineageBindingClients();
+    // replayWorkflowStateTo finishes by loading its own run view, re-entering
+    // here. Without this guard a definition that carries no workflowKey could
+    // never satisfy the match below and would recurse indefinitely.
+    if (binding.has(clientId)) return;
+
+    const boundId = this.getViewedWorkflowId(clientId);
+    const bound = boundId ? this.findInstance(boundId) : undefined;
+    if (bound?.getQueueState().workflowKey === address.workflowKey) return;
+
+    binding.add(clientId);
+    try {
+      // A CLI-managed lineage is registered under its workflowKey, not a UUID.
+      const resident = this.cliSessions.has(address.workflowKey)
+        ? address.workflowKey
+        : this.findInstanceForLineage(address.workflowKey)?.id;
+      if (resident) {
+        await this.replayWorkflowStateTo(resident, send, clientId);
+        return;
+      }
+      await this.loadFreshInstanceAndReplay(
+        this.resolveAddressFilePath(this.requireWorkspaceRoot(), address),
+        clientId,
+        send
+      );
+    } finally {
+      binding.delete(clientId);
+    }
+  }
+
   /**
    * Loads one addressed definition and its matching timeline as a single
-   * client-local snapshot. It never calls loadWorkingFile(), so a client
-   * browsing an older run cannot change the queue, watcher, lock, or harness
-   * environment of an execution in this lineage.
+   * client-local snapshot. It never calls loadWorkingFile() on an instance
+   * owned by another run, so a client browsing an older run cannot change the
+   * queue, watcher, lock, or harness environment of an execution in this
+   * lineage.
    */
   async loadRunViewForClient(
     address: WorkflowViewAddress,
@@ -1869,14 +1989,9 @@ export class WorkflowOrchestrator {
       throw new Error("No workspace folder is open");
     }
 
-    const filePath =
-      address.kind === "draft"
-        ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
-        : WorkflowPaths.runFilePath(
-            workspaceRoot,
-            address.workflowKey,
-            address.runRef
-          );
+    await this.bindClientToAddressedLineage(address, send, clientId);
+
+    const filePath = this.resolveAddressFilePath(workspaceRoot, address);
     const content = await fs.promises.readFile(filePath, "utf-8");
     const workingFile = JSON.parse(content) as WorkingFile;
     const historyManager = new OutputHistoryManager(workspaceRoot);

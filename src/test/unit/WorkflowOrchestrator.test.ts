@@ -37,6 +37,46 @@ function createOrchestratorHarness() {
   };
 }
 
+/**
+ * A client already bound to instance "instance-bound" of lineage "bound",
+ * with the replay and fresh-instance seams recorded instead of executed.
+ */
+function createLineageBindingHarness() {
+  const orchestrator = Object.create(
+    WorkflowOrchestrator.prototype
+  ) as WorkflowOrchestrator;
+  const internal = orchestrator as any;
+  const boundKey = "bound" as never;
+
+  internal.currentWorkspaceFolder = { uri: { fsPath: path.join("/", "ws") } };
+  internal.instances = new Map<string, unknown>([
+    [
+      "instance-bound",
+      {
+        id: "instance-bound",
+        getQueueState: () => ({ workflowKey: boundKey }),
+      },
+    ],
+  ]);
+  internal.retiredInstances = new Map<string, unknown>();
+  internal.cliSessions = new Map<string, unknown>();
+  internal.viewerRegistry = new Map([["client-a", "instance-bound"]]);
+  internal.viewAddressRegistry = new Map();
+  internal.viewMessageSinks = new Map();
+  internal.lineageBindingClients = new Set<string>();
+
+  const replays: string[] = [];
+  const freshLoads: string[] = [];
+  internal.replayWorkflowStateTo = async (workflowId: string) => {
+    replays.push(workflowId);
+  };
+  internal.loadFreshInstanceAndReplay = async (filePath: string) => {
+    freshLoads.push(filePath);
+  };
+
+  return { orchestrator, internal, boundKey, replays, freshLoads };
+}
+
 suite("WorkflowOrchestrator startup auto-load gating", () => {
   test("triggers startup auto-load immediately when dashboard becomes ready after init", async () => {
     const { orchestrator, internal, getAutoLoadCalls } =
@@ -150,6 +190,114 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
 
     assert.deepStrictEqual(loaded, [{ workflowKey, kind: "run", runRef }]);
+  });
+
+  test("binds a switching client to the addressed lineage's resident instance", async () => {
+    const { internal, replays } = createLineageBindingHarness();
+    const other = "other" as never;
+
+    internal.instances.set("instance-other", {
+      id: "instance-other",
+      getQueueState: () => ({ workflowKey: other }),
+    });
+
+    await internal.bindClientToAddressedLineage(
+      { workflowKey: other, kind: "draft" },
+      () => undefined,
+      "client-a"
+    );
+
+    // Without this the client keeps editing/running/terminalling the workflow
+    // it was bound to before the switch.
+    assert.deepStrictEqual(replays, ["instance-other"]);
+  });
+
+  test("leaves the binding alone when the address is another run of the same lineage", async () => {
+    const { internal, replays } = createLineageBindingHarness();
+
+    await internal.bindClientToAddressedLineage(
+      {
+        workflowKey: "bound" as never,
+        kind: "run",
+        runRef: "run-2026-07-19T10-30-00-000Z" as never,
+      },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.deepStrictEqual(replays, []);
+  });
+
+  test("prefers a live instance over a retired duplicate of the same lineage", async () => {
+    const { internal, replays } = createLineageBindingHarness();
+    const other = "other" as never;
+
+    internal.retiredInstances.set("instance-retired", {
+      id: "instance-retired",
+      getQueueState: () => ({ workflowKey: other }),
+    });
+    internal.instances.set("instance-live", {
+      id: "instance-live",
+      getQueueState: () => ({ workflowKey: other }),
+    });
+
+    await internal.bindClientToAddressedLineage(
+      { workflowKey: other, kind: "draft" },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.deepStrictEqual(replays, ["instance-live"]);
+  });
+
+  test("materializes an addressed instance only when the lineage has none resident", async () => {
+    const { internal, freshLoads } = createLineageBindingHarness();
+    const other = "other" as never;
+    const runRef = "run-2026-07-21T10-30-00-000Z" as never;
+
+    await internal.bindClientToAddressedLineage(
+      { workflowKey: other, kind: "run", runRef },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.strictEqual(freshLoads.length, 1);
+    assert.ok(
+      freshLoads[0].endsWith(
+        path.join(other, runRef, "workflow.ctrlyoke.json")
+      ),
+      `unexpected addressed file path: ${freshLoads[0]}`
+    );
+  });
+
+  test("does not re-enter while the replay loads its own run view", async () => {
+    const { internal, replays } = createLineageBindingHarness();
+    const other = "other" as never;
+    const address = { workflowKey: other, kind: "draft" as const };
+
+    internal.instances.set("instance-other", {
+      id: "instance-other",
+      getQueueState: () => ({ workflowKey: other }),
+    });
+    // replayWorkflowStateTo finishes by loading a run view, which re-enters the
+    // binder. A definition with no workflowKey would otherwise never satisfy
+    // the already-bound check and would recurse forever.
+    internal.replayWorkflowStateTo = async (workflowId: string) => {
+      replays.push(workflowId);
+      await internal.bindClientToAddressedLineage(
+        address,
+        () => undefined,
+        "client-a"
+      );
+    };
+
+    await internal.bindClientToAddressedLineage(
+      address,
+      () => undefined,
+      "client-a"
+    );
+
+    assert.deepStrictEqual(replays, ["instance-other"]);
   });
 
   test("deleting a viewed run falls every affected client back deterministically", async () => {
@@ -1362,6 +1510,48 @@ suite("WorkflowOrchestrator client view addressing", () => {
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
+  });
+
+  test("hands the revisions a write produced to every viewer of that address", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const identity = {
+      type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
+      address: { workflowKey: "wf-1", kind: "draft" },
+      definitionRevision: 4,
+      descriptorRevision: 2,
+    };
+    internal.getViewIdentity = async () => identity;
+    internal.viewAddressRegistry = new Map([
+      ["writer", { workflowKey: "wf-1", kind: "draft" }],
+      ["same-address", { workflowKey: "wf-1", kind: "draft" }],
+      ["other-workflow", { workflowKey: "wf-2", kind: "draft" }],
+      ["other-run", { workflowKey: "wf-1", kind: "run", runRef: "run-1" }],
+    ]);
+    const received: Record<string, unknown[]> = {
+      writer: [],
+      "same-address": [],
+      "other-workflow": [],
+      "other-run": [],
+    };
+    internal.viewMessageSinks = new Map(
+      Object.keys(received).map((clientId) => [
+        clientId,
+        (message: unknown) => received[clientId].push(message),
+      ])
+    );
+
+    const published = await orchestrator.publishViewIdentityToViewers("writer");
+
+    assert.strictEqual(published, identity);
+    assert.deepStrictEqual(received["same-address"], [identity]);
+    // The acting client is served by its own scoped channel, and clients on a
+    // different address keep the revisions their own address published.
+    assert.deepStrictEqual(received["writer"], []);
+    assert.deepStrictEqual(received["other-workflow"], []);
+    assert.deepStrictEqual(received["other-run"], []);
   });
 
   test("has no identity to publish before a client's workflow has a lineage", async () => {

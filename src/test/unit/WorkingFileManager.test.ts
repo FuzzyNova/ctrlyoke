@@ -379,6 +379,62 @@ suite("WorkingFileManager", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  suite("promoteToNewRun", () => {
+    let tmpWorkspace: string;
+
+    afterEach(async () => {
+      if (tmpWorkspace) {
+        await fs
+          .rm(tmpWorkspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    test("carries the draft's workflow settings into the first run", async () => {
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
+      tempPaths.push(tmpWorkspace);
+
+      const creator = new WorkingFileManager(makeMockAccess());
+      const { workflowKey, workingFilePath } = await creator.createWorkingFile(
+        "settings-workflow",
+        [],
+        tmpWorkspace,
+        "Settings Workflow"
+      );
+      // Workflow-level settings live only in the definition file; the queue
+      // knows nothing about them, so promotion must merge the head it is
+      // bound to rather than rebuilding the file from queue state alone.
+      const draftAccess = makeMockAccess(workingFilePath);
+      const draftManager = new WorkingFileManager(draftAccess);
+      await draftManager.updateWorkingFileProperties({
+        harness: "claude-cli",
+        model: "claude-opus-4-8",
+        finalStep: { prompt: "wrap up" },
+      });
+
+      const steps = [{ prompt: "only step" }] as WorkingFile["steps"];
+      const promotingAccess = makeMockAccess(workingFilePath);
+      promotingAccess.getSteps = () => steps ?? [];
+      const promoted = await new WorkingFileManager(
+        promotingAccess
+      ).promoteToNewRun(tmpWorkspace, workflowKey as any, Date.now());
+
+      const run = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(run.harness, "claude-cli");
+      assert.strictEqual(run.model, "claude-opus-4-8");
+      assert.deepStrictEqual(run.finalStep, { prompt: "wrap up" });
+      // Queue state still wins for topology and the new run's own revision.
+      assert.deepStrictEqual(
+        run.steps?.map((step) => (step as { prompt?: string }).prompt),
+        ["only step"]
+      );
+      assert.strictEqual(run.definitionRevision, 1);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   suite("seedNewRun", () => {
     let tmpWorkspace: string;
 

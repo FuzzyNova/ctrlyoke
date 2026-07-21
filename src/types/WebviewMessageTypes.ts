@@ -1151,6 +1151,26 @@ export interface WorkflowViewIdentityMessage {
   descriptorRevision: number;
 }
 
+/**
+ * An addressed view load, definition mutation, or run action was rejected.
+ *
+ * Failures used to be reported only through `vscode.window.showErrorMessage`,
+ * which a hosted browser client never sees — a rejected Run looked like a dead
+ * button. Worse, a rejected `LOAD_RUN_VIEW` left that client's in-flight
+ * run-view request pending forever, and a pending request suppresses both
+ * `RUN_VIEW_LOADED` replays and `WORKFLOW_VIEW_IDENTITY`, so the client stayed
+ * wedged on a superseded `definitionRevision`. Carrying `requestId` back lets
+ * the client retire the request it actually issued.
+ */
+export interface WorkflowActionFailedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_ACTION_FAILED;
+  /** Human-readable action name, e.g. "run draft" or "load run". */
+  action: string;
+  error: string;
+  /** Present when the failed action was a client-issued run-view request. */
+  requestId?: string;
+}
+
 /** Stable target and optimistic revisions required for a definition mutation. */
 export interface WorkflowDefinitionMutation {
   address: WorkflowViewAddress;

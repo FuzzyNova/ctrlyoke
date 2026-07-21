@@ -114,4 +114,77 @@ describe("Header execution controls", () => {
       expectedDescriptorRevision: 7,
     });
   });
+
+  // Below xs there is no room for greyed-out affordances, so a disabled slot is
+  // hidden rather than dimmed. The slots stay in the DOM (they are only display-
+  // toggled by breakpoint), so assert the classes rather than presence.
+  it("hides disabled execution slots and their orphaned dividers below xs", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-b" as never,
+        kind: "draft",
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+
+    render(<Header />);
+
+    const controls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    // Run is enabled for a draft — visible at every width.
+    expect(screen.getByRole("button", { name: "Run" }).className).toContain(
+      "flex bg-btn-bg"
+    );
+    for (const label of ["Pause", "Stop"]) {
+      expect(screen.getByRole("button", { name: label }).className).toContain(
+        "hidden xs:flex"
+      );
+    }
+    // Neither divider separates two visible slots here.
+    const dividers = controls.querySelectorAll(".fp-button-group-divider");
+    expect(dividers).toHaveLength(2);
+    for (const divider of dividers) {
+      expect(divider.className).toContain("hidden xs:block");
+    }
+  });
+
+  it("keeps a divider visible when both of the slots it separates are", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: runRef,
+      pendingRewind: null,
+      runSummaries: [
+        {
+          workflowKey: "workflow-a" as never,
+          runRef,
+          runId: 4,
+          startedAt: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+          stepCount: 2,
+          definitionRevision: 3,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+
+    render(<Header />);
+
+    // Pause and Stop are both live while running, so the divider between them
+    // must not be hidden.
+    expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+    const dividers = screen
+      .getByRole("group", { name: "Workflow execution controls" })
+      .querySelectorAll(".fp-button-group-divider");
+    expect(dividers[1].className).not.toContain("hidden");
+  });
 });

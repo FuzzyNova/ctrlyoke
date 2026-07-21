@@ -309,6 +309,17 @@ export const Header: React.FC<{
     </div>
   );
 
+  // Below xs (380px) the row-1 grid has no room for greyed-out affordances, so
+  // a disabled execution slot is hidden outright rather than shown at
+  // opacity-50 — and a divider only earns its pixel when both of the slots it
+  // separates are actually visible.
+  const slot1Visible = slot1.enabled && !isCLIManaged;
+  const slot2Visible = slot2.enabled && !isCLIManaged;
+  const slot3Visible = slot3.enabled || isCLIManaged;
+  const HIDDEN_UNTIL_XS = "hidden xs:flex";
+  const dividerClass = (bothVisible: boolean) =>
+    `fp-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
+
   const runControls = (
     <div className="header-run-controls flex items-center flex-shrink-0">
       <div
@@ -320,9 +331,9 @@ export const Header: React.FC<{
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
             slot1.emphasized ? "font-bold" : ""
           } ${
-            slot1.enabled && !isCLIManaged
+            slot1Visible
               ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
-              : "flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot1.action)}
           disabled={!slot1.enabled || isCLIManaged}
@@ -334,13 +345,13 @@ export const Header: React.FC<{
           <i className={`codicon ${slot1.icon} ${btnSize.icon}`} />
         </button>
 
-        <div className="fp-button-group-divider" />
+        <div className={dividerClass(slot1Visible && slot2Visible)} />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            slot2.enabled && !isCLIManaged
+            slot2Visible
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              : "flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
           disabled={!slot2.enabled || isCLIManaged}
@@ -354,13 +365,13 @@ export const Header: React.FC<{
           />
         </button>
 
-        <div className="fp-button-group-divider" />
+        <div className={dividerClass(slot2Visible && slot3Visible)} />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            slot3.enabled || isCLIManaged
+            slot3Visible
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              : "flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={
             isCLIManaged

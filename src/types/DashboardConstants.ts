@@ -171,6 +171,7 @@ export const MESSAGE_TYPES = {
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
   RUN_VIEW_LOADED: "runViewLoaded", // Extension -> Webview: Atomic definition/settings/output snapshot for a view address
   WORKFLOW_VIEW_IDENTITY: "workflowViewIdentity", // Extension -> Webview: Authoritative address + revisions after a definition write
+  WORKFLOW_ACTION_FAILED: "workflowActionFailed", // Extension -> Webview: { action, error, requestId? } an addressed view/mutation/run action was rejected
 
   // Save Workflow - Webview <-> Extension
   SAVE_WORKFLOW_REQUEST: "saveWorkflowRequest", // Webview -> Extension: Request default save path/format

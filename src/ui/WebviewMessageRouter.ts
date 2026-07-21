@@ -209,6 +209,15 @@ export class WebviewMessageRouter {
     } catch (error) {
       const errorMsg = getErrorMessage(error);
       Log.error(`Error handling webview message (${message.type}):`, errorMsg);
+      // An addressed mutation that throws here never reached its success path,
+      // so the client was never handed the revisions its next mutation needs.
+      // Left alone, one rejection wedges every later edit on that address.
+      if (
+        message?.mutation ||
+        message?.expectedDefinitionRevision !== undefined
+      ) {
+        await this.reportActionFailure(message.type, error);
+      }
     }
   }
 
@@ -985,10 +994,10 @@ export class WebviewMessageRouter {
           message.requestId
         );
       } catch (error) {
-        this.emitMessage({
-          type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
-          error: `Failed to load run: ${getErrorMessage(error)}`,
-        });
+        // The requestId must come back: the client suppresses run-view
+        // snapshots and view-identity updates while its own request is in
+        // flight, so a silent failure would freeze its revisions permanently.
+        await this.reportActionFailure("load run", error, message.requestId);
       }
     });
 
@@ -1948,12 +1957,36 @@ export class WebviewMessageRouter {
    * as a conflict.
    */
   private async publishViewIdentity(): Promise<void> {
-    const identity = await this.getOrchestrator()?.getViewIdentity(
+    const identity = await this.getOrchestrator()?.publishViewIdentityToViewers(
       this.clientId
     );
     if (identity) {
       this.scopedPostMessage(identity);
     }
+  }
+
+  /**
+   * Reports a rejected addressed action to the client *and* re-publishes the
+   * authoritative revisions.
+   *
+   * A conflict is nearly always the client holding a superseded
+   * `definitionRevision`, and until this ran the rejection was terminal: the
+   * stale revision stayed in the store, so every following edit and every Run
+   * press was rejected the same way and the header looked like a dead button.
+   * Re-publishing turns a wedge into a single failed attempt.
+   */
+  private async reportActionFailure(
+    action: string,
+    error: unknown,
+    requestId?: string
+  ): Promise<void> {
+    this.emitMessage({
+      type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+      action,
+      error: getErrorMessage(error),
+      ...(requestId ? { requestId } : {}),
+    });
+    await this.publishViewIdentity();
   }
 
   private async handleExecuteDraft(
@@ -2068,6 +2101,9 @@ export class WebviewMessageRouter {
     void vscode.window.showErrorMessage(
       `Failed to ${action}: ${getErrorMessage(error)}`
     );
+    // A hosted browser client never sees the VS Code notification, so without
+    // this the rejected run action is indistinguishable from a dead button.
+    void this.reportActionFailure(action, error);
   }
 
   private async handleSetStartPosition(

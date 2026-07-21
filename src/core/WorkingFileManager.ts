@@ -375,6 +375,24 @@ export class WorkingFileManager {
   }
 
   /**
+   * The lineage definition the queue is currently bound to, read from disk.
+   * Workflow-level properties live only in that file — the queue exposes step
+   * topology and runtime, not settings — so any code that rewrites a
+   * definition from queue state must merge this first.
+   */
+  private async readCurrentDefinitionHead(): Promise<WorkingFile | undefined> {
+    const currentPath = this.queueAccess.getWorkingFilePath();
+    if (!currentPath) return undefined;
+    try {
+      return await readWorkingFileFromDisk(currentPath);
+    } catch {
+      // A missing/unreadable head is not fatal: promotion still produces a
+      // valid run from queue state, exactly as it did before.
+      return undefined;
+    }
+  }
+
+  /**
    * Promotes the lineage's current definition (the draft, or the previous run if one
    * already exists) into a freshly allocated run, using the queue's CURRENT in-memory
    * state as the new run's starting definition/runtime. This is the moment a "fresh
@@ -404,13 +422,23 @@ export class WorkingFileManager {
       workflowKey
     );
 
+    // The lineage's current head carries everything that is *not* queue state:
+    // harness/model/agent/skills/mcpServers/hooks/conditions/permissions and
+    // `finalStep`. Building the run file from queue state alone silently
+    // dropped all of it, so a workflow's first execution ran with global
+    // defaults and every later view of that run showed no saved settings.
+    // Mirrors `seedNewRun`, which already carries its source forward.
+    const head = await this.readCurrentDefinitionHead();
     const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
     const workingFile: WorkingFile = {
+      ...head,
       ...(descriptor.originalFile
         ? { originalFile: descriptor.originalFile }
         : {}),
       workflowName:
-        this.queueAccess.getWorkflowName() ?? descriptor.workflowName,
+        this.queueAccess.getWorkflowName() ??
+        head?.workflowName ??
+        descriptor.workflowName,
       startedAt,
       lastModifiedAt: startedAt,
       isFavorite: descriptor.isFavorite,
