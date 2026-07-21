@@ -332,9 +332,10 @@ export abstract class HarnessIntegration {
   /**
    * Clean up workflow-scoped artifacts created during execution (e.g. MCP config files).
    *
-   * Called from the finally block in WorkflowInstance.startWorkflowExecution after
-   * each workflow run completes. Default is a no-op; CliIntegration overrides this
-   * to delegate to the provider's cleanupMcpConfig.
+   * Called from WorkflowInstance when the integration is actually retired. A
+   * reusable PTY may outlive a completed execution, so its hooks/MCP artifacts
+   * stay registered until that PTY exits or is explicitly replaced. Default is
+   * a no-op; CliIntegration delegates to provider-owned artifact cleanup.
    *
    * @param workingFilePath The working file path for this workflow run
    * @param workspaceRoot Workspace root directory

@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Header } from "@components/layout/Header";
 import { useUiStore } from "@store/uiStore";
@@ -186,5 +192,43 @@ describe("Header execution controls", () => {
       .getByRole("group", { name: "Workflow execution controls" })
       .querySelectorAll(".fp-button-group-divider");
     expect(dividers[1].className).not.toContain("hidden");
+  });
+
+  it("targets the active workflow run when an append continuation has not refreshed executionRunRef yet", () => {
+    useUiStore.setState({
+      activeWorkflowId: "workflow-instance",
+      executionRunRef: null,
+      pendingRewind: null,
+      loadedWorkflows: [
+        {
+          id: "workflow-instance",
+          workflowKey: "workflow-a" as never,
+          runRef,
+          workflowName: "Run view",
+          filePath: "workflow.ctrlyoke.json",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+
+    render(<Header />);
+
+    const executionControls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    fireEvent.click(
+      within(executionControls).getByRole("button", { name: "Stop" })
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.STOP_RUN,
+      address: {
+        workflowKey: "workflow-a",
+        kind: "run",
+        runRef,
+      },
+    });
   });
 });

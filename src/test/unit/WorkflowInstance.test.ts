@@ -1542,6 +1542,77 @@ suite("WorkflowInstance append-and-continue", () => {
   });
 });
 
+suite("WorkflowInstance retained integration artifacts", () => {
+  test("keeps completion hooks until a reusable PTY integration actually exits", async () => {
+    class RetainedIntegration extends MockHarnessIntegration {
+      cleanupCalls = 0;
+      disposeCalls = 0;
+      private ptyEndedCallback: (() => void) | undefined;
+
+      override canReuseForInject(): boolean {
+        return true;
+      }
+
+      override async cleanupWorkflowArtifacts(): Promise<void> {
+        this.cleanupCalls += 1;
+      }
+
+      override onPtySessionEnded(callback: () => void): void {
+        this.ptyEndedCallback = callback;
+      }
+
+      override dispose(): void {
+        this.disposeCalls += 1;
+        super.dispose();
+      }
+
+      firePtyEnded(): void {
+        this.ptyEndedCallback?.();
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const integration = new RetainedIntegration(undefined, false);
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      integration
+    );
+    (instance as any).workflowExecutor.execute = async () => {};
+
+    await (instance as any).startWorkflowExecution(
+      integration,
+      "",
+      "workflow.ctrlyoke.json"
+    );
+
+    assert.strictEqual(
+      integration.cleanupCalls,
+      0,
+      "completion hooks must remain installed while the integration can receive another injected prompt"
+    );
+    assert.strictEqual(integration.disposeCalls, 0);
+
+    integration.firePtyEnded();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(
+      integration.cleanupCalls,
+      1,
+      "provider artifacts should be cleaned once the retained PTY exits"
+    );
+    assert.strictEqual(integration.disposeCalls, 1);
+  });
+});
+
 suite("WorkflowInstance executeSeededRun", () => {
   test("executes an already-seeded run without re-promoting or restarting, and initializes its own timeline", async () => {
     const tempWorkspace = await fs.mkdtemp(

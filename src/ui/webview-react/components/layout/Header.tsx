@@ -18,6 +18,7 @@ import {
   getWorkflowExecutionControls,
   type WorkflowExecutionControlAction,
 } from "@utils/status";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
 let saveRequestSequence = 0;
 
@@ -104,26 +105,43 @@ export const Header: React.FC<{
     toggleHistorySearch,
   } = useUiStore();
 
+  const activeWorkflow = loadedWorkflows.find(
+    (workflow) => workflow.id === activeWorkflowId
+  );
+
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
-    RUNNER_IDS.CLI;
+  const isCLIManaged = activeWorkflow?.managedBy === RUNNER_IDS.CLI;
 
   const hasFile = fileName !== null;
   const executionRunSummary = executionRunRef
     ? runSummaries.find((summary) => summary.runRef === executionRunRef)
     : undefined;
-  const executionRunAddress = useMemo(
-    () =>
-      executionRunRef && displayedViewAddress
-        ? {
-            workflowKey: displayedViewAddress.workflowKey,
-            kind: "run" as const,
-            runRef: executionRunRef as never,
-          }
-        : null,
-    [displayedViewAddress, executionRunRef]
-  );
+  const executionRunAddress = useMemo<Extract<
+    WorkflowViewAddress,
+    { kind: "run" }
+  > | null>(() => {
+    // WORKFLOW_ADDED is the first authoritative runtime identity update when a
+    // completed run is reopened by appending another prompt. At that instant
+    // executionRunRef may still be null because the previous terminal state
+    // cleared it, but the visible Pause/Stop controls are already active. Use
+    // the active workflow summary first so those controls never become no-ops.
+    if (activeWorkflow?.workflowKey && activeWorkflow.runRef) {
+      return {
+        workflowKey: activeWorkflow.workflowKey,
+        kind: "run",
+        runRef: activeWorkflow.runRef,
+      };
+    }
+    if (!executionRunRef || !displayedViewAddress) return null;
+    return {
+      workflowKey: displayedViewAddress.workflowKey,
+      kind: "run",
+      runRef: executionRunRef as Extract<
+        WorkflowViewAddress,
+        { kind: "run" }
+      >["runRef"],
+    };
+  }, [activeWorkflow, displayedViewAddress, executionRunRef]);
   const { isRunning, isPausing, isPaused, isCancelling, slot1, slot2, slot3 } =
     getWorkflowExecutionControls({
       viewedExecutionState: executionState,

@@ -246,6 +246,21 @@ export class WorkflowInstance {
     HarnessIntegration
   >();
 
+  /**
+   * Cleanup context for integrations whose PTY/session watcher remains live
+   * between executions. Provider artifacts (including completion hooks) must
+   * remain registered for as long as the retained integration can receive an
+   * injected prompt, then be removed when that integration is actually retired.
+   */
+  private readonly retainedIntegrationArtifactContexts = new Map<
+    string,
+    {
+      integration: HarnessIntegration;
+      workingFilePath: string | undefined;
+      workspaceRoot: string;
+    }
+  >();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Streaming event forwarding — aggregates events from all execution integrations
   // so callers (e.g. the standalone CLI) can subscribe once on the instance.
@@ -571,7 +586,8 @@ export class WorkflowInstance {
     }
     this.lastRunIntegrations = [];
     // Dispose all live inject integrations held across runs (PTY still alive).
-    for (const integration of this.liveInjectIntegrations.values()) {
+    for (const [harnessKey, integration] of this.liveInjectIntegrations) {
+      void this.cleanupRetainedIntegrationArtifacts(harnessKey, integration);
       integration.dispose();
     }
     this.liveInjectIntegrations.clear();
@@ -1223,7 +1239,12 @@ export class WorkflowInstance {
         // Gracefully terminate live inject integrations before creating the new
         // execution integration. Ctrl+C gives the CLI time to clean up; dispose()
         // then releases the event emitters and any headless process handle.
-        for (const liveIntegration of this.liveInjectIntegrations.values()) {
+        for (const [harnessKey, liveIntegration] of this
+          .liveInjectIntegrations) {
+          await this.cleanupRetainedIntegrationArtifacts(
+            harnessKey,
+            liveIntegration
+          );
           liveIntegration.closeTerminalGracefully();
           liveIntegration.dispose();
         }
@@ -3194,17 +3215,10 @@ export class WorkflowInstance {
         harnessKey,
         execIntegration,
       ] of this.executionIntegrations.entries()) {
-        if (workspaceRoot) {
-          await execIntegration
-            .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
-            .catch((err) =>
-              Log.warn("Failed to clean up workflow artifacts:", err)
-            );
-        }
-        if (
+        const retainIntegration =
           execIntegration.canReuseForInject() ||
-          execIntegration.shouldPersistForSessionActivity()
-        ) {
+          execIntegration.shouldPersistForSessionActivity();
+        if (retainIntegration) {
           // Either the PTY is still alive with inject context set (CLI), or the
           // integration wants to stay alive for its own post-completion session
           // watcher (non-PTY harness). Keep it alive for the next run rather
@@ -3213,11 +3227,31 @@ export class WorkflowInstance {
           // one-shot exit callback so we dispose it if the terminal is killed
           // between runs (no-op for non-PTY harnesses).
           this.liveInjectIntegrations.set(harnessKey, execIntegration);
+          if (workspaceRoot) {
+            this.retainedIntegrationArtifactContexts.set(harnessKey, {
+              integration: execIntegration,
+              workingFilePath,
+              workspaceRoot,
+            });
+          }
           execIntegration.onPtySessionEnded(() => {
-            this.liveInjectIntegrations.delete(harnessKey);
-            execIntegration.dispose();
+            if (
+              this.liveInjectIntegrations.get(harnessKey) === execIntegration
+            ) {
+              this.liveInjectIntegrations.delete(harnessKey);
+            }
+            void this.cleanupRetainedIntegrationArtifacts(
+              harnessKey,
+              execIntegration
+            ).finally(() => execIntegration.dispose());
           });
         } else {
+          await this.cleanupRetainedIntegrationArtifacts(
+            harnessKey,
+            execIntegration,
+            workingFilePath,
+            workspaceRoot
+          );
           // Normal path: terminal closed or inject mode not active — dispose now
           // and save so the next run can close any VS Code terminal tab left open.
           this.lastRunIntegrations.push(execIntegration);
@@ -3244,6 +3278,32 @@ export class WorkflowInstance {
       this.resolveExecutionSettled?.();
       this.resolveExecutionSettled = undefined;
     }
+  }
+
+  private async cleanupRetainedIntegrationArtifacts(
+    harnessKey: string,
+    integration: HarnessIntegration,
+    fallbackWorkingFilePath?: string,
+    fallbackWorkspaceRoot?: string
+  ): Promise<void> {
+    const retainedContext =
+      this.retainedIntegrationArtifactContexts.get(harnessKey);
+    if (retainedContext?.integration === integration) {
+      this.retainedIntegrationArtifactContexts.delete(harnessKey);
+    }
+    const workingFilePath =
+      retainedContext?.integration === integration
+        ? retainedContext.workingFilePath
+        : fallbackWorkingFilePath;
+    const workspaceRoot =
+      retainedContext?.integration === integration
+        ? retainedContext.workspaceRoot
+        : fallbackWorkspaceRoot;
+    if (!workspaceRoot) return;
+
+    await integration
+      .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
+      .catch((err) => Log.warn("Failed to clean up workflow artifacts:", err));
   }
 
   private propagateWorkflowNameToIntegrations(): void {
