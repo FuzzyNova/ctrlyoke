@@ -45,6 +45,7 @@ import {
   externalRootsTrustStore,
 } from "./config/ExternalRootsTrustStore";
 import { WorkingFileManager } from "./core/WorkingFileManager";
+import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
 import { PromptFileParser } from "./core/PromptFileParser";
@@ -714,7 +715,7 @@ async function executeAddressedCliOperation(
       options as AppendOptions,
       platform
     );
-    const appended = await WorkingFileManager.appendTailToRun(
+    const appended = await RunContinuationService.appendTailToRun(
       workspaceRoot,
       workflowKey,
       runRef,
@@ -782,43 +783,12 @@ async function validateCliContinuationTarget(
   descriptorRevision: number;
   allowInterruptedRun: boolean;
 }> {
-  await assertLineageAvailableForCli(workspaceRoot, workflowKey);
-  const descriptor = await lineageRepository.readDescriptor(
+  return RunContinuationService.validateContinuationTarget(
     workspaceRoot,
-    workflowKey
+    workflowKey,
+    runRef,
+    lineageRepository
   );
-  if (descriptor.pendingEdit) {
-    throw new Error("This workflow has a draft or pending continuation");
-  }
-  const target = await readRunDefinition(workspaceRoot, workflowKey, runRef);
-  const executionState =
-    target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
-  if (
-    executionState === EXECUTION_STATES.PAUSING ||
-    executionState === EXECUTION_STATES.CANCELLING
-  ) {
-    throw new Error(`Cannot continue while run is in state ${executionState}`);
-  }
-  if (executionState === EXECUTION_STATES.PAUSED) {
-    throw new Error(
-      "Cannot continue a paused run without its live execution owner"
-    );
-  }
-  const lockStatus = await WorkflowLockManager.checkLock(
-    workspaceRoot,
-    workflowKey
-  );
-  const allowInterruptedRun =
-    executionState === EXECUTION_STATES.RUNNING &&
-    (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
-  if (executionState === EXECUTION_STATES.RUNNING && !allowInterruptedRun) {
-    throw new Error(`Cannot continue while run is in state ${executionState}`);
-  }
-  return {
-    definitionRevision: target.definitionRevision ?? 1,
-    descriptorRevision: descriptor.revision,
-    allowInterruptedRun,
-  };
 }
 
 async function readRunDefinition(

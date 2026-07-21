@@ -7,7 +7,6 @@ import {
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import {
-  RUNNER_IDS,
   LOCK_STATUS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -17,6 +16,11 @@ import {
 import type { LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import * as WorkflowPaths from "./WorkflowPaths";
+import {
+  inspectWorkflowLock,
+  isProcessAlive as isPidAlive,
+  readWorkflowLock,
+} from "./WorkflowLockInspector";
 
 export type { LockStatus };
 
@@ -212,16 +216,7 @@ export class WorkflowLockManager {
     workspaceRoot: string,
     workflowKey: WorkflowKey
   ): Promise<WorkflowRunnerLock | null> {
-    const lockPath = WorkflowLockManager.getLockPath(
-      workspaceRoot,
-      workflowKey
-    );
-    try {
-      const content = await fs.promises.readFile(lockPath, "utf8");
-      return JSON.parse(content) as WorkflowRunnerLock;
-    } catch {
-      return null;
-    }
+    return readWorkflowLock(workspaceRoot, workflowKey);
   }
 
   /**
@@ -237,25 +232,7 @@ export class WorkflowLockManager {
     workspaceRoot: string,
     workflowKey: WorkflowKey
   ): Promise<LockStatus> {
-    const lock = await WorkflowLockManager.readLock(workspaceRoot, workflowKey);
-    if (!lock) {
-      return LOCK_STATUS.NONE;
-    }
-
-    const pidAlive = isPidAlive(lock.pid);
-    const heartbeatAge = Date.now() - lock.lastHeartbeat;
-    const heartbeatFresh = heartbeatAge <= STALE_HEARTBEAT_MS;
-
-    if (!pidAlive || !heartbeatFresh) {
-      Log.debug(
-        `[WorkflowLockManager] checkLock: stale — runner="${lock.runner}" pid=${lock.pid} pidAlive=${pidAlive} heartbeatAge=${heartbeatAge}ms fresh=${heartbeatFresh}`
-      );
-      return LOCK_STATUS.STALE;
-    }
-
-    return lock.runner === RUNNER_IDS.CLI
-      ? LOCK_STATUS.ACTIVE_CLI
-      : LOCK_STATUS.ACTIVE_VSCODE;
+    return inspectWorkflowLock(workspaceRoot, workflowKey);
   }
 
   /**
@@ -412,24 +389,5 @@ export class WorkflowLockManager {
     }
 
     return { activeCliRunFiles: activeCli, recoveredRunFiles };
-  }
-}
-
-/**
- * Check if a process is alive using signal 0.
- *
- * - Returns true if the process exists (alive or EPERM = alive but different user)
- * - Returns false if ESRCH (no such process — dead)
- * - Works on Windows via Node.js's OpenProcess emulation
- */
-function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    // EPERM = process exists but caller lacks permission → alive
-    // ESRCH = no such process → dead
-    return code === "EPERM";
   }
 }

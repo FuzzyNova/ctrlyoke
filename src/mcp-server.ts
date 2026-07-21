@@ -35,9 +35,10 @@ import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "./types/DashboardConstants";
-import { withFileLock } from "./utils/FileLockUtils";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
+import { RunContinuationService } from "./core/orchestration/RunContinuationService";
+import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const CTRLYOKE_DIR = ".ctrlyoke";
@@ -46,25 +47,18 @@ const CAPABILITIES_FILE = "capabilities.json";
 
 const lineageRepository = new WorkflowLineageRepository();
 
-/** Resolves a lineage's current definition file: its latest run, or the draft if none has executed yet. */
-async function resolveLineageCurrentFilePath(
-  workspaceRoot: string,
-  workflowKey: Awaited<
-    ReturnType<typeof lineageRepository.listLineageKeys>
-  >[number]
-): Promise<string> {
-  const descriptor = await lineageRepository.readDescriptor(
-    workspaceRoot,
-    workflowKey
-  );
-  return descriptor.latestRunRef
-    ? WorkflowPaths.runFilePath(
-        workspaceRoot,
-        workflowKey,
-        descriptor.latestRunRef
-      )
-    : WorkflowPaths.draftFilePath(workspaceRoot, workflowKey);
-}
+const runSelectorProperties = {
+  workflowKey: {
+    type: "string",
+    description:
+      "Stable workflow lineage key. Provide with runRef to target one promoted run.",
+  },
+  runRef: {
+    type: "string",
+    description:
+      "Stable promoted-run reference. Requires workflowKey; never use a display index.",
+  },
+};
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
 // CTRLYOKE_DIAGNOSTIC_LOGS=true is passed by the extension when
@@ -130,13 +124,14 @@ function isUnlimitedMode(): boolean {
   return process.env.CTRLYOKE_UNLIMITED_MODE === "true";
 }
 
-class CtrlYokeMCPServer {
+export class CtrlYokeMCPServer {
   private server: InstanceType<typeof Server>;
   private workspaceRoot: string;
   private operationQueue: Promise<any> = Promise.resolve();
 
-  constructor() {
-    this.workspaceRoot = process.env.CTRLYOKE_WORKSPACE || process.cwd();
+  constructor(options: { workspaceRoot?: string } = {}) {
+    this.workspaceRoot =
+      options.workspaceRoot || process.env.CTRLYOKE_WORKSPACE || process.cwd();
     log("MCP Server initializing...");
     log("Workspace root:", this.workspaceRoot);
     log("Environment variables:", {
@@ -167,125 +162,127 @@ class CtrlYokeMCPServer {
     log("MCP Server handlers registered");
   }
 
+  public getToolDefinitions() {
+    return [
+      {
+        name: "ctrlyoke_queue_status",
+        description:
+          "Get status for one promoted ctrlyoke run. Provide workflowKey and runRef to inspect a historical run; with no selector, CTRLYOKE_WORKING_FILE must pin one exact promoted run.",
+        inputSchema: {
+          type: "object",
+          properties: runSelectorProperties,
+        },
+      },
+      {
+        name: "ctrlyoke_append_queue",
+        description: `Append a runtime-free tail to one promoted ctrlyoke run. Target with workflowKey and runRef, or rely only on an exact CTRLYOKE_WORKING_FILE pin. This follows lineage lock and revision rules; '${QUEUE_POSITION.NEXT}' is not supported for addressed continuation appends.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            ...runSelectorProperties,
+            expectedDefinitionRevision: {
+              type: "number",
+              description:
+                "Optional definition revision returned by queue_status; rejects stale writes deterministically.",
+            },
+            expectedDescriptorRevision: {
+              type: "number",
+              description:
+                "Optional descriptor revision returned by queue_status; rejects stale writes deterministically.",
+            },
+            steps: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  prompt: {
+                    type: "string",
+                    description: "The prompt text to add",
+                  },
+                  model: {
+                    type: "string",
+                    description: "Optional model override",
+                  },
+                  harness: {
+                    type: "string",
+                    description: "Optional harness override",
+                  },
+                  resumeSession: { type: "boolean" },
+                  sessionId: { type: "number" },
+                },
+                required: ["prompt"],
+              },
+              description: "Non-empty runtime-free tail to append.",
+            },
+            position: {
+              type: "string",
+              enum: [QUEUE_POSITION.END],
+              description: `Must be '${QUEUE_POSITION.END}' so the selected run's executed prefix remains immutable.`,
+            },
+            source: {
+              type: "string",
+              description: "Optional source identifier",
+            },
+          },
+          required: ["steps", "position"],
+        },
+      },
+      {
+        name: "ctrlyoke_capabilities",
+        description:
+          "Get available harnesses and their supported models on this machine. Call this before appending prompts with harness or model overrides to ensure you use valid values. Returns only harnesses that are installed and detected as available.",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "ctrlyoke_read_output",
+        description:
+          "Read response text from one promoted ctrlyoke run without rebinding an executor. workflowKey/runRef can select historical output.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            ...runSelectorProperties,
+            indices: {
+              type: "array",
+              items: { type: "number" },
+              description:
+                "Zero-based indices; omit or pass [] for all prompts.",
+            },
+          },
+        },
+      },
+      {
+        name: "ctrlyoke_global_status",
+        description:
+          "List current workflow addresses, or select a lineage/current run with workflowKey and an exact historical run with workflowKey/runRef.",
+        inputSchema: {
+          type: "object",
+          properties: runSelectorProperties,
+        },
+      },
+      {
+        name: "ctrlyoke_submit_commit_message",
+        description:
+          "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              description: "The complete commit message",
+            },
+          },
+          required: ["message"],
+        },
+      },
+    ];
+  }
+
   private setupHandlers() {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       log("ListTools request received");
       return {
-        tools: [
-          {
-            name: "ctrlyoke_queue_status",
-            description:
-              "Get comprehensive status of the current ctrlyoke workflow queue, including metadata and all prompts with their execution state",
-            inputSchema: {
-              type: "object",
-              properties: {},
-            },
-          },
-          {
-            name: "ctrlyoke_append_queue",
-            description: `Append prompts to the current ctrlyoke workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('${QUEUE_POSITION.NEXT}') or at end of queue ('${QUEUE_POSITION.END}'). Call ctrlyoke_capabilities first to get valid harness IDs and model values.`,
-            inputSchema: {
-              type: "object",
-              properties: {
-                steps: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      prompt: {
-                        type: "string",
-                        description: "The prompt text to add to the queue",
-                      },
-                      model: {
-                        type: "string",
-                        description:
-                          "Model override for this prompt. Call ctrlyoke_capabilities to get valid model values per harness.",
-                      },
-                      harness: {
-                        type: "string",
-                        description:
-                          "Harness override for this prompt. If omitted, uses the workflow default. Call ctrlyoke_capabilities to get installed harness IDs and their available models.",
-                      },
-                      resumeSession: {
-                        type: "boolean",
-                        description:
-                          "Continue a prior prompt's conversation session. Must be true to enable session resumption. Default: false (new session).",
-                      },
-                      sessionId: {
-                        type: "number",
-                        description:
-                          "1-based prompt number whose session to resume. Requires resumeSession: true. Omit to resume the immediately preceding prompt's session.",
-                      },
-                    },
-                    required: ["prompt"],
-                  },
-                  description: "Array of prompts to add to the queue",
-                },
-                position: {
-                  type: "string",
-                  enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
-                  description: `Where to insert steps: '${QUEUE_POSITION.NEXT}' (after current) or '${QUEUE_POSITION.END}' (at end of queue)`,
-                },
-                source: {
-                  type: "string",
-                  description:
-                    'Source identifier (e.g., "copilot-cli", "claude-cli", "AI-generated testing tasks")',
-                },
-              },
-              required: ["steps", "position"],
-            },
-          },
-          {
-            name: "ctrlyoke_capabilities",
-            description:
-              "Get available harnesses and their supported models on this machine. Call this before appending prompts with harness or model overrides to ensure you use valid values. Returns only harnesses that are installed and detected as available.",
-            inputSchema: {
-              type: "object",
-              properties: {},
-            },
-          },
-          {
-            name: "ctrlyoke_read_output",
-            description:
-              "Read the AI response text from completed prompts in the current workflow. Use this to inspect prior results before deciding what to add next.",
-            inputSchema: {
-              type: "object",
-              properties: {
-                indices: {
-                  type: "array",
-                  items: { type: "number" },
-                  description:
-                    "Zero-based indices of prompts to read. Omit or pass empty array to read all prompts.",
-                },
-              },
-            },
-          },
-          {
-            name: "ctrlyoke_global_status",
-            description:
-              "Get the status of ALL ctrlyoke workflows currently in the workspace queue, not just the current one. Call this at the start of a session to understand what other agents are working on, avoid editing files they own, and ignore compile/test errors they may have caused. Returns name, execution state, harness, current step, and working file path for each workflow.",
-            inputSchema: {
-              type: "object",
-              properties: {},
-            },
-          },
-          {
-            name: "ctrlyoke_submit_commit_message",
-            description:
-              "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
-            inputSchema: {
-              type: "object",
-              properties: {
-                message: {
-                  type: "string",
-                  description: "The complete commit message",
-                },
-              },
-              required: ["message"],
-            },
-          },
-        ],
+        tools: this.getToolDefinitions(),
       };
     });
 
@@ -299,45 +296,7 @@ class CtrlYokeMCPServer {
         log("Arguments:", JSON.stringify(args, null, 2));
 
         try {
-          let result;
-          switch (name) {
-            case "ctrlyoke_queue_status":
-              log("Handling queue_status...");
-              result = await this.handleQueueStatus();
-              log("queue_status completed successfully");
-              return result;
-            case "ctrlyoke_append_queue":
-              log("Handling append_queue...");
-              // Queue the operation to prevent race conditions
-              result = await this.queueOperation(() =>
-                this.handleQueueAppend(args)
-              );
-              log("append_queue completed successfully");
-              log("Result:", JSON.stringify(result, null, 2));
-              return result;
-            case "ctrlyoke_capabilities":
-              log("Handling capabilities...");
-              result = await this.handleCapabilities();
-              log("capabilities completed successfully");
-              return result;
-            case "ctrlyoke_read_output":
-              log("Handling read_output...");
-              result = await this.handleReadOutput(args);
-              log("read_output completed successfully");
-              return result;
-            case "ctrlyoke_global_status":
-              log("Handling global_status...");
-              result = await this.handleGlobalStatus();
-              log("global_status completed successfully");
-              return result;
-            case "ctrlyoke_submit_commit_message":
-              log("Handling submit_commit_message...");
-              result = await this.handleSubmitCommitMessage(args);
-              log("submit_commit_message completed successfully");
-              return result;
-            default:
-              throw new Error(`Unknown tool: ${name}`);
-          }
+          return await this.invokeTool(name, args);
         } catch (error: any) {
           log("ERROR in tool invocation:", error);
           log("Error stack:", error.stack);
@@ -353,6 +312,26 @@ class CtrlYokeMCPServer {
         }
       }
     );
+  }
+
+  /** Dispatch one tool without transport error wrapping; useful to embedders and focused tests. */
+  public async invokeTool(name: string, args: unknown): Promise<unknown> {
+    switch (name) {
+      case "ctrlyoke_queue_status":
+        return this.handleQueueStatus(args);
+      case "ctrlyoke_append_queue":
+        return this.queueOperation(() => this.handleQueueAppend(args));
+      case "ctrlyoke_capabilities":
+        return this.handleCapabilities();
+      case "ctrlyoke_read_output":
+        return this.handleReadOutput(args);
+      case "ctrlyoke_global_status":
+        return this.handleGlobalStatus(args);
+      case "ctrlyoke_submit_commit_message":
+        return this.handleSubmitCommitMessage(args);
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
   }
 
   /**
@@ -389,16 +368,9 @@ class CtrlYokeMCPServer {
    * Handle ctrlyoke_queue_status tool invocation
    * Returns comprehensive queue state including metadata and all prompts
    */
-  private async handleQueueStatus() {
-    log("Finding active working file...");
-    const workingFile = await this.findActiveWorkingFile();
-    log("Working file:", workingFile || "(none found)");
-
-    if (!workingFile) {
-      throw new Error(
-        "No active ctrlyoke workflow found. Start a workflow in VS Code first."
-      );
-    }
+  private async handleQueueStatus(args: unknown) {
+    const selected = await this.resolveSelectedRun(args, "queue_status");
+    const workingFile = selected.filePath;
 
     const fileContent = await fs.readFile(workingFile, "utf8");
     const queueData: WorkingFile = JSON.parse(fileContent);
@@ -424,7 +396,11 @@ class CtrlYokeMCPServer {
     const maxSize = getMaxQueueSize();
 
     const response = {
+      workflowKey: selected.workflowKey,
+      runRef: selected.runRef,
       metadata: {
+        workflowKey: selected.workflowKey,
+        runRef: selected.runRef,
         workflowName: queueData.workflowName,
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
@@ -435,6 +411,8 @@ class CtrlYokeMCPServer {
         maxQueueSize: unlimited ? "unlimited" : maxSize,
         remainingSlots: unlimited ? "unlimited" : maxSize - allSteps.length,
         workingFile: path.relative(this.workspaceRoot, workingFile),
+        definitionRevision: queueData.definitionRevision ?? 1,
+        descriptorRevision: selected.descriptorRevision,
       },
       steps,
     };
@@ -459,6 +437,8 @@ class CtrlYokeMCPServer {
       steps,
       position,
       source = "MCP Tool",
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
     } = args as {
       steps: Array<
         PromptStep & {
@@ -469,6 +449,8 @@ class CtrlYokeMCPServer {
       >;
       position: QueuePosition;
       source?: string;
+      expectedDefinitionRevision?: number;
+      expectedDescriptorRevision?: number;
     };
 
     log("Parsed arguments:", {
@@ -483,21 +465,35 @@ class CtrlYokeMCPServer {
       throw new Error("steps must be a non-empty array");
     }
 
-    if (position !== QUEUE_POSITION.NEXT && position !== QUEUE_POSITION.END) {
+    if (position !== QUEUE_POSITION.END) {
       log("ERROR: Invalid position:", position);
       throw new Error(
-        `position must be '${QUEUE_POSITION.NEXT}' or '${QUEUE_POSITION.END}'`
+        `position must be '${QUEUE_POSITION.END}' for an addressed append`
       );
     }
 
-    // Find active working file
-    log("Finding active working file...");
-    const workingFile = await this.findActiveWorkingFile();
-    log("Working file:", workingFile || "(none found)");
-
-    if (!workingFile) {
+    const selected = await this.resolveSelectedRun(args, "append_queue");
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "append"
+    );
+    if (
+      expectedDefinitionRevision !== undefined &&
+      expectedDefinitionRevision !== target.definitionRevision
+    ) {
       throw new Error(
-        "No active ctrlyoke workflow found. Start a workflow in VS Code first."
+        `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${target.definitionRevision}`
+      );
+    }
+    if (
+      expectedDescriptorRevision !== undefined &&
+      expectedDescriptorRevision !== target.descriptorRevision
+    ) {
+      throw new Error(
+        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${target.descriptorRevision}`
       );
     }
 
@@ -539,6 +535,10 @@ class CtrlYokeMCPServer {
       newQueueSize: number;
       insertIndex: number;
       workingFile: string;
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      definitionRevision: number;
+      descriptorRevision: number;
       rejectionDetails?: Array<{
         prompt: string;
         name?: string;
@@ -546,32 +546,13 @@ class CtrlYokeMCPServer {
       }>;
     } | null = null;
 
-    await withFileLock(workingFile, async () => {
-      // Read current queue state
-      log("Reading current queue state...");
-      const fileContent = await fs.readFile(workingFile, "utf8");
-      const queueData: WorkingFile = JSON.parse(fileContent);
+    {
+      const queueData: WorkingFile = JSON.parse(
+        await fs.readFile(selected.filePath, "utf8")
+      );
       log("Current queue size:", queueData.steps?.length || 0);
 
-      const runtime = queueData._runtime || {
-        currentIndex: 0,
-        executionState: EXECUTION_STATES.IDLE,
-      };
-      const completedCount = (queueData.steps || []).filter(
-        (p) => p._runtime?.completedAt !== undefined
-      ).length;
-      log("Current runtime state:", {
-        currentIndex: runtime.currentIndex,
-        executionState: runtime.executionState,
-        completedCount,
-      });
-
-      // Calculate insert index
-      const insertIndex =
-        position === QUEUE_POSITION.NEXT
-          ? runtime.currentIndex + 1
-          : (queueData.steps || []).length;
-      log("Insert index calculated:", insertIndex);
+      const insertIndex = (queueData.steps || []).length;
 
       // Validate prompts (check for already-completed only)
       log("Starting deduplication validation...");
@@ -614,52 +595,28 @@ class CtrlYokeMCPServer {
         );
       }
 
-      // Insert valid prompts at calculated position
-      if (!queueData.steps) {
-        log("Initializing empty prompts array");
-        queueData.steps = [];
-      }
-      log(
-        "Inserting",
-        validPrompts.length,
-        "valid prompts at index",
-        insertIndex
+      const appended = await RunContinuationService.appendTailToRun(
+        this.workspaceRoot,
+        selected.workflowKey,
+        selected.runRef,
+        validPrompts,
+        target.definitionRevision,
+        target.descriptorRevision,
+        lineageRepository,
+        target.allowInterruptedRun
       );
-      queueData.steps.splice(insertIndex, 0, ...validPrompts);
-      log("New queue size:", queueData.steps.length);
-
-      // Update runtime metadata
-      queueData._runtime = runtime;
-
-      // If queue is completed/idle, set to running state
-      if (
-        runtime.executionState === EXECUTION_STATES.COMPLETED ||
-        runtime.executionState === EXECUTION_STATES.IDLE
-      ) {
-        log(
-          "Updating execution state from",
-          runtime.executionState,
-          "to",
-          EXECUTION_STATES.RUNNING
-        );
-        runtime.executionState = EXECUTION_STATES.RUNNING;
-      }
-
-      // Write atomically (temp file + rename)
-      const tempFile = workingFile + ".tmp";
-      log("Writing to temp file:", tempFile);
-      await fs.writeFile(tempFile, JSON.stringify(queueData, null, 2), "utf8");
-      log("Renaming temp file to working file...");
-      await fs.rename(tempFile, workingFile);
-      log("File write completed successfully");
 
       response = {
         success: true,
         stepsAdded: validPrompts.length,
         stepsRejected: rejectedPrompts.length,
-        newQueueSize: queueData.steps.length,
+        newQueueSize: appended.workingFile.steps?.length ?? 0,
         insertIndex,
-        workingFile: path.relative(this.workspaceRoot, workingFile),
+        workingFile: path.relative(this.workspaceRoot, selected.filePath),
+        workflowKey: selected.workflowKey,
+        runRef: selected.runRef,
+        definitionRevision: appended.definitionRevision,
+        descriptorRevision: appended.descriptorRevision,
         ...(rejectedPrompts.length > 0 && {
           rejectionDetails: rejectedPrompts.map((r) => ({
             prompt:
@@ -670,7 +627,7 @@ class CtrlYokeMCPServer {
           })),
         }),
       };
-    });
+    }
 
     if (!response) {
       throw new Error("Failed to append steps: no response generated");
@@ -747,13 +704,8 @@ class CtrlYokeMCPServer {
    * Returns AI response text from completed prompts.
    */
   private async handleReadOutput(args: any) {
-    const workingFile = await this.findActiveWorkingFile();
-
-    if (!workingFile) {
-      throw new Error(
-        "No active ctrlyoke workflow found. Start a workflow in VS Code first."
-      );
-    }
+    const selected = await this.resolveSelectedRun(args, "read_output");
+    const workingFile = selected.filePath;
 
     const fileContent = await fs.readFile(workingFile, "utf8");
     const queueData: WorkingFile = JSON.parse(fileContent);
@@ -785,7 +737,15 @@ class CtrlYokeMCPServer {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ outputs }, null, 2),
+          text: JSON.stringify(
+            {
+              workflowKey: selected.workflowKey,
+              runRef: selected.runRef,
+              outputs,
+            },
+            null,
+            2
+          ),
         },
       ],
     };
@@ -837,23 +797,42 @@ class CtrlYokeMCPServer {
    * other workflows are running so they can avoid file conflicts and ignore
    * errors caused by sibling workflows.
    */
-  private async handleGlobalStatus() {
+  private async handleGlobalStatus(args: unknown) {
     log("Scanning .runs/ for all workflow lineages:", this.workspaceRoot);
 
     try {
-      const workflowKeys = await lineageRepository.listLineageKeys(
-        this.workspaceRoot
-      );
+      const selector = this.parseSelector(args, "global_status", true);
+      const workflowKeys = selector.workflowKey
+        ? [selector.workflowKey]
+        : await lineageRepository.listLineageKeys(this.workspaceRoot);
       log("Found lineages:", workflowKeys.length);
 
       const workflows = await Promise.all(
         workflowKeys.map(async (workflowKey) => {
           let filePath: string;
+          let runRef: RunRef | null;
           try {
-            filePath = await resolveLineageCurrentFilePath(
-              this.workspaceRoot,
-              workflowKey
-            );
+            if (selector.runRef) {
+              filePath = WorkflowPaths.runFilePath(
+                this.workspaceRoot,
+                workflowKey,
+                selector.runRef
+              );
+              runRef = selector.runRef;
+            } else {
+              const descriptor = await lineageRepository.readDescriptor(
+                this.workspaceRoot,
+                workflowKey
+              );
+              runRef = descriptor.latestRunRef ?? null;
+              filePath = runRef
+                ? WorkflowPaths.runFilePath(
+                    this.workspaceRoot,
+                    workflowKey,
+                    runRef
+                  )
+                : WorkflowPaths.draftFilePath(this.workspaceRoot, workflowKey);
+            }
           } catch {
             return null;
           }
@@ -870,6 +849,8 @@ class CtrlYokeMCPServer {
             ).length;
 
             return {
+              workflowKey,
+              runRef,
               workflowName: data.workflowName,
               executionState: runtime.executionState,
               harness: data.harness ?? null,
@@ -960,97 +941,93 @@ class CtrlYokeMCPServer {
     };
   }
 
-  /**
-   * Find the active working file for this workflow execution.
-   *
-   * Lookup order:
-   * 1. CTRLYOKE_WORKING_FILE env var — set per-workflow by the MCP config generator
-   *    so each AI session targets exactly its own queue file (multi-workflow safe).
-   * 2. Fallback: scan .ctrlyoke/.runs/ lineages and prefer files with executionState=running,
-   *    then most recently modified (single-workflow fallback).
-   */
-  private async findActiveWorkingFile(): Promise<string | null> {
-    // 1. Prefer the pinned file from the per-workflow MCP config
-    const pinnedFile = process.env.CTRLYOKE_WORKING_FILE;
-    if (pinnedFile) {
-      log("Using pinned working file:", pinnedFile);
-      try {
-        await fs.access(pinnedFile);
-        return pinnedFile;
-      } catch (error: any) {
-        log(
-          "Pinned working file not accessible, falling back to scan:",
-          error.message
+  private parseSelector(
+    args: unknown,
+    operation: string,
+    allowWorkflowOnly: boolean = false
+  ): { workflowKey?: WorkflowKey; runRef?: RunRef } {
+    const value = (args ?? {}) as Record<string, unknown>;
+    const workflowKey = value.workflowKey;
+    const runRef = value.runRef;
+    if (workflowKey !== undefined && typeof workflowKey !== "string") {
+      throw new Error(`${operation}: workflowKey must be a string`);
+    }
+    if (runRef !== undefined && typeof runRef !== "string") {
+      throw new Error(`${operation}: runRef must be a string`);
+    }
+    if (runRef !== undefined && workflowKey === undefined) {
+      throw new Error(`${operation}: runRef requires workflowKey`);
+    }
+    if (
+      !allowWorkflowOnly &&
+      (workflowKey === undefined) !== (runRef === undefined)
+    ) {
+      throw new Error(
+        `${operation}: workflowKey and runRef must be provided together`
+      );
+    }
+    if (workflowKey !== undefined)
+      WorkflowPaths.assertValidWorkflowKey(workflowKey);
+    if (runRef !== undefined) WorkflowPaths.assertValidRunRef(runRef);
+    return {
+      ...(workflowKey !== undefined && { workflowKey }),
+      ...(runRef !== undefined && { runRef }),
+    };
+  }
+
+  private async resolveSelectedRun(
+    args: unknown,
+    operation: string
+  ): Promise<{
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+    filePath: string;
+    descriptorRevision: number;
+  }> {
+    const selector = this.parseSelector(args, operation);
+    const pinnedPath = process.env.CTRLYOKE_WORKING_FILE;
+    const pinnedAddress = pinnedPath
+      ? WorkflowPaths.parseWorkingFileAddressFromPath(pinnedPath)
+      : undefined;
+    if (pinnedPath && (!pinnedAddress || !pinnedAddress.runRef)) {
+      throw new Error(
+        `${operation}: CTRLYOKE_WORKING_FILE must pin one exact promoted run`
+      );
+    }
+    if (!selector.workflowKey || !selector.runRef) {
+      if (!pinnedAddress?.runRef) {
+        throw new Error(
+          `${operation}: workflowKey and runRef are required unless CTRLYOKE_WORKING_FILE pins an exact promoted run`
         );
       }
+      selector.workflowKey = pinnedAddress.workflowKey;
+      selector.runRef = pinnedAddress.runRef;
     }
-
-    // 2. Scan every lineage's current definition file under .ctrlyoke/.runs/
-    log("Searching for workflow lineages in:", this.workspaceRoot);
-
-    try {
-      const workflowKeys = await lineageRepository.listLineageKeys(
-        this.workspaceRoot
+    if (
+      pinnedAddress &&
+      (pinnedAddress.workflowKey !== selector.workflowKey ||
+        pinnedAddress.runRef !== selector.runRef)
+    ) {
+      throw new Error(
+        `${operation}: selector conflicts with CTRLYOKE_WORKING_FILE pin`
       );
-      log("Lineages found:", workflowKeys.length);
-
-      if (workflowKeys.length === 0) {
-        log("No active working files found");
-        return null;
-      }
-
-      // Read each lineage's current file's executionState so we can prefer RUNNING ones
-      const fileInfos = await Promise.all(
-        workflowKeys.map(async (workflowKey) => {
-          try {
-            const filePath = await resolveLineageCurrentFilePath(
-              this.workspaceRoot,
-              workflowKey
-            );
-            const [content, stats] = await Promise.all([
-              fs.readFile(filePath, "utf8"),
-              fs.stat(filePath),
-            ]);
-            const data = JSON.parse(content);
-            return {
-              path: filePath,
-              mtime: stats.mtime,
-              executionState:
-                (data._runtime?.executionState as string) ?? "idle",
-            };
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      const validFiles = fileInfos.filter(
-        (f): f is { path: string; mtime: Date; executionState: string } =>
-          f !== null
-      );
-
-      if (validFiles.length === 0) {
-        return null;
-      }
-
-      // Prefer RUNNING files over all others; fall back to most-recently-modified
-      const runningFiles = validFiles.filter(
-        (f) => f.executionState === EXECUTION_STATES.RUNNING
-      );
-      const candidates = runningFiles.length > 0 ? runningFiles : validFiles;
-      candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
-      log(
-        "Selected working file:",
-        candidates[0].path,
-        `(state=${candidates[0].executionState})`
-      );
-      return candidates[0].path;
-    } catch (error: any) {
-      log("ERROR finding active working file:", error.message);
-      log("Error stack:", error.stack);
-      return null;
     }
+    const filePath = WorkflowPaths.runFilePath(
+      this.workspaceRoot,
+      selector.workflowKey,
+      selector.runRef
+    );
+    await fs.access(filePath);
+    const descriptor = await lineageRepository.readDescriptor(
+      this.workspaceRoot,
+      selector.workflowKey
+    );
+    return {
+      workflowKey: selector.workflowKey,
+      runRef: selector.runRef,
+      filePath,
+      descriptorRevision: descriptor.revision,
+    };
   }
 
   /**
@@ -1093,12 +1070,13 @@ class CtrlYokeMCPServer {
   }
 }
 
-// Start server
-log("Initializing ctrlyoke MCP Server...");
-const server = new CtrlYokeMCPServer();
-server.start().catch((error) => {
-  log("FATAL ERROR: Failed to start MCP server");
-  log("Error:", error);
-  log("Stack:", error.stack);
-  process.exit(1);
-});
+if (require.main === module) {
+  log("Initializing ctrlyoke MCP Server...");
+  const server = new CtrlYokeMCPServer();
+  server.start().catch((error) => {
+    log("FATAL ERROR: Failed to start MCP server");
+    log("Error:", error);
+    log("Stack:", error.stack);
+    process.exit(1);
+  });
+}

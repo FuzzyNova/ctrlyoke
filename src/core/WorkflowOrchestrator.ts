@@ -6,6 +6,7 @@ import { CliIntegration } from "./harness/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
 import { WorkingFileManager } from "./WorkingFileManager";
+import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { buildDefinitionSnapshot } from "./WorkflowStepSanitizer";
 import { PromptQueue } from "./PromptQueue";
 import {
@@ -2428,7 +2429,7 @@ export class WorkflowOrchestrator {
         expectedDescriptorRevision,
         clientId
       );
-    const appended = await WorkingFileManager.appendTailToRun(
+    const appended = await RunContinuationService.appendTailToRun(
       workspaceRoot,
       address.workflowKey,
       address.runRef,
