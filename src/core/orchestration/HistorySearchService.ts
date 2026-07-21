@@ -519,10 +519,19 @@ export class HistorySearchService {
     }
 
     return [
-      this.buildResult(manifest, metadata, workflowKey, runRef, event.target, 0, query, {
-        matchType: "status",
-        text: message,
-      }),
+      this.buildResult(
+        manifest,
+        metadata,
+        workflowKey,
+        runRef,
+        event.target,
+        0,
+        query,
+        {
+          matchType: "status",
+          text: message,
+        }
+      ),
     ];
   }
 

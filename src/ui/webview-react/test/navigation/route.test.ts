@@ -29,7 +29,9 @@ describe("workflow run routes", () => {
   });
 
   it("serializes a stable address while preserving the token", () => {
-    const params = new URLSearchParams(serializeRoute({ workflow: RUN }, "?token=t"));
+    const params = new URLSearchParams(
+      serializeRoute({ workflow: RUN }, "?token=t")
+    );
     expect(params.get("token")).toBe("t");
     expect(params.get("workflowKey")).toBe("demo");
     expect(params.get("runRef")).toBe(RUN.runRef);
@@ -42,7 +44,9 @@ describe("workflow run routes", () => {
     { workflow: RUN, viewer: "explorer", file: "src/a.ts" },
     { viewer: "sourceControl", ref: "~diff" },
   ])("round-trips %o", (route) => {
-    expect(parseRoute(serializeRoute(route, "?token=t"))).toEqual(normalizeRoute(route));
+    expect(parseRoute(serializeRoute(route, "?token=t"))).toEqual(
+      normalizeRoute(route)
+    );
   });
 
   it("distinguishes runs in the same lineage", () => {
@@ -55,7 +59,12 @@ describe("workflow run routes", () => {
 
   it("normalizes nested viewer fields", () => {
     expect(
-      normalizeRoute({ viewer: "sourceControl", file: "src/a.ts", dir: "src", lines: [1, 2] })
+      normalizeRoute({
+        viewer: "sourceControl",
+        file: "src/a.ts",
+        dir: "src",
+        lines: [1, 2],
+      })
     ).toEqual({ viewer: "sourceControl", file: "src/a.ts" });
   });
 
@@ -79,12 +88,19 @@ describe("deriveRoute", () => {
   };
 
   it("derives the stable selected run", () => {
-    expect(deriveRoute({ ...base, displayedViewAddress: RUN })).toEqual({ workflow: RUN });
+    expect(deriveRoute({ ...base, displayedViewAddress: RUN })).toEqual({
+      workflow: RUN,
+    });
   });
 
   it("derives workspace viewer state alongside the address", () => {
     expect(
-      deriveRoute({ ...base, displayedViewAddress: DRAFT, isOpen: true, selectedFilePath: "src/a.ts" })
+      deriveRoute({
+        ...base,
+        displayedViewAddress: DRAFT,
+        isOpen: true,
+        selectedFilePath: "src/a.ts",
+      })
     ).toEqual({ workflow: DRAFT, viewer: "explorer", file: "src/a.ts" });
   });
 });

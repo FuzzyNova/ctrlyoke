@@ -88,7 +88,11 @@ function normalizeWorkflowAddress(
   if (!address || !address.workflowKey.trim()) return undefined;
   if (address.kind === "run") {
     return address.runRef.trim()
-      ? { workflowKey: address.workflowKey, kind: "run", runRef: address.runRef }
+      ? {
+          workflowKey: address.workflowKey,
+          kind: "run",
+          runRef: address.runRef,
+        }
       : undefined;
   }
   return { workflowKey: address.workflowKey, kind: "draft" };
@@ -159,8 +163,18 @@ export function parseRoute(search: string): Route {
       const runRef = clean(params.get("runRef"));
       if (!workflowKey) return undefined;
       return runRef
-        ? { workflowKey: workflowKey as WorkflowViewAddress["workflowKey"], kind: "run" as const, runRef: runRef as Extract<WorkflowViewAddress, { kind: "run" }>["runRef"] }
-        : { workflowKey: workflowKey as WorkflowViewAddress["workflowKey"], kind: "draft" as const };
+        ? {
+            workflowKey: workflowKey as WorkflowViewAddress["workflowKey"],
+            kind: "run" as const,
+            runRef: runRef as Extract<
+              WorkflowViewAddress,
+              { kind: "run" }
+            >["runRef"],
+          }
+        : {
+            workflowKey: workflowKey as WorkflowViewAddress["workflowKey"],
+            kind: "draft" as const,
+          };
     })(),
     viewer,
     file: clean(params.get("file")),

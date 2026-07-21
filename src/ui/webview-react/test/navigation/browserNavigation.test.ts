@@ -8,7 +8,11 @@ let cleanup: (() => void) | null = null;
 
 beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
-  useUiStore.setState({ displayedViewAddress: null, runSummaries: [], executionRunRef: null });
+  useUiStore.setState({
+    displayedViewAddress: null,
+    runSummaries: [],
+    executionRunRef: null,
+  });
   useBrowserHistoryStore.getState().reset();
   window.history.replaceState({}, "", "/?token=t");
 });
@@ -54,7 +58,13 @@ describe("setupBrowserNavigation", () => {
     cleanup = setupBrowserNavigation();
 
     // Server restores the most-recent workflow after a token-only load.
-    useUiStore.getState().setDisplayedRunView({ workflowKey: "recent" as never, kind: "draft" }, [], undefined);
+    useUiStore
+      .getState()
+      .setDisplayedRunView(
+        { workflowKey: "recent" as never, kind: "draft" },
+        [],
+        undefined
+      );
 
     expect(useBrowserHistoryStore.getState().idx).toBe(0);
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
@@ -66,7 +76,13 @@ describe("setupBrowserNavigation", () => {
     window.history.replaceState({}, "", "/?token=t&workflowKey=old");
     cleanup = setupBrowserNavigation();
 
-    useUiStore.getState().setDisplayedRunView({ workflowKey: "old" as never, kind: "draft" }, [], undefined);
+    useUiStore
+      .getState()
+      .setDisplayedRunView(
+        { workflowKey: "old" as never, kind: "draft" },
+        [],
+        undefined
+      );
 
     expect(useBrowserHistoryStore.getState().idx).toBe(0);
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
@@ -78,12 +94,26 @@ describe("setupBrowserNavigation", () => {
     window.history.replaceState({}, "", "/?token=t");
     cleanup = setupBrowserNavigation();
 
-    useUiStore.getState().setDisplayedRunView({ workflowKey: "recent" as never, kind: "draft" }, [], undefined);
+    useUiStore
+      .getState()
+      .setDisplayedRunView(
+        { workflowKey: "recent" as never, kind: "draft" },
+        [],
+        undefined
+      );
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
       null
     );
 
-    useUiStore.getState().setDisplayedRunView({ workflowKey: "other" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never }, [], undefined);
+    useUiStore.getState().setDisplayedRunView(
+      {
+        workflowKey: "other" as never,
+        kind: "run",
+        runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      },
+      [],
+      undefined
+    );
 
     expect(useBrowserHistoryStore.getState()).toMatchObject({
       idx: 1,
@@ -110,9 +140,17 @@ describe("setupBrowserNavigation", () => {
   });
 
   it("threads a deep-linked workflow into the ui store before READY", () => {
-    window.history.replaceState({}, "", "/?token=t&workflowKey=demo&runRef=run-2026-07-20T10-30-00-000Z");
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&workflowKey=demo&runRef=run-2026-07-20T10-30-00-000Z"
+    );
     cleanup = setupBrowserNavigation();
-    expect(useUiStore.getState().displayedViewAddress).toEqual({ workflowKey: "demo", kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" });
+    expect(useUiStore.getState().displayedViewAddress).toEqual({
+      workflowKey: "demo",
+      kind: "run",
+      runRef: "run-2026-07-20T10-30-00-000Z",
+    });
   });
 
   it("pushes a new history entry when the route settles to a new location", () => {

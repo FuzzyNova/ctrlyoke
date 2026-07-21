@@ -16,7 +16,11 @@ function fakeVsCode() {
 
 beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
-  useUiStore.setState({ displayedViewAddress: null, runSummaries: [], executionRunRef: null });
+  useUiStore.setState({
+    displayedViewAddress: null,
+    runSummaries: [],
+    executionRunRef: null,
+  });
 });
 
 describe("applyRoute", () => {
@@ -38,7 +42,10 @@ describe("applyRoute", () => {
   });
 
   it("opens an explorer file and clears the guard afterwards", () => {
-    applyRoute({ viewer: "explorer", file: "src/a.ts", lines: [3, 9] }, fakeVsCode());
+    applyRoute(
+      { viewer: "explorer", file: "src/a.ts", lines: [3, 9] },
+      fakeVsCode()
+    );
     expect(useWorkspaceViewerStore.getState().pendingNavigation).toEqual({
       type: "file",
       filePath: "src/a.ts",

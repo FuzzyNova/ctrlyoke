@@ -10,6 +10,13 @@ src/ui/webview-react/static/custom-icons.css
 # Dependencies
 node_modules/
 
+# Runtime-managed state
+.codex/hooks.json
+.ctrlyoke/notifications/push-subscriptions.json
+
+# JSONL fixture retained with its historical .json filename
+dev/reference/opencode-output-example.json
+
 # Logs
 logs/
 *.log

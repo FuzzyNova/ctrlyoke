@@ -87,6 +87,7 @@ const HEADER =
 
 function generateContent(table) {
   return `${HEADER}
+
 # ctrlyoke Project Memory
 
 ## Core Project Context

@@ -7,9 +7,15 @@ describe("routeTitle", () => {
   });
 
   it("uses the stable run label when no viewer is open", () => {
-    expect(routeTitle({ workflow: { workflowKey: "main" as never, kind: "run", runRef: "run-2026-07-20T10-30-00-000Z" as never } })).toBe(
-      "Run run-2026-07-20T10-30-00-000Z — ctrlyoke"
-    );
+    expect(
+      routeTitle({
+        workflow: {
+          workflowKey: "main" as never,
+          kind: "run",
+          runRef: "run-2026-07-20T10-30-00-000Z" as never,
+        },
+      })
+    ).toBe("Run run-2026-07-20T10-30-00-000Z — ctrlyoke");
   });
 
   it("uses the explorer file basename", () => {

@@ -145,7 +145,9 @@
     }
     if (msg && msg.type === "ready") {
       readySentForSocket = true;
-      lastSentReadyPreferredViewAddress = JSON.stringify(msg.preferredViewAddress);
+      lastSentReadyPreferredViewAddress = JSON.stringify(
+        msg.preferredViewAddress
+      );
     }
     return true;
   }
