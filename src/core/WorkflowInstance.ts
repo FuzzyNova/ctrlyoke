@@ -928,7 +928,8 @@ export class WorkflowInstance {
       seeded.runDir,
       seeded.runId,
       seeded.startedAt,
-      [seeded.sourceRunRef]
+      [seeded.sourceRunRef],
+      this.getDefinitionRevisionContext().definition
     );
     if (!historyInit.filePath) {
       throw new Error(
@@ -1214,7 +1215,9 @@ export class WorkflowInstance {
             promoted.runRef,
             runDir,
             promoted.runId,
-            startedAt
+            startedAt,
+            [],
+            this.getDefinitionRevisionContext().definition
           );
           historyFilePath = historyInit.filePath;
           if (historyInit.runCount > 0) {
@@ -3223,7 +3226,9 @@ export class WorkflowInstance {
       definitionRevision: state.definitionRevision,
       definition: buildDefinitionSnapshot(
         state.workflowName ?? "",
-        state.steps
+        state.steps,
+        undefined,
+        this.promptQueue.getWorkflowFile().finalStep
       ),
     };
   }

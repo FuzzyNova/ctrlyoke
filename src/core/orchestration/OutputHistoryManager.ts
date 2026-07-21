@@ -110,7 +110,8 @@ export class OutputHistoryManager {
     runDir: string,
     runId: number,
     startedAt: number,
-    retentionProtectedRunRefs: readonly RunRef[] = []
+    retentionProtectedRunRefs: readonly RunRef[] = [],
+    initialDefinition?: WorkflowDefinitionSnapshot
   ): Promise<{ filePath: string; runCount: number }> {
     Log.debug(
       `[OutputHistoryManager] initializeRunAt: ${workflowKey}/${runRef} (runId=${runId})`
@@ -121,7 +122,9 @@ export class OutputHistoryManager {
         workflowKey,
         runId,
         startedAt,
-        EXECUTION_STATES.RUNNING
+        EXECUTION_STATES.RUNNING,
+        1,
+        initialDefinition
       );
 
       // Prune old runs if needed (disk-only operation)

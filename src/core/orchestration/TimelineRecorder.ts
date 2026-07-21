@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as readline from "readline";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_SCHEMA_VERSION,
@@ -71,7 +72,8 @@ export class TimelineRecorder {
     runId: number,
     startedAt: number,
     executionState: ExecutionState,
-    definitionRevision: number = 1
+    definitionRevision: number = 1,
+    initialDefinition?: WorkflowDefinitionSnapshot
   ): Promise<string> {
     const manifestPath =
       TimelineRecorder.getManifestPathForRunDirectory(runDirectoryPath);
@@ -83,6 +85,7 @@ export class TimelineRecorder {
       startedAt,
       executionState,
       definitionRevision,
+      ...(initialDefinition ? { initialDefinition } : {}),
       stepCount: 0,
       eventCount: 0,
       nextSequence: 1,
@@ -151,6 +154,52 @@ export class TimelineRecorder {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOENT") {
         return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Streams timeline events in their append/sequence order without first
+   * materializing events.jsonl. A partially written final JSONL line is
+   * ignored, matching `readEvents` crash-recovery semantics.
+   */
+  async *streamEvents(
+    manifestPath: string
+  ): AsyncGenerator<WorkflowTimelineEvent, void, undefined> {
+    const eventsPath =
+      TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
+    let pendingParseError: unknown;
+
+    try {
+      const lines = readline.createInterface({
+        input: fs.createReadStream(eventsPath, { encoding: "utf8" }),
+        crlfDelay: Infinity,
+      });
+
+      try {
+        for await (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) {
+            continue;
+          }
+          if (pendingParseError) {
+            throw pendingParseError;
+          }
+          try {
+            yield JSON.parse(line) as WorkflowTimelineEvent;
+          } catch (error) {
+            // Keep consuming so only a malformed trailing line is tolerated.
+            pendingParseError = error;
+          }
+        }
+      } finally {
+        lines.close();
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        return;
       }
       throw error;
     }

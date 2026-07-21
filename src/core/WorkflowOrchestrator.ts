@@ -2658,7 +2658,8 @@ export class WorkflowOrchestrator {
         definition: buildDefinitionSnapshot(
           workingFile.workflowName ?? "",
           workingFile.steps ?? [],
-          workingFile._runtime?.pendingRewind?.fromStepIndex
+          workingFile._runtime?.pendingRewind?.fromStepIndex,
+          workingFile.finalStep
         ),
       }
     );

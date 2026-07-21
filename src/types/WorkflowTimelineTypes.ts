@@ -87,6 +87,13 @@ export interface WorkflowRunManifest {
   executionState: ExecutionState;
   /** Definition revision most recently committed for this run (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision: number;
+  /**
+   * Immutable starting definition for revision 1. Later revisions are recorded
+   * as `DEFINITION_REVISION_COMMITTED` events. Keeping this in the small
+   * manifest makes revision-1 attempts resolvable even after an in-place
+   * continuation advances the run's working-file head.
+   */
+  initialDefinition?: WorkflowDefinitionSnapshot;
   stepCount: number;
   eventCount: number;
   nextSequence: number;
@@ -208,6 +215,8 @@ export interface WorkflowRuntimeTransitionPayload {
 export interface WorkflowDefinitionSnapshot {
   workflowName: string;
   steps: WorkflowStep[];
+  /** The final-step definition that belongs to this revision, if configured. */
+  finalStep?: WorkflowStep;
   /** Present for the mutable suffix revision created by a same-run rewind. */
   rewindBoundary?: number;
 }
