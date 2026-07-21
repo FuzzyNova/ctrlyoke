@@ -28,13 +28,13 @@ suite("QueueOperations", () => {
       assert.strictEqual(status.metadata.workflowName, "my-workflow");
     });
 
-    test("extracts multi-segment name", () => {
+    test("does not infer a workflow name from a non-run path", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(
         queue,
-        "C:\\Users\\dev\\.ctrlyoke\\.working\\build-and-test-2025-01-01T00-00-00.ctrlyoke.json"
+        "C:\\Users\\dev\\source-workflow.ctrlyoke.json"
       );
-      assert.strictEqual(status.metadata.workflowName, "build-and-test");
+      assert.strictEqual(status.metadata.workflowName, null);
     });
 
     test("returns null workflowName when no file path provided", () => {

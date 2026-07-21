@@ -1335,9 +1335,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
  */
 function getWorkflowNameFromPath(filePath: string): string {
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
-  // Remove .working.yaml, .working.json, .ctrlyoke.yaml, etc.
+  // Source prompt files may use any supported extension; run-scoped workflow
+  // definitions always derive their display name from the lineage descriptor.
   return fileName
-    .replace(/\.working\.(yaml|yml|json)$/i, "")
     .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "")
     .replace(/\.(yaml|yml|json)$/i, "");
 }

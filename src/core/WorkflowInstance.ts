@@ -491,15 +491,16 @@ export class WorkflowInstance {
   }
 
   async replayOutputHistoryTo(send: (msg: unknown) => void): Promise<void> {
-    const workflowKey = this.promptQueue.getState().workflowKey;
-    if (!workflowKey) {
+    const { workflowKey, runRef } = this.promptQueue.getState();
+    if (!workflowKey || !runRef) {
       return;
     }
     try {
       const om = this.outputHistoryManager;
       const runs = await om.getRunsForWorkflow(workflowKey);
-      if (runs.length > 0) {
-        const historyPath = om.getHistoryFilePath(workflowKey, runs[0]);
+      const currentRunIndex = runs.indexOf(runRef);
+      if (currentRunIndex >= 0) {
+        const historyPath = om.getHistoryFilePath(workflowKey, runRef);
         const [history, runTimestamps, runStates] = await Promise.all([
           om.loadHistory(historyPath),
           om.getRunTimestamps(workflowKey),
@@ -509,7 +510,7 @@ export class WorkflowInstance {
           type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
           history,
           availableRuns: runs.length,
-          currentRunIndex: 0,
+          currentRunIndex,
           runTimestamps,
           runStates,
         });

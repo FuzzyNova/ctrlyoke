@@ -1001,7 +1001,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     });
   });
 
-  test("deleteRun removes a single run by index (newest = 0)", async () => {
+  test("deleteRunByRef removes one explicitly addressed run", async () => {
     const workflowKey = (
       await new WorkflowLineageRepository().createLineage(
         tempWorkspace,
@@ -1020,8 +1020,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       3
     );
 
-    // Delete the newest run (index 0) — the accidental-restart recovery case.
-    const remaining = await manager.deleteRun(workflowKey, 0);
+    // Resolve the newest row for display, then retain its immutable reference
+    // for the actual mutation.
+    const [newestRunRef] = await manager.getRunsForWorkflow(workflowKey);
+    assert.ok(newestRunRef);
+    const remaining = await manager.deleteRunByRef(workflowKey, newestRunRef);
     assert.strictEqual(remaining, 2);
 
     const runs = await manager.getRunsForWorkflow(workflowKey);
@@ -1034,7 +1037,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(newest.runId, 2);
   });
 
-  test("deleteRun is a no-op for an out-of-range index", async () => {
+  test("deleteRunByRef rejects a missing stable reference", async () => {
     const workflowKey = (
       await new WorkflowLineageRepository().createLineage(
         tempWorkspace,
@@ -1044,8 +1047,14 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     ).workflowKey;
     await initAdditionalRun(recorder, tempWorkspace, workflowKey, 1, 1000);
 
-    const remaining = await manager.deleteRun(workflowKey, 5);
-    assert.strictEqual(remaining, 1);
+    await assert.rejects(() =>
+      manager.deleteRunByRef(
+        workflowKey,
+        WorkflowPaths.formatRunRef(99_999) as ReturnType<
+          typeof WorkflowPaths.formatRunRef
+        >
+      )
+    );
     assert.strictEqual(
       (await manager.getRunsForWorkflow(workflowKey)).length,
       1

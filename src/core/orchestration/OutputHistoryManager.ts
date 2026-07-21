@@ -925,27 +925,6 @@ export class OutputHistoryManager {
     }
   }
 
-  /**
-   * Delete a single run by index (0 = most recent), matching the newest-first
-   * ordering of getRunsForWorkflow(). Disk-only: removes the one run directory,
-   * no working file changes. Returns the number of runs remaining afterward.
-   *
-   * Continuation operations are explicitly addressed by RunRef, so deletion
-   * never retargets a later continuation to a different run.
-   */
-  async deleteRun(workflowKey: WorkflowKey, runIndex: number): Promise<number> {
-    const runs = await this.getRunsForWorkflow(workflowKey);
-    const runRef = runs[runIndex];
-    if (!runRef) {
-      Log.warn(
-        `deleteRun: no run at index ${runIndex} for workflow ${workflowKey}`
-      );
-      return runs.length;
-    }
-    await this.deleteRunByRef(workflowKey, runRef);
-    return (await this.getRunsForWorkflow(workflowKey)).length;
-  }
-
   /** Delete one stable run identity. Callers must never resolve a display index late. */
   async deleteRunByRef(
     workflowKey: WorkflowKey,

@@ -233,7 +233,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     }
   });
 
-  test("loads the current most-recent working file for a first-time browser client", async () => {
+  test("loads the current most-recent run file for a first-time browser client", async () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
@@ -246,7 +246,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     };
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () =>
-        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.working\\recent.ctrlyoke.json",
+        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.runs\\recent-2026-07-20T10-30-00\\run-2026-07-20T10-31-00-000Z\\workflow.ctrlyoke.json",
     };
 
     let loaded: { filePath: string; clientId: string } | undefined;
@@ -263,7 +263,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     await orchestrator.handleClientReady("browser:1", (msg) => sent.push(msg));
 
     assert.deepStrictEqual(loaded, {
-      filePath: "C:\\dev\\ctrlyoke\\.ctrlyoke\\.working\\recent.ctrlyoke.json",
+      filePath:
+        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.runs\\recent-2026-07-20T10-30-00\\run-2026-07-20T10-31-00-000Z\\workflow.ctrlyoke.json",
       clientId: "browser:1",
     });
     assert.deepStrictEqual(sent, [

@@ -116,19 +116,14 @@ export function getQueueStatus(
     ? Infinity
     : Math.max(0, maxQueueSize - state.steps.length);
 
-  // Extract workflow name from working file path if available
+  // A working-file path is only an execution transport detail. The lineage
+  // address encodes the display name; never recreate it from a mutable path.
   let workflowName: string | null = null;
   if (workingFilePath || state.workingFilePath) {
     const filePath = workingFilePath || state.workingFilePath!;
     const address = WorkflowPaths.parseWorkingFileAddressFromPath(filePath);
     if (address) {
       workflowName = WorkflowPaths.workflowNameFromKey(address.workflowKey);
-    } else {
-      const fileName = filePath.split(/[/\\]/).pop() || "";
-      // Legacy working files encoded the workflow name in the filename.
-      workflowName = fileName
-        .replace(/\.ctrlyoke\.json$/, "")
-        .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
     }
   }
 

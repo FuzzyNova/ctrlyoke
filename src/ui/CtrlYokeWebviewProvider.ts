@@ -1019,10 +1019,10 @@ export class CtrlYokeWebviewProvider
   }
 
   /**
-   * Load and send the most recent output history for a workflow to the webview.
+   * Load and send output history for the exact promoted run to the webview.
    * Called after session restore when autoLoadRecentSession is enabled.
-   * Reads available runs directly from disk — the .history/ directory is the
-   * single source of truth, not anything stored in the working file.
+   * The run address is parsed from the execution file; it never follows a
+   * lineage's newest run merely because another run was created meanwhile.
    *
    * @param workingFilePath Absolute path to the working file
    */
@@ -1039,28 +1039,28 @@ export class CtrlYokeWebviewProvider
     }
 
     try {
-      const workflowId =
-        WorkflowPaths.parseWorkingFileAddressFromPath(
-          workingFilePath
-        )?.workflowKey;
-      if (!workflowId) {
+      const address =
+        WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+      if (!address?.runRef) {
         return;
       }
+      const { workflowKey, runRef } = address;
       const runs =
-        await this.outputHistoryManager.getRunsForWorkflow(workflowId);
-      if (!runs.length) {
+        await this.outputHistoryManager.getRunsForWorkflow(workflowKey);
+      const currentRunIndex = runs.indexOf(runRef);
+      if (currentRunIndex < 0) {
         return;
       }
 
       const historyPath = this.outputHistoryManager.getHistoryFilePath(
-        workflowId,
-        runs[0]
+        workflowKey,
+        runRef
       );
 
       const history = await this.outputHistoryManager.loadHistory(historyPath);
       const [runTimestamps, runStates] = await Promise.all([
-        this.outputHistoryManager.getRunTimestamps(workflowId),
-        this.outputHistoryManager.getRunStates(workflowId),
+        this.outputHistoryManager.getRunTimestamps(workflowKey),
+        this.outputHistoryManager.getRunStates(workflowKey),
       ]);
       Log.debug(
         `[CtrlYokeWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`
@@ -1070,7 +1070,7 @@ export class CtrlYokeWebviewProvider
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history,
         availableRuns: runs.length,
-        currentRunIndex: 0,
+        currentRunIndex,
         runTimestamps,
         runStates,
         ...(workflowInstanceId !== undefined

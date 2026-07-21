@@ -471,6 +471,8 @@ This is the largest phase and must not be attempted as one commit. Split it into
 
 Checkpoint: identical user-visible behavior on the new layout. Grep gate must pass.
 
+**Storage-migration cleanup audit [DONE in the repository; per-workspace execution remains manual].** The production and active-test inventory has no `.working`/`.history` layout literals, `WORKING_DIR`/`HISTORY_DIR`, legacy filename-derived workflow-name fallback, index-based run deletion, or load-by-index message alias, except for the migration utility's isolated legacy-fixture test. Execution/reconnect output replay now reads the exact `RunRef` encoded in its active run file rather than the newest lineage run. `dev/migrate-runs-layout.mjs` is retained because the repository contains no evidence that every pre-release developer workspace has already migrated; it remains unbundled and dry-run by default. Its isolated temporary-workspace coverage verifies staged promotion, approximate historical definitions, monotonic run-ID repair, dry-run/collision refusal, idempotent reruns, interrupted staging, orphan quarantine, corrupt manifests, symlink rejection, flat-manifest migration, and Windows-reserved names. No repository `.ctrlyoke` data is used by those tests or by normal builds. Remove the utility and this note only after the remaining developer data has been manually migrated and its reports reviewed.
+
 **Phase 1b — correctness primitives.**
 
 1. Make locks exclusive and owner-token safe; pin CLI watch to lock `runRef`; remove duplicate acquisition.
@@ -559,7 +561,7 @@ Extend `PriorContext` with `WorkflowRunAddress` and resolve through the phase-4 
 
 - Workflow key and run-ref collision allocation; Windows case handling; traversal/reserved-name/symlink rejection; parser round trips.
 - First draft promotion, rerun seed, append reopen, descriptor-repair windows, partial `.creating-*` recovery, corrupt descriptor/manifest isolation.
-- No `.working`/`.history` literals or `WORKING_DIR`/`HISTORY_DIR` references remain outside the migration script and historical documentation.
+- No `.working`/`.history` literals or `WORKING_DIR`/`HISTORY_DIR` references remain outside the migration utility, its isolated legacy-fixture tests, and historical documentation.
 - A promoted run is never visible without definition, manifest, and events artifacts.
 
 ### Identity and concurrency

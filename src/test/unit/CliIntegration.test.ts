@@ -558,7 +558,7 @@ suite("CliIntegration", () => {
       });
 
       await integration.cleanupWorkflowArtifacts(
-        "workflow.working.json",
+        "workflow.ctrlyoke.json",
         workspaceRoot
       );
 
@@ -566,7 +566,7 @@ suite("CliIntegration", () => {
       assert.strictEqual(fs.existsSync(extraPath), false);
       assert.deepStrictEqual(cleanupArgs, {
         workspaceRoot,
-        workingFilePath: "workflow.working.json",
+        workingFilePath: "workflow.ctrlyoke.json",
       });
     } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });

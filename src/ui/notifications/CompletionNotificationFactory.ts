@@ -1,4 +1,3 @@
-import * as path from "path";
 import {
   COMPLETION_NOTIFICATION_KINDS,
   COMPLETION_NOTIFICATION_SEVERITY,
@@ -292,14 +291,6 @@ function getWorkflowDisplayName(
 
   if (summary.workflowName?.trim()) {
     return summary.workflowName;
-  }
-
-  if (summary.filePath?.trim()) {
-    return path.basename(summary.filePath);
-  }
-
-  if (summary.workingFilePath?.trim()) {
-    return path.basename(summary.workingFilePath);
   }
 
   return undefined;

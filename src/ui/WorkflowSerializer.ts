@@ -1178,8 +1178,7 @@ export class WorkflowSerializer {
   }
 
   /**
-   * Handle REMOVE_WORKFLOW_HISTORY: delete the .ctrlyoke.json working file and associated
-   * .history/<workflowId>/ directory for a single entry.
+   * Handle REMOVE_WORKFLOW_HISTORY by deleting one addressed lineage directory.
    */
   async handleRemoveWorkflowHistory(
     address: WorkflowViewAddress
@@ -1217,62 +1216,6 @@ export class WorkflowSerializer {
   // ============================================================================
 
   /**
-   * Handle LOAD_RUN_HISTORY: load a specific historical run and send to webview.
-   * runIndex 0 = most recent, 1 = second most recent, etc.
-   */
-  async handleLoadRunHistory(
-    runIndex: number,
-    postMessage?: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
-  ): Promise<void> {
-    const pm = postMessage ?? this.postMessage;
-    const outputHistoryManager = this.getOutputHistoryManager();
-    if (!outputHistoryManager) {
-      return;
-    }
-
-    try {
-      const workflowId = this.getManager()?.getQueueState(clientId).workflowKey;
-      if (!workflowId) {
-        return;
-      }
-
-      const runs = await outputHistoryManager.getRunsForWorkflow(workflowId);
-      if (!runs.length) {
-        return;
-      }
-
-      const fileName = runs[runIndex];
-      if (!fileName) {
-        Log.warn(`No history file at run index ${runIndex}`);
-        return;
-      }
-
-      const historyPath = outputHistoryManager.getHistoryFilePath(
-        workflowId,
-        fileName
-      );
-
-      const history = await outputHistoryManager.loadHistory(historyPath);
-      const [runTimestamps, runStates] = await Promise.all([
-        outputHistoryManager.getRunTimestamps(workflowId),
-        outputHistoryManager.getRunStates(workflowId),
-      ]);
-
-      pm({
-        type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-        history,
-        availableRuns: runs.length,
-        currentRunIndex: runIndex,
-        runTimestamps,
-        runStates,
-      });
-    } catch (error) {
-      Log.error("Failed to load run history:", error);
-    }
-  }
-
-  /**
    * Handle CLEAR_RUN_HISTORY: delete all history files for the current workflow.
    */
   async handleClearRunHistory(
@@ -1301,14 +1244,13 @@ export class WorkflowSerializer {
         return;
       }
 
-      // Delete every run for this lineage (but not its descriptor/draft), one at
-      // a time via the tested deleteRun path rather than reaching into storage directly.
+      // Resolve the complete list once, then delete by immutable references.
+      // A display index is never a durable deletion target.
       try {
-        let remaining = (
-          await outputHistoryManager.getRunsForWorkflow(workflowId)
-        ).length;
-        while (remaining > 0) {
-          remaining = await outputHistoryManager.deleteRun(workflowId, 0);
+        const runRefs =
+          await outputHistoryManager.getRunsForWorkflow(workflowId);
+        for (const runRef of runRefs) {
+          await outputHistoryManager.deleteRunByRef(workflowId, runRef);
         }
       } catch (error) {
         Log.warn("Failed to delete history directory:", error);
@@ -1326,56 +1268,6 @@ export class WorkflowSerializer {
       Log.error("Failed to clear run history:", error);
       vscode.window.showErrorMessage(
         `Failed to clear run history: ${getErrorMessage(error)}`
-      );
-    }
-  }
-
-  /**
-   * Handle DELETE_RUN_HISTORY: delete a single run (runIndex 0 = most recent).
-   * After deletion, refreshes the output view: shows the newest remaining run,
-   * or resets to the empty/live state when no runs remain.
-   *
-   * Confirmation is handled inline in the RunSelector UI, so no modal here.
-   */
-  async handleDeleteRunHistory(
-    runIndex: number,
-    postMessage?: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
-  ): Promise<void> {
-    const pm = postMessage ?? this.postMessage;
-    const outputHistoryManager = this.getOutputHistoryManager();
-    if (!outputHistoryManager) {
-      return;
-    }
-
-    try {
-      const workflowId = this.getManager()?.getQueueState(clientId).workflowKey;
-      if (!workflowId) {
-        return;
-      }
-
-      const remaining = await outputHistoryManager.deleteRun(
-        workflowId,
-        runIndex
-      );
-
-      if (remaining === 0) {
-        // No runs left — reset to live view with no available runs.
-        pm({
-          type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-          history: null,
-          availableRuns: 0,
-          currentRunIndex: 0,
-        });
-        return;
-      }
-
-      // Show the newest remaining run and refresh selector metadata.
-      await this.handleLoadRunHistory(0, pm, clientId);
-    } catch (error) {
-      Log.error("Failed to delete run history:", error);
-      vscode.window.showErrorMessage(
-        `Failed to delete run: ${getErrorMessage(error)}`
       );
     }
   }
