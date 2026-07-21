@@ -1,6 +1,6 @@
 # Run-Head Mutability Follow-up
 
-Status: **Proposed — design correction to Working File Per Run.**
+Status: **Complete — implemented and verified.** All five delivery-sequence phases are done: addressed `*AtRun` mutation primitives, the orchestrator's automatic-draft policy replaced with in-place addressed edits, dashboard append converted to `appendAndContinueAtRun`, pending-rewind property relaxation, and a full compile/typecheck/lint/format/test pass (extension-host 1856/1856, webview 1028/1028). One deferred, currently-invisible gap: the `*AtRun` primitives don't update a run's `manifest.json` `definitionRevision`/`stepCount` between an idle edit and the run's next execution (only `reopenRun`/execution transitions touch the manifest today). No UI currently renders manifest-sourced `stepCount`, and no backend logic depends on it being current mid-edit, so this was left unaddressed rather than adding unrequested plumbing — worth a follow-up if a run-switcher UI ever surfaces manifest step counts for idle runs.
 
 ## Problem
 
