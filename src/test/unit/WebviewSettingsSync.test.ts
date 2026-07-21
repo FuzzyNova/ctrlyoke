@@ -1185,3 +1185,61 @@ suite("WebviewMessageRouter stable run actions", () => {
     ]);
   });
 });
+
+suite("WebviewMessageRouter APPEND_FILE routing", () => {
+  const runAddress = {
+    workflowKey: "workflow-a" as never,
+    kind: "run" as const,
+    runRef: "run-2026-07-20T10-30-00-000Z" as never,
+  };
+
+  function makeRouter(calls: Array<{ mutation: unknown; filePath: unknown }>) {
+    const orchestrator = {
+      appendFromFileForClient: async (mutation: unknown, filePath: unknown) => {
+        calls.push({ mutation, filePath });
+      },
+    } as any;
+    return new WebviewMessageRouter(
+      () => {},
+      {} as any,
+      {} as any,
+      () => orchestrator,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+  }
+
+  test("passes a run-kind mutation through to appendFromFileForClient", async () => {
+    const calls: Array<{ mutation: unknown; filePath: unknown }> = [];
+    const router = makeRouter(calls);
+    const mutation = {
+      address: runAddress,
+      expectedDefinitionRevision: 2,
+      expectedDescriptorRevision: 5,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: "/fake/prompts.ctrlyoke.yaml",
+      mutation,
+    });
+
+    assert.deepStrictEqual(calls, [
+      { mutation, filePath: "/fake/prompts.ctrlyoke.yaml" },
+    ]);
+  });
+
+  test("passes no mutation through when the client has no addressed context", async () => {
+    const calls: Array<{ mutation: unknown; filePath: unknown }> = [];
+    const router = makeRouter(calls);
+
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: "/fake/legacy.ctrlyoke.yaml",
+    });
+
+    assert.deepStrictEqual(calls, [
+      { mutation: undefined, filePath: "/fake/legacy.ctrlyoke.yaml" },
+    ]);
+  });
+});

@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { HEADER_BUTTON_SIZES } from "@/constants";
 import {
@@ -9,6 +10,7 @@ import {
   type SplitButtonOption,
 } from "@components/shared/SplitButton";
 import { WorkflowFilePickerModal } from "@components/workflow/WorkflowFilePickerModal";
+import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 
 interface WorkflowControlsProps {
   /** Additional className for styling */
@@ -42,11 +44,13 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
   const { fileName } = useWorkflowStore();
+  const { displayedViewAddress } = useUiStore();
   const [filePickerMode, setFilePickerMode] = useState<"load" | "queue" | null>(
     null
   );
 
   const hasQueue = fileName !== null;
+  const isViewingRun = displayedViewAddress?.kind === "run";
 
   // Handle new workflow (clear current)
   const handleNewWorkflow = useCallback(() => {
@@ -74,7 +78,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       setFilePickerMode("queue");
       return;
     }
-    vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
+    postWorkflowDefinitionMutation(vscode, { type: MESSAGE_TYPES.APPEND_FILE });
   }, [vscode, hasQueue]);
 
   const handlePickerSelect = useCallback(
@@ -84,7 +88,10 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         return;
       }
       if (filePickerMode === "queue") {
-        vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE, filePath });
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.APPEND_FILE,
+          filePath,
+        });
       }
     },
     [filePickerMode, vscode]
@@ -105,7 +112,9 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       onClick: handleLoadFile,
     },
     {
-      label: "Queue from File...",
+      label: isViewingRun
+        ? "Append and Continue from File..."
+        : "Queue from File...",
       value: "queue-file",
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,

@@ -1226,6 +1226,18 @@ export interface DiscardContinuationMessage {
 }
 
 /**
+ * Append a prompt file's steps to the queue (webview -> extension). A `"run"`-kind
+ * `mutation` re-addresses this through the append-and-continue contract instead of
+ * the legacy instance-bound queue append; a draft/ephemeral target keeps the
+ * original queue-only behavior.
+ */
+export interface AppendFileMessage {
+  type: typeof MESSAGE_TYPES.APPEND_FILE;
+  filePath?: string;
+  mutation?: WorkflowDefinitionMutation;
+}
+
+/**
  * Insert workflow step message (webview -> extension)
  * `afterIndex` is the existing queue index after which the pasted step should be inserted.
  */

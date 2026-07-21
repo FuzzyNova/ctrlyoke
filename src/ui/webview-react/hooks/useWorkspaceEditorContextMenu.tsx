@@ -8,8 +8,10 @@ import { type WorkspaceFileEditorHandle } from "@components/workspace-viewer/Wor
 import { useLongPress } from "@hooks/useLongPress";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useEditorStore } from "@store/editorStore";
+import { useUiStore } from "@store/uiStore";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
+import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
 
 const PROMPT_FILE_RE = /\.(ctrlyoke\.(yaml|yml|json)|prompt\.md)$/i;
 
@@ -58,6 +60,7 @@ export function useWorkspaceEditorContextMenu({
   filePath,
 }: UseWorkspaceEditorContextMenuOptions): UseWorkspaceEditorContextMenuResult {
   const vscode = useVsCodeApi();
+  const { displayedViewAddress } = useUiStore();
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
@@ -151,18 +154,24 @@ export function useWorkspaceEditorContextMenu({
               }),
           },
           {
-            label: "Queue Workflow",
+            label:
+              displayedViewAddress?.kind === "run"
+                ? "Append and Continue Workflow"
+                : "Queue Workflow",
             icon: "codicon-list-ordered",
             disabled: false,
             onClick: () =>
-              vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE, filePath }),
+              postWorkflowDefinitionMutation(vscode, {
+                type: MESSAGE_TYPES.APPEND_FILE,
+                filePath,
+              }),
           }
         );
       }
 
       setContextMenu({ x, y, items });
     },
-    [editorRef, filePath, vscode]
+    [editorRef, filePath, vscode, displayedViewAddress]
   );
 
   const editorLongPressHandlers = useLongPress((x, y) => openContextMenu(x, y));

@@ -1376,14 +1376,35 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().appendFromFile(filePath, position);
   }
 
+  /**
+   * A run-addressed mutation re-routes this legacy "Queue from File" action
+   * through the addressed continuation contract: a promoted run has no
+   * pending queue to append into, so appending necessarily means running the
+   * new tail. Draft/ephemeral targets keep the original instance-bound
+   * queue-only behavior.
+   */
   async appendFromFileForClient(
+    mutation: WorkflowDefinitionMutation | undefined,
     filePath: string,
     clientId: string,
     position?: QueuePosition
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).appendFromFile(
-      filePath,
-      position
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).appendFromFile(
+        filePath,
+        position
+      );
+    }
+    const parsed = await this.promptFileParser.parsePromptFile(filePath);
+    if (!parsed?.steps?.length) {
+      throw new Error("No prompts found in file");
+    }
+    await this.appendAndContinueAtRun(
+      mutation.address,
+      parsed.steps,
+      mutation.expectedDefinitionRevision,
+      mutation.expectedDescriptorRevision,
+      clientId
     );
   }
 

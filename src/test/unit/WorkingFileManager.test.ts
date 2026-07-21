@@ -1214,6 +1214,76 @@ suite("WorkingFileManager", () => {
         /draft or pending continuation/
       );
     });
+
+    test("instance-bound property edit succeeds during a pending rewind and its value survives (Continue path)", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+      await WorkingFileManager.beginPendingRewind(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      const access = makeMockAccess(runFilePath);
+      const instanceManager = new WorkingFileManager(access);
+      instanceManager.expectDefinitionRevision(2);
+      const result = await instanceManager.updateWorkingFileProperties({
+        harness: "codex-cli",
+      });
+
+      assert.strictEqual(result?.workingFile.harness, "codex-cli");
+      const onDisk = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(onDisk.harness, "codex-cli");
+      assert.ok(
+        onDisk._runtime?.pendingRewind,
+        "pending rewind stays active until Continue/Discard explicitly resolves it"
+      );
+    });
+
+    test("Discard after an instance-bound property edit made during a pending rewind reverts the property, not just the suffix", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+      const beforeRewind = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(beforeRewind.harness, undefined);
+
+      await WorkingFileManager.beginPendingRewind(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      const access = makeMockAccess(runFilePath);
+      const instanceManager = new WorkingFileManager(access);
+      instanceManager.expectDefinitionRevision(2);
+      await instanceManager.updateWorkingFileProperties({
+        harness: "codex-cli",
+      });
+
+      const discarded = await WorkingFileManager.discardPendingRewind(
+        workspace,
+        workflowKey,
+        runRef,
+        3,
+        3
+      );
+
+      assert.strictEqual(discarded.discarded, true);
+      if (discarded.discarded) {
+        assert.strictEqual(discarded.workingFile.harness, beforeRewind.harness);
+      }
+      const onDisk = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(onDisk.harness, beforeRewind.harness);
+    });
   });
 
   suite("seedDraftFromRun", () => {

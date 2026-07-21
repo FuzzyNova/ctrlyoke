@@ -11,6 +11,7 @@ import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  QUEUE_POSITION,
 } from "../../types/DashboardConstants";
 
 function createOrchestratorHarness() {
@@ -1082,6 +1083,106 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         PANEL_CLIENT_ID
       );
       assert.strictEqual(called, true);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("appendFromFileForClient with a run-kind mutation parses the file and continues the addressed run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-append-file-run-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let parsedPath: string | undefined;
+      internal.promptFileParser = {
+        parsePromptFile: async (filePath: string) => {
+          parsedPath = filePath;
+          return { steps: [{ prompt: "from file" }] };
+        },
+      };
+      let executed: [string, string, number] | undefined;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async (...args: [string, string, number]) => {
+          executed = args;
+        },
+      });
+      const descriptor = await internal.lineageRepository.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+
+      await orchestrator.appendFromFileForClient(
+        {
+          address: {
+            workflowKey: run.workflowKey,
+            kind: "run",
+            runRef: run.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptor.revision,
+        },
+        "/fake/prompts.ctrlyoke.yaml",
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(parsedPath, "/fake/prompts.ctrlyoke.yaml");
+      assert.deepStrictEqual(executed, [run.workflowKey, run.runRef, 2]);
+      const written = JSON.parse(
+        await fs.readFile(run.workingFilePath, "utf8")
+      );
+      assert.strictEqual(written.steps.length, 2);
+      assert.strictEqual(written.steps[1].prompt, "from file");
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("appendFromFileForClient with no mutation keeps the legacy instance-bound queue-only append", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-append-file-legacy-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let parseCalled = false;
+      internal.promptFileParser = {
+        parsePromptFile: async () => {
+          parseCalled = true;
+          return { steps: [{ prompt: "should not be used" }] };
+        },
+      };
+      let appended: [string, string | undefined] | undefined;
+      const legacyInstance = {
+        appendFromFile: async (filePath: string, position?: string) => {
+          appended = [filePath, position];
+        },
+      };
+      internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "legacy-instance"]]);
+      internal.instances = new Map([["legacy-instance", legacyInstance]]);
+      internal.retiredInstances = new Map();
+
+      await orchestrator.appendFromFileForClient(
+        undefined,
+        "/fake/legacy.ctrlyoke.yaml",
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.END
+      );
+
+      assert.strictEqual(parseCalled, false);
+      assert.deepStrictEqual(appended, [
+        "/fake/legacy.ctrlyoke.yaml",
+        QUEUE_POSITION.END,
+      ]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

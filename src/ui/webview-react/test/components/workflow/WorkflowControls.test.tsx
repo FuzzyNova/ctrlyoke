@@ -12,6 +12,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowControls } from "@components/workflow/WorkflowControls";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
@@ -21,6 +22,11 @@ const postMessageSpy = vi.fn();
 beforeEach(() => {
   useWorkflowStore.getState().resetWorkflow();
   useWorkflowStore.temporal.getState().clear();
+  useUiStore.setState({
+    displayedViewAddress: null,
+    displayedDefinitionRevision: null,
+    displayedDescriptorRevision: null,
+  });
   // Reset the vscodeApi mock on each test
   (
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
@@ -105,6 +111,42 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(screen.getByText(/Queue from File/i));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.APPEND_FILE,
+    });
+  });
+
+  it("labels the option 'Append and Continue from File...' and attaches the run mutation when a promoted run is displayed", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({ fileName: "/path/to/workflow.yaml" });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 5,
+    });
+    render(<WorkflowControls />);
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
+    expect(
+      screen.getByText(/Append and Continue from File/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Queue from File/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByText(/Append and Continue from File/i));
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      mutation: {
+        address: {
+          workflowKey: "wf-1",
+          kind: "run",
+          runRef: "run-1",
+        },
+        expectedDefinitionRevision: 2,
+        expectedDescriptorRevision: 5,
+      },
     });
   });
 });

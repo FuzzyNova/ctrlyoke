@@ -446,11 +446,19 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message) => {
       if (message.filePath) {
-        await this.getOrchestrator()?.appendFromFileForClient(
-          message.filePath,
-          this.clientId,
-          QUEUE_POSITION.END
-        );
+        const mutation = this.asWorkflowDefinitionMutation(message);
+        const isRunAddressed = mutation?.address.kind === "run";
+        try {
+          await this.getOrchestrator()?.appendFromFileForClient(
+            mutation,
+            message.filePath,
+            this.clientId,
+            QUEUE_POSITION.END
+          );
+        } catch (error) {
+          if (!isRunAddressed) throw error;
+          this.showRunActionFailure("append and continue from file", error);
+        }
         return;
       }
       vscode.commands.executeCommand("ctrlyoke.appendFromDashboard");

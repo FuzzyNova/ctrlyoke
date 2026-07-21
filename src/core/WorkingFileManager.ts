@@ -1462,11 +1462,12 @@ export class WorkingFileManager {
         const workingFile = await this.readWorkingFile(workingFilePath);
         this.assertExpectedDefinitionRevision(workingFile);
 
-        if (workingFile._runtime?.pendingRewind) {
-          throw new Error(
-            "Cannot change workflow-level properties while a continuation is pending; create a draft instead"
-          );
-        }
+        // Properties aren't part of the restricted prefix/suffix a pending
+        // rewind protects (only step topology is, via PromptQueue's own
+        // assertNoPendingRewindWorkflowMutation/assertPendingRewindSuffixIndex
+        // guards) — mirrors updatePropertiesAtRun's allowDuringPendingRewind.
+        // Discard Continuation still reverts these via its separate base
+        // snapshot, taken before this write.
 
         let modified = false;
         for (const [key, value] of Object.entries(properties)) {
