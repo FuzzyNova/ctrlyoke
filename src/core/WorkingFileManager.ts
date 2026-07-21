@@ -772,6 +772,429 @@ export class WorkingFileManager {
   }
 
   /**
+   * Shared shell for every addressed, in-place edit of an idle promoted run's
+   * current definition head. Mirrors `beginPendingRewind`/`appendTailToRun`'s
+   * lock ordering (descriptor lock, then run-file lock) and revision/state
+   * guards so callers only supply the step/property transform itself.
+   *
+   * A run reaching this shell is never actively `PAUSED`: a paused run always
+   * has a live `WorkflowInstance` holding the runner lock, so orchestrator
+   * callers route those edits through that instance instead of here. The
+   * `PAUSED` rejection below is defense-in-depth, not a supported case.
+   *
+   * `allowDuringPendingRewind` lets a property-only transform proceed while
+   * this exact run has a pending rewind continuation; step-topology
+   * transforms must leave it `false` (the default) until the suffix stays
+   * restricted per the pending-rewind policy.
+   */
+  private static async mutateRunDefinition<T>(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    transform: (source: WorkingFile) => { workingFile: WorkingFile; result: T },
+    options: {
+      lineageRepository?: WorkflowLineageRepository;
+      allowDuringPendingRewind?: boolean;
+    } = {}
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+    result: T;
+  }> {
+    const lineageRepository =
+      options.lineageRepository ?? new WorkflowLineageRepository();
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    return lineageRepository.mutateDescriptorAtRevision(
+      workspaceFolderPath,
+      workflowKey,
+      expectedDescriptorRevision,
+      async (descriptor) => {
+        if (descriptor.pendingEdit) {
+          const pendingRewindOnThisRun =
+            descriptor.pendingEdit.kind === "rewind" &&
+            descriptor.pendingEdit.runRef === runRef;
+          if (!options.allowDuringPendingRewind || !pendingRewindOnThisRun) {
+            throw new Error(
+              "Cannot edit while this workflow has a draft or pending continuation"
+            );
+          }
+        }
+        return withFileLock(runFilePath, async () => {
+          const source = await readWorkingFileFromDisk(runFilePath);
+          const sourceRevision = source.definitionRevision ?? 1;
+          if (sourceRevision !== expectedDefinitionRevision) {
+            throw new Error(
+              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
+            );
+          }
+          const sourceState = source._runtime?.executionState;
+          if (
+            sourceState === EXECUTION_STATES.RUNNING ||
+            sourceState === EXECUTION_STATES.PAUSING ||
+            sourceState === EXECUTION_STATES.CANCELLING ||
+            sourceState === EXECUTION_STATES.PAUSED
+          ) {
+            throw new Error(`Cannot edit while run is in state ${sourceState}`);
+          }
+          const { workingFile: transformed, result } = transform(source);
+          const now = Date.now();
+          const workingFile: WorkingFile = {
+            ...transformed,
+            lastModifiedAt: now,
+            definitionRevision: sourceRevision + 1,
+          };
+          await writeWorkingFileAtomicTo(runFilePath, workingFile, {
+            skipLock: true,
+          });
+          return {
+            value: {
+              workingFile,
+              definitionRevision: workingFile.definitionRevision,
+              descriptorRevision: expectedDescriptorRevision + 1,
+              result,
+            },
+            descriptor,
+          };
+        });
+      }
+    );
+  }
+
+  /**
+   * Addressed workflow-level property edit (including a `finalStep`
+   * replace, which is persisted as an ordinary property on `WorkingFile`).
+   * Always allowed during a pending rewind on this exact run — properties
+   * aren't part of the restricted suffix.
+   */
+  public static async updatePropertiesAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    properties: Record<string, unknown>,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    options: { allowDeletes?: boolean } = {}
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+    appliedKeys: string[];
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => {
+        const workingFile: WorkingFile = { ...source };
+        const appliedKeys: string[] = [];
+        for (const [key, value] of Object.entries(properties)) {
+          if (value === undefined) {
+            if (
+              options.allowDeletes &&
+              (workingFile as any)[key] !== undefined
+            ) {
+              delete (workingFile as any)[key];
+              appliedKeys.push(key);
+            }
+            continue;
+          }
+          if ((workingFile as any)[key] !== value) {
+            (workingFile as any)[key] = value;
+            appliedKeys.push(key);
+          }
+        }
+        return { workingFile, result: appliedKeys };
+      },
+      { lineageRepository, allowDuringPendingRewind: true }
+    ).then(
+      ({ workingFile, definitionRevision, descriptorRevision, result }) => ({
+        workingFile,
+        definitionRevision,
+        descriptorRevision,
+        appliedKeys: result,
+      })
+    );
+  }
+
+  /** Addressed workflow name rename. */
+  public static async updateWorkflowNameAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    workflowName: string,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => ({
+        workingFile: { ...source, workflowName },
+        result: undefined,
+      }),
+      { lineageRepository, allowDuringPendingRewind: true }
+    );
+  }
+
+  /**
+   * Addressed step insert, mirroring `PromptQueue.insertStepAfterIndex`'s
+   * splice and `currentIndex` shift (adapted to the persisted
+   * `_runtime.currentIndex`; `results`/`completedIndices` are in-memory-only
+   * `PromptQueue` bookkeeping, not part of `WorkingFile`).
+   */
+  public static async insertStepAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    afterIndex: number,
+    step: WorkflowStep,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => {
+        const steps = source.steps ?? [];
+        const isEmptyInsert = steps.length === 0 && afterIndex === -1;
+        const isValidExistingIndex =
+          steps.length > 0 && afterIndex >= 0 && afterIndex < steps.length;
+        if (!isEmptyInsert && !isValidExistingIndex) {
+          throw new Error(`Invalid insert index: ${afterIndex}`);
+        }
+        const insertIndex = afterIndex + 1;
+        const nextSteps = [...steps];
+        nextSteps.splice(insertIndex, 0, step);
+        const currentIndex = source._runtime?.currentIndex ?? 0;
+        const nextCurrentIndex =
+          insertIndex <= currentIndex ? currentIndex + 1 : currentIndex;
+        return {
+          workingFile: {
+            ...source,
+            steps: nextSteps,
+            _runtime: source._runtime
+              ? { ...source._runtime, currentIndex: nextCurrentIndex }
+              : source._runtime,
+          },
+          result: undefined,
+        };
+      },
+      { lineageRepository }
+    );
+  }
+
+  /**
+   * Addressed step update: `updates` merges into the existing step (matching
+   * `PromptQueue.updatePrompt`); pass a full `WorkflowStep` via `replace` for
+   * a type-changing edit (matching `PromptQueue.replaceStep`).
+   */
+  public static async updateStepAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    index: number,
+    change: { updates: Partial<WorkflowStep> } | { replace: WorkflowStep },
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => {
+        const steps = source.steps ?? [];
+        if (index < 0 || index >= steps.length) {
+          throw new Error(`Invalid prompt index: ${index}`);
+        }
+        const nextSteps = [...steps];
+        nextSteps[index] =
+          "replace" in change
+            ? change.replace
+            : ({ ...steps[index], ...change.updates } as WorkflowStep);
+        return {
+          workingFile: { ...source, steps: nextSteps },
+          result: undefined,
+        };
+      },
+      { lineageRepository }
+    );
+  }
+
+  /**
+   * Addressed step delete, mirroring `PromptQueue.deletePrompt`'s splice and
+   * `currentIndex` shift.
+   */
+  public static async deleteStepAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    index: number,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => {
+        const steps = source.steps ?? [];
+        if (index < 0 || index >= steps.length) {
+          throw new Error(`Invalid prompt index: ${index}`);
+        }
+        const nextSteps = [...steps];
+        nextSteps.splice(index, 1);
+        const currentIndex = source._runtime?.currentIndex ?? 0;
+        const nextCurrentIndex =
+          index < currentIndex ? currentIndex - 1 : currentIndex;
+        return {
+          workingFile: {
+            ...source,
+            steps: nextSteps,
+            _runtime: source._runtime
+              ? { ...source._runtime, currentIndex: nextCurrentIndex }
+              : source._runtime,
+          },
+          result: undefined,
+        };
+      },
+      { lineageRepository }
+    );
+  }
+
+  /**
+   * Addressed reorder of the pending (not-yet-executed) suffix, mirroring
+   * `PromptQueue.reorderPendingPrompts`'s done/pending split.
+   * `newPendingOrder` entries are indices relative to the pending slice
+   * (steps from `_runtime.currentIndex` onward), matching the existing
+   * webview contract.
+   */
+  public static async reorderStepsAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    newPendingOrder: number[],
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => {
+        const steps = source.steps ?? [];
+        const currentIndex = source._runtime?.currentIndex ?? 0;
+        const donePrompts = steps.slice(0, currentIndex);
+        const pendingPrompts = steps.slice(currentIndex);
+        const newPending = newPendingOrder.map((i) => pendingPrompts[i]);
+        return {
+          workingFile: { ...source, steps: [...donePrompts, ...newPending] },
+          result: undefined,
+        };
+      },
+      { lineageRepository }
+    );
+  }
+
+  /**
+   * Addressed undo/redo step-array replace for an idle run. Preserves
+   * `_runtime` from the current on-disk step at the same index when the
+   * incoming step is otherwise identical, and otherwise trusts whatever
+   * `_runtime` the restored snapshot carries. This deliberately does not
+   * replicate `PromptQueue.syncStepsForUndoRedo`'s in-memory
+   * `runtimeArchive` restoration: that archive is scoped to one live
+   * instance's continuous editing session and was never persisted to disk,
+   * so an addressed edit against an idle run (no live instance) has no
+   * archive to restore from regardless.
+   */
+  public static async syncStepsForUndoRedoAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    newSteps: WorkflowStep[],
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      (source) => {
+        const existingSteps = source.steps ?? [];
+        const nextSteps = newSteps.map((newStep, index) => {
+          const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
+          if (persistableStep._runtime) {
+            return persistableStep;
+          }
+          const existing = existingSteps[index];
+          return existing?._runtime
+            ? { ...persistableStep, _runtime: existing._runtime }
+            : persistableStep;
+        });
+        return {
+          workingFile: { ...source, steps: nextSteps },
+          result: undefined,
+        };
+      },
+      { lineageRepository }
+    );
+  }
+
+  /**
    * Restores a durable pre-rewind definition. This is deliberately the sole
    * rollback path: the in-memory runtime archive is not crash-safe and must
    * never be used to reconstruct a discarded suffix.

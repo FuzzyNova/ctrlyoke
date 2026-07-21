@@ -1745,6 +1745,7 @@ export class PromptQueue {
     // Update working file if it exists
     // If no working file yet (brand new workflow), the name will be included when the working file is created
     if (this.state.workingFilePath) {
+      this.bumpDefinitionRevision();
       await this.updateWorkingFile(true);
     }
 
@@ -1802,6 +1803,7 @@ export class PromptQueue {
       Array.from({ length: toIndex }, (_, i) => String(i))
     );
 
+    this.bumpDefinitionRevision();
     this.emitStateChange();
     await this.updateWorkingFile();
   }

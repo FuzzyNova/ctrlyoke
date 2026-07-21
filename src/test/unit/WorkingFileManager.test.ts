@@ -897,6 +897,325 @@ suite("WorkingFileManager", () => {
     });
   });
 
+  suite("addressed run-head mutation primitives", () => {
+    let workspace: string;
+
+    afterEach(async () => {
+      if (workspace) {
+        await fs
+          .rm(workspace, { recursive: true, force: true })
+          .catch(() => {});
+      }
+    });
+
+    async function makeIdleRun(
+      status: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES] = EXECUTION_STATES.COMPLETED
+    ): Promise<{
+      workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
+      runRef: import("../../types/CtrlYokeTypes").RunRef;
+      runFilePath: string;
+    }> {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-addressed-"));
+      const draft = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await draft.createWorkingFile(
+        "addressed-source",
+        [
+          { prompt: "first", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "second", _runtime: { startedAt: 3, completedAt: 4 } },
+        ],
+        workspace,
+        "Addressed source"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => [
+        { prompt: "first", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "second", _runtime: { startedAt: 3, completedAt: 4 } },
+      ];
+      access.getCurrentIndex = () => 2;
+      access.getStatus = () => status;
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      return {
+        workflowKey,
+        runRef: promoted.runRef,
+        runFilePath: promoted.workingFilePath,
+      };
+    }
+
+    test("insertStepAtRun splices the step and shifts currentIndex, bumping the revision", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+
+      const result = await WorkingFileManager.insertStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { prompt: "inserted" },
+        1,
+        2
+      );
+
+      assert.strictEqual(result.definitionRevision, 2);
+      assert.strictEqual(result.descriptorRevision, 3);
+      const after = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(after.steps!.length, 3);
+      assert.strictEqual((after.steps![1] as PromptStep).prompt, "inserted");
+      assert.strictEqual(after._runtime?.currentIndex, 3);
+
+      await assert.rejects(
+        () =>
+          WorkingFileManager.insertStepAtRun(
+            workspace,
+            workflowKey,
+            runRef,
+            0,
+            { prompt: "stale" },
+            1,
+            3
+          ),
+        /Definition revision conflict/
+      );
+    });
+
+    test("updateStepAtRun merges updates and supports a full replace", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+
+      const merged = await WorkingFileManager.updateStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { updates: { prompt: "first (edited)" } },
+        1,
+        2
+      );
+      assert.strictEqual(
+        (merged.workingFile.steps![0] as PromptStep).prompt,
+        "first (edited)"
+      );
+      assert.ok(
+        merged.workingFile.steps![0]._runtime?.completedAt,
+        "merge must not drop existing runtime"
+      );
+
+      const replaced = await WorkingFileManager.updateStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { replace: { prompt: "replaced entirely" } },
+        2,
+        3
+      );
+      assert.strictEqual(
+        (replaced.workingFile.steps![0] as PromptStep).prompt,
+        "replaced entirely"
+      );
+      assert.strictEqual(replaced.workingFile.steps![0]._runtime, undefined);
+
+      const after = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(after.definitionRevision, 3);
+    });
+
+    test("deleteStepAtRun removes the step and shifts currentIndex", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+
+      const result = await WorkingFileManager.deleteStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        1,
+        2
+      );
+
+      assert.strictEqual(result.workingFile.steps!.length, 1);
+      assert.strictEqual(
+        (result.workingFile.steps![0] as PromptStep).prompt,
+        "second"
+      );
+      assert.strictEqual(result.workingFile._runtime?.currentIndex, 1);
+      const after = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(after.definitionRevision, 2);
+    });
+
+    test("reorderStepsAtRun reorders only the pending suffix", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-addressed-"));
+      const draft = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await draft.createWorkingFile(
+        "reorder-source",
+        [
+          { prompt: "done", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "pending-a" },
+          { prompt: "pending-b" },
+        ],
+        workspace,
+        "Reorder source"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => [
+        { prompt: "done", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "pending-a" },
+        { prompt: "pending-b" },
+      ];
+      access.getCurrentIndex = () => 1;
+      access.getStatus = () => EXECUTION_STATES.PAUSED;
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      // Reordering runs against an idle definition head; stop() the runtime
+      // marker down to COMPLETED so the addressed-mutation execution-state
+      // guard (RUNNING/PAUSING/CANCELLING/PAUSED all rejected) doesn't fire —
+      // only the pending-suffix split (currentIndex=1) matters for this test.
+      const idleFile = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf8")
+      ) as WorkingFile;
+      idleFile._runtime = {
+        ...idleFile._runtime!,
+        executionState: EXECUTION_STATES.STOPPED,
+      };
+      await fs.writeFile(
+        promoted.workingFilePath,
+        JSON.stringify(idleFile, null, 2)
+      );
+
+      const result = await WorkingFileManager.reorderStepsAtRun(
+        workspace,
+        workflowKey,
+        promoted.runRef,
+        [1, 0],
+        1,
+        2
+      );
+
+      assert.strictEqual(result.workingFile.steps!.length, 3);
+      assert.strictEqual(
+        (result.workingFile.steps![0] as PromptStep).prompt,
+        "done"
+      );
+      assert.strictEqual(
+        (result.workingFile.steps![1] as PromptStep).prompt,
+        "pending-b"
+      );
+      assert.strictEqual(
+        (result.workingFile.steps![2] as PromptStep).prompt,
+        "pending-a"
+      );
+    });
+
+    test("syncStepsForUndoRedoAtRun preserves existing runtime for unchanged-position steps", async () => {
+      const { workflowKey, runRef } = await makeIdleRun();
+
+      const result = await WorkingFileManager.syncStepsForUndoRedoAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "first" }, { prompt: "second (renamed)" }],
+        1,
+        2
+      );
+
+      assert.ok(result.workingFile.steps![0]._runtime?.completedAt);
+      assert.strictEqual(
+        (result.workingFile.steps![1] as PromptStep).prompt,
+        "second (renamed)"
+      );
+      assert.ok(result.workingFile.steps![1]._runtime?.completedAt);
+    });
+
+    test("updatePropertiesAtRun applies a diff and updateWorkflowNameAtRun renames", async () => {
+      const { workflowKey, runRef } = await makeIdleRun();
+
+      const properties = await WorkingFileManager.updatePropertiesAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { harness: "claude-cli" },
+        1,
+        2
+      );
+      assert.deepStrictEqual(properties.appliedKeys, ["harness"]);
+      assert.strictEqual(properties.workingFile.harness, "claude-cli");
+
+      const renamed = await WorkingFileManager.updateWorkflowNameAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        "Renamed run",
+        2,
+        3
+      );
+      assert.strictEqual(renamed.workingFile.workflowName, "Renamed run");
+    });
+
+    test("rejects an addressed edit while the run is RUNNING", async () => {
+      const { workflowKey, runRef } = await makeIdleRun(
+        EXECUTION_STATES.RUNNING
+      );
+
+      await assert.rejects(
+        () =>
+          WorkingFileManager.insertStepAtRun(
+            workspace,
+            workflowKey,
+            runRef,
+            0,
+            { prompt: "should not land" },
+            1,
+            2
+          ),
+        /Cannot edit while run is in state/
+      );
+    });
+
+    test("property edits pass through a pending rewind on this run; step-topology edits stay blocked", async () => {
+      const { workflowKey, runRef } = await makeIdleRun();
+      await WorkingFileManager.beginPendingRewind(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      const properties = await WorkingFileManager.updatePropertiesAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { harness: "codex-cli" },
+        2,
+        3
+      );
+      assert.strictEqual(properties.workingFile.harness, "codex-cli");
+
+      await assert.rejects(
+        () =>
+          WorkingFileManager.insertStepAtRun(
+            workspace,
+            workflowKey,
+            runRef,
+            0,
+            { prompt: "blocked during rewind" },
+            3,
+            4
+          ),
+        /draft or pending continuation/
+      );
+    });
+  });
+
   suite("seedDraftFromRun", () => {
     let tmpWorkspace: string;
 

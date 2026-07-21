@@ -34,7 +34,7 @@ export class RunContinuationService {
     workflowKey: WorkflowKey,
     runRef: RunRef,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    action: "append" | "continue" = "continue",
+    action: "append" | "continue" | "edit" = "continue",
     allowActiveTargetAppend: boolean = false
   ): Promise<RunContinuationTarget> {
     const [lock, lockStatus, descriptor] = await Promise.all([
@@ -55,7 +55,13 @@ export class RunContinuationService {
     if (lock && lockStatus !== LOCK_STATUS.STALE && !activeTargetAppend) {
       throw new Error("Another run in this workflow lineage is executing");
     }
-    if (descriptor.pendingEdit) {
+    const pendingRewindOnThisRun =
+      descriptor.pendingEdit?.kind === "rewind" &&
+      descriptor.pendingEdit.runRef === runRef;
+    if (
+      descriptor.pendingEdit &&
+      !(action === "edit" && pendingRewindOnThisRun)
+    ) {
       throw new Error("This workflow has a draft or pending continuation");
     }
 
