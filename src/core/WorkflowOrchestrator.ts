@@ -2694,6 +2694,69 @@ export class WorkflowOrchestrator {
     );
   }
 
+  /**
+   * Deletes one stable run and rehydrates every client viewing the lineage.
+   * A client on the deleted address moves to the newest remaining run (or the
+   * draft); clients on another address retain that address but receive refreshed
+   * summaries. Keeping this here prevents a UI-only caller from leaving another
+   * connected client pointed at a removed directory.
+   */
+  async deleteRunAtAddress(
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    send: (message: unknown) => void,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    const viewed = this.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== "run" ||
+      viewed.workflowKey !== address.workflowKey ||
+      viewed.runRef !== address.runRef
+    ) {
+      throw new Error("Delete no longer targets this client's viewed run");
+    }
+    if (this.findExecutionRunRef(address.workflowKey) === address.runRef) {
+      throw new Error("Cannot delete an executing run");
+    }
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+
+    const historyManager = new OutputHistoryManager(workspaceRoot);
+    await historyManager.deleteRunByRef(address.workflowKey, address.runRef);
+    const remaining = await historyManager.getRunSummaries(address.workflowKey);
+    const fallback: WorkflowViewAddress = remaining[0]
+      ? {
+          workflowKey: address.workflowKey,
+          kind: "run",
+          runRef: remaining[0].runRef,
+        }
+      : { workflowKey: address.workflowKey, kind: "draft" };
+
+    const targets = [...this.getViewAddressRegistry().entries()].filter(
+      ([, candidate]) => candidate?.workflowKey === address.workflowKey
+    );
+    await Promise.all(
+      targets.map(async ([targetClientId, currentAddress]) => {
+        const targetAddress =
+          currentAddress?.kind === "run" &&
+          currentAddress.runRef === address.runRef
+            ? fallback
+            : currentAddress;
+        if (!targetAddress) return;
+        const targetSend =
+          targetClientId === clientId
+            ? send
+            : this.getViewMessageSinks().get(targetClientId);
+        if (!targetSend) return;
+        await this.loadRunViewForClient(
+          targetAddress,
+          targetSend,
+          targetClientId
+        );
+      })
+    );
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,

@@ -451,6 +451,7 @@ export class WorkingFileManager {
     }
   ): Promise<{
     workingFilePath: string;
+    sourceRunRef: RunRef;
     runRef: RunRef;
     runId: number;
     runDir: string;
@@ -539,6 +540,7 @@ export class WorkingFileManager {
     );
     return {
       workingFilePath: allocation.runFilePath,
+      sourceRunRef: fromRunRef,
       runRef: allocation.runRef,
       runId: allocation.runId,
       runDir: allocation.runDir,

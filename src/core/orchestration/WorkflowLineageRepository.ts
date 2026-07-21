@@ -28,6 +28,13 @@ export interface AllocatedRun {
   draftFilePathToRemove?: string;
 }
 
+export interface DeletedRun {
+  /** Run refs still present after the deletion, newest first. */
+  remainingRunRefs: RunRef[];
+  /** The descriptor revision after its repair write. */
+  descriptorRevision: number;
+}
+
 /**
  * Owns everything about a workflow lineage that has no pre-existing single owner: the
  * `workflow.json` descriptor, `WorkflowKey` allocation, and `RunRef` allocation/promotion.
@@ -191,6 +198,59 @@ export class WorkflowLineageRepository {
     });
   }
 
+  /**
+   * Removes one promoted run while holding the lineage metadata lock and repairs
+   * the descriptor's cache-like latest-run hint. Callers supply every run that
+   * is temporarily in use by their operation; the durable pending-rewind target
+   * is always protected here as well.
+   */
+  async deleteRun(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    protectedRunRefs: ReadonlySet<RunRef> = new Set()
+  ): Promise<DeletedRun> {
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    return withFileLock(descriptorPath, async () => {
+      const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      const protectedByPendingRewind =
+        descriptor.pendingEdit?.kind === "rewind" &&
+        descriptor.pendingEdit.runRef === runRef;
+      if (protectedByPendingRewind || protectedRunRefs.has(runRef)) {
+        throw new Error("Cannot delete a protected run");
+      }
+
+      const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+      try {
+        await fs.promises.rm(runDir, { recursive: true, force: false });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+        throw new Error(
+          `Run ${runRef} does not exist for workflow ${workflowKey}`
+        );
+      }
+
+      const remainingRunRefs = await this.listRunRefs(
+        workspaceRoot,
+        workflowKey
+      );
+      const latestRunRef = remainingRunRefs[0];
+      const updated: WorkflowLineageDescriptor = {
+        ...descriptor,
+        latestRunRef,
+        lastModifiedAt: Date.now(),
+        revision: descriptor.revision + 1,
+      };
+      await this.writeDescriptorDirect(workspaceRoot, workflowKey, updated);
+      return { remainingRunRefs, descriptorRevision: updated.revision };
+    });
+  }
+
   /** Marks `isFavorite` and/or bumps `lastModifiedAt` without allocating anything. */
   async updateDescriptor(
     workspaceRoot: string,
@@ -261,6 +321,29 @@ export class WorkflowLineageRepository {
     return entries
       .filter((entry) => WorkflowPaths.isLineageDirEntry(entry))
       .map((entry) => entry.name as WorkflowKey);
+  }
+
+  /** Lists valid promoted run directories newest first. */
+  private async listRunRefs(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<RunRef[]> {
+    try {
+      const entries = await fs.promises.readdir(
+        WorkflowPaths.lineageDir(workspaceRoot, workflowKey),
+        { withFileTypes: true }
+      );
+      return entries
+        .filter((entry) => WorkflowPaths.isRunDirEntry(entry))
+        .map((entry) => entry.name as RunRef)
+        .sort(
+          (left, right) =>
+            (WorkflowPaths.parseRunRefTimestamp(right) ?? 0) -
+            (WorkflowPaths.parseRunRefTimestamp(left) ?? 0)
+        );
+    } catch {
+      return [];
+    }
   }
 
   private async writeDescriptorDirect(

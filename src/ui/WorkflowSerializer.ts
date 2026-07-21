@@ -1387,25 +1387,8 @@ export class WorkflowSerializer {
     clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
-    const outputHistoryManager = this.getOutputHistoryManager();
-    if (!outputHistoryManager) return;
     const manager = this.getManager();
-    await outputHistoryManager.deleteRunByRef(
-      address.workflowKey,
-      address.runRef
-    );
-    const remaining = await outputHistoryManager.getRunSummaries(
-      address.workflowKey
-    );
-    const fallback: WorkflowViewAddress = remaining[0]
-      ? {
-          workflowKey: address.workflowKey,
-          kind: "run",
-          runRef: remaining[0].runRef,
-        }
-      : { workflowKey: address.workflowKey, kind: "draft" };
-    if (manager) {
-      await manager.loadRunViewForClient(fallback, pm, clientId);
-    }
+    if (!manager) return;
+    await manager.deleteRunAtAddress(address, pm, clientId);
   }
 }

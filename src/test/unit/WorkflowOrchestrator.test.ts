@@ -117,6 +117,122 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.strictEqual(internal.findExecutionRunRef(workflowKey), executingRun);
   });
 
+  test("deleting a viewed run falls every affected client back deterministically", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-delete-multiclient-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const fileManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Delete clients",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await fileManager.createWorkingFile(
+        "delete-clients",
+        [{ prompt: "one" }],
+        workspace,
+        "Delete clients"
+      );
+      const older = await fileManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now() - 1_000
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        older.runRef,
+        older.runDir,
+        older.runId,
+        Date.now() - 1_000
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, older.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+      const newer = await WorkingFileManager.seedNewRun(
+        workspace,
+        workflowKey,
+        older.runRef
+      );
+      await history.initializeRunAt(
+        workflowKey,
+        newer.runRef,
+        newer.runDir,
+        newer.runId,
+        newer.startedAt
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, newer.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.cliSessions = new Map();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef: newer.runRef }],
+        ["browser:delete", { workflowKey, kind: "run", runRef: newer.runRef }],
+        ["browser:older", { workflowKey, kind: "run", runRef: older.runRef }],
+      ]);
+      const refreshed: Array<{ clientId: string; address: unknown }> = [];
+      internal.viewMessageSinks = new Map([
+        ["browser:delete", () => undefined],
+        ["browser:older", () => undefined],
+      ]);
+      internal.loadRunViewForClient = async (
+        address: unknown,
+        _send: unknown,
+        clientId: string
+      ) => {
+        refreshed.push({ clientId, address });
+        internal.viewAddressRegistry.set(clientId, address);
+      };
+
+      await orchestrator.deleteRunAtAddress(
+        { workflowKey, runRef: newer.runRef },
+        () => undefined,
+        PANEL_CLIENT_ID
+      );
+
+      const fallback = { workflowKey, kind: "run", runRef: older.runRef };
+      assert.deepStrictEqual(
+        orchestrator.getViewAddress(PANEL_CLIENT_ID),
+        fallback
+      );
+      assert.deepStrictEqual(
+        orchestrator.getViewAddress("browser:delete"),
+        fallback
+      );
+      assert.deepStrictEqual(
+        orchestrator.getViewAddress("browser:older"),
+        fallback
+      );
+      assert.deepStrictEqual(
+        refreshed.map(({ clientId }) => clientId).sort(),
+        [PANEL_CLIENT_ID, "browser:delete", "browser:older"].sort()
+      );
+    } finally {
+      await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("loads the current most-recent working file for a first-time browser client", async () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype
@@ -442,6 +558,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-addressed-rewind-")
     );
+    let history: OutputHistoryManager | undefined;
     try {
       const sourceAccess = {
         getWorkingFilePath: () => undefined,
@@ -468,7 +585,8 @@ suite("WorkflowOrchestrator addressed start position", () => {
         workflowKey,
         Date.now()
       );
-      await new OutputHistoryManager(workspace).initializeRunAt(
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
         workflowKey,
         historical.runRef,
         historical.runDir,
@@ -531,6 +649,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
       assert.deepStrictEqual(events[0].payload.definition.rewindBoundary, 1);
       assert.strictEqual(events[0].payload.definitionRevision, 2);
     } finally {
+      await history?.flushPendingIndexRefresh();
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });

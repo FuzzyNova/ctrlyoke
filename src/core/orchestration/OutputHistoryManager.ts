@@ -14,9 +14,11 @@ import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  LOCK_STATUS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
+import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
@@ -26,6 +28,7 @@ import {
   type WorkflowDefinitionSnapshot,
   type RunSummary,
 } from "../../types/WorkflowTimelineTypes";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 /** The definitionRevision that produced an attempt, plus the snapshot to commit before its first output. */
 export interface DefinitionRevisionContext {
@@ -62,6 +65,7 @@ export class OutputHistoryManager {
     this.timelineRecorder
   );
   private readonly historySearchIndexService = new HistorySearchIndexService();
+  private readonly lineageRepository = new WorkflowLineageRepository();
   /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
   private readonly streamingBuffer = new StreamingHistoryBuffer(
     (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush)
@@ -93,7 +97,8 @@ export class OutputHistoryManager {
     runRef: RunRef,
     runDir: string,
     runId: number,
-    startedAt: number
+    startedAt: number,
+    retentionProtectedRunRefs: readonly RunRef[] = []
   ): Promise<{ filePath: string; runCount: number }> {
     Log.debug(
       `[OutputHistoryManager] initializeRunAt: ${workflowKey}/${runRef} (runId=${runId})`
@@ -109,7 +114,11 @@ export class OutputHistoryManager {
 
       // Prune old runs if needed (disk-only operation)
       const maxRuns = ConfigurationUtils.getMaxRuns();
-      await this.pruneOldRuns(workflowKey, maxRuns);
+      await this.pruneOldRuns(
+        workflowKey,
+        maxRuns,
+        new Set([runRef, ...retentionProtectedRunRefs])
+      );
 
       const runCount = (await this.getRunsForWorkflow(workflowKey)).length;
       this.refreshSearchIndex();
@@ -713,7 +722,11 @@ export class OutputHistoryManager {
    * Prune runs beyond maxRuns limit (oldest first).
    * Disk-only: deletes the oldest run directories, no working file changes.
    */
-  async pruneOldRuns(workflowKey: WorkflowKey, maxRuns: number): Promise<void> {
+  async pruneOldRuns(
+    workflowKey: WorkflowKey,
+    maxRuns: number,
+    inFlightRunRefs: ReadonlySet<RunRef> = new Set()
+  ): Promise<void> {
     // -1 or 0 means keep all runs
     if (maxRuns <= 0) {
       return;
@@ -724,28 +737,32 @@ export class OutputHistoryManager {
       return;
     }
 
-    // runs is newest-first; slice(maxRuns) gives the oldest entries to delete
-    const protectedRunRef = await this.getProtectedRunRef(workflowKey);
-    const toDelete = runs.slice(maxRuns).filter((runRef) => {
-      if (runRef !== protectedRunRef) return true;
-      Log.warn(
-        `Skipping protected pending-continuation run ${runRef} during pruning`
-      );
-      return false;
-    });
+    const protectedRunRefs = await this.getProtectedRunRefs(
+      workflowKey,
+      inFlightRunRefs
+    );
+    // The newest completed rows remain the normal retention set. Additional
+    // protected rows may temporarily exceed the configured limit, while older
+    // eligible rows are removed without retargeting an in-flight source/target.
+    for (const runRef of runs.slice(0, maxRuns)) {
+      protectedRunRefs.add(runRef);
+    }
+    const toDelete = runs.filter((runRef) => !protectedRunRefs.has(runRef));
     for (const runRef of toDelete) {
-      const entryPath = WorkflowPaths.runDir(
-        this._workspaceFolderPath,
-        workflowKey,
-        runRef
-      );
       try {
-        await fs.promises.rm(entryPath, { recursive: true, force: true });
+        await this.lineageRepository.deleteRun(
+          this._workspaceFolderPath,
+          workflowKey,
+          runRef,
+          protectedRunRefs
+        );
       } catch (error) {
         Log.warn(`Failed to delete old run ${runRef}:`, error);
       }
     }
-    this.refreshSearchIndex();
+    if (toDelete.length > 0) {
+      await this.refreshSearchIndex();
+    }
   }
 
   /**
@@ -765,22 +782,7 @@ export class OutputHistoryManager {
       );
       return runs.length;
     }
-    if ((await this.getProtectedRunRef(workflowKey)) === runRef) {
-      throw new Error("Cannot delete a run with a pending continuation");
-    }
-
-    const entryPath = WorkflowPaths.runDir(
-      this._workspaceFolderPath,
-      workflowKey,
-      runRef
-    );
-    try {
-      await fs.promises.rm(entryPath, { recursive: true, force: true });
-    } catch (error) {
-      Log.warn(`Failed to delete run ${runRef}:`, error);
-    }
-
-    this.refreshSearchIndex();
+    await this.deleteRunByRef(workflowKey, runRef);
     return (await this.getRunsForWorkflow(workflowKey)).length;
   }
 
@@ -789,29 +791,30 @@ export class OutputHistoryManager {
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): Promise<number> {
-    if ((await this.getProtectedRunRef(workflowKey)) === runRef) {
-      throw new Error("Cannot delete a run with a pending continuation");
-    }
     const runs = await this.getRunsForWorkflow(workflowKey);
     if (!runs.includes(runRef)) {
       throw new Error(
         `Run ${runRef} does not exist for workflow ${workflowKey}`
       );
     }
-    await fs.promises.rm(
-      WorkflowPaths.runDir(this._workspaceFolderPath, workflowKey, runRef),
-      {
-        recursive: true,
-        force: false,
-      }
+    const protectedRunRefs = await this.getProtectedRunRefs(workflowKey);
+    await this.lineageRepository.deleteRun(
+      this._workspaceFolderPath,
+      workflowKey,
+      runRef,
+      protectedRunRefs
     );
-    this.refreshSearchIndex();
+    // Returning only after the refreshed documents land makes a deleted run
+    // unreachable through search as well as through the run list.
+    await this.refreshSearchIndex();
     return (await this.getRunsForWorkflow(workflowKey)).length;
   }
 
-  private async getProtectedRunRef(
-    workflowKey: WorkflowKey
-  ): Promise<RunRef | undefined> {
+  private async getProtectedRunRefs(
+    workflowKey: WorkflowKey,
+    inFlightRunRefs: ReadonlySet<RunRef> = new Set()
+  ): Promise<Set<RunRef>> {
+    const protectedRunRefs = new Set(inFlightRunRefs);
     try {
       const descriptor = JSON.parse(
         await fs.promises.readFile(
@@ -819,12 +822,39 @@ export class OutputHistoryManager {
           "utf8"
         )
       ) as import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor;
-      return descriptor.pendingEdit?.kind === "rewind"
-        ? descriptor.pendingEdit.runRef
-        : undefined;
+      if (descriptor.pendingEdit?.kind === "rewind") {
+        protectedRunRefs.add(descriptor.pendingEdit.runRef);
+      }
     } catch {
-      return undefined;
+      // A missing/corrupt descriptor cannot make an active run safe to delete.
     }
+    const summaries = await this.getRunSummaries(workflowKey);
+    for (const summary of summaries) {
+      if (
+        summary.executionState === EXECUTION_STATES.RUNNING ||
+        summary.executionState === EXECUTION_STATES.PAUSING ||
+        summary.executionState === EXECUTION_STATES.PAUSED ||
+        summary.executionState === EXECUTION_STATES.CANCELLING
+      ) {
+        protectedRunRefs.add(summary.runRef);
+      }
+    }
+    const lock = await WorkflowLockManager.readLock(
+      this._workspaceFolderPath,
+      workflowKey
+    );
+    const lockStatus = await WorkflowLockManager.checkLock(
+      this._workspaceFolderPath,
+      workflowKey
+    );
+    if (
+      lock &&
+      lockStatus !== LOCK_STATUS.NONE &&
+      lockStatus !== LOCK_STATUS.STALE
+    ) {
+      protectedRunRefs.add(lock.runRef);
+    }
+    return protectedRunRefs;
   }
 
   /**
@@ -1027,12 +1057,13 @@ export class OutputHistoryManager {
    * append is cheap. Awaiting it here previously stalled workflow completion on
    * a full index rebuild (and contributed to the extension-host OOM).
    */
-  private refreshSearchIndex(): void {
+  private refreshSearchIndex(): Promise<void> {
     this.pendingIndexRefresh = this.historySearchIndexService
       .enqueueWorkspaceRefresh(this._workspaceFolderPath)
       .catch(() => {
         /* index refresh failures are logged inside the index service */
       });
+    return this.pendingIndexRefresh;
   }
 
   /**

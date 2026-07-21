@@ -6,6 +6,8 @@ import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
 import {
   EXECUTION_STATES,
   CLI_EVENT_TYPES,
@@ -43,10 +45,13 @@ async function initTestRun(
   workflowKey: WorkflowKey;
   runRef: ReturnType<typeof WorkflowPaths.formatRunRef>;
 }> {
-  const workflowKey = await WorkflowPaths.allocateWorkflowKey(
-    workspaceRoot,
-    nameHint
-  );
+  const workflowKey = (
+    await new WorkflowLineageRepository().createLineage(
+      workspaceRoot,
+      nameHint,
+      nameHint
+    )
+  ).workflowKey;
   const runRef = WorkflowPaths.formatRunRef(Date.now() + nextTestRunOrdinal++);
   const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
   const result = await manager.initializeRunAt(
@@ -777,10 +782,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("deleteRun removes a single run by index (newest = 0)", async () => {
-    const workflowKey = await WorkflowPaths.allocateWorkflowKey(
-      tempWorkspace,
-      "wf-delete"
-    );
+    const workflowKey = (
+      await new WorkflowLineageRepository().createLineage(
+        tempWorkspace,
+        "wf-delete",
+        "wf-delete"
+      )
+    ).workflowKey;
 
     // Three runs with explicit, increasing startedAt so ordering is deterministic.
     await initAdditionalRun(recorder, tempWorkspace, workflowKey, 1, 1000);
@@ -807,10 +815,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   test("deleteRun is a no-op for an out-of-range index", async () => {
-    const workflowKey = await WorkflowPaths.allocateWorkflowKey(
-      tempWorkspace,
-      "wf-delete-oob"
-    );
+    const workflowKey = (
+      await new WorkflowLineageRepository().createLineage(
+        tempWorkspace,
+        "wf-delete-oob",
+        "wf-delete-oob"
+      )
+    ).workflowKey;
     await initAdditionalRun(recorder, tempWorkspace, workflowKey, 1, 1000);
 
     const remaining = await manager.deleteRun(workflowKey, 5);
@@ -818,6 +829,159 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(
       (await manager.getRunsForWorkflow(workflowKey)).length,
       1
+    );
+  });
+
+  test("repairs the descriptor hint and preserves run-id gaps after stable deletion", async () => {
+    const repository = new WorkflowLineageRepository();
+    const workflowKey = (
+      await repository.createLineage(
+        tempWorkspace,
+        "wf-delete-repair",
+        "wf-delete-repair"
+      )
+    ).workflowKey;
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 4, 4_000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 9, 9_000);
+    const [newest, older] = await manager.getRunsForWorkflow(workflowKey);
+    assert.ok(newest);
+    assert.ok(older);
+
+    await manager.saveExecutionOutput(
+      manager.getHistoryFilePath(workflowKey, newest),
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      [
+        {
+          prompt: "descriptor repair",
+          response: "delete-search-document-needle",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 9_001,
+          attemptIndex: 0,
+        },
+      ]
+    );
+    await manager.flushPendingIndexRefresh();
+    const search = new HistorySearchService();
+    assert.strictEqual(
+      (await search.search("delete-search-document-needle", tempWorkspace))
+        .totalCount,
+      1
+    );
+
+    await manager.deleteRunByRef(workflowKey, newest);
+
+    const descriptor = await repository.readDescriptor(
+      tempWorkspace,
+      workflowKey
+    );
+    assert.strictEqual(descriptor.latestRunRef, older);
+    assert.strictEqual(descriptor.nextRunId, 1);
+    const remaining = await manager.getRunSummaries(workflowKey);
+    assert.deepStrictEqual(
+      remaining.map((summary) => summary.runId),
+      [4]
+    );
+    assert.strictEqual(
+      (await search.search("delete-search-document-needle", tempWorkspace))
+        .totalCount,
+      0,
+      "deletion must remove stale search documents before it resolves"
+    );
+  });
+
+  test("retention keeps executing and pending-rewind runs while pruning complete runs", async () => {
+    const repository = new WorkflowLineageRepository();
+    const workflowKey = (
+      await repository.createLineage(
+        tempWorkspace,
+        "wf-prune-protected",
+        "wf-prune-protected"
+      )
+    ).workflowKey;
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 1, 1_000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 2, 2_000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 3, 3_000);
+    const [newest, pending, oldest] =
+      await manager.getRunsForWorkflow(workflowKey);
+    assert.ok(newest);
+    assert.ok(pending);
+    assert.ok(oldest);
+    await manager.appendRuntimeTransition(
+      manager.getHistoryFilePath(workflowKey, newest),
+      {
+        command: "resume",
+        previous: {
+          status: EXECUTION_STATES.IDLE,
+          stopped: false,
+          totalPausedDuration: 0,
+        },
+        current: {
+          status: EXECUTION_STATES.RUNNING,
+          stopped: false,
+          totalPausedDuration: 0,
+        },
+        timestampMs: Date.now(),
+      }
+    );
+    await repository.updateDescriptor(
+      tempWorkspace,
+      workflowKey,
+      (descriptor) => ({
+        ...descriptor,
+        pendingEdit: {
+          kind: "rewind",
+          runRef: pending,
+          fromStepIndex: 1,
+          baseDefinitionRevision: 1,
+        },
+      })
+    );
+
+    await manager.pruneOldRuns(workflowKey, 1);
+
+    const remaining = await manager.getRunsForWorkflow(workflowKey);
+    assert.deepStrictEqual(remaining, [newest, pending]);
+    await assert.rejects(
+      () => manager.deleteRunByRef(workflowKey, newest),
+      /protected/
+    );
+    await assert.rejects(
+      () => manager.deleteRunByRef(workflowKey, pending),
+      /protected/
+    );
+    assert.ok(
+      !(await manager.getRunsForWorkflow(workflowKey)).includes(oldest),
+      "the oldest complete run should be retained only until pruning runs"
+    );
+  });
+
+  test("finite retention skips an old in-flight source or append target instead of retargeting it", async () => {
+    const workflowKey = (
+      await new WorkflowLineageRepository().createLineage(
+        tempWorkspace,
+        "wf-prune-inflight",
+        "wf-prune-inflight"
+      )
+    ).workflowKey;
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 2, 2_000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 5, 5_000);
+    await initAdditionalRun(recorder, tempWorkspace, workflowKey, 8, 8_000);
+    const [newest, middle, oldest] =
+      await manager.getRunsForWorkflow(workflowKey);
+    assert.ok(newest);
+    assert.ok(middle);
+    assert.ok(oldest);
+
+    await manager.pruneOldRuns(workflowKey, 1, new Set([oldest]));
+
+    assert.deepStrictEqual(
+      await manager.getRunsForWorkflow(workflowKey),
+      [newest, oldest],
+      "the old protected target survives while the next oldest complete run is pruned"
+    );
+    assert.ok(
+      !(await manager.getRunsForWorkflow(workflowKey)).includes(middle)
     );
   });
 

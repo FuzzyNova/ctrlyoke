@@ -912,6 +912,7 @@ export class WorkflowInstance {
   async executeSeededRun(
     seeded: {
       workingFilePath: string;
+      sourceRunRef: RunRef;
       runRef: RunRef;
       runId: number;
       runDir: string;
@@ -926,7 +927,8 @@ export class WorkflowInstance {
       seeded.runRef,
       seeded.runDir,
       seeded.runId,
-      seeded.startedAt
+      seeded.startedAt,
+      [seeded.sourceRunRef]
     );
     if (!historyInit.filePath) {
       throw new Error(
