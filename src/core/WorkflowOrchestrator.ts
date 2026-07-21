@@ -619,6 +619,27 @@ export class WorkflowOrchestrator {
       // awaits created a race: the workflow could complete during replayRunHistoryTo or
       // replayOutputHistoryTo, causing retirement with stale (false) isViewed.
       this.setViewedWorkflowId(clientId, workflowId);
+
+      // Load the addressed disk snapshot before replaying the live in-memory state.
+      // RUN_VIEW_LOADED resets the webview's live output store, so sending it after
+      // replayFullStateTo caused newly connected browser clients to discard the full
+      // reconnect buffer and display only the potentially incomplete on-disk history.
+      // The addressed snapshot must land before the live replay for a resident workflow.
+      const queueState = instance.getQueueState();
+      if (queueState.workflowKey) {
+        await this.loadRunViewForClient(
+          queueState.runRef
+            ? {
+                workflowKey: queueState.workflowKey,
+                kind: "run",
+                runRef: queueState.runRef,
+              }
+            : { workflowKey: queueState.workflowKey, kind: "draft" },
+          send,
+          clientId
+        );
+      }
+
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
       await instance.replayOutputHistoryTo(send);
@@ -688,20 +709,6 @@ export class WorkflowOrchestrator {
             }
           }
         }
-      }
-      const queueState = instance.getQueueState();
-      if (queueState.workflowKey) {
-        await this.loadRunViewForClient(
-          queueState.runRef
-            ? {
-                workflowKey: queueState.workflowKey,
-                kind: "run",
-                runRef: queueState.runRef,
-              }
-            : { workflowKey: queueState.workflowKey, kind: "draft" },
-          send,
-          clientId
-        );
       }
       // setViewedWorkflowId already called before awaits above.
       return;

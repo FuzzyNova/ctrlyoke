@@ -279,8 +279,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       id: "instance-other",
       getQueueState: () => ({ workflowKey: other }),
     });
-    // replayWorkflowStateTo finishes by loading a run view, which re-enters the
-    // binder. A definition with no workflowKey would otherwise never satisfy
+    // replayWorkflowStateTo loads a run view, which re-enters the binder. A
+    // definition with no workflowKey would otherwise never satisfy
     // the already-bound check and would recurse forever.
     internal.replayWorkflowStateTo = async (workflowId: string) => {
       replays.push(workflowId);
@@ -491,6 +491,62 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
     assert.deepStrictEqual(sent, [
       { type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: [] },
+    ]);
+  });
+
+  test("loads the addressed run view before replaying live output to a reconnecting client", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowId = "workflow-live";
+    const workflowKey = "live-lineage" as never;
+    const runRef = "run-2026-07-21T12-00-00-000Z" as never;
+    const operations: string[] = [];
+
+    internal.viewerRegistry = new Map<string, string | null>();
+    internal.viewAddressRegistry = new Map();
+    internal.instances = new Map([
+      [
+        workflowId,
+        {
+          getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
+          getQueueState: () => ({ workflowKey, runRef }),
+          replayFullStateTo: () => operations.push("live-output"),
+          replayRunHistoryTo: async () => operations.push("run-history"),
+          replayOutputHistoryTo: async () => operations.push("output-history"),
+        },
+      ],
+    ]);
+    internal.retiredInstances = new Map();
+    internal.cliSessions = new Map();
+    internal.getActiveTerminalWorkflowRefs = () => [];
+    internal.loadRunViewForClient = async (
+      address: unknown,
+      _send: (message: unknown) => void,
+      clientId: string
+    ) => {
+      assert.strictEqual(
+        internal.viewerRegistry.get(clientId),
+        workflowId,
+        "the client must be bound before addressed loading awaits"
+      );
+      assert.deepStrictEqual(address, { workflowKey, kind: "run", runRef });
+      operations.push("run-view");
+    };
+
+    await orchestrator.replayWorkflowStateTo(
+      workflowId,
+      () => undefined,
+      "browser:reconnect",
+      { skipTerminalReplay: true }
+    );
+
+    assert.deepStrictEqual(operations, [
+      "run-view",
+      "live-output",
+      "run-history",
+      "output-history",
     ]);
   });
 });
