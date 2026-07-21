@@ -170,6 +170,7 @@ export const MESSAGE_TYPES = {
   DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by index
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
   RUN_VIEW_LOADED: "runViewLoaded", // Extension -> Webview: Atomic definition/settings/output snapshot for a view address
+  WORKFLOW_VIEW_IDENTITY: "workflowViewIdentity", // Extension -> Webview: Authoritative address + revisions after a definition write
 
   // Save Workflow - Webview <-> Extension
   SAVE_WORKFLOW_REQUEST: "saveWorkflowRequest", // Webview -> Extension: Request default save path/format

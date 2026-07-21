@@ -1,5 +1,35 @@
 # Run-Head Mutability Follow-up
 
+Status: **Complete**, plus the post-implementation correction below.
+
+## Post-implementation correction: client addressing (2026-07-21)
+
+The mutation policy below was implemented correctly, but the everyday flow
+"new workflow → queue steps → edit properties → run" still failed, because
+nothing kept a client's _address_ aligned with the workflow it was editing:
+
+- `loadRunViewForClient` was the only writer of the view-address registry, so a
+  client that created a new workflow kept the previously viewed lineage's
+  address. Addressed guards then validated one file while the write went to
+  another, and `REMOVE_WORKFLOW_HISTORY` cleared an unrelated live instance's
+  working-file path — after which its next write forked a duplicate lineage
+  while the in-memory queue still held the original steps (the reported
+  "new workflow appeared" and "two steps showed up" symptoms).
+- Definition writes with no snapshot back-channel (queueing a step, renaming,
+  first-draft creation) never told the client its new `definitionRevision`, so
+  the following property edit was rejected as a revision conflict.
+- `WorkingFileManager`'s expectation stayed armed after a rejected or no-op
+  write and later failed an unrelated write to a different file.
+
+Fixed by: re-deriving the address from the bound instance (on instance switch
+and on the instance's own lineage-identity change), publishing
+`WORKFLOW_VIEW_IDENTITY` after every definition write, keying the
+remove-lineage guard off the instance's own `workflowKey`, and making the
+revision expectation strictly one-shot. See `core.instructions.md` for the
+durable rules.
+
+## Original delivery
+
 Status: **Complete — implemented and verified.** All five delivery-sequence phases are done: addressed `*AtRun` mutation primitives, the orchestrator's automatic-draft policy replaced with in-place addressed edits, dashboard append converted to `appendAndContinueAtRun`, pending-rewind property relaxation, and a full compile/typecheck/lint/format/test pass (extension-host 1856/1856, webview 1028/1028). One deferred, currently-invisible gap: the `*AtRun` primitives don't update a run's `manifest.json` `definitionRevision`/`stepCount` between an idle edit and the run's next execution (only `reopenRun`/execution transitions touch the manifest today). No UI currently renders manifest-sourced `stepCount`, and no backend logic depends on it being current mid-edit, so this was left unaddressed rather than adding unrequested plumbing — worth a follow-up if a run-switcher UI ever surfaces manifest step counts for idle runs.
 
 ## Problem

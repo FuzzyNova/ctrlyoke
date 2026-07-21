@@ -1395,3 +1395,52 @@ suite("WorkingFileManager", () => {
     });
   });
 });
+
+suite("WorkingFileManager one-shot definition revision expectation", () => {
+  let workspace: string;
+
+  afterEach(async () => {
+    if (workspace) {
+      await fs.rm(workspace, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  test("does not carry a rejected expectation into the next write", async () => {
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-expectation-"));
+    const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+    await writeTempJson(workingFilePath, makeMinimalWorkingFile());
+    const manager = new WorkingFileManager(makeMockAccess(workingFilePath));
+
+    manager.expectDefinitionRevision(9);
+    await assert.rejects(
+      () => manager.updateWorkingFileProperties({ harness: "claude-cli" }),
+      /Definition revision conflict/
+    );
+
+    // The stale expectation must not survive to guard an unrelated later write.
+    const result = await manager.updateWorkingFileProperties({
+      harness: "claude-cli",
+    });
+    assert.strictEqual(result?.workingFile.harness, "claude-cli");
+    assert.strictEqual(result?.workingFile.definitionRevision, 2);
+  });
+
+  test("does not carry an expectation past a write that changed nothing", async () => {
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-expectation-"));
+    const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+    await writeTempJson(workingFilePath, {
+      ...makeMinimalWorkingFile(),
+      harness: "claude-cli",
+    });
+    const manager = new WorkingFileManager(makeMockAccess(workingFilePath));
+
+    manager.expectDefinitionRevision(1);
+    // No-op: the property already holds this value, so nothing is written.
+    await manager.updateWorkingFileProperties({ harness: "claude-cli" });
+
+    const result = await manager.updateWorkingFileProperties({
+      model: "sonnet",
+    });
+    assert.strictEqual(result?.workingFile.model, "sonnet");
+  });
+});

@@ -57,6 +57,7 @@ import type {
   ActiveTerminalWorkflowRef,
   RunViewLoadedMessage,
   WorkflowDefinitionMutation,
+  WorkflowViewIdentityMessage,
 } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -120,6 +121,20 @@ function sameWorkingFilePath(
 ): boolean {
   if (a == null || b == null) return a === b;
   return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+}
+
+/**
+ * The view address an instance's own queue currently describes: its draft while
+ * the lineage has never executed, otherwise the run it holds open. `null` until
+ * the instance has a lineage at all (a blank, never-edited new workflow).
+ */
+function lineageAddressOf(
+  state: QueueState | undefined
+): WorkflowViewAddress | null {
+  if (!state?.workflowKey) return null;
+  return state.runRef
+    ? { workflowKey: state.workflowKey, kind: "run", runRef: state.runRef }
+    : { workflowKey: state.workflowKey, kind: "draft" };
 }
 
 export class WorkflowOrchestrator {
@@ -1752,6 +1767,53 @@ export class WorkflowOrchestrator {
 
   getViewAddress(clientId: string): WorkflowViewAddress | null {
     return this.getViewAddressRegistry().get(clientId) ?? null;
+  }
+
+  /**
+   * Current address and revisions of a client's editing target, read from disk.
+   *
+   * Every definition write advances `definitionRevision`, and a client that
+   * does not learn the new value fails its *next* optimistic mutation. The
+   * caller publishes this after a write so cheap mutation paths stay addressable
+   * without paying for a full `RUN_VIEW_LOADED` snapshot.
+   */
+  async getViewIdentity(
+    clientId: string
+  ): Promise<WorkflowViewIdentityMessage | null> {
+    const address = this.getViewAddress(clientId);
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!address || !workspaceRoot) {
+      return null;
+    }
+    const filePath =
+      address.kind === "draft"
+        ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
+        : WorkflowPaths.runFilePath(
+            workspaceRoot,
+            address.workflowKey,
+            address.runRef
+          );
+    try {
+      const [content, descriptor] = await Promise.all([
+        fs.promises.readFile(filePath, "utf8"),
+        this.lineageRepository.readDescriptor(
+          workspaceRoot,
+          address.workflowKey
+        ),
+      ]);
+      return {
+        type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
+        address,
+        definitionRevision:
+          (JSON.parse(content) as WorkingFile).definitionRevision ?? 1,
+        descriptorRevision: descriptor.revision,
+      };
+    } catch (error) {
+      Log.warn(
+        `[WorkflowOrchestrator] Could not resolve view identity for ${clientId}: ${getErrorMessage(error)}`
+      );
+      return null;
+    }
   }
 
   /** Defensive for lightweight unit-test instances created without constructors. */
@@ -3415,6 +3477,17 @@ export class WorkflowOrchestrator {
     const prev = this.viewerRegistry.get(clientId);
     this.viewerRegistry.set(clientId, workflowId);
     if (prev !== workflowId) {
+      // The address must follow the instance this client now edits; keeping the
+      // previous workflow's address would point every addressed guard, and every
+      // lineage-scoped command, at a workflow the client no longer has open.
+      const adopted = workflowId
+        ? (this.instances.get(workflowId) ??
+          this.retiredInstances.get(workflowId))
+        : undefined;
+      this.getViewAddressRegistry().set(
+        clientId,
+        lineageAddressOf(adopted?.getQueueState())
+      );
       const prevInRetired = prev ? this.retiredInstances.has(prev) : false;
       const prevStillViewed = prev
         ? this.isWorkflowViewedByAnyClient(prev)
@@ -3519,12 +3592,22 @@ export class WorkflowOrchestrator {
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
 
+    // Tracks the lineage identity this instance last reported, so the address
+    // registry is refreshed on the transition rather than on every state change.
+    let lastLineageIdentity = "";
+
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
     instance.promptQueue.onDidChangeState((state) => {
       const summary = instance.getSummary();
       const inRegistry = this.instances.has(instance.id);
+
+      const lineageIdentity = `${state.workflowKey ?? ""}|${state.runRef ?? ""}`;
+      if (lineageIdentity !== lastLineageIdentity) {
+        lastLineageIdentity = lineageIdentity;
+        this.adoptInstanceLineageAddress(instance, state);
+      }
 
       Log.debug(
         `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
@@ -3610,6 +3693,34 @@ export class WorkflowOrchestrator {
     });
 
     return instance;
+  }
+
+  /**
+   * Adopts an instance's own lineage as the view address of every client bound
+   * to it, whenever that instance's lineage identity changes.
+   *
+   * `loadRunViewForClient` is the only other writer of the address registry, and
+   * it is never involved when an instance creates a lineage for itself (first
+   * property edit or rename on a brand-new workflow). Without this, such a
+   * client keeps the address of whatever it viewed previously, and every
+   * addressed guard then validates revisions of a file the client is not
+   * editing — or a lineage-scoped command reaches into the wrong workflow.
+   *
+   * Browsing an older run does not change the bound instance, so a client
+   * reading history is left alone.
+   */
+  private adoptInstanceLineageAddress(
+    instance: WorkflowInstance,
+    state: QueueState
+  ): void {
+    const address = lineageAddressOf(state);
+
+    for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
+      if (viewedInstanceId !== instance.id) {
+        continue;
+      }
+      this.getViewAddressRegistry().set(clientId, address);
+    }
   }
 
   private syncExecutingRunViews(instance: WorkflowInstance): void {

@@ -1125,6 +1125,9 @@ export class WebviewMessageRouter {
           message.workflowName,
           this.clientId
         );
+        // Renaming a brand-new workflow is what materializes its lineage/draft,
+        // so this is often the client's first chance to learn its own address.
+        await this.publishViewIdentity();
         return;
       }
       this.serializer.handleUpdateWorkflowName(
@@ -1436,8 +1439,12 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message) => {
       if (message.address) {
         await this.serializer.handleRemoveWorkflowHistory(message.address);
+        // Only the instance whose own file was just deleted may be reset. Keying
+        // this off the view address instead would clear an unrelated live
+        // workflow's path, and its next write would then fork a duplicate
+        // lineage while the queue still held the original steps.
         if (
-          this.getOrchestrator()?.getViewAddress(this.clientId)?.workflowKey ===
+          this.getOrchestrator()?.getQueueState(this.clientId)?.workflowKey ===
           message.address.workflowKey
         ) {
           this.getOrchestrator()?.clearWorkingFilePath(this.clientId);
@@ -1707,6 +1714,9 @@ export class WebviewMessageRouter {
         forceNewWorkflow,
         this.clientId
       );
+      // Queueing a step is a definition mutation with no other back-channel, so
+      // without this the following property edit would carry a stale revision.
+      await this.publishViewIdentity();
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);
       vscode.window.showErrorMessage(
@@ -1915,18 +1925,34 @@ export class WebviewMessageRouter {
     mutation?: unknown;
   }): Promise<void> {
     if (
-      this.asWorkflowDefinitionMutation(message ?? {})?.address.kind === "run"
+      this.asWorkflowDefinitionMutation(message ?? {})?.address.kind !== "run"
     ) {
-      return;
+      const orchestrator = this.getOrchestrator();
+      const address = orchestrator?.getViewAddress(this.clientId);
+      if (orchestrator && address) {
+        await orchestrator.loadRunViewForClient(
+          address,
+          this.scopedPostMessage,
+          this.clientId
+        );
+      }
     }
-    const orchestrator = this.getOrchestrator();
-    const address = orchestrator?.getViewAddress(this.clientId);
-    if (orchestrator && address) {
-      await orchestrator.loadRunViewForClient(
-        address,
-        this.scopedPostMessage,
-        this.clientId
-      );
+    await this.publishViewIdentity();
+  }
+
+  /**
+   * Hands the client the revisions its next mutation must carry. Required after
+   * every definition write, including the ones that broadcast nothing else
+   * (queueing a step, renaming, creating a lineage's first draft) — a client
+   * left holding a superseded `definitionRevision` has its next edit rejected
+   * as a conflict.
+   */
+  private async publishViewIdentity(): Promise<void> {
+    const identity = await this.getOrchestrator()?.getViewIdentity(
+      this.clientId
+    );
+    if (identity) {
+      this.scopedPostMessage(identity);
     }
   }
 

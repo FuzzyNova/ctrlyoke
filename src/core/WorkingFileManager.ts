@@ -293,20 +293,24 @@ export class WorkingFileManager {
     this.expectedDefinitionRevision = revision;
   }
 
+  /**
+   * Consumes the pending expectation as it checks it, so it can only ever guard
+   * the one write it was primed for. Leaving it armed made a superseded
+   * expectation fail an unrelated later write — including writes to a different
+   * lineage's file after the queue changed working files.
+   */
   private assertExpectedDefinitionRevision(workingFile: WorkingFile): void {
-    if (this.expectedDefinitionRevision === undefined) {
+    const expected = this.expectedDefinitionRevision;
+    this.expectedDefinitionRevision = undefined;
+    if (expected === undefined) {
       return;
     }
     const actual = workingFile.definitionRevision ?? 1;
-    if (actual !== this.expectedDefinitionRevision) {
+    if (actual !== expected) {
       throw new Error(
-        `Definition revision conflict: expected ${this.expectedDefinitionRevision}, found ${actual}`
+        `Definition revision conflict: expected ${expected}, found ${actual}`
       );
     }
-  }
-
-  private consumeExpectedDefinitionRevision(): void {
-    this.expectedDefinitionRevision = undefined;
   }
 
   /**
@@ -1432,7 +1436,6 @@ export class WorkingFileManager {
       await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
         skipLock: true,
       });
-      this.consumeExpectedDefinitionRevision();
     });
   }
 
@@ -1523,7 +1526,6 @@ export class WorkingFileManager {
           this.queueAccess.setDefinitionRevision(
             workingFile.definitionRevision
           );
-          this.consumeExpectedDefinitionRevision();
         }
 
         for (const key of appliedKeys) {

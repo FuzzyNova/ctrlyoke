@@ -1137,6 +1137,20 @@ export interface RunViewLoadedMessage {
   descriptorRevision: number;
 }
 
+/**
+ * Authoritative address and revisions for the client's own editing target,
+ * published after every definition write. `RUN_VIEW_LOADED` also carries these,
+ * but it is a full snapshot; this message exists so the cheap paths that only
+ * advance `definitionRevision` (queueing a step, renaming, creating a lineage's
+ * first draft) still leave the client able to address its next mutation.
+ */
+export interface WorkflowViewIdentityMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY;
+  address: WorkflowViewAddress;
+  definitionRevision: number;
+  descriptorRevision: number;
+}
+
 /** Stable target and optimistic revisions required for a definition mutation. */
 export interface WorkflowDefinitionMutation {
   address: WorkflowViewAddress;

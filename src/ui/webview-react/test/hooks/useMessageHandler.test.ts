@@ -880,6 +880,78 @@ describe("run view revision snapshots", () => {
       baseDefinitionRevision: 6,
     });
   });
+
+  it("re-arms the next edit with the revisions a write just produced", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({
+      displayedViewAddress: { workflowKey: "wf-1" as never, kind: "draft" },
+      displayedDefinitionRevision: 3,
+      displayedDescriptorRevision: 4,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address: { workflowKey: "wf-1" as never, kind: "draft" },
+        definitionRevision: 4,
+        descriptorRevision: 5,
+      });
+    });
+
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(4);
+    expect(useUiStore.getState().displayedDescriptorRevision).toBe(5);
+  });
+
+  it("does not let a write identity override a run switch still in flight", () => {
+    renderHook(() => useMessageHandler());
+    const inFlight = { workflowKey: "wf-1" as never, kind: "run" as const };
+
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: {
+          ...inFlight,
+          runRef: "run-2026-07-20T11-00-00-000Z" as never,
+        },
+        pendingRunViewRequestId: "run-view-1",
+      });
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address: {
+          ...inFlight,
+          runRef: "run-2026-07-20T10-00-00-000Z" as never,
+        },
+        definitionRevision: 2,
+        descriptorRevision: 2,
+      });
+    });
+
+    expect(useUiStore.getState().displayedViewAddress).toEqual({
+      ...inFlight,
+      runRef: "run-2026-07-20T11-00-00-000Z",
+    });
+  });
+
+  it("stops addressing the previous workflow when a new one is selected", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "previous-workflow" as never,
+        kind: "draft",
+      },
+      displayedDefinitionRevision: 5,
+      displayedDescriptorRevision: 6,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "New Workflow",
+        workflowName: "New Workflow",
+        steps: [],
+      });
+    });
+
+    expect(useUiStore.getState().displayedViewAddress).toBeNull();
+    expect(useUiStore.getState().displayedDefinitionRevision).toBeNull();
+    expect(useUiStore.getState().displayedDescriptorRevision).toBeNull();
+  });
 });
 
 describe("history search messages", () => {

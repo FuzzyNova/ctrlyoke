@@ -475,6 +475,11 @@ interface UiActions {
     revisions?: { definitionRevision: number; descriptorRevision: number },
     pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number }
   ) => void;
+  setDisplayedViewIdentity: (
+    address: WorkflowViewAddress,
+    definitionRevision: number,
+    descriptorRevision: number
+  ) => void;
   requestRunViewLoad: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
@@ -1046,6 +1051,20 @@ export const useUiStore = create<UiState & UiActions>()(
                   summaries.findIndex((run) => run.runRef === address.runRef)
                 )
               : 0,
+        }),
+
+      // Address + revisions only. Unlike setDisplayedRunView this never touches
+      // run summaries or history framing, so it is safe to apply after an
+      // ordinary edit without disturbing what the user is looking at.
+      setDisplayedViewIdentity: (
+        address,
+        definitionRevision,
+        descriptorRevision
+      ) =>
+        set({
+          displayedViewAddress: address,
+          displayedDefinitionRevision: definitionRevision,
+          displayedDescriptorRevision: descriptorRevision,
         }),
 
       requestRunViewLoad: (address, summaries, executionRunRef) => {

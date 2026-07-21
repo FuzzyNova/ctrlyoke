@@ -220,6 +220,16 @@ function applyWorkflowPropertiesFromMessage(message: {
 function applyWorkflowChange(): void {
   useWorkflowStore.getState().clearHistoryOutputs();
   useUiStore.getState().clearHistoryView();
+  // The previous workflow's address and revisions cannot address the new one.
+  // Holding them would aim the next mutation at the workflow the user just left.
+  // Every path that lands on an addressable workflow republishes them — the
+  // RUN_VIEW_LOADED that follows a load, or the WORKFLOW_VIEW_IDENTITY that
+  // follows the first write to a brand-new workflow.
+  useUiStore.setState({
+    displayedViewAddress: null,
+    displayedDefinitionRevision: null,
+    displayedDescriptorRevision: null,
+  });
   useUiStore.getState().setFinalStepFooterExpanded(false);
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
@@ -1743,6 +1753,24 @@ function createMessageHandlers(): MessageHandlerMap {
         uiStore.setRunStates(runStates);
       }
     }
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_VIEW_IDENTITY - authoritative address/revisions after a write
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY] = (message) => {
+    const { address, definitionRevision, descriptorRevision } = message;
+    if (!address) return;
+    // A run view switch that is still in flight owns the address; letting this
+    // land first would re-point the client at the run it is navigating away from.
+    if (useUiStore.getState().pendingRunViewRequestId !== null) return;
+    useUiStore
+      .getState()
+      .setDisplayedViewIdentity(
+        address,
+        definitionRevision ?? 1,
+        descriptorRevision ?? 1
+      );
   };
 
   // --------------------------------------------------------------------------

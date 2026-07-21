@@ -1188,3 +1188,156 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 });
+
+suite("WorkflowOrchestrator client view addressing", () => {
+  test("adopts an instance's own lineage for the clients bound to it", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const previousKey = "previous-lineage" as never;
+    const newKey = "new-lineage" as never;
+
+    internal.viewerRegistry = new Map([
+      ["client-a", "new-instance"],
+      ["client-b", "other-instance"],
+    ]);
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey: previousKey, kind: "draft" }],
+      ["client-b", { workflowKey: previousKey, kind: "draft" }],
+    ]);
+
+    internal.adoptInstanceLineageAddress(
+      { id: "new-instance" },
+      {
+        workflowKey: newKey,
+      }
+    );
+
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+      workflowKey: newKey,
+      kind: "draft",
+    });
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
+      workflowKey: previousKey,
+      kind: "draft",
+    });
+  });
+
+  test("addresses a promoted run rather than the lineage draft", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "promoted-lineage" as never;
+    const runRef = "run-2026-07-21T10-00-00-000Z" as never;
+
+    internal.viewerRegistry = new Map([["client-a", "instance"]]);
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey, kind: "draft" }],
+    ]);
+
+    internal.adoptInstanceLineageAddress(
+      { id: "instance" },
+      {
+        workflowKey,
+        runRef,
+      }
+    );
+
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+      workflowKey,
+      kind: "run",
+      runRef,
+    });
+  });
+
+  test("drops the previous lineage's address when a client switches to a blank workflow", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    internal.viewerRegistry = new Map([["client-a", "old-instance"]]);
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey: "old-lineage" as never, kind: "draft" }],
+    ]);
+    internal.instances = new Map([
+      ["blank-instance", { getQueueState: () => ({}) }],
+    ]);
+    internal.retiredInstances = new Map();
+
+    internal.setViewedWorkflowId("client-a", "blank-instance");
+
+    assert.strictEqual(orchestrator.getViewAddress("client-a"), null);
+  });
+
+  test("reports the on-disk revisions a client's next mutation must carry", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-view-identity-")
+    );
+    try {
+      const fileManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Identity",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey, workingFilePath } =
+        await fileManager.createWorkingFile(
+          "identity",
+          [{ prompt: "one" }],
+          workspace,
+          "Identity"
+        );
+      const draft = JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+      draft.definitionRevision = 7;
+      await fs.writeFile(workingFilePath, JSON.stringify(draft));
+
+      const repository = new WorkflowLineageRepository();
+      const descriptor = await repository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.lineageRepository = repository;
+      internal.viewAddressRegistry = new Map([
+        ["client-a", { workflowKey, kind: "draft" }],
+      ]);
+
+      const identity = await orchestrator.getViewIdentity("client-a");
+
+      assert.deepStrictEqual(identity, {
+        type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
+        address: { workflowKey, kind: "draft" },
+        definitionRevision: 7,
+        descriptorRevision: descriptor.revision,
+      });
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("has no identity to publish before a client's workflow has a lineage", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.viewAddressRegistry = new Map([["client-a", null]]);
+
+    assert.strictEqual(await orchestrator.getViewIdentity("client-a"), null);
+  });
+});
