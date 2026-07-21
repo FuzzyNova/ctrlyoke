@@ -817,11 +817,12 @@ export class WorkflowExecutor {
       initCliOutput
     );
     if (context.historyFilePath && context.outputHistoryManager) {
-      void context.outputHistoryManager.startStreamingExecutionOutput(
+      await context.outputHistoryManager.startStreamingExecutionOutput(
         context.historyFilePath,
         this.toOutputExecutionTarget(target),
         initCliOutput,
-        context.getDefinitionRevisionContext?.()
+        context.getDefinitionRevisionContext?.(),
+        { kind: "script", startReason: "initial", prompt: step.script }
       );
     }
 
@@ -921,6 +922,16 @@ export class WorkflowExecutor {
       stepIndex >= 0 ? stepIndex : this.promptQueue.getState().currentIndex,
       { scriptOutput: scriptRuntimeOutput }
     );
+    if (context.historyFilePath && context.outputHistoryManager) {
+      await context.outputHistoryManager.recordScriptExecution(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        scriptRuntimeOutput,
+        context.getDefinitionRevisionContext?.()
+      );
+    }
 
     // Build final output text (headless: from evalResult; interactive: empty since xterm shows it)
     const rawOutput = [evalResult.stdout, evalResult.stderr]
@@ -992,6 +1003,19 @@ export class WorkflowExecutor {
         target,
         attemptIndex,
         `Script exited with code ${evalResult.exitCode}`
+      );
+    }
+    if (context.historyFilePath && context.outputHistoryManager) {
+      await context.outputHistoryManager.recordAttemptTerminal(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        shouldContinue ? "completed" : "failed",
+        context.getDefinitionRevisionContext?.(),
+        shouldContinue
+          ? undefined
+          : `Script exited with code ${evalResult.exitCode}`
       );
     }
 
@@ -1298,9 +1322,8 @@ export class WorkflowExecutor {
     timestampMs: number,
     runIndex: number,
     attemptIndex: number,
-    rawTextOutput: boolean | undefined,
-    persistToHistory: boolean = false
-  ): void {
+    rawTextOutput: boolean | undefined
+  ): CliOutput {
     const placeholder: CliOutput = {
       prompt,
       response: "",
@@ -1318,7 +1341,7 @@ export class WorkflowExecutor {
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       if (signedStepIndex === undefined) {
-        return;
+        return placeholder;
       }
       context.dashboardProvider?.updateCliOutput(signedStepIndex, placeholder);
       context.captureOutputInit?.(
@@ -1350,18 +1373,7 @@ export class WorkflowExecutor {
       );
     }
 
-    if (
-      persistToHistory &&
-      context.historyFilePath &&
-      context.outputHistoryManager
-    ) {
-      void context.outputHistoryManager.startStreamingExecutionOutput(
-        context.historyFilePath,
-        this.toOutputExecutionTarget(target),
-        placeholder,
-        context.getDefinitionRevisionContext?.()
-      );
-    }
+    return placeholder;
   }
 
   /** Resolves token usage stats from parsed output metadata, falling back to last-result statistics. */
@@ -1767,7 +1779,8 @@ export class WorkflowExecutor {
     runIndex: number,
     attemptIndex: number,
     sendOptions: WorkflowContext,
-    onPromptSent?: () => Promise<void>
+    onPromptSent?: () => Promise<void>,
+    attemptStartReason: "initial" | "retry" | "resumed" = "initial"
   ): Promise<{ responseText: string; duration: number } | null> {
     const runtime = this.promptQueue.getRuntimeStateMachine();
     const attempt = runtime.beginAttempt(target, attemptIndex, Date.now());
@@ -1782,7 +1795,7 @@ export class WorkflowExecutor {
     ) {
       context.dashboardProvider?.updateCliStreamingChunk(signedStepIndex, "");
     }
-    this.emitStreamingPlaceholder(
+    const placeholder = this.emitStreamingPlaceholder(
       context,
       target,
       signedStepIndex,
@@ -1792,9 +1805,23 @@ export class WorkflowExecutor {
       initTimestampMs,
       runIndex,
       attemptIndex,
-      rawTextOutput,
-      true
+      rawTextOutput
     );
+    if (context.historyFilePath && context.outputHistoryManager) {
+      // Do not let a prompt that may consume prior context proceed until its
+      // durable attempt identity and definition revision are committed.
+      await context.outputHistoryManager.startStreamingExecutionOutput(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        placeholder,
+        context.getDefinitionRevisionContext?.(),
+        {
+          kind: "ai",
+          startReason: attemptStartReason,
+          prompt: promptStep.prompt,
+        }
+      );
+    }
 
     const responsePromise = this.waitForResponseComplete(
       promptStep,
@@ -1951,6 +1978,18 @@ export class WorkflowExecutor {
         workflowFile
       );
 
+      if (context.historyFilePath && context.outputHistoryManager) {
+        await context.outputHistoryManager.recordRetryScheduled(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          runIndex,
+          retryAttemptIndex,
+          retryAttemptIndex - 1,
+          retryPromptStep.prompt,
+          context.getDefinitionRevisionContext?.()
+        );
+      }
+
       const result = await this.executeWithStreaming(
         retryPromptStep,
         integration,
@@ -1974,7 +2013,9 @@ export class WorkflowExecutor {
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,
-        }
+        },
+        undefined,
+        "retry"
       );
 
       if (!result) {
@@ -2180,6 +2221,14 @@ export class WorkflowExecutor {
         stoppedOutput,
         "stopped-by-user output"
       );
+      await context.outputHistoryManager?.recordAttemptTerminal?.(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        "stopped",
+        context.getDefinitionRevisionContext?.()
+      );
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE && stoppedOutput.response) {
         await this.promptQueue
@@ -2226,6 +2275,15 @@ export class WorkflowExecutor {
       if (runtime.requestStop()) {
         await this.promptQueue.commitRuntimeTransition({ persist: false });
       }
+      await context.outputHistoryManager?.recordAttemptTerminal?.(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        "cancelled",
+        context.getDefinitionRevisionContext?.(),
+        failureReason
+      );
       return { outcome: "stop" };
     }
 
@@ -2308,6 +2366,15 @@ export class WorkflowExecutor {
       signedStepIndex,
       errorCliOutput,
       "error output"
+    );
+    await context.outputHistoryManager?.recordAttemptTerminal?.(
+      context.historyFilePath,
+      this.toOutputExecutionTarget(target),
+      runIndex,
+      attemptIndex,
+      "failed",
+      context.getDefinitionRevisionContext?.(),
+      failureReason
     );
 
     return { outcome: "stop" };
@@ -2392,6 +2459,15 @@ export class WorkflowExecutor {
         signedStepIndex,
         failureOutputRecord,
         `${failureKind} output`
+      );
+      await context.outputHistoryManager?.recordAttemptTerminal?.(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        "failed",
+        context.getDefinitionRevisionContext?.(),
+        failureReason
       );
 
       if (
@@ -2521,6 +2597,16 @@ export class WorkflowExecutor {
       cliOutputObj,
       "step output"
     );
+    if (context.historyFilePath && context.outputHistoryManager) {
+      await context.outputHistoryManager.recordAttemptTerminal(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        "completed",
+        context.getDefinitionRevisionContext?.()
+      );
+    }
   }
 
   private async finalizeWorkflowExecution(): Promise<void> {

@@ -24,6 +24,11 @@ import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
 import {
   TIMELINE_EVENT_TYPES,
+  TIMELINE_ATTEMPT_KINDS,
+  TIMELINE_ATTEMPT_START_REASONS,
+  type TimelineAttemptKind,
+  type TimelineAttemptStartReason,
+  type TimelineAttemptTerminalState,
   type WorkflowTimelineEventDraft,
   type WorkflowDefinitionSnapshot,
   type RunSummary,
@@ -34,6 +39,13 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 export interface DefinitionRevisionContext {
   definitionRevision: number;
   definition: WorkflowDefinitionSnapshot;
+}
+
+/** Immutable identity/input metadata recorded before an attempt can emit output. */
+export interface TimelineAttemptStartContext {
+  kind: TimelineAttemptKind;
+  startReason: TimelineAttemptStartReason;
+  prompt: string;
 }
 import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
@@ -173,7 +185,12 @@ export class OutputHistoryManager {
     historyFilePath: string,
     target: OutputExecutionTarget,
     cliOutput: CliOutput,
-    definitionContext?: DefinitionRevisionContext
+    definitionContext?: DefinitionRevisionContext,
+    attemptContext: TimelineAttemptStartContext = {
+      kind: TIMELINE_ATTEMPT_KINDS.AI,
+      startReason: TIMELINE_ATTEMPT_START_REASONS.INITIAL,
+      prompt: cliOutput.prompt,
+    }
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -185,14 +202,25 @@ export class OutputHistoryManager {
           definitionContext
         );
       }
+      const definitionRevision = definitionContext?.definitionRevision ?? 1;
       await this.timelineRecorder.appendEvents(historyFilePath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: cliOutput.timestampMs ?? Date.now(),
+          target,
+          runIndex: cliOutput.runIndex ?? 0,
+          attemptIndex: cliOutput.attemptIndex ?? 0,
+          definitionRevision,
+          payload: attemptContext,
+        },
         {
           eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
           timestampMs: cliOutput.timestampMs ?? Date.now(),
           target,
           runIndex: cliOutput.runIndex ?? 0,
           attemptIndex: cliOutput.attemptIndex ?? 0,
-          definitionRevision: definitionContext?.definitionRevision,
+          definitionRevision,
+          responseKind: attemptContext.kind,
           payload: { cliOutput },
         },
       ]);
@@ -284,6 +312,119 @@ export class OutputHistoryManager {
       attemptIndex,
       events
     );
+  }
+
+  /** Record the final state of an attempt after its response/error has landed. */
+  async recordAttemptTerminal(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    terminalState: TimelineAttemptTerminalState,
+    definitionContext?: DefinitionRevisionContext,
+    reason?: string
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+    await this.timelineRecorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        timestampMs: Date.now(),
+        target,
+        runIndex,
+        attemptIndex,
+        definitionRevision: definitionContext?.definitionRevision ?? 1,
+        payload: { terminalState, reason },
+      },
+    ]);
+  }
+
+  /** Persist lossless script process data before runtime metadata can be replaced. */
+  async recordScriptExecution(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    scriptOutput: {
+      command: string;
+      stdout: string;
+      stderr: string;
+      exitCode?: number;
+    },
+    definitionContext?: DefinitionRevisionContext
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+    await this.timelineRecorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+        timestampMs: Date.now(),
+        target,
+        runIndex,
+        attemptIndex,
+        definitionRevision: definitionContext?.definitionRevision ?? 1,
+        payload: scriptOutput,
+      },
+    ]);
+  }
+
+  /** Persist the exact retry input before the retry attempt is sent. */
+  async recordRetryScheduled(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    previousAttemptIndex: number,
+    retryPrompt: string,
+    definitionContext?: DefinitionRevisionContext
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+    await this.timelineRecorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.RETRY_SCHEDULED,
+        timestampMs: Date.now(),
+        target,
+        runIndex,
+        attemptIndex,
+        definitionRevision: definitionContext?.definitionRevision ?? 1,
+        payload: { retryPrompt, previousAttemptIndex },
+      },
+    ]);
+  }
+
+  /** Persist asynchronous post-completion activity before mutable runtime text is updated. */
+  async recordFollowUpResponse(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    responseText: string,
+    events: CliEvent[],
+    contextWindow: { used: number; size: number } | undefined,
+    definitionContext?: DefinitionRevisionContext
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+    await this.timelineRecorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        timestampMs: Date.now(),
+        target,
+        runIndex,
+        attemptIndex,
+        definitionRevision: definitionContext?.definitionRevision ?? 1,
+        payload: {
+          responseTextLength: responseText.length,
+          eventCount: events.length,
+          contextWindow,
+        },
+      },
+    ]);
   }
 
   /** Write one coalesced batch of streamed deltas to the timeline. */
@@ -453,6 +594,13 @@ export class OutputHistoryManager {
     try {
       await this.streamingBuffer.flush(historyFilePath);
       const completedAt = Date.now();
+      await this.timelineRecorder.appendEvents(historyFilePath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+          timestampMs: completedAt,
+          payload: { executionState, stepCount },
+        },
+      ]);
       await this.timelineRecorder.updateManifest(
         historyFilePath,
         (manifest) => ({
@@ -1018,6 +1166,10 @@ export class OutputHistoryManager {
         runIndex: cliOutput.runIndex ?? 0,
         attemptIndex: cliOutput.attemptIndex ?? 0,
         definitionRevision,
+        responseKind:
+          cliOutput.source === "script"
+            ? TIMELINE_ATTEMPT_KINDS.SCRIPT
+            : TIMELINE_ATTEMPT_KINDS.AI,
         payload: { cliOutput },
       })
     );

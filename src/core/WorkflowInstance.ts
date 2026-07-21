@@ -2431,6 +2431,37 @@ export class WorkflowInstance {
     // history persistence below — a step can be referenced via priorContext even
     // when history capture is unavailable.
     const followUpText = extractTextFromEvents({ events: contentEvents });
+    const historyFilePath = this.activeHistoryFilePath;
+    const latestContextWindowSync = [...events]
+      .reverse()
+      .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
+      ?.data as ContextWindowSyncData | undefined;
+    if (historyFilePath) {
+      try {
+        // Commit the immutable follow-up record before extending mutable
+        // responseText, which later phases will hydrate from this timeline.
+        await this.outputHistoryManager.recordFollowUpResponse(
+          historyFilePath,
+          target,
+          runIndex,
+          attemptIndex,
+          followUpText,
+          contentEvents,
+          latestContextWindowSync
+            ? {
+                used: latestContextWindowSync.used,
+                size: latestContextWindowSync.size,
+              }
+            : undefined,
+          this.getDefinitionRevisionContext()
+        );
+      } catch (error) {
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity event:`,
+          error
+        );
+      }
+    }
     if (followUpText) {
       try {
         if (target.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -2452,7 +2483,6 @@ export class WorkflowInstance {
       }
     }
 
-    const historyFilePath = this.activeHistoryFilePath;
     if (!historyFilePath) {
       return;
     }
@@ -2470,11 +2500,6 @@ export class WorkflowInstance {
       if (!existing) {
         return;
       }
-
-      const latestContextWindowSync = [...events]
-        .reverse()
-        .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
-        ?.data as ContextWindowSyncData | undefined;
 
       const existingEvents = existing.cliOutput.structured?.events ?? [];
       const hasFollowUpDivider = existingEvents.some(

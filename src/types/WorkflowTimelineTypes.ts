@@ -19,13 +19,19 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = "2.2.0" as const;
+export const TIMELINE_SCHEMA_VERSION = "2.3.0" as const;
 
 export const TIMELINE_EVENT_TYPES = {
   WORKFLOW_RUNTIME_TRANSITION_RECORDED: "workflowRuntimeTransitionRecorded",
   CLI_OUTPUT_RECORDED: "cliOutputRecorded",
   CLI_OUTPUT_CHUNK_APPENDED: "cliOutputChunkAppended",
   CLI_OUTPUT_EVENTS_APPENDED: "cliOutputEventsAppended",
+  ATTEMPT_STARTED: "attemptStarted",
+  ATTEMPT_TERMINATED: "attemptTerminated",
+  SCRIPT_EXECUTION_RECORDED: "scriptExecutionRecorded",
+  RETRY_SCHEDULED: "retryScheduled",
+  FOLLOW_UP_RESPONSE_APPENDED: "followUpResponseAppended",
+  RUN_TERMINATED: "runTerminated",
   STATUS_MESSAGE_RECORDED: "statusMessageRecorded",
   DEFINITION_REVISION_COMMITTED: "definitionRevisionCommitted",
   // Legacy aggregate event retained for read compatibility only.
@@ -41,6 +47,35 @@ export const TIMELINE_EVENT_TYPES = {
 
 export type WorkflowTimelineEventType =
   (typeof TIMELINE_EVENT_TYPES)[keyof typeof TIMELINE_EVENT_TYPES];
+
+/** Why an attempt exists. This is independent of its target, so final-step loops
+ * and resumed queue work use the same durable attempt model. */
+export const TIMELINE_ATTEMPT_START_REASONS = {
+  INITIAL: "initial",
+  RETRY: "retry",
+  RESUMED: "resumed",
+} as const;
+
+export type TimelineAttemptStartReason =
+  (typeof TIMELINE_ATTEMPT_START_REASONS)[keyof typeof TIMELINE_ATTEMPT_START_REASONS];
+
+export const TIMELINE_ATTEMPT_KINDS = {
+  AI: "ai",
+  SCRIPT: "script",
+} as const;
+
+export type TimelineAttemptKind =
+  (typeof TIMELINE_ATTEMPT_KINDS)[keyof typeof TIMELINE_ATTEMPT_KINDS];
+
+export const TIMELINE_ATTEMPT_TERMINAL_STATES = {
+  COMPLETED: "completed",
+  FAILED: "failed",
+  CANCELLED: "cancelled",
+  STOPPED: "stopped",
+} as const;
+
+export type TimelineAttemptTerminalState =
+  (typeof TIMELINE_ATTEMPT_TERMINAL_STATES)[keyof typeof TIMELINE_ATTEMPT_TERMINAL_STATES];
 
 export interface WorkflowRunManifest {
   schemaVersion: typeof TIMELINE_SCHEMA_VERSION;
@@ -199,6 +234,8 @@ export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftB
   attemptIndex: number;
   /** The definitionRevision that produced this attempt (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision?: number;
+  /** The output role is explicit so a later resolver never infers retry/script semantics from runtime fields. */
+  responseKind?: TimelineAttemptKind;
   payload: {
     cliOutput: CliOutput;
   };
@@ -217,8 +254,83 @@ export interface CliOutputEventsAppendedEventDraft extends TargetedTimelineEvent
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED;
   runIndex?: number;
   attemptIndex: number;
+  definitionRevision?: number;
   payload: {
     events: CliEvent[];
+  };
+}
+
+/** A durable identity and input record for one executable attempt. */
+export interface AttemptStartedEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: {
+    kind: TimelineAttemptKind;
+    startReason: TimelineAttemptStartReason;
+    prompt: string;
+  };
+}
+
+/** The definitive outcome for an attempt, including failures where no response was produced. */
+export interface AttemptTerminatedEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: {
+    terminalState: TimelineAttemptTerminalState;
+    reason?: string;
+  };
+}
+
+/** Preserves script stdout/stderr separately from its display-formatted response. */
+export interface ScriptExecutionRecordedEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: {
+    command: string;
+    stdout: string;
+    stderr: string;
+    exitCode?: number;
+  };
+}
+
+/** Captures the exact retry prompt before the next attempt is constructed/sent. */
+export interface RetryScheduledEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.RETRY_SCHEDULED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: {
+    retryPrompt: string;
+    previousAttemptIndex: number;
+  };
+}
+
+/** Records post-completion session activity without relying on mutable responseText. */
+export interface FollowUpResponseAppendedEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: {
+    /** Content remains in the one canonical CLI response event; avoid duplicating large payloads. */
+    responseTextLength: number;
+    eventCount: number;
+    contextWindow?: { used: number; size: number };
+  };
+}
+
+/** Matches the terminal manifest transition, so an event-only reader does not infer terminal state from a manifest. */
+export interface RunTerminatedEventDraft extends RunTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.RUN_TERMINATED;
+  payload: {
+    executionState: ExecutionState;
+    stepCount: number;
   };
 }
 
@@ -277,6 +389,12 @@ export type WorkflowTimelineEventDraft =
   | CliOutputRecordedEventDraft
   | CliOutputChunkAppendedEventDraft
   | CliOutputEventsAppendedEventDraft
+  | AttemptStartedEventDraft
+  | AttemptTerminatedEventDraft
+  | ScriptExecutionRecordedEventDraft
+  | RetryScheduledEventDraft
+  | FollowUpResponseAppendedEventDraft
+  | RunTerminatedEventDraft
   | StatusMessageRecordedEventDraft
   | StatusMessagesUpdatedEventDraft
   | WorkspaceSnapshotCapturedEventDraft
@@ -291,6 +409,7 @@ export interface CliOutputRecordedEvent extends TargetedTimelineEventBase {
   attemptIndex: number;
   /** The definitionRevision that produced this attempt (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision?: number;
+  responseKind?: TimelineAttemptKind;
   payload: {
     cliOutput: CliOutput;
   };
@@ -309,9 +428,55 @@ export interface CliOutputEventsAppendedEvent extends TargetedTimelineEventBase 
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED;
   runIndex?: number;
   attemptIndex: number;
+  definitionRevision?: number;
   payload: {
     events: CliEvent[];
   };
+}
+
+export interface AttemptStartedEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: AttemptStartedEventDraft["payload"];
+}
+
+export interface AttemptTerminatedEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: AttemptTerminatedEventDraft["payload"];
+}
+
+export interface ScriptExecutionRecordedEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: ScriptExecutionRecordedEventDraft["payload"];
+}
+
+export interface RetryScheduledEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.RETRY_SCHEDULED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: RetryScheduledEventDraft["payload"];
+}
+
+export interface FollowUpResponseAppendedEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED;
+  runIndex: number;
+  attemptIndex: number;
+  definitionRevision: number;
+  payload: FollowUpResponseAppendedEventDraft["payload"];
+}
+
+export interface RunTerminatedEvent extends RunTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.RUN_TERMINATED;
+  payload: RunTerminatedEventDraft["payload"];
 }
 
 export interface WorkflowRuntimeTransitionRecordedEvent extends RunTimelineEventBase {
@@ -385,6 +550,12 @@ export type WorkflowTimelineEvent =
   | CliOutputRecordedEvent
   | CliOutputChunkAppendedEvent
   | CliOutputEventsAppendedEvent
+  | AttemptStartedEvent
+  | AttemptTerminatedEvent
+  | ScriptExecutionRecordedEvent
+  | RetryScheduledEvent
+  | FollowUpResponseAppendedEvent
+  | RunTerminatedEvent
   | StatusMessageRecordedEvent
   | StatusMessagesUpdatedEvent
   | WorkspaceSnapshotCapturedEvent

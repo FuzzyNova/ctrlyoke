@@ -123,6 +123,223 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.deepStrictEqual(events, []);
   });
 
+  test("serializes the normalized attempt lifecycle without duplicating large follow-up payloads", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-events");
+    const target = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      loopIndex: 4,
+    } as const;
+    const definition = {
+      workflowName: "timeline contract",
+      steps: [{ prompt: "first definition" }],
+    };
+    const definitionContext = { definitionRevision: 2, definition };
+    const largeFollowUp = "x".repeat(256 * 1024);
+    const queueTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 0,
+    } as const;
+
+    // Fresh AI, a failed attempt, pause/resume, and a same-run restart are
+    // deliberately serialized independently of the final-step loop below.
+    await manager.startStreamingExecutionOutput(
+      filePath,
+      queueTarget,
+      {
+        prompt: "queue prompt",
+        response: "",
+        elapsed: 0,
+        isStreaming: true,
+        timestampMs: 90,
+        runIndex: 0,
+        attemptIndex: 0,
+      },
+      definitionContext,
+      { kind: "ai", startReason: "initial", prompt: "queue prompt" }
+    );
+    await manager.recordAttemptTerminal(
+      filePath,
+      queueTarget,
+      0,
+      0,
+      "failed",
+      definitionContext,
+      "harness failed"
+    );
+    await manager.appendRuntimeTransition(filePath, {
+      command: "pause",
+      previous: {
+        status: EXECUTION_STATES.RUNNING,
+        stopped: false,
+        totalPausedDuration: 0,
+      },
+      current: {
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        totalPausedDuration: 0,
+      },
+      timestampMs: 91,
+    });
+    await manager.appendRuntimeTransition(filePath, {
+      command: "resume",
+      previous: {
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        totalPausedDuration: 0,
+      },
+      current: {
+        status: EXECUTION_STATES.RUNNING,
+        stopped: false,
+        totalPausedDuration: 0,
+      },
+      timestampMs: 92,
+    });
+
+    await manager.startStreamingExecutionOutput(
+      filePath,
+      target,
+      {
+        prompt: "final prompt",
+        response: "",
+        elapsed: 0,
+        isStreaming: true,
+        timestampMs: 100,
+        runIndex: 3,
+        attemptIndex: 1,
+      },
+      definitionContext,
+      { kind: "ai", startReason: "resumed", prompt: "final prompt" }
+    );
+    await manager.recordRetryScheduled(
+      filePath,
+      target,
+      3,
+      2,
+      1,
+      "retry using the validation output",
+      definitionContext
+    );
+    await manager.startStreamingExecutionOutput(
+      filePath,
+      target,
+      {
+        prompt: "script final prompt",
+        response: "",
+        elapsed: 0,
+        isStreaming: true,
+        timestampMs: 110,
+        runIndex: 3,
+        attemptIndex: 2,
+        source: "script",
+      },
+      definitionContext,
+      { kind: "script", startReason: "retry", prompt: "script final prompt" }
+    );
+    await manager.recordScriptExecution(
+      filePath,
+      target,
+      3,
+      2,
+      { command: "npm test", stdout: "ok", stderr: "", exitCode: 0 },
+      definitionContext
+    );
+    await manager.recordFollowUpResponse(
+      filePath,
+      target,
+      3,
+      2,
+      largeFollowUp,
+      [
+        {
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: 120,
+          data: { text: largeFollowUp },
+        },
+      ],
+      { used: 32, size: 128 },
+      definitionContext
+    );
+    await manager.recordAttemptTerminal(
+      filePath,
+      target,
+      3,
+      2,
+      "cancelled",
+      definitionContext,
+      "user cancelled"
+    );
+    await manager.finalizeRun(filePath, EXECUTION_STATES.STOPPED, 1);
+
+    const events = await recorder.readEvents(filePath);
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED,
+        TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
+        TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
+        TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.RETRY_SCHEDULED,
+        TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+        TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+      ]
+    );
+    const attempt = events[6];
+    assert.strictEqual(
+      attempt?.eventType,
+      TIMELINE_EVENT_TYPES.ATTEMPT_STARTED
+    );
+    if (attempt?.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
+      assert.deepStrictEqual(attempt.target, target);
+      assert.strictEqual(attempt.runIndex, 3);
+      assert.strictEqual(attempt.attemptIndex, 1);
+      assert.strictEqual(attempt.definitionRevision, 2);
+      assert.deepStrictEqual(attempt.payload, {
+        kind: "ai",
+        startReason: "resumed",
+        prompt: "final prompt",
+      });
+    }
+    const followUp = events[12];
+    assert.strictEqual(
+      followUp?.eventType,
+      TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED
+    );
+    if (
+      followUp?.eventType === TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED
+    ) {
+      assert.deepStrictEqual(followUp.payload, {
+        responseTextLength: largeFollowUp.length,
+        eventCount: 1,
+        contextWindow: { used: 32, size: 128 },
+      });
+    }
+
+    const rawEvents = await fs.readFile(
+      path.join(path.dirname(filePath), TIMELINE_STORAGE_FILES.EVENTS),
+      "utf8"
+    );
+    assert.ok(
+      !rawEvents.includes(largeFollowUp),
+      "follow-up metadata must not duplicate a large response/event payload"
+    );
+    assert.deepStrictEqual(
+      JSON.parse(rawEvents.trim().split(/\r?\n/)[14] ?? "{}"),
+      events[14]
+    );
+
+    const manifest = await recorder.readManifest(filePath);
+    assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(manifest.definitionRevision, 2);
+  });
+
   test("projects timeline events back into WorkflowOutputHistory shape", async () => {
     const historyInit = await initTestRun(manager, tempWorkspace, "wf-test");
     const historyFilePath = historyInit.filePath;
@@ -271,10 +488,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(loaded.orderedEntries[1].sequence, 3);
 
     const events = await recorder.readEvents(historyFilePath);
-    assert.strictEqual(events.length, 8);
+    assert.strictEqual(events.length, 9);
     assert.deepStrictEqual(
       events.map((event) => event.sequence),
-      [1, 2, 3, 4, 5, 6, 7, 8]
+      [1, 2, 3, 4, 5, 6, 7, 8, 9]
     );
     assert.deepStrictEqual(
       events.map((event) => event.eventType),
@@ -287,6 +504,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
         TIMELINE_EVENT_TYPES.UNDO_APPLIED,
         TIMELINE_EVENT_TYPES.REDO_APPLIED,
+        TIMELINE_EVENT_TYPES.RUN_TERMINATED,
       ]
     );
     assert.ok(events.every((event) => typeof event.timestampMs === "number"));
@@ -339,6 +557,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.deepStrictEqual(
       events.map((event) => event.eventType),
       [
+        TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
@@ -375,6 +594,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.deepStrictEqual(
       events.map((event) => event.eventType),
       [
+        TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
       ],

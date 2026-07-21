@@ -536,6 +536,13 @@ Process note for whoever picks this up: after finishing an item, update its `[DO
 3. Move all response/prior-context/MCP consumers to the resolver and hydrate active execution caches on restore.
 4. Remove duplicated persisted response fields only after full parity and crash/restart tests pass.
 
+### Phase 4 checkpoint / progress
+
+- **Item 1 [DONE] — normalized timeline event contract:** inventoried producers (`WorkflowExecutor` for AI/script/retry output, `WorkflowInstance` for resumed-session follow-up, and `OutputHistoryManager` for runtime/finalization) and consumers (`OutputHistoryTimelineAdapter`, history search/index, dashboard history replay, and future resolver/prior-context paths). `TimelineRecorder` remains the only manifest/event writer. The append-only schema now carries explicit attempt start/terminal identity, response kind, lossless script process data, exact retry input, bounded follow-up metadata, final-step addressing, run terminal state, and definition revision tags. Runtime `responseText`, script output, and final-step caches remain in place until the resolver parity/cutover items. Attempt creation is awaited before the harness sends a potentially context-dependent prompt; follow-up timeline persistence is awaited before mutable runtime response text extends. Focused serialization coverage includes AI, scripts, retry, resumed/final-step attempts, failed/cancelled/stopped outcomes, pause/resume restart transitions, definition revisions, and large follow-up payload de-duplication.
+- **Item 2 [PENDING] — streaming resolver and parity matrix.**
+- **Item 3 [PENDING] — resolver consumer migration and restore hydration.**
+- **Item 4 [PENDING] — duplicated runtime-field removal after parity/crash proof.**
+
 ### Phase 5 — Separate follow-up: cross-run/cross-workflow prior context
 
 Extend `PriorContext` with `WorkflowRunAddress` and resolve through the phase-4 reader. This requires its own UX and authorization design; it is not part of phases 1–4.
