@@ -464,10 +464,10 @@ export class RunOutputResolver {
     const queueItems = [...queueIndices]
       .sort((left, right) => left - right)
       .flatMap((index): PriorContextItem[] => {
-        const step = allPrompts[index];
         const value = resolved.get(
           getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
         );
+        const step = value?.definition?.step ?? allPrompts[index];
         if (!step || !value) return [];
         if ("script" in step) {
           const scriptOutput = value.scriptOutput;
@@ -515,6 +515,37 @@ export class RunOutputResolver {
         ? finalItems
         : [];
     return deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]);
+  }
+
+  /** Read a whole terminal source run through the timeline reader. */
+  async resolveAllPriorContextItems(
+    manifestPath: string
+  ): Promise<PriorContextItem[]> {
+    const queueIndices = new Set<number>();
+    for await (const event of this.stream(manifestPath)) {
+      if (
+        event.kind !== "runTerminated" &&
+        event.kind !== "runtimeTransition" &&
+        event.attempt.target.kind === FINAL_STEP_PHASES.QUEUE
+      ) {
+        queueIndices.add(event.attempt.target.stepIndex);
+      }
+    }
+    const maxIndex = Math.max(-1, ...queueIndices);
+    return this.resolvePriorContextItems(
+      manifestPath,
+      [PRIOR_CONTEXT_KEYWORDS.ALL, PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL],
+      Array.from({ length: maxIndex + 1 }, () => ({
+        type: "prompt" as const,
+        prompt: "",
+      })),
+      maxIndex + 1
+    );
+  }
+
+  /** Narrow manifest access for address authorization without exposing paths to callers. */
+  async getManifest(manifestPath: string) {
+    return this.recorder.readManifest(manifestPath);
   }
 
   /** Resolve all final-step loop attempts while retaining only one value per loop. */

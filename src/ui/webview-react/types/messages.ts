@@ -162,6 +162,7 @@ export {
 export type {
   WorkflowSummary,
   PriorContext,
+  WorkflowRunAddress,
   McpServerConfig,
   ToolPermissionsOverride,
   PreCondition,

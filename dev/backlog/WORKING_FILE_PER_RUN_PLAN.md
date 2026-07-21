@@ -547,6 +547,12 @@ Process note for whoever picks this up: after finishing an item, update its `[DO
 
 Extend `PriorContext` with `WorkflowRunAddress` and resolve through the phase-4 reader. This requires its own UX and authorization design; it is not part of phases 1–4.
 
+### Phase 5 checkpoint / progress
+
+- **Settled UX and authorization design [DONE]:** `priorContext` accepts either its existing same-run selector or the stable, path-free `{ workflowKey, runRef }` address of one source run. The dashboard exposes this as **Completed run output** with explicit stable-key/ref fields; no webview/hosted contract carries a local filesystem path. The source always contributes its complete queue and final-step timeline output, preserving the existing same-run defaults unchanged. Only a real, non-symlink promoted run inside the current workspace's `.ctrlyoke/.runs` root is authorized; drafts and unfinished runs are rejected. Missing, deleted, malformed, traversal, symlink, and live-source cases produce the same deterministic path-free failure. Deletion and retention scan persisted draft/run definitions and refuse to remove an addressed source.
+- **Reader, persistence, and execution [DONE]:** `AddressedPriorContextResolver` validates the address and workspace boundary, then delegates all response reconstruction to Phase 4's `RunOutputResolver`; it never reads `_runtime` response fields. The resolver uses each selected attempt's immutable definition snapshot for historic prompt/name fidelity, including rewound/continued revisions, and streams the full source without loading its event log. The shared `WorkflowContext` execution callback means extension, CLI, and MCP-appended workflow definitions all use the same authorization and resolver path.
+- **Validation [DONE]:** Added focused authorization/same-run regression coverage and retained resolver large-output/revision parity coverage. `npm run typecheck`, `npm run compile-tests`, and focused resolver tests passed.
+
 ## Test and acceptance matrix
 
 ### Paths and storage

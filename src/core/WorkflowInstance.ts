@@ -76,6 +76,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
 import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
+import { AddressedPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
 import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
@@ -2743,14 +2744,23 @@ export class WorkflowInstance {
         if (!historyFilePath) {
           return [];
         }
-        return this.outputHistoryManager
-          .getRunOutputResolver()
-          .resolvePriorContextItems(
+        const workspaceRoot =
+          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+        if (!workspaceRoot) {
+          return [];
+        }
+        const resolver = this.outputHistoryManager.getRunOutputResolver();
+        return new AddressedPriorContextResolver(
+          workspaceRoot,
+          resolver
+        ).resolve(contexts, (sameRunContexts) =>
+          resolver.resolvePriorContextItems(
             historyFilePath,
-            contexts,
+            sameRunContexts,
             allPrompts,
             promptIndex
-          );
+          )
+        );
       },
       targetRunIndices,
       getIntegrationForPrompt: (

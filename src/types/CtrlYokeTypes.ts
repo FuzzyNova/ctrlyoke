@@ -27,13 +27,16 @@ export type { ToolPermissionMode };
  * - "previous": Inject only the immediately preceding prompt's output
  * - "none": Explicit no-op (same as omitting the field)
  * - number[]: Inject specific prompt outputs by 1-based prompt number (e.g., [1, 3])
+ * - WorkflowRunAddress: Inject the complete, terminal timeline of an explicitly
+ *   addressed run in this workspace. Addresses intentionally contain no path.
  *
  * Context is injected as an XML block before the user's prompt text.
  * Note: When used with resumeSession:true, context may be duplicated — this is accepted behavior.
  */
 export type PriorContext =
   | (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS]
-  | number[];
+  | number[]
+  | WorkflowRunAddress;
 
 /**
  * User-defined MCP server configuration for attaching external MCP servers to harness invocations.
@@ -260,6 +263,19 @@ export type WorkflowViewAddress =
 export interface WorkflowRunAddress {
   workflowKey: WorkflowKey;
   runRef: RunRef;
+}
+
+/** True when a persisted prior-context value addresses one promoted run. */
+export function isWorkflowRunAddress(
+  value: PriorContext | undefined
+): value is WorkflowRunAddress {
+  return (
+    !!value &&
+    !Array.isArray(value) &&
+    typeof value === "object" &&
+    typeof value.workflowKey === "string" &&
+    typeof value.runRef === "string"
+  );
 }
 
 /**

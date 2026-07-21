@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
-import type { PriorContext } from "@/types/messages";
+import type { PriorContext, WorkflowRunAddress } from "@/types/messages";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import { dropdownBorderClass } from "@utils/dropdownValidation";
 
@@ -24,6 +24,7 @@ export type KeywordMode =
   | "all"
   | "finalStepPrevious"
   | "finalStepAll"
+  | "run"
   | "custom";
 
 export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
@@ -33,12 +34,20 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   all: "All prior steps",
   finalStepPrevious: "Previous final step output",
   finalStepAll: "All final step outputs",
+  run: "Completed run output",
   custom: "Custom",
 };
+
+function isRunAddress(
+  value: PriorContext | undefined
+): value is WorkflowRunAddress {
+  return !!value && !Array.isArray(value) && typeof value === "object";
+}
 
 function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return "default";
   if (Array.isArray(value)) return "custom";
+  if (isRunAddress(value)) return "run";
   return value as KeywordMode;
 }
 
@@ -99,6 +108,12 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const [customText, setCustomText] = useState(() =>
     Array.isArray(value) ? formatAsRangeNotation(value) : ""
   );
+  const [workflowKey, setWorkflowKey] = useState(() =>
+    isRunAddress(value) ? value.workflowKey : ""
+  );
+  const [runRef, setRunRef] = useState(() =>
+    isRunAddress(value) ? value.runRef : ""
+  );
   const [customError, setCustomError] = useState(false);
   // Track onChange calls originating from our text input so we don't sync back
   const textChangePendingRef = useRef(false);
@@ -120,11 +135,20 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       setCustomText("");
       setCustomError(false);
     }
+    if (isRunAddress(value)) {
+      setWorkflowKey(value.workflowKey);
+      setRunRef(value.runRef);
+    }
   }, [value]);
 
   const selectKeyword = (k: KeywordMode) => {
     if (k === "custom") {
       setWantsCustom(true);
+      setIsOpen(false);
+      return;
+    }
+    if (k === "run") {
+      setWantsCustom(false);
       setIsOpen(false);
       return;
     }
@@ -158,6 +182,13 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     }
   };
 
+  const updateRunAddress = (key: string, ref: string) => {
+    setWorkflowKey(key);
+    setRunRef(ref);
+    if (key && ref)
+      onChange({ workflowKey: key, runRef: ref } as WorkflowRunAddress);
+  };
+
   // Build button label
   const displayMode = showCustomInput ? "custom" : mode;
   let buttonLabel: string;
@@ -177,6 +208,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "all",
         "finalStepPrevious",
         "finalStepAll",
+        "run",
         "custom",
       ]
     : [
@@ -185,6 +217,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "all",
         "finalStepPrevious",
         "finalStepAll",
+        "run",
         "custom",
       ];
 
@@ -236,6 +269,30 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           </div>
         </DropdownPortal>
       </div>
+
+      {mode === "run" && (
+        <div className="mt-1 grid grid-cols-1 gap-1">
+          <input
+            value={workflowKey}
+            onChange={(event) => updateRunAddress(event.target.value, runRef)}
+            placeholder="Workflow key"
+            aria-label="Prior-context workflow key"
+            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7"
+          />
+          <input
+            value={runRef}
+            onChange={(event) =>
+              updateRunAddress(workflowKey, event.target.value)
+            }
+            placeholder="Run reference"
+            aria-label="Prior-context run reference"
+            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7"
+          />
+          <span className="text-xxs text-description-fg">
+            Imports all output from a completed run in this workspace.
+          </span>
+        </div>
+      )}
 
       {/* Custom range input — always rendered, disabled when not in custom mode */}
       <div

@@ -2,9 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import type {
   RunRef,
+  WorkflowRunAddress,
   WorkflowKey,
   WorkflowLineageDescriptor,
 } from "../../types/CtrlYokeTypes";
+import { isWorkflowRunAddress } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
@@ -222,6 +224,17 @@ export class WorkflowLineageRepository {
       if (protectedByPendingRewind || protectedRunRefs.has(runRef)) {
         throw new Error("Cannot delete a protected run");
       }
+      if (
+        await this.isReferencedAsPriorContext(
+          workspaceRoot,
+          workflowKey,
+          runRef
+        )
+      ) {
+        throw new Error(
+          "Cannot delete a run that is selected as prior context by another workflow"
+        );
+      }
 
       const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
       try {
@@ -344,6 +357,62 @@ export class WorkflowLineageRepository {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Source addresses are durable dependencies. Scan only known working-file
+   * locations and never follow a link while deciding whether deletion is safe.
+   */
+  private async isReferencedAsPriorContext(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<boolean> {
+    for (const key of await this.listLineageKeys(workspaceRoot)) {
+      const files = [
+        WorkflowPaths.draftFilePath(workspaceRoot, key),
+        ...(await this.listRunRefs(workspaceRoot, key)).map((candidate) =>
+          WorkflowPaths.runFilePath(workspaceRoot, key, candidate)
+        ),
+      ];
+      for (const filePath of files) {
+        try {
+          const stat = await fs.promises.lstat(filePath);
+          if (!stat.isFile() || stat.isSymbolicLink()) continue;
+          const parsed = JSON.parse(
+            await fs.promises.readFile(filePath, "utf8")
+          ) as {
+            priorContext?: unknown;
+            steps?: Array<{ priorContext?: unknown }>;
+            finalStep?: { priorContext?: unknown };
+          };
+          const contexts = [
+            parsed.priorContext,
+            ...(parsed.steps ?? []).map((step) => step.priorContext),
+            parsed.finalStep?.priorContext,
+          ];
+          if (
+            contexts.some((context) => {
+              const address = isWorkflowRunAddress(
+                context as import("../../types/CtrlYokeTypes").PriorContext
+              )
+                ? (context as WorkflowRunAddress)
+                : undefined;
+              return (
+                address !== undefined &&
+                address.workflowKey === workflowKey &&
+                address.runRef === runRef
+              );
+            })
+          ) {
+            return true;
+          }
+        } catch {
+          // Malformed or concurrently removed files cannot authorize deletion.
+        }
+      }
+    }
+    return false;
   }
 
   private async writeDescriptorDirect(
