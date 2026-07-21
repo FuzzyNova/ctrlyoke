@@ -313,9 +313,9 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 });
 
 suite("WorkflowOrchestrator draft mutation preparation", () => {
-  test("forks only the requesting client's promoted run view and leaves execution/source untouched", async () => {
+  test("validates a promoted run's edit in place, primes the live instance's revision guard, and never forks a draft", async () => {
     const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-draft-view-")
+      path.join(os.tmpdir(), "ctrlyoke-run-edit-")
     );
     try {
       const sourceManager = new WorkingFileManager({
@@ -343,12 +343,18 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         Date.now()
       );
       const sourceBefore = await fs.readFile(promoted.workingFilePath, "utf8");
+      const repository = new WorkflowLineageRepository();
+      const descriptor = await repository.readDescriptor(
+        workspace,
+        workflowKey
+      );
 
       const orchestrator = Object.create(
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([
         ["client-a", "source-instance"],
         ["client-b", "execution-instance"],
@@ -358,62 +364,45 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ["client-b", { workflowKey, kind: "run", runRef: promoted.runRef }],
       ]);
       internal.viewMessageSinks = new Map();
+      let primedRevision: number | undefined;
       internal.instances = new Map([
         [
           "execution-instance",
           {
             getQueueState: () => ({ workflowKey, runRef: promoted.runRef }),
             getExecutionRunRef: () => promoted.runRef,
+            expectDefinitionRevision: (revision: number) => {
+              primedRevision = revision;
+            },
           },
         ],
       ]);
       internal.retiredInstances = new Map();
       internal.cliSessions = new Map();
-
-      let loadedFor: string | undefined;
-      internal.loadFreshInstanceAndReplay = async (
-        draftPath: string,
-        clientId: string
-      ) => {
-        loadedFor = clientId;
-        assert.match(draftPath, /draft[\\/]workflow\.ctrlyoke\.json$/);
-        internal.viewerRegistry.set(clientId, "draft-instance");
-        internal.instances.set("draft-instance", {
-          expectDefinitionRevision: () => undefined,
-        });
-      };
-      internal.loadRunViewForClient = async (
-        address: unknown,
-        _send: unknown,
-        clientId: string
-      ) => {
-        internal.viewAddressRegistry.set(clientId, address);
+      internal.loadFreshInstanceAndReplay = async () => {
+        throw new Error("An idle run edit must not fork a draft");
       };
 
       await orchestrator.prepareDefinitionMutation(
         {
           address: { workflowKey, kind: "run", runRef: promoted.runRef },
           expectedDefinitionRevision: 1,
-          expectedDescriptorRevision: 2,
+          expectedDescriptorRevision: descriptor.revision,
         },
-        () => undefined,
         "client-a"
       );
 
-      assert.strictEqual(loadedFor, "client-a");
+      assert.strictEqual(primedRevision, 1);
       assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
         workflowKey,
-        kind: "draft",
+        kind: "run",
+        runRef: promoted.runRef,
       });
       assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
         workflowKey,
         kind: "run",
         runRef: promoted.runRef,
       });
-      assert.strictEqual(
-        internal.findExecutionRunRef(workflowKey),
-        promoted.runRef
-      );
       assert.strictEqual(
         await fs.readFile(promoted.workingFilePath, "utf8"),
         sourceBefore
@@ -496,7 +485,6 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: descriptor.revision,
         },
-        () => undefined,
         "client-a"
       );
 
@@ -506,6 +494,157 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         kind: "run",
         runRef: promoted.runRef,
       });
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("WorkflowOrchestrator run-addressed step edits", () => {
+  test("edits an idle run's steps directly on disk when no live instance owns it, without creating a draft", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-static-edit-")
+    );
+    try {
+      const sourceManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [
+          { prompt: "keep", _runtime: { startedAt: 1 } },
+          { prompt: "delete-me", _runtime: { startedAt: 2 } },
+        ],
+        getCurrentIndex: () => 2,
+        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Source",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "source",
+        [{ prompt: "keep" }, { prompt: "delete-me" }],
+        workspace,
+        "Source"
+      );
+      const promoted = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const repository = new WorkflowLineageRepository();
+      const descriptor = await repository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.lineageRepository = repository;
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.viewAddressRegistry = new Map([
+        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+      ]);
+      internal.viewMessageSinks = new Map([["client-a", () => undefined]]);
+
+      await orchestrator.deletePromptFromQueue(
+        {
+          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptor.revision,
+        },
+        1,
+        "client-a"
+      );
+
+      const written = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf8")
+      );
+      assert.strictEqual(written.steps.length, 1);
+      assert.strictEqual(written.steps[0].prompt, "keep");
+      assert.strictEqual(written.definitionRevision, 2);
+
+      const draftExists = await fs
+        .access(
+          path.join(
+            workspace,
+            ".ctrlyoke",
+            ".runs",
+            workflowKey,
+            "draft",
+            "workflow.ctrlyoke.json"
+          )
+        )
+        .then(() => true)
+        .catch(() => false);
+      assert.strictEqual(draftExists, false);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("routes to the run's own live instance, not the client's unrelated bound instance", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-live-edit-")
+    );
+    try {
+      const wf1 =
+        "wf-1" as unknown as import("../../types/CtrlYokeTypes").WorkflowKey;
+      const run1 =
+        "run-1" as unknown as import("../../types/CtrlYokeTypes").RunRef;
+      const wf2 =
+        "wf-2" as unknown as import("../../types/CtrlYokeTypes").WorkflowKey;
+      const run2 =
+        "run-2" as unknown as import("../../types/CtrlYokeTypes").RunRef;
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewerRegistry = new Map([["client-a", "unrelated-instance"]]);
+      internal.viewAddressRegistry = new Map([
+        ["client-a", { workflowKey: wf1, kind: "run", runRef: run1 }],
+      ]);
+      internal.viewMessageSinks = new Map();
+
+      const deletedFrom: string[] = [];
+      const runOwningInstance = {
+        getQueueState: () => ({ workflowKey: wf1, runRef: run1 }),
+        deletePromptFromQueue: async () => {
+          deletedFrom.push("run-owning-instance");
+        },
+      };
+      const unrelatedInstance = {
+        getQueueState: () => ({ workflowKey: wf2, runRef: run2 }),
+        deletePromptFromQueue: async () => {
+          deletedFrom.push("unrelated-instance");
+        },
+      };
+      internal.instances = new Map([
+        ["run-owning-instance", runOwningInstance],
+        ["unrelated-instance", unrelatedInstance],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+
+      await orchestrator.deletePromptFromQueue(
+        {
+          address: { workflowKey: wf1, kind: "run", runRef: run1 },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: 1,
+        },
+        0,
+        "client-a"
+      );
+
+      assert.deepStrictEqual(deletedFrom, ["run-owning-instance"]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

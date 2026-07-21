@@ -934,7 +934,13 @@ export class WorkflowSerializer {
     }
 
     const { workflowName } = message;
-    await manager.updateWorkflowName(workflowName, clientId);
+    await manager.updateWorkflowName(
+      message.mutation as
+        | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
+        | undefined,
+      workflowName,
+      clientId
+    );
     updateWorkflowNameFn(workflowName);
   }
 

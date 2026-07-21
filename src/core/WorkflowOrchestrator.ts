@@ -7,7 +7,14 @@ import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
-import { buildDefinitionSnapshot } from "./WorkflowStepSanitizer";
+import {
+  buildClearUpdates,
+  buildDefinitionSnapshot,
+  buildPromptStepProperties,
+  buildScriptStepFromProperties,
+  sanitizeClipboardWorkflowStep,
+  stripViewOnlyWorkflowStepFields,
+} from "./WorkflowStepSanitizer";
 import { PromptQueue } from "./PromptQueue";
 import {
   QueueState,
@@ -23,6 +30,7 @@ import {
   type WorkflowRunAddress,
   type WorkflowViewAddress,
   workflowDisplayStep,
+  isScriptStep,
 } from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
@@ -34,6 +42,7 @@ import {
   PANEL_CLIENT_ID,
   RUNNER_IDS,
   STEP_STATUS,
+  STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   type HarnessId,
   type QueuePosition,
@@ -1809,13 +1818,14 @@ export class WorkflowOrchestrator {
 
   /**
    * Resolves a definition mutation against the requesting client's addressed
-   * view. A promoted run is copied to the shared lineage draft under descriptor
-   * revision control, then only this client is rebound to a draft instance.
-   * The source instance remains untouched, including any active executor.
+   * view. A promoted run is validated in place (no draft fork, no instance
+   * rebinding) — the actual write happens in the caller's subsequent per-op
+   * call, either against a reused live instance or the static `*AtRun`
+   * primitives. Editing an already-existing draft still goes through this
+   * client's bound draft instance, unchanged.
    */
   async prepareDefinitionMutation(
     mutation: WorkflowDefinitionMutation | undefined,
-    send: (message: unknown) => void,
     clientId: string
   ): Promise<void> {
     const viewed = this.getViewAddress(clientId);
@@ -1848,27 +1858,30 @@ export class WorkflowOrchestrator {
     }
 
     if (mutation.address.kind === "run") {
-      const draft = await WorkingFileManager.seedDraftFromRun(
+      const target = await RunContinuationService.validateContinuationTarget(
         workspaceRoot,
         mutation.address.workflowKey,
         mutation.address.runRef,
-        mutation.expectedDefinitionRevision,
-        mutation.expectedDescriptorRevision,
-        this.lineageRepository
+        this.lineageRepository,
+        "edit"
       );
-      await this.loadFreshInstanceAndReplay(
-        draft.workingFilePath,
-        clientId,
-        send
-      );
-      await this.loadRunViewForClient(
-        { workflowKey: mutation.address.workflowKey, kind: "draft" },
-        send,
-        clientId
-      );
-      this.getInstanceForClient(clientId).expectDefinitionRevision(
-        mutation.expectedDefinitionRevision
-      );
+      if (target.definitionRevision !== mutation.expectedDefinitionRevision) {
+        throw new Error(
+          `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${target.definitionRevision}`
+        );
+      }
+      if (target.descriptorRevision !== mutation.expectedDescriptorRevision) {
+        throw new Error(
+          `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${target.descriptorRevision}`
+        );
+      }
+      // If a live instance already owns this exact run (executing/paused, or
+      // simply loaded), prime its next definition write with the client's
+      // observed revision — mirroring the draft-instance carve-out below.
+      this.findLiveInstanceForRun(
+        mutation.address.workflowKey,
+        mutation.address.runRef
+      )?.expectDefinitionRevision(mutation.expectedDefinitionRevision);
       return;
     }
 
@@ -1906,11 +1919,11 @@ export class WorkflowOrchestrator {
    * Workflow-level settings on the actively executing run are part of that
    * run's current definition head. Persist them in place so subsequent steps
    * resolve the same settings the dashboard displays. Other addressed runs
-   * keep the normal generic-edit behavior of forking a draft.
+   * fall through to `prepareDefinitionMutation`'s validation-only "run"
+   * branch, which likewise edits the run in place.
    */
   async prepareWorkflowPropertiesMutation(
     mutation: WorkflowDefinitionMutation | undefined,
-    send: (message: unknown) => void,
     clientId: string
   ): Promise<void> {
     const viewed = this.getViewAddress(clientId);
@@ -1924,7 +1937,7 @@ export class WorkflowOrchestrator {
       viewed.runRef !== runAddress.runRef ||
       this.findExecutionRunRef(runAddress.workflowKey) !== runAddress.runRef
     ) {
-      await this.prepareDefinitionMutation(mutation, send, clientId);
+      await this.prepareDefinitionMutation(mutation, clientId);
       return;
     }
 
@@ -1952,6 +1965,58 @@ export class WorkflowOrchestrator {
       throw new Error("Workflow properties no longer target the executing run");
     }
     instance.expectDefinitionRevision(mutation.expectedDefinitionRevision);
+  }
+
+  /**
+   * Finds an already-loaded `WorkflowInstance` bound to this exact run,
+   * regardless of which client owns it. A client merely viewing a run (via
+   * `loadRunViewForClient`) never binds an instance, so `getInstanceForClient`
+   * cannot be used for this lookup — only an instance that actually loaded
+   * this run's working file (executing, paused, or otherwise still resident)
+   * qualifies.
+   */
+  private findLiveInstanceForRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): WorkflowInstance | undefined {
+    return [...this.instances.values()].find((instance) => {
+      const state = instance.getQueueState();
+      return state.workflowKey === workflowKey && state.runRef === runRef;
+    });
+  }
+
+  private requireWorkspaceRoot(): string {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+    return workspaceRoot;
+  }
+
+  /**
+   * Dual-path resolver for a run-addressed dashboard mutation: reuse an
+   * already-loaded live instance for this exact run if one exists (its own
+   * dashboardSink push covers its owning client), otherwise apply a static,
+   * descriptor+revision-locked `WorkingFileManager.*AtRun` write directly to
+   * disk. Either way, every other client currently viewing this run is
+   * refreshed afterward — mirroring the existing `setStartPositionAtRun`
+   * precedent.
+   */
+  private async applyRunAddressedMutation(
+    runAddress: WorkflowRunAddress,
+    liveEdit: (instance: WorkflowInstance) => Promise<void>,
+    staticEdit: (workspaceRoot: string) => Promise<void>
+  ): Promise<void> {
+    const live = this.findLiveInstanceForRun(
+      runAddress.workflowKey,
+      runAddress.runRef
+    );
+    if (live) {
+      await liveEdit(live);
+    } else {
+      await staticEdit(this.requireWorkspaceRoot());
+    }
+    await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
   }
 
   private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {
@@ -1986,10 +2051,30 @@ export class WorkflowOrchestrator {
   }
 
   async updateWorkflowName(
+    mutation: WorkflowDefinitionMutation | undefined,
     workflowName: string,
     clientId: string
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).updateWorkflowName(workflowName);
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).updateWorkflowName(
+        workflowName
+      );
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.updateWorkflowName(workflowName),
+      (workspaceRoot) =>
+        WorkingFileManager.updateWorkflowNameAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          workflowName,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        ).then(() => undefined)
+    );
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
@@ -2090,6 +2175,7 @@ export class WorkflowOrchestrator {
   }
 
   async updateWorkingFileProperties(
+    mutation: WorkflowDefinitionMutation | undefined,
     properties: Record<string, unknown>,
     options: {
       onlyIfUndefined?: boolean;
@@ -2098,13 +2184,45 @@ export class WorkflowOrchestrator {
     } = {},
     clientId: string
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
-    return this.getInstanceForClient(clientId).updateWorkingFileProperties(
-      properties,
-      options
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).updateWorkingFileProperties(
+        properties,
+        options
+      );
+    }
+    const runAddress = mutation.address;
+    let result: { workingFile: WorkingFile; appliedKeys: string[] } | null =
+      null;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      async (instance) => {
+        result = await instance.updateWorkingFileProperties(
+          properties,
+          options
+        );
+      },
+      async (workspaceRoot) => {
+        const written = await WorkingFileManager.updatePropertiesAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          properties,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository,
+          { allowDeletes: options.allowDeletes }
+        );
+        result = {
+          workingFile: written.workingFile,
+          appliedKeys: written.appliedKeys,
+        };
+      }
     );
+    return result;
   }
 
   async updatePromptInQueue(
+    mutation: WorkflowDefinitionMutation | undefined,
     index: number,
     text: string,
     properties: unknown,
@@ -2112,34 +2230,127 @@ export class WorkflowOrchestrator {
     clearProperties?: string[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).updatePromptInQueue(
-      index,
-      text,
-      properties,
-      promptName,
-      clearProperties
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).updatePromptInQueue(
+        index,
+        text,
+        properties,
+        promptName,
+        clearProperties
+      );
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) =>
+        instance.updatePromptInQueue(
+          index,
+          text,
+          properties,
+          promptName,
+          clearProperties
+        ),
+      (workspaceRoot) => {
+        const props = properties as Record<string, unknown>;
+        const change:
+          | { updates: Partial<WorkflowStep> }
+          | { replace: WorkflowStep } =
+          props?.type === STEP_TYPES.SCRIPT
+            ? {
+                replace: buildScriptStepFromProperties(text, props, promptName),
+              }
+            : {
+                updates: {
+                  prompt: text,
+                  ...(promptName !== undefined && {
+                    name: promptName || undefined,
+                  }),
+                  ...buildPromptStepProperties(properties),
+                  ...buildClearUpdates(clearProperties),
+                },
+              };
+        return WorkingFileManager.updateStepAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          index,
+          change,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        ).then(() => undefined);
+      }
     );
   }
 
   async insertWorkflowStepAfterIndex(
+    mutation: WorkflowDefinitionMutation | undefined,
     afterIndex: number,
     step: WorkflowStep,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
-      afterIndex,
-      step
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
+        afterIndex,
+        step
+      );
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.insertWorkflowStepAfterIndex(afterIndex, step),
+      (workspaceRoot) =>
+        WorkingFileManager.insertStepAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          afterIndex,
+          sanitizeClipboardWorkflowStep(step),
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        ).then(() => undefined)
     );
   }
 
   async updateFinalStepInQueue(
+    mutation: WorkflowDefinitionMutation | undefined,
     finalStep: PromptStep | null,
     clearProperties?: string[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).updateFinalStepInQueue(
-      finalStep,
-      clearProperties
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).updateFinalStepInQueue(
+        finalStep,
+        clearProperties
+      );
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.updateFinalStepInQueue(finalStep, clearProperties),
+      (workspaceRoot) => {
+        const normalized = !finalStep
+          ? undefined
+          : isScriptStep(finalStep)
+            ? stripViewOnlyWorkflowStepFields(finalStep)
+            : {
+                prompt: finalStep.prompt,
+                ...(finalStep.name ? { name: finalStep.name } : {}),
+                ...buildPromptStepProperties(finalStep as unknown),
+                ...buildClearUpdates(clearProperties),
+              };
+        return WorkingFileManager.updatePropertiesAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          { finalStep: normalized },
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository,
+          { allowDeletes: true }
+        ).then(() => undefined);
+      }
     );
   }
 
@@ -2153,10 +2364,28 @@ export class WorkflowOrchestrator {
   }
 
   async deletePromptFromQueue(
+    mutation: WorkflowDefinitionMutation | undefined,
     index: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).deletePromptFromQueue(index);
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).deletePromptFromQueue(index);
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.deletePromptFromQueue(index),
+      (workspaceRoot) =>
+        WorkingFileManager.deleteStepAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          index,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        ).then(() => undefined)
+    );
   }
 
   async resetWorkflowState(
@@ -2166,23 +2395,102 @@ export class WorkflowOrchestrator {
   }
 
   async reorderPendingPrompts(
+    mutation: WorkflowDefinitionMutation | undefined,
     newPendingOrder: number[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).reorderPendingPrompts(
-      newPendingOrder
+    if (!mutation || mutation.address.kind !== "run") {
+      return this.getInstanceForClient(clientId).reorderPendingPrompts(
+        newPendingOrder
+      );
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.reorderPendingPrompts(newPendingOrder),
+      (workspaceRoot) =>
+        WorkingFileManager.reorderStepsAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          newPendingOrder,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        ).then(() => undefined)
     );
   }
 
+  /**
+   * Two sequential addressed writes on the static path (steps, then
+   * `finalStep`), matching the instance-bound path's own two separate
+   * `promptQueue` calls — not a new atomicity gap, just the existing
+   * behavior carried over to the addressed primitives. Returns the resulting
+   * revisions only for a static-path write, so a caller chaining a further
+   * addressed write (e.g. the dashboard's bundled workflow-properties
+   * restore) can target the up-to-date revision instead of the now-stale
+   * one this call started with. `undefined` covers both the non-run and
+   * live-instance cases, where the instance's own one-shot revision guard —
+   * primed by `prepareDefinitionMutation` — already makes a chained
+   * instance-bound write safe without passing revisions forward.
+   */
   async syncStepsForUndoRedo(
+    mutation: WorkflowDefinitionMutation | undefined,
     steps: WorkflowStep[],
     finalStep: WorkflowStep | null,
     clientId: string = this.PANEL_CLIENT_ID
-  ): Promise<void> {
-    return this.getInstanceForClient(clientId).syncStepsForUndoRedo(
-      steps,
-      finalStep
+  ): Promise<
+    { definitionRevision: number; descriptorRevision: number } | undefined
+  > {
+    if (!mutation || mutation.address.kind !== "run") {
+      await this.getInstanceForClient(clientId).syncStepsForUndoRedo(
+        steps,
+        finalStep
+      );
+      return undefined;
+    }
+    const runAddress = mutation.address;
+    let latest:
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.syncStepsForUndoRedo(steps, finalStep),
+      async (workspaceRoot) => {
+        const stepsResult = await WorkingFileManager.syncStepsForUndoRedoAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          steps,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        );
+        latest = {
+          definitionRevision: stepsResult.definitionRevision,
+          descriptorRevision: stepsResult.descriptorRevision,
+        };
+        if (finalStep !== null) {
+          const persistableFinalStep =
+            stripViewOnlyWorkflowStepFields(finalStep);
+          const finalStepResult =
+            await WorkingFileManager.updatePropertiesAtRun(
+              workspaceRoot,
+              runAddress.workflowKey,
+              runAddress.runRef,
+              { finalStep: persistableFinalStep },
+              stepsResult.definitionRevision,
+              stepsResult.descriptorRevision,
+              this.lineageRepository
+            );
+          latest = {
+            definitionRevision: finalStepResult.definitionRevision,
+            descriptorRevision: finalStepResult.descriptorRevision,
+          };
+        }
+      }
     );
+    return latest;
   }
 
   async setStartPosition(
@@ -2307,13 +2615,10 @@ export class WorkflowOrchestrator {
       );
     }
 
-    const loadedTarget = [...this.instances.values()].find((instance) => {
-      const state = instance.getQueueState();
-      return (
-        state.workflowKey === address.workflowKey &&
-        state.runRef === address.runRef
-      );
-    });
+    const loadedTarget = this.findLiveInstanceForRun(
+      address.workflowKey,
+      address.runRef
+    );
     const result = loadedTarget
       ? await loadedTarget.beginPendingRewind(
           address.workflowKey,

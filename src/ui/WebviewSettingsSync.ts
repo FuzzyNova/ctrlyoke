@@ -53,7 +53,10 @@ import type { AgentInfo } from "../utils/AgentDiscovery";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import type { SkillInfo } from "../utils/SkillDiscovery";
 import { configService } from "../config/CtrlYokeConfigService";
-import type { DevStatus } from "../types/WebviewMessageTypes";
+import type {
+  DevStatus,
+  WorkflowDefinitionMutation,
+} from "../types/WebviewMessageTypes";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 
 /**
@@ -462,12 +465,14 @@ export class WebviewSettingsSync {
   }
 
   async handleUpdateWorkflowProperty(
+    mutation: WorkflowDefinitionMutation | undefined,
     property: string,
     value: any,
     postMessage: PostMessageFn = this.postMessage,
     clientId: string
   ): Promise<void> {
     await this.handleUpdateWorkflowProperties(
+      mutation,
       { [property]: value },
       postMessage,
       clientId
@@ -475,6 +480,7 @@ export class WebviewSettingsSync {
   }
 
   async handleUpdateWorkflowProperties(
+    mutation: WorkflowDefinitionMutation | undefined,
     properties: Record<string, unknown>,
     postMessage: PostMessageFn = this.postMessage,
     clientId: string
@@ -503,6 +509,7 @@ export class WebviewSettingsSync {
     }
 
     await orchestrator.updateWorkingFileProperties(
+      mutation,
       properties,
       {
         allowDeletes: Object.values(properties).some(

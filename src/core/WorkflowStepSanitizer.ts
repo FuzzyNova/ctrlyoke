@@ -1,7 +1,12 @@
-import { STEP_TYPES } from "../types/DashboardConstants";
+import {
+  STEP_TYPES,
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
+} from "../types/DashboardConstants";
 import type {
   ErrorBehavior,
   EndCondition,
+  HarnessId,
   McpServerConfig,
   PreCondition,
   PriorContext,
@@ -467,4 +472,123 @@ export function parseClipboardWorkflowStep(text: string): WorkflowStep {
   }
 
   return sanitizeClipboardWorkflowStep(parsed);
+}
+
+/**
+ * Produces `{ key: undefined }` entries for each key in clearProperties, which
+ * when spread into a Partial<PromptStep> removes those fields from the stored prompt.
+ * Shared by `WorkflowInstance`'s instance-bound edits and the addressed static
+ * mutation path so both build identical step updates from the same dashboard payload.
+ */
+export function buildClearUpdates(
+  clearProperties?: string[]
+): Partial<PromptStep> {
+  if (!clearProperties?.length) return {};
+  return Object.fromEntries(
+    clearProperties.map((key) => [key, undefined])
+  ) as Partial<PromptStep>;
+}
+
+/** Build a ScriptStep from properties sent in an EXECUTE_PROMPT / UPDATE_PROMPT message. */
+export function buildScriptStepFromProperties(
+  script: string,
+  props: Record<string, unknown>,
+  name?: string
+): ScriptStep {
+  return {
+    type: STEP_TYPES.SCRIPT,
+    script,
+    ...(name?.trim() ? { name: name.trim() } : {}),
+    ...(props.enabled !== undefined && {
+      enabled: props.enabled as boolean,
+    }),
+    ...(props.timeout !== undefined &&
+      props.timeout !== null && {
+        timeout: props.timeout as number,
+      }),
+    ...(props.onPass !== undefined &&
+      props.onPass !== null && {
+        onPass: props.onPass as
+          | typeof CONDITION_ACTIONS.CONTINUE
+          | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
+      }),
+    ...(props.onFail !== undefined &&
+      props.onFail !== null && {
+        onFail: props.onFail as
+          | typeof CONDITION_ACTIONS.CONTINUE
+          | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
+      }),
+    ...(props.compareSource !== undefined &&
+      props.compareSource !== null && {
+        compareSource:
+          props.compareSource as (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
+      }),
+    ...(props.returns !== undefined &&
+      props.returns !== null && { returns: props.returns as string }),
+  };
+}
+
+export function buildPromptStepProperties(
+  properties: unknown
+): Partial<PromptStep> {
+  const props = properties as Record<string, unknown>;
+  // For non-nullable properties: null coerces to undefined (removes key from PromptStep).
+  // For tri-state nullable properties like agent, skills, and additionalArgs,
+  // null is stored as-is to represent an explicit "none/disabled" override.
+  // "Clear to inherit" is handled separately via buildClearUpdates / clearProperties.
+  const coerce = <T>(v: unknown): T | undefined =>
+    v === null ? undefined : (v as T);
+
+  return {
+    ...(props?.harness !== undefined && {
+      harness: coerce<HarnessId>(props.harness),
+    }),
+    ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
+    ...(props?.agent !== undefined && {
+      agent: props.agent as string | null,
+    }),
+    ...(props?.enabled !== undefined && {
+      enabled: props.enabled as boolean,
+    }),
+    ...(props?.resumeSession !== undefined && {
+      resumeSession: coerce<boolean>(props.resumeSession),
+    }),
+    ...(props?.sessionId !== undefined && {
+      sessionId: coerce<string | number>(props.sessionId),
+    }),
+    ...(props?.mcpServers !== undefined && {
+      mcpServers: props.mcpServers as (string | McpServerConfig)[] | null,
+    }),
+    ...(props?.hooks !== undefined && {
+      hooks: props.hooks as UserHookConfig[] | null,
+    }),
+    ...(props?.endCondition !== undefined && {
+      endCondition: coerce<EndCondition>(props.endCondition),
+    }),
+    ...(props?.preCondition !== undefined && {
+      preCondition: props.preCondition as PreCondition | null,
+    }),
+    ...(props?.errorBehavior !== undefined && {
+      errorBehavior: props.errorBehavior as ErrorBehavior | null,
+    }),
+    ...(props?.skills !== undefined && {
+      skills: props.skills as string[] | null,
+    }),
+    ...(props?.priorContext !== undefined && {
+      priorContext: coerce<PriorContext>(props.priorContext),
+    }),
+    // additionalArgs is three-state: null = explicitly disabled, string = custom, undefined = inherit.
+    // Do NOT coerce null to undefined — null must be preserved in PromptStep so the working
+    // file retains the "explicitly none" override and the PropertyResolver stops resolution.
+    ...(props?.additionalArgs !== undefined && {
+      additionalArgs: props.additionalArgs as string | null,
+    }),
+    // toolPermissions is three-state: null = explicitly none (inject no flags),
+    // object = override, undefined = inherit from workflow.
+    // Do NOT coerce null to undefined — null must be preserved so the PropertyResolver
+    // stops resolution and injects no permission flags for this prompt.
+    ...(props?.toolPermissions !== undefined && {
+      toolPermissions: props.toolPermissions as ToolPermissionsOverride | null,
+    }),
+  };
 }

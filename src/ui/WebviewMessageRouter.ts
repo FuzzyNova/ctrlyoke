@@ -552,15 +552,18 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
       await this.prepareDefinitionMutation(message);
       await this.getOrchestrator()?.reorderPendingPrompts(
+        this.asWorkflowDefinitionMutation(message),
         message.newPendingOrder as number[],
         this.clientId
       );
-      await this.refreshDefinitionMutationView();
+      await this.refreshDefinitionMutationView(message);
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
       await this.prepareDefinitionMutation(message);
-      await this.getOrchestrator()?.syncStepsForUndoRedo(
+      const mutation = this.asWorkflowDefinitionMutation(message);
+      const latest = await this.getOrchestrator()?.syncStepsForUndoRedo(
+        mutation,
         message.steps,
         message.finalStep ?? null,
         this.clientId
@@ -589,14 +592,29 @@ export class WebviewMessageRouter {
           Object.entries(raw).filter(([, v]) => v !== undefined)
         );
         if (Object.keys(workflowProperties).length > 0) {
+          // `syncStepsForUndoRedo`'s static-path write(s) above already advanced
+          // the run's revision — target that fresh revision here instead of the
+          // now-stale one this message started with. `latest` is only set for
+          // that static path; the live-instance and non-run cases fall back to
+          // the original mutation, whose one-shot revision guard is already
+          // consumed by the first write and imposes no further check.
+          const propertiesMutation =
+            mutation && latest
+              ? {
+                  ...mutation,
+                  expectedDefinitionRevision: latest.definitionRevision,
+                  expectedDescriptorRevision: latest.descriptorRevision,
+                }
+              : mutation;
           await this.settingsSync.handleUpdateWorkflowProperties(
+            propertiesMutation,
             workflowProperties,
             this.getCurrentPostMessage(),
             this.clientId
           );
         }
       }
-      await this.refreshDefinitionMutationView();
+      await this.refreshDefinitionMutationView(message);
     });
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
@@ -1095,6 +1113,7 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         await orchestrator.updateWorkflowName(
+          this.asWorkflowDefinitionMutation(message),
           message.workflowName,
           this.clientId
         );
@@ -1705,6 +1724,7 @@ export class WebviewMessageRouter {
 
     try {
       await orchestrator.updatePromptInQueue(
+        this.asWorkflowDefinitionMutation(message),
         index,
         text,
         properties,
@@ -1712,7 +1732,7 @@ export class WebviewMessageRouter {
         clearProperties,
         this.clientId
       );
-      await this.refreshDefinitionMutationView();
+      await this.refreshDefinitionMutationView(message);
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
@@ -1734,11 +1754,12 @@ export class WebviewMessageRouter {
 
     try {
       await orchestrator.insertWorkflowStepAfterIndex(
+        this.asWorkflowDefinitionMutation(message),
         message.afterIndex,
         message.step,
         this.clientId
       );
-      await this.refreshDefinitionMutationView();
+      await this.refreshDefinitionMutationView(message);
     } catch (error) {
       Log.error("Failed to insert workflow step:", error);
       vscode.window.showErrorMessage(
@@ -1758,11 +1779,12 @@ export class WebviewMessageRouter {
 
     try {
       await orchestrator.updateFinalStepInQueue(
+        this.asWorkflowDefinitionMutation(message),
         message.finalStep ?? null,
         message.clearProperties,
         this.clientId
       );
-      await this.refreshDefinitionMutationView();
+      await this.refreshDefinitionMutationView(message);
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
       vscode.window.showErrorMessage(
@@ -1783,8 +1805,12 @@ export class WebviewMessageRouter {
     const { index } = message;
 
     try {
-      await orchestrator.deletePromptFromQueue(index, this.clientId);
-      await this.refreshDefinitionMutationView();
+      await orchestrator.deletePromptFromQueue(
+        this.asWorkflowDefinitionMutation(message),
+        index,
+        this.clientId
+      );
+      await this.refreshDefinitionMutationView(message);
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
@@ -1813,25 +1839,27 @@ export class WebviewMessageRouter {
   private async handleUpdateWorkflowProperty(message: any): Promise<void> {
     await this.prepareWorkflowPropertiesMutation(message);
     await this.settingsSync.handleUpdateWorkflowProperty(
+      this.asWorkflowDefinitionMutation(message),
       message.property,
       message.value,
       this.getCurrentPostMessage(),
       this.clientId
     );
-    await this.refreshDefinitionMutationView();
+    await this.refreshDefinitionMutationView(message);
   }
 
   private async handleUpdateWorkflowProperties(message: any): Promise<void> {
     await this.prepareWorkflowPropertiesMutation(message);
     await this.settingsSync.handleUpdateWorkflowProperties(
+      this.asWorkflowDefinitionMutation(message),
       message.properties,
       this.getCurrentPostMessage(),
       this.clientId
     );
-    await this.refreshDefinitionMutationView();
+    await this.refreshDefinitionMutationView(message);
   }
 
-  /** Fork a promoted run before its generic mutation reaches a queue instance. */
+  /** Validate a promoted-run edit in place, or step this client onto its draft. */
   private async prepareDefinitionMutation(message: {
     mutation?: unknown;
   }): Promise<void> {
@@ -1840,10 +1868,7 @@ export class WebviewMessageRouter {
       throw new Error("WorkflowOrchestrator not initialized");
     }
     await orchestrator.prepareDefinitionMutation(
-      message.mutation as
-        | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
-        | undefined,
-      this.scopedPostMessage,
+      this.asWorkflowDefinitionMutation(message),
       this.clientId
     );
   }
@@ -1857,15 +1882,35 @@ export class WebviewMessageRouter {
       throw new Error("WorkflowOrchestrator not initialized");
     }
     await orchestrator.prepareWorkflowPropertiesMutation(
-      message.mutation as
-        | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
-        | undefined,
-      this.scopedPostMessage,
+      this.asWorkflowDefinitionMutation(message),
       this.clientId
     );
   }
 
-  private async refreshDefinitionMutationView(): Promise<void> {
+  private asWorkflowDefinitionMutation(message: {
+    mutation?: unknown;
+  }):
+    | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
+    | undefined {
+    return message.mutation as
+      | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
+      | undefined;
+  }
+
+  /**
+   * A run-addressed mutation refreshes every viewer of that run (including
+   * this client) via `invalidateRunViews` inside the orchestrator call
+   * itself, so a follow-up single-client refresh here would be redundant.
+   * Draft/ephemeral edits have no such broadcast and still need it.
+   */
+  private async refreshDefinitionMutationView(message?: {
+    mutation?: unknown;
+  }): Promise<void> {
+    if (
+      this.asWorkflowDefinitionMutation(message ?? {})?.address.kind === "run"
+    ) {
+      return;
+    }
     const orchestrator = this.getOrchestrator();
     const address = orchestrator?.getViewAddress(this.clientId);
     if (orchestrator && address) {
