@@ -14,9 +14,37 @@ import type {
   RunSummary,
 } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 let runViewRequestSequence = 0;
+
+/**
+ * Descriptor revisions are monotonic per lineage, so when a message targets the
+ * address already displayed, a lower incoming value is always a stale read that
+ * raced a descriptor transaction (e.g. an identity built between a rewind's
+ * run-file write and its descriptor commit). Keep the newer knowledge; a
+ * different address adopts the incoming value verbatim. Definition revisions
+ * must NOT get this treatment — a discarded continuation legitimately restores
+ * an older definition head.
+ */
+function mergeDescriptorRevision(
+  state: {
+    displayedViewAddress: WorkflowViewAddress | null;
+    displayedDescriptorRevision: number | null;
+  },
+  address: WorkflowViewAddress,
+  incoming: number | null
+): number | null {
+  if (
+    incoming !== null &&
+    state.displayedDescriptorRevision !== null &&
+    areWorkflowAddressesEqual(address, state.displayedViewAddress)
+  ) {
+    return Math.max(incoming, state.displayedDescriptorRevision);
+  }
+  return incoming;
+}
 
 /**
  * A single template variable — name plus optional UI metadata.
@@ -482,6 +510,10 @@ interface UiActions {
   setDisplayedViewIdentity: (
     address: WorkflowViewAddress,
     definitionRevision: number,
+    descriptorRevision: number
+  ) => void;
+  adoptDescriptorRevision: (
+    address: WorkflowViewAddress,
     descriptorRevision: number
   ) => void;
   markExecutionRunFinished: (executionState: ExecutionState) => void;
@@ -1038,11 +1070,15 @@ export const useUiStore = create<UiState & UiActions>()(
         revisions,
         pendingRewind
       ) =>
-        set({
+        set((state) => ({
           displayedViewAddress: address,
           executionRunRef: executionRunRef ?? null,
           displayedDefinitionRevision: revisions?.definitionRevision ?? null,
-          displayedDescriptorRevision: revisions?.descriptorRevision ?? null,
+          displayedDescriptorRevision: mergeDescriptorRevision(
+            state,
+            address,
+            revisions?.descriptorRevision ?? null
+          ),
           pendingRewind: pendingRewind ?? null,
           runSummaries: summaries,
           availableRuns: summaries.length,
@@ -1056,7 +1092,7 @@ export const useUiStore = create<UiState & UiActions>()(
                   summaries.findIndex((run) => run.runRef === address.runRef)
                 )
               : 0,
-        }),
+        })),
 
       // Address + revisions only. Unlike setDisplayedRunView this never touches
       // run summaries or history framing, so it is safe to apply after an
@@ -1066,11 +1102,33 @@ export const useUiStore = create<UiState & UiActions>()(
         definitionRevision,
         descriptorRevision
       ) =>
-        set({
+        set((state) => ({
           displayedViewAddress: address,
           displayedDefinitionRevision: definitionRevision,
-          displayedDescriptorRevision: descriptorRevision,
-        }),
+          displayedDescriptorRevision: mergeDescriptorRevision(
+            state,
+            address,
+            descriptorRevision
+          ),
+        })),
+
+      // Descriptor knowledge only, and only for the address the client is
+      // already displaying. This is how a snapshot whose *definition* portion
+      // is stale (and therefore ignored) still contributes its newer lineage
+      // revision instead of leaving run-lifecycle actions armed with a
+      // superseded one.
+      adoptDescriptorRevision: (address, descriptorRevision) =>
+        set((state) =>
+          areWorkflowAddressesEqual(address, state.displayedViewAddress)
+            ? {
+                displayedDescriptorRevision: mergeDescriptorRevision(
+                  state,
+                  address,
+                  descriptorRevision
+                ),
+              }
+            : state
+        ),
 
       // The live execution reached a terminal state. Nothing else refreshes the
       // addressed snapshot at that moment, so without this the client keeps an

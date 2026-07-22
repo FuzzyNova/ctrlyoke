@@ -368,6 +368,62 @@ describe("setDisplayedRunView", () => {
   });
 });
 
+describe("descriptor revision monotonicity", () => {
+  const runAddress = {
+    workflowKey: "wf-1" as never,
+    kind: "run" as const,
+    runRef: "run-2026-07-20T10-30-00-000Z" as never,
+  };
+
+  it("never lets an identity lower the descriptor revision for the displayed address", () => {
+    store().setDisplayedViewIdentity(runAddress, 2, 6);
+    // A stale identity built between a run-file write and its descriptor commit.
+    store().setDisplayedViewIdentity(runAddress, 3, 5);
+    expect(store().displayedDefinitionRevision).toBe(3);
+    expect(store().displayedDescriptorRevision).toBe(6);
+  });
+
+  it("still lets an identity lower the definition revision (discard restores an older head)", () => {
+    store().setDisplayedViewIdentity(runAddress, 3, 6);
+    store().setDisplayedViewIdentity(runAddress, 2, 7);
+    expect(store().displayedDefinitionRevision).toBe(2);
+    expect(store().displayedDescriptorRevision).toBe(7);
+  });
+
+  it("adopts the incoming descriptor revision verbatim on an address switch", () => {
+    store().setDisplayedViewIdentity(runAddress, 2, 6);
+    store().setDisplayedViewIdentity(
+      { workflowKey: "wf-2" as never, kind: "draft" },
+      1,
+      2
+    );
+    expect(store().displayedDescriptorRevision).toBe(2);
+  });
+
+  it("keeps newer descriptor knowledge across a same-address run view snapshot", () => {
+    store().setDisplayedViewIdentity(runAddress, 2, 6);
+    store().setDisplayedRunView(runAddress, [], undefined, {
+      definitionRevision: 3,
+      descriptorRevision: 5,
+    });
+    expect(store().displayedDefinitionRevision).toBe(3);
+    expect(store().displayedDescriptorRevision).toBe(6);
+  });
+
+  it("adoptDescriptorRevision only raises, and only for the displayed address", () => {
+    store().setDisplayedViewIdentity(runAddress, 3, 5);
+    store().adoptDescriptorRevision(runAddress, 6);
+    expect(store().displayedDescriptorRevision).toBe(6);
+    store().adoptDescriptorRevision(runAddress, 4);
+    expect(store().displayedDescriptorRevision).toBe(6);
+    store().adoptDescriptorRevision(
+      { workflowKey: "other" as never, kind: "draft" },
+      9
+    );
+    expect(store().displayedDescriptorRevision).toBe(6);
+  });
+});
+
 describe("requestRunViewLoad", () => {
   const summary = {
     workflowKey: "wf-1" as never,

@@ -1878,6 +1878,15 @@ function createMessageHandlers(): MessageHandlerMap {
           `revision ${incomingDefinitionRevision}/${currentDefinitionRevision}, ` +
           `steps ${incomingStepCount}/${currentStepCount}`
       );
+      // The definition portion is stale, but the snapshot's descriptorRevision
+      // is monotonic lineage state that may still be newer than what the client
+      // holds (a rewind bumps the descriptor even when the definition read
+      // raced the write). Adopting it here is what keeps Discard/Continue from
+      // being rejected with a superseded descriptor revision after the full
+      // snapshot was dropped.
+      if (typeof message.descriptorRevision === "number") {
+        uiStore.adoptDescriptorRevision(address, message.descriptorRevision);
+      }
       return;
     }
     const openSaveDialog = useUiStore.getState().saveWorkflowDialogData;

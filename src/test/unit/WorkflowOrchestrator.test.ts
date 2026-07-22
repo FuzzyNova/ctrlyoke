@@ -549,6 +549,86 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       "output-history",
     ]);
   });
+
+  test("re-publishes the addressed view identity after the live replay so SESSION_RESTORED cannot leave the client without a run address", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowId = "workflow-live";
+    const workflowKey = "live-lineage" as never;
+    const runRef = "run-2026-07-21T12-00-00-000Z" as never;
+    const address = { workflowKey, kind: "run", runRef };
+    const operations: string[] = [];
+    const sent: unknown[] = [];
+
+    internal.viewerRegistry = new Map<string, string | null>();
+    internal.viewAddressRegistry = new Map();
+    internal.instances = new Map([
+      [
+        workflowId,
+        {
+          getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
+          getQueueState: () => ({ workflowKey, runRef }),
+          // Model the live replay clearing the client's displayed address the
+          // way SESSION_RESTORED → applyWorkflowChange() does on the client.
+          replayFullStateTo: () => {
+            operations.push("live-output");
+            sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
+          },
+          replayRunHistoryTo: async () => operations.push("run-history"),
+          replayOutputHistoryTo: async () => operations.push("output-history"),
+        },
+      ],
+    ]);
+    internal.retiredInstances = new Map();
+    internal.cliSessions = new Map();
+    internal.getActiveTerminalWorkflowRefs = () => [];
+    internal.loadRunViewForClient = async () => {
+      operations.push("run-view");
+    };
+    const identity = {
+      type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
+      address,
+      definitionRevision: 3,
+      descriptorRevision: 2,
+    };
+    internal.getViewIdentity = async () => {
+      operations.push("view-identity");
+      return identity;
+    };
+
+    await orchestrator.replayWorkflowStateTo(
+      workflowId,
+      (msg) => sent.push(msg),
+      "browser:reconnect",
+      { skipTerminalReplay: true }
+    );
+
+    // The identity must be re-published, and only after the live replay that
+    // cleared it — otherwise SESSION_RESTORED would overwrite it again.
+    assert.deepStrictEqual(operations, [
+      "run-view",
+      "live-output",
+      "run-history",
+      "output-history",
+      "view-identity",
+    ]);
+    const identityIndex = sent.findIndex(
+      (msg) =>
+        (msg as { type?: string }).type === MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY
+    );
+    const sessionRestoredIndex = sent.findIndex(
+      (msg) =>
+        (msg as { type?: string }).type === MESSAGE_TYPES.SESSION_RESTORED
+    );
+    assert.ok(identityIndex >= 0, "view identity must be sent to the client");
+    assert.ok(
+      identityIndex > sessionRestoredIndex,
+      "view identity must be re-published after SESSION_RESTORED cleared it"
+    );
+    assert.deepStrictEqual(sent[identityIndex], identity);
+  });
 });
 
 suite("WorkflowOrchestrator draft mutation preparation", () => {

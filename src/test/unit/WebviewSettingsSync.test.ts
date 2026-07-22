@@ -1246,6 +1246,68 @@ suite("WebviewMessageRouter stable run actions", () => {
       "stop",
     ]);
   });
+
+  test("a rejected discard or set-start-position republishes the authoritative revisions", async () => {
+    const emitted: any[] = [];
+    const identityClients: string[] = [];
+    const orchestrator = {
+      discardContinuationAtRun: async () => {
+        throw new Error("Descriptor revision conflict: expected 5, found 6");
+      },
+      setStartPositionAtRun: async () => {
+        throw new Error("Descriptor revision conflict: expected 5, found 6");
+      },
+      publishViewIdentityToViewers: async (clientId: string) => {
+        identityClients.push(clientId);
+        return {
+          type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
+          address: runAddress,
+          definitionRevision: 3,
+          descriptorRevision: 6,
+        };
+      },
+    } as any;
+    const router = new WebviewMessageRouter(
+      (message: unknown) => emitted.push(message),
+      {} as any,
+      {} as any,
+      () => orchestrator,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.DISCARD_CONTINUATION,
+      address: runAddress,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+      confirmEditedSuffix: false,
+    });
+    await router.route({
+      type: MESSAGE_TYPES.SET_START_POSITION,
+      address: runAddress,
+      toIndex: 1,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // Without the republish, the stale client revision made every following
+    // click fail identically — the header read as a dead button.
+    assert.strictEqual(identityClients.length, 2);
+    const failures = emitted.filter(
+      (message) => message.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.deepStrictEqual(
+      failures.map((message) => message.action),
+      ["discard continuation", "set start position"]
+    );
+    const identities = emitted.filter(
+      (message) => message.type === MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY
+    );
+    assert.strictEqual(identities.length, 2);
+    assert.strictEqual(identities[0].descriptorRevision, 6);
+  });
 });
 
 suite("WebviewMessageRouter APPEND_FILE routing", () => {

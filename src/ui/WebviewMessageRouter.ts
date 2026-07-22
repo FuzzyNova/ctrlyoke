@@ -2127,10 +2127,7 @@ export class WebviewMessageRouter {
         this.clientId
       );
     } catch (error) {
-      Log.error("Failed to set start position:", error);
-      vscode.window.showErrorMessage(
-        `Failed to set start position: ${getErrorMessage(error)}`
-      );
+      this.showRunActionFailure("set start position", error);
     }
   }
 
@@ -2164,10 +2161,7 @@ export class WebviewMessageRouter {
         }
       }
     } catch (error) {
-      Log.error("Failed to discard continuation:", error);
-      vscode.window.showErrorMessage(
-        `Failed to discard continuation: ${getErrorMessage(error)}`
-      );
+      this.showRunActionFailure("discard continuation", error);
     }
   }
 

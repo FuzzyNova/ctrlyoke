@@ -59,6 +59,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 - `WorkflowTaggedSink` only solves live per-workflow message tagging.
 - `DashboardBroadcastHub.updateSessionRestored()` is intentionally a no-op, so loading a working file is **not** complete until `WorkflowOrchestrator.replayWorkflowStateTo()` runs.
 - Always call `replayWorkflowStateTo()` **after** `instance.loadWorkingFile(...)`. Replaying too early, or only sending partial dashboard messages, leaves restored workflows looking idle because `SESSION_RESTORED` never reaches the client.
+- `replayWorkflowStateTo()` sends the addressed `RUN_VIEW_LOADED` **before** the live replay (so its live-output reset can't wipe the reconnect buffer), but the client's `SESSION_RESTORED` handler then runs `applyWorkflowChange()`, which clears the displayed view address/revisions. `replayOutputHistoryTo` re-populates the output the clear wiped, but nothing re-publishes the address — so the replay must re-emit `WORKFLOW_VIEW_IDENTITY` **after** the live replay, or the switched-to run loses its address and the header's Run/Re-run collapses to the disabled "Load a workflow to run" state. This is why `SESSION_RESTORED`/`FILE_SELECTED` clearing the address is safe only when followed by an identity/`RUN_VIEW_LOADED` republish.
 - Reuse retired instances when reopening finished workflows; that preserves PTY/session associations across panel switches.
 
 </dashboardReplay>

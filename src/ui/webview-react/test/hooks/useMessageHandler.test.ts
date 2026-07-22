@@ -1020,6 +1020,48 @@ describe("run view revision snapshots", () => {
     });
   });
 
+  it("adopts a regressive snapshot's newer descriptor revision while ignoring its definition", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: address,
+        displayedDefinitionRevision: 3,
+        displayedDescriptorRevision: 5,
+      });
+      useWorkflowStore.setState({
+        workflowName: "Current head",
+        steps: [makePrompt("prefix"), makePrompt("edited suffix")],
+      });
+      // A requestless invalidation snapshot whose definition read raced an
+      // in-place write: its definition revision is stale, but its descriptor
+      // revision already reflects the rewind's descriptor commit.
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Stale head",
+          definitionRevision: 2,
+          steps: [makePrompt("prefix"), makePrompt("old suffix")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 6,
+      });
+    });
+
+    // Definition state stays on the newer head the client already has…
+    expect(useWorkflowStore.getState().workflowName).toBe("Current head");
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
+    // …but the monotonic descriptor knowledge is adopted, so the next
+    // Discard/Continue does not carry a superseded descriptor revision.
+    expect(useUiStore.getState().displayedDescriptorRevision).toBe(6);
+  });
+
   it("re-arms the next edit with the revisions a write just produced", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({
