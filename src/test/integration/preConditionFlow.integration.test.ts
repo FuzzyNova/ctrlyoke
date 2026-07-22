@@ -1,0 +1,314 @@
+import { suite, test, setup, teardown } from "mocha";
+import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+import {
+  ACTION_TYPES,
+  CONDITION_ACTIONS,
+  EXECUTION_STATES,
+} from "../../types/DashboardConstants";
+import {
+  createExecutionHarness,
+  type ExecutionHarness,
+} from "./helpers/executionHarness";
+
+/**
+ * Full user-flow coverage for workflow-level `preCondition`: load a workflow
+ * (or set the property after load, as the dashboard does), press Run, and
+ * verify the gate script actually executes before the first prompt and its
+ * onPass/onFail action is honored.
+ *
+ * The whole production pipeline runs — parse, draft, run promotion, executor
+ * loop, EndConditionEvaluator — against a real temp workspace; only the AI
+ * harness is a recording no-op mock (see `helpers/executionHarness.ts`).
+ * The pre-condition scripts leave a marker file, so "did the gate run?" is a
+ * plain filesystem assertion and "was the prompt skipped?" is
+ * `integration.sentPrompts`.
+ */
+
+const MARKER_FILE = "pre-ran.txt";
+const PASSING_SCRIPT = "pre-pass.js";
+const FAILING_SCRIPT = "pre-fail.js";
+const WRITE_MARKER = `require('fs').writeFileSync(require('path').join(__dirname, '${MARKER_FILE}'), 'ran');`;
+
+suite("Workflow-level preCondition full flow (load -> run)", function () {
+  // Each test executes a full workflow incl. a node subprocess for the gate.
+  this.timeout(60_000);
+
+  let workspace: string;
+  let harness: ExecutionHarness | undefined;
+
+  setup(async () => {
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-precond-"));
+    await fs.writeFile(
+      path.join(workspace, PASSING_SCRIPT),
+      `${WRITE_MARKER}\n`
+    );
+    await fs.writeFile(
+      path.join(workspace, FAILING_SCRIPT),
+      `${WRITE_MARKER}\nprocess.exit(1);\n`
+    );
+  });
+
+  teardown(async () => {
+    await harness?.dispose();
+    harness = undefined;
+    await fs.rm(workspace, { recursive: true, force: true });
+  });
+
+  async function writeWorkflow(
+    definition: Record<string, unknown>
+  ): Promise<string> {
+    const filePath = path.join(workspace, "wf.ctrlyoke.json");
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({ steps: [{ prompt: "step 1" }], ...definition }, null, 2)
+    );
+    return filePath;
+  }
+
+  async function markerExists(): Promise<boolean> {
+    try {
+      await fs.access(path.join(workspace, MARKER_FILE));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  test("control: without a preCondition the prompt reaches the harness", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(await writeWorkflow({}));
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.deepStrictEqual(
+      harness.integration.sentPrompts,
+      ["step 1"],
+      "the mock harness must receive the prompt when no gate is configured"
+    );
+    assert.strictEqual(await markerExists(), false);
+  });
+
+  test("workflow-level preCondition in the source file runs before the first prompt; onPass: skipPrompt skips it", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: PASSING_SCRIPT,
+          onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+        },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(
+      await markerExists(),
+      true,
+      "workflow-level preCondition script must run before the first prompt"
+    );
+    assert.deepStrictEqual(
+      harness.integration.sentPrompts,
+      [],
+      "onPass: skipPrompt must skip the prompt (it must never reach the harness)"
+    );
+    assert.strictEqual(
+      harness.instance.promptQueue.getState().status,
+      EXECUTION_STATES.COMPLETED,
+      "an all-skipped workflow must still complete cleanly"
+    );
+  });
+
+  test("preCondition set via property update after load gates the first prompt", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(await writeWorkflow({}));
+    // The dashboard property-edit path: workflow already loaded, user sets the
+    // pre-condition, then presses Run.
+    await harness.instance.updateWorkingFileProperties({
+      preCondition: {
+        script: PASSING_SCRIPT,
+        onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+      },
+    });
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(
+      await markerExists(),
+      true,
+      "a preCondition added after load must run before the first prompt"
+    );
+    assert.deepStrictEqual(harness.integration.sentPrompts, []);
+  });
+
+  test("failing preCondition defaults to skipPrompt", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: { script: FAILING_SCRIPT },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(await markerExists(), true, "gate script must run");
+    assert.deepStrictEqual(
+      harness.integration.sentPrompts,
+      [],
+      "a failing preCondition must skip the prompt by default"
+    );
+  });
+
+  test("passing preCondition with default onPass continues into the prompt", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: { script: PASSING_SCRIPT },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(await markerExists(), true, "gate script must run");
+    assert.deepStrictEqual(
+      harness.integration.sentPrompts,
+      ["step 1"],
+      "default onPass is continue — the prompt must still execute"
+    );
+  });
+
+  test("ephemeral flow: new workflow -> set preCondition -> run gates the first prompt", async () => {
+    harness = createExecutionHarness(workspace);
+    const preCondition = {
+      script: PASSING_SCRIPT,
+      onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+    };
+    // The dashboard flow for a brand-new workflow: the first property edit
+    // eagerly creates the ephemeral working file, then persists the property
+    // (mirrors WebviewSettingsSync.handleUpdateWorkflowProperties).
+    await harness.instance.ensureEphemeralWorkingFile({
+      initialProperties: { preCondition },
+    });
+    await harness.instance.updateWorkingFileProperties({ preCondition });
+    // Then the user types a prompt in the editor and presses Run.
+    await harness.instance.executeEphemeralPrompt(
+      "step 1",
+      undefined,
+      ACTION_TYPES.RUN
+    );
+
+    assert.strictEqual(
+      await markerExists(),
+      true,
+      "a preCondition set on a brand-new workflow must run before the first prompt"
+    );
+    assert.deepStrictEqual(
+      harness.integration.sentPrompts,
+      [],
+      "onPass: skipPrompt must skip the prompt (it must never reach the harness)"
+    );
+  });
+
+  test("direct shell command preCondition works (npm/.cmd shims, shell builtins)", async () => {
+    // Regression: the file-not-found fallback used to spawn the bare command
+    // name with shell:false — on Windows anything that is not a .exe (npm's
+    // .cmd shim, builtins like echo) failed with spawn ENOENT, so the gate
+    // "failed" without ever running. `echo` is a shell builtin on both cmd.exe
+    // and sh, so it only passes when the command truly runs through the shell.
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: "echo gate-ran",
+          compareSource: "stdout",
+          returns: "gate-ran",
+          onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+          // Distinguish pass from spawn failure: a failed spawn would fall
+          // through to the prompt, which the assertion below catches.
+          onFail: CONDITION_ACTIONS.CONTINUE,
+        },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.deepStrictEqual(
+      harness.integration.sentPrompts,
+      [],
+      "the shell command must actually run and pass (spawn ENOENT would fall through to the prompt)"
+    );
+  });
+
+  test("re-run after completion still gates the first prompt", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: PASSING_SCRIPT,
+          onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+        },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+    assert.strictEqual(await markerExists(), true, "first run must gate");
+
+    // Reset the marker, then Run again on the completed workflow.
+    await fs.rm(path.join(workspace, MARKER_FILE));
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(
+      await markerExists(),
+      true,
+      "the gate must run again on a restart-from-completed re-run"
+    );
+    assert.deepStrictEqual(harness.integration.sentPrompts, []);
+  });
+
+  test("a restored working file (fresh session) still gates the first prompt on run", async () => {
+    // Session 1: load and execute (gate skips the prompt, run completes).
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: PASSING_SCRIPT,
+          onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+        },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+    const runWorkingFilePath =
+      harness.instance.promptQueue.getState().workingFilePath;
+    assert.ok(runWorkingFilePath, "execution must leave a promoted run file");
+    await harness.dispose();
+
+    // Session 2: restore the run from its working file and Run again.
+    harness = createExecutionHarness(workspace);
+    await fs.rm(path.join(workspace, MARKER_FILE));
+    await harness.instance.loadWorkingFile(runWorkingFilePath);
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(
+      await markerExists(),
+      true,
+      "a restored workflow must still run its workflow-level preCondition"
+    );
+    assert.deepStrictEqual(harness.integration.sentPrompts, []);
+  });
+
+  test("step-level preCondition: null disables the workflow-level gate for that step", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        steps: [{ prompt: "step 1", preCondition: null }],
+        preCondition: {
+          script: PASSING_SCRIPT,
+          onPass: CONDITION_ACTIONS.SKIP_PROMPT,
+        },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(
+      await markerExists(),
+      false,
+      "step-level null must disable the inherited gate entirely"
+    );
+    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+  });
+});

@@ -2086,7 +2086,9 @@ export class WorkflowOrchestrator {
         viewed.runRef !== mutation.address.runRef)
     ) {
       throw new Error(
-        "Definition mutation no longer targets this client's viewed run"
+        "Definition mutation no longer targets this client's viewed run " +
+          `(targeted: ${WorkflowOrchestrator.describeViewAddress(mutation.address)}, ` +
+          `viewing: ${WorkflowOrchestrator.describeViewAddress(viewed)})`
       );
     }
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
@@ -2746,17 +2748,7 @@ export class WorkflowOrchestrator {
     if (!Number.isInteger(toIndex) || toIndex < 0) {
       throw new Error("Start position must be a non-negative integer");
     }
-    const viewed = this.getViewAddress(clientId);
-    if (
-      !viewed ||
-      viewed.kind !== "run" ||
-      viewed.workflowKey !== address.workflowKey ||
-      viewed.runRef !== address.runRef
-    ) {
-      throw new Error(
-        "Set start position no longer targets this client's viewed run"
-      );
-    }
+    this.assertViewedRunAddress(address, clientId, "Set start position");
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
@@ -3032,6 +3024,18 @@ export class WorkflowOrchestrator {
     );
   }
 
+  /** Human-readable view address for mismatch diagnostics in thrown errors. */
+  private static describeViewAddress(
+    address: WorkflowViewAddress | null | undefined
+  ): string {
+    if (!address) {
+      return "(none)";
+    }
+    return address.kind === "run"
+      ? `${address.workflowKey}/${address.runRef}`
+      : `${address.workflowKey}/draft`;
+  }
+
   private assertViewedRunAddress(
     address: WorkflowRunAddress,
     clientId: string,
@@ -3044,7 +3048,11 @@ export class WorkflowOrchestrator {
       viewed.workflowKey !== address.workflowKey ||
       viewed.runRef !== address.runRef
     ) {
-      throw new Error(`${action} no longer targets this client's viewed run`);
+      throw new Error(
+        `${action} no longer targets this client's viewed run ` +
+          `(targeted: ${address.workflowKey}/${address.runRef}, ` +
+          `viewing: ${WorkflowOrchestrator.describeViewAddress(viewed)})`
+      );
     }
   }
 
@@ -3168,17 +3176,7 @@ export class WorkflowOrchestrator {
     allowInterruptedRun: boolean;
     pendingRewindOnThisRun: boolean;
   }> {
-    const viewed = this.getViewAddress(clientId);
-    if (
-      !viewed ||
-      viewed.kind !== "run" ||
-      viewed.workflowKey !== address.workflowKey ||
-      viewed.runRef !== address.runRef
-    ) {
-      throw new Error(
-        "Continuation no longer targets this client's viewed run"
-      );
-    }
+    this.assertViewedRunAddress(address, clientId, "Continuation");
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
 
@@ -3305,17 +3303,7 @@ export class WorkflowOrchestrator {
         descriptorRevision: number;
       }
   > {
-    const viewed = this.getViewAddress(clientId);
-    if (
-      !viewed ||
-      viewed.kind !== "run" ||
-      viewed.workflowKey !== address.workflowKey ||
-      viewed.runRef !== address.runRef
-    ) {
-      throw new Error(
-        "Discard continuation no longer targets this client's viewed run"
-      );
-    }
+    this.assertViewedRunAddress(address, clientId, "Discard continuation");
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
     const result = await WorkingFileManager.discardPendingRewind(
@@ -3398,15 +3386,7 @@ export class WorkflowOrchestrator {
     send: (message: unknown) => void,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    const viewed = this.getViewAddress(clientId);
-    if (
-      !viewed ||
-      viewed.kind !== "run" ||
-      viewed.workflowKey !== address.workflowKey ||
-      viewed.runRef !== address.runRef
-    ) {
-      throw new Error("Delete no longer targets this client's viewed run");
-    }
+    this.assertViewedRunAddress(address, clientId, "Delete");
     if (this.findExecutionRunRef(address.workflowKey) === address.runRef) {
       throw new Error("Cannot delete an executing run");
     }

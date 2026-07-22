@@ -7,150 +7,16 @@ import {
 import { PromptQueue } from "../../core/PromptQueue";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
-import { HarnessIntegration } from "../../core/HarnessIntegration";
-import { HarnessStatus } from "../../core/HarnessIntegration";
-import { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { PromptStep, PromptFile } from "../../types/CtrlYokeTypes";
+import { PromptFile } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   STEP_STATUS,
-  FAILURE_KINDS,
 } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 import { Log } from "../../utils/Log";
-
-class MockPlatform implements PlatformAdapter {
-  getConfig<T>(_key: string, defaultValue: T): T {
-    return defaultValue;
-  }
-  getWorkspaceRoot(): string {
-    return process.cwd();
-  }
-  getWorkspaceRoots(): string[] {
-    return [process.cwd()];
-  }
-  getNamedWorkspaceRoots() {
-    return [{ name: "root", fsPath: process.cwd() }];
-  }
-  log(_message: string): void {}
-  warn(_message: string): void {}
-  error(_message: string): void {}
-  showProgress(_message: string): void {}
-  async showChoice(
-    _message: string,
-    ..._options: string[]
-  ): Promise<string | undefined> {
-    return undefined;
-  }
-  getExtensionPath(): string {
-    return process.cwd();
-  }
-}
-
-type SendOutcome = {
-  success?: boolean;
-  responseText?: string;
-  afterResponse?: () => Promise<void> | void;
-};
-
-class MockHarnessIntegration extends HarnessIntegration {
-  public sentPrompts: string[] = [];
-  public processExitFailure: boolean = false;
-  public harnessErrorFailure: boolean = false;
-  public timeoutFailure: boolean = false;
-  public lastFailureOutput?: string;
-  public lastCliCommandValue?: string;
-  public onSend?: (
-    prompt: PromptStep,
-    workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
-  ) => Promise<SendOutcome>;
-
-  async initialize(): Promise<void> {}
-
-  async sendPrompt(
-    prompt: PromptStep,
-    _needsCompletionDetection?: boolean,
-    workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
-  ): Promise<boolean> {
-    this.sentPrompts.push(prompt.prompt);
-    this.promptReadyEmitter.fire({ fullPrompt: prompt.prompt });
-
-    const outcome = this.onSend
-      ? await this.onSend(prompt, workflowContext)
-      : { success: true, responseText: `ok:${prompt.prompt}` };
-
-    const success = outcome.success ?? true;
-    if (!success) {
-      return false;
-    }
-
-    this.responseCompleteEmitter.fire(
-      outcome.responseText ?? `ok:${prompt.prompt}`
-    );
-    if (outcome.afterResponse) {
-      await outcome.afterResponse();
-    }
-
-    return true;
-  }
-
-  getStatus(): { available: boolean; message: string; strategy: string } {
-    return { available: true, message: "ready", strategy: "mock" };
-  }
-
-  override wasLastFailureProcessExit(): boolean {
-    return this.processExitFailure;
-  }
-
-  override wasLastFailureHarnessError(): boolean {
-    return this.harnessErrorFailure;
-  }
-
-  override wasLastFailureTimeout(): boolean {
-    return this.timeoutFailure;
-  }
-
-  override getLastFailureKind() {
-    if (this.processExitFailure) {
-      return FAILURE_KINDS.PROCESS_EXIT;
-    }
-    if (this.harnessErrorFailure) {
-      return FAILURE_KINDS.HARNESS_ERROR;
-    }
-    if (this.timeoutFailure) {
-      return FAILURE_KINDS.TIMEOUT;
-    }
-    return undefined;
-  }
-
-  override getLastFailureOutput(): string | undefined {
-    return this.lastFailureOutput;
-  }
-
-  override getLastCliCommand(): string | undefined {
-    return this.lastCliCommandValue;
-  }
-
-  isIntegrationAvailable(): boolean {
-    return true;
-  }
-
-  getIntegrationMode(): string {
-    return HARNESS_IDS.COPILOT_CLI;
-  }
-
-  getInitializationStatus(): HarnessStatus {
-    return HarnessStatus.Ready;
-  }
-
-  isReady(): boolean {
-    return true;
-  }
-
-  protected async cancelImplementation(): Promise<void> {}
-}
+import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
 function makeContext(
   integration: MockHarnessIntegration

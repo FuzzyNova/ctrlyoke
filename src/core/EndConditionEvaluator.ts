@@ -172,12 +172,12 @@ export class EndConditionEvaluator {
         workingDirectory
       );
 
-      let command: { executable: string; args: string[] } | null;
+      let command: { executable: string; args: string[]; viaShell?: boolean };
 
       if (resolvedScriptPath) {
         // File found - determine script type and command
-        command = this.getScriptCommand(resolvedScriptPath);
-        if (!command) {
+        const fileCommand = this.getScriptCommand(resolvedScriptPath);
+        if (!fileCommand) {
           return {
             passed: false,
             stdout: "",
@@ -188,14 +188,19 @@ export class EndConditionEvaluator {
           };
         }
         // Append additional arguments from the script command
-        command.args = [...command.args, ...additionalArgs];
+        fileCommand.args = [...fileCommand.args, ...additionalArgs];
+        command = fileCommand;
       } else {
-        // File not found - treat as direct shell command
+        // File not found - treat as direct shell command. Run the untouched
+        // command string through the platform shell: spawning the bare name
+        // with shell:false fails ENOENT on Windows for anything that is not a
+        // .exe (npm/npx/yarn are .cmd shims; echo is a builtin), and the shell
+        // is also what gives PATH lookup, quoting, and pipes the semantics a
+        // user's terminal would.
         Log.info(
           `Script file not found, treating as direct command: ${condition.script}`
         );
-        // Execute as shell command directly
-        command = { executable: rawScriptPath, args: additionalArgs };
+        command = { executable: condition.script, args: [], viaShell: true };
       }
 
       // Execute script with timeout from config or per-condition override
@@ -207,7 +212,8 @@ export class EndConditionEvaluator {
         workingDirectory,
         timeout,
         vars,
-        onOutput
+        onOutput,
+        command.viaShell ?? false
       );
 
       const passed = this.evaluateSuccess(
@@ -482,7 +488,9 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Execute script with timeout
+   * Execute script with timeout.
+   * `viaShell` runs the command through the platform shell — used for the
+   * direct-command fallback where `executable` is the full command string.
    */
   private async executeScript(
     executable: string,
@@ -490,7 +498,8 @@ export class EndConditionEvaluator {
     workingDirectory?: string,
     timeout: number = ConfigurationUtils.getScriptTimeoutMs(),
     vars?: Record<string, string>,
-    onOutput?: (chunk: string) => void
+    onOutput?: (chunk: string) => void,
+    viaShell: boolean = false
   ): Promise<{
     success: boolean;
     result: string;
@@ -502,7 +511,7 @@ export class EndConditionEvaluator {
   }> {
     // Log what we're about to execute
     Log.debug(
-      `Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
+      `Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]${viaShell ? " (via shell)" : ""}`
     );
     Log.debug(
       `Working directory: ${workingDirectory || this.platform.getWorkspaceRoot()}`
@@ -537,7 +546,7 @@ export class EndConditionEvaluator {
         timeout,
         env: cleanEnv,
         onStdout: onOutput,
-        shell: false,
+        shell: viaShell,
       });
 
       return {

@@ -22,10 +22,44 @@ extension host (23 tests; full suite green alongside):
   4 prompt-level cases: per-step override lands on the right step only, text +
   override together, `clearProperties` inherit removal, revision bump.
 
+**Second slice — full-flow execution harness (2026-07-22), also green:**
+
+- `src/test/helpers/mockHarness.ts` — shared `MockHarnessIntegration` (records
+  `sentPrompts`, fires canned responses; extracted from
+  `WorkflowExecutor.test.ts`), `MockPlatform` (workspace-root-configurable),
+  and `MockIntegrationFactory`.
+- `src/test/integration/helpers/executionHarness.ts` — a **real
+  `WorkflowInstance`** over a temp workspace with the mock factory: the full
+  production pipeline runs (parse → draft → run promotion → executor loop →
+  pre/end-condition evaluation → history persistence) at zero AI cost. Its
+  `dispose()` awaits `outputHistoryManager.flushPendingIndexRefresh()` before
+  the caller deletes the workspace (otherwise the fire-and-forget search-index
+  refresh races the rmdir).
+- `src/test/integration/preConditionFlow.integration.test.ts` — 9 full
+  user-flow cases for workflow-level `preCondition`: control (no gate → prompt
+  reaches harness), gate in source file, gate set via property update after
+  load, ephemeral new-workflow flow (`ensureEphemeralWorkingFile` →
+  `updateWorkingFileProperties` → `executeEphemeralPrompt`), failing gate
+  default-skip, passing gate default-continue, re-run after completion,
+  restore-in-fresh-session then run, and step-level `null` override. Gate
+  scripts write a marker file so "did the gate run" is a filesystem assertion.
+  **All 9 pass** — the reported "workflow-level preCondition not run before
+  first prompt" bug does not reproduce in any of these instance-level paths.
+  Prime remaining suspect (UI half): enabling the Pre-Condition toggle posts
+  `{script: "", onFail: "skipPrompt"}` (`WorkflowPropertiesPanel.
+  handlePreConditionToggle`), the script text field commits only on
+  blur/Enter (`ScriptConditionEditor`), and the executor **silently** skips
+  gates whose script is empty (`WorkflowExecutor` checks
+  `resolvedPreCondition.script?.trim()`). A user who types the script and
+  clicks Run without leaving the field runs with `script: ""` — which
+  presents exactly as "pre-condition not run". Confirm via the run's
+  `workflow.ctrlyoke.json`: an empty `preCondition.script` proves it.
+
 Remaining: `harness`-switch batched pairing against a model list, prompt-level
 `null` "none" overrides, final-step (`UPDATE_FINAL_PROMPT`) coverage, the
-`mutationAddressing.integration.test.ts` scenarios, and the draft/ephemeral
-path (needs a real `WorkflowInstance` — next phase).
+`mutationAddressing.integration.test.ts` scenarios, and continuation-contract
+execution coverage (`appendAndContinueAtRun`/`continueAtRun` through the
+execution harness).
 
 **Fidelity decision (chosen by Nathan): message-contract, not browser E2E.**
 These tests enter one layer below the pixels: they construct the exact

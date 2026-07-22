@@ -74,7 +74,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 
 - `EndConditionHandler` owns retry orchestration and stays iterative/callback-based to avoid circular executor dependencies.
 - `EndConditionEvaluator` is security-sensitive: canonicalize paths before boundary checks, allow workspace-root and `~/.ctrlyoke/scripts`, and never replace `isWithinDirectory(...)` with naive prefix checks.
-- If end-condition script resolution fails, evaluator deliberately falls back to treating the value as a direct shell command.
+- If end-condition script resolution fails, evaluator deliberately falls back to treating the value as a direct shell command — run via the platform shell (`shell: true`), which is required for `.cmd` shims/builtins (`npm`, `echo`) on Windows and is not a new capability grant: the whole string is one principal's config value, and arbitrary execution was always reachable with `shell: false` (`node -e`, `sh -c`). The invariant that keeps this safe: **never interpolate lower-trust fragments (AI output, externally sourced values) into a condition script string.** `{{vars}}` substitution into `endCondition.script` (`VarSubstitutor.applyToEndCondition`) is same-author today — workflow vars come from the same file as the script — but if vars ever become writable by AI/MCP at runtime, that interpolation becomes command injection. Pass dynamic values to scripts via the `CTRLYOKE_VAR_*` environment variables (already injected by `executeScript`), never via the command string.
 
 </parsingAndValidation>
 

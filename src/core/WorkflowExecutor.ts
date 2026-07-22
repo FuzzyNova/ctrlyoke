@@ -456,6 +456,20 @@ export class WorkflowExecutor {
         `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
       );
 
+      // A gate that could not run at all (spawn failure, timeout, unsupported
+      // script type) currently falls into the onFail branch. Until errored
+      // gates get their own errorBehavior routing, at least surface the error
+      // in the dashboard — a silently mis-firing gate reads as "pre-condition
+      // never ran".
+      if (!preResult.passed && preResult.error && !preResult.stderr) {
+        await this.trackStatusMessage(
+          context,
+          target,
+          `Pre-condition could not run: ${preResult.error} → ${preAction}`,
+          STATUS_MESSAGE_SEVERITY.WARNING
+        );
+      }
+
       if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
         return this.handleSkippedStep(step, target, context);
       }
