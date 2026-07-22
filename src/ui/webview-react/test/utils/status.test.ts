@@ -215,6 +215,7 @@ describe("getWorkflowExecutionControls", () => {
     overrides: {
       viewedKind?: "draft" | "run" | null;
       hasFile?: boolean;
+      hasSteps?: boolean;
       pendingRewind?: boolean;
       executionRunState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
       executionRunLabel?: string;
@@ -224,6 +225,7 @@ describe("getWorkflowExecutionControls", () => {
       viewedExecutionState: executionState,
       viewedKind: overrides.viewedKind ?? "run",
       hasFile: overrides.hasFile ?? true,
+      hasSteps: overrides.hasSteps ?? true,
       pendingRewind: overrides.pendingRewind ?? false,
       executionRunState: overrides.executionRunState,
       executionRunLabel: overrides.executionRunLabel,
@@ -244,6 +246,30 @@ describe("getWorkflowExecutionControls", () => {
       enabled: false,
     });
     expect(controls.slot3.enabled).toBe(false);
+  });
+
+  it("disables all execution slots for an empty draft", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      viewedKind: "draft",
+      hasSteps: false,
+    });
+    expect(controls.slot1).toMatchObject({ label: "Run", enabled: false });
+    expect(controls.slot1.title).toBe("Add steps to run");
+    expect(controls.slot2.enabled).toBe(false);
+    expect(controls.slot3.enabled).toBe(false);
+  });
+
+  it("trusts an addressed run while its definition is still loading", () => {
+    const controls = getControls(EXECUTION_STATES.COMPLETED, {
+      viewedKind: "run",
+      hasFile: false,
+      hasSteps: false,
+    });
+    expect(controls.slot1).toMatchObject({
+      action: "rerun",
+      label: "Re-run",
+      enabled: true,
+    });
   });
 
   it("falls back to a disabled Pause when there is nothing to resume", () => {

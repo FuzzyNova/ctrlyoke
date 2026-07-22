@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -121,10 +122,10 @@ describe("Header execution controls", () => {
     });
   });
 
-  // Below xs there is no room for greyed-out affordances, so a disabled slot is
-  // hidden rather than dimmed. The slots stay in the DOM (they are only display-
-  // toggled by breakpoint), so assert the classes rather than presence.
-  it("hides disabled execution slots and their orphaned dividers below xs", () => {
+  // The primary Run affordance must remain discoverable even when an empty new
+  // workflow cannot run yet. Secondary inactive slots can still collapse below
+  // xs; assert the responsive classes because jsdom does not apply breakpoints.
+  it("keeps disabled Run visible while collapsing inactive secondary slots below xs", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
@@ -134,16 +135,23 @@ describe("Header execution controls", () => {
       pendingRewind: null,
       runSummaries: [],
     });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "new-workflow.ctrlyoke.json",
+      workflowName: "New workflow",
+      steps: [],
+      executionState: EXECUTION_STATES.IDLE,
+    });
 
     render(<Header />);
 
     const controls = screen.getByRole("group", {
       name: "Workflow execution controls",
     });
-    // Run is enabled for a draft — visible at every width.
-    expect(screen.getByRole("button", { name: "Run" }).className).toContain(
-      "flex bg-btn-bg"
-    );
+
+    const runButton = screen.getByRole("button", { name: "Run" });
+    expect(runButton).toBeDisabled();
+    expect(runButton.className).toContain("flex bg-btn-secondary-bg");
+    expect(runButton.className).not.toContain("hidden");
     for (const label of ["Pause", "Stop"]) {
       expect(screen.getByRole("button", { name: label }).className).toContain(
         "hidden xs:flex"
@@ -155,6 +163,60 @@ describe("Header execution controls", () => {
     for (const divider of dividers) {
       expect(divider.className).toContain("hidden xs:block");
     }
+  });
+
+  it("offers Re-run immediately when navigation addresses a completed run", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "completed-workflow" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+    // WorkflowStatus updates the addressed view optimistically before the
+    // asynchronous RUN_VIEW_LOADED definition snapshot arrives.
+    useWorkflowStore.getState().resetWorkflow();
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.COMPLETED);
+
+    render(<Header />);
+
+    const rerunButton = screen.getByRole("button", { name: "Re-run" });
+    expect(rerunButton).toBeEnabled();
+    expect(rerunButton.className).toContain("flex bg-btn-bg");
+    for (const label of ["Pause", "Stop"]) {
+      expect(screen.getByRole("button", { name: label }).className).toContain(
+        "hidden xs:flex"
+      );
+    }
+  });
+
+  it("shows only Re-run below xs for a stopped run", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.STOPPED);
+
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: "Re-run" }).className).toContain(
+      "flex bg-btn-bg"
+    );
+    const resumeButton = screen.getByRole("button", { name: "Resume" });
+    expect(resumeButton).toBeEnabled();
+    expect(resumeButton.className).toContain("hidden xs:flex");
+    expect(screen.getByRole("button", { name: "Stop" }).className).toContain(
+      "hidden xs:flex"
+    );
   });
 
   it("keeps a divider visible when both of the slots it separates are", () => {
@@ -188,10 +250,57 @@ describe("Header execution controls", () => {
     // must not be hidden.
     expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Re-run" }).className).toContain(
+      "hidden xs:flex"
+    );
     const dividers = screen
       .getByRole("group", { name: "Workflow execution controls" })
       .querySelectorAll(".fp-button-group-divider");
     expect(dividers[1].className).not.toContain("hidden");
+  });
+
+  it("switches from active controls to Re-run as soon as execution completes", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: runRef,
+      pendingRewind: null,
+      runSummaries: [
+        {
+          workflowKey: "workflow-a" as never,
+          runRef,
+          runId: 4,
+          startedAt: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+          stepCount: 2,
+          definitionRevision: 3,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+
+    act(() => {
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.COMPLETED);
+      useUiStore
+        .getState()
+        .markExecutionRunFinished(EXECUTION_STATES.COMPLETED);
+    });
+
+    expect(screen.getByRole("button", { name: "Re-run" })).toBeEnabled();
+    for (const label of ["Pause", "Stop"]) {
+      expect(screen.getByRole("button", { name: label }).className).toContain(
+        "hidden xs:flex"
+      );
+    }
   });
 
   it("targets the active workflow run when an append continuation has not refreshed executionRunRef yet", () => {

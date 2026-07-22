@@ -18,6 +18,7 @@ import {
   HARNESS_IDS,
   HARNESS_INFO,
   TERMINAL_SESSION_STATUS,
+  type ExecutionState,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { RecentWorkflows } from "./RecentWorkflows";
@@ -737,6 +738,22 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       // Record a request ID before the asynchronous load so RUN_VIEW_LOADED can
       // discard responses from an older recent-workflow selection.
       const ui = useUiStore.getState();
+      const selectedWorkflow = recentWorkflows.find((workflow) =>
+        areWorkflowAddressesEqual(workflow.address, address)
+      );
+      if (
+        selectedWorkflow &&
+        ALL_WORKFLOW_STATES.includes(
+          selectedWorkflow.executionState as ExecutionState
+        )
+      ) {
+        // The address changes optimistically, so move the lightweight runtime
+        // state with it. Otherwise Header keeps rendering the workflow we just
+        // left until the asynchronous definition snapshot arrives.
+        useWorkflowStore
+          .getState()
+          .setExecutionState(selectedWorkflow.executionState as ExecutionState);
+      }
       const requestId = ui.requestRunViewLoad(
         address,
         ui.runSummaries,
@@ -749,7 +766,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       });
       closeDropdown();
     },
-    [closeDropdown, displayedViewAddress, vscode]
+    [closeDropdown, displayedViewAddress, recentWorkflows, vscode]
   );
 
   // Clear workflow history

@@ -296,6 +296,7 @@ export interface WorkflowExecutionControlsInput {
   viewedExecutionState: ExecutionState;
   viewedKind: "draft" | "run" | null;
   hasFile: boolean;
+  hasSteps: boolean;
   pendingRewind: boolean;
   executionRunState?: ExecutionState | null;
   executionRunLabel?: string | null;
@@ -311,6 +312,7 @@ export function getWorkflowExecutionControls({
   viewedExecutionState,
   viewedKind,
   hasFile,
+  hasSteps,
   pendingRewind,
   executionRunState,
   executionRunLabel,
@@ -389,9 +391,21 @@ export function getWorkflowExecutionControls({
     };
   }
 
-  if (!hasFile || viewedKind === null) {
+  if (viewedKind === null || (viewedKind === "draft" && !hasFile)) {
     return {
       slot1: disabled("Run", "codicon-debug-start", "Load a workflow to run"),
+      slot2: disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
+      slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
+      isRunning,
+      isPausing,
+      isPaused,
+      isCancelling,
+    };
+  }
+
+  if (viewedKind === "draft" && !hasSteps) {
+    return {
+      slot1: disabled("Run", "codicon-debug-start", "Add steps to run"),
       slot2: disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
       slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
       isRunning,

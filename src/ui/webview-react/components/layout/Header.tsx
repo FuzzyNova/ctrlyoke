@@ -1,7 +1,11 @@
 import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
+import {
+  EXECUTION_STATES,
+  MESSAGE_TYPES,
+  RUNNER_IDS,
+} from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
@@ -85,7 +89,7 @@ export const Header: React.FC<{
     : HEADER_BUTTON_SIZES.default;
   const openWorkspaceViewer = useWorkspaceViewerStore((s) => s.open);
   const { fileName, executionState } = useWorkflowStore();
-  const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
+  const hasSteps = useWorkflowStore((s) => s.steps.length > 0);
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -147,6 +151,7 @@ export const Header: React.FC<{
       viewedExecutionState: executionState,
       viewedKind: displayedViewAddress?.kind ?? null,
       hasFile,
+      hasSteps,
       pendingRewind: pendingRewind !== null,
       executionRunState: executionRunSummary?.executionState,
       executionRunLabel: executionRunSummary
@@ -165,7 +170,7 @@ export const Header: React.FC<{
     }
   }, [vscode, activeWorkflowId]);
 
-  const canSave = hasFile && hasPrompts;
+  const canSave = hasFile && hasSteps;
 
   const handleSave = useCallback(() => {
     if (!canSave || !displayedViewAddress) return;
@@ -305,8 +310,8 @@ export const Header: React.FC<{
         title={
           !hasFile
             ? "Load a workflow to save"
-            : !hasPrompts
-              ? "Add prompts to save"
+            : !hasSteps
+              ? "Add steps to save"
               : "Save workflow to file"
         }
         aria-label="Save workflow"
@@ -327,13 +332,21 @@ export const Header: React.FC<{
     </div>
   );
 
-  // Below xs (380px) the row-1 grid has no room for greyed-out affordances, so
-  // a disabled execution slot is hidden outright rather than shown at
-  // opacity-50 — and a divider only earns its pixel when both of the slots it
-  // separates are actually visible.
-  const slot1Visible = slot1.enabled && !isCLIManaged;
-  const slot2Visible = slot2.enabled && !isCLIManaged;
-  const slot3Visible = slot3.enabled || isCLIManaged;
+  // Below xs (380px), show only actionable execution slots. If none are
+  // actionable, retain the disabled Run slot so the primary affordance never
+  // disappears completely. From xs upward all three fixed slots remain visible.
+  const slot1Enabled = slot1.enabled && !isCLIManaged;
+  const slot2Enabled = slot2.enabled && !isCLIManaged;
+  const slot3Enabled = slot3.enabled || isCLIManaged;
+  const restartOnlyOnNarrow =
+    executionState === EXECUTION_STATES.STOPPED &&
+    !isRunning &&
+    !isPausing &&
+    !isPaused &&
+    !isCancelling;
+  const slot2NarrowVisible = slot2Enabled && !restartOnlyOnNarrow;
+  const slot1NarrowVisible =
+    slot1Enabled || (!slot2NarrowVisible && !slot3Enabled);
   const HIDDEN_UNTIL_XS = "hidden xs:flex";
   const dividerClass = (bothVisible: boolean) =>
     `fp-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
@@ -349,9 +362,9 @@ export const Header: React.FC<{
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
             slot1.emphasized ? "font-bold" : ""
           } ${
-            slot1Visible
+            slot1Enabled
               ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
-              : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
+              : `${slot1NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot1.action)}
           disabled={!slot1.enabled || isCLIManaged}
@@ -363,12 +376,14 @@ export const Header: React.FC<{
           <i className={`codicon ${slot1.icon} ${btnSize.icon}`} />
         </button>
 
-        <div className={dividerClass(slot1Visible && slot2Visible)} />
+        <div
+          className={dividerClass(slot1NarrowVisible && slot2NarrowVisible)}
+        />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            slot2Visible
-              ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            slot2Enabled
+              ? `${slot2NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
@@ -383,11 +398,11 @@ export const Header: React.FC<{
           />
         </button>
 
-        <div className={dividerClass(slot2Visible && slot3Visible)} />
+        <div className={dividerClass(slot2NarrowVisible && slot3Enabled)} />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-            slot3Visible
+            slot3Enabled
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
@@ -458,8 +473,8 @@ export const Header: React.FC<{
               title={
                 !hasFile
                   ? "Load a workflow to save"
-                  : !hasPrompts
-                    ? "Add prompts to save"
+                  : !hasSteps
+                    ? "Add steps to save"
                     : "Save workflow to file"
               }
               aria-label="Save workflow"

@@ -248,6 +248,7 @@ describe("WorkflowStatus — loaded state", () => {
       displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
       runSummaries: [],
     });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
     setRecentWorkflows([
       {
         address,
@@ -274,6 +275,9 @@ describe("WorkflowStatus — loaded state", () => {
       })
     );
     expect(useUiStore.getState().displayedViewAddress).toEqual(address);
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
   });
 
   it("keeps a completed workflow selected after it leaves Running Workflows", async () => {
