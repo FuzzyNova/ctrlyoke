@@ -480,6 +480,51 @@ describe("requestRunViewLoad", () => {
     expect(store().runSummaries).toEqual([]);
     expect(store().executionRunRef).toBeNull();
   });
+
+  it("records a pending switch for cross-lineage requests only", () => {
+    store().setDisplayedRunView(
+      { workflowKey: "wf-1" as never, kind: "run", runRef: summary.runRef },
+      [summary],
+      summary.runRef
+    );
+
+    const switchRequestId = store().requestRunViewLoad(
+      { workflowKey: "wf-2" as never, kind: "draft" },
+      [],
+      undefined,
+      "Target workflow"
+    );
+    expect(store().pendingRunViewSwitch).toEqual({
+      requestId: switchRequestId,
+      workflowName: "Target workflow",
+    });
+
+    // A same-lineage follow-up supersedes the switch: its snapshot refines the
+    // panels already on screen, so no overlay/rename should remain pending.
+    store().requestRunViewLoad(
+      {
+        workflowKey: "wf-2" as never,
+        kind: "run",
+        runRef: "run-2026-07-21T10-30-00-000Z" as never,
+      },
+      []
+    );
+    expect(store().pendingRunViewSwitch).toBeNull();
+  });
+
+  it("clearPendingRunViewLoad clears the pending switch with the request", () => {
+    store().requestRunViewLoad(
+      { workflowKey: "wf-9" as never, kind: "draft" },
+      [],
+      undefined,
+      "Somewhere else"
+    );
+    expect(store().pendingRunViewSwitch).not.toBeNull();
+
+    store().clearPendingRunViewLoad();
+    expect(store().pendingRunViewRequestId).toBeNull();
+    expect(store().pendingRunViewSwitch).toBeNull();
+  });
 });
 
 describe("clearHistoryView", () => {

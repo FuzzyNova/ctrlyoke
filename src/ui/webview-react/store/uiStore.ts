@@ -237,6 +237,15 @@ interface UiState {
   displayedViewAddress: WorkflowViewAddress | null;
   /** Latest client-initiated run-view request; not persisted across reloads. */
   pendingRunViewRequestId: string | null;
+  /**
+   * Set while the latest run-view request crosses lineages — i.e. a workflow
+   * switch whose snapshot has not arrived yet. Drives the instant header
+   * rename and the panel loading overlay. Cleared with the request.
+   */
+  pendingRunViewSwitch: {
+    requestId: string;
+    workflowName: string | null;
+  } | null;
   executionRunRef: string | null;
   /** Optimistic revisions paired with the current addressed definition snapshot. */
   displayedDefinitionRevision: number | null;
@@ -520,7 +529,9 @@ interface UiActions {
   requestRunViewLoad: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
-    executionRunRef?: string
+    executionRunRef?: string,
+    /** Display name for the switch overlay when the caller knows it. */
+    targetWorkflowName?: string
   ) => string;
   clearPendingRunViewLoad: () => void;
 
@@ -635,6 +646,7 @@ const initialState: UiState = {
   runSummaries: [],
   displayedViewAddress: null,
   pendingRunViewRequestId: null,
+  pendingRunViewSwitch: null,
   executionRunRef: null,
   displayedDefinitionRevision: null,
   displayedDescriptorRevision: null,
@@ -1150,7 +1162,12 @@ export const useUiStore = create<UiState & UiActions>()(
               }
         ),
 
-      requestRunViewLoad: (address, summaries, executionRunRef) => {
+      requestRunViewLoad: (
+        address,
+        summaries,
+        executionRunRef,
+        targetWorkflowName
+      ) => {
         runViewRequestSequence += 1;
         const requestId = `run-view-${Date.now()}-${runViewRequestSequence}`;
         // Optimistic carry-over is only meaningful inside one lineage. Carrying
@@ -1165,11 +1182,21 @@ export const useUiStore = create<UiState & UiActions>()(
           sameLineage ? summaries : [],
           sameLineage ? executionRunRef : undefined
         );
-        set({ pendingRunViewRequestId: requestId });
+        set({
+          pendingRunViewRequestId: requestId,
+          // A cross-lineage request is a workflow switch: until its snapshot
+          // arrives the panels still render the previous workflow, so record
+          // the target for instant header feedback and the switch overlay.
+          // Same-lineage loads (run selector) keep the panels they refine.
+          pendingRunViewSwitch: sameLineage
+            ? null
+            : { requestId, workflowName: targetWorkflowName ?? null },
+        });
         return requestId;
       },
 
-      clearPendingRunViewLoad: () => set({ pendingRunViewRequestId: null }),
+      clearPendingRunViewLoad: () =>
+        set({ pendingRunViewRequestId: null, pendingRunViewSwitch: null }),
 
       // ============================================================================
       // DROPDOWN HIDE FEATURE

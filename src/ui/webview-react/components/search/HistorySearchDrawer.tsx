@@ -122,7 +122,8 @@ export function HistorySearchDrawer() {
       const requestId = ui.requestRunViewLoad(
         address,
         ui.runSummaries,
-        ui.executionRunRef ?? undefined
+        ui.executionRunRef ?? undefined,
+        result.workflowName
       );
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_RUN_VIEW,

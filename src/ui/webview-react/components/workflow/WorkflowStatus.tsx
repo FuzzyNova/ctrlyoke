@@ -177,6 +177,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
     displayedViewAddress,
+    pendingRunViewSwitch,
     recentWorkflows,
     setRecentWorkflows,
     setActiveWorkflowWorkingFilePath,
@@ -625,9 +626,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Start editing workflow name
   const startEditing = useCallback(() => {
     if (!fileName) return;
+    // Mid-switch the store still holds the previous workflow's name while the
+    // displayed address already targets the new one — a rename here would pair
+    // the old name with the new address. Wait for the snapshot.
+    if (pendingRunViewSwitch) return;
     setEditValue(workflowName || getWorkflowNameFromPath(fileName));
     setIsEditing(true);
-  }, [fileName, workflowName]);
+  }, [fileName, pendingRunViewSwitch, workflowName]);
 
   // Save edited workflow name
   const saveEdit = useCallback(() => {
@@ -762,7 +767,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       const requestId = ui.requestRunViewLoad(
         address,
         ui.runSummaries,
-        ui.executionRunRef ?? undefined
+        ui.executionRunRef ?? undefined,
+        // Names the pending switch so the header renames instantly and the
+        // panel overlay can say what it is loading.
+        selectedWorkflow?.workflowName
       );
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_RUN_VIEW,
@@ -910,9 +918,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [vscode]
   );
 
-  const displayName = fileName
-    ? workflowName || getWorkflowNameFromPath(fileName)
-    : DEFAULT_WORKFLOW_NAME;
+  // While a cross-lineage switch is in flight the workflow store still holds
+  // the previous workflow's definition. Show the switch target immediately so
+  // the click visibly took effect before the snapshot lands.
+  const displayName =
+    pendingRunViewSwitch?.workflowName ??
+    (fileName
+      ? workflowName || getWorkflowNameFromPath(fileName)
+      : DEFAULT_WORKFLOW_NAME);
 
   // Single flag drives opacity, clip-path, and visible/pointer-events together —
   // splitting these across separate conditions previously let the opacity class

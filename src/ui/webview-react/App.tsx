@@ -45,6 +45,7 @@ import {
   PromptChipRail,
   GlobalSettingsDrawer,
   StartupOverlay,
+  WorkflowSwitchOverlay,
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
@@ -951,6 +952,10 @@ function App() {
           {/* Global drawers - scoped below the header inside the main content area */}
           <GlobalSettingsDrawer />
           <HistorySearchDrawer />
+
+          {/* Workflow switch overlay — covers panels (not the header) while an
+              addressed cross-lineage switch is loading its snapshot */}
+          <WorkflowSwitchOverlay />
         </div>
 
         {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
@@ -1211,6 +1216,10 @@ function App() {
         {/* Global drawers - scoped below the header inside the main content area */}
         <GlobalSettingsDrawer />
         <HistorySearchDrawer />
+
+        {/* Workflow switch overlay — covers panels (not the header) while an
+            addressed cross-lineage switch is loading its snapshot */}
+        <WorkflowSwitchOverlay />
       </div>
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}

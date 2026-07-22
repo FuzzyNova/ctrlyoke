@@ -952,8 +952,12 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
         requestId,
       });
     });
-    // The announcement must not cancel the request it is answering.
+    // The announcement must not cancel the request it is answering — neither
+    // the pending id nor the switch overlay/header-rename state.
     expect(useUiStore.getState().pendingRunViewRequestId).toBe(requestId);
+    expect(useUiStore.getState().pendingRunViewSwitch?.requestId).toBe(
+      requestId
+    );
 
     act(() => {
       dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
@@ -976,6 +980,8 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
     expect(useWorkflowStore.getState().workflowName).toBe("Switched workflow");
     expect(useUiStore.getState().displayedViewAddress).toEqual(target);
     expect(useUiStore.getState().pendingRunViewRequestId).toBeNull();
+    // Applying the snapshot ends the switch: overlay down, header back to store.
+    expect(useUiStore.getState().pendingRunViewSwitch).toBeNull();
   });
 
   it("still cancels a stale pending request on a backend-initiated switch", () => {
@@ -1001,6 +1007,8 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
     });
 
     expect(useUiStore.getState().pendingRunViewRequestId).toBeNull();
+    // The abandoned switch's overlay must come down with its request.
+    expect(useUiStore.getState().pendingRunViewSwitch).toBeNull();
   });
 
   it("hydrates an executing run's full history before overlaying buffered output", () => {

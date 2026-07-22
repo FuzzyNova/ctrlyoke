@@ -9,3 +9,4 @@ export { PromptChipRail } from "../prompts/PromptChipRail";
 export { GlobalSettingsDrawer } from "./GlobalSettingsDrawer";
 export { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 export { StartupOverlay } from "./StartupOverlay";
+export { WorkflowSwitchOverlay } from "./WorkflowSwitchOverlay";
