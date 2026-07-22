@@ -15,6 +15,11 @@ type WorkflowHookLayers = {
   userHooks: Record<string, unknown[]>;
 };
 
+export type HookBaselinePolicy = {
+  /** Discard provider-owned groups left behind by an interrupted/older run. */
+  discardHookGroup?: (group: unknown) => boolean;
+};
+
 /**
  * Manages ctrlyoke hook injection into settings.json / hooks.json.
  *
@@ -83,7 +88,8 @@ export class SettingsJsonHooksTracker {
     workflowKey: string,
     workspaceRoot: string,
     ctrlyokeHooks: Record<string, unknown[]>,
-    workflowUserHooks: Record<string, unknown[]>
+    workflowUserHooks: Record<string, unknown[]>,
+    baselinePolicy?: HookBaselinePolicy
   ): Promise<void> {
     const settingsPath = path.join(
       workspaceRoot,
@@ -93,7 +99,7 @@ export class SettingsJsonHooksTracker {
 
     // First registration captures the baseline and records the original-case path
     if (this.workflowHooks.size === 0) {
-      const baseline = await this.readBaseline(settingsPath);
+      const baseline = await this.readBaseline(settingsPath, baselinePolicy);
       this.baselineHooksSection = baseline.hooks;
       this.baselineFileExisted = baseline.fileExisted;
       this.registeredSettingsPath = settingsPath;
@@ -176,7 +182,10 @@ export class SettingsJsonHooksTracker {
     this.gitignorePath = gitignorePath;
   }
 
-  private async readBaseline(settingsPath: string): Promise<{
+  private async readBaseline(
+    settingsPath: string,
+    policy?: HookBaselinePolicy
+  ): Promise<{
     fileExisted: boolean;
     hooks: Record<string, unknown> | null;
   }> {
@@ -188,10 +197,51 @@ export class SettingsJsonHooksTracker {
     }
 
     try {
-      const settings = JSON.parse(content);
+      const settings = JSON.parse(content) as Record<string, unknown>;
+      const hooks = this.asRecord(settings.hooks);
+      const discardHookGroup = policy?.discardHookGroup;
+      if (!hooks || !discardHookGroup) {
+        return {
+          fileExisted: true,
+          hooks,
+        };
+      }
+
+      let discardedGroup = false;
+      const sanitizedHooks = Object.fromEntries(
+        Object.entries(hooks).map(([event, value]) => {
+          if (!Array.isArray(value)) {
+            return [event, value];
+          }
+          const retainedGroups = value.filter((group) => {
+            if (!discardHookGroup(group)) {
+              return true;
+            }
+            discardedGroup = true;
+            return false;
+          });
+          return [event, retainedGroups];
+        })
+      );
+      const hasRetainedHookData = Object.values(sanitizedHooks).some((value) =>
+        Array.isArray(value)
+          ? value.length > 0
+          : this.asRecord(value)
+            ? Object.keys(this.asRecord(value)!).length > 0
+            : value !== null && value !== undefined
+      );
+      const hasOtherSettings = Object.keys(settings).some(
+        (key) => key !== "hooks"
+      );
+      const containedOnlyDiscardedGroups =
+        discardedGroup && !hasRetainedHookData && !hasOtherSettings;
+
       return {
-        fileExisted: true,
-        hooks: this.asRecord(settings.hooks),
+        // Treat an otherwise-empty provider-owned file like one ctrlyoke
+        // originally created so last-unregister removes it instead of restoring
+        // stale generated hooks as the baseline.
+        fileExisted: !containedOnlyDiscardedGroups,
+        hooks: containedOnlyDiscardedGroups ? null : sanitizedHooks,
       };
     } catch {
       return { fileExisted: true, hooks: null };

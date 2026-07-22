@@ -204,5 +204,115 @@ suite("CodexCliProvider", () => {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
+
+    test("does not preserve stale ctrlyoke notification hooks as the baseline", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "codex-stale-hook-baseline-")
+      );
+      const workingFilePath = path.join(workspaceRoot, ".ctrlyoke", "wf.json");
+      const codexDir = path.join(workspaceRoot, ".codex");
+      const hooksPath = path.join(codexDir, "hooks.json");
+      await fs.mkdir(codexDir, { recursive: true });
+      await fs.writeFile(
+        hooksPath,
+        JSON.stringify({
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command:
+                      'node "/old/out/scripts/ctrlyoke-codex-notify.js" "/old/notifications"',
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      );
+
+      try {
+        await provider.buildNotificationHookArgs(
+          "/ext",
+          workspaceRoot,
+          0,
+          workingFilePath,
+          undefined,
+          []
+        );
+        const activeHooks = JSON.parse(await fs.readFile(hooksPath, "utf8"));
+        assert.strictEqual(activeHooks.hooks.Stop.length, 1);
+
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          workingFilePath
+        );
+        await assert.rejects(fs.access(hooksPath), /ENOENT/);
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          workingFilePath
+        );
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("preserves user-owned Codex hooks while discarding stale ctrlyoke groups", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "codex-mixed-hook-baseline-")
+      );
+      const workingFilePath = path.join(workspaceRoot, ".ctrlyoke", "wf.json");
+      const codexDir = path.join(workspaceRoot, ".codex");
+      const hooksPath = path.join(codexDir, "hooks.json");
+      const userGroup = {
+        matcher: "",
+        hooks: [{ type: "command", command: "echo user-hook" }],
+      };
+      await fs.mkdir(codexDir, { recursive: true });
+      await fs.writeFile(
+        hooksPath,
+        JSON.stringify({
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command:
+                      'node "/old/out/scripts/ctrlyoke-codex-notify.js" "/old/notifications"',
+                  },
+                ],
+              },
+              userGroup,
+            ],
+          },
+        })
+      );
+
+      try {
+        await provider.buildNotificationHookArgs(
+          "/ext",
+          workspaceRoot,
+          0,
+          workingFilePath,
+          undefined,
+          []
+        );
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          workingFilePath
+        );
+
+        const restored = JSON.parse(await fs.readFile(hooksPath, "utf8"));
+        assert.deepStrictEqual(restored.hooks.Stop, [userGroup]);
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          workingFilePath
+        );
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+      }
+    });
   });
 });

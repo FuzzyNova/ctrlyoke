@@ -1534,6 +1534,10 @@ export class CliIntegration extends HarnessIntegration {
     this.ptySessionEndedCallback = callback;
   }
 
+  override shouldRetainWorkflowArtifactsForReuse(): boolean {
+    return this.provider.shouldRetainWorkflowArtifactsForReuse?.() ?? false;
+  }
+
   /**
    * Delete the MCP config file written for this workflow run, if any.
    *

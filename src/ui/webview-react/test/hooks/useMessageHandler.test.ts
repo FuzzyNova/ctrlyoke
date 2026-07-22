@@ -50,6 +50,8 @@ import {
   STEP_STATUS,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
+  OUTPUT_HISTORY_KINDS,
+  FINAL_STEP_PHASES,
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -742,10 +744,32 @@ describe("OPEN_HARNESS_DIR_RESULT", () => {
 describe("OUTPUT_HISTORY_LOADED", () => {
   it("keeps the output view live when the newest run history arrives during execution", () => {
     renderHook(() => useMessageHandler());
+    const persistedEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: {
+        prompt: "Step 1",
+        response: "persisted output",
+        elapsed: 1,
+        isStreaming: false,
+      },
+      timestampMs: 1000,
+      sequence: 0,
+    };
 
     act(() => {
       useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
       useUiStore.getState().setHistoryView(0, 1);
+      useWorkflowStore.getState().appendLiveEntry({
+        ...persistedEntry,
+        cliOutput: {
+          ...persistedEntry.cliOutput,
+          response: "newer buffered output",
+        },
+        timestampMs: 1100,
+      });
     });
 
     act(() => {
@@ -755,7 +779,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
           startedAt: 1000,
           completedAt: undefined,
           executionState: EXECUTION_STATES.RUNNING,
-          orderedEntries: [],
+          orderedEntries: [persistedEntry],
           promptOutputs: {},
         },
         availableRuns: 1,
@@ -769,6 +793,13 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     expect(useUiStore.getState().availableRuns).toBe(1);
     expect(useUiStore.getState().runTimestamps).toEqual([1000]);
     expect(useWorkflowStore.getState().historyOutputs).toBeNull();
+    expect(useWorkflowStore.getState().liveOrderedEntries).toHaveLength(1);
+    const [liveEntry] = useWorkflowStore.getState().liveOrderedEntries;
+    expect(
+      liveEntry && "cliOutput" in liveEntry
+        ? liveEntry.cliOutput.response
+        : null
+    ).toBe("newer buffered output");
   });
 
   it("loads history when the manifest is completed even if the webview state is still running (race condition fix)", () => {
@@ -841,6 +872,220 @@ describe("OUTPUT_HISTORY_LOADED", () => {
       preferredTarget: { kind: "queue", stepIndex: 0 },
     });
     expect(useUiStore.getState().pendingHistorySearchNavigation).toBeNull();
+  });
+});
+
+describe("RUN_VIEW_LOADED navigation identity", () => {
+  it("does not clear an optimistically selected run while its snapshot loads", () => {
+    renderHook(() => useMessageHandler());
+    const source = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+    const target = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T11-30-00-000Z" as never,
+    };
+
+    act(() => {
+      useUiStore.getState().setDisplayedRunView(source, [], undefined);
+    });
+    const requestId = useUiStore
+      .getState()
+      .requestRunViewLoad(target, [], undefined);
+    const observedAddresses: Array<typeof target | null> = [];
+    const unsubscribe = useUiStore.subscribe((state) => {
+      observedAddresses.push(
+        state.displayedViewAddress as typeof target | null
+      );
+    });
+
+    try {
+      act(() => {
+        dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+          requestId,
+          address: target,
+          workingFile: { workflowName: "Selected run", steps: [] },
+          workflowProperties: {},
+          runSummaries: [],
+          history: {
+            runId: 2,
+            startedAt: 1000,
+            completedAt: 2000,
+            executionState: EXECUTION_STATES.COMPLETED,
+            orderedEntries: [],
+            promptOutputs: {},
+          },
+        });
+      });
+    } finally {
+      unsubscribe();
+    }
+
+    expect(observedAddresses).not.toContain(null);
+    expect(useUiStore.getState().displayedViewAddress).toEqual(target);
+    expect(useUiStore.getState().isViewingHistory).toBe(true);
+    expect(useWorkflowStore.getState().historyOutputs).not.toBeNull();
+  });
+
+  it("applies the snapshot when its own ACTIVE_WORKFLOW_CHANGED announcement precedes it", () => {
+    renderHook(() => useMessageHandler());
+    const target = {
+      workflowKey: "wf-switch" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-22T12-00-00-000Z" as never,
+    };
+
+    // Cross-lineage dropdown switch: request issued, then the backend answers
+    // with ACTIVE_WORKFLOW_CHANGED (carrying the requestId) before the
+    // requestful RUN_VIEW_LOADED snapshot.
+    const requestId = useUiStore
+      .getState()
+      .requestRunViewLoad(target, [], undefined);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "instance-switch",
+        workingFilePath: null,
+        requestId,
+      });
+    });
+    // The announcement must not cancel the request it is answering.
+    expect(useUiStore.getState().pendingRunViewRequestId).toBe(requestId);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        requestId,
+        address: target,
+        workingFile: { workflowName: "Switched workflow", steps: [] },
+        workflowProperties: {},
+        runSummaries: [],
+        history: {
+          runId: 1,
+          startedAt: 1000,
+          completedAt: 2000,
+          executionState: EXECUTION_STATES.COMPLETED,
+          orderedEntries: [],
+          promptOutputs: {},
+        },
+      });
+    });
+
+    expect(useWorkflowStore.getState().workflowName).toBe("Switched workflow");
+    expect(useUiStore.getState().displayedViewAddress).toEqual(target);
+    expect(useUiStore.getState().pendingRunViewRequestId).toBeNull();
+  });
+
+  it("still cancels a stale pending request on a backend-initiated switch", () => {
+    renderHook(() => useMessageHandler());
+    const target = {
+      workflowKey: "wf-stale" as never,
+      kind: "draft" as const,
+    };
+
+    // A request whose response was lost leaves a stale pending id; a
+    // backend-initiated switch (no requestId) must clear it so the follow-up
+    // requestless replay is not suppressed forever.
+    const staleRequestId = useUiStore
+      .getState()
+      .requestRunViewLoad(target, [], undefined);
+    expect(useUiStore.getState().pendingRunViewRequestId).toBe(staleRequestId);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "instance-backend",
+        workingFilePath: null,
+      });
+    });
+
+    expect(useUiStore.getState().pendingRunViewRequestId).toBeNull();
+  });
+
+  it("hydrates an executing run's full history before overlaying buffered output", () => {
+    renderHook(() => useMessageHandler());
+    const workflowId = "instance-atomic";
+    const address = {
+      workflowKey: "wf-atomic" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-22T10-30-00-000Z" as never,
+    };
+    const earlierPersistedEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: { response: "earlier persisted history" },
+      timestampMs: 1000,
+      sequence: 0,
+    };
+    const persistedCurrentEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: { response: "persisted current output" },
+      timestampMs: 1500,
+      sequence: 1,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, { workflowId });
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Atomic snapshot",
+          definitionRevision: 3,
+          steps: [makePrompt("Step 1"), makePrompt("Step 2")],
+          _runtime: {
+            executionState: EXECUTION_STATES.RUNNING,
+            currentIndex: 1,
+          },
+        },
+        workflowProperties: {},
+        runSummaries: [
+          {
+            workflowKey: address.workflowKey,
+            runRef: address.runRef,
+            startedAt: 1000,
+            executionState: EXECUTION_STATES.RUNNING,
+            stepCount: 2,
+          },
+        ],
+        executionRunRef: address.runRef,
+        history: {
+          runId: 1,
+          startedAt: 1000,
+          executionState: EXECUTION_STATES.RUNNING,
+          orderedEntries: [earlierPersistedEntry, persistedCurrentEntry],
+          promptOutputs: {},
+        },
+        descriptorRevision: 2,
+      });
+      dispatch(MESSAGE_TYPES.CLI_OUTPUT, {
+        workflowId,
+        stepIndex: 1,
+        output: {
+          response: "newer buffered output",
+          timestampMs: 2001,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+    });
+
+    const workflow = useWorkflowStore.getState();
+    expect(workflow.historyOutputs).toBeNull();
+    expect(workflow.liveOrderedEntries).toHaveLength(2);
+    expect(workflow.liveOrderedEntries[0]).toEqual(earlierPersistedEntry);
+    expect(
+      "cliOutput" in workflow.liveOrderedEntries[1]
+        ? workflow.liveOrderedEntries[1].cliOutput.response
+        : null
+    ).toBe("newer buffered output");
+    expect(useUiStore.getState().isViewingHistory).toBe(false);
+    expect(useUiStore.getState().displayedViewAddress).toEqual(address);
   });
 });
 

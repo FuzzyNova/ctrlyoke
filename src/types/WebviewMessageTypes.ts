@@ -952,6 +952,13 @@ export interface ActiveWorkflowChangedMessage {
   type: typeof MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED;
   workflowId: string;
   workingFilePath?: string | null;
+  /**
+   * Present when this announcement is part of answering a client's own
+   * LOAD_RUN_VIEW request. The client must not treat it as a backend-initiated
+   * switch that cancels the in-flight request — the addressed RUN_VIEW_LOADED
+   * carrying this same requestId follows immediately.
+   */
+  requestId?: string;
 }
 
 export interface PromptEditorInsertRequest {

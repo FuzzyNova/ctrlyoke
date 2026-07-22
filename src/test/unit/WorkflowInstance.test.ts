@@ -1521,13 +1521,17 @@ suite("WorkflowInstance append-and-continue", () => {
 });
 
 suite("WorkflowInstance retained integration artifacts", () => {
-  test("keeps completion hooks until a reusable PTY integration actually exits", async () => {
+  test("keeps required completion hooks until a reusable PTY integration actually exits", async () => {
     class RetainedIntegration extends MockHarnessIntegration {
       cleanupCalls = 0;
       disposeCalls = 0;
       private ptyEndedCallback: (() => void) | undefined;
 
       override canReuseForInject(): boolean {
+        return true;
+      }
+
+      override shouldRetainWorkflowArtifactsForReuse(): boolean {
         return true;
       }
 
@@ -1586,6 +1590,79 @@ suite("WorkflowInstance retained integration artifacts", () => {
       integration.cleanupCalls,
       1,
       "provider artifacts should be cleaned once the retained PTY exits"
+    );
+    assert.strictEqual(integration.disposeCalls, 1);
+  });
+
+  test("cleans ordinary provider artifacts when execution ends while retaining the reusable PTY", async () => {
+    class EagerCleanupIntegration extends MockHarnessIntegration {
+      cleanupCalls = 0;
+      disposeCalls = 0;
+      private ptyEndedCallback: (() => void) | undefined;
+
+      override canReuseForInject(): boolean {
+        return true;
+      }
+
+      override async cleanupWorkflowArtifacts(): Promise<void> {
+        this.cleanupCalls += 1;
+      }
+
+      override onPtySessionEnded(callback: () => void): void {
+        this.ptyEndedCallback = callback;
+      }
+
+      override dispose(): void {
+        this.disposeCalls += 1;
+        super.dispose();
+      }
+
+      firePtyEnded(): void {
+        this.ptyEndedCallback?.();
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const integration = new EagerCleanupIntegration(undefined, false);
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.CODEX_CLI,
+      integration
+    );
+    (instance as any).workflowExecutor.execute = async () => {};
+
+    await (instance as any).startWorkflowExecution(
+      integration,
+      "",
+      "workflow.ctrlyoke.json"
+    );
+
+    assert.strictEqual(
+      integration.cleanupCalls,
+      1,
+      "Codex-style artifacts should be removed as soon as execution completes"
+    );
+    assert.strictEqual(
+      integration.disposeCalls,
+      0,
+      "the reusable PTY integration should remain available for injection"
+    );
+
+    integration.firePtyEnded();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(
+      integration.cleanupCalls,
+      1,
+      "PTY exit must not repeat eager artifact cleanup"
     );
     assert.strictEqual(integration.disposeCalls, 1);
   });

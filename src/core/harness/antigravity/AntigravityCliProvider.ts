@@ -70,6 +70,12 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityToolPermissionMapper();
   readonly logParser = new AntigravityLogParser();
 
+  shouldRetainWorkflowArtifactsForReuse(): boolean {
+    // Injected turns do not rebuild CLI arguments or hook registration, and
+    // agy re-reads its global hook file when firing completion events.
+    return true;
+  }
+
   async buildCliArgs(
     _prompt: PromptStep,
     _isInteractive: boolean,

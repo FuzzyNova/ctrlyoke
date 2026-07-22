@@ -154,6 +154,10 @@ function lineageAddressOf(
     : { workflowKey: state.workflowKey, kind: "draft" };
 }
 
+interface WorkflowReplayOptions {
+  skipTerminalReplay?: boolean;
+}
+
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry
@@ -587,7 +591,7 @@ export class WorkflowOrchestrator {
     workflowId: string,
     send: (msg: unknown) => void,
     clientId: string,
-    options?: { skipTerminalReplay?: boolean }
+    options?: WorkflowReplayOptions
   ): Promise<void> {
     const sink = new PostMessageDashboardSink(send);
 
@@ -631,7 +635,6 @@ export class WorkflowOrchestrator {
       // RUN_VIEW_LOADED resets the webview's live output store, so sending it after
       // replayFullStateTo caused newly connected browser clients to discard the full
       // reconnect buffer and display only the potentially incomplete on-disk history.
-      // The addressed snapshot must land before the live replay for a resident workflow.
       const queueState = instance.getQueueState();
       if (queueState.workflowKey) {
         await this.loadRunViewForClient(
@@ -673,65 +676,7 @@ export class WorkflowOrchestrator {
       // skipTerminalReplay: true so we don't clear and dispose live xtermjs
       // instances that already hold the correct scrollback.
       if (!options?.skipTerminalReplay) {
-        const ptyManager = getPtyProcessManager();
-        if (ptyManager) {
-          const sessionsForWorkflow =
-            ptyManager.getSessionsForWorkflow(workflowId);
-          Log.debug(
-            `[replayWorkflowStateTo] terminal replay for inst:${workflowId.slice(0, 8)} — ` +
-              `found ${sessionsForWorkflow.length} PTY session(s): ` +
-              `[${sessionsForWorkflow.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
-          );
-          for (const session of sessionsForWorkflow) {
-            // Auto-assign controller to the first client to reconnect for this session.
-            // Use assignController (not direct mutation) so workflowRunControllers is
-            // updated — ensuring subsequent step PTY spawns inherit the same controller.
-            // Broadcast TERMINAL_CONTROLLER_CHANGED to all clients so no other client
-            // continues to think it is still the controller (prevents dual-controller).
-            if (session.controllerClientId === undefined) {
-              ptyManager.assignController(session.id, clientId);
-              ptyPostMessage({
-                type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
-                workflowId: session.workflowId,
-                sessionId: session.id,
-                controllerClientId: clientId,
-              });
-            }
-            Log.debug(
-              `[replayWorkflowStateTo] sending TERMINAL_STARTED for session ${session.id.slice(0, 8)} ` +
-                `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
-                `reconnectBuffer=${session.reconnectBuffer.length} chunks`
-            );
-            send({
-              type: MESSAGE_TYPES.TERMINAL_STARTED,
-              workflowId: session.workflowId,
-              sessionId: session.id,
-              stepName: session.stepName,
-              kind: session.kind,
-              promptNumber: session.promptNumber,
-              harnessId: session.harnessId,
-              controllerClientId: session.controllerClientId,
-            });
-            // Immediately follow with current PTY dimensions so viewers can match
-            // the controller's width without waiting for the next resize event.
-            // session.pty.cols reflects the controller's most recent TERMINAL_RESIZE.
-            send({
-              type: MESSAGE_TYPES.TERMINAL_SIZE_CHANGED,
-              workflowId: session.workflowId,
-              sessionId: session.id,
-              cols: session.pty.cols,
-              rows: session.pty.rows,
-            });
-            for (const chunk of session.reconnectBuffer) {
-              send({
-                type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-                workflowId: session.workflowId,
-                sessionId: session.id,
-                data: chunk,
-              });
-            }
-          }
-        }
+        this.replayTerminalSessionsTo(workflowId, send, clientId);
       }
       // setViewedWorkflowId already called before awaits above.
       return;
@@ -756,6 +701,71 @@ export class WorkflowOrchestrator {
       Log.warn(
         `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
       );
+    }
+  }
+
+  /** Replay PTY metadata and scrollback without touching workflow/output state. */
+  private replayTerminalSessionsTo(
+    workflowId: string,
+    send: (message: unknown) => void,
+    clientId: string
+  ): void {
+    const ptyManager = getPtyProcessManager();
+    if (!ptyManager) return;
+
+    const sessionsForWorkflow = ptyManager.getSessionsForWorkflow(workflowId);
+    Log.debug(
+      `[replayTerminalSessionsTo] terminal replay for inst:${workflowId.slice(0, 8)} — ` +
+        `found ${sessionsForWorkflow.length} PTY session(s): ` +
+        `[${sessionsForWorkflow.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
+    );
+    for (const session of sessionsForWorkflow) {
+      // Auto-assign controller to the first client to reconnect for this session.
+      // Use assignController (not direct mutation) so workflowRunControllers is
+      // updated — ensuring subsequent step PTY spawns inherit the same controller.
+      // Broadcast TERMINAL_CONTROLLER_CHANGED to all clients so no other client
+      // continues to think it is still the controller (prevents dual-controller).
+      if (session.controllerClientId === undefined) {
+        ptyManager.assignController(session.id, clientId);
+        ptyPostMessage({
+          type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+          workflowId: session.workflowId,
+          sessionId: session.id,
+          controllerClientId: clientId,
+        });
+      }
+      Log.debug(
+        `[replayTerminalSessionsTo] sending TERMINAL_STARTED for session ${session.id.slice(0, 8)} ` +
+          `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
+          `reconnectBuffer=${session.reconnectBuffer.length} chunks`
+      );
+      send({
+        type: MESSAGE_TYPES.TERMINAL_STARTED,
+        workflowId: session.workflowId,
+        sessionId: session.id,
+        stepName: session.stepName,
+        kind: session.kind,
+        promptNumber: session.promptNumber,
+        harnessId: session.harnessId,
+        controllerClientId: session.controllerClientId,
+      });
+      // Immediately follow with current PTY dimensions so viewers can match
+      // the controller's width without waiting for the next resize event.
+      send({
+        type: MESSAGE_TYPES.TERMINAL_SIZE_CHANGED,
+        workflowId: session.workflowId,
+        sessionId: session.id,
+        cols: session.pty.cols,
+        rows: session.pty.rows,
+      });
+      for (const chunk of session.reconnectBuffer) {
+        send({
+          type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+          workflowId: session.workflowId,
+          sessionId: session.id,
+          data: chunk,
+        });
+      }
     }
   }
 
@@ -1970,16 +1980,14 @@ export class WorkflowOrchestrator {
     address: WorkflowViewAddress,
     send: (message: unknown) => void,
     clientId: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     const binding = this.getLineageBindingClients();
-    // replayWorkflowStateTo finishes by loading its own run view, re-entering
-    // here. Without this guard a definition that carries no workflowKey could
-    // never satisfy the match below and would recurse indefinitely.
-    if (binding.has(clientId)) return;
+    // A nested client transition must not bind/replay the same lineage twice.
+    if (binding.has(clientId)) return null;
 
     const boundId = this.getViewedWorkflowId(clientId);
     const bound = boundId ? this.findInstance(boundId) : undefined;
-    if (bound?.getQueueState().workflowKey === address.workflowKey) return;
+    if (bound?.getQueueState().workflowKey === address.workflowKey) return null;
 
     binding.add(clientId);
     try {
@@ -1988,14 +1996,16 @@ export class WorkflowOrchestrator {
         ? address.workflowKey
         : this.findInstanceForLineage(address.workflowKey)?.id;
       if (resident) {
-        await this.replayWorkflowStateTo(resident, send, clientId);
-        return;
+        this.setViewedWorkflowId(clientId, resident);
+        return resident;
       }
       await this.loadFreshInstanceAndReplay(
         this.resolveAddressFilePath(this.requireWorkspaceRoot(), address),
         clientId,
-        send
+        send,
+        { skipReplay: true }
       );
+      return this.getViewedWorkflowId(clientId);
     } finally {
       binding.delete(clientId);
     }
@@ -2020,7 +2030,11 @@ export class WorkflowOrchestrator {
       throw new Error("No workspace folder is open");
     }
 
-    await this.bindClientToAddressedLineage(address, send, clientId);
+    const boundWorkflowId = await this.bindClientToAddressedLineage(
+      address,
+      send,
+      clientId
+    );
 
     const filePath = this.resolveAddressFilePath(workspaceRoot, address);
     const content = await fs.promises.readFile(filePath, "utf-8");
@@ -2067,7 +2081,53 @@ export class WorkflowOrchestrator {
           }
         : {}),
     };
+
+    const runtimeWorkflowId =
+      boundWorkflowId ??
+      (address.kind === "draft" ||
+      (address.kind === "run" && address.runRef === executionRunRef)
+        ? this.getViewedWorkflowId(clientId)
+        : null);
+    const boundInstance = runtimeWorkflowId
+      ? this.findInstance(runtimeWorkflowId)
+      : undefined;
+    if (boundWorkflowId) {
+      // Announce the new active instance before transferring the potentially
+      // large history snapshot. This lets the client route subsequent tagged
+      // live events correctly and prevents the switch indicator from sitting
+      // behind megabytes of snapshot processing.
+      send({
+        type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+        workflows: this.getActiveTerminalWorkflowRefs(),
+      });
+      send({
+        type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        workflowId: boundWorkflowId,
+        workingFilePath:
+          boundInstance?.getSummary().workingFilePath ??
+          this.cliSessions.get(boundWorkflowId)?.summary.workingFilePath ??
+          null,
+        // Announcing before the snapshot must not read as a backend-initiated
+        // switch: without the requestId the client cancels its own in-flight
+        // request and then drops the requestful RUN_VIEW_LOADED that follows.
+        requestId,
+      });
+    }
+
+    // This is the one authoritative definition/runtime/history application for
+    // the addressed switch. Nothing after it may emit FILE_SELECTED,
+    // SESSION_RESTORED, RUN_VIEW_LOADED, or OUTPUT_HISTORY_LOADED.
     send(snapshot);
+
+    // Overlay only in-memory output that may have arrived after the timeline
+    // read, then restore PTY metadata/scrollback. Neither path resets the
+    // snapshot, so completed/fresh instances keep their persisted output.
+    if (runtimeWorkflowId) {
+      boundInstance?.replayBufferedOutputTo(new PostMessageDashboardSink(send));
+    }
+    if (boundWorkflowId) {
+      this.replayTerminalSessionsTo(boundWorkflowId, send, clientId);
+    }
   }
 
   /**

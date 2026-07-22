@@ -658,6 +658,69 @@ describe("loadHistoryRun", () => {
   });
 });
 
+describe("hydrateLiveRunHistory", () => {
+  it("seeds the complete live timeline and overlays a matching buffered attempt", () => {
+    const persistedEntry: OrderedCliHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "persisted" }),
+      timestampMs: 120,
+      sequence: 4,
+    };
+    const history: WorkflowOutputHistory = {
+      schemaVersion: "1.1.0",
+      workflowId: "wf-live-history",
+      runId: 3,
+      startedAt: 100,
+      executionState: EXECUTION_STATES.RUNNING,
+      promptOutputs: {
+        0: {
+          workspaceSnapshot: {
+            capturedAt: 125,
+            strategy: "filesystem",
+            changedFiles: [],
+          },
+          undoRecord: {
+            appliedAt: 130,
+            restoredFiles: ["src/example.ts"],
+            redoInstructions: [],
+          },
+        },
+      },
+      orderedEntries: [persistedEntry],
+    };
+
+    store().hydrateLiveRunHistory(history);
+
+    expect(store().historyOutputs).toBeNull();
+    expect(store().liveOrderedEntries).toEqual([persistedEntry]);
+    expect(store().liveSequence).toBe(5);
+    expect(store().workspaceSnapshots[0]).toEqual({
+      capturedAt: 125,
+      strategy: "filesystem",
+      changedFiles: [],
+    });
+    expect(store().undoRecords["queue-0"]?.appliedAt).toBe(130);
+
+    store().appendLiveEntry({
+      ...persistedEntry,
+      cliOutput: makeOutput({ response: "buffered replacement" }),
+      timestampMs: 140,
+      sequence: store().liveSequence,
+    });
+
+    expect(store().liveOrderedEntries).toHaveLength(1);
+    expect(
+      (store().liveOrderedEntries[0] as OrderedCliHistoryEntry).cliOutput
+        .response
+    ).toBe("buffered replacement");
+    expect(store().liveOrderedEntries[0]?.sequence).toBe(4);
+    expect(store().liveSequence).toBe(6);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Computed selectors
 // ---------------------------------------------------------------------------

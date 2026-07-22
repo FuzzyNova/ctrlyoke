@@ -67,15 +67,37 @@ function createLineageBindingHarness() {
   internal.lineageBindingClients = new Set<string>();
 
   const replays: string[] = [];
+  const replayOptions: unknown[] = [];
   const freshLoads: string[] = [];
-  internal.replayWorkflowStateTo = async (workflowId: string) => {
+  const freshLoadOptions: unknown[] = [];
+  internal.replayWorkflowStateTo = async (
+    workflowId: string,
+    _send: unknown,
+    _clientId: unknown,
+    options: unknown
+  ) => {
     replays.push(workflowId);
+    replayOptions.push(options);
   };
-  internal.loadFreshInstanceAndReplay = async (filePath: string) => {
+  internal.loadFreshInstanceAndReplay = async (
+    filePath: string,
+    _clientId: unknown,
+    _send: unknown,
+    options: unknown
+  ) => {
     freshLoads.push(filePath);
+    freshLoadOptions.push(options);
   };
 
-  return { orchestrator, internal, boundKey, replays, freshLoads };
+  return {
+    orchestrator,
+    internal,
+    boundKey,
+    replays,
+    replayOptions,
+    freshLoads,
+    freshLoadOptions,
+  };
 }
 
 suite("WorkflowOrchestrator startup auto-load gating", () => {
@@ -194,7 +216,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("binds a switching client to the addressed lineage's resident instance", async () => {
-    const { internal, replays } = createLineageBindingHarness();
+    const { internal, replays, replayOptions } = createLineageBindingHarness();
     const other = "other" as never;
 
     internal.instances.set("instance-other", {
@@ -209,8 +231,15 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     );
 
     // Without this the client keeps editing/running/terminalling the workflow
-    // it was bound to before the switch.
-    assert.deepStrictEqual(replays, ["instance-other"]);
+    // it was bound to before the switch. The caller sends one exact snapshot
+    // and overlays only buffered runtime output, so binding itself remains
+    // side-effect free beyond updating the client-to-instance registry.
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-other"
+    );
+    assert.deepStrictEqual(replays, []);
+    assert.deepStrictEqual(replayOptions, []);
   });
 
   test("leaves the binding alone when the address is another run of the same lineage", async () => {
@@ -248,11 +277,16 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       "client-a"
     );
 
-    assert.deepStrictEqual(replays, ["instance-live"]);
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-live"
+    );
+    assert.deepStrictEqual(replays, []);
   });
 
   test("materializes an addressed instance only when the lineage has none resident", async () => {
-    const { internal, freshLoads } = createLineageBindingHarness();
+    const { internal, freshLoads, freshLoadOptions } =
+      createLineageBindingHarness();
     const other = "other" as never;
     const runRef = "run-2026-07-21T10-30-00-000Z" as never;
 
@@ -269,9 +303,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ),
       `unexpected addressed file path: ${freshLoads[0]}`
     );
+    assert.deepStrictEqual(freshLoadOptions, [{ skipReplay: true }]);
   });
 
-  test("does not re-enter while the replay loads its own run view", async () => {
+  test("does not rebind when the client already owns the target lineage", async () => {
     const { internal, replays } = createLineageBindingHarness();
     const other = "other" as never;
     const address = { workflowKey: other, kind: "draft" as const };
@@ -280,25 +315,22 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       id: "instance-other",
       getQueueState: () => ({ workflowKey: other }),
     });
-    // replayWorkflowStateTo loads a run view, which re-enters the binder. A
-    // definition with no workflowKey would otherwise never satisfy
-    // the already-bound check and would recurse forever.
-    internal.replayWorkflowStateTo = async (workflowId: string) => {
-      replays.push(workflowId);
-      await internal.bindClientToAddressedLineage(
-        address,
-        () => undefined,
-        "client-a"
-      );
-    };
-
+    await internal.bindClientToAddressedLineage(
+      address,
+      () => undefined,
+      "client-a"
+    );
     await internal.bindClientToAddressedLineage(
       address,
       () => undefined,
       "client-a"
     );
 
-    assert.deepStrictEqual(replays, ["instance-other"]);
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-other"
+    );
+    assert.deepStrictEqual(replays, []);
   });
 
   test("deleting a viewed run falls every affected client back deterministically", async () => {
@@ -549,6 +581,108 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       "run-history",
       "output-history",
     ]);
+  });
+
+  test("applies an addressed switch as one snapshot without a resetting state replay", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-atomic-run-view-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "Atomic snapshot",
+          definitionRevision: 3,
+          steps: [{ prompt: "Keep this output" }],
+        })
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const workflowId = "workflow-live";
+      const workflowKey = "live-lineage" as never;
+      const operations: string[] = [];
+      const sent: Array<{ type?: string }> = [];
+
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewerRegistry = new Map<string, string | null>();
+      internal.viewAddressRegistry = new Map();
+      internal.viewMessageSinks = new Map();
+      internal.instances = new Map([
+        [
+          workflowId,
+          {
+            getSummary: () => ({ workingFilePath }),
+            replayBufferedOutputTo: (sink: {
+              updateCliOutput: (stepIndex: number, output: unknown) => void;
+            }) => {
+              operations.push("buffered-output");
+              sink.updateCliOutput(0, { response: "newer live output" });
+            },
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.bindClientToAddressedLineage = async () => workflowId;
+      internal.resolveAddressFilePath = () => workingFilePath;
+      internal.findExecutionRunRef = () => null;
+      internal.getActiveTerminalWorkflowRefs = () => [];
+      internal.replayTerminalSessionsTo = () => operations.push("terminals");
+      internal.lineageRepository = {
+        readDescriptor: async () => ({ revision: 2 }),
+      };
+
+      await orchestrator.loadRunViewForClient(
+        { workflowKey, kind: "draft" },
+        (message) => {
+          const typed = message as { type?: string };
+          sent.push(typed);
+          operations.push(typed.type ?? "unknown");
+        },
+        "browser:switch",
+        "run-view-request-1"
+      );
+
+      assert.deepStrictEqual(operations, [
+        MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+        MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        MESSAGE_TYPES.RUN_VIEW_LOADED,
+        "buffered-output",
+        MESSAGE_TYPES.CLI_OUTPUT,
+        "terminals",
+      ]);
+      // The pre-snapshot announcement must carry the client's requestId —
+      // without it the client cancels its own in-flight request and then
+      // drops the requestful RUN_VIEW_LOADED that immediately follows.
+      const announcement = sent.find(
+        (message) => message.type === MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED
+      ) as { requestId?: string } | undefined;
+      assert.strictEqual(announcement?.requestId, "run-view-request-1");
+      const snapshot = sent.find(
+        (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
+      ) as { requestId?: string } | undefined;
+      assert.strictEqual(snapshot?.requestId, "run-view-request-1");
+      assert.strictEqual(
+        sent.filter((message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED)
+          .length,
+        1
+      );
+      assert.ok(
+        !sent.some(
+          (message) =>
+            message.type === MESSAGE_TYPES.SESSION_RESTORED ||
+            message.type === MESSAGE_TYPES.FILE_SELECTED ||
+            message.type === MESSAGE_TYPES.OUTPUT_HISTORY_LOADED
+        ),
+        "the runtime overlay must not reset or replace the addressed snapshot"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 
   test("re-publishes the addressed view identity after the live replay so SESSION_RESTORED cannot leave the client without a run address", async () => {

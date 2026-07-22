@@ -31,6 +31,7 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
+const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
 
 /**
  * Codex CLI Harness
@@ -62,6 +63,35 @@ const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
  * ```
  */
 export class CodexCliProvider implements ICliProvider {
+  private static readonly hookBaselinePolicy = {
+    discardHookGroup: (group: unknown): boolean => {
+      if (!group || Array.isArray(group) || typeof group !== "object") {
+        return false;
+      }
+      const handlers = (group as Record<string, unknown>).hooks;
+      return (
+        Array.isArray(handlers) &&
+        handlers.length > 0 &&
+        handlers.every((handler) => {
+          if (
+            !handler ||
+            Array.isArray(handler) ||
+            typeof handler !== "object"
+          ) {
+            return false;
+          }
+          const command = (handler as Record<string, unknown>).command;
+          return (
+            typeof command === "string" &&
+            command
+              .toLowerCase()
+              .includes(CODEX_NOTIFICATION_SCRIPT_NAME.toLowerCase())
+          );
+        })
+      );
+    },
+  };
+
   private buildToolApprovalOverrideArgs(server: McpServerConfig): string[] {
     if (!Array.isArray(server.autoApprove) || server.autoApprove.length === 0) {
       return [];
@@ -315,7 +345,7 @@ export class CodexCliProvider implements ICliProvider {
                 extensionPath,
                 "out",
                 "scripts",
-                "ctrlyoke-codex-notify.js"
+                CODEX_NOTIFICATION_SCRIPT_NAME
               ),
               this.notificationMonitor.getNotificationDirectory(workspaceRoot),
               workspaceRoot,
@@ -340,7 +370,8 @@ export class CodexCliProvider implements ICliProvider {
         workflowKey,
         workspaceRoot,
         ctrlyokeHooksSection,
-        workflowUserHooks
+        workflowUserHooks,
+        CodexCliProvider.hookBaselinePolicy
       );
       trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
         CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
@@ -401,7 +432,7 @@ export class CodexCliProvider implements ICliProvider {
       extensionPath,
       "out",
       "scripts",
-      "ctrlyoke-codex-notify.js"
+      CODEX_NOTIFICATION_SCRIPT_NAME
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -434,7 +465,8 @@ export class CodexCliProvider implements ICliProvider {
         workflowKey,
         workspaceRoot,
         ctrlyokeHooksSection,
-        workflowUserHooks
+        workflowUserHooks,
+        CodexCliProvider.hookBaselinePolicy
       );
       trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
         CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)

@@ -227,19 +227,23 @@ function applyWorkflowPropertiesFromMessage(message: {
  * when switching workflows to prevent drafts from one workflow appearing in
  * another workflow that has the same step index.
  */
-function applyWorkflowChange(): void {
+function applyWorkflowChange(options?: {
+  preserveViewAddress?: boolean;
+}): void {
   useWorkflowStore.getState().clearHistoryOutputs();
   useUiStore.getState().clearHistoryView();
-  // The previous workflow's address and revisions cannot address the new one.
-  // Holding them would aim the next mutation at the workflow the user just left.
-  // Every path that lands on an addressable workflow republishes them — the
-  // RUN_VIEW_LOADED that follows a load, or the WORKFLOW_VIEW_IDENTITY that
-  // follows the first write to a brand-new workflow.
-  useUiStore.setState({
-    displayedViewAddress: null,
-    displayedDefinitionRevision: null,
-    displayedDescriptorRevision: null,
-  });
+  if (!options?.preserveViewAddress) {
+    // The previous workflow's address and revisions cannot address the new one.
+    // Holding them would aim the next mutation at the workflow the user just left.
+    // Every path that lands on an addressable workflow republishes them — the
+    // RUN_VIEW_LOADED that follows a load, or the WORKFLOW_VIEW_IDENTITY that
+    // follows the first write to a brand-new workflow.
+    useUiStore.setState({
+      displayedViewAddress: null,
+      displayedDefinitionRevision: null,
+      displayedDescriptorRevision: null,
+    });
+  }
   useUiStore.getState().setFinalStepFooterExpanded(false);
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
@@ -1688,21 +1692,21 @@ function createMessageHandlers(): MessageHandlerMap {
       const workflowStore = useWorkflowStore.getState();
       const uiStore = useUiStore.getState();
       // A run at index 0 is "live" only when both the webview and the history
-      // manifest agree it is still running.  If the manifest was already
+      // manifest agree it is still active. If the manifest was already
       // finalised as "completed" (which happens before replayOutputHistoryTo
       // reads it) but SESSION_RESTORED hasn't been processed yet, trusting
       // only the webview state would silently drop the history — causing the
       // last step to vanish until the user navigates away and back.
       const isLiveCurrentRun =
         currentRunIndex === 0 &&
-        workflowStore.executionState === EXECUTION_STATES.RUNNING &&
-        history.executionState === EXECUTION_STATES.RUNNING;
+        isWorkflowActive(workflowStore.executionState) &&
+        isWorkflowActive(history.executionState);
 
       if (isLiveCurrentRun) {
         // Workflow replay may send the newest run's history after SESSION_RESTORED.
-        // During an active run, index 0 represents the live run, so keep the
-        // output panel on live data and only refresh the run selector metadata.
-        workflowStore.clearHistoryOutputs();
+        // Seed the complete persisted timeline into live output, preserving any
+        // buffered events that were replayed between those two messages.
+        workflowStore.hydrateLiveRunHistory(history);
         uiStore.clearHistoryView();
         uiStore.setRunTimestamps(runTimestamps ?? []);
         uiStore.setRunStates(runStates ?? []);
@@ -1854,7 +1858,11 @@ function createMessageHandlers(): MessageHandlerMap {
       // switch and accidentally apply a late path check/save response to N+1.
       useUiStore.getState().closeSaveWorkflowDialog();
     }
-    applyWorkflowChange();
+    // The selected address was set optimistically before this asynchronous
+    // snapshot arrived. Clearing it here briefly records an addressless route,
+    // which makes Back/Forward require several clicks to cross one run switch.
+    // Keep the address stable while resetting the remaining workflow-local UI.
+    applyWorkflowChange({ preserveViewAddress: true });
     const runtime = workingFile._runtime;
     // The addressed run view sends the run's own definition file, where each
     // step's completion status lives in its own _runtime.terminalStatus
@@ -1913,17 +1921,29 @@ function createMessageHandlers(): MessageHandlerMap {
       useWorkflowStore.temporal.getState().clear();
     }
     if (history) {
-      useWorkflowStore.getState().loadHistoryRun(
-        history,
-        runSummaries.length,
-        Math.max(
-          0,
-          runSummaries.findIndex(
-            (run: RunSummary) =>
-              address.kind === "run" && run.runRef === address.runRef
+      const isExecutionRun =
+        address.kind === "run" &&
+        executionRunRef !== undefined &&
+        address.runRef === executionRunRef;
+      if (isExecutionRun) {
+        // An executing run is a live view, but its persisted timeline is still
+        // the authoritative baseline. Hydrate that complete history before the
+        // backend overlays output captured after the snapshot read.
+        useWorkflowStore.getState().hydrateLiveRunHistory(history);
+        ui.clearHistoryView();
+      } else {
+        useWorkflowStore.getState().loadHistoryRun(
+          history,
+          runSummaries.length,
+          Math.max(
+            0,
+            runSummaries.findIndex(
+              (run: RunSummary) =>
+                address.kind === "run" && run.runRef === address.runRef
+            )
           )
-        )
-      );
+        );
+      }
     }
     const pendingNavigation = ui.pendingHistorySearchNavigation;
     if (pendingNavigation?.findQuery) {
@@ -2208,7 +2228,15 @@ function createMessageHandlers(): MessageHandlerMap {
     if (message.workflowId) {
       const uiStore = useUiStore.getState();
       uiStore.setActiveWorkflowId(message.workflowId);
-      uiStore.clearPendingRunViewLoad();
+      // A backend-initiated switch supersedes any in-flight run-view request,
+      // and clearing here is also the recovery valve for a stale pending id
+      // (its requestless replay would otherwise be suppressed forever). But an
+      // addressed switch announces the new instance *before* its own snapshot —
+      // clearing then would make the client drop the requestful RUN_VIEW_LOADED
+      // it just asked for, freezing the view on the previous workflow.
+      if (message.requestId !== uiStore.pendingRunViewRequestId) {
+        uiStore.clearPendingRunViewLoad();
+      }
     }
     if ("workingFilePath" in message) {
       persistViewedWorkingFilePath(message.workingFilePath);

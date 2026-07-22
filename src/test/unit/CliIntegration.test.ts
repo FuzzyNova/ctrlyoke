@@ -167,6 +167,19 @@ suite("CliIntegration", () => {
     configService.setCliOverlay({});
   });
 
+  test("should delegate retained artifact policy to the CLI provider", () => {
+    assert.strictEqual(
+      createHeadlessIntegration().shouldRetainWorkflowArtifactsForReuse(),
+      false
+    );
+    assert.strictEqual(
+      createHeadlessIntegration({
+        shouldRetainWorkflowArtifactsForReuse: () => true,
+      }).shouldRetainWorkflowArtifactsForReuse(),
+      true
+    );
+  });
+
   test("should include install and sign-in guidance when unavailable", async () => {
     const integration = createHeadlessIntegration({
       config: {

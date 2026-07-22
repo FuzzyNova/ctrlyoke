@@ -231,6 +231,14 @@ export interface ICliProvider {
   ): Promise<void>;
 
   /**
+   * Whether workspace artifacts must remain registered while a reusable CLI
+   * process is retained between executions. Most CLIs load hooks at process
+   * startup and should use the default eager cleanup. Providers whose injected
+   * turns re-read hook/config files opt into deferred cleanup.
+   */
+  shouldRetainWorkflowArtifactsForReuse?(): boolean;
+
+  /**
    * Delete hook artifacts written for the previous prompt before building hooks for the next.
    * Called by CliIntegration at the start of each prompt's hook setup phase.
    *

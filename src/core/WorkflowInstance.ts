@@ -248,10 +248,9 @@ export class WorkflowInstance {
   >();
 
   /**
-   * Cleanup context for integrations whose PTY/session watcher remains live
-   * between executions. Provider artifacts (including completion hooks) must
-   * remain registered for as long as the retained integration can receive an
-   * injected prompt, then be removed when that integration is actually retired.
+   * Cleanup context for retained integrations whose provider explicitly needs
+   * workflow artifacts to survive between executions. Most providers clean up
+   * at execution completion even when their PTY/session watcher remains live.
    */
   private readonly retainedIntegrationArtifactContexts = new Map<
     string,
@@ -471,6 +470,25 @@ export class WorkflowInstance {
     this.outputCaptureBuffer.replayTo(
       sink,
       { status: executionState, currentIndex: state.currentIndex },
+      this.promptQueue.getFinalStepRuntime(),
+      `[inst:${this.id.slice(0, 8)}]`
+    );
+  }
+
+  /**
+   * Replay only in-memory output that may be newer than the persisted timeline.
+   * Addressed run switches already carry definition, runtime, and history in one
+   * RUN_VIEW_LOADED snapshot, so emitting SESSION_RESTORED here would reset that
+   * snapshot before the client could display it.
+   */
+  replayBufferedOutputTo(sink: IDashboardSink): void {
+    const state = this.promptQueue.getState();
+    this.outputCaptureBuffer.replayTo(
+      sink,
+      {
+        status: this.getAuthoritativeExecutionState(),
+        currentIndex: state.currentIndex,
+      },
       this.promptQueue.getFinalStepRuntime(),
       `[inst:${this.id.slice(0, 8)}]`
     );
@@ -3204,12 +3222,22 @@ export class WorkflowInstance {
           // one-shot exit callback so we dispose it if the terminal is killed
           // between runs (no-op for non-PTY harnesses).
           this.liveInjectIntegrations.set(harnessKey, execIntegration);
-          if (workspaceRoot) {
+          if (
+            workspaceRoot &&
+            execIntegration.shouldRetainWorkflowArtifactsForReuse()
+          ) {
             this.retainedIntegrationArtifactContexts.set(harnessKey, {
               integration: execIntegration,
               workingFilePath,
               workspaceRoot,
             });
+          } else {
+            await this.cleanupRetainedIntegrationArtifacts(
+              harnessKey,
+              execIntegration,
+              workingFilePath,
+              workspaceRoot
+            );
           }
           execIntegration.onPtySessionEnded(() => {
             if (

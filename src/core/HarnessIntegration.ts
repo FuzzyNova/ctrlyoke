@@ -330,12 +330,23 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Returns true when workflow artifacts must remain installed while this
+   * integration is retained for reuse. Most harnesses load their hooks when
+   * the process starts, so their workspace artifacts can be cleaned as soon as
+   * execution completes. Harnesses that re-read hook configuration for an
+   * injected turn override this and defer cleanup until the integration exits.
+   */
+  shouldRetainWorkflowArtifactsForReuse(): boolean {
+    return false;
+  }
+
+  /**
    * Clean up workflow-scoped artifacts created during execution (e.g. MCP config files).
    *
-   * Called from WorkflowInstance when the integration is actually retired. A
-   * reusable PTY may outlive a completed execution, so its hooks/MCP artifacts
-   * stay registered until that PTY exits or is explicitly replaced. Default is
-   * a no-op; CliIntegration delegates to provider-owned artifact cleanup.
+   * Called from WorkflowInstance after execution completes, or when a retained
+   * integration is retired if shouldRetainWorkflowArtifactsForReuse() opts into
+   * deferred cleanup. Default is a no-op; CliIntegration delegates to
+   * provider-owned artifact cleanup.
    *
    * @param workingFilePath The working file path for this workflow run
    * @param workspaceRoot Workspace root directory

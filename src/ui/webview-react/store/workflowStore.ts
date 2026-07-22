@@ -31,6 +31,7 @@ function isScriptStep(step: WorkflowStep): step is ScriptStep {
 import type {
   OrderedHistoryEntry,
   OrderedCliHistoryEntry,
+  OrderedStatusHistoryEntry,
   OutputExecutionTarget,
   WorkflowOutputHistory,
   WorkflowRunMetadata,
@@ -257,6 +258,8 @@ interface WorkflowActions {
     availableRuns: number,
     runIndex: number
   ) => void;
+  /** Seed an executing run's live output view from its complete persisted timeline. */
+  hydrateLiveRunHistory: (history: WorkflowOutputHistory) => void;
   clearHistoryOutputs: () => void;
 
   // Partial runtime state clear (for append-continuation runs)
@@ -387,6 +390,118 @@ function getCliEntryRunIndex(entry: OrderedCliHistoryEntry): number {
   return entry.runIndex ?? entry.cliOutput.runIndex ?? 0;
 }
 
+function findMatchingCliEntryIndex(
+  entries: OrderedHistoryEntry[],
+  cliEntry: OrderedCliHistoryEntry
+): number {
+  return entries.findIndex(
+    (entry): entry is OrderedCliHistoryEntry =>
+      entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+      targetsEqual(entry.target, cliEntry.target) &&
+      getCliEntryRunIndex(entry) === getCliEntryRunIndex(cliEntry) &&
+      entry.attemptIndex === cliEntry.attemptIndex
+  );
+}
+
+function overlayLiveHistoryEntries(
+  persistedEntries: OrderedHistoryEntry[],
+  overlayEntries: OrderedHistoryEntry[]
+): { entries: OrderedHistoryEntry[]; nextSequence: number } {
+  const entries = [...persistedEntries];
+  const matchedStatusIndices = new Set<number>();
+  let nextSequence =
+    persistedEntries.reduce((max, entry) => Math.max(max, entry.sequence), -1) +
+    1;
+
+  for (const overlayEntry of overlayEntries) {
+    if (overlayEntry.kind === OUTPUT_HISTORY_KINDS.CLI) {
+      const matchingIdx = findMatchingCliEntryIndex(entries, overlayEntry);
+      if (matchingIdx >= 0) {
+        entries[matchingIdx] = {
+          ...overlayEntry,
+          sequence: entries[matchingIdx].sequence,
+        };
+        continue;
+      }
+    }
+    if (overlayEntry.kind === OUTPUT_HISTORY_KINDS.STATUS) {
+      const matchingIdx = entries.findIndex(
+        (entry, index): entry is OrderedStatusHistoryEntry =>
+          !matchedStatusIndices.has(index) &&
+          entry.kind === OUTPUT_HISTORY_KINDS.STATUS &&
+          targetsEqual(entry.target, overlayEntry.target) &&
+          entry.statusMessage.message === overlayEntry.statusMessage.message &&
+          entry.statusMessage.severity === overlayEntry.statusMessage.severity
+      );
+      if (matchingIdx >= 0) {
+        // Status replay does not preserve its original timestamp. Match each
+        // semantic occurrence once so the full buffer can overlay history
+        // without duplicating it, while genuinely newer repeats still append.
+        matchedStatusIndices.add(matchingIdx);
+        continue;
+      }
+    }
+    entries.push({ ...overlayEntry, sequence: nextSequence });
+    nextSequence += 1;
+  }
+
+  return { entries, nextSequence };
+}
+
+function getUndoRecordKey(target: UndoExecutionTarget): string {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? `queue-${target.stepIndex}`
+    : `finalStep-${target.loopIndex}`;
+}
+
+function projectLiveHistoryArtifacts(
+  history: WorkflowOutputHistory
+): Pick<
+  WorkflowState,
+  "workspaceSnapshots" | "finalStepWorkspaceSnapshots" | "undoRecords"
+> {
+  const workspaceSnapshots: Record<number, WorkspaceSnapshot> = {};
+  const finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot> = {};
+  const undoRecords: Record<string, UndoRecord> = {};
+
+  for (const [rawStepIndex, output] of Object.entries(history.promptOutputs)) {
+    const stepIndex = Number(rawStepIndex);
+    if (!Number.isInteger(stepIndex)) continue;
+    if (output.workspaceSnapshot) {
+      workspaceSnapshots[stepIndex] = output.workspaceSnapshot;
+    }
+    if (output.undoRecord) {
+      undoRecords[
+        getUndoRecordKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex })
+      ] = output.undoRecord;
+    }
+  }
+
+  for (const [rawLoopIndex, output] of Object.entries(
+    history.finalStepOutputs ?? {}
+  )) {
+    const loopIndex = Number(rawLoopIndex);
+    if (!Number.isInteger(loopIndex)) continue;
+    if (output.workspaceSnapshot) {
+      finalStepWorkspaceSnapshots[loopIndex] = output.workspaceSnapshot;
+    }
+    if (output.undoRecord) {
+      undoRecords[
+        getUndoRecordKey({
+          kind: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex,
+        })
+      ] = output.undoRecord;
+    }
+  }
+
+  return {
+    workspaceSnapshots,
+    finalStepWorkspaceSnapshots,
+    undoRecords,
+  };
+}
+
 export const useWorkflowStore = create<
   WorkflowState & WorkflowActions & WorkflowSelectors
 >()(
@@ -462,23 +577,19 @@ export const useWorkflowStore = create<
           set((state) => {
             if (entry.kind === "cli") {
               const cliEntry = entry as OrderedCliHistoryEntry;
-              const streamingIdx = state.liveOrderedEntries.findIndex(
-                (e): e is OrderedCliHistoryEntry =>
-                  e.kind === "cli" &&
-                  "target" in e &&
-                  targetsEqual(
-                    (e as OrderedCliHistoryEntry).target,
-                    cliEntry.target
-                  ) &&
-                  getCliEntryRunIndex(e as OrderedCliHistoryEntry) ===
-                    getCliEntryRunIndex(cliEntry) &&
-                  (e as OrderedCliHistoryEntry).attemptIndex ===
-                    cliEntry.attemptIndex &&
-                  (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
+              const matchingIdx = findMatchingCliEntryIndex(
+                state.liveOrderedEntries,
+                cliEntry
               );
-              if (streamingIdx >= 0) {
+              if (matchingIdx >= 0) {
                 const newEntries = [...state.liveOrderedEntries];
-                newEntries[streamingIdx] = entry;
+                newEntries[matchingIdx] = {
+                  ...entry,
+                  // An overlay updates the same logical attempt in place. Keep
+                  // its persisted position even though the replacement arrived
+                  // after the snapshot.
+                  sequence: newEntries[matchingIdx].sequence,
+                };
                 return {
                   liveOrderedEntries: newEntries,
                   liveSequence: state.liveSequence + 1,
@@ -787,6 +898,37 @@ export const useWorkflowStore = create<
           })
         ),
 
+      hydrateLiveRunHistory: (history) =>
+        withUndoPause(() =>
+          set((state) => {
+            const projected = projectLiveHistoryArtifacts(history);
+            const overlay = overlayLiveHistoryEntries(
+              history.orderedEntries,
+              state.liveOrderedEntries
+            );
+            return {
+              // The executing run must remain in live mode so buffered and
+              // future events can update it. Its durable timeline is the
+              // baseline; any already-replayed in-memory entries overlay it.
+              historyOutputs: null,
+              liveOrderedEntries: overlay.entries,
+              liveSequence: overlay.nextSequence,
+              workspaceSnapshots: {
+                ...projected.workspaceSnapshots,
+                ...state.workspaceSnapshots,
+              },
+              finalStepWorkspaceSnapshots: {
+                ...projected.finalStepWorkspaceSnapshots,
+                ...state.finalStepWorkspaceSnapshots,
+              },
+              undoRecords: {
+                ...projected.undoRecords,
+                ...state.undoRecords,
+              },
+            };
+          })
+        ),
+
       clearHistoryOutputs: () =>
         withUndoPause(() => set(() => ({ historyOutputs: null }))),
 
@@ -914,10 +1056,7 @@ export const useWorkflowStore = create<
         }),
 
       setUndoRecord: (target, record) => {
-        const key =
-          target.kind === FINAL_STEP_PHASES.QUEUE
-            ? `queue-${target.stepIndex}`
-            : `finalStep-${target.loopIndex}`;
+        const key = getUndoRecordKey(target);
         withUndoPause(() =>
           set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }))
         );
