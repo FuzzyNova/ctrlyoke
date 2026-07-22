@@ -399,42 +399,6 @@ describe("undo/redo round-trips", () => {
     expect(store().executionState).toBe(EXECUTION_STATES.RUNNING);
     expect((store().steps[0] as any).prompt).toBe("hello world");
   });
-
-  it("set start position records an undo entry and restores cleared runtime", () => {
-    loadWorkflow([
-      makePrompt({
-        status: STEP_STATUS.COMPLETED,
-        _runtime: { sessionId: "s1", startedAt: 100, completedAt: 200 } as any,
-      }),
-      makePrompt({
-        prompt: "second",
-        status: STEP_STATUS.COMPLETED,
-        _runtime: { sessionId: "s2", startedAt: 300, completedAt: 400 } as any,
-      }),
-    ]);
-
-    rememberUndoRedoRuntime(store().steps);
-    store().applyStartPositionChange(
-      [
-        store().steps[0],
-        { prompt: "second", status: STEP_STATUS.PENDING } as any,
-      ],
-      1
-    );
-
-    expect(temporal().pastStates).toHaveLength(1);
-    expect((store().steps[1] as any)._runtime).toBeUndefined();
-
-    const beforeUndo = store().steps;
-    temporal().undo();
-    const undoMerged = mergeRuntimeForUndoRedo(store().steps, beforeUndo);
-    temporal().pause();
-    store().setPrompts(undoMerged);
-    temporal().resume();
-
-    expect((store().steps[1] as any)._runtime?.sessionId).toBe("s2");
-    expect((store().steps[1] as any).status).toBe(STEP_STATUS.COMPLETED);
-  });
 });
 
 // ---------------------------------------------------------------------------

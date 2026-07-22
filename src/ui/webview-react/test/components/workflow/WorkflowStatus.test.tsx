@@ -132,6 +132,33 @@ describe("WorkflowStatus — loaded state", () => {
     });
   });
 
+  it("attaches the displayed run mutation to a rename so it targets the viewed run", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 5,
+    });
+    render(<WorkflowStatus />);
+    await user.click(screen.getByTitle("Click to edit workflow name"));
+    const input = screen.getByRole("textbox");
+    await user.clear(input);
+    await user.type(input, "Renamed Run{Enter}");
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
+      workflowName: "Renamed Run",
+      mutation: {
+        address: { workflowKey: "wf-1", kind: "run", runRef: "run-1" },
+        expectedDefinitionRevision: 2,
+        expectedDescriptorRevision: 5,
+      },
+    });
+  });
+
   it("pressing Escape cancels edit without sending message", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);

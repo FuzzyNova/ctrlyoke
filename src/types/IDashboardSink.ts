@@ -172,14 +172,6 @@ export interface IDashboardSink {
     workflowId?: string
   ): void;
 
-  notifyWorkflowStateReset(steps: any[], workflowId?: string): void;
-
-  notifyStartPositionSet(
-    steps: WorkflowStep[],
-    currentIndex: number,
-    workflowId?: string
-  ): void;
-
   notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void;
 
   /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */

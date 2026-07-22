@@ -8,6 +8,7 @@ import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import {
+  ACTION_TYPES,
   EXECUTION_STATES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
@@ -1300,6 +1301,212 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         await fs.readFile(latest.workingFilePath, "utf8"),
         latestBefore
       );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("prompt-editor run submission addressed at an older run continues that run, not the instance's run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-ephemeral-addressed-")
+    );
+    try {
+      const historical = await createRun(workspace);
+      const latest = await WorkingFileManager.seedNewRun(
+        workspace,
+        historical.workflowKey,
+        historical.runRef
+      );
+      const latestBefore = await fs.readFile(latest.workingFilePath, "utf8");
+      const boundInstance = {
+        id: "bound-latest",
+        getQueueState: () => ({
+          workflowKey: historical.workflowKey,
+          runRef: latest.runRef,
+        }),
+        executeEphemeralPrompt: async () => {
+          throw new Error("must not append through the instance's loaded run");
+        },
+      };
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        historical.workflowKey,
+        historical.runRef,
+        boundInstance
+      );
+      internal.viewerRegistry.set(PANEL_CLIENT_ID, "active");
+      let executed: [string, string, number] | undefined;
+      internal.buildWorkflowInstance = () => ({
+        id: "continuation-owner",
+        executeContinuationAtRun: async (...args: [string, string, number]) => {
+          executed = args;
+        },
+      });
+
+      await orchestrator.executeEphemeralPrompt(
+        "appended tail",
+        {},
+        ACTION_TYPES.RUN,
+        undefined,
+        false,
+        PANEL_CLIENT_ID,
+        {
+          address: {
+            workflowKey: historical.workflowKey,
+            kind: "run",
+            runRef: historical.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: 3,
+        }
+      );
+
+      assert.deepStrictEqual(executed?.slice(0, 3), [
+        historical.workflowKey,
+        historical.runRef,
+        2,
+      ]);
+      const appended = JSON.parse(
+        await fs.readFile(historical.workingFilePath, "utf8")
+      );
+      assert.strictEqual(appended.steps.length, 2);
+      assert.strictEqual(appended.steps[1].prompt, "appended tail");
+      assert.strictEqual(
+        await fs.readFile(latest.workingFilePath, "utf8"),
+        latestBefore
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("prompt-editor queue submission addressed at an older run appends to its head without executing", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-ephemeral-queue-")
+    );
+    try {
+      const historical = await createRun(workspace);
+      const latest = await WorkingFileManager.seedNewRun(
+        workspace,
+        historical.workflowKey,
+        historical.runRef
+      );
+      const latestBefore = await fs.readFile(latest.workingFilePath, "utf8");
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        historical.workflowKey
+      );
+      const boundInstance = {
+        id: "bound-latest",
+        getQueueState: () => ({
+          workflowKey: historical.workflowKey,
+          runRef: latest.runRef,
+        }),
+        executeEphemeralPrompt: async () => {
+          throw new Error("must not append through the instance's loaded run");
+        },
+      };
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        historical.workflowKey,
+        historical.runRef,
+        boundInstance
+      );
+      internal.viewerRegistry.set(PANEL_CLIENT_ID, "active");
+      internal.buildWorkflowInstance = () => {
+        throw new Error("queueing a step must not execute the run");
+      };
+
+      await orchestrator.executeEphemeralPrompt(
+        "queued tail",
+        {},
+        ACTION_TYPES.QUEUE,
+        undefined,
+        false,
+        PANEL_CLIENT_ID,
+        {
+          address: {
+            workflowKey: historical.workflowKey,
+            kind: "run",
+            runRef: historical.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptor.revision,
+        }
+      );
+
+      const appended = JSON.parse(
+        await fs.readFile(historical.workingFilePath, "utf8")
+      );
+      assert.strictEqual(appended.steps.length, 2);
+      assert.strictEqual(appended.steps[1].prompt, "queued tail");
+      assert.strictEqual(appended.definitionRevision, 2);
+      assert.strictEqual(
+        await fs.readFile(latest.workingFilePath, "utf8"),
+        latestBefore
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("prompt-editor submission whose addressed run the instance owns keeps the instance-bound path", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-ephemeral-owned-")
+    );
+    try {
+      const run = await createRun(workspace);
+      let instanceAppend: unknown[] | undefined;
+      const boundInstance = {
+        id: "bound-owner",
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+        }),
+        getSummary: () => ({
+          totalSteps: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+        }),
+        executeEphemeralPrompt: async (...args: unknown[]) => {
+          instanceAppend = args;
+        },
+      };
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        boundInstance
+      );
+      internal.viewerRegistry.set(PANEL_CLIENT_ID, "active");
+      internal.buildWorkflowInstance = () => {
+        throw new Error("owned-run submissions must reuse the bound instance");
+      };
+
+      await orchestrator.executeEphemeralPrompt(
+        "same run",
+        {},
+        ACTION_TYPES.RUN,
+        undefined,
+        false,
+        PANEL_CLIENT_ID,
+        {
+          address: {
+            workflowKey: run.workflowKey,
+            kind: "run",
+            runRef: run.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: 2,
+        }
+      );
+
+      assert.deepStrictEqual(instanceAppend, [
+        "same run",
+        {},
+        ACTION_TYPES.RUN,
+        undefined,
+        false,
+      ]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

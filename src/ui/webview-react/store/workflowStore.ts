@@ -259,19 +259,8 @@ interface WorkflowActions {
   ) => void;
   clearHistoryOutputs: () => void;
 
-  // Reset execution state only — preserves all CLI outputs and run history.
-  // Resets executionState→IDLE, currentStep→0, and all prompt statuses→PENDING.
-  // Used by "Clear workflow state" so users can edit prompts without losing output.
-  resetExecutionState: (steps: WorkflowStep[]) => void;
-
   // Partial runtime state clear (for append-continuation runs)
   clearRuntimeStateFromStep: (startStep: number) => void;
-
-  // Apply a start-position change — updates prompts, currentStep, totalSteps, and resets execution state to IDLE.
-  applyStartPositionChange: (
-    steps: WorkflowStep[],
-    newCurrentStep: number
-  ) => void;
 
   // Promote completed history entries into the live ordered timeline for preserved steps.
   // Called before switching from history→live view on a continuation run so the user
@@ -801,30 +790,6 @@ export const useWorkflowStore = create<
       clearHistoryOutputs: () =>
         withUndoPause(() => set(() => ({ historyOutputs: null }))),
 
-      resetExecutionState: (steps) => {
-        // Not wrapped in pause/resume — this is a user-initiated action (Reset button).
-        // Steps are reset to PENDING and included in the undo snapshot so the user
-        // can undo the reset. executionState/currentStep are not in partialize and
-        // won't appear in the undo history. The equality guard prevents a snapshot if
-        // only _runtime/status changed (e.g., reset on already-idle steps).
-        set((state) => ({
-          steps: steps.map((p) => ({
-            ...p,
-            status: STEP_STATUS.PENDING,
-          })) as WorkflowStep[],
-          totalSteps: steps.length,
-          executionState: EXECUTION_STATES.IDLE,
-          currentStep: 0,
-          finalStepStatus: null,
-          finalStepLoopCount: 0,
-          finalStepPhase: null,
-          runtimeUndoGeneration: state.runtimeUndoGeneration + 1,
-          // liveOrderedEntries, retryStates, streamingChunks, historyOutputs,
-          // finalStepStreamingChunks are intentionally preserved
-          // so the run history and output panel are unaffected.
-        }));
-      },
-
       clearRuntimeStateFromStep: (startStep) =>
         withUndoPause(() =>
           set((state) => {
@@ -859,20 +824,6 @@ export const useWorkflowStore = create<
             };
           })
         ),
-
-      applyStartPositionChange: (steps, newCurrentStep) => {
-        // Not wrapped in pause/resume — this is a user-initiated action.
-        // partialize ensures only prompts/workflowName/finalStep are snapshotted,
-        // so currentStep/executionState changes here are NOT recorded in undo history.
-        set((state) => ({
-          steps,
-          currentStep: newCurrentStep,
-          totalSteps: steps.length,
-          executionState: EXECUTION_STATES.IDLE,
-          finalStepStatus: null,
-          runtimeUndoGeneration: state.runtimeUndoGeneration + 1,
-        }));
-      },
 
       promoteHistoryToLive: (stepCount) =>
         withUndoPause(() =>

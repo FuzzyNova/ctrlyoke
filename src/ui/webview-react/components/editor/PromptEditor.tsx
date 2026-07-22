@@ -516,7 +516,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       // Save before clearing so we can restore on failure
       lastSubmittedTextRef.current = text;
 
-      vscode.postMessage({
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.EXECUTE_PROMPT,
         text,
         properties: propertyValues,
@@ -586,7 +586,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           });
         }
       } else if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        vscode.postMessage({
+        postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
           finalStep: {
             type: STEP_TYPES.SCRIPT,

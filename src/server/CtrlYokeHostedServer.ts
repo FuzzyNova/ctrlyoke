@@ -515,23 +515,12 @@ export class CtrlYokeHostedServer
       workflowId
     );
   }
-  notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
-    this.sink.notifyWorkflowStateReset(steps, workflowId);
-  }
-
   async sendTestNotification(): Promise<void> {
     await this.dispatchCompletionNotification(
       buildTestNotificationEvent(this.publicUrl)
     );
   }
 
-  notifyStartPositionSet(
-    steps: WorkflowStep[],
-    currentIndex: number,
-    workflowId?: string
-  ): void {
-    this.sink.notifyStartPositionSet(steps, currentIndex, workflowId);
-  }
   notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
     this.sink.notifyPromptsReordered(steps, workflowId);
   }

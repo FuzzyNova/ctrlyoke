@@ -1076,14 +1076,6 @@ export interface NotificationEventMessage {
 }
 
 /**
- * Reset workflow state message (extension -> webview, bidirectional)
- */
-export interface ResetWorkflowStateMessage {
-  type: typeof MESSAGE_TYPES.RESET_WORKFLOW_STATE;
-  steps: WorkflowStep[];
-}
-
-/**
  * Run history updated message (extension -> webview)
  */
 export interface RunHistoryUpdatedMessage {
@@ -1280,15 +1272,6 @@ export interface InsertWorkflowStepMessage {
   afterIndex: number;
   step: WorkflowStep;
   mutation?: WorkflowDefinitionMutation;
-}
-
-/**
- * Set start position confirmed message (extension -> webview)
- */
-export interface SetStartPositionConfirmedMessage {
-  type: typeof MESSAGE_TYPES.SET_START_POSITION_CONFIRMED;
-  steps: WorkflowStep[];
-  currentIndex: number;
 }
 
 /**
@@ -1787,11 +1770,9 @@ export type IncomingMessage =
   | ActiveWorkflowChangedMessage
   | PromptEditorInsertMessage
   | GlobalSettingsUpdatedMessage
-  | ResetWorkflowStateMessage
   | RunHistoryUpdatedMessage
   | SearchHistoryResultsMessage
   | OutputHistoryLoadedMessage
-  | SetStartPositionConfirmedMessage
   | StepUndoDataUpdatedMessage
   | UndoPromptResultMessage
   | UndoRecordUpdatedMessage

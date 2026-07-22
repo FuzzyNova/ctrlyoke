@@ -762,17 +762,6 @@ export class CtrlYokeWebviewProvider
       workflowId
     );
   }
-  /** Only resets prompt statuses and execution state — does not touch CLI outputs or run history. */
-  public notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
-    this.sink.notifyWorkflowStateReset(steps, workflowId);
-  }
-  public notifyStartPositionSet(
-    steps: WorkflowStep[],
-    currentIndex: number,
-    workflowId?: string
-  ): void {
-    this.sink.notifyStartPositionSet(steps, currentIndex, workflowId);
-  }
   public notifyPromptsReordered(
     steps: WorkflowStep[],
     workflowId?: string

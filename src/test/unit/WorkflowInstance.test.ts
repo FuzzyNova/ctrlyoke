@@ -171,8 +171,6 @@ suite("WorkflowInstance finalStep replay", () => {
       ) => {
         statusMessageCalls.push({ stepIndex, message, severity });
       },
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -315,8 +313,6 @@ suite("WorkflowInstance session activity forwarding", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -578,8 +574,6 @@ suite("WorkflowInstance runtime transitions", () => {
         updateFinalStepStreamingChunk: () => {},
         updateFinalStepStreamingEvents: () => {},
         updateStatusMessage: () => {},
-        notifyWorkflowStateReset: () => {},
-        notifyStartPositionSet: () => {},
         notifyPromptsReordered: () => {},
       } as any,
       new MockIntegrationFactory(platform),
@@ -657,8 +651,6 @@ suite("WorkflowInstance runtime transitions", () => {
         updateFinalStepStreamingChunk: () => {},
         updateFinalStepStreamingEvents: () => {},
         updateStatusMessage: () => {},
-        notifyWorkflowStateReset: () => {},
-        notifyStartPositionSet: () => {},
         notifyPromptsReordered: () => {},
       };
 
@@ -725,8 +717,6 @@ suite("WorkflowInstance runtime transitions", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -803,8 +793,6 @@ suite("WorkflowInstance runtime transitions", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
       updateWorkflowName: () => {},
     };
@@ -876,8 +864,6 @@ suite("WorkflowInstance runtime transitions", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
       updateWorkflowName: () => {},
     };
@@ -1044,8 +1030,6 @@ suite("WorkflowInstance runtime transitions", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -1104,8 +1088,6 @@ suite("WorkflowInstance eager working file creation", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -1369,8 +1351,6 @@ suite("WorkflowInstance append-and-continue", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -1436,8 +1416,6 @@ suite("WorkflowInstance append-and-continue", () => {
       updateFinalStepStreamingChunk: () => {},
       updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
-      notifyWorkflowStateReset: () => {},
-      notifyStartPositionSet: () => {},
       notifyPromptsReordered: () => {},
     };
 
@@ -1692,8 +1670,6 @@ suite("WorkflowInstance executeSeededRun", () => {
         updateFinalStepStreamingChunk: () => {},
         updateFinalStepStreamingEvents: () => {},
         updateStatusMessage: () => {},
-        notifyWorkflowStateReset: () => {},
-        notifyStartPositionSet: () => {},
         notifyPromptsReordered: () => {},
       };
       instance = new WorkflowInstance(

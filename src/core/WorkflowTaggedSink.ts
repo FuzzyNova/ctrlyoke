@@ -273,14 +273,6 @@ export class WorkflowTaggedSink implements IDashboardSink {
     );
   }
 
-  notifyWorkflowStateReset(steps: any[]): void {
-    this.inner.notifyWorkflowStateReset(steps, this.workflowId);
-  }
-
-  notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number): void {
-    this.inner.notifyStartPositionSet(steps, currentIndex, this.workflowId);
-  }
-
   notifyPromptsReordered(steps: WorkflowStep[]): void {
     this.inner.notifyPromptsReordered(steps, this.workflowId);
   }

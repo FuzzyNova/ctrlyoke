@@ -528,6 +528,27 @@ export function buildScriptStepFromProperties(
   };
 }
 
+/**
+ * Build the complete queue step for an EXECUTE_PROMPT submission (dashboard
+ * prompt editor). One builder for both the instance-bound append path and the
+ * orchestrator's run-addressed append path so an identical payload always
+ * produces an identical step.
+ */
+export function buildEphemeralWorkflowStep(
+  text: string,
+  properties: unknown,
+  promptName?: string
+): WorkflowStep {
+  const props = properties as Record<string, unknown>;
+  return props?.type === STEP_TYPES.SCRIPT
+    ? buildScriptStepFromProperties(text, props, promptName)
+    : {
+        prompt: text,
+        ...(promptName?.trim() ? { name: promptName.trim() } : {}),
+        ...buildPromptStepProperties(properties),
+      };
+}
+
 export function buildPromptStepProperties(
   properties: unknown
 ): Partial<PromptStep> {

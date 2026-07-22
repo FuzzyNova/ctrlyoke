@@ -349,22 +349,6 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
-    for (const client of this.clients) {
-      client.notifyWorkflowStateReset?.(steps, workflowId);
-    }
-  }
-
-  notifyStartPositionSet(
-    steps: WorkflowStep[],
-    currentIndex: number,
-    workflowId?: string
-  ): void {
-    for (const client of this.clients) {
-      client.notifyStartPositionSet?.(steps, currentIndex, workflowId);
-    }
-  }
-
   notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
     for (const client of this.clients) {
       client.notifyPromptsReordered?.(steps, workflowId);

@@ -552,10 +552,6 @@ export class WebviewMessageRouter {
       await this.handleDeletePrompt(message);
     });
 
-    table.set(MESSAGE_TYPES.RESET_WORKFLOW_STATE, async () => {
-      await this.handleResetWorkflowState();
-    });
-
     table.set(MESSAGE_TYPES.SET_START_POSITION, async (message) => {
       await this.handleSetStartPosition(message as SetStartPositionMessage);
     });
@@ -1721,7 +1717,8 @@ export class WebviewMessageRouter {
         action,
         promptName,
         forceNewWorkflow,
-        this.clientId
+        this.clientId,
+        this.asWorkflowDefinitionMutation(message)
       );
       // Queueing a step is a definition mutation with no other back-channel, so
       // without this the following property edit would carry a stale revision.
@@ -1735,6 +1732,9 @@ export class WebviewMessageRouter {
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text,
       });
+      // A rejection is usually a superseded revision; hand the authoritative
+      // revisions back so the next submission isn't rejected identically.
+      await this.publishViewIdentity();
     }
   }
 
@@ -1842,23 +1842,6 @@ export class WebviewMessageRouter {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
         `Failed to delete prompt: ${getErrorMessage(error)}`
-      );
-    }
-  }
-
-  private async handleResetWorkflowState(): Promise<void> {
-    const orchestrator = this.getOrchestrator();
-    if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
-      return;
-    }
-
-    try {
-      await orchestrator.resetWorkflowState(this.clientId);
-    } catch (error) {
-      Log.error("Failed to reset workflow state:", error);
-      vscode.window.showErrorMessage(
-        `Failed to reset workflow state: ${getErrorMessage(error)}`
       );
     }
   }

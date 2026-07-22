@@ -1,6 +1,49 @@
 # Run-Head Mutability Follow-up
 
-Status: **Complete**, plus the post-implementation correction below.
+Status: **Complete**, plus the post-implementation corrections below.
+
+## Post-implementation correction: prompt-editor addressing (2026-07-22)
+
+Implementation correction #2 required the prompt editor's new-step submission
+to use the same run addressing as Queue from File, but only `APPEND_FILE` was
+converted. `EXECUTE_PROMPT` still flowed through
+`WorkflowOrchestrator.executeEphemeralPrompt` → `getInstanceForClient` →
+`instance.executeEphemeralPrompt`, and the webview's prompt submission never
+attached the `mutation` context at all. Because a client viewing an older run
+stays bound to the lineage instance (which holds whatever run it last loaded
+— typically the latest, e.g. right after a Re-run), submitting a prompt while
+viewing an older run appended to and re-executed the wrong run.
+
+Fixed by: attaching the displayed address/revisions to the prompt-editor
+submission (`postWorkflowDefinitionMutation`), and routing
+`executeEphemeralPrompt` by that address — when the bound instance does not
+own the addressed run, run actions go through `appendAndContinueAtRun` and
+queue actions through `prepareDefinitionMutation` +
+`applyRunAddressedMutation`/`appendTailToRun`. The instance path remains for
+drafts, unaddressed ephemeral editors, and the run the instance itself owns
+(including dynamic append to the executing run). The addressed continuation
+paths now also register the initiating client as pending PTY controller,
+matching `seedAndExecuteAtRun`.
+
+A follow-up sender audit found two more webview paths posting definition
+mutations without the `mutation` context and fixed them the same way:
+`WorkflowStatus`'s rename (`UPDATE_WORKFLOW_NAME` fell back to the
+instance-bound path and renamed the instance's run instead of the viewed
+one) and `PromptEditor`'s script-mode final-step update
+(`UPDATE_FINAL_PROMPT` without revisions was rejected outright by
+`prepareDefinitionMutation` for any client viewing a persisted draft/run).
+All other mutation senders route through `sendMessage`'s auto-attach list,
+`postWorkflowDefinitionMutation`, `postRunLifecycleMutation`, or explicit
+address payloads. The dormant instance-bound paths the audit surfaced were
+then deleted outright: the `updateWorkflowPropertyInQueue` wrappers, the
+legacy non-addressed `setStartPosition` chain
+(orchestrator/instance/`PromptQueue` plus the `SET_START_POSITION_CONFIRMED`
+confirmation message, sink family, and webview handler/store helper), and the
+`RESET_WORKFLOW_STATE` flow (router handler, orchestrator/instance methods,
+`notifyWorkflowStateReset` sink family, message type, webview handler, and
+`resetExecutionState` store helper). Addressed equivalents —
+`setStartPositionAtRun`/`beginPendingRewind` and run-view invalidation —
+are the only remaining paths.
 
 ## Post-implementation correction: client addressing (2026-07-21)
 

@@ -71,7 +71,6 @@ export const MESSAGE_TYPES = {
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
-  RESET_WORKFLOW_STATE: "resetWorkflowState", // Bidirectional: Webview->Extension request reset; Extension->Webview confirms with updated prompts (preserves output history)
 
   // Workflow Status - Webview <-> Extension
   UPDATE_WORKFLOW_NAME: "updateWorkflowName", // Webview -> Extension: Save new workflow name
@@ -268,7 +267,6 @@ export const MESSAGE_TYPES = {
   UPDATE_CONFIRM_RESET: "updateConfirmReset",
 
   // Queue Position Control — Extension → Webview
-  SET_START_POSITION_CONFIRMED: "setStartPositionConfirmed",
   REORDER_PROMPTS_CONFIRMED: "reorderPromptsConfirmed",
 
   // Undo/Redo — Webview → Extension: sync restored state after undo/redo

@@ -347,27 +347,6 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
-  notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
-    this.send({
-      type: MESSAGE_TYPES.RESET_WORKFLOW_STATE,
-      steps,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  notifyStartPositionSet(
-    steps: WorkflowStep[],
-    currentIndex: number,
-    workflowId?: string
-  ): void {
-    this.send({
-      type: MESSAGE_TYPES.SET_START_POSITION_CONFIRMED,
-      steps,
-      currentIndex,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
   notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
     this.send({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,

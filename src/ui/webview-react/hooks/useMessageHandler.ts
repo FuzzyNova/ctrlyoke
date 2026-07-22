@@ -674,33 +674,6 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // RESET_WORKFLOW_STATE - Extension confirms state reset (response to button click)
-  // Resets prompt statuses and execution state without touching output history.
-  // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.RESET_WORKFLOW_STATE] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
-    const workflowStore = useWorkflowStore.getState();
-    workflowStore.resetExecutionState(message.steps || []);
-
-    // Exit history view — the panel must show the live (reset) state, not the
-    // historical run. Without this, isViewingHistory=true keeps doneStepCount
-    // at historyOutputs.stepCount while currentStep resets to 0, causing every
-    // prompt to appear twice (once in the done list, once in pending).
-    useUiStore.getState().clearHistoryView();
-
-    // Cancel any active edit — the selected prompt's status has changed
-    const editorStore = useEditorStore.getState();
-    if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
-      editorStore.cancelEdit();
-    }
-  };
-
-  // --------------------------------------------------------------------------
   // REORDER_PROMPTS_CONFIRMED - Extension confirms pending prompts were reordered
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED] = (message) => {
@@ -712,35 +685,6 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setPrompts(message.steps || []);
-  };
-
-  // --------------------------------------------------------------------------
-  // SET_START_POSITION_CONFIRMED - Extension confirms start position was moved
-  // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.SET_START_POSITION_CONFIRMED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
-    const workflowStore = useWorkflowStore.getState();
-    const prevCurrentStep = workflowStore.currentStep;
-    const newCurrentStep = message.currentIndex as number;
-
-    rememberUndoRedoRuntime(workflowStore.steps);
-    workflowStore.applyStartPositionChange(message.steps || [], newCurrentStep);
-
-    // For rewind: clear live CLI outputs for rewound steps
-    if (newCurrentStep < prevCurrentStep) {
-      workflowStore.clearRuntimeStateFromStep(newCurrentStep);
-    }
-
-    // Cancel any active edit — the selected prompt's state has changed
-    const editorStore = useEditorStore.getState();
-    if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
-      editorStore.cancelEdit();
-    }
   };
 
   // --------------------------------------------------------------------------

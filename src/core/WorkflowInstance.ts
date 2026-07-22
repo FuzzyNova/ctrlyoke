@@ -5,6 +5,7 @@ import { WorkingFileManager } from "./WorkingFileManager";
 import {
   buildClearUpdates,
   buildDefinitionSnapshot,
+  buildEphemeralWorkflowStep,
   buildPromptStepProperties,
   buildScriptStepFromProperties,
   sanitizeClipboardWorkflowStep,
@@ -1167,11 +1168,11 @@ export class WorkflowInstance {
     const isAppendContinuation =
       !continueFromCurrent && prevCompletedCount > 0 && pendingCount > 0;
 
-    // Detect stop → setStartPosition → Run scenario: the queue is IDLE but
-    // already has a partial run in progress (currentIndex > 0). This happens
-    // when the user stopped a workflow, skipped the cancelled step via
-    // setStartPosition, and then pressed Run instead of Resume. We want to
-    // reuse the existing history file rather than starting a fresh run.
+    // Detect stop → rewind → Run scenario: the queue is IDLE but already has
+    // a partial run in progress (currentIndex > 0). This happens when the
+    // user stopped a workflow, moved the start position past the cancelled
+    // step (a nonzero rewind), and then pressed Run instead of Resume. We
+    // want to reuse the existing history file rather than starting a fresh run.
     const isIdleContinuation =
       !continueFromCurrent &&
       !isAppendContinuation &&
@@ -1872,10 +1873,6 @@ export class WorkflowInstance {
     this.propagateWorkflowNameToIntegrations();
   }
 
-  updateWorkflowPropertyInQueue(property: string, value: unknown): void {
-    this.promptQueue.updateWorkflowProperty(property, value);
-  }
-
   /** Guard the next user definition mutation with its client-observed revision. */
   expectDefinitionRevision(revision: number): void {
     this.promptQueue.expectDefinitionRevision(revision);
@@ -2228,16 +2225,6 @@ export class WorkflowInstance {
     }
   }
 
-  async resetWorkflowState(): Promise<void> {
-    Log.debug("WorkflowInstance.resetWorkflowState: Resetting workflow state");
-    await this.promptQueue.restart();
-    if (this.dashboardSink) {
-      const currentState = this.promptQueue.getState();
-      this.dashboardSink.notifyWorkflowStateReset(currentState.steps);
-    }
-    Log.debug("WorkflowInstance.resetWorkflowState: Complete");
-  }
-
   async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
     await this.promptQueue.reorderPendingPrompts(newPendingOrder);
     if (this.dashboardSink) {
@@ -2246,36 +2233,10 @@ export class WorkflowInstance {
     }
   }
 
-  async setStartPosition(toIndex: number): Promise<void> {
-    const executionState = this.getAuthoritativeExecutionState();
-    if (
-      executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSING ||
-      executionState === EXECUTION_STATES.CANCELLING
-    ) {
-      Log.warn(
-        `WorkflowInstance.setStartPosition: Cannot set start position while in state ${executionState}`
-      );
-      return;
-    }
-    Log.info(`WorkflowInstance.setStartPosition: Moving to index ${toIndex}`);
-    await this.promptQueue.setStartPosition(toIndex);
-    if (this.dashboardSink) {
-      const updatedState = this.promptQueue.getState();
-      const promptsWithStatus = updatedState.steps.map((prompt, index) => ({
-        ...prompt,
-        status: updatedState.results[index]?.status ?? STEP_STATUS.PENDING,
-      }));
-      this.dashboardSink.notifyStartPositionSet(promptsWithStatus, toIndex);
-    }
-    Log.info(`WorkflowInstance.setStartPosition: Complete`);
-  }
-
   /**
    * Begins an addressed same-run rewind for the run already loaded by this
-   * instance. This is intentionally separate from the legacy implicit
-   * `setStartPosition`: callers that address another historical run use the
-   * static WorkingFileManager transaction and never rebind this executor.
+   * instance. Callers that address another historical run use the static
+   * WorkingFileManager transaction and never rebind this executor.
    */
   async beginPendingRewind(
     workflowKey: WorkflowKey,
@@ -2342,15 +2303,11 @@ export class WorkflowInstance {
       promptName
     );
 
-    const props = properties as Record<string, unknown>;
-    const step: WorkflowStep =
-      props?.type === STEP_TYPES.SCRIPT
-        ? buildScriptStepFromProperties(text, props, promptName)
-        : {
-            prompt: text,
-            ...(promptName?.trim() ? { name: promptName.trim() } : {}),
-            ...buildPromptStepProperties(properties),
-          };
+    const step: WorkflowStep = buildEphemeralWorkflowStep(
+      text,
+      properties,
+      promptName
+    );
     const stepHarness = isScriptStep(step) ? undefined : step.harness;
     if (forceNewWorkflow) {
       Log.info("Force new workflow requested...");

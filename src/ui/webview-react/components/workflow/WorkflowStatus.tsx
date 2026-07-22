@@ -23,6 +23,7 @@ import {
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
@@ -638,7 +639,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
     const currentName = workflowName || getWorkflowNameFromPath(fileName || "");
     if (newName !== currentName) {
-      vscode.postMessage({
+      // Rename must carry the displayed address/revisions so a promoted run's
+      // head is renamed in place — without it the backend falls back to the
+      // instance-bound path, which renames whatever run the lineage instance
+      // currently holds instead of the viewed run.
+      postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
         workflowName: newName,
       });

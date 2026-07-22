@@ -10,6 +10,7 @@ import { RunContinuationService } from "./orchestration/RunContinuationService";
 import {
   buildClearUpdates,
   buildDefinitionSnapshot,
+  buildEphemeralWorkflowStep,
   buildPromptStepProperties,
   buildScriptStepFromProperties,
   sanitizeClipboardWorkflowStep,
@@ -2405,17 +2406,6 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().outputHistoryManager;
   }
 
-  updateWorkflowPropertyInQueue(
-    property: string,
-    value: unknown,
-    clientId: string
-  ): void {
-    this.getInstanceForClient(clientId).updateWorkflowPropertyInQueue(
-      property,
-      value
-    );
-  }
-
   async updateWorkingFileProperties(
     mutation: WorkflowDefinitionMutation | undefined,
     properties: Record<string, unknown>,
@@ -2630,12 +2620,6 @@ export class WorkflowOrchestrator {
     );
   }
 
-  async resetWorkflowState(
-    clientId: string = this.PANEL_CLIENT_ID
-  ): Promise<void> {
-    return this.getInstanceForClient(clientId).resetWorkflowState();
-  }
-
   async reorderPendingPrompts(
     mutation: WorkflowDefinitionMutation | undefined,
     newPendingOrder: number[],
@@ -2733,13 +2717,6 @@ export class WorkflowOrchestrator {
       }
     );
     return latest;
-  }
-
-  async setStartPosition(
-    toIndex: number,
-    clientId: string = this.PANEL_CLIENT_ID
-  ): Promise<void> {
-    return this.getInstanceForClient(clientId).setStartPosition(toIndex);
   }
 
   /**
@@ -3124,6 +3101,7 @@ export class WorkflowOrchestrator {
       activeInstance ??
       this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
       this.buildWorkflowInstance();
+    getPtyProcessManager()?.setPendingController(instance.id, clientId);
     await instance.executeContinuationAtRun(
       address.workflowKey,
       address.runRef,
@@ -3169,6 +3147,7 @@ export class WorkflowOrchestrator {
       activeInstance ??
       this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
       this.buildWorkflowInstance();
+    getPtyProcessManager()?.setPendingController(instance.id, clientId);
     await instance.executeContinuationAtRun(
       address.workflowKey,
       address.runRef,
@@ -3476,9 +3455,38 @@ export class WorkflowOrchestrator {
     action: ActionType,
     promptName?: string,
     forceNewWorkflow?: boolean,
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    mutation?: WorkflowDefinitionMutation
   ): Promise<void> {
     const instance = this.getInstanceForClient(clientId);
+
+    // A prompt-editor submission addressed at a promoted run must target that
+    // exact run. The bound instance is only lineage-accurate: its queue holds
+    // whatever run it last loaded (typically the latest/executing run), so
+    // when the client views a different run of the lineage, appending through
+    // the instance would silently mutate the wrong run. Route those through
+    // the run-addressed continuation/mutation primitives instead. When the
+    // instance owns the addressed run itself (the everyday single-run case,
+    // including dynamic append to the executing run), the instance path below
+    // already targets the right file.
+    if (!forceNewWorkflow && mutation && mutation.address.kind === "run") {
+      const runAddress = mutation.address;
+      const queueState = instance.getQueueState();
+      const instanceOwnsAddressedRun =
+        queueState.workflowKey === runAddress.workflowKey &&
+        queueState.runRef === runAddress.runRef;
+      if (!instanceOwnsAddressedRun) {
+        return this.executeEphemeralPromptAtRun(
+          runAddress,
+          mutation,
+          text,
+          properties,
+          action,
+          promptName,
+          clientId
+        );
+      }
+    }
 
     // When this action will trigger a new workflow run, register the initiating client
     // as the PTY controller so TERMINAL_STARTED carries the correct controllerClientId
@@ -3507,6 +3515,59 @@ export class WorkflowOrchestrator {
       action,
       promptName,
       forceNewWorkflow
+    );
+  }
+
+  /**
+   * Prompt-editor submission against an addressed promoted run the client's
+   * bound instance does not own (viewing an older run while the instance
+   * holds another run of the lineage). Run actions append the step and
+   * continue that exact `RunRef`; queue actions append to its definition head
+   * without executing. Neither may fall back to the instance's loaded run.
+   */
+  private async executeEphemeralPromptAtRun(
+    runAddress: WorkflowRunAddress,
+    mutation: WorkflowDefinitionMutation,
+    text: string,
+    properties: unknown,
+    action: ActionType,
+    promptName: string | undefined,
+    clientId: string
+  ): Promise<void> {
+    const step = buildEphemeralWorkflowStep(text, properties, promptName);
+    const isRunAction =
+      action === ACTION_TYPES.RUN ||
+      action === ACTION_TYPES.RUN_NEXT ||
+      action === ACTION_TYPES.RUN_BEFORE_CURRENT;
+    if (isRunAction) {
+      await this.appendAndContinueAtRun(
+        runAddress,
+        [step],
+        mutation.expectedDefinitionRevision,
+        mutation.expectedDescriptorRevision,
+        clientId
+      );
+      return;
+    }
+
+    // Queue-only: validate the addressed edit (viewed-address + revision
+    // checks, resident-instance guard priming), then append the runtime-free
+    // tail step to the addressed run head in place.
+    await this.prepareDefinitionMutation(mutation, clientId);
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (live) =>
+        live.executeEphemeralPrompt(text, properties, action, promptName),
+      (workspaceRoot) =>
+        WorkingFileManager.appendTailToRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          [step],
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision,
+          this.lineageRepository
+        ).then(() => undefined)
     );
   }
 
