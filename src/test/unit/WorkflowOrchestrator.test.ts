@@ -1563,6 +1563,115 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });
+
+  async function createTwoStepRun(workspace: string): Promise<{
+    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
+    runRef: import("../../types/CtrlYokeTypes").RunRef;
+    workingFilePath: string;
+  }> {
+    const steps = [{ prompt: "prefix" }, { prompt: "suffix" }];
+    const manager = new WorkingFileManager({
+      getWorkingFilePath: () => undefined,
+      getSteps: () => steps,
+      getCurrentIndex: () => 2,
+      getStatus: () => EXECUTION_STATES.COMPLETED,
+      getDefinitionRevision: () => 1,
+      setDefinitionRevision: () => undefined,
+      getWorkflowName: () => "Rewind",
+      mergeDiskSteps: () => [],
+      emitStateChange: () => undefined,
+      getFinalStepRuntime: () => undefined,
+      updateWorkflowProperty: () => undefined,
+    });
+    const { workflowKey } = await manager.createWorkingFile(
+      "rewind",
+      steps,
+      workspace,
+      "Rewind"
+    );
+    const promoted = await manager.promoteToNewRun(
+      workspace,
+      workflowKey,
+      Date.now()
+    );
+    return { workflowKey, ...promoted };
+  }
+
+  test("continuing a run with a pending rewind commits the rewind instead of rejecting it", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-continue-rewind-")
+    );
+    try {
+      const run = await createTwoStepRun(workspace);
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        1,
+        1,
+        (
+          await new WorkflowLineageRepository().readDescriptor(
+            workspace,
+            run.workflowKey
+          )
+        ).revision
+      );
+      const pending = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      assert.strictEqual(pending.pendingEdit?.kind, "rewind");
+
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let executed: [string, string, number] | undefined;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async (...args: [string, string, number]) => {
+          executed = args;
+        },
+      });
+
+      await orchestrator.continueAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        rewind.definitionRevision,
+        rewind.descriptorRevision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(executed?.slice(0, 3), [
+        run.workflowKey,
+        run.runRef,
+        rewind.definitionRevision,
+      ]);
+      const after = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      assert.strictEqual(
+        after.pendingEdit,
+        undefined,
+        "continuation must clear the pending rewind marker"
+      );
+      const workingFile = JSON.parse(
+        await fs.readFile(run.workingFilePath, "utf8")
+      );
+      assert.strictEqual(
+        workingFile._runtime?.pendingRewind,
+        undefined,
+        "continuation must strip the runtime rewind marker"
+      );
+      assert.strictEqual(
+        workingFile.definitionRevision,
+        rewind.definitionRevision,
+        "committing a rewind must not change the definition revision"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
 });
 
 suite("WorkflowOrchestrator client view addressing", () => {

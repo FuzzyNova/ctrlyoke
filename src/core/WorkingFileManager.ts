@@ -1357,6 +1357,97 @@ export class WorkingFileManager {
   }
 
   /**
+   * Commits a pending rewind in place: the rewound-and-possibly-edited current
+   * head becomes the run's durable definition, the discard snapshot is removed,
+   * and the descriptor's `pendingEdit` marker is cleared. This is the commit
+   * counterpart to {@link discardPendingRewind}; continuing a rewound run is an
+   * intentional commit, so discard availability ends here. The definition
+   * revision is deliberately unchanged — clearing the runtime rewind marker is
+   * not a definition edit, and the caller's continuation validates against the
+   * same head revision it just observed.
+   */
+  public static async commitPendingRewind(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    const snapshotPath = WorkflowPaths.pendingRewindBaseFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    return lineageRepository.mutateDescriptorAtRevision(
+      workspaceFolderPath,
+      workflowKey,
+      expectedDescriptorRevision,
+      async (descriptor) => {
+        const pending = descriptor.pendingEdit;
+        if (pending?.kind !== "rewind" || pending.runRef !== runRef) {
+          throw new Error(
+            "This run does not have a pending continuation to commit"
+          );
+        }
+        return withFileLock(runFilePath, async () => {
+          const current = await readWorkingFileFromDisk(runFilePath);
+          const currentRevision = current.definitionRevision ?? 1;
+          if (currentRevision !== expectedDefinitionRevision) {
+            throw new Error(
+              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${currentRevision}`
+            );
+          }
+          const nextRuntime = current._runtime
+            ? { ...current._runtime }
+            : undefined;
+          if (nextRuntime) {
+            delete nextRuntime.pendingRewind;
+          }
+          const committed: WorkingFile = {
+            ...current,
+            lastModifiedAt: Date.now(),
+            _runtime: nextRuntime,
+          };
+          await writeWorkingFileAtomicTo(runFilePath, committed, {
+            skipLock: true,
+          });
+          // Best-effort snapshot cleanup: the run head is now durable, so a
+          // leftover snapshot must never be able to overwrite it. Never
+          // recursively remove the directory — a damaged/foreign entry must
+          // survive for investigation rather than being silently erased.
+          await fs.unlink(snapshotPath).catch(() => {});
+          await fs
+            .rmdir(
+              WorkflowPaths.pendingRewindDir(
+                workspaceFolderPath,
+                workflowKey,
+                runRef
+              )
+            )
+            .catch((error: NodeJS.ErrnoException) => {
+              if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+                throw error;
+            });
+          return {
+            value: {
+              definitionRevision: currentRevision,
+              descriptorRevision: expectedDescriptorRevision + 1,
+            },
+            descriptor: { ...descriptor, pendingEdit: undefined },
+          };
+        });
+      }
+    );
+  }
+
+  /**
    * Update working file with current queue state (serialized through operation queue).
    * This is called after prompt completion, append, or any queue modification.
    * @param skipMerge If true, writes memory state directly without checking for MCP changes (used for deletes/updates)

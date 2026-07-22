@@ -65,18 +65,6 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
-import { postRunLifecycleMutation } from "../../utils/workflowMutation";
-
-const lifecycleMessageTarget = {
-  postMessage: (message: unknown) => {
-    const { type, ...payload } = message as { type: string } & Record<
-      string,
-      unknown
-    >;
-    sendMessage(type, payload);
-  },
-};
-
 /** Local type guard for script steps */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -758,23 +746,6 @@ const WorkflowStepsPanelInner: React.FC<{
           />
         )}
       </div>
-
-      {pendingRewind && (
-        <div className="flex items-center gap-2 border-b border-panel-border bg-toolbar-hover-bg px-2 py-1 text-xxs text-description-fg">
-          <span>Continuing from step {pendingRewind.fromStepIndex + 1}</span>
-          <button
-            type="button"
-            className="text-link-fg hover:underline"
-            onClick={() =>
-              postRunLifecycleMutation(lifecycleMessageTarget, {
-                type: MESSAGE_TYPES.DISCARD_CONTINUATION,
-              })
-            }
-          >
-            Discard Continuation
-          </button>
-        </div>
-      )}
 
       {/* Step list */}
       <div

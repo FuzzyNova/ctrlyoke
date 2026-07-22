@@ -3067,20 +3067,40 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
-    const { workspaceRoot, activeInstance, allowInterruptedRun } =
-      await this.validateExplicitContinuationTarget(
-        address,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        clientId
-      );
+    const {
+      workspaceRoot,
+      activeInstance,
+      allowInterruptedRun,
+      pendingRewindOnThisRun,
+    } = await this.validateExplicitContinuationTarget(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId
+    );
+    // Appending to a rewound run commits the rewind first (clearing the
+    // descriptor marker and discard snapshot), then appends the tail at the
+    // now-bumped descriptor revision. The definition revision is untouched by
+    // the commit, so the append still validates against the observed head.
+    const descriptorRevisionForAppend = pendingRewindOnThisRun
+      ? (
+          await WorkingFileManager.commitPendingRewind(
+            workspaceRoot,
+            address.workflowKey,
+            address.runRef,
+            expectedDefinitionRevision,
+            expectedDescriptorRevision,
+            this.lineageRepository
+          )
+        ).descriptorRevision
+      : expectedDescriptorRevision;
     const appended = await RunContinuationService.appendTailToRun(
       workspaceRoot,
       address.workflowKey,
       address.runRef,
       tail,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      descriptorRevisionForAppend,
       this.lineageRepository,
       allowInterruptedRun
     );
@@ -3108,12 +3128,27 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    const { activeInstance } = await this.validateExplicitContinuationTarget(
-      address,
-      expectedDefinitionRevision,
-      expectedDescriptorRevision,
-      clientId
-    );
+    const { workspaceRoot, activeInstance, pendingRewindOnThisRun } =
+      await this.validateExplicitContinuationTarget(
+        address,
+        expectedDefinitionRevision,
+        expectedDescriptorRevision,
+        clientId
+      );
+    // Continuing a rewound run commits the rewind: clear the descriptor marker
+    // and discard snapshot before execution so the run head is durable and no
+    // stale pending state can block later edits/continuations. The definition
+    // revision is unchanged, so the continuation still validates below.
+    if (pendingRewindOnThisRun) {
+      await WorkingFileManager.commitPendingRewind(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef,
+        expectedDefinitionRevision,
+        expectedDescriptorRevision,
+        this.lineageRepository
+      );
+    }
     const instance =
       activeInstance ??
       this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
@@ -3136,6 +3171,7 @@ export class WorkflowOrchestrator {
     workspaceRoot: string;
     activeInstance: WorkflowInstance | undefined;
     allowInterruptedRun: boolean;
+    pendingRewindOnThisRun: boolean;
   }> {
     const viewed = this.getViewAddress(clientId);
     if (
@@ -3160,7 +3196,13 @@ export class WorkflowOrchestrator {
         `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
       );
     }
-    if (descriptor.pendingEdit) {
+    // A pending rewind on the run being continued is not a blocker: continuing
+    // it is precisely how the user commits that rewind. Only a draft, or a
+    // rewind belonging to a different run, blocks this continuation.
+    const pendingRewindOnThisRun =
+      descriptor.pendingEdit?.kind === "rewind" &&
+      descriptor.pendingEdit.runRef === address.runRef;
+    if (descriptor.pendingEdit && !pendingRewindOnThisRun) {
       throw new Error("This workflow has a draft or pending continuation");
     }
 
@@ -3247,6 +3289,7 @@ export class WorkflowOrchestrator {
       workspaceRoot,
       activeInstance,
       allowInterruptedRun: interruptedRun,
+      pendingRewindOnThisRun,
     };
   }
 
