@@ -1062,6 +1062,49 @@ describe("run view revision snapshots", () => {
     expect(useUiStore.getState().displayedDescriptorRevision).toBe(6);
   });
 
+  it("accepts the explicit definition rollback produced by discarding a continuation", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: address,
+        displayedDefinitionRevision: 5,
+        displayedDescriptorRevision: 10,
+        pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 4 },
+      });
+      useWorkflowStore.setState({
+        workflowName: "Pending continuation",
+        steps: [makePrompt("prefix"), makePrompt("rewound suffix")],
+      });
+
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Committed run",
+          definitionRevision: 4,
+          steps: [makePrompt("prefix"), makePrompt("committed suffix")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 11,
+        definitionRollback: { fromRevision: 5 },
+      });
+    });
+
+    expect(useWorkflowStore.getState().workflowName).toBe("Committed run");
+    expect(useWorkflowStore.getState().steps[1]).toMatchObject({
+      prompt: "committed suffix",
+    });
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(4);
+    expect(useUiStore.getState().displayedDescriptorRevision).toBe(11);
+    expect(useUiStore.getState().pendingRewind).toBeNull();
+  });
+
   it("re-arms the next edit with the revisions a write just produced", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({

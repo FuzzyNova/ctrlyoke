@@ -1127,6 +1127,15 @@ export interface RunViewLoadedMessage {
   };
   /** Descriptor revision paired with this snapshot for optimistic mutations. */
   descriptorRevision: number;
+  /**
+   * Identifies an intentional definition rollback, such as discarding a
+   * pending continuation. Requestless snapshots normally may not replace a
+   * newer definition revision; this marker authorizes only the exact
+   * fromRevision -> restored revision transition.
+   */
+  definitionRollback?: {
+    fromRevision: number;
+  };
 }
 
 /**

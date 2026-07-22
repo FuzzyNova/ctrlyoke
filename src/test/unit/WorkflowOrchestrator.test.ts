@@ -1884,6 +1884,58 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     return { workflowKey, ...promoted };
   }
 
+  test("discard invalidation identifies the intentional definition rollback", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-discard-rewind-")
+    );
+    try {
+      const run = await createTwoStepRun(workspace);
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        1,
+        1,
+        (
+          await new WorkflowLineageRepository().readDescriptor(
+            workspace,
+            run.workflowKey
+          )
+        ).revision
+      );
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let invalidation: unknown[] | undefined;
+      internal.invalidateRunViews = async (...args: unknown[]) => {
+        invalidation = args;
+      };
+
+      const discarded = await orchestrator.discardContinuationAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        rewind.definitionRevision,
+        rewind.descriptorRevision,
+        false,
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(discarded.discarded, true);
+      assert.deepStrictEqual(invalidation, [
+        run.workflowKey,
+        run.runRef,
+        {
+          fromRevision: rewind.definitionRevision,
+          restoredRevision: 1,
+          descriptorRevision: rewind.descriptorRevision + 1,
+        },
+      ]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("continuing a run with a pending rewind commits the rewind instead of rejecting it", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-continue-rewind-")

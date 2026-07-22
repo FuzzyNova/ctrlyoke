@@ -1807,15 +1807,23 @@ function createMessageHandlers(): MessageHandlerMap {
       uiStore.displayedViewAddress
     );
     const currentDefinitionRevision = uiStore.displayedDefinitionRevision;
+    const currentDescriptorRevision = uiStore.displayedDescriptorRevision;
     const currentStepCount = useWorkflowStore.getState().steps.length;
     const incomingStepCount = workingFile.steps?.length ?? 0;
+    const isAuthorizedDefinitionRollback =
+      currentDefinitionRevision !== null &&
+      message.definitionRollback?.fromRevision === currentDefinitionRevision &&
+      incomingDefinitionRevision < currentDefinitionRevision &&
+      (currentDescriptorRevision === null ||
+        message.descriptorRevision >= currentDescriptorRevision);
     if (
       !message.requestId &&
       isCurrentAddress &&
       currentDefinitionRevision !== null &&
       (incomingDefinitionRevision < currentDefinitionRevision ||
         (incomingDefinitionRevision === currentDefinitionRevision &&
-          incomingStepCount < currentStepCount))
+          incomingStepCount < currentStepCount)) &&
+      !isAuthorizedDefinitionRollback
     ) {
       WebviewLog.debug(
         `[RUN_VIEW_LOADED] ignoring regressive snapshot for ${address.workflowKey}: ` +

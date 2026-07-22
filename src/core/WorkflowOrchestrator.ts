@@ -124,6 +124,12 @@ function sameWorkingFilePath(
   return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
 }
 
+interface DefinitionRollbackInvalidation {
+  fromRevision: number;
+  restoredRevision: number;
+  descriptorRevision: number;
+}
+
 /**
  * The view address an instance's own queue currently describes: its draft while
  * the lineage has never executed, otherwise the run it holds open. `null` until
@@ -2006,7 +2012,8 @@ export class WorkflowOrchestrator {
     address: WorkflowViewAddress,
     send: (message: unknown) => void,
     clientId: string,
-    requestId?: string
+    requestId?: string,
+    definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void> {
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) {
@@ -2049,6 +2056,16 @@ export class WorkflowOrchestrator {
       executionRunRef,
       pendingRewind: workingFile._runtime?.pendingRewind,
       descriptorRevision: descriptor.revision,
+      ...(definitionRollback &&
+      (workingFile.definitionRevision ?? 1) ===
+        definitionRollback.restoredRevision &&
+      descriptor.revision === definitionRollback.descriptorRevision
+        ? {
+            definitionRollback: {
+              fromRevision: definitionRollback.fromRevision,
+            },
+          }
+        : {}),
     };
     send(snapshot);
   }
@@ -3317,7 +3334,11 @@ export class WorkflowOrchestrator {
     );
     if (!result.discarded) return result;
     if (invalidate) {
-      await this.invalidateRunViews(address.workflowKey, address.runRef);
+      await this.invalidateRunViews(address.workflowKey, address.runRef, {
+        fromRevision: expectedDefinitionRevision,
+        restoredRevision: result.definitionRevision,
+        descriptorRevision: result.descriptorRevision,
+      });
     }
     return result;
   }
@@ -3347,7 +3368,8 @@ export class WorkflowOrchestrator {
   /** Refresh every connected client viewing the changed stable run identity. */
   private async invalidateRunViews(
     workflowKey: WorkflowKey,
-    runRef: RunRef
+    runRef: RunRef,
+    definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void> {
     const targets = [...this.getViewAddressRegistry().entries()].filter(
       ([, address]) =>
@@ -3363,7 +3385,9 @@ export class WorkflowOrchestrator {
           await this.loadRunViewForClient(
             { workflowKey, kind: "run", runRef },
             send,
-            clientId
+            clientId,
+            undefined,
+            definitionRollback
           );
         } catch (error) {
           Log.warn(
