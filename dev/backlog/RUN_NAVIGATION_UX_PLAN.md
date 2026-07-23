@@ -64,6 +64,11 @@ Workflow list view                        Run panel view
 | Workflow7                         |     |   Run  7    COMPLETED   yesterday |
 ```
 
+The diagram is schematic — it elides the metadata cells to show structure.
+Workflow rows keep **every cell they render today** (favorite, harness icon,
+state badge, step count, relative time, terminal icon, remove action); see
+“Workflow list view” below.
+
 The run panel is a **flat, homogeneous, virtualized list** with a pinned
 header row naming the lineage. There is no accordion, no flattened
 mixed-kind row model, no sticky-parent virtualizer range, and no
@@ -140,9 +145,17 @@ predictable):
 
 ## Workflow list view
 
-The workflow list keeps today's structure, search, and filters. A lineage row
-gains a **run indicator cell** only when the lineage is drillable — the same
-multi-target rule as the header badge:
+The workflow list keeps today's structure, search, and filters. **Workflow
+rows render exactly the cells they render today** — name, favorite star,
+harness icon, execution-state badge, step count, relative time, terminal
+icon, and remove action — with all run-derived values mapped to the
+lineage's primary address (latest run or draft), which is already where
+today's `RecentWorkflow` fields come from. The run indicator described below
+is the **only addition** to the row, and it appears only when the lineage is
+drillable.
+
+A lineage row gains a **run indicator cell** only when the lineage is
+drillable — the same multi-target rule as the header badge:
 
 - `Run N ▸` for a lineage with `runCount > 1` (or one run plus a draft),
   using the latest/default `RunSummary.runId`; or
@@ -151,6 +164,36 @@ multi-target rule as the header badge:
 A single-run lineage with no draft, a draft-only lineage, and a lineage with
 no addressable definition show **no run indicator at all** — their rows
 render exactly as today.
+
+**Placement:** the run indicator sits immediately after the time column —
+the last cell of the row's metadata cluster — and **before** the
+hover-revealed favorite/trash actions, which keep today's positions at the
+row edge:
+
+```text
+[icon] Name        4 steps   COMPLETED   5 min ago   Run 12 ▸   [★] [🗑]
+```
+
+Since favorite/trash are hover-revealed, the indicator is the rightmost
+visible element at rest, reading as the row's drill affordance. Placing it
+inside the actions cluster (next to the lineage-deleting trash) is rejected
+for destructive-adjacency reasons. Narrow layouts render it as `#12 ▸`.
+
+**Column reservation is list-scoped, not row-scoped:** when at least one
+visible row is drillable, reserve the run-indicator track on every row
+(empty for non-drillable rows) so the time/badge columns stay aligned across
+rows. When no visible row is drillable, the track does not exist at all —
+that is what keeps the never-re-run user's list pixel-identical to today.
+
+**The empty track on non-drillable rows is deliberate, not a gap to fill.**
+Empty-when-inapplicable is already this row's design language — the
+terminal-icon track is empty on most rows, the harness span renders empty
+without a harness, and step count renders empty at zero. Filler text for
+single-run rows (e.g. an inert `1 run`) was considered and rejected: it
+repeats a near-constant value across most rows, dilutes the scannability of
+the sparse column (drillable lineages should pop), and mixes value types —
+a count next to `Run 12 ▸` identities, misleading for a lineage whose only
+surviving run is, say, Run 7.
 
 The row's primary button keeps today's behavior: it selects the lineage's
 default address and closes the dropdown, preserving the two-click workflow
@@ -552,8 +595,12 @@ button — so no alternate mobile navigation model is necessary.
   clicking its run indicator drills in without loading it.
 - A one-run lineage (no draft) shows no run indicator in the list and no
   header badge — its row and header are pixel-identical to the pre-feature
-  UI. A draft with historical runs can drill in and shows the draft row at
-  the top of the panel.
+  UI. A drillable lineage's row differs from today **only** by the added run
+  indicator cell; every existing metadata cell renders unchanged, mapped to
+  the primary address. In a mixed list, non-drillable rows reserve the empty
+  indicator track so time/badge columns stay aligned; in a list with no
+  drillable rows the track is absent everywhere. A draft with historical
+  runs can drill in and shows the draft row at the top of the panel.
 - Trigger toggle semantics: badge closes an open run panel, chevron closes an
   open workflow list, and each switches views when the other view is showing.
 - Closing and reopening resets to the entry view of whichever trigger was

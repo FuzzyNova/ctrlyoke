@@ -5,28 +5,44 @@ import {
 } from "../../utils/status";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
+import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { HarnessIcon } from "../shared/HarnessIcon";
 import { VirtualizedDropdownList } from "../shared";
 import { HARNESS_INFO } from "../../types/messages";
+import type { WorkflowSummary } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 
-interface RecentWorkflowsProps {
-  workflows: RecentWorkflow[];
+/**
+ * One row of the unified workflow dropdown list: either a lineage with an
+ * active instance (running/pausing/paused) or a lineage known only from
+ * history. Running state lives on the row itself — there is exactly one row
+ * per lineage, never a duplicate between a "running" and a "recent" section.
+ */
+export type UnifiedWorkflowRow =
+  | { kind: "running"; key: string; workflow: WorkflowSummary }
+  | { kind: "recent"; key: string; workflow: RecentWorkflow };
+
+interface WorkflowListProps {
+  rows: UnifiedWorkflowRow[];
   currentAddress: WorkflowViewAddress | null;
-  hasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
-  onSelect: (address: WorkflowViewAddress) => void;
+  activeWorkflowId: string | null;
+  runningHasActiveTerminal: (workflowId: string) => boolean;
+  recentHasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
+  onSelectRecent: (address: WorkflowViewAddress) => void;
+  onSwitchRunning: (workflowId: string) => void;
+  onPauseRunning: (workflow: WorkflowSummary) => void;
+  onCancelPauseRunning: (workflow: WorkflowSummary) => void;
+  onResumeRunning: (workflow: WorkflowSummary) => void;
+  onStopRunning: (workflow: WorkflowSummary) => void;
   onClearHistory: () => void;
   onRemove?: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   onNewWorkflow?: () => void;
   onClose?: () => void;
-  showCloseButton?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
-  showSearch?: boolean;
-  showFilters?: boolean;
   filtersOpen?: boolean;
   filtersActive?: boolean;
   onToggleFilters?: () => void;
@@ -36,7 +52,7 @@ interface RecentWorkflowsProps {
   className?: string;
 }
 
-interface WorkflowRowProps {
+interface RecentWorkflowRowProps {
   workflow: RecentWorkflow;
   currentAddress: WorkflowViewAddress | null;
   hasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
@@ -46,7 +62,7 @@ interface WorkflowRowProps {
   onRemove?: (address: WorkflowViewAddress) => void;
 }
 
-const WorkflowRow: React.FC<WorkflowRowProps> = ({
+const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   workflow,
   currentAddress,
   hasActiveTerminal,
@@ -191,32 +207,42 @@ const WorkflowRow: React.FC<WorkflowRowProps> = ({
 };
 
 /**
- * RecentWorkflows - Dropdown list of recent workflows
+ * WorkflowList - Unified dropdown list of workflow lineages
+ *
+ * One row per lineage regardless of whether it currently has a running
+ * instance: running lineages carry their inline pause/resume/stop controls,
+ * historical lineages carry favorite/remove, and both live in the same
+ * virtualized list under one header — running rows sort first because
+ * `rows` already arrives in that order.
  *
  * Features:
- * - Shows workflow name, state, and relative time
+ * - Shows workflow name, state, and relative time (or a live elapsed timer
+ *   while running)
  * - Highlights current workflow
- * - Click to load workflow
+ * - Click to load workflow or switch to a running instance
  * - Clear history option
- * - Virtualizes rows once the history grows large (see
- *   VirtualizedDropdownList) so a long history doesn't slow down opening
- *   the dropdown
+ * - Virtualizes rows once the list grows large (see VirtualizedDropdownList)
+ *   so a long history doesn't slow down opening the dropdown
  */
-export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
-  workflows,
+export const WorkflowList: React.FC<WorkflowListProps> = ({
+  rows,
   currentAddress,
-  hasActiveTerminal,
-  onSelect,
+  activeWorkflowId,
+  runningHasActiveTerminal,
+  recentHasActiveTerminal,
+  onSelectRecent,
+  onSwitchRunning,
+  onPauseRunning,
+  onCancelPauseRunning,
+  onResumeRunning,
+  onStopRunning,
   onClearHistory,
   onRemove,
   onToggleFavorite,
   onNewWorkflow,
   onClose,
-  showCloseButton = false,
   searchValue = "",
   onSearchChange,
-  showSearch = false,
-  showFilters = false,
   filtersOpen = false,
   filtersActive = false,
   onToggleFilters,
@@ -226,6 +252,9 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   className = "",
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Clear History only ever targets persisted history, never live instances —
+  // hide the footer when the list is showing running lineages with no history yet.
+  const hasHistoryRows = rows.some((row) => row.kind === "recent");
 
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
@@ -233,11 +262,11 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
       <WorkflowDropdownHeader
         icon="codicon-checklist"
         title="Workflows"
-        onClose={showCloseButton ? onClose : undefined}
+        onClose={onClose}
         searchValue={searchValue}
         onSearchChange={onSearchChange}
-        showSearch={showSearch}
-        showFilters={showFilters}
+        showSearch
+        showFilters
         filtersOpen={filtersOpen}
         filtersActive={filtersActive}
         onToggleFilters={onToggleFilters}
@@ -249,10 +278,10 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
         ref={scrollContainerRef}
         className="workflow-menu-items overflow-y-auto overflow-x-clip flex-1 min-h-0 py-1"
       >
-        {workflows.length === 0 ? (
+        {rows.length === 0 ? (
           isFiltering ? (
             <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
-              No recent workflows match your search.
+              No workflows match your search.
             </div>
           ) : (
             <button
@@ -268,28 +297,40 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
           // Rows have no wrapping text (name/time truncate to one line), so
           // the default estimated height in VirtualizedDropdownList is fine.
           <VirtualizedDropdownList
-            items={workflows}
-            getItemKey={(workflow) =>
-              `${workflow.address.workflowKey}:${workflow.address.kind}:${workflow.address.kind === "run" ? workflow.address.runRef : "draft"}`
-            }
+            items={rows}
+            getItemKey={(row) => row.key}
             scrollContainerRef={scrollContainerRef}
-            renderItem={(workflow) => (
-              <WorkflowRow
-                workflow={workflow}
-                currentAddress={currentAddress}
-                hasActiveTerminal={hasActiveTerminal}
-                isNarrow={isNarrow}
-                onSelect={onSelect}
-                onToggleFavorite={onToggleFavorite}
-                onRemove={onRemove}
-              />
-            )}
+            renderItem={(row) =>
+              row.kind === "running" ? (
+                <RunningWorkflowItem
+                  workflow={row.workflow}
+                  isCurrent={row.workflow.id === activeWorkflowId}
+                  hasActiveTerminal={runningHasActiveTerminal(row.workflow.id)}
+                  isNarrow={isNarrow}
+                  onClick={() => onSwitchRunning(row.workflow.id)}
+                  onPause={() => onPauseRunning(row.workflow)}
+                  onCancelPause={() => onCancelPauseRunning(row.workflow)}
+                  onResume={() => onResumeRunning(row.workflow)}
+                  onStop={() => onStopRunning(row.workflow)}
+                />
+              ) : (
+                <RecentWorkflowRow
+                  workflow={row.workflow}
+                  currentAddress={currentAddress}
+                  hasActiveTerminal={recentHasActiveTerminal}
+                  isNarrow={isNarrow}
+                  onSelect={onSelectRecent}
+                  onToggleFavorite={onToggleFavorite}
+                  onRemove={onRemove}
+                />
+              )
+            }
           />
         )}
       </div>
 
       {/* Footer - Clear History */}
-      {workflows.length > 0 && (
+      {hasHistoryRows && (
         <div className="workflow-menu-footer p-1 border-t border-dropdown-border bg-editor-bg flex-shrink-0">
           <button
             type="button"

@@ -21,15 +21,12 @@ import {
   type ExecutionState,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
-import { RecentWorkflows } from "./RecentWorkflows";
+import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
-import { RunningWorkflowItem } from "./RunningWorkflowItem";
-import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
-import { VirtualizedDropdownList } from "../shared";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
@@ -318,7 +315,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const runningWorkflowsScrollRef = useRef<HTMLDivElement>(null);
 
   const mergedContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -1018,7 +1014,27 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           loadedWorkflow.workflowKey === recentWorkflow.address.workflowKey
       )
   );
-  const showRunningWorkflowsSection = effectiveLoadedWorkflows.length > 0;
+  // One lineage-keyed row per entry, running lineages first — this is the
+  // unified navigation model step 0 of the run-navigation plan calls for:
+  // running state is a property of a row, not a separate section, and a
+  // lineage never appears twice (filteredRecentWorkflows already excludes
+  // whatever is represented by a loaded/running workflow above).
+  const workflowListRows: UnifiedWorkflowRow[] = [
+    ...filteredEffectiveLoadedWorkflows.map(
+      (workflow): UnifiedWorkflowRow => ({
+        kind: "running",
+        key: `running:${workflow.workflowKey ?? workflow.id}`,
+        workflow,
+      })
+    ),
+    ...filteredRecentWorkflows.map(
+      (workflow): UnifiedWorkflowRow => ({
+        kind: "recent",
+        key: `recent:${workflow.address.workflowKey}`,
+        workflow,
+      })
+    ),
+  ];
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">
       <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto pb-0.5">
@@ -1266,79 +1282,27 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           clipPath: dropdownRevealed ? "inset(0 0 0 0)" : "inset(0 0 100% 0)",
         }}
       >
-        {/* Section 1: Running Workflows — only shown when any workflow is active */}
-        {showRunningWorkflowsSection && (
-          <div className="running-workflows-section flex-shrink-0">
-            <WorkflowDropdownHeader
-              icon="codicon-debug-line-by-line"
-              title="Running Workflows"
-              onClose={closeDropdown}
-              searchValue={workflowSearch}
-              onSearchChange={setWorkflowSearch}
-              showSearch
-              showFilters
-              filtersOpen={filtersOpen}
-              filtersActive={filtersActive}
-              onToggleFilters={handleToggleFilters}
-              filterControls={workflowFilterControls}
-            />
-            <div
-              ref={runningWorkflowsScrollRef}
-              // Bounded + scrollable (rather than growing unboundedly like the
-              // rest of this flex-shrink-0 section) so a large running-workflow
-              // count has somewhere to scroll instead of pushing the recent
-              // workflows list out of the dropdown — and so
-              // VirtualizedDropdownList has an actual scroll container to
-              // measure against.
-              className="py-1 max-h-[260px] overflow-y-auto overflow-x-clip"
-            >
-              {filteredEffectiveLoadedWorkflows.length === 0 &&
-              isFilteringWorkflows ? (
-                <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
-                  No running workflows match your search.
-                </div>
-              ) : (
-                <VirtualizedDropdownList
-                  items={filteredEffectiveLoadedWorkflows}
-                  getItemKey={(workflow) => workflow.id}
-                  scrollContainerRef={runningWorkflowsScrollRef}
-                  renderItem={(workflow) => (
-                    <RunningWorkflowItem
-                      workflow={workflow}
-                      isCurrent={workflow.id === activeWorkflowId}
-                      hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
-                      isNarrow={isNarrow}
-                      onClick={() => handleSwitchWorkflow(workflow.id)}
-                      onPause={() => handlePauseWorkflow(workflow)}
-                      onCancelPause={() => handleCancelPauseWorkflow(workflow)}
-                      onResume={() => handleResumeWorkflow(workflow)}
-                      onStop={() => handleStopWorkflow(workflow)}
-                    />
-                  )}
-                />
-              )}
-            </div>
-            <div className="border-t border-dropdown-border" />
-          </div>
-        )}
-
-        {/* Recent workflows list — exclude any already shown in Running Workflows */}
+        {/* Unified workflow list — one row per lineage, running lineages first */}
         <div className="flex-1 min-h-0 overflow-clip flex flex-col">
-          <RecentWorkflows
-            workflows={filteredRecentWorkflows}
+          <WorkflowList
+            rows={workflowListRows}
             currentAddress={displayedViewAddress}
-            hasActiveTerminal={recentWorkflowHasActiveTerminal}
-            onSelect={handleSelectWorkflow}
+            activeWorkflowId={activeWorkflowId}
+            runningHasActiveTerminal={workflowHasActiveTerminal}
+            recentHasActiveTerminal={recentWorkflowHasActiveTerminal}
+            onSelectRecent={handleSelectWorkflow}
+            onSwitchRunning={handleSwitchWorkflow}
+            onPauseRunning={handlePauseWorkflow}
+            onCancelPauseRunning={handleCancelPauseWorkflow}
+            onResumeRunning={handleResumeWorkflow}
+            onStopRunning={handleStopWorkflow}
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}
             onToggleFavorite={handleToggleFavorite}
             isNarrow={isNarrow}
             onClose={closeDropdown}
-            showCloseButton={!showRunningWorkflowsSection}
             searchValue={workflowSearch}
             onSearchChange={setWorkflowSearch}
-            showSearch={!showRunningWorkflowsSection}
-            showFilters={!showRunningWorkflowsSection}
             filtersOpen={filtersOpen}
             filtersActive={filtersActive}
             onToggleFilters={handleToggleFilters}

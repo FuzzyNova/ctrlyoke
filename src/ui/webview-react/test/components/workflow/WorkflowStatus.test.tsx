@@ -186,7 +186,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
   });
 
-  it("keeps the active pausing workflow in the Running Workflows section when loadedWorkflows is stale", async () => {
+  it("keeps the active pausing workflow visible in the unified list when loadedWorkflows is stale", async () => {
     const user = userEvent.setup();
     useWorkflowStore.setState({
       fileName: "/workspace/pausing.ctrlyoke.json",
@@ -206,8 +206,10 @@ describe("WorkflowStatus — loaded state", () => {
       screen.getByRole("button", { name: /Show recent workflows/i })
     );
 
-    expect(screen.getByText("Running Workflows")).toBeInTheDocument();
     expect(screen.getAllByText("Pausing Workflow").length).toBeGreaterThan(0);
+    expect(
+      document.querySelector(".running-workflow-item")
+    ).toBeInTheDocument();
   });
 
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
