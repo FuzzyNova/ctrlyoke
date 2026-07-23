@@ -229,8 +229,17 @@ function applyWorkflowPropertiesFromMessage(message: {
  */
 function applyWorkflowChange(options?: {
   preserveViewAddress?: boolean;
+  /**
+   * Skip the historyOutputs clear when the caller immediately replaces it
+   * (loadHistoryRun) or explicitly nulls it (hydrateLiveRunHistory). Clearing
+   * first would destroy the previous reference and defeat the structural
+   * sharing that keeps identical replayed history identity-stable.
+   */
+  skipHistoryOutputsClear?: boolean;
 }): void {
-  useWorkflowStore.getState().clearHistoryOutputs();
+  if (!options?.skipHistoryOutputsClear) {
+    useWorkflowStore.getState().clearHistoryOutputs();
+  }
   useUiStore.getState().clearHistoryView();
   if (!options?.preserveViewAddress) {
     // The previous workflow's address and revisions cannot address the new one.
@@ -1858,11 +1867,28 @@ function createMessageHandlers(): MessageHandlerMap {
       // switch and accidentally apply a late path check/save response to N+1.
       useUiStore.getState().closeSaveWorkflowDialog();
     }
+    // A same-view replay (same address, same definition revision, not a
+    // rollback) re-describes the workflow the store already holds — e.g. a
+    // run-view invalidation or reconnect. Preserve live output, runtime state,
+    // and undo history so unchanged rows keep their identities and nothing in
+    // the output pane redraws. Anything else is a genuine view change and
+    // clears runtime state as before.
+    const isSameViewReplay =
+      isCurrentAddress &&
+      currentDefinitionRevision !== null &&
+      incomingDefinitionRevision === currentDefinitionRevision &&
+      !message.definitionRollback;
     // The selected address was set optimistically before this asynchronous
     // snapshot arrived. Clearing it here briefly records an addressless route,
     // which makes Back/Forward require several clicks to cross one run switch.
     // Keep the address stable while resetting the remaining workflow-local UI.
-    applyWorkflowChange({ preserveViewAddress: true });
+    applyWorkflowChange({
+      preserveViewAddress: true,
+      // history (when present) is immediately re-applied below — replaced by
+      // loadHistoryRun or nulled by hydrateLiveRunHistory — so pre-clearing
+      // would only break structural sharing for identical replays.
+      skipHistoryOutputsClear: Boolean(history),
+    });
     const runtime = workingFile._runtime;
     // The addressed run view sends the run's own definition file, where each
     // step's completion status lives in its own _runtime.terminalStatus
@@ -1899,6 +1925,7 @@ function createMessageHandlers(): MessageHandlerMap {
       finalStepStatus: runtime?.finalStep?.status ?? null,
       finalStepLoopCount: runtime?.finalStep?.loopCount ?? 0,
       finalStepPhase: runtime?.finalStep?.phase ?? null,
+      preserveLiveOutput: isSameViewReplay,
     });
     const normalized = normalizeWorkflowProperties(workflowProperties);
     useSettingsStore.getState().setWorkflowProperties(normalized);

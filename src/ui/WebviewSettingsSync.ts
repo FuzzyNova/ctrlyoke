@@ -484,8 +484,8 @@ export class WebviewSettingsSync {
     value: any,
     postMessage: PostMessageFn = this.postMessage,
     clientId: string
-  ): Promise<void> {
-    await this.handleUpdateWorkflowProperties(
+  ): Promise<boolean> {
+    return this.handleUpdateWorkflowProperties(
       mutation,
       { [property]: value },
       postMessage,
@@ -493,30 +493,40 @@ export class WebviewSettingsSync {
     );
   }
 
+  /**
+   * Returns true when the write seeded a brand-new ephemeral working file for
+   * the client — the one case where the caller still needs a full run-view
+   * snapshot so the client learns its new lineage. Ordinary property writes
+   * return false and need no snapshot replay.
+   */
   async handleUpdateWorkflowProperties(
     mutation: WorkflowDefinitionMutation | undefined,
     properties: Record<string, unknown>,
     postMessage: PostMessageFn = this.postMessage,
     clientId: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (Object.keys(properties).length === 0) {
-      return;
+      return false;
     }
 
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      return;
+      return false;
     }
 
     // An addressed run mutation writes straight to that run's file and needs no
     // instance-owned working file. Seeding one here would create a whole extra
     // lineage for a client whose bound instance happens to be blank — while the
     // property itself still lands on the addressed run.
+    let createdWorkingFile = false;
     if (mutation?.address.kind !== "run") {
       if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
         await orchestrator.ensureEphemeralWorkingFile(
           { initialProperties: properties },
           clientId
+        );
+        createdWorkingFile = Boolean(
+          orchestrator.getQueueState(clientId)?.workingFilePath
         );
       }
 
@@ -524,7 +534,7 @@ export class WebviewSettingsSync {
         Log.warn(
           `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
         );
-        return;
+        return false;
       }
     }
 
@@ -540,6 +550,7 @@ export class WebviewSettingsSync {
     );
 
     await this.sendWorkflowPropertiesToSettings(postMessage, clientId);
+    return createdWorkingFile;
   }
 
   async handleSetAsDefault(

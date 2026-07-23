@@ -1848,25 +1848,49 @@ export class WebviewMessageRouter {
 
   private async handleUpdateWorkflowProperty(message: any): Promise<void> {
     await this.prepareWorkflowPropertiesMutation(message);
-    await this.settingsSync.handleUpdateWorkflowProperty(
-      this.asWorkflowDefinitionMutation(message),
-      message.property,
-      message.value,
-      this.getCurrentPostMessage(),
-      this.clientId
-    );
-    await this.refreshDefinitionMutationView(message);
+    const createdWorkingFile =
+      await this.settingsSync.handleUpdateWorkflowProperty(
+        this.asWorkflowDefinitionMutation(message),
+        message.property,
+        message.value,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
+    await this.finishWorkflowPropertiesMutation(message, createdWorkingFile);
   }
 
   private async handleUpdateWorkflowProperties(message: any): Promise<void> {
     await this.prepareWorkflowPropertiesMutation(message);
-    await this.settingsSync.handleUpdateWorkflowProperties(
-      this.asWorkflowDefinitionMutation(message),
-      message.properties,
-      this.getCurrentPostMessage(),
-      this.clientId
-    );
-    await this.refreshDefinitionMutationView(message);
+    const createdWorkingFile =
+      await this.settingsSync.handleUpdateWorkflowProperties(
+        this.asWorkflowDefinitionMutation(message),
+        message.properties,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
+    await this.finishWorkflowPropertiesMutation(message, createdWorkingFile);
+  }
+
+  /**
+   * A property-only write leaves steps and output untouched, so it must not
+   * trigger the full `RUN_VIEW_LOADED` snapshot replay — the webview treats
+   * that snapshot as a workflow load and rebuilds its entire output model,
+   * visibly redrawing already-rendered output rows. `WORKFLOW_PROPERTIES_UPDATE`
+   * (sent by the settings sync / run-view invalidation) carries the values, and
+   * `publishViewIdentity()` republishes the bumped revisions every definition
+   * write requires. Only a first edit that just seeded the client's ephemeral
+   * working file still needs the full snapshot, so the client learns its new
+   * lineage view (address, run summaries, workflow name).
+   */
+  private async finishWorkflowPropertiesMutation(
+    message: { mutation?: unknown },
+    createdWorkingFile: boolean
+  ): Promise<void> {
+    if (createdWorkingFile) {
+      await this.refreshDefinitionMutationView(message);
+    } else {
+      await this.publishViewIdentity();
+    }
   }
 
   /** Validate a promoted-run edit in place, or step this client onto its draft. */

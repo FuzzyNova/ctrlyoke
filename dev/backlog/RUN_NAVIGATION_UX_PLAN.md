@@ -7,19 +7,20 @@ Status: **Proposed**
 Make the selected run part of the workflow's visible identity and move run
 navigation out of the Output panel.
 
-The workflow dropdown should present a lineage and its runs as one hierarchy
-that works equally well on desktop and mobile:
+The workflow dropdown should present a lineage and its runs as one navigable
+hierarchy that works equally well on desktop and mobile:
 
-1. The header always identifies the viewed workflow and viewed run (or draft).
-2. The currently viewed lineage is expanded when the dropdown opens.
-3. Other lineages remain one compact row until explicitly expanded.
-4. Expanding a lineage with 1,000 runs mounts only the visible run rows.
-5. While scrolling those runs, the parent workflow row stays pinned and can
-   always collapse the section.
-6. Run labels use the manifest's monotonic `runId`; deletion gaps remain visible.
-7. Navigation and mutations target stable `{ workflowKey, runRef }` addresses,
+1. The header identifies the viewed workflow and viewed run (or draft)
+   whenever the lineage has more than one addressable target; a single-run
+   lineage renders exactly as today, so users who never re-run see no new UI
+   anywhere.
+2. Switching runs of the currently viewed workflow takes two clicks.
+3. Any other lineage's runs are reachable from the workflow list.
+4. A lineage with 1,000 runs mounts only the visible run rows.
+5. Run labels use the manifest's monotonic `runId`; deletion gaps remain visible.
+6. Navigation and mutations target stable `{ workflowKey, runRef }` addresses,
    never a list index or inferred “latest” run.
-8. The Terminal tab continues to describe execution-owned terminals honestly;
+7. The Terminal tab continues to describe execution-owned terminals honestly;
    selecting a historical run does not imply that the terminal changed runs.
 
 ## Current problem
@@ -39,136 +40,185 @@ After the working-file-per-run work, selecting a run changes the definition,
 steps, properties, output, save target, and continuation target together. Run
 selection is workflow navigation now, not an Output-panel tool.
 
-## Decision: one virtualized accordion
+One current-behavior note for later sections: the workflow dropdown has **no
+scroll-to-current logic today**. The viewed workflow merely appears near the
+top because sorting is favorites-then-recency and the viewed lineage is almost
+always the most recently modified. `VirtualizedDropdownList` has no
+`scrollToIndex`; the run panel below is where that capability gets added.
 
-`WorkflowStatus` keeps its existing single-column dropdown. A workflow row can
-expand its run children in place:
+## Decision: drill-in dropdown with dual triggers
 
-```text
-[ Workflow8              Run 12    COMPLETED | ▾ ]
-[ Workflows  [search workflows] [filters]    [x] ]
-| Workflow2              Run 10 ▾  COMPLETED     |
-| Workflow3                        COMPLETED     |
-| Workflow4               Run 2 ▾       IDLE     |
-| Workflow8              Run 12 ▴  COMPLETED     |
-|   └                    Run 11    COMPLETED     |
-|   └                    Run 10    COMPLETED     |
-|   └                    Run  9    COMPLETED     |
-|   └                    Run  8    COMPLETED     |
-|   └                    Run  7    COMPLETED     |
-|   └                    Run  6    COMPLETED     |
-|   └                    Run  5    COMPLETED     |
-|   └                    Run  4    COMPLETED     |
-|   └                    Run  3    COMPLETED     |
-|   └                    Run  2    COMPLETED     |
-|   └                    Run  1    COMPLETED     |
-| Workflow6                        COMPLETED     |
-| Workflow7                        COMPLETED     |
-```
-
-The accordion has at most one expanded lineage:
-
-- opening the dropdown expands the displayed lineage;
-- expanding another lineage collapses the previous one;
-- the user may explicitly collapse the expanded lineage, leaving all collapsed
-  for the rest of that open session; and
-- closing and reopening resets expansion to the displayed lineage.
-
-This bounds the logical list to `workflow count + one lineage's run count`.
-There are never 1,000 run children beneath multiple workflow rows at once.
-
-## Header identity
-
-Keep the existing `WorkflowStatus` split-button shape:
+The `WorkflowStatus` dropdown becomes one panel with **two views** — the
+existing workflow list, and a per-lineage **run panel** that replaces the list
+when the user drills into a lineage:
 
 ```text
-┌──────────────────────────────────────────┬────┐
-│ Workflow name · Run 1042 · COMPLETED     │  ▾ │
-└──────────────────────────────────────────┴────┘
-             rename action                  open
+Workflow list view                        Run panel view
+[ Workflow8 · Run 12 · COMPLETED | ▾ ]    [ Workflow8 · Run 12 · COMPLETED | ▾ ]
+[ Workflows [search] [filters]  [x] ]     [ ‹ Workflow8   ↑ newer ↓ older [x] ]
+| Workflow2              Run 10 ▸   |     |   Draft                           |
+| Workflow3                         |     |   Run 12    COMPLETED   5 min ago |
+| Workflow4               Run 2 ▸   |     |   Run 11    COMPLETED   1 hr ago  |
+| Workflow8              Run 12 ▸   |  →  |   Run 10    STOPPED     2 hrs ago |
+| Workflow6                         |     |   Run  9    COMPLETED   yesterday |
+| Workflow7                         |     |   Run  7    COMPLETED   yesterday |
 ```
 
-- The main segment retains its current rename behavior.
-- The chevron opens the workflow/run accordion.
-- The viewed run identity is a non-interactive badge inside the main segment.
+The run panel is a **flat, homogeneous, virtualized list** with a pinned
+header row naming the lineage. There is no accordion, no flattened
+mixed-kind row model, no sticky-parent virtualizer range, and no
+deep-scroll collapse anchoring — the pinned header *is* the parent, natively,
+and “collapse” is the back button restoring the workflow list.
+
+### Why not the accordion (alternative considered)
+
+An earlier draft of this plan expanded run children in place beneath their
+workflow row (one virtualized accordion). It was rejected because:
+
+- roughly a third of its spec existed to solve problems the accordion itself
+  created: sticky-parent range inclusion, interactive-clone avoidance,
+  deep-scroll collapse anchoring, and filter/expansion interaction;
+- auto-expanding the displayed lineage on open pushed the workflow list — the
+  dropdown's most common target — below hundreds of run rows; and
+- it required a heterogeneous flattened row model and tree ARIA semantics
+  where drill-in needs two ordinary listboxes.
+
+Drill-in delivers the same navigation with a fraction of the UI machinery.
+Its only real costs — other workflows are one back-click away while browsing
+runs, and cross-lineage run comparison needs back-and-forth — are rare flows.
+
+## Header identity and triggers
+
+The `WorkflowStatus` split button gains a third segment. All three are sibling
+native buttons (per the established sibling-button rule; a clickable badge
+nested inside the rename button would be a button-in-button):
+
+```text
+┌─────────────────────────────┬──────────┬────┐
+│ Workflow name    COMPLETED  │ Run 1042 │ ▾  │
+└─────────────────────────────┴──────────┴────┘
+        rename                 run panel   workflow list
+```
+
+- **Main segment** retains its current rename behavior.
+- **Run identity badge** (`RunIdentityBadge`) shows the viewed run identity
+  and opens the dropdown **directly in the run panel** for the displayed
+  lineage. This is what keeps “switch run of the current workflow” at two
+  clicks — the most common run action.
+- **Chevron** opens the dropdown in the workflow list view, exactly as today.
+
+Badge display rules:
+
+- **Visibility: render the badge segment only when the lineage has more than
+  one addressable target** (promoted runs plus draft, i.e.
+  `runCount + (hasDraft ? 1 : 0) > 1`). A single-run lineage with no draft
+  and a draft-only lineage show **no badge at all** — the header keeps
+  today's two-segment shape, so users who never use re-run see exactly
+  today's UI. There is no disabled-badge state; the badge either navigates
+  or does not exist. This is the same visibility rule the workflow list's
+  run indicator uses below — one rule, both surfaces.
+- Resolve the label by matching `displayedViewAddress.runRef` against
+  `runSummaries` and render the matching manifest `runId`. Never derive the
+  number from array length or index.
+- A draft displays `Draft` instead of a run number (shown only when at least
+  one promoted run exists to navigate to).
 - On narrow layouts, `Run 1042` becomes `#1042`; its accessible label and
-  tooltip remain “Run 1042.”
-- A draft displays `Draft` instead of a run number.
-- The identity remains visible even when the lineage has only one run. There is
-  no standalone run selector to show or hide.
+  tooltip remain “Run 1042.” It stays a button at every tier.
 
-Resolve the badge by matching `displayedViewAddress.runRef` against
-`runSummaries` and render the matching manifest `runId`. Never derive the
-number from array length or index.
+Trigger semantics when the dropdown is already open (stateless and
+predictable):
 
-## Workflow parent rows
+- Badge click: opens/switches to the run panel for the displayed lineage; if
+  the run panel for that lineage is already showing, closes the dropdown.
+- Chevron click: opens/switches to the workflow list; if the workflow list is
+  already showing, closes the dropdown.
+- Back `‹` in the run panel always goes to the workflow list — even when the
+  user entered via the badge. The badge is a shortcut *into* the hierarchy,
+  not a separate widget; users build one spatial model.
+- Escape closes the dropdown outright from either view and restores focus to
+  the trigger that opened it.
 
-A workflow parent row represents a lineage and one default address:
+## Workflow list view
 
-- for a recent lineage, its advertised address is the latest run or draft
-  supplied by the backend;
-- for a running lineage, its primary address is its exact execution run; and
-- clicking the parent's primary button selects that address and closes the
-  dropdown, preserving today's two-click workflow switch.
+The workflow list keeps today's structure, search, and filters. A lineage row
+gains a **run indicator cell** only when the lineage is drillable — the same
+multi-target rule as the header badge:
 
-The row's run label describes that primary address:
+- `Run N ▸` for a lineage with `runCount > 1` (or one run plus a draft),
+  using the latest/default `RunSummary.runId`; or
+- `Draft ▸` for a draft with at least one historical run.
 
-- `Run N` for a promoted run, using the latest/default `RunSummary.runId`;
-- `Draft` for a draft; or
-- no run label for a lineage with no addressable definition.
+A single-run lineage with no draft, a draft-only lineage, and a lineage with
+no addressable definition show **no run indicator at all** — their rows
+render exactly as today.
 
-The disclosure button is a sibling native button, not part of the primary
-workflow button. It expands/collapses without selecting or loading the
-workflow. Show it only when the lineage has at least one selectable run address
-not already represented by the parent:
+The row's primary button keeps today's behavior: it selects the lineage's
+default address and closes the dropdown, preserving the two-click workflow
+switch. The run indicator is a **sibling native button** that drills into the
+run panel without selecting or loading the workflow.
 
-- a latest-run parent needs `runCount > 1`; and
-- a draft parent needs `runCount > 0`.
-
-This preserves the requirement to hide useless run selection for a one-run
-lineage while keeping its `Run N` identity visible.
-
-The expanded parent is visually distinct from:
+Row states that must stay visually distinct (not one `isSelected` flag):
 
 - the displayed lineage;
-- the exact selected run;
 - a running lineage; and
 - a pending run-view target.
 
-These states may overlap and must not be collapsed into one `isSelected` flag.
+## Run panel view
 
-## Run child rows
+### Pinned header row
 
-Expanded children are the lineage's `RunSummary[]` in newest-first order,
-excluding the run already represented by the parent row. A draft parent does
-not represent a run, so all promoted runs appear as children.
-
-Each child uses manifest values directly:
+The run panel's first row is pinned above the scrolling list (outside the
+scroll container, like the workflow search header today):
 
 ```text
-└  Run 1042   CODEX   COMPLETED   4 steps      5 minutes ago
+[ ‹  Workflow8            ↑ newer  ↓ older  [x] ]
+```
+
+- **Back `‹`** returns to the workflow list, restoring its previous scroll
+  position and filter state.
+- The lineage name identifies whose runs these are.
+- **Newer/older** actions navigate to the adjacent run relative to the viewed
+  run, resolving the adjacent summary to its stable `runRef` immediately
+  before sending `LOAD_RUN_VIEW`. Disable the appropriate direction at either
+  end. The draft counts as newest: “older” from the draft goes to the latest
+  run, and “newer” from the latest run goes to the draft when one exists.
+  With the badge one click away, prev/next run is two clicks total — no
+  permanent header width is spent on it.
+- Close `[x]` closes the dropdown.
+
+### Rows
+
+The list is the lineage's `RunSummary[]` in newest-first order. When the
+lineage has a draft, a **`Draft` row appears at the top** as a peer of the
+runs — draft and runs become one list, which also gives a draft-viewing user
+a way back to any run and a run-viewing user a way to the draft.
+
+Each run row uses manifest values directly:
+
+```text
+Run 1042   CODEX   COMPLETED   4 steps      5 minutes ago
 ```
 
 Recommended cells:
 
-- tree connector/indent;
 - selected/live indicator;
 - `Run ${summary.runId}`;
-- primary harness/model, with the existing mixed-harness/mixed-model treatment;
+- primary harness/model, with the existing mixed-harness/mixed-model
+  treatment;
 - execution-state badge;
 - step count; and
 - relative start/completion time.
 
-Narrow layouts retain the hierarchy but progressively reduce metadata:
+Narrow layouts progressively reduce metadata:
 
 ```text
-└  #1042   ✓
+#1042   ✓
 ```
 
-The full run number, state, harness/model, steps, and time remain in the row's
-accessible name and tooltip.
+The full run number, state, harness/model, steps, and time remain in the
+row's accessible name and tooltip.
 
-The child primary button loads this exact address:
+The row's primary button loads this exact address:
 
 ```ts
 {
@@ -178,129 +228,67 @@ The child primary button loads this exact address:
 }
 ```
 
+Selecting the **executing run's row** must reuse today's back-to-live path
+(`clearHistoryOutputs`/`clearHistoryView`), not a `LOAD_RUN_VIEW` snapshot
+fetch — the legacy `RunSelector` special-cased live-run selection the same
+way, and loading a persisted snapshot of an actively streaming run would
+present stale output.
+
 The delete action is a sibling native button, targets `summary.runRef`, and is
 unavailable for the executing or otherwise protected run.
 
-### Viewing an older run
+### Footer
 
-The parent continues to represent the lineage's default/latest address. If the
-client is viewing an older run:
+The run panel keeps the legacy selector's bulk-cleanup path as a
+**Delete all runs** footer action. It sends the existing `CLEAR_RUN_HISTORY`
+operation for the drilled lineage (all runs, not the lineage itself), is
+gated by `confirmDeleteOperations`, and follows the same protected-run
+exclusions as per-run delete (the executing run and any pending-rewind or
+in-flight-transaction run survive).
 
-- the parent is marked as the displayed lineage but not as the exact selected
-  address;
-- the matching child is the exact selected row;
-- opening the dropdown expands the lineage and scrolls that child into view;
-  and
-- the parent immediately becomes sticky if scrolling the selected child above
-  the fold requires it.
+Rows follow the existing dropdown-row conventions: non-focusable row
+container, native primary button, sibling native action buttons, grid tracks
+with the label in `minmax(0,1fr)`, and the measured usable-row-width lock
+inside the scrollable container.
 
-Do not replace the parent label with the historical selected run. Keeping the
-parent as the latest/default shortcut preserves newest-first ordering and avoids
-removing an arbitrary run from the middle of the child list.
+### Opening behavior
 
-## One flattened virtual row model
+- Entering via the badge (or via a lineage whose run is currently viewed):
+  highlight the viewed run's row and `scrollToIndex` it into view. The
+  displayed lineage's summaries are already in `uiStore.runSummaries`, so no
+  backend round trip occurs.
+- Entering another lineage via its `Run N ▸` cell: show the pinned header
+  immediately with a loading row, fire the summary-only request below, then
+  replace with run rows or a clear empty/error row.
+- Keyboard: Arrow Up/Down, Page Up/Down, Home, End traverse the run list;
+  Left (or Backspace) triggers back; Enter selects. In the workflow list,
+  Right on a row with a drill affordance drills in.
 
-Do not render a nested run list inside a workflow row. Build one flattened row
-array for the dropdown:
+## One virtualized list per view
 
-```ts
-type WorkflowNavigationRow =
-  | {
-      kind: "workflow";
-      workflowKey: WorkflowKey;
-      // Parent-row display and primary-address data.
-    }
-  | {
-      kind: "run";
-      workflowKey: WorkflowKey;
-      runRef: RunRef;
-      summary: RunSummary;
-    }
-  | {
-      kind: "runs-loading" | "runs-empty" | "runs-error";
-      workflowKey: WorkflowKey;
-    };
-```
+Both views are plain homogeneous lists over the same
+`@tanstack/react-virtual` primitive `VirtualizedDropdownList` already wraps.
+Extend it with the two capabilities the run panel needs:
 
-For every workflow, append its parent row. Append run/loading/empty/error
-children only for `expandedWorkflowKey`. Feed that single array into one
-virtualizer.
+- `scrollToIndex` for the selected/viewed row; and
+- restoring a saved scroll offset (workflow list position on back).
 
-Keys are stable identities:
+Keys are stable identities — `run:${workflowKey}:${runRef}` and
+`draft:${workflowKey}` for run-panel rows, the existing keys for workflow
+rows. Never key by index; deletion and new-run arrival change indices
+immediately.
 
-- workflow row: `workflow:${workflowKey}`;
-- run row: `run:${workflowKey}:${runRef}`; and
-- state row: `${kind}:${workflowKey}`.
-
-Never key by flattened index. Expanding/collapsing or receiving summaries
-changes indices immediately.
-
-The existing `VirtualizedDropdownList` may be extended if the sticky-row and
-scroll-anchor features remain generally useful. Otherwise create a focused
-`VirtualizedWorkflowRunList` over the same `@tanstack/react-virtual` primitive
-rather than complicating every shared dropdown.
-
-## Sticky expanded parent
-
-When the expanded parent's natural row scrolls above the list viewport and one
-of its children is still visible, pin that same keyed parent immediately below
-the fixed workflow search/filter header:
-
-```text
-[ Workflow8              Run 1209    COMPLETED | ▾ ]
-[ Workflows  [search workflows] [filters]      [x] ]
-| Workflow8              Run 1209 ▴  COMPLETED     |  sticky
-|   └                    Run 110     COMPLETED     |
-|   └                    Run 109     COMPLETED     |
-|   └                    Run 108     COMPLETED     |
-|   └                    Run 107     COMPLETED     |
-|   └                    Run 106     COMPLETED     |
-|   └                    Run 105     COMPLETED     |
-|   └                    Run 104     COMPLETED     |
-|   └                    Run 103     COMPLETED     |
-|   └                    Run 102     COMPLETED     |
-```
-
-Prefer the virtualizer's sticky-range pattern:
-
-- include the active parent index in the virtual range while its child range is
-  active;
-- render that virtual item as `position: sticky` with the correct background,
-  border, and z-index;
-- render it in normal flow/absolute positioning before it reaches the sticky
-  boundary; and
-- release it when the final child leaves and the next workflow parent reaches
-  the boundary.
-
-This keeps one semantic/focusable instance of the parent instead of rendering
-an interactive visual clone. If a clone is unavoidable, it must be
-`aria-hidden`, non-focusable, and delegate its collapse action to the canonical
-row; the preferred design avoids this duplication.
-
-### Collapsing while scrolled deep
-
-Collapsing 1,000 children can shrink the virtual content by tens of thousands of
-pixels. If state is changed without anchoring, the browser may clamp the old
-scroll offset near the end of the shorter list and appear to jump to an
-unrelated workflow.
-
-The collapse operation must:
-
-1. capture the expanded parent's stable key/index;
-2. anchor or scroll that parent to the top of the list viewport;
-3. remove its child rows; and
-4. restore focus to the now-collapsed parent disclosure button.
-
-Cover this with a deep-scroll test, not only a top-of-list collapse test.
+No sticky-row support, mixed-kind row unions, or expansion-aware anchoring is
+required.
 
 ## Expansion and summary loading
 
-The displayed lineage already has `RUN_VIEW_LOADED.runSummaries`, so its
-default expansion requires no backend round trip.
+The displayed lineage already has `RUN_VIEW_LOADED.runSummaries`, so opening
+its run panel requires no backend round trip.
 
-Expanding another lineage requires a request-correlated, summary-only message.
-Unlike hover preview, this request occurs only after an explicit disclosure
-action, so there is no hover flooding or debounce requirement.
+Drilling into another lineage requires a request-correlated, summary-only
+message. It occurs only after an explicit drill action, so there is no hover
+flooding or debounce requirement.
 
 Recommended contract:
 
@@ -323,28 +311,20 @@ interface RunSummariesLoadedMessage {
 ```
 
 The exact names may follow nearby contract conventions, but the operation must
-remain summary-only. It does not register a new client view, switch an instance,
-load a working file, read `events.jsonl`, alter the browser route, or rebaseline
-editor/output state.
+remain summary-only. It does not register a new client view, switch an
+instance, load a working file, read `events.jsonl`, alter the browser route,
+or rebaseline editor/output state.
 
 Cache successful summaries by `workflowKey` plus known
-`lastModifiedAt`/descriptor revision for the lifetime of the webview. Invalidate
-when newer lineage metadata arrives. Deduplicate repeated expansion while a
-request is in flight and correlate responses so a late result populates only
-its keyed cache.
-
-When expansion begins:
-
-- collapse the previous lineage;
-- expand the requested parent immediately;
-- render a virtualized loading child;
-- replace it with run children or a clear empty/error child; and
-- keep focus on the disclosure unless the user moves it.
+`lastModifiedAt`/descriptor revision for the lifetime of the webview.
+Invalidate when newer lineage metadata arrives. Deduplicate repeated drill-in
+while a request is in flight and correlate responses so a late result
+populates only its keyed cache.
 
 ## Recent-workflow summary metadata
 
-Collapsed rows need enough manifest metadata to show the correct run number and
-whether disclosure is useful without loading all summaries.
+Workflow list rows need enough manifest metadata to show the correct run
+number and whether a drill affordance is useful without loading all summaries.
 
 Extend recent/running workflow row contracts with lightweight fields such as:
 
@@ -369,65 +349,38 @@ unvalidated UI count.
 
 ## Search and filters
 
-The existing search and filters continue to target workflow parent rows. Run
-children appear only beneath an expanded workflow that survives the current
-workflow filter.
+The existing search and filters belong to the workflow list view only. The
+run panel has no search in the first delivery; scrolling is the required
+navigation for a 1,000-run lineage. Exact run-ID search or type-to-jump may
+be added later, but must filter or navigate the cached `RunSummary[]` by
+`runId` while still selecting by `runRef`.
 
-- If filtering hides the expanded workflow, remove its children from the flat
-  row model but retain `expandedWorkflowKey` for the current open session.
-- If it becomes visible again, restore its expansion from cached summaries.
-- Search/filter changes must recompute the active sticky parent index from
-  stable keys.
-- Clearing filters does not reorder runs; summaries remain newest first.
-
-Scrolling is the required first-delivery navigation for a lineage with 1,000
-runs. Exact run-ID search or type-to-jump may be added later, but must filter or
-navigate the cached `RunSummary[]` by `runId` while still selecting by `runRef`.
-
-## Previous and next navigation
-
-Preserve previous/newer and next/older run navigation without spending
-permanent header width:
-
-- expose newer/older actions on the expanded/sticky workflow parent;
-- support Arrow Up/Down, Page Up/Down, Home, and End across the flattened list;
-- disable the appropriate direction at either end; and
-- resolve an adjacent summary to its stable `runRef` immediately before sending
-  `LOAD_RUN_VIEW`.
-
-Deleting a run may change array positions, but it must not change displayed
-numbers or leave a callback holding a stale index.
+- Drilling in does not reset workflow search/filter state; back restores the
+  workflow list exactly as it was, including scroll position.
+- Filter state interacts with nothing in the run panel — the two views own
+  disjoint state, which is most of the reason this design is simpler.
 
 ## Scaling to 1,000+ runs
 
 ### Rendering
 
-At 1,000 summaries, keep the lightweight summary array in memory but mount only
-visible rows plus overscan. Definitions and `events.jsonl` are not loaded until
-a run is selected.
-
-Add these virtualizer capabilities:
-
-- selected-row `scrollToIndex`;
-- active-sticky-parent range inclusion;
-- keyboard-active row support without mounting all off-screen rows;
-- measured workflow/run row heights; and
-- stable-key scroll anchoring across expand/collapse.
-
-The workflow search/filter header remains outside the scroll container. Only
-the flattened workflow/run rows scroll.
+At 1,000 summaries, keep the lightweight summary array in memory but mount
+only visible rows plus overscan. Definitions and `events.jsonl` are not loaded
+until a run is selected. The run panel is a flat list, so this is ordinary
+virtualization — no novel capabilities beyond `scrollToIndex` and offset
+restore.
 
 ### Payload and storage measurement
 
-Keep complete summary arrays for the first delivery and measure with 1,000- and
-10,000-run fixtures. A thousand small manifest-only records is an acceptable
-initial target; the likely costs are manifest scanning and serialization, not
-React row count after virtualization.
+Keep complete summary arrays for the first delivery and measure with 1,000-
+and 10,000-run fixtures. A thousand small manifest-only records is an
+acceptable initial target; the likely costs are manifest scanning and
+serialization, not React row count after virtualization.
 
 Targets:
 
-- opening with displayed-lineage summaries already cached becomes interactive
-  within 100 ms;
+- opening the run panel with displayed-lineage summaries already cached
+  becomes interactive within 100 ms;
 - only visible rows plus overscan mount for 1,000 runs;
 - switching a run does not regress existing run-view load time by more than
   10%; and
@@ -444,45 +397,63 @@ Remove run navigation from `OutputSectionHeader` rather than making it visible
 on both tabs. The Terminal tab shows sessions owned by the executing workflow
 run and does not change merely because the client views a historical run.
 
-When the terminal's execution address differs from `displayedViewAddress`, show
-the execution identity in the terminal context:
+When the terminal's execution address differs from `displayedViewAddress`,
+show the execution identity in the terminal context:
 
 ```text
 Terminal · Live Run 1042
 ```
 
-`WorkflowStatus` continues to show the viewed identity, for example `Run 1031`.
-The two labels make the split explicit.
+`WorkflowStatus` continues to show the viewed identity, for example
+`Run 1031`. The two labels make the split explicit.
 
 ## Component and state changes
+
+### Step 0: unify the running/recent sections
+
+Today the dropdown renders two differently keyed sections —
+`RunningWorkflowItem` keyed by instance UUID, `RecentWorkflows` keyed by
+`workflowKey` — plus the `syntheticActiveWorkflow` special case in
+`WorkflowStatus`. Compose these into **one lineage-level navigation model**
+(one row per lineage, running state as row state, no lineage duplicated
+across sections) before building the run panel. This is a prerequisite
+refactor for the drill-in design, not a side effect: the run indicator cell,
+drill affordance, and view-switch semantics all assume one row per lineage.
+
+**Decided layout: one unified list, not two visual sections.** Running
+lineages sort to the top with their live indicators and keep their inline
+pause/resume/stop controls on the row. The bounded-scroll “Running
+Workflows” section, its dedicated scroll container, and the
+section-conditional search/close-button plumbing are removed along with the
+section itself.
 
 ### `WorkflowStatus.tsx`
 
 - Read `runSummaries`, `displayedViewAddress`, `executionRunRef`, and pending
   run-view state from `uiStore`.
-- Resolve and render the actual manifest `runId`.
-- Own ephemeral `expandedWorkflowKey`, initialized from the displayed lineage
-  on each open.
-- Compose running and recent workflow data into one lineage-level navigation
-  model without duplicating a lineage in both sections.
+- Resolve and render the actual manifest `runId` in the badge.
+- Own ephemeral dropdown view state:
+  `dropdownView: "workflows" | "runs"` plus `drilledWorkflowKey`, reset on
+  close. This state is per-open-session and never persisted.
 - Keep request correlation and loading feedback through
   `requestRunViewLoad`; do not create another run-selection path.
-- Retain the responsive single-mount behavior in `Header.tsx`.
+- Retain the responsive single-mount behavior in `Header.tsx` (one instance
+  gated by `useMediaQuery`, never per-tier hidden copies).
 
 ### Workflow/run navigation components
 
 Replace the trigger-oriented legacy `RunSelector` with focused pieces:
 
-- `RunIdentityBadge` — non-interactive header identity;
-- `WorkflowRunAccordion` — flattened row construction, expansion, focus, and
-  sticky-parent coordination;
-- `WorkflowNavigationRow` — parent presentation and sibling disclosure/actions;
-- `RunSummaryRow` — child presentation keyed by `runRef`; and
+- `RunIdentityBadge` — the header's third split-button segment; displays
+  viewed identity and opens the run panel;
+- `RunPanel` — pinned header row plus the virtualized run/draft list for one
+  lineage;
+- `RunSummaryRow` — run-row presentation keyed by `runRef`; and
 - `useRunSummaryCache` (or equivalent non-persisted store) — summary-only
   loading, request correlation, deduplication, and invalidation.
 
-Extract shared harness, state, count, and time cells/helpers where
-`RecentWorkflows` and run rows genuinely share semantics.
+Extract shared harness, state, count, and time cells/helpers where the
+workflow rows and run rows genuinely share semantics.
 
 Do not preserve the legacy count/index component API under a new wrapper.
 Components accept `RunSummary[]` and stable addresses.
@@ -500,8 +471,9 @@ Components accept `RunSummary[]` and stable addresses.
 
 ### `uiStore.ts`
 
-`runSummaries` and `displayedViewAddress` remain the displayed lineage's sources
-of truth. After all callers migrate, remove legacy derived fields if unused:
+`runSummaries` and `displayedViewAddress` remain the displayed lineage's
+sources of truth. After all callers migrate, remove legacy derived fields if
+unused:
 
 - `availableRuns`;
 - `viewingRunIndex`;
@@ -511,46 +483,46 @@ of truth. After all callers migrate, remove legacy derived fields if unused:
 If another consumer needs a position, derive it from `runRef` at presentation
 time. Never persist or send the position across the webview boundary.
 
-Expanded key, keyboard-active row, and per-lineage scroll positions for the
-current open session are ephemeral. The summary cache is non-persisted and
-keyed by lineage identity/revision; it is not dashboard selection state.
+Dropdown view state, drilled lineage, keyboard-active row, and the workflow
+list's saved scroll offset are ephemeral per-open-session state. The summary
+cache is non-persisted and keyed by lineage identity/revision; it is not
+dashboard selection state.
 
 ## Accessibility and responsive behavior
 
-- Parent workflow primary actions, disclosure buttons, and secondary actions
-  are sibling native buttons.
-- Disclosure uses `aria-expanded` and `aria-controls` for the logical child
-  group.
-- Run children expose their tree level/relationship using an accessible tree or
-  grouped-list pattern selected during implementation; do not rely on the
-  visual `└` connector alone.
-- The sticky parent remains the same semantic row, so focus and expanded state
-  are not duplicated.
-- Opening focuses or scrolls to the exact selected address.
-- Arrow keys traverse the flattened visible rows; Left collapses an expanded
-  parent or returns from a child to its parent, and Right expands a parent.
-- Escape closes the dropdown and restores focus to the header trigger.
+- All triggers and row actions are sibling native buttons; no row is a
+  focusable pseudo-button wrapping real buttons.
+- Each view is an ordinary listbox/grouped list. No tree role is needed —
+  the run panel's pinned header (`‹ Workflow8`) carries the hierarchy.
+- The badge's accessible name states both identity and action, e.g.
+  “Run 1042 — browse runs of Workflow8.”
+- Switching views moves focus predictably: drilling in focuses the run list
+  (or the viewed run's row); back focuses the row/affordance that initiated
+  the drill, or the workflow list when entered via the badge.
+- Escape closes the dropdown and restores focus to the opening trigger.
 - High-contrast selection/hover uses `fp-dropdown-row` and
   `fp-dropdown-row-selected`.
 
 The dropdown remains single-column and full-width/bottom-bounded on mobile.
-Run children use compact indentation and chip-style metadata, so no alternate
-mobile navigation model is necessary.
+Drill-in is inherently mobile-friendly — a full-panel view swap with a back
+button — so no alternate mobile navigation model is necessary.
 
 ## Deletion and live-run behavior
 
-- Delete by `{ workflowKey, runRef }`, never a flattened or summary index.
-- Keep inline confirmation inside the run child using sibling native buttons.
+- Delete by `{ workflowKey, runRef }`, never a list index.
+- Keep inline confirmation inside the run row using sibling native buttons.
 - An executing run shows its live indicator and cannot be deleted.
-- If the parent-represented latest run is deleted, refresh the parent address,
-  `primaryRunId`, count, and children from the authoritative response.
+- If the deleted run was the lineage's latest, refresh the workflow row's
+  `primaryAddress`, `primaryRunId`, count, and the run panel's rows from the
+  authoritative response.
 - If the viewed run is deleted by this or another client, retain the existing
   deterministic fallback (draft, newest remaining run, or unload lineage).
-- If a new run appears while expanded, merge/replace summaries by `runRef`.
-  Do not move keyboard focus merely because a newer row was inserted.
-- A pending `LOAD_RUN_VIEW` highlights its target separately from the currently
-  displayed address and ignores stale responses through the existing request
-  ID.
+- If a new run appears while the panel is open, merge/replace summaries by
+  `runRef`. Do not move keyboard focus merely because a newer row was
+  inserted.
+- A pending `LOAD_RUN_VIEW` highlights its target separately from the
+  currently displayed address and ignores stale responses through the
+  existing request ID.
 
 ## Test and acceptance matrix
 
@@ -558,86 +530,108 @@ mobile navigation model is necessary.
 
 - Runs with IDs `[1042, 1040, 7]` display those exact numbers after deletion;
   no UI substitutes `3`, `2`, or `1`.
-- Parent rows display their actual latest/default `runId`; historical selected
-  children retain their exact highlight.
-- Selecting, deleting, and adjacent-navigating a child sends its exact
+- Workflow rows display their actual latest/default `runId`; the viewed run's
+  row retains its exact highlight in the run panel.
+- Selecting, deleting, and newer/older-navigating a run sends its exact
   `runRef`.
 - Draft, single-run, multiple-run, executing-run, historical-run, and pending
-  run-view states render the correct identity and affordance.
+  run-view states render the correct identity and affordance (including the
+  fully hidden badge/indicator for single-run and draft-only lineages).
 - Switching runs preserves coherent definition/settings/output snapshots and
   existing stale-response protection.
 
-### Accordion interaction
+### Drill-in interaction
 
-- Opening expands the displayed lineage and collapses all others.
-- Expanding another lineage collapses the prior lineage and performs at most one
-  summary request.
-- Clicking a workflow primary action still switches it directly rather than
-  toggling expansion.
-- A one-run lineage has no disclosure; its run identity remains readable.
-- A draft with historical runs can expand those runs.
-- Closing and reopening resets expansion to the newly displayed lineage.
+- Badge click opens the run panel for the displayed lineage with the viewed
+  run highlighted and scrolled into view, with no summary request.
+- Chevron click opens the workflow list exactly as today.
+- Drilling into another lineage performs at most one summary request and
+  shows loading/empty/error rows correctly.
+- Back restores the workflow list's scroll position and filter state.
+- Clicking a workflow row's primary action still switches to it directly;
+  clicking its run indicator drills in without loading it.
+- A one-run lineage (no draft) shows no run indicator in the list and no
+  header badge — its row and header are pixel-identical to the pre-feature
+  UI. A draft with historical runs can drill in and shows the draft row at
+  the top of the panel.
+- Trigger toggle semantics: badge closes an open run panel, chevron closes an
+  open workflow list, and each switches views when the other view is showing.
+- Closing and reopening resets to the entry view of whichever trigger was
+  used.
+- The unified workflow list sorts running lineages to the top with working
+  inline pause/resume/stop controls; no lineage appears twice.
+- Selecting the executing run's row returns to live output without a
+  `LOAD_RUN_VIEW` round trip.
+- Newer/older traverses draft ↔ latest run correctly when a draft exists.
+- Delete-all-runs confirms (when `confirmDeleteOperations` is on), excludes
+  protected runs, and refreshes the panel and workflow row metadata from the
+  authoritative response.
 
-### Scale and sticky behavior
+### Scale
 
 - A 1,000-run fixture mounts only visible rows plus overscan.
-- Opening on a selected run near the beginning, middle, or end scrolls it into
+- Opening on a viewed run near the beginning, middle, or end scrolls it into
   view.
-- While any child is in the scrolling range, its parent remains sticky below
-  the search/filter header and its collapse button works.
-- The sticky parent yields when the final child leaves and the next workflow
-  reaches it.
-- Collapsing after scrolling hundreds of children anchors to the parent instead
-  of jumping to an unrelated workflow or blank space.
-- Expanding/collapsing and search/filter changes retain stable keys and do not
+- Deleting rows and receiving new summaries retain stable keys and do not
   leak observers, listeners, or virtualizer measurements.
 
 ### Terminal clarity
 
 - Viewing historical Run 1031 while terminals belong to live Run 1042 shows
   both identities in their respective contexts.
-- Switching the viewed run does not relabel or rebind the active terminal as if
-  it belonged to the historical run.
+- Switching the viewed run does not relabel or rebind the active terminal as
+  if it belonged to the historical run.
 
 ### Responsive/accessibility
 
-- Narrow layouts render `#1042`, compact child rows, and one
-  `WorkflowStatus` instance.
-- Mouse, keyboard, and touch can expand/collapse and select exact runs without
-  hover-only behavior.
-- Keyboard users can reach a virtualized off-screen selected child, return to
-  its sticky parent, collapse it, and close with Escape.
-- Screen readers distinguish parent workflow rows, expanded state, child runs,
-  exact selection, pending selection, and live execution.
+- Narrow layouts render `#1042`, compact run rows, and one `WorkflowStatus`
+  instance.
+- Mouse, keyboard, and touch can drill in, go back, and select exact runs
+  without hover-only behavior.
+- Keyboard users can reach a virtualized off-screen viewed run, navigate back
+  to the workflow list, and close with Escape, with focus restored at each
+  step.
+- Screen readers distinguish workflow rows, the run panel's lineage context,
+  run rows, the draft row, exact selection, pending selection, and live
+  execution.
 
 ## Delivery sequence
 
-1. Add the lightweight parent-row run metadata and summary-only request pair,
-   with repository/router isolation tests.
-2. Add `RunSummaryRow` and the flattened virtual row model, including
-   selected-row scrolling and 1,000-run coverage.
-3. Implement one-expanded-lineage state, lazy summary loading, and exact stable
-   address selection in `WorkflowStatus`.
-4. Implement sticky-parent range behavior and deep-scroll collapse anchoring,
-   then cover mouse, keyboard, and touch interaction.
-5. Add the header run identity and compact responsive child presentation.
-6. Remove the legacy selector from `OutputSectionHeader`/`OutputSection`, delete
-   its count/index props and popup-height plumbing, and remove obsolete store
-   fields after a caller audit.
+1. Unify the running/recent dropdown sections into one lineage-keyed row
+   model rendered as a single list (step 0), preserving current
+   switch/pause/resume/stop behavior on running rows.
+2. Add the lightweight workflow-row run metadata and summary-only request
+   pair, with repository/router isolation tests.
+3. Add `RunSummaryRow`, `RunPanel`, and the `scrollToIndex`/offset-restore
+   virtualizer capabilities, including 1,000-run coverage.
+4. Implement the two-view dropdown state, lazy summary loading, drill/back
+   navigation, and exact stable-address selection in `WorkflowStatus`.
+5. Add the three-segment header with `RunIdentityBadge` as a run-panel
+   trigger, including narrow `#1042` and the hidden state for single-target
+   lineages (header collapses back to today's two segments).
+6. Remove the legacy selector from `OutputSectionHeader`/`OutputSection`,
+   delete its count/index props and popup-height plumbing, and remove obsolete
+   store fields after a caller audit.
 7. Add terminal execution-run labeling when viewed and executing addresses
    differ.
-8. Run compile, typecheck, lint, formatting, and the full webview/extension test
-   suites; manually exercise 1, 2, 1,000, and gapped run IDs across responsive
-   tiers.
+8. Run compile, typecheck, lint, formatting, and the full webview/extension
+   test suites; manually exercise 1, 2, 1,000, and gapped run IDs across
+   responsive tiers.
 9. Measure manifest-summary generation and payload/application with 1,000 and
    10,000 runs. Add cursor pagination only if the targets above fail.
 
 ## Decision summary
 
-Use one single-column, flattened, virtualized accordion. The displayed lineage
-expands automatically; expanding another lineage collapses it. With 1,000
-runs, only visible children mount, and the expanded workflow parent stays
-sticky so the user can always collapse the section before continuing through
-the workflow list. This avoids long cross-column pointer movement, hover
-flooding, nested dropdowns, and a separate mobile navigation model while
-keeping workflow and run identities in one coherent hierarchy.
+Use one single-column dropdown with two views: the existing workflow list and
+a per-lineage run panel reached by drilling in. The header's run identity
+badge is a third split-button segment that opens the run panel for the viewed
+lineage directly, keeping same-workflow run switching at two clicks; the
+chevron keeps the workflow list at two clicks; back returns from runs to
+workflows with scroll and filters intact. Both views are plain flat
+virtualized lists, so 1,000-run lineages need only ordinary virtualization
+plus `scrollToIndex` — no sticky parents, mixed-kind row models, tree
+semantics, or collapse anchoring. Run navigation UI is progressive: the badge
+and row indicators appear only when a lineage has more than one addressable
+target, so single-run workflows — and users who never re-run — keep exactly
+today's header and dropdown. Workflow and run identities stay stable
+(`workflowKey`/`runRef`/manifest `runId`) end to end.

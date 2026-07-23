@@ -722,6 +722,158 @@ describe("hydrateLiveRunHistory", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Snapshot replay structural sharing
+// ---------------------------------------------------------------------------
+
+describe("snapshot replay structural sharing", () => {
+  it("preserves the steps array identity when a replayed loadWorkflow delivers identical steps", () => {
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [
+        makePrompt({ prompt: "Step 1" }),
+        makePrompt({ prompt: "Step 2" }),
+      ],
+    });
+    const firstSteps = store().steps;
+
+    // Same content, freshly parsed objects — as a RUN_VIEW_LOADED replay sends.
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [
+        makePrompt({ prompt: "Step 1" }),
+        makePrompt({ prompt: "Step 2" }),
+      ],
+    });
+
+    expect(store().steps).toBe(firstSteps);
+  });
+
+  it("reuses unchanged step objects when only one step changed", () => {
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [
+        makePrompt({ prompt: "Step 1" }),
+        makePrompt({ prompt: "Step 2" }),
+      ],
+    });
+    const firstSteps = store().steps;
+
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [
+        makePrompt({ prompt: "Step 1" }),
+        makePrompt({ prompt: "Step 2 (edited)" }),
+      ],
+    });
+
+    expect(store().steps).not.toBe(firstSteps);
+    expect(store().steps[0]).toBe(firstSteps[0]);
+    expect((store().steps[1] as any).prompt).toBe("Step 2 (edited)");
+  });
+
+  it("keeps live output and runtime state on a preserveLiveOutput replay", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ timestampMs: 100 }),
+      timestampMs: 100,
+      sequence: 1,
+    });
+    const entries = store().liveOrderedEntries;
+    expect(entries).toHaveLength(1);
+    const sequence = store().liveSequence;
+
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt()],
+      preserveLiveOutput: true,
+    });
+
+    expect(store().liveOrderedEntries).toBe(entries);
+    expect(store().liveSequence).toBe(sequence);
+  });
+
+  it("still clears live output on a load without preserveLiveOutput", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ timestampMs: 100 }),
+      timestampMs: 100,
+      sequence: 1,
+    });
+
+    store().loadWorkflow({ fileName: "other.yaml", steps: [makePrompt()] });
+
+    expect(store().liveOrderedEntries).toEqual([]);
+    expect(store().liveSequence).toBe(0);
+  });
+
+  it("preserves liveOrderedEntries identity when hydrateLiveRunHistory re-delivers the same timeline", () => {
+    const makeHistory = (): WorkflowOutputHistory => ({
+      schemaVersion: "1.1.0",
+      workflowId: "wf-rehydrate",
+      runId: 3,
+      startedAt: 100,
+      executionState: EXECUTION_STATES.RUNNING,
+      promptOutputs: {},
+      orderedEntries: [
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          cliOutput: makeOutput({ response: "persisted", timestampMs: 120 }),
+          timestampMs: 120,
+          sequence: 4,
+        },
+      ],
+    });
+
+    store().hydrateLiveRunHistory(makeHistory());
+    const entries = store().liveOrderedEntries;
+    expect(entries).toHaveLength(1);
+
+    store().hydrateLiveRunHistory(makeHistory());
+
+    expect(store().liveOrderedEntries).toBe(entries);
+  });
+
+  it("preserves historyOutputs identity when loadHistoryRun re-delivers the same run", () => {
+    const makeHistory = (): WorkflowOutputHistory => ({
+      schemaVersion: "1.1.0",
+      workflowId: "wf-history-replay",
+      runId: 3,
+      startedAt: 100,
+      completedAt: 150,
+      executionState: EXECUTION_STATES.COMPLETED,
+      promptOutputs: {},
+      orderedEntries: [
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          attemptIndex: 0,
+          cliOutput: makeOutput({ response: "done", timestampMs: 120 }),
+          timestampMs: 120,
+          sequence: 2,
+        },
+      ],
+    });
+
+    store().loadHistoryRun(makeHistory(), 4, 1);
+    const historyOutputs = store().historyOutputs;
+    expect(historyOutputs).not.toBeNull();
+
+    store().loadHistoryRun(makeHistory(), 4, 1);
+
+    expect(store().historyOutputs).toBe(historyOutputs);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Computed selectors
 // ---------------------------------------------------------------------------
 

@@ -1097,6 +1097,112 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
   });
 });
 
+describe("RUN_VIEW_LOADED same-view replay", () => {
+  it("preserves step and live-entry identities when an identical snapshot is replayed", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-replay" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-23T09-00-00-000Z" as never,
+    };
+    const makeSnapshot = () => ({
+      address,
+      workingFile: {
+        workflowName: "Replayed run",
+        definitionRevision: 2,
+        steps: [makePrompt("Step 1"), makePrompt("Step 2")],
+        _runtime: {
+          executionState: EXECUTION_STATES.RUNNING,
+          currentIndex: 0,
+        },
+      },
+      workflowProperties: { model: "some-model" },
+      runSummaries: [],
+      executionRunRef: address.runRef,
+      history: {
+        runId: 1,
+        startedAt: 1000,
+        executionState: EXECUTION_STATES.RUNNING,
+        orderedEntries: [
+          {
+            kind: OUTPUT_HISTORY_KINDS.CLI,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            runIndex: 0,
+            attemptIndex: 0,
+            cliOutput: { response: "persisted output", timestampMs: 1100 },
+            timestampMs: 1100,
+            sequence: 0,
+          },
+        ],
+        promptOutputs: {},
+      },
+      descriptorRevision: 1,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, makeSnapshot());
+    });
+
+    const before = useWorkflowStore.getState();
+    const stepsBefore = before.steps;
+    const entriesBefore = before.liveOrderedEntries;
+    expect(stepsBefore).toHaveLength(2);
+    expect(entriesBefore).toHaveLength(1);
+
+    // A property edit's run-view invalidation used to replay this exact
+    // snapshot. The replay must not hand the output pane fresh identities —
+    // that's what made rendered rows and diffs visibly redraw.
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, makeSnapshot());
+    });
+
+    const after = useWorkflowStore.getState();
+    expect(after.steps).toBe(stepsBefore);
+    expect(after.liveOrderedEntries).toBe(entriesBefore);
+  });
+
+  it("still clears runtime state when the snapshot carries a new definition revision", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-replay-rev" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-23T10-00-00-000Z" as never,
+    };
+    const makeSnapshot = (definitionRevision: number, prompt: string) => ({
+      address,
+      workingFile: {
+        workflowName: "Edited run",
+        definitionRevision,
+        steps: [makePrompt(prompt)],
+      },
+      workflowProperties: {},
+      runSummaries: [],
+      history: {
+        runId: 1,
+        startedAt: 1000,
+        completedAt: 2000,
+        executionState: EXECUTION_STATES.COMPLETED,
+        orderedEntries: [],
+        promptOutputs: {},
+      },
+      descriptorRevision: 1,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, makeSnapshot(1, "original"));
+    });
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, makeSnapshot(2, "edited"));
+    });
+
+    const workflow = useWorkflowStore.getState();
+    expect(
+      workflow.steps.map((step) => ("prompt" in step ? step.prompt : undefined))
+    ).toEqual(["edited"]);
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(2);
+  });
+});
+
 describe("run view revision snapshots", () => {
   it("ignores a late requestless snapshot that would regress an appended run", () => {
     renderHook(() => useMessageHandler());

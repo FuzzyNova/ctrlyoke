@@ -2327,7 +2327,8 @@ export class WorkflowOrchestrator {
   private async applyRunAddressedMutation(
     runAddress: WorkflowRunAddress,
     liveEdit: (instance: WorkflowInstance) => Promise<void>,
-    staticEdit: (workspaceRoot: string) => Promise<void>
+    staticEdit: (workspaceRoot: string) => Promise<void>,
+    invalidation: "snapshot" | "properties" = "snapshot"
   ): Promise<void> {
     const live = this.findResidentInstanceForRun(
       runAddress.workflowKey,
@@ -2338,7 +2339,14 @@ export class WorkflowOrchestrator {
     } else {
       await staticEdit(this.requireWorkspaceRoot());
     }
-    await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
+    if (invalidation === "properties") {
+      await this.invalidateRunViewProperties(
+        runAddress.workflowKey,
+        runAddress.runRef
+      );
+    } else {
+      await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
+    }
   }
 
   private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {
@@ -2527,7 +2535,10 @@ export class WorkflowOrchestrator {
           workingFile: written.workingFile,
           appliedKeys: written.appliedKeys,
         };
-      }
+      },
+      // Property-only writes leave steps and output untouched, so viewers get
+      // a lightweight properties push instead of a full snapshot replay.
+      "properties"
     );
     return result;
   }
@@ -3423,6 +3434,56 @@ export class WorkflowOrchestrator {
         ),
       }
     );
+  }
+
+  /**
+   * Push refreshed workflow properties — not a full run snapshot — to every
+   * client viewing the changed run. Property-only writes must not replay
+   * `RUN_VIEW_LOADED`: the webview treats that snapshot as a workflow load and
+   * rebuilds its entire output model (steps, live timeline, history) with
+   * fresh identities, visibly redrawing already-rendered output rows. The
+   * bumped `definitionRevision` still reaches viewers via the router's
+   * follow-up `publishViewIdentity()`.
+   */
+  private async invalidateRunViewProperties(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<void> {
+    const targets = [...this.getViewAddressRegistry().entries()].filter(
+      ([, address]) =>
+        address?.kind === "run" &&
+        address.workflowKey === workflowKey &&
+        address.runRef === runRef
+    );
+    if (targets.length === 0) return;
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) return;
+    let workingFile: WorkingFile;
+    try {
+      const filePath = this.resolveAddressFilePath(workspaceRoot, {
+        workflowKey,
+        kind: "run",
+        runRef,
+      });
+      workingFile = JSON.parse(
+        await fs.promises.readFile(filePath, "utf-8")
+      ) as WorkingFile;
+    } catch (error) {
+      Log.warn(
+        `[WorkflowOrchestrator] Failed to read run file for properties invalidation: ${getErrorMessage(error)}`
+      );
+      return;
+    }
+    const { prompt, steps, finalStep, ...workflowProperties } = workingFile;
+    void prompt;
+    void steps;
+    void finalStep;
+    for (const [clientId] of targets) {
+      this.getViewMessageSinks().get(clientId)?.({
+        type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
+        workflowProperties,
+      });
+    }
   }
 
   /** Refresh every connected client viewing the changed stable run identity. */

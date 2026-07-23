@@ -43,6 +43,7 @@ import type {
 import type { UndoResult } from "../types/messages";
 import { useUiStore } from "./uiStore";
 import { WebviewLog } from "@utils/logger";
+import { preserveReferences } from "@utils/structuralSharing";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
@@ -282,6 +283,14 @@ interface WorkflowActions {
     finalStepStatus?: StepStatus | null;
     finalStepLoopCount?: number;
     finalStepPhase?: FinalStepPhase | null;
+    /**
+     * Same-view snapshot replay: keep live output, streaming/runtime state,
+     * and the zundo history instead of clearing them. Only pass true when the
+     * incoming snapshot re-describes the workflow the store already holds
+     * (same address, same definition revision) — for a genuine workflow/run
+     * switch the runtime state belongs to the previous view and must clear.
+     */
+    preserveLiveOutput?: boolean;
   }) => void;
   resetWorkflow: () => void;
   clearAllRuntimeState: () => void;
@@ -829,6 +838,7 @@ export const useWorkflowStore = create<
         finalStepStatus = null,
         finalStepLoopCount = 0,
         finalStepPhase = null,
+        preserveLiveOutput = false,
       }) => {
         // Apply status from results to prompts
         const promptsWithStatus = steps.map((prompt, index) => ({
@@ -837,31 +847,61 @@ export const useWorkflowStore = create<
         })) as WorkflowStep[];
 
         withUndoPause(() =>
-          set({
+          set((state) => ({
             fileName,
             workflowName: workflowName ?? null,
-            steps: promptsWithStatus,
+            // Structural sharing: snapshot replays of an unchanged definition
+            // must not hand the output pane fresh step identities — that alone
+            // rebuilds every rendered row (see utils/structuralSharing.ts).
+            steps: preserveReferences(state.steps, promptsWithStatus),
             executionState,
             currentStep,
             totalSteps: steps.length,
-            finalStep,
+            finalStep: preserveReferences(state.finalStep, finalStep),
             finalStepStatus,
             finalStepLoopCount,
             finalStepPhase,
-            // Clear runtime state on new workflow
-            liveOrderedEntries: [],
-            liveSequence: 0,
-            retryStates: {},
-            streamingChunks: {},
-            finalStepStreamingChunks: {},
-            liveContextWindow: {},
-            workspaceSnapshots: {},
-            finalStepWorkspaceSnapshots: {},
-            undoResults: {},
-            undoRecords: {},
-          })
+            // Clear runtime state on new workflow. `preserveReferences`
+            // keeps the existing (already-empty) references stable so a
+            // replayed clear is identity-neutral.
+            ...(preserveLiveOutput
+              ? {}
+              : {
+                  liveOrderedEntries: preserveReferences(
+                    state.liveOrderedEntries,
+                    []
+                  ) as OrderedHistoryEntry[],
+                  liveSequence: 0,
+                  retryStates: preserveReferences(state.retryStates, {}),
+                  streamingChunks: preserveReferences(
+                    state.streamingChunks,
+                    {}
+                  ),
+                  finalStepStreamingChunks: preserveReferences(
+                    state.finalStepStreamingChunks,
+                    {}
+                  ),
+                  liveContextWindow: preserveReferences(
+                    state.liveContextWindow,
+                    {}
+                  ),
+                  workspaceSnapshots: preserveReferences(
+                    state.workspaceSnapshots,
+                    {}
+                  ),
+                  finalStepWorkspaceSnapshots: preserveReferences(
+                    state.finalStepWorkspaceSnapshots,
+                    {}
+                  ),
+                  undoResults: preserveReferences(state.undoResults, {}),
+                  undoRecords: preserveReferences(state.undoRecords, {}),
+                }),
+          }))
         );
-        useWorkflowStore.temporal.getState().clear();
+        // A same-view replay is not a new editing epoch — keep undo history.
+        if (!preserveLiveOutput) {
+          useWorkflowStore.temporal.getState().clear();
+        }
       },
 
       // ============================================================================
@@ -870,7 +910,7 @@ export const useWorkflowStore = create<
 
       loadHistoryRun: (history, availableRuns, runIndex) =>
         withUndoPause(() =>
-          set(() => {
+          set((state) => {
             // Update uiStore for history view state
             useUiStore.getState().setHistoryView(runIndex, availableRuns);
 
@@ -879,8 +919,10 @@ export const useWorkflowStore = create<
             // a previous run or a different history selection doesn't bleed into
             // this run's view. History data in historyOutputs is the sole source
             // of truth for undo state while in history mode.
+            // Structural sharing keeps identities stable when a replayed
+            // snapshot re-delivers the history the store already holds.
             return {
-              historyOutputs: {
+              historyOutputs: preserveReferences(state.historyOutputs, {
                 orderedEntries: history.orderedEntries,
                 promptOutputs: history.promptOutputs,
                 finalStepOutputs: history.finalStepOutputs,
@@ -890,10 +932,16 @@ export const useWorkflowStore = create<
                   completedAt: history.completedAt,
                   executionState: history.executionState,
                 },
-              },
-              undoRecords: {},
-              workspaceSnapshots: {},
-              finalStepWorkspaceSnapshots: {},
+              }),
+              undoRecords: preserveReferences(state.undoRecords, {}),
+              workspaceSnapshots: preserveReferences(
+                state.workspaceSnapshots,
+                {}
+              ),
+              finalStepWorkspaceSnapshots: preserveReferences(
+                state.finalStepWorkspaceSnapshots,
+                {}
+              ),
             };
           })
         ),
@@ -910,21 +958,30 @@ export const useWorkflowStore = create<
               // The executing run must remain in live mode so buffered and
               // future events can update it. Its durable timeline is the
               // baseline; any already-replayed in-memory entries overlay it.
+              // Structural sharing keeps entry/record identities stable when
+              // the rehydrated timeline matches what the store already holds,
+              // so the output pane doesn't redraw unchanged rows.
               historyOutputs: null,
-              liveOrderedEntries: overlay.entries,
+              liveOrderedEntries: preserveReferences(
+                state.liveOrderedEntries,
+                overlay.entries
+              ),
               liveSequence: overlay.nextSequence,
-              workspaceSnapshots: {
+              workspaceSnapshots: preserveReferences(state.workspaceSnapshots, {
                 ...projected.workspaceSnapshots,
                 ...state.workspaceSnapshots,
-              },
-              finalStepWorkspaceSnapshots: {
-                ...projected.finalStepWorkspaceSnapshots,
-                ...state.finalStepWorkspaceSnapshots,
-              },
-              undoRecords: {
+              }),
+              finalStepWorkspaceSnapshots: preserveReferences(
+                state.finalStepWorkspaceSnapshots,
+                {
+                  ...projected.finalStepWorkspaceSnapshots,
+                  ...state.finalStepWorkspaceSnapshots,
+                }
+              ),
+              undoRecords: preserveReferences(state.undoRecords, {
                 ...projected.undoRecords,
                 ...state.undoRecords,
-              },
+              }),
             };
           })
         ),

@@ -1985,6 +1985,71 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 
+  test("run-addressed property update pushes properties to run viewers instead of a full snapshot", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prop-invalidate-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let snapshotInvalidations = 0;
+      internal.invalidateRunViews = async () => {
+        snapshotInvalidations += 1;
+      };
+      const received: any[] = [];
+      internal.viewMessageSinks = new Map([
+        [PANEL_CLIENT_ID, (message: unknown) => received.push(message)],
+      ]);
+      const descriptor = await internal.lineageRepository.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+
+      const result = await orchestrator.updateWorkingFileProperties(
+        {
+          address: {
+            workflowKey: run.workflowKey,
+            kind: "run",
+            runRef: run.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptor.revision,
+        },
+        { model: "test-model" },
+        {},
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(result?.appliedKeys.includes("model"), true);
+      // A property-only write must not replay the full run snapshot — the
+      // webview treats RUN_VIEW_LOADED as a workflow load and redraws the
+      // entire output pane.
+      assert.strictEqual(snapshotInvalidations, 0);
+      assert.strictEqual(
+        received.some(
+          (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
+        ),
+        false
+      );
+      const propertyPushes = received.filter(
+        (message) => message.type === MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE
+      );
+      assert.strictEqual(propertyPushes.length, 1);
+      assert.strictEqual(
+        propertyPushes[0].workflowProperties.model,
+        "test-model"
+      );
+      // The push carries properties only, never definition steps.
+      assert.strictEqual(propertyPushes[0].workflowProperties.steps, undefined);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   async function createTwoStepRun(workspace: string): Promise<{
     workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
     runRef: import("../../types/CtrlYokeTypes").RunRef;
