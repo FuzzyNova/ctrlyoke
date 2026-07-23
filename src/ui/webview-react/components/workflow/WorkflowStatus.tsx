@@ -21,10 +21,26 @@ import {
   type ExecutionState,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
-import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
+import {
+  WorkflowList,
+  type UnifiedWorkflowRow,
+  type WorkflowListHandle,
+} from "./WorkflowList";
+import { RunPanel } from "./RunPanel";
+import { RunIdentityBadge } from "./RunIdentityBadge";
+import type { RunPanelRow } from "./RunSummaryRow";
+import { useRunSummaryCacheStore } from "../../store/runSummaryCacheStore";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import {
+  navigateToWorkflowAddress,
+  isDrillableRunNav,
+  viewedRunLabel,
+} from "../../utils/runNavigation";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
-import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowKey,
+  WorkflowViewAddress,
+} from "@root/types/CtrlYokeTypes";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
 import {
@@ -178,6 +194,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     recentWorkflows,
     setRecentWorkflows,
     setActiveWorkflowWorkingFilePath,
+    runSummaries,
+    executionRunRef,
+    isViewingHistory,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
   // Global set of workflows with a running PTY, broadcast by the extension. This
@@ -305,6 +324,31 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [recentWorkflows]
   );
 
+  // Dropdown view state — ephemeral per-open-session, reset on close. Drilling
+  // into a lineage swaps the workflow list for its run panel without closing
+  // the dropdown; the same two views are what the badge/chevron/back triggers
+  // navigate between (RUN_NAVIGATION_UX_PLAN.md).
+  const [dropdownView, setDropdownView] = useState<"workflows" | "runs">(
+    "workflows"
+  );
+  const [drilledWorkflow, setDrilledWorkflow] = useState<{
+    workflowKey: WorkflowKey;
+    workflowName: string;
+  } | null>(null);
+  const workflowListHandleRef = useRef<WorkflowListHandle>(null);
+  const savedWorkflowListScrollOffsetRef = useRef(0);
+
+  // While a cross-lineage switch is in flight the workflow store still holds
+  // the previous workflow's definition. Show the switch target immediately so
+  // the click visibly took effect before the snapshot lands. Computed early
+  // (rather than just before render) since the run-identity badge's opener
+  // also needs it to name the lineage it's drilling into.
+  const displayName =
+    pendingRunViewSwitch?.workflowName ??
+    (fileName
+      ? workflowName || getWorkflowNameFromPath(fileName)
+      : DEFAULT_WORKFLOW_NAME);
+
   const isMobile = useIsMobile();
   const wfStatusSize = isMobile
     ? WORKFLOW_STATUS_BUTTON_SIZES.touch
@@ -315,6 +359,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Whichever split-button segment opened the dropdown — Escape restores
+  // focus here rather than leaving it stranded on an unmounting popup.
+  const dropdownOpenerRef = useRef<HTMLElement | null>(null);
 
   const mergedContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -496,6 +543,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setIsDropdownClosing(false);
     setIsDropdownOpen(false);
     setWorkflowSearch("");
+    // Dropdown view state is per-open-session — reset so the next open
+    // starts from whichever entry view its own trigger implies.
+    setDropdownView("workflows");
+    setDrilledWorkflow(null);
   }, []);
 
   useEffect(() => {
@@ -611,6 +662,22 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [closeDropdown, isDropdownOpen]);
 
+  // Escape closes the dropdown from either view and restores focus to
+  // whichever segment opened it.
+  useEffect(() => {
+    if (!isDropdownOpen) {
+      return;
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const opener = dropdownOpenerRef.current;
+      closeDropdown();
+      opener?.focus();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [closeDropdown, isDropdownOpen]);
+
   // Focus input when editing starts
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -686,6 +753,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
       setIsDropdownClosing(false);
       setIsDropdownOpen(true);
+      setDropdownView("workflows");
+      setDrilledWorkflow(null);
       return;
     }
     if (isDropdownClosing) {
@@ -694,10 +763,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       );
       return;
     }
+    // Chevron re-click while the run panel is showing switches back to the
+    // workflow list instead of closing outright — matching the badge's own
+    // "switch views, don't close" behavior when the other view is active.
+    if (dropdownView !== "workflows") {
+      setDropdownView("workflows");
+      setDrilledWorkflow(null);
+      return;
+    }
     closeDropdown();
   }, [
     isDropdownOpen,
     isDropdownClosing,
+    dropdownView,
     vscode,
     loadedWorkflows,
     activeWorkflowId,
@@ -736,14 +814,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Load workflow from recent list
   const handleSelectWorkflow = useCallback(
     (address: WorkflowViewAddress) => {
-      if (areWorkflowAddressesEqual(address, displayedViewAddress)) {
-        closeDropdown();
-        return;
-      }
-
-      // Record a request ID before the asynchronous load so RUN_VIEW_LOADED can
-      // discard responses from an older recent-workflow selection.
-      const ui = useUiStore.getState();
       const selectedWorkflow = recentWorkflows.find((workflow) =>
         areWorkflowAddressesEqual(workflow.address, address)
       );
@@ -760,23 +830,116 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           .getState()
           .setExecutionState(selectedWorkflow.executionState as ExecutionState);
       }
-      const requestId = ui.requestRunViewLoad(
+      // Names the pending switch so the header renames instantly and the
+      // panel overlay can say what it is loading.
+      navigateToWorkflowAddress(
+        vscode,
         address,
-        ui.runSummaries,
-        ui.executionRunRef ?? undefined,
-        // Names the pending switch so the header renames instantly and the
-        // panel overlay can say what it is loading.
         selectedWorkflow?.workflowName
       );
-      vscode.postMessage({
-        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-        address,
-        requestId,
-      });
       closeDropdown();
     },
-    [closeDropdown, displayedViewAddress, recentWorkflows, vscode]
+    [closeDropdown, recentWorkflows, vscode]
   );
+
+  // Drill into a lineage's run panel from the workflow list's run-indicator
+  // cell — never selects/loads the lineage, only swaps dropdown views.
+  const handleDrillIntoRuns = useCallback(
+    (workflow: RecentWorkflow) => {
+      savedWorkflowListScrollOffsetRef.current =
+        workflowListHandleRef.current?.getScrollOffset() ?? 0;
+      setDrilledWorkflow({
+        workflowKey: workflow.address.workflowKey,
+        workflowName: workflow.workflowName,
+      });
+      setDropdownView("runs");
+      if (workflow.address.workflowKey !== displayedViewAddress?.workflowKey) {
+        useRunSummaryCacheStore
+          .getState()
+          .ensureRunSummaries(
+            workflow.address.workflowKey,
+            workflow.lastModifiedAt
+          );
+      }
+    },
+    [displayedViewAddress]
+  );
+
+  // The run-identity badge always drills into the *displayed* lineage's own
+  // panel, so its summaries are already in uiStore — no fetch needed.
+  const handleOpenDisplayedRunPanel = useCallback(() => {
+    if (!displayedViewAddress) return;
+    const alreadyShowingThisPanel =
+      isDropdownOpen &&
+      !isDropdownClosing &&
+      dropdownView === "runs" &&
+      drilledWorkflow?.workflowKey === displayedViewAddress.workflowKey;
+    if (alreadyShowingThisPanel) {
+      closeDropdown();
+      return;
+    }
+    updateDropdownTop();
+    setIsDropdownClosing(false);
+    setIsDropdownOpen(true);
+    setDrilledWorkflow({
+      workflowKey: displayedViewAddress.workflowKey,
+      workflowName: displayName,
+    });
+    setDropdownView("runs");
+  }, [
+    displayedViewAddress,
+    isDropdownOpen,
+    isDropdownClosing,
+    dropdownView,
+    drilledWorkflow,
+    closeDropdown,
+    updateDropdownTop,
+    displayName,
+  ]);
+
+  // Back always returns to the workflow list — even entering via the badge —
+  // and restores the list's pre-drill scroll position (RUN_NAVIGATION_UX_PLAN.md:
+  // "the badge is a shortcut into the hierarchy, not a separate widget").
+  const handleBackToWorkflowList = useCallback(() => {
+    setDropdownView("workflows");
+    setDrilledWorkflow(null);
+    requestAnimationFrame(() => {
+      workflowListHandleRef.current?.setScrollOffset(
+        savedWorkflowListScrollOffsetRef.current
+      );
+    });
+  }, []);
+
+  const handleSelectRunPanelRow = useCallback(
+    (address: WorkflowViewAddress) => {
+      navigateToWorkflowAddress(vscode, address, drilledWorkflow?.workflowName);
+      closeDropdown();
+    },
+    [closeDropdown, drilledWorkflow, vscode]
+  );
+
+  const handleDeleteRunPanelRow = useCallback(
+    (runRef: string) => {
+      if (!drilledWorkflow) return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
+        address: {
+          workflowKey: drilledWorkflow.workflowKey,
+          kind: "run",
+          runRef,
+        },
+      });
+    },
+    [drilledWorkflow, vscode]
+  );
+
+  const handleDeleteAllRunsInPanel = useCallback(() => {
+    if (!drilledWorkflow) return;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE,
+      workflowKey: drilledWorkflow.workflowKey,
+    });
+  }, [drilledWorkflow, vscode]);
 
   // Clear workflow history
   const handleClearHistory = useCallback(() => {
@@ -914,15 +1077,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [vscode]
   );
 
-  // While a cross-lineage switch is in flight the workflow store still holds
-  // the previous workflow's definition. Show the switch target immediately so
-  // the click visibly took effect before the snapshot lands.
-  const displayName =
-    pendingRunViewSwitch?.workflowName ??
-    (fileName
-      ? workflowName || getWorkflowNameFromPath(fileName)
-      : DEFAULT_WORKFLOW_NAME);
-
   // Single flag drives opacity, clip-path, and visible/pointer-events together —
   // splitting these across separate conditions previously let the opacity class
   // go stale during close (it never changed, so the transitionend listener that
@@ -1035,6 +1189,67 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       })
     ),
   ];
+
+  // ── Run panel (drill-in view) derived data ──────────────────────────────
+  const isDrilledLineageDisplayed =
+    drilledWorkflow?.workflowKey === displayedViewAddress?.workflowKey;
+  const drilledRecentEntry = drilledWorkflow
+    ? recentWorkflows.find(
+        (w) => w.address.workflowKey === drilledWorkflow.workflowKey
+      )
+    : undefined;
+  const cachedRunSummaries = useRunSummaryCacheStore((s) =>
+    drilledWorkflow ? s.entries[drilledWorkflow.workflowKey] : undefined
+  );
+  const runPanelSummaries = isDrilledLineageDisplayed
+    ? runSummaries
+    : (cachedRunSummaries?.runSummaries ?? []);
+  const runPanelHasDraft =
+    drilledRecentEntry?.runNav?.hasDraft ??
+    (isDrilledLineageDisplayed && displayedViewAddress?.kind === "draft");
+  const runPanelRows: RunPanelRow[] = drilledWorkflow
+    ? [
+        ...(runPanelHasDraft ? [{ kind: "draft" as const }] : []),
+        ...runPanelSummaries.map((summary) => ({
+          kind: "run" as const,
+          summary,
+        })),
+      ]
+    : [];
+  const runPanelIsLoading = drilledWorkflow
+    ? isDrilledLineageDisplayed
+      ? false
+      : !cachedRunSummaries || cachedRunSummaries.status === "loading"
+    : false;
+  const runPanelLoadError = isDrilledLineageDisplayed
+    ? undefined
+    : cachedRunSummaries?.status === "error"
+      ? (cachedRunSummaries.error ?? "Failed to load runs")
+      : undefined;
+  const runPanelExecutionRunRef = isDrilledLineageDisplayed
+    ? executionRunRef
+    : (cachedRunSummaries?.executionRunRef ?? null);
+  // The viewed run scrolls into view only for the displayed lineage's own
+  // panel (opened via the badge) — drilling into another lineage has no
+  // "already viewed" row to seek to.
+  const runPanelScrollToKey =
+    drilledWorkflow && isDrilledLineageDisplayed && displayedViewAddress
+      ? displayedViewAddress.kind === "draft"
+        ? `draft:${drilledWorkflow.workflowKey}`
+        : `run:${drilledWorkflow.workflowKey}:${displayedViewAddress.runRef}`
+      : null;
+
+  // Badge visibility: the same drillable rule as the list's run indicator,
+  // resolved from the displayed lineage's own recent-workflow entry when
+  // known, falling back to the live run-summary count for a lineage not yet
+  // reflected in the recent list (e.g. a workflow just created this session).
+  const displayedRunNav = recentWorkflows.find(
+    (w) => w.address.workflowKey === displayedViewAddress?.workflowKey
+  )?.runNav;
+  const isDisplayedLineageDrillable = displayedRunNav
+    ? isDrillableRunNav(displayedRunNav)
+    : runSummaries.length > 1;
+
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">
       <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto pb-0.5">
@@ -1219,6 +1434,39 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             </div>
           </button>
 
+          {/* Run identity badge — third segment, only when the displayed
+              lineage has more than one addressable target. A single-run
+              lineage with no draft keeps exactly today's two-segment header. */}
+          {isDisplayedLineageDrillable && displayedViewAddress && (
+            <>
+              <div
+                className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}
+              >
+                <div className="w-px h-full bg-current opacity-40" />
+              </div>
+              <RunIdentityBadge
+                label={viewedRunLabel(
+                  displayedViewAddress,
+                  runSummaries,
+                  isNarrow
+                )}
+                accessibleLabel={`${viewedRunLabel(displayedViewAddress, runSummaries, false)} — browse runs of ${displayName}`}
+                isActive={
+                  isDropdownOpen &&
+                  !isDropdownClosing &&
+                  dropdownView === "runs" &&
+                  drilledWorkflow?.workflowKey ===
+                    displayedViewAddress.workflowKey
+                }
+                sizeClassName={wfStatusSize.triggerButton}
+                onClick={(event) => {
+                  dropdownOpenerRef.current = event.currentTarget;
+                  handleOpenDisplayedRunPanel();
+                }}
+              />
+            </>
+          )}
+
           {/* Separator — mirrors VS Code's monaco-button-dropdown-separator */}
           <div
             className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}
@@ -1229,7 +1477,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           {/* Dropdown Trigger */}
           <button
             type="button"
-            onClick={toggleDropdown}
+            onClick={(event) => {
+              dropdownOpenerRef.current = event.currentTarget;
+              toggleDropdown();
+            }}
             aria-label="Show recent workflows"
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
@@ -1282,38 +1533,64 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           clipPath: dropdownRevealed ? "inset(0 0 0 0)" : "inset(0 0 100% 0)",
         }}
       >
-        {/* Unified workflow list — one row per lineage, running lineages first */}
+        {/* Two dropdown views share one panel: the workflow list, and a
+            per-lineage run panel reached by drilling in. Both stay mounted
+            only while active — switching views is a full swap, not a
+            slide/accordion (RUN_NAVIGATION_UX_PLAN.md's drill-in design). */}
         <div className="flex-1 min-h-0 overflow-clip flex flex-col">
-          <WorkflowList
-            rows={workflowListRows}
-            currentAddress={displayedViewAddress}
-            activeWorkflowId={activeWorkflowId}
-            runningHasActiveTerminal={workflowHasActiveTerminal}
-            recentHasActiveTerminal={recentWorkflowHasActiveTerminal}
-            onSelectRecent={handleSelectWorkflow}
-            onSwitchRunning={handleSwitchWorkflow}
-            onPauseRunning={handlePauseWorkflow}
-            onCancelPauseRunning={handleCancelPauseWorkflow}
-            onResumeRunning={handleResumeWorkflow}
-            onStopRunning={handleStopWorkflow}
-            onClearHistory={handleClearHistory}
-            onRemove={handleRemoveWorkflow}
-            onToggleFavorite={handleToggleFavorite}
-            isNarrow={isNarrow}
-            onClose={closeDropdown}
-            searchValue={workflowSearch}
-            onSearchChange={setWorkflowSearch}
-            filtersOpen={filtersOpen}
-            filtersActive={filtersActive}
-            onToggleFilters={handleToggleFilters}
-            filterControls={workflowFilterControls}
-            isFiltering={isFilteringWorkflows}
-            onNewWorkflow={() => {
-              setActiveWorkflowWorkingFilePath(null);
-              vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
-              closeDropdown();
-            }}
-          />
+          {dropdownView === "runs" && drilledWorkflow ? (
+            <RunPanel
+              workflowKey={drilledWorkflow.workflowKey}
+              workflowName={drilledWorkflow.workflowName}
+              rows={runPanelRows}
+              isLoading={runPanelIsLoading}
+              loadError={runPanelLoadError}
+              isNarrow={isNarrow}
+              displayedAddress={displayedViewAddress}
+              isViewingHistory={isViewingHistory}
+              executionRunRef={runPanelExecutionRunRef}
+              confirmDeleteOperations={globalSettings.confirmDeleteOperations}
+              onBack={handleBackToWorkflowList}
+              onClose={closeDropdown}
+              onSelectRow={handleSelectRunPanelRow}
+              onDeleteRun={handleDeleteRunPanelRow}
+              onDeleteAllRuns={handleDeleteAllRunsInPanel}
+              scrollToKey={runPanelScrollToKey}
+            />
+          ) : (
+            <WorkflowList
+              ref={workflowListHandleRef}
+              rows={workflowListRows}
+              currentAddress={displayedViewAddress}
+              activeWorkflowId={activeWorkflowId}
+              runningHasActiveTerminal={workflowHasActiveTerminal}
+              recentHasActiveTerminal={recentWorkflowHasActiveTerminal}
+              onSelectRecent={handleSelectWorkflow}
+              onSwitchRunning={handleSwitchWorkflow}
+              onPauseRunning={handlePauseWorkflow}
+              onCancelPauseRunning={handleCancelPauseWorkflow}
+              onResumeRunning={handleResumeWorkflow}
+              onStopRunning={handleStopWorkflow}
+              onClearHistory={handleClearHistory}
+              onRemove={handleRemoveWorkflow}
+              onToggleFavorite={handleToggleFavorite}
+              onDrillIntoRuns={handleDrillIntoRuns}
+              isNarrow={isNarrow}
+              onClose={closeDropdown}
+              searchValue={workflowSearch}
+              onSearchChange={setWorkflowSearch}
+              filtersOpen={filtersOpen}
+              filtersActive={filtersActive}
+              onToggleFilters={handleToggleFilters}
+              filterControls={workflowFilterControls}
+              isFiltering={isFilteringWorkflows}
+              onNewWorkflow={() => {
+                setActiveWorkflowWorkingFilePath(null);
+                vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+                closeDropdown();
+              }}
+            />
+          )}
         </div>
       </div>
 

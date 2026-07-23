@@ -32,6 +32,7 @@ import {
   type WorkingFile,
   type WorkflowViewAddress,
   type WorkflowRunNavigationSummary,
+  type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
@@ -1304,5 +1305,17 @@ export class WorkflowSerializer {
     const manager = this.getManager();
     if (!manager) return;
     await manager.deleteRunAtAddress(address, pm, clientId);
+  }
+
+  /** Deletes every non-executing run of an explicit lineage (run-navigation panel). */
+  async handleDeleteAllRunsForLineage(
+    workflowKey: WorkflowKey,
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    const manager = this.getManager();
+    if (!manager) return;
+    await manager.deleteAllRunsForLineage(workflowKey, pm, clientId);
   }
 }

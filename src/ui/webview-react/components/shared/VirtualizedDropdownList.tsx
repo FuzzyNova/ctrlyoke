@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -22,6 +22,15 @@ interface VirtualizedDropdownListProps<T> {
   estimatedRowHeight?: number;
   overscan?: number;
   threshold?: number;
+  /**
+   * Scrolls the matching row into view once, the first time it resolves to an
+   * index (mount, or a later arrival e.g. after an async fetch populates
+   * `items`). Re-fires if the key itself changes (new panel content), but not
+   * on every render — callers don't need to track "already scrolled" state.
+   * Used by RunPanel to bring the viewed run into view without a layout
+   * jump on every re-render.
+   */
+  scrollToKey?: string | null;
 }
 
 /**
@@ -38,6 +47,7 @@ export function VirtualizedDropdownList<T>({
   estimatedRowHeight = DEFAULT_ROW_ESTIMATED_HEIGHT,
   overscan = DEFAULT_ROW_OVERSCAN,
   threshold = DROPDOWN_LIST_VIRTUALIZATION_THRESHOLD,
+  scrollToKey = null,
 }: VirtualizedDropdownListProps<T>): React.ReactElement {
   const shouldVirtualize = items.length >= threshold;
 
@@ -48,6 +58,40 @@ export function VirtualizedDropdownList<T>({
     overscan,
     getItemKey: (index) => getItemKey(items[index], index) ?? index,
   });
+
+  // Tracks the key already scrolled-to so a re-render with the same target
+  // (e.g. items array identity changing but not content) doesn't keep
+  // re-issuing scrollIntoView/scrollToIndex and fighting the user's own scroll.
+  const scrolledKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!scrollToKey || scrolledKeyRef.current === scrollToKey) {
+      return;
+    }
+    const index = items.findIndex(
+      (item, itemIndex) => getItemKey(item, itemIndex) === scrollToKey
+    );
+    if (index === -1) {
+      return;
+    }
+    scrolledKeyRef.current = scrollToKey;
+    if (shouldVirtualize) {
+      rowVirtualizer.scrollToIndex(index, { align: "center" });
+      return;
+    }
+    const container = scrollContainerRef.current;
+    const target = container?.querySelector(
+      `[data-scroll-key="${CSS.escape(scrollToKey)}"]`
+    );
+    // Optional chained on the method itself, not just the element: jsdom
+    // (unit tests) has no scrollIntoView implementation at all.
+    target?.scrollIntoView?.({ block: "nearest" });
+    // items/getItemKey/rowVirtualizer intentionally excluded: re-running on
+    // every items-array identity change would fight manual scrolling. Only
+    // items.length is tracked, so a target that resolves later (e.g. an
+    // async summary fetch that hasn't landed yet on the first pass) still
+    // gets scrolled to once its row actually appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollToKey, shouldVirtualize, items.length]);
 
   if (!shouldVirtualize) {
     return (

@@ -18,6 +18,7 @@ import {
 } from "../store/settingsStore";
 import { useUiStore } from "../store/uiStore";
 import { useEditorStore } from "../store/editorStore";
+import { useRunSummaryCacheStore } from "../store/runSummaryCacheStore";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -1777,6 +1778,19 @@ function createMessageHandlers(): MessageHandlerMap {
       uiStore.clearPendingRunViewLoad();
     }
     uiStore.showToast(`Failed to ${message.action}: ${message.error}`, "error");
+    if (message.requestId) {
+      useRunSummaryCacheStore
+        .getState()
+        .resolveRunSummariesError(message.requestId, message.error);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // RUN_SUMMARIES_LOADED - manifest-only run listing for one lineage's
+  // run-panel drill-in (never switches the client's own displayed view)
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.RUN_SUMMARIES_LOADED] = (message) => {
+    useRunSummaryCacheStore.getState().resolveRunSummaries(message);
   };
 
   // --------------------------------------------------------------------------

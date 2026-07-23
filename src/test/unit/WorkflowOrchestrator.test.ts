@@ -449,6 +449,218 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     }
   });
 
+  test("deleteRunAtAddress deletes a run the requesting client is not currently viewing", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-delete-non-viewed-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const fileManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Delete non-viewed",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await fileManager.createWorkingFile(
+        "delete-non-viewed",
+        [{ prompt: "one" }],
+        workspace,
+        "Delete non-viewed"
+      );
+      const older = await fileManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now() - 1_000
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        older.runRef,
+        older.runDir,
+        older.runId,
+        Date.now() - 1_000
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, older.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+      const newer = await WorkingFileManager.seedNewRun(
+        workspace,
+        workflowKey,
+        older.runRef
+      );
+      await history.initializeRunAt(
+        workflowKey,
+        newer.runRef,
+        newer.runDir,
+        newer.runId,
+        newer.startedAt
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, newer.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.cliSessions = new Map();
+      // The requester (the run-navigation panel's client) is viewing an
+      // unrelated lineage, not this one at all — proving delete no longer
+      // requires the target to be the client's own viewed run.
+      internal.viewAddressRegistry = new Map([
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey: "other-lineage" as never, kind: "draft" },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map();
+      internal.lineageRepository = {
+        readDescriptor: async () => ({ revision: 1, lastModifiedAt: 123 }),
+      };
+      const pushed: Array<{ type?: string; runSummaries?: unknown[] }> = [];
+
+      await orchestrator.deleteRunAtAddress(
+        { workflowKey, runRef: older.runRef },
+        (message) => pushed.push(message as { type?: string }),
+        PANEL_CLIENT_ID
+      );
+
+      const remaining = await history.getRunSummaries(workflowKey);
+      assert.strictEqual(remaining.length, 1);
+      assert.strictEqual(remaining[0].runRef, newer.runRef);
+
+      // Not a registered viewer of this lineage, so the only refresh it gets
+      // is the manifest-only push — never a full RUN_VIEW_LOADED snapshot.
+      assert.strictEqual(pushed.length, 1);
+      assert.strictEqual(pushed[0].type, MESSAGE_TYPES.RUN_SUMMARIES_LOADED);
+      assert.strictEqual(pushed[0].runSummaries?.length, 1);
+    } finally {
+      await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("deleteAllRunsForLineage deletes every non-executing run and leaves the executing run untouched", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-delete-all-runs-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const fileManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Delete all runs",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await fileManager.createWorkingFile(
+        "delete-all-runs",
+        [{ prompt: "one" }],
+        workspace,
+        "Delete all runs"
+      );
+      const first = await fileManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now() - 2_000
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        first.runRef,
+        first.runDir,
+        first.runId,
+        Date.now() - 2_000
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, first.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+      const second = await WorkingFileManager.seedNewRun(
+        workspace,
+        workflowKey,
+        first.runRef
+      );
+      await history.initializeRunAt(
+        workflowKey,
+        second.runRef,
+        second.runDir,
+        second.runId,
+        second.startedAt
+      );
+      // second run stays "running" — the executing run must survive the bulk delete.
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map([
+        [
+          "instance-1",
+          {
+            getQueueState: () => ({ workflowKey, runRef: second.runRef }),
+            getExecutionRunRef: () => second.runRef,
+          },
+        ],
+      ]);
+      internal.cliSessions = new Map();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef: first.runRef }],
+      ]);
+      const refreshed: Array<{ clientId: string; address: unknown }> = [];
+      internal.viewMessageSinks = new Map();
+      internal.loadRunViewForClient = async (
+        address: unknown,
+        _send: unknown,
+        clientId: string
+      ) => {
+        refreshed.push({ clientId, address });
+        internal.viewAddressRegistry.set(clientId, address);
+      };
+
+      await orchestrator.deleteAllRunsForLineage(
+        workflowKey,
+        () => undefined,
+        PANEL_CLIENT_ID
+      );
+
+      const remaining = await history.getRunsForWorkflow(workflowKey);
+      assert.deepStrictEqual(remaining, [second.runRef]);
+      // The client viewing the now-deleted first run falls back to the
+      // surviving (executing) run.
+      assert.deepStrictEqual(refreshed, [
+        {
+          clientId: PANEL_CLIENT_ID,
+          address: { workflowKey, kind: "run", runRef: second.runRef },
+        },
+      ]);
+    } finally {
+      await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("loads the current most-recent run file for a first-time browser client", async () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype

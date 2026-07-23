@@ -72,7 +72,7 @@ state badge, step count, relative time, terminal icon, remove action); see
 The run panel is a **flat, homogeneous, virtualized list** with a pinned
 header row naming the lineage. There is no accordion, no flattened
 mixed-kind row model, no sticky-parent virtualizer range, and no
-deep-scroll collapse anchoring — the pinned header *is* the parent, natively,
+deep-scroll collapse anchoring — the pinned header _is_ the parent, natively,
 and “collapse” is the back button restoring the workflow list.
 
 ### Why not the accordion (alternative considered)
@@ -138,7 +138,7 @@ predictable):
 - Chevron click: opens/switches to the workflow list; if the workflow list is
   already showing, closes the dropdown.
 - Back `‹` in the run panel always goes to the workflow list — even when the
-  user entered via the badge. The badge is a shortcut *into* the hierarchy,
+  user entered via the badge. The badge is a shortcut _into_ the hierarchy,
   not a separate widget; users build one spatial model.
 - Escape closes the dropdown outright from either view and restores focus to
   the trigger that opened it.
@@ -573,7 +573,24 @@ button — so no alternate mobile navigation model is necessary.
 
 ## Deletion and live-run behavior
 
-- Delete by `{ workflowKey, runRef }`, never a list index.
+- Delete by `{ workflowKey, runRef }`, never a list index. `deleteRunAtAddress`
+  no longer requires `runRef` to be the requesting client's own viewed
+  run — it originally did (`assertViewedRunAddress`), which the legacy
+  `RunSelector`'s per-row delete already silently violated for any row other
+  than the currently viewed one. The run panel needs a working delete button
+  on every row, including a drilled-into lineage the client isn't viewing at
+  all, so the guard was widened to "any run in the named lineage" instead.
+  Non-viewer requesters get a direct `RUN_SUMMARIES_LOADED` refresh push
+  (`pushRunSummariesRefreshIfNotAlreadyViewing`) since they aren't in the
+  viewer-registry refresh loop that `RUN_VIEW_LOADED` already covers.
+- "Delete all runs" is a new `DELETE_ALL_RUNS_FOR_LINEAGE` message
+  (`WorkflowOrchestrator.deleteAllRunsForLineage`), not the legacy
+  `CLEAR_RUN_HISTORY` — that operation targets the requesting client's own
+  active queue (no `workflowKey` param) and pops a blocking native VS Code
+  modal, neither of which works for a drilled-into, possibly-inactive
+  lineage. The new operation is address-scoped and relies on the client's
+  own `confirmDeleteOperations`-gated inline confirmation instead of a
+  server-side modal.
 - Keep inline confirmation inside the run row using sibling native buttons.
 - An executing run shows its live indicator and cannot be deleted.
 - If the deleted run was the lineage's latest, refresh the workflow row's

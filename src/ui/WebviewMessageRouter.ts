@@ -1073,6 +1073,19 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE, async (message) => {
+      if (!message.workflowKey) return;
+      try {
+        await this.serializer.handleDeleteAllRunsForLineage(
+          message.workflowKey,
+          this.getCurrentPostMessage(),
+          this.clientId
+        );
+      } catch (error) {
+        await this.reportActionFailure("delete all runs", error);
+      }
+    });
+
     // ── Dashboard — New Workflow Modal ───────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_WORKFLOW, () => {
       this.serializer.handleNewWorkflow(this.getCurrentPostMessage());

@@ -766,3 +766,335 @@ describe("WorkflowStatus — loaded state", () => {
     expect(screen.queryByText("Regular Workflow")).not.toBeInTheDocument();
   });
 });
+
+describe("WorkflowStatus — run navigation panel", () => {
+  beforeEach(() => {
+    // resetUi() doesn't clear these request-scoped fields (by design — a
+    // pending switch outlives the reset that runs between unrelated tests
+    // in production too), so a prior test's unresolved pendingRunViewSwitch
+    // would otherwise leak into displayName here.
+    useUiStore.setState({
+      pendingRunViewSwitch: null,
+      pendingRunViewRequestId: null,
+    });
+  });
+
+  it("shows a run indicator on a drillable recent workflow and drills into its run panel without loading it", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "multi-wf" as never;
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Multi-run Workflow",
+        filePath: "/path/multi.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+        address: {
+          workflowKey,
+          kind: "run",
+          runRef: "run-2" as never,
+        },
+        runNav: {
+          primaryAddress: {
+            workflowKey,
+            kind: "run",
+            runRef: "run-2" as never,
+          },
+          primaryRunId: 2,
+          runCount: 2,
+          hasDraft: false,
+        },
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Back to workflow list" })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Multi-run Workflow").length).toBeGreaterThan(0);
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_SUMMARIES })
+    );
+    expect(postMessageSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_VIEW })
+    );
+  });
+
+  it("shows no run indicator for a single-run lineage with no draft", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Single Run Workflow",
+        filePath: "/path/single.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+        runNav: {
+          primaryAddress: {
+            workflowKey: "test-0" as never,
+            kind: "run",
+            runRef: "run-1" as never,
+          },
+          primaryRunId: 1,
+          runCount: 1,
+          hasDraft: false,
+        },
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Browse runs of/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("re-clicking the chevron while the run panel is open switches back to the workflow list", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "multi-wf" as never;
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Multi-run Workflow",
+        filePath: "/path/multi.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+        address: { workflowKey, kind: "run", runRef: "run-2" as never },
+        runNav: {
+          primaryAddress: {
+            workflowKey,
+            kind: "run",
+            runRef: "run-2" as never,
+          },
+          primaryRunId: 2,
+          runCount: 2,
+          hasDraft: false,
+        },
+      },
+    ]);
+
+    const dropdownTrigger = screen.getByRole("button", {
+      name: /Show recent workflows/i,
+    });
+    await user.click(dropdownTrigger);
+    await user.click(
+      screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
+    );
+    expect(
+      screen.getByRole("button", { name: "Back to workflow list" })
+    ).toBeInTheDocument();
+
+    await user.click(dropdownTrigger);
+    expect(
+      screen.queryByRole("button", { name: "Back to workflow list" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
+  });
+
+  it("hides the run identity badge for a single-run displayed lineage", () => {
+    const workflowKey = "wf-single" as never;
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: "run",
+        runRef: "run-1" as never,
+      },
+      runSummaries: [
+        {
+          workflowKey,
+          runRef: "run-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    render(<WorkflowStatus />);
+    expect(
+      screen.queryByRole("button", { name: /browse runs of/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the run identity badge for a drillable displayed lineage and opens its run panel directly", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "wf-badge" as never;
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+      runSummaries: [
+        {
+          workflowKey,
+          runRef: "run-2" as never,
+          runId: 2,
+          startedAt: 200,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey,
+          runRef: "run-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.setState({
+      fileName: "/workspace/badge.ctrlyoke.yaml",
+      workflowName: "Badge Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    const badge = screen.getByRole("button", {
+      name: /Run 2 — browse runs of Badge Workflow/i,
+    });
+    await user.click(badge);
+
+    expect(
+      screen.getByRole("button", { name: "Back to workflow list" })
+    ).toBeInTheDocument();
+    // Already the displayed lineage — no summary fetch needed.
+    expect(postMessageSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_SUMMARIES })
+    );
+
+    // Clicking the badge again while its own panel is showing closes the dropdown.
+    await user.click(badge);
+    expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
+      "pointer-events-none"
+    );
+  });
+
+  it("selects a run row in the panel through the run-view loader and deletes a run by address", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "wf-badge" as never;
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+      runSummaries: [
+        {
+          workflowKey,
+          runRef: "run-2" as never,
+          runId: 2,
+          startedAt: 200,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey,
+          runRef: "run-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.setState({
+      fileName: "/workspace/badge.ctrlyoke.yaml",
+      workflowName: "Badge Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 2 — browse runs of Badge Workflow/i,
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Run 1\b/ }));
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: { workflowKey, kind: "run", runRef: "run-1" },
+      })
+    );
+  });
+
+  it("deletes all runs from the panel footer via DELETE_ALL_RUNS_FOR_LINEAGE", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "wf-badge" as never;
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmDeleteOperations: false,
+      },
+    }));
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: "run",
+        runRef: "run-1" as never,
+      },
+      runSummaries: [
+        {
+          workflowKey,
+          runRef: "run-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey,
+          runRef: "run-2" as never,
+          runId: 2,
+          startedAt: 200,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.setState({
+      fileName: "/workspace/badge.ctrlyoke.yaml",
+      workflowName: "Badge Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 1 — browse runs of Badge Workflow/i,
+      })
+    );
+    await user.click(screen.getByRole("button", { name: "Delete all runs" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE,
+      workflowKey,
+    });
+  });
+});

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useImperativeHandle, useRef } from "react";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
@@ -13,6 +13,7 @@ import type { WorkflowSummary } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { isDrillableRunNav, runNavIndicatorLabel } from "@utils/runNavigation";
 
 /**
  * One row of the unified workflow dropdown list: either a lineage with an
@@ -23,6 +24,12 @@ import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 export type UnifiedWorkflowRow =
   | { kind: "running"; key: string; workflow: WorkflowSummary }
   | { kind: "recent"; key: string; workflow: RecentWorkflow };
+
+/** Imperative handle for saving/restoring the recent-list scroll position across a drill-in/back round trip. */
+export interface WorkflowListHandle {
+  getScrollOffset: () => number;
+  setScrollOffset: (offset: number) => void;
+}
 
 interface WorkflowListProps {
   rows: UnifiedWorkflowRow[];
@@ -39,6 +46,8 @@ interface WorkflowListProps {
   onClearHistory: () => void;
   onRemove?: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
+  /** Drills into a lineage's run panel without selecting/loading it. Omitted rows render no indicator. */
+  onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
   onNewWorkflow?: () => void;
   onClose?: () => void;
   searchValue?: string;
@@ -60,6 +69,9 @@ interface RecentWorkflowRowProps {
   onSelect: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   onRemove?: (address: WorkflowViewAddress) => void;
+  onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
+  /** List-scoped: reserve the indicator's track even on this row when a sibling row is drillable, so time/badge columns stay aligned. */
+  showRunIndicatorTrack: boolean;
 }
 
 const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
@@ -70,7 +82,10 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   onSelect,
   onToggleFavorite,
   onRemove,
+  onDrillIntoRuns,
+  showRunIndicatorTrack,
 }) => {
+  const isDrillable = isDrillableRunNav(workflow.runNav);
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
@@ -162,6 +177,30 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         </span>
       </button>
 
+      {/* Run indicator — sibling of the primary button, not part of its grid.
+          Drills into the run panel without selecting/loading the lineage. */}
+      {showRunIndicatorTrack && (
+        <span className="flex w-[64px] flex-shrink-0 justify-end">
+          {isDrillable && workflow.runNav && onDrillIntoRuns ? (
+            <button
+              type="button"
+              title={`Browse runs of ${workflow.workflowName}`}
+              aria-label={`${runNavIndicatorLabel(workflow.runNav, isNarrow)} — browse runs of ${workflow.workflowName}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDrillIntoRuns(workflow);
+              }}
+              className="fp-dropdown-row flex items-center gap-0.5 rounded px-1 py-0.5 text-xs text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+            >
+              <span className="truncate">
+                {runNavIndicatorLabel(workflow.runNav, isNarrow)}
+              </span>
+              <i className="codicon codicon-chevron-right text-xxs" />
+            </button>
+          ) : null}
+        </span>
+      )}
+
       {onToggleFavorite && (
         <button
           type="button"
@@ -232,35 +271,55 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
  *   VirtualizedDropdownList) so a long history doesn't slow down opening
  *   the dropdown
  */
-export const WorkflowList: React.FC<WorkflowListProps> = ({
-  rows,
-  currentAddress,
-  activeWorkflowId,
-  runningHasActiveTerminal,
-  recentHasActiveTerminal,
-  onSelectRecent,
-  onSwitchRunning,
-  onPauseRunning,
-  onCancelPauseRunning,
-  onResumeRunning,
-  onStopRunning,
-  onClearHistory,
-  onRemove,
-  onToggleFavorite,
-  onNewWorkflow,
-  onClose,
-  searchValue = "",
-  onSearchChange,
-  filtersOpen = false,
-  filtersActive = false,
-  onToggleFilters,
-  filterControls,
-  isFiltering = false,
-  isNarrow = false,
-  className = "",
-}) => {
+export const WorkflowList = React.forwardRef<
+  WorkflowListHandle,
+  WorkflowListProps
+>(function WorkflowList(
+  {
+    rows,
+    currentAddress,
+    activeWorkflowId,
+    runningHasActiveTerminal,
+    recentHasActiveTerminal,
+    onSelectRecent,
+    onSwitchRunning,
+    onPauseRunning,
+    onCancelPauseRunning,
+    onResumeRunning,
+    onStopRunning,
+    onClearHistory,
+    onRemove,
+    onToggleFavorite,
+    onDrillIntoRuns,
+    onNewWorkflow,
+    onClose,
+    searchValue = "",
+    onSearchChange,
+    filtersOpen = false,
+    filtersActive = false,
+    onToggleFilters,
+    filterControls,
+    isFiltering = false,
+    isNarrow = false,
+    className = "",
+  },
+  ref
+) {
   const runningScrollContainerRef = useRef<HTMLDivElement>(null);
   const recentScrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getScrollOffset: () => recentScrollContainerRef.current?.scrollTop ?? 0,
+      setScrollOffset: (offset) => {
+        if (recentScrollContainerRef.current) {
+          recentScrollContainerRef.current.scrollTop = offset;
+        }
+      },
+    }),
+    []
+  );
   const runningRows = rows.filter(
     (row): row is Extract<UnifiedWorkflowRow, { kind: "running" }> =>
       row.kind === "running"
@@ -271,6 +330,12 @@ export const WorkflowList: React.FC<WorkflowListProps> = ({
   );
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;
+  // List-scoped, not row-scoped: reserve the indicator track on every recent
+  // row only when at least one is drillable, so time/badge columns stay
+  // aligned. A list with no drillable rows renders pixel-identical to today.
+  const hasDrillableRecentRow = recentRows.some((row) =>
+    isDrillableRunNav(row.workflow.runNav)
+  );
 
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
@@ -360,12 +425,12 @@ export const WorkflowList: React.FC<WorkflowListProps> = ({
                 onSelect={onSelectRecent}
                 onToggleFavorite={onToggleFavorite}
                 onRemove={onRemove}
+                onDrillIntoRuns={onDrillIntoRuns}
+                showRunIndicatorTrack={hasDrillableRecentRow}
               />
             )}
           />
-        ) : hasRunningRows ? // Running matches fill the pinned region above; an empty recent
-        // region needs neither a "no match" message nor a New Workflow
-        // prompt while workflows are actively running.
+        ) : hasRunningRows ? // prompt while workflows are actively running. // region needs neither a "no match" message nor a New Workflow // Running matches fill the pinned region above; an empty recent
         null : isFiltering ? (
           <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
             No workflows match your search.
@@ -397,4 +462,4 @@ export const WorkflowList: React.FC<WorkflowListProps> = ({
       )}
     </div>
   );
-};
+});

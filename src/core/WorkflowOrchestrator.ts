@@ -3559,13 +3559,19 @@ export class WorkflowOrchestrator {
    * draft); clients on another address retain that address but receive refreshed
    * summaries. Keeping this here prevents a UI-only caller from leaving another
    * connected client pointed at a removed directory.
+   *
+   * `address.runRef` may be any run in the lineage — deliberately not required
+   * to be the requesting client's own viewed run. The run-navigation panel
+   * (RUN_NAVIGATION_UX_PLAN.md) offers a delete button on every row while
+   * browsing a lineage the client may not even be viewing (a drilled-into,
+   * non-displayed lineage), so a "must match my own viewed address" guard
+   * would reject the common case rather than an edge case.
    */
   async deleteRunAtAddress(
     address: { workflowKey: WorkflowKey; runRef: RunRef },
     send: (message: unknown) => void,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    this.assertViewedRunAddress(address, clientId, "Delete");
     if (this.findExecutionRunRef(address.workflowKey) === address.runRef) {
       throw new Error("Cannot delete an executing run");
     }
@@ -3605,6 +3611,105 @@ export class WorkflowOrchestrator {
           targetClientId
         );
       })
+    );
+
+    await this.pushRunSummariesRefreshIfNotAlreadyViewing(
+      address.workflowKey,
+      send,
+      targets.map(([targetClientId]) => targetClientId),
+      clientId
+    );
+  }
+
+  /**
+   * Deletes every non-executing run of a lineage — the run-navigation panel's
+   * "Delete all runs" footer action. Unlike `CLEAR_RUN_HISTORY`, this targets
+   * an explicit `workflowKey` rather than the requesting client's own active
+   * queue, so it works for a drilled-into lineage the client isn't executing
+   * or even currently viewing.
+   */
+  async deleteAllRunsForLineage(
+    workflowKey: WorkflowKey,
+    send: (message: unknown) => void,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) throw new Error("No workspace folder is open");
+
+    const historyManager = new OutputHistoryManager(workspaceRoot);
+    const executionRunRef = this.findExecutionRunRef(workflowKey);
+    const runRefs = await historyManager.getRunsForWorkflow(workflowKey);
+    for (const runRef of runRefs) {
+      if (runRef === executionRunRef) continue;
+      try {
+        await historyManager.deleteRunByRef(workflowKey, runRef);
+      } catch (error) {
+        Log.warn(
+          `[WorkflowOrchestrator] deleteAllRunsForLineage: failed to delete ${workflowKey}/${runRef}:`,
+          error
+        );
+      }
+    }
+
+    const remaining = await historyManager.getRunSummaries(workflowKey);
+    const fallback: WorkflowViewAddress = remaining[0]
+      ? { workflowKey, kind: "run", runRef: remaining[0].runRef }
+      : { workflowKey, kind: "draft" };
+
+    const targets = [...this.getViewAddressRegistry().entries()].filter(
+      ([, candidate]) => candidate?.workflowKey === workflowKey
+    );
+    await Promise.all(
+      targets.map(async ([targetClientId, currentAddress]) => {
+        const targetAddress =
+          currentAddress?.kind === "run" &&
+          currentAddress.runRef !== executionRunRef
+            ? fallback
+            : currentAddress;
+        if (!targetAddress) return;
+        const targetSend =
+          targetClientId === clientId
+            ? send
+            : this.getViewMessageSinks().get(targetClientId);
+        if (!targetSend) return;
+        await this.loadRunViewForClient(
+          targetAddress,
+          targetSend,
+          targetClientId
+        );
+      })
+    );
+
+    await this.pushRunSummariesRefreshIfNotAlreadyViewing(
+      workflowKey,
+      send,
+      targets.map(([targetClientId]) => targetClientId),
+      clientId
+    );
+  }
+
+  /**
+   * The delete flows above only push a fresh `RUN_VIEW_LOADED` to clients
+   * registered as viewers of the lineage (`getViewAddressRegistry`). A client
+   * browsing this lineage's run-navigation panel without viewing it — the
+   * drilled-into, non-displayed case — is not a "viewer" and would otherwise
+   * see a stale run list after deleting from that panel. Push a manifest-only
+   * refresh directly to the requester in that case; viewers already got a
+   * full snapshot above.
+   */
+  private async pushRunSummariesRefreshIfNotAlreadyViewing(
+    workflowKey: WorkflowKey,
+    send: (message: unknown) => void,
+    refreshedClientIds: string[],
+    clientId: string
+  ): Promise<void> {
+    if (refreshedClientIds.includes(clientId)) {
+      return;
+    }
+    await this.loadRunSummariesForClient(
+      workflowKey,
+      send,
+      `delete-refresh-${Date.now()}`
     );
   }
 

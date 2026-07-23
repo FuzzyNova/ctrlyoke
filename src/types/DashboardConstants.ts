@@ -167,8 +167,9 @@ export const MESSAGE_TYPES = {
   SEARCH_HISTORY: "searchHistory", // Webview -> Extension: Search global run history
   SEARCH_HISTORY_RESULTS: "searchHistoryResults", // Extension -> Webview: Return global history matches
   OPEN_HISTORY_SEARCH: "openHistorySearch", // Extension -> Webview: Open global history search UI
-  CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete all run history
-  DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by index
+  CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete all run history for the client's own active queue (pops a native confirm)
+  DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by address, any run in the lineage (not required to be the viewed run)
+  DELETE_ALL_RUNS_FOR_LINEAGE: "deleteAllRunsForLineage", // Webview -> Extension: Delete every non-executing run of an explicit lineage (run-navigation panel's "Delete all runs")
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
   RUN_VIEW_LOADED: "runViewLoaded", // Extension -> Webview: Atomic definition/settings/output snapshot for a view address
   WORKFLOW_VIEW_IDENTITY: "workflowViewIdentity", // Extension -> Webview: Authoritative address + revisions after a definition write

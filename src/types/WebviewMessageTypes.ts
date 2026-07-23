@@ -1217,6 +1217,18 @@ export interface RunSummariesLoadedMessage {
   executionRunRef?: RunRef;
 }
 
+/**
+ * Webview → Extension: delete every non-executing run of an explicit lineage —
+ * the run-navigation panel's "Delete all runs" footer action. Unlike the legacy
+ * `CLEAR_RUN_HISTORY`, this targets `workflowKey` directly rather than the
+ * client's own active queue, and has no native confirm dialog (the client
+ * gates confirmation itself, per `confirmDeleteOperations`).
+ */
+export interface DeleteAllRunsForLineageMessage {
+  type: typeof MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE;
+  workflowKey: WorkflowKey;
+}
+
 /** Start the currently viewed draft through its explicit address. */
 export interface ExecuteDraftMessage {
   type: typeof MESSAGE_TYPES.EXECUTE_DRAFT;
