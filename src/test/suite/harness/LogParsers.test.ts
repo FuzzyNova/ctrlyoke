@@ -565,6 +565,127 @@ suite("ClaudeLogParser", () => {
   });
 
   suite("background work tracking", () => {
+    test("should track confirmed asynchronous Agent launches until notification", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_async_agent",
+              name: "Agent",
+              input: {
+                description: "Research the implementation",
+                subagent_type: "Explore",
+              },
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_async_agent",
+              content: [
+                {
+                  type: "text",
+                  text: "Async agent launched successfully.\nThe agent is working in the background.",
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification><tool-use-id>toolu_async_agent</tool-use-id></task-notification>",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("should ignore synchronous and failed Agent launches", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_sync_agent",
+              name: "Agent",
+              input: {
+                description: "Run synchronously",
+                run_in_background: false,
+              },
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_sync_agent",
+              content: "Synchronous agent result",
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_failed_agent",
+              name: "Agent",
+              input: {
+                description: "Attempt an async launch",
+              },
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_failed_agent",
+              is_error: true,
+              content: "Agent launch failed",
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
     test("should clear pending background work from string task notifications", () => {
       parser.trackBackgroundWorkState({
         type: "assistant",

@@ -101,13 +101,21 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   private pendingStreamingToolUses = new Map<string, string>();
 
   /**
-   * The `tool_use` id of the most recent `run_in_background: true` Bash launch
-   * that has not yet been notified, or undefined when no background task is
-   * pending. "Most recent" (not "any outstanding") is deliberate: a newer
-   * launch always displaces an older, superseded one that will never be
-   * notified — see `hasPendingBackgroundWork` for the empirical rationale.
+   * The `tool_use` id of the most recent background Bash or confirmed async
+   * Agent launch that has not yet been notified, or undefined when no
+   * background task is pending. "Most recent" (not "any outstanding") is
+   * deliberate: a newer launch always displaces an older, superseded one that
+   * will never be notified — see `hasPendingBackgroundWork` for the empirical
+   * rationale.
    */
   private mostRecentBackgroundLaunchId?: string;
+
+  /**
+   * Agent tool calls that may launch asynchronously. Unlike Bash, an Agent
+   * call with no `run_in_background` field is not positive evidence by itself;
+   * Claude confirms the launch in the correlated tool result.
+   */
+  private unconfirmedAsyncAgentLaunchIds = new Set<string>();
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -542,13 +550,45 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
+   * Promote a candidate Agent tool call to pending background work only after
+   * Claude confirms that it launched asynchronously. Failed and synchronous
+   * Agent calls must not hold workflow completion.
+   */
+  private trackAsyncAgentLaunchResult(e: ClaudeProviderEvent): void {
+    if (e.type !== "user" || !Array.isArray(e.message?.content)) {
+      return;
+    }
+
+    for (const block of e.message.content as Array<Record<string, any>>) {
+      const toolUseId = block.tool_use_id;
+      if (
+        block.type !== "tool_result" ||
+        typeof toolUseId !== "string" ||
+        !this.unconfirmedAsyncAgentLaunchIds.delete(toolUseId)
+      ) {
+        continue;
+      }
+
+      const resultText = ClaudeToolBuilder.extractToolResultText(block.content);
+      if (
+        block.is_error !== true &&
+        resultText.includes("Async agent launched successfully")
+      ) {
+        this.mostRecentBackgroundLaunchId = toolUseId;
+      }
+    }
+  }
+
+  /**
    * Track background-task launch/notification markers per the empirically
    * confirmed rule (see `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
    * "Claude Code — CONFIRMED"):
    * - **Launch:** an `assistant` `tool_use` block, `name: "Bash"`,
-   *   `input.run_in_background === true`. Its id becomes the new
-   *   "most recent" launch, superseding any prior one (a superseded launch
-   *   is a "zombie" that will never be notified — see class doc).
+   *   `input.run_in_background === true`, or a candidate `Agent` tool call
+   *   whose correlated result confirms `Async agent launched successfully`.
+   *   Its id becomes the new "most recent" launch, superseding any prior one
+   *   (a superseded launch is a "zombie" that will never be notified — see
+   *   class doc).
    * - **Notification delivery:** a `user` or `attachment` event whose payload contains
    *   `<task-notification>…<tool-use-id>{id}</tool-use-id>…`. Clears the
    *   tracked id only when it matches the most-recent launch. Queue operations
@@ -568,9 +608,19 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         ) {
           this.mostRecentBackgroundLaunchId = block.id;
         }
+        if (
+          block.type === "tool_use" &&
+          block.name === "Agent" &&
+          block.input?.run_in_background !== false &&
+          typeof block.id === "string"
+        ) {
+          this.unconfirmedAsyncAgentLaunchIds.add(block.id);
+        }
       }
       return;
     }
+
+    this.trackAsyncAgentLaunchResult(e);
 
     if (this.mostRecentBackgroundLaunchId) {
       const text = this.extractTaskNotificationText(e);
