@@ -212,6 +212,68 @@ describe("WorkflowStatus — loaded state", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders running rows in the pinned region, separate from the recent scroll container", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      fileName: "/workspace/running.ctrlyoke.json",
+      workflowName: "Running Workflow",
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 0,
+      totalSteps: 1,
+    });
+    useUiStore.setState({
+      activeWorkflowId: "workflow-running",
+      activeWorkflowWorkingFilePath: "/workspace/running.ctrlyoke.json",
+      loadedWorkflows: [],
+    });
+
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Old Workflow",
+        filePath: "/path/old.yaml",
+        executionState: "completed",
+        isFavorite: false,
+      },
+    ]);
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    // The pinned running region exists and holds the running row — never the
+    // recent scroll container, so it stays visible regardless of recent scroll.
+    const runningRegion = document.querySelector(".running-workflows-region");
+    expect(runningRegion).toBeInTheDocument();
+    expect(
+      runningRegion?.querySelector(".running-workflow-item")
+    ).toBeInTheDocument();
+    expect(
+      document
+        .querySelector(".workflow-menu-items")
+        ?.querySelector(".running-workflow-item")
+    ).toBeNull();
+  });
+
+  it("shows no pinned running region when nothing is running", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Only Recent",
+        filePath: "/path/only.yaml",
+        executionState: "completed",
+        isFavorite: false,
+      },
+    ]);
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    expect(
+      document.querySelector(".running-workflows-region")
+    ).not.toBeInTheDocument();
+  });
+
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
     render(<WorkflowStatus />);
     setRecentWorkflows([

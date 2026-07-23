@@ -463,12 +463,33 @@ across sections) before building the run panel. This is a prerequisite
 refactor for the drill-in design, not a side effect: the run indicator cell,
 drill affordance, and view-switch semantics all assume one row per lineage.
 
-**Decided layout: one unified list, not two visual sections.** Running
-lineages sort to the top with their live indicators and keep their inline
-pause/resume/stop controls on the row. The bounded-scroll “Running
-Workflows” section, its dedicated scroll container, and the
-section-conditional search/close-button plumbing are removed along with the
-section itself.
+**Decided layout: one navigation model, two scroll regions under one
+header.** There is still exactly one lineage-keyed row per lineage (running
+state is row state; no lineage appears twice), which is the invariant the
+run panel actually depends on. But running rows render in a **pinned region**
+directly under the shared header rather than being interleaved into the
+single scrolling list.
+
+An earlier iteration folded running rows into the top of one unified
+scrolling list. That was reverted: once the recent list is scrolled, running
+lineages scroll out of view, so you lose at-a-glance visibility of what is
+running and quick access to its pause/resume/stop controls — the whole point
+of a running section. Alternatives considered and rejected: `position:sticky`
+running rows via a custom tanstack `rangeExtractor` (converges to the same
+look as the pinned region but adds virtualizer machinery — sticky/transform
+positioning split, z-index layering — for no visible gain), and a compact
+pinned chip strip (cheapest in height but duplicates running identity and
+can't host the row controls).
+
+The pinned region is content-sized up to `min(260px, 50%)` of the dropdown
+height and scrolls internally past that cap, so a handful of running rows
+cost only their own height while a large count never crowds out the recent
+list. Both regions virtualize independently over `VirtualizedDropdownList`.
+The shared `WorkflowDropdownHeader` owns search/filters/close for both
+regions — no per-section search/close plumbing. When nothing is running the
+region and its `Running (N)` caption are absent entirely and the dropdown
+renders as a single flat list, pixel-identical to the no-running case of the
+old design.
 
 ### `WorkflowStatus.tsx`
 
@@ -644,9 +665,10 @@ button — so no alternate mobile navigation model is necessary.
 
 ## Delivery sequence
 
-1. Unify the running/recent dropdown sections into one lineage-keyed row
-   model rendered as a single list (step 0), preserving current
-   switch/pause/resume/stop behavior on running rows.
+1. Unify the running/recent dropdown into one lineage-keyed row model under
+   one shared header, with running rows in a pinned region above the recent
+   list (step 0), preserving current switch/pause/resume/stop behavior on
+   running rows.
 2. Add the lightweight workflow-row run metadata and summary-only request
    pair, with repository/router isolation tests.
 3. Add `RunSummaryRow`, `RunPanel`, and the `scrollToIndex`/offset-restore

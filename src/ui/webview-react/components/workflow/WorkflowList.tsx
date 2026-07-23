@@ -211,9 +211,16 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
  *
  * One row per lineage regardless of whether it currently has a running
  * instance: running lineages carry their inline pause/resume/stop controls,
- * historical lineages carry favorite/remove, and both live in the same
- * virtualized list under one header — running rows sort first because
- * `rows` already arrives in that order.
+ * historical lineages carry favorite/remove. The shared header (search,
+ * filters, close) applies to both regions below it.
+ *
+ * Layout: running rows render in a **pinned region** directly under the
+ * header — content-sized up to `min(260px, 50%)`, scrolling internally past
+ * that cap — while recent rows fill the rest in their own scroll container.
+ * Pinning is the point: a running lineage stays reachable (and its controls
+ * usable) no matter how far down the recent list the user has scrolled.
+ * With nothing running, the region (and its caption) is absent entirely and
+ * the list renders exactly as a single flat list.
  *
  * Features:
  * - Shows workflow name, state, and relative time (or a live elapsed timer
@@ -221,8 +228,9 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
  * - Highlights current workflow
  * - Click to load workflow or switch to a running instance
  * - Clear history option
- * - Virtualizes rows once the list grows large (see VirtualizedDropdownList)
- *   so a long history doesn't slow down opening the dropdown
+ * - Virtualizes each region's rows once they grow large (see
+ *   VirtualizedDropdownList) so a long history doesn't slow down opening
+ *   the dropdown
  */
 export const WorkflowList: React.FC<WorkflowListProps> = ({
   rows,
@@ -251,14 +259,22 @@ export const WorkflowList: React.FC<WorkflowListProps> = ({
   isNarrow = false,
   className = "",
 }) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // Clear History only ever targets persisted history, never live instances —
-  // hide the footer when the list is showing running lineages with no history yet.
-  const hasHistoryRows = rows.some((row) => row.kind === "recent");
+  const runningScrollContainerRef = useRef<HTMLDivElement>(null);
+  const recentScrollContainerRef = useRef<HTMLDivElement>(null);
+  const runningRows = rows.filter(
+    (row): row is Extract<UnifiedWorkflowRow, { kind: "running" }> =>
+      row.kind === "running"
+  );
+  const recentRows = rows.filter(
+    (row): row is Extract<UnifiedWorkflowRow, { kind: "recent" }> =>
+      row.kind === "recent"
+  );
+  const hasRunningRows = runningRows.length > 0;
+  const hasRecentRows = recentRows.length > 0;
 
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
-      {/* Header */}
+      {/* Header — owns search/filter/close for both regions below */}
       <WorkflowDropdownHeader
         icon="codicon-checklist"
         title="Workflows"
@@ -273,35 +289,36 @@ export const WorkflowList: React.FC<WorkflowListProps> = ({
         filterControls={filterControls}
       />
 
-      {/* Scrollable Items */}
-      <div
-        ref={scrollContainerRef}
-        className="workflow-menu-items overflow-y-auto overflow-x-clip flex-1 min-h-0 py-1"
-      >
-        {rows.length === 0 ? (
-          isFiltering ? (
-            <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
-              No workflows match your search.
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onNewWorkflow?.()}
-              className="fp-dropdown-row w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
-            >
-              <i className="codicon codicon-add text-xs" />
-              New Workflow
-            </button>
-          )
-        ) : (
-          // Rows have no wrapping text (name/time truncate to one line), so
-          // the default estimated height in VirtualizedDropdownList is fine.
-          <VirtualizedDropdownList
-            items={rows}
-            getItemKey={(row) => row.key}
-            scrollContainerRef={scrollContainerRef}
-            renderItem={(row) =>
-              row.kind === "running" ? (
+      {/* Pinned running region — content-sized up to min(260px, 50%) so a
+          handful of running rows cost only their own height while a large
+          count scrolls internally instead of crowding out the recent list.
+          The 50% term resolves because the dropdown is fixed-positioned with
+          a definite height. When the recent region is empty the cap lifts
+          (flex-1) so running rows can use the free space. */}
+      {hasRunningRows && (
+        <div
+          className={`running-workflows-region flex flex-col border-b border-dropdown-border ${
+            hasRecentRows
+              ? "flex-shrink-0 max-h-[min(260px,50%)]"
+              : "flex-1 min-h-0"
+          }`}
+        >
+          <div className="flex flex-shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
+            <i
+              className="codicon codicon-debug-line-by-line"
+              aria-hidden="true"
+            />
+            <span>Running ({runningRows.length})</span>
+          </div>
+          <div
+            ref={runningScrollContainerRef}
+            className="running-workflow-items min-h-0 overflow-y-auto overflow-x-clip pb-1"
+          >
+            <VirtualizedDropdownList
+              items={runningRows}
+              getItemKey={(row) => row.key}
+              scrollContainerRef={runningScrollContainerRef}
+              renderItem={(row) => (
                 <RunningWorkflowItem
                   workflow={row.workflow}
                   isCurrent={row.workflow.id === activeWorkflowId}
@@ -313,24 +330,61 @@ export const WorkflowList: React.FC<WorkflowListProps> = ({
                   onResume={() => onResumeRunning(row.workflow)}
                   onStop={() => onStopRunning(row.workflow)}
                 />
-              ) : (
-                <RecentWorkflowRow
-                  workflow={row.workflow}
-                  currentAddress={currentAddress}
-                  hasActiveTerminal={recentHasActiveTerminal}
-                  isNarrow={isNarrow}
-                  onSelect={onSelectRecent}
-                  onToggleFavorite={onToggleFavorite}
-                  onRemove={onRemove}
-                />
-              )
-            }
+              )}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Recent workflows — scrolls independently of the pinned running
+          region, so running lineages stay reachable at any scroll depth */}
+      <div
+        ref={recentScrollContainerRef}
+        className={`workflow-menu-items overflow-y-auto overflow-x-clip py-1 ${
+          hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "flex-shrink-0"
+        }`}
+      >
+        {hasRecentRows ? (
+          // Rows have no wrapping text (name/time truncate to one line), so
+          // the default estimated height in VirtualizedDropdownList is fine.
+          <VirtualizedDropdownList
+            items={recentRows}
+            getItemKey={(row) => row.key}
+            scrollContainerRef={recentScrollContainerRef}
+            renderItem={(row) => (
+              <RecentWorkflowRow
+                workflow={row.workflow}
+                currentAddress={currentAddress}
+                hasActiveTerminal={recentHasActiveTerminal}
+                isNarrow={isNarrow}
+                onSelect={onSelectRecent}
+                onToggleFavorite={onToggleFavorite}
+                onRemove={onRemove}
+              />
+            )}
           />
+        ) : hasRunningRows ? // Running matches fill the pinned region above; an empty recent
+        // region needs neither a "no match" message nor a New Workflow
+        // prompt while workflows are actively running.
+        null : isFiltering ? (
+          <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
+            No workflows match your search.
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onNewWorkflow?.()}
+            className="fp-dropdown-row w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
+          >
+            <i className="codicon codicon-add text-xs" />
+            New Workflow
+          </button>
         )}
       </div>
 
-      {/* Footer - Clear History */}
-      {hasHistoryRows && (
+      {/* Footer - Clear History: only ever targets persisted history, never
+          live instances — hidden when no history rows exist */}
+      {hasRecentRows && (
         <div className="workflow-menu-footer p-1 border-t border-dropdown-border bg-editor-bg flex-shrink-0">
           <button
             type="button"
