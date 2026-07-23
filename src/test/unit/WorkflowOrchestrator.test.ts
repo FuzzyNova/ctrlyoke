@@ -685,6 +685,72 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     }
   });
 
+  test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-summaries-")
+    );
+    try {
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const workflowKey = "summaries-lineage" as never;
+      const sent: Array<{ type?: string }> = [];
+      let bindCalls = 0;
+      let resolveCalls = 0;
+
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewAddressRegistry = new Map();
+      internal.viewMessageSinks = new Map();
+      internal.bindClientToAddressedLineage = async () => {
+        bindCalls += 1;
+        return null;
+      };
+      internal.resolveAddressFilePath = () => {
+        resolveCalls += 1;
+        return "";
+      };
+      internal.findExecutionRunRef = () => undefined;
+      internal.lineageRepository = {
+        readDescriptor: async () => ({
+          revision: 4,
+          lastModifiedAt: 1_753_000_000_000,
+        }),
+      };
+
+      await orchestrator.loadRunSummariesForClient(
+        workflowKey,
+        (message) => sent.push(message as { type?: string }),
+        "run-summaries-request-1"
+      );
+
+      assert.strictEqual(sent.length, 1);
+      assert.deepStrictEqual(sent[0], {
+        type: MESSAGE_TYPES.RUN_SUMMARIES_LOADED,
+        requestId: "run-summaries-request-1",
+        workflowKey,
+        descriptorRevision: 4,
+        lastModifiedAt: 1_753_000_000_000,
+        runSummaries: [],
+        executionRunRef: undefined,
+      });
+      assert.strictEqual(
+        bindCalls,
+        0,
+        "must not bind the client to the lineage — that would switch its view"
+      );
+      assert.strictEqual(
+        resolveCalls,
+        0,
+        "must not load a working file for the lineage"
+      );
+      assert.strictEqual(internal.viewAddressRegistry.size, 0);
+      assert.strictEqual(internal.viewMessageSinks.size, 0);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("re-publishes the addressed view identity after the live replay so SESSION_RESTORED cannot leave the client without a run address", async () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype

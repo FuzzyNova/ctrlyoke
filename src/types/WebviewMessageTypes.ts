@@ -46,6 +46,7 @@ import type {
   WorkflowKey,
   RunRef,
   WorkingFile,
+  WorkflowRunNavigationSummary,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -791,6 +792,7 @@ export interface RecentWorkflowsMessage {
     isFavorite?: boolean;
     totalSteps?: number;
     harness?: HarnessId;
+    runNav?: WorkflowRunNavigationSummary;
   }>;
 }
 
@@ -1190,6 +1192,29 @@ export interface LoadRunViewMessage {
   type: typeof MESSAGE_TYPES.LOAD_RUN_VIEW;
   address: WorkflowViewAddress;
   requestId?: string;
+}
+
+/**
+ * Webview → Extension: fetch another lineage's run list for the run-navigation
+ * dropdown's drill-in panel. Summary-only — unlike `LoadRunViewMessage`, this never
+ * registers a client view, switches the active instance, or loads a working file.
+ */
+export interface LoadRunSummariesMessage {
+  type: typeof MESSAGE_TYPES.LOAD_RUN_SUMMARIES;
+  requestId: string;
+  workflowKey: WorkflowKey;
+}
+
+/** Extension → Webview: manifest-only run listing for one lineage, request-correlated. */
+export interface RunSummariesLoadedMessage {
+  type: typeof MESSAGE_TYPES.RUN_SUMMARIES_LOADED;
+  requestId: string;
+  workflowKey: WorkflowKey;
+  descriptorRevision: number;
+  lastModifiedAt: number;
+  runSummaries: RunSummary[];
+  /** The exact run currently bound to execution, if the lineage is active. */
+  executionRunRef?: RunRef;
 }
 
 /** Start the currently viewed draft through its explicit address. */
@@ -1750,6 +1775,7 @@ export type IncomingMessage =
   | OpenNewWorkflowModalMessage
   | { type: typeof MESSAGE_TYPES.WORKFLOW_NAME_UPDATED; workflowName: string }
   | RecentWorkflowsMessage
+  | RunSummariesLoadedMessage
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
   | { type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET; templateId: string }
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }

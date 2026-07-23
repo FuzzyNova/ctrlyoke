@@ -607,6 +607,19 @@ export interface PromptResult {
 }
 
 /**
+ * Lightweight per-lineage run-navigation metadata for workflow-list rows: whether a
+ * lineage is drillable (more than one run, or a run plus a draft), and what to show
+ * without loading every run's full `RunSummary`. Shared across `RecentWorkflow` and
+ * `WorkflowSummary` rather than duplicated as parallel optional fields on each.
+ */
+export interface WorkflowRunNavigationSummary {
+  primaryAddress: WorkflowViewAddress;
+  primaryRunId?: number;
+  runCount: number;
+  hasDraft: boolean;
+}
+
+/**
  * Summary of a workflow instance — used by WorkflowOrchestrator to expose
  * lightweight status information without leaking the full WorkflowInstance.
  */
@@ -630,6 +643,8 @@ export interface WorkflowSummary {
   managedBy?: RunnerId;
   /** Resolved harness this workflow runs on (workflow/step override, or the global default). */
   harness?: HarnessId;
+  /** Run-navigation metadata for this lineage's list row. Not yet populated for running workflows. */
+  runNav?: WorkflowRunNavigationSummary;
 }
 
 /**

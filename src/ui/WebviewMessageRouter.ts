@@ -997,6 +997,24 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.LOAD_RUN_SUMMARIES, async (message) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      try {
+        await orchestrator.loadRunSummariesForClient(
+          message.workflowKey,
+          this.scopedPostMessage,
+          message.requestId
+        );
+      } catch (error) {
+        await this.reportActionFailure(
+          "load run summaries",
+          error,
+          message.requestId
+        );
+      }
+    });
+
     table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message) => {
       const query =
         typeof message.query === "string" ? message.query.trim() : "";

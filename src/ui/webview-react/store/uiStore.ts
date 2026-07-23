@@ -13,7 +13,10 @@ import type {
   HistorySearchResult,
   RunSummary,
 } from "@root/types/WorkflowTimelineTypes";
-import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowViewAddress,
+  WorkflowRunNavigationSummary,
+} from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
@@ -122,6 +125,7 @@ export interface RecentWorkflow {
   isFavorite?: boolean;
   totalSteps?: number;
   harness?: HarnessId;
+  runNav?: WorkflowRunNavigationSummary;
 }
 
 /** Panel size snapshot for the desktop layout (steps/settings/editor in px; output as %). */

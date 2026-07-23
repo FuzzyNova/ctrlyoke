@@ -162,6 +162,8 @@ export const MESSAGE_TYPES = {
   // Output history messages
   OUTPUT_HISTORY_LOADED: "outputHistoryLoaded", // Extension -> Webview: Load history for display
   LOAD_RUN_VIEW: "loadRunView", // Webview -> Extension: Switch this client's displayed draft/run
+  LOAD_RUN_SUMMARIES: "loadRunSummaries", // Webview -> Extension: Fetch another lineage's run list (summary-only, no view switch)
+  RUN_SUMMARIES_LOADED: "runSummariesLoaded", // Extension -> Webview: Manifest-only run listing for one lineage, request-correlated
   SEARCH_HISTORY: "searchHistory", // Webview -> Extension: Search global run history
   SEARCH_HISTORY_RESULTS: "searchHistoryResults", // Extension -> Webview: Return global history matches
   OPEN_HISTORY_SEARCH: "openHistorySearch", // Extension -> Webview: Open global history search UI

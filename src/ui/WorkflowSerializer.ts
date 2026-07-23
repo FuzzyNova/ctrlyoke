@@ -31,6 +31,7 @@ import {
   type PromptStep,
   type WorkingFile,
   type WorkflowViewAddress,
+  type WorkflowRunNavigationSummary,
 } from "../types/CtrlYokeTypes";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
@@ -1020,6 +1021,20 @@ export class WorkflowSerializer {
 
           try {
             const workingFile = (await readJsonFile(filePath)) as WorkingFile;
+            const historyManager =
+              this.getOutputHistoryManager() ??
+              new OutputHistoryManager(workspaceRoot);
+            const { runCount, primaryRunId } =
+              await historyManager.getRunNavigationSummary(workflowKey);
+            const hasDraft =
+              !descriptor.latestRunRef ||
+              descriptor.pendingEdit?.kind === "draft";
+            const runNav: WorkflowRunNavigationSummary = {
+              primaryAddress: address,
+              primaryRunId,
+              runCount,
+              hasDraft,
+            };
 
             const lastModified =
               workingFile.lastModifiedAt || workingFile.startedAt || 0;
@@ -1075,6 +1090,7 @@ export class WorkflowSerializer {
               isFavorite: descriptor.isFavorite,
               totalSteps: steps.length,
               harness,
+              runNav,
             };
           } catch (error) {
             Log.warn(`Failed to parse workflow file ${workflowKey}:`, error);

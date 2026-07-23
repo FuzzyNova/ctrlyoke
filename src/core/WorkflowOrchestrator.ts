@@ -57,6 +57,7 @@ import type {
   CliOutput,
   ActiveTerminalWorkflowRef,
   RunViewLoadedMessage,
+  RunSummariesLoadedMessage,
   WorkflowDefinitionMutation,
   WorkflowViewIdentityMessage,
 } from "../types/WebviewMessageTypes";
@@ -2128,6 +2129,39 @@ export class WorkflowOrchestrator {
     if (boundWorkflowId) {
       this.replayTerminalSessionsTo(boundWorkflowId, send, clientId);
     }
+  }
+
+  /**
+   * Fetches one lineage's manifest-only run list for the run-navigation dropdown's
+   * drill-in panel. Unlike `loadRunViewForClient`, this never binds a client to the
+   * lineage, loads a working file, or replays PTY/output state — it is a pure,
+   * request-correlated summary fetch so drilling into another lineage's runs cannot
+   * change what the caller is currently viewing.
+   */
+  async loadRunSummariesForClient(
+    workflowKey: WorkflowKey,
+    send: (message: unknown) => void,
+    requestId: string
+  ): Promise<void> {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder is open");
+    }
+    const historyManager = new OutputHistoryManager(workspaceRoot);
+    const [runSummaries, descriptor] = await Promise.all([
+      historyManager.getRunSummaries(workflowKey),
+      this.lineageRepository.readDescriptor(workspaceRoot, workflowKey),
+    ]);
+    const snapshot: RunSummariesLoadedMessage = {
+      type: MESSAGE_TYPES.RUN_SUMMARIES_LOADED,
+      requestId,
+      workflowKey,
+      descriptorRevision: descriptor.revision,
+      lastModifiedAt: descriptor.lastModifiedAt,
+      runSummaries,
+      executionRunRef: this.findExecutionRunRef(workflowKey),
+    };
+    send(snapshot);
   }
 
   /**

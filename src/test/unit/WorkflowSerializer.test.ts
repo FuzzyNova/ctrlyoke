@@ -8,8 +8,12 @@ import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
-import type { WorkflowViewAddress } from "../../types/CtrlYokeTypes";
+import type {
+  WorkflowViewAddress,
+  WorkflowKey,
+} from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 /** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
 function fakeWorkspaceState(): any {
@@ -21,6 +25,69 @@ function fakeWorkspaceState(): any {
       store.set(key, value);
     },
   };
+}
+
+/** Promotes one complete run under an already-created lineage, writing the working
+ * file, manifest, and empty events log the finalize step requires. */
+async function createPromotedRun(
+  repository: WorkflowLineageRepository,
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  startedAt: number
+): Promise<{ runRef: string; runId: number }> {
+  const run = await repository.allocateRun(workspaceRoot, workflowKey);
+  await fs.writeFile(
+    run.stagingRunFilePath,
+    JSON.stringify({
+      workflowName: "Recent workflows test",
+      definitionRevision: 1,
+      startedAt,
+      lastModifiedAt: startedAt,
+      steps: [{ prompt: "hello" }],
+      _runtime: { currentIndex: 0, executionState: "completed" },
+    })
+  );
+  await fs.writeFile(
+    path.join(run.stagingRunDir, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: "2.2.0",
+      storageKind: "timeline",
+      workflowId: "test",
+      runId: run.runId,
+      startedAt,
+      executionState: "completed",
+      definitionRevision: 1,
+      stepCount: 1,
+      eventCount: 0,
+      nextSequence: 0,
+      lastUpdatedAt: startedAt,
+    })
+  );
+  await fs.writeFile(path.join(run.stagingRunDir, "events.jsonl"), "");
+  await repository.finalizeAllocatedRun(workspaceRoot, workflowKey, run);
+  return { runRef: run.runRef, runId: run.runId };
+}
+
+/** Writes a minimal draft working file directly (bypassing WorkingFileManager). */
+async function writeDraftWorkingFile(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  startedAt: number
+): Promise<void> {
+  await fs.mkdir(WorkflowPaths.draftDir(workspaceRoot, workflowKey), {
+    recursive: true,
+  });
+  await fs.writeFile(
+    WorkflowPaths.draftFilePath(workspaceRoot, workflowKey),
+    JSON.stringify({
+      workflowName: "Recent workflows draft test",
+      definitionRevision: 1,
+      startedAt,
+      lastModifiedAt: startedAt,
+      steps: [{ prompt: "hello" }],
+      _runtime: { currentIndex: 0, executionState: "idle" },
+    })
+  );
 }
 
 suite("WorkflowSerializer", () => {
@@ -363,6 +430,209 @@ suite("WorkflowSerializer", () => {
         });
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
+    });
+  });
+
+  suite("handleGetRecentWorkflows: runNav", () => {
+    async function withWorkspace(
+      prefix: string,
+      run: (workspaceRoot: string) => Promise<void>
+    ): Promise<void> {
+      const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [
+            {
+              uri: vscode.Uri.file(workspaceRoot),
+              name: prefix,
+              index: 0,
+            },
+          ],
+          configurable: true,
+        });
+        await run(workspaceRoot);
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+      }
+    }
+
+    test("a single promoted run with no draft reports runCount 1 and no drill affordance beyond it", async () => {
+      await withWorkspace("ctrlyoke-recent-single-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-recent-single",
+          "Recent Single"
+        );
+        const { runRef, runId } = await createPromotedRun(
+          repository,
+          workspaceRoot,
+          lineage.workflowKey,
+          1_000
+        );
+
+        const messages: any[] = [];
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {} as any,
+          () => undefined,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+        await serializer.handleGetRecentWorkflows();
+
+        const message = messages.pop();
+        assert.strictEqual(message.type, MESSAGE_TYPES.RECENT_WORKFLOWS);
+        assert.strictEqual(message.workflows.length, 1);
+        assert.deepStrictEqual(message.workflows[0].runNav, {
+          primaryAddress: {
+            workflowKey: lineage.workflowKey,
+            kind: "run",
+            runRef,
+          },
+          primaryRunId: runId,
+          runCount: 1,
+          hasDraft: false,
+        });
+      });
+    });
+
+    test("multiple promoted runs report the total count and the latest run's id", async () => {
+      await withWorkspace("ctrlyoke-recent-multi-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-recent-multi",
+          "Recent Multi"
+        );
+        await createPromotedRun(
+          repository,
+          workspaceRoot,
+          lineage.workflowKey,
+          1_000
+        );
+        const { runRef: latestRunRef, runId: latestRunId } =
+          await createPromotedRun(
+            repository,
+            workspaceRoot,
+            lineage.workflowKey,
+            2_000
+          );
+
+        const messages: any[] = [];
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {} as any,
+          () => undefined,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+        await serializer.handleGetRecentWorkflows();
+
+        const message = messages.pop();
+        assert.deepStrictEqual(message.workflows[0].runNav, {
+          primaryAddress: {
+            workflowKey: lineage.workflowKey,
+            kind: "run",
+            runRef: latestRunRef,
+          },
+          primaryRunId: latestRunId,
+          runCount: 2,
+          hasDraft: false,
+        });
+      });
+    });
+
+    test("a fresh lineage with no promoted run reports a draft-only row", async () => {
+      await withWorkspace("ctrlyoke-recent-draft-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-recent-draft",
+          "Recent Draft"
+        );
+        await writeDraftWorkingFile(workspaceRoot, lineage.workflowKey, 1_000);
+
+        const messages: any[] = [];
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {} as any,
+          () => undefined,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+        await serializer.handleGetRecentWorkflows();
+
+        const message = messages.pop();
+        assert.deepStrictEqual(message.workflows[0].runNav, {
+          primaryAddress: { workflowKey: lineage.workflowKey, kind: "draft" },
+          primaryRunId: undefined,
+          runCount: 0,
+          hasDraft: true,
+        });
+      });
+    });
+
+    test("a promoted run plus a seeded draft reports hasDraft alongside the run count", async () => {
+      await withWorkspace(
+        "ctrlyoke-recent-run-draft-",
+        async (workspaceRoot) => {
+          const repository = new WorkflowLineageRepository();
+          const lineage = await repository.createLineage(
+            workspaceRoot,
+            "wf-recent-run-draft",
+            "Recent Run Plus Draft"
+          );
+          const { runRef, runId } = await createPromotedRun(
+            repository,
+            workspaceRoot,
+            lineage.workflowKey,
+            1_000
+          );
+          await repository.updateDescriptor(
+            workspaceRoot,
+            lineage.workflowKey,
+            (descriptor) => ({
+              ...descriptor,
+              pendingEdit: { kind: "draft" },
+            })
+          );
+          await writeDraftWorkingFile(
+            workspaceRoot,
+            lineage.workflowKey,
+            2_000
+          );
+
+          const messages: any[] = [];
+          const serializer = new WorkflowSerializer(
+            (message) => messages.push(message),
+            {} as any,
+            () => undefined,
+            () => undefined,
+            fakeWorkspaceState()
+          );
+          await serializer.handleGetRecentWorkflows();
+
+          const message = messages.pop();
+          // latestRunRef is still set, so the row's primary/displayed address stays
+          // the run — hasDraft is what signals a separately reachable draft exists.
+          assert.deepStrictEqual(message.workflows[0].runNav, {
+            primaryAddress: {
+              workflowKey: lineage.workflowKey,
+              kind: "run",
+              runRef,
+            },
+            primaryRunId: runId,
+            runCount: 1,
+            hasDraft: true,
+          });
+        }
+      );
     });
   });
 });

@@ -760,6 +760,35 @@ export class OutputHistoryManager {
   }
 
   /**
+   * Cheap run-count plus the latest run's manifest `runId`, for workflow-list rows that
+   * need to know whether a lineage is drillable without loading every run's summary.
+   * `runCount` comes from `getRunsForWorkflow` (directory listing only, no manifest I/O),
+   * so a corrupted non-latest run directory still counts — validating every run's
+   * manifest just to produce a list-row count would reintroduce the per-run cost this
+   * method exists to avoid. Only the newest run's manifest is read, for `primaryRunId`.
+   */
+  async getRunNavigationSummary(
+    workflowKey: WorkflowKey
+  ): Promise<{ runCount: number; primaryRunId?: number }> {
+    const runs = await this.getRunsForWorkflow(workflowKey);
+    if (runs.length === 0) {
+      return { runCount: 0 };
+    }
+    try {
+      const manifest = await this.timelineRecorder.readManifest(
+        this.getHistoryFilePath(workflowKey, runs[0])
+      );
+      return { runCount: runs.length, primaryRunId: manifest.runId };
+    } catch (error) {
+      Log.warn(
+        `[OutputHistoryManager] getRunNavigationSummary: latest run manifest unreadable for ${workflowKey}/${runs[0]}:`,
+        error
+      );
+      return { runCount: runs.length };
+    }
+  }
+
+  /**
    * Manifest-only run listing for a lineage, newest first. Reads each run's
    * manifest.json plus its workflow.ctrlyoke.json (for harness/model disclosure only —
    * no output events are loaded). Runs whose manifest cannot be read are treated as

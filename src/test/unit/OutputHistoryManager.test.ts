@@ -1258,6 +1258,93 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(summaries[1]?.hasMixedModels, false);
   });
 
+  test("getRunNavigationSummary reports the latest run's id and total run count", async () => {
+    const { workflowKey } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-nav-summary",
+      { runId: 1, startedAt: 1_000 }
+    );
+    await initAdditionalRun(
+      recorder,
+      tempWorkspace,
+      workflowKey,
+      2,
+      Date.now() + 1_000_000
+    );
+
+    const summary = await manager.getRunNavigationSummary(workflowKey);
+
+    assert.strictEqual(summary.runCount, 2);
+    assert.strictEqual(summary.primaryRunId, 2);
+  });
+
+  test("getRunNavigationSummary reports zero runs for a lineage with no promoted run", async () => {
+    const workflowKey = (
+      await new WorkflowLineageRepository().createLineage(
+        tempWorkspace,
+        "wf-nav-empty",
+        "wf-nav-empty"
+      )
+    ).workflowKey;
+
+    const summary = await manager.getRunNavigationSummary(workflowKey);
+
+    assert.deepStrictEqual(summary, { runCount: 0 });
+  });
+
+  test("getRunNavigationSummary counts a corrupted latest run but omits its primaryRunId", async () => {
+    const { workflowKey } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-nav-corrupt-latest",
+      { runId: 1, startedAt: 1_000 }
+    );
+    // A newer run dir with no manifest.json — this is "the latest" by
+    // directory-timestamp ordering but cannot be read.
+    const corruptRunDir = WorkflowPaths.runDir(
+      tempWorkspace,
+      workflowKey,
+      WorkflowPaths.formatRunRef(Date.now() + 1_000_000)
+    );
+    await fs.mkdir(corruptRunDir, { recursive: true });
+
+    const summary = await manager.getRunNavigationSummary(workflowKey);
+
+    assert.strictEqual(summary.runCount, 2);
+    assert.strictEqual(summary.primaryRunId, undefined);
+  });
+
+  test("getRunNavigationSummary still counts a corrupted non-latest run directory", async () => {
+    // Documents the directory-count tradeoff: runCount reflects run
+    // directories, not validated manifests, so a corrupted older run still
+    // counts here even though getRunSummaries() would exclude it.
+    const { workflowKey } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-nav-corrupt-older",
+      { runId: 1, startedAt: 1_000 }
+    );
+    await initAdditionalRun(
+      recorder,
+      tempWorkspace,
+      workflowKey,
+      2,
+      Date.now() + 1_000_000
+    );
+    const corruptRunDir = WorkflowPaths.runDir(
+      tempWorkspace,
+      workflowKey,
+      WorkflowPaths.formatRunRef(500)
+    );
+    await fs.mkdir(corruptRunDir, { recursive: true });
+
+    const summary = await manager.getRunNavigationSummary(workflowKey);
+
+    assert.strictEqual(summary.runCount, 3);
+    assert.strictEqual(summary.primaryRunId, 2);
+  });
+
   test("appendRuntimeTransition keeps the manifest executionState authoritative for non-terminal transitions", async () => {
     const historyInit = await initTestRun(
       manager,
