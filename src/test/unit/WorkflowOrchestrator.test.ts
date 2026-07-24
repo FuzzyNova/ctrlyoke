@@ -315,6 +315,95 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.deepStrictEqual(replays, []);
   });
 
+  test("binds every run view to the retired instance that owns the lineage terminal", async () => {
+    const { internal, replays } = createLineageBindingHarness();
+    const other = "other" as never;
+    const historicalRun = "run-2026-07-24T04-48-38-282Z" as never;
+    const liveRun = "run-2026-07-24T16-44-11-345Z" as never;
+
+    // Reproduce a completed older run lingering before the newer run's
+    // terminal-owning instance in insertion order.
+    internal.retiredInstances.set("instance-historical", {
+      id: "instance-historical",
+      getQueueState: () => ({
+        workflowKey: other,
+        runRef: historicalRun,
+      }),
+    });
+    internal.retiredInstances.set("instance-terminal-owner", {
+      id: "instance-terminal-owner",
+      getQueueState: () => ({
+        workflowKey: other,
+        runRef: liveRun,
+      }),
+    });
+    internal.getActiveTerminalWorkflowRefs = () => [
+      {
+        workflowId: "instance-terminal-owner",
+        workflowKey: other,
+        runRef: liveRun,
+      },
+    ];
+
+    await internal.bindClientToAddressedLineage(
+      { workflowKey: other, kind: "run", runRef: historicalRun },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-terminal-owner",
+      "historical snapshots must retain the lineage's live TerminalView"
+    );
+    assert.deepStrictEqual(replays, []);
+  });
+
+  test("rebinds a same-lineage client when its current instance is not the terminal owner", async () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+    const historicalRun = "run-2026-07-24T04-48-38-282Z" as never;
+    const liveRun = "run-2026-07-24T16-44-11-345Z" as never;
+
+    const staleBound = internal.instances.get("instance-bound");
+    internal.instances.delete("instance-bound");
+    internal.retiredInstances.set("instance-bound", {
+      ...staleBound,
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        runRef: historicalRun,
+      }),
+    });
+    internal.retiredInstances.set("instance-terminal-owner", {
+      id: "instance-terminal-owner",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        runRef: liveRun,
+      }),
+    });
+    internal.getActiveTerminalWorkflowRefs = () => [
+      {
+        workflowId: "instance-terminal-owner",
+        workflowKey: boundKey,
+        runRef: liveRun,
+      },
+    ];
+
+    await internal.bindClientToAddressedLineage(
+      {
+        workflowKey: boundKey,
+        kind: "run",
+        runRef: historicalRun,
+      },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-terminal-owner"
+    );
+  });
+
   test("materializes an addressed instance only when the lineage has none resident", async () => {
     const { internal, freshLoads, freshLoadOptions } =
       createLineageBindingHarness();

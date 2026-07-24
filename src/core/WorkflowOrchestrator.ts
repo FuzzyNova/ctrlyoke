@@ -1969,19 +1969,35 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Instances are lineage-scoped: at most one is resident per `workflowKey`,
-   * so viewing *any* run of a lineage binds to that one instance. Live wins
-   * over retired, since a retired duplicate can briefly linger while the same
-   * lineage is re-executing.
+   * Instances are lineage-scoped: viewing *any* run of a lineage binds to its
+   * single runtime owner. Live wins over retired. If stale retired duplicates
+   * exist, the instance that owns the lineage's running PTY wins so every run
+   * view renders the same TerminalView; the addressed RunRef only controls the
+   * definition/history snapshot and its live-run indicator.
    */
   private findInstanceForLineage(
     workflowKey: WorkflowKey
   ): WorkflowInstance | undefined {
     const matches = (instance: WorkflowInstance) =>
       instance.getQueueState().workflowKey === workflowKey;
+    const live = [...this.instances.values()].find(matches);
+    if (live) {
+      return live;
+    }
+
+    const retired = [...this.retiredInstances.values()].filter(matches);
+    if (retired.length <= 1) {
+      return retired[0];
+    }
+
+    const activeTerminalOwnerIds = new Set(
+      this.getActiveTerminalWorkflowRefs()
+        .filter((ref) => ref.workflowKey === workflowKey)
+        .map((ref) => ref.workflowId)
+    );
     return (
-      [...this.instances.values()].find(matches) ??
-      [...this.retiredInstances.values()].find(matches)
+      retired.find((instance) => activeTerminalOwnerIds.has(instance.id)) ??
+      retired[0]
     );
   }
 
@@ -2010,15 +2026,14 @@ export class WorkflowOrchestrator {
     if (binding.has(clientId)) return null;
 
     const boundId = this.getViewedWorkflowId(clientId);
-    const bound = boundId ? this.findInstance(boundId) : undefined;
-    if (bound?.getQueueState().workflowKey === address.workflowKey) return null;
+    const resident = this.cliSessions.has(address.workflowKey)
+      ? address.workflowKey
+      : this.findInstanceForLineage(address.workflowKey)?.id;
+    if (boundId === resident) return null;
 
     binding.add(clientId);
     try {
       // A CLI-managed lineage is registered under its workflowKey, not a UUID.
-      const resident = this.cliSessions.has(address.workflowKey)
-        ? address.workflowKey
-        : this.findInstanceForLineage(address.workflowKey)?.id;
       if (resident) {
         this.setViewedWorkflowId(clientId, resident);
         return resident;
