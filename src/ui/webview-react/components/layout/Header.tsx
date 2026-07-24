@@ -228,6 +228,8 @@ export const Header: React.FC<{
         postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
       } else if (action === "continue") {
         postViewedRunAction(MESSAGE_TYPES.CONTINUE_RUN);
+      } else if (action === "restart") {
+        postViewedRunAction(MESSAGE_TYPES.START_NEW_RUN_INSTEAD);
       } else if (action === "resume") {
         if (executionRunAddress) {
           vscode.postMessage({
@@ -258,10 +260,6 @@ export const Header: React.FC<{
       vscode,
     ]
   );
-
-  const handleStartNewRunInstead = useCallback(() => {
-    postViewedRunAction(MESSAGE_TYPES.START_NEW_RUN_INSTEAD);
-  }, [postViewedRunAction]);
 
   const handleDiscardContinuation = useCallback(() => {
     postViewedRunAction(MESSAGE_TYPES.DISCARD_CONTINUATION);
@@ -410,6 +408,8 @@ export const Header: React.FC<{
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+            slot2.emphasized ? "font-bold" : ""
+          } ${
             slot2Enabled
               ? `${slot2NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
@@ -745,18 +745,19 @@ export const Header: React.FC<{
           <span>
             Continuing run from step {pendingRewind.fromStepIndex + 1}
           </span>
+          <span
+            className="inline-flex items-center gap-1 opacity-90 cursor-help"
+            title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
+          >
+            <i className="codicon codicon-info" aria-hidden="true" />
+            Can&apos;t be undone after continuing
+          </span>
           <div className="ml-auto flex items-center gap-3">
             <button
               className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
               onClick={handleDiscardContinuation}
             >
               Discard Continuation
-            </button>
-            <button
-              className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
-              onClick={handleStartNewRunInstead}
-            >
-              Start new run instead
             </button>
           </div>
         </div>

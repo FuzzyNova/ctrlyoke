@@ -311,16 +311,32 @@ describe("getWorkflowExecutionControls", () => {
     });
   });
 
-  it("uses slot 1 Continue during a pending rewind", () => {
+  it("uses slot 1 Restart and slot 2 Continue during a pending rewind", () => {
     const controls = getControls(EXECUTION_STATES.IDLE, {
       pendingRewind: true,
     });
     expect(controls.slot1).toMatchObject({
+      action: "restart",
+      label: "Restart",
+      enabled: true,
+    });
+    expect(controls.slot2).toMatchObject({
       action: "continue",
       label: "Continue",
       enabled: true,
     });
-    expect(controls.slot2.enabled).toBe(false);
+  });
+
+  it("prefers Continue over Resume during a pending rewind on a stopped run", () => {
+    const controls = getControls(EXECUTION_STATES.STOPPED, {
+      pendingRewind: true,
+    });
+    expect(controls.slot1.action).toBe("restart");
+    expect(controls.slot2).toMatchObject({
+      action: "continue",
+      label: "Continue",
+      enabled: true,
+    });
   });
 
   it("keeps all three slots while executing and targets the execution label", () => {

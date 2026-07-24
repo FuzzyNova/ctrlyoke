@@ -266,6 +266,7 @@ export function canStopExecution(state: ExecutionState): boolean {
 export type WorkflowExecutionControlAction =
   | "run-draft"
   | "rerun"
+  | "restart"
   | "continue"
   | "pause"
   | "cancel-pause"
@@ -426,12 +427,11 @@ export function getWorkflowExecutionControls({
         }
       : pendingRewind
         ? {
-            action: "continue" as const,
-            label: "Continue",
-            icon: "codicon-debug-continue",
+            action: "restart" as const,
+            label: "Restart",
+            icon: "codicon-debug-restart",
             enabled: true,
-            title: "Continue this run",
-            emphasized: true,
+            title: "Start a new run from the beginning, discarding this continuation",
           }
         : {
             action: "rerun" as const,
@@ -441,26 +441,39 @@ export function getWorkflowExecutionControls({
             title: "Seed and run a new run from this definition",
             emphasized: true,
           };
+  // Resume only applies outside a pending rewind: while a rewind is pending,
+  // slot 2 is dedicated to Continue instead (see below).
   const resumable =
+    !pendingRewind &&
     viewedKind === "run" &&
     (viewedExecutionState === EXECUTION_STATES.PAUSED ||
       viewedExecutionState === EXECUTION_STATES.STOPPED ||
       viewedExecutionState === EXECUTION_STATES.ERROR);
   return {
     slot1,
-    slot2: resumable
+    slot2: pendingRewind
       ? {
-          action: "resume",
-          label: "Resume",
+          action: "continue",
+          label: "Continue",
           icon: "codicon-debug-continue",
           enabled: true,
-          title: "Resume this run",
+          title: "Continue this run with the edited suffix",
+          emphasized: true,
         }
-      : // Slot 2 is the pause/resume slot. Resume is only offered when this run
-        // actually has interrupted work to resume; otherwise it falls back to a
-        // disabled Pause so an idle workflow reads as Run · Pause · Stop rather
-        // than advertising a continuation that does not exist.
-        disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
+      : resumable
+        ? {
+            action: "resume",
+            label: "Resume",
+            icon: "codicon-debug-continue",
+            enabled: true,
+            title: "Resume this run",
+          }
+        : // Slot 2 is the pause/resume/continue slot. Resume/Continue are only
+          // offered when this run actually has interrupted or rewound work;
+          // otherwise it falls back to a disabled Pause so an idle workflow
+          // reads as Run · Pause · Stop rather than advertising work that does
+          // not exist.
+          disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
     slot3: disabled("Stop", "codicon-debug-stop", "Nothing is executing"),
     isRunning,
     isPausing,

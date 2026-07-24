@@ -57,7 +57,7 @@ describe("Header execution controls", () => {
 
   afterEach(cleanup);
 
-  it("keeps exactly three execution slots and places discard actions in the continuation banner", () => {
+  it("shows Restart/Continue/Stop and places discard in the continuation banner", () => {
     render(<Header />);
 
     const controls = screen.getByRole("group", {
@@ -68,6 +68,9 @@ describe("Header execution controls", () => {
     expect(
       screen.getByRole("button", { name: "Discard Continuation" })
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start new run instead" })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(postMessage).toHaveBeenCalledWith({
@@ -81,9 +84,7 @@ describe("Header execution controls", () => {
       expectedDescriptorRevision: 7,
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start new run instead" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.START_NEW_RUN_INSTEAD,
       address: {
