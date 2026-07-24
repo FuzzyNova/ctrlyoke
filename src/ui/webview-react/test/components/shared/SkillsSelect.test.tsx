@@ -62,6 +62,23 @@ describe("SkillsSelect", () => {
     expect(onHideOption).toHaveBeenCalledWith("lint");
   });
 
+  it("shows a visible skill's full description when hovering its row", async () => {
+    const user = userEvent.setup();
+    const description = "Run the full lint suite with project-specific rules.";
+
+    render(
+      <SkillsSelect
+        value={undefined}
+        onChange={vi.fn()}
+        availableSkills={[{ name: "lint", description }]}
+      />
+    );
+
+    await user.click(screen.getByRole("button"));
+
+    expect(screen.getByTitle(description)).toHaveTextContent("lint");
+  });
+
   it("reveals hidden skills and lets the user unhide them", async () => {
     const user = userEvent.setup();
     const onUnhideOption = vi.fn();
@@ -82,5 +99,25 @@ describe("SkillsSelect", () => {
     await user.click(screen.getByTitle("Unhide this option"));
 
     expect(onUnhideOption).toHaveBeenCalledWith("test");
+  });
+
+  it("shows a hidden skill's full description when hovering its row", async () => {
+    const user = userEvent.setup();
+    const description = "Run the full test suite with project-specific setup.";
+
+    render(
+      <SkillsSelect
+        value={undefined}
+        onChange={vi.fn()}
+        availableSkills={[{ name: "test", description }]}
+        namespace="skills"
+        hiddenValues={["test"]}
+      />
+    );
+
+    await user.click(screen.getByRole("button"));
+    await user.click(screen.getByText(/Show hidden/i));
+
+    expect(screen.getByTitle(description)).toHaveTextContent("test");
   });
 });

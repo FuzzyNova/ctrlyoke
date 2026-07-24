@@ -172,6 +172,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return (
               <div
                 key={skill.name}
+                title={skill.description}
                 className={`group w-full flex items-start focus:outline-none border-none ${
                   isChecked
                     ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
@@ -226,6 +227,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 return (
                   <div
                     key={skill.name}
+                    title={skill.description}
                     className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg fp-dropdown-row"
                   >
                     <button

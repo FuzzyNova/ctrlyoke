@@ -179,7 +179,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
             >
               <span className="flex flex-col min-w-0">
-                <span className="truncate">{option.label}</span>
+                <span title={option.label} className="truncate">
+                  {option.label}
+                </span>
                 {option.description && (
                   <span
                     title={option.description}
@@ -238,7 +240,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
               >
                 <span className="flex flex-col min-w-0">
-                  <span className="truncate">{option.label}</span>
+                  <span title={option.label} className="truncate">
+                    {option.label}
+                  </span>
                   {option.description && (
                     <span
                       title={option.description}

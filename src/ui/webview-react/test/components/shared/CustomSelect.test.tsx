@@ -72,6 +72,22 @@ describe("CustomSelect — basic behavior", () => {
     expect(screen.getByTitle(description)).toBeInTheDocument();
   });
 
+  it("provides each option's full label as hover text", async () => {
+    const user = userEvent.setup();
+    const longLabel = "opencode/very-long-model-name-that-overflows-the-menu";
+    render(
+      <CustomSelect
+        value="a"
+        onChange={vi.fn()}
+        options={[...OPTIONS, { value: "long", label: longLabel }]}
+      />
+    );
+
+    await user.click(getTrigger());
+
+    expect(screen.getByTitle(longLabel)).toHaveClass("truncate");
+  });
+
   it("dropdown options are not rendered when closed", () => {
     render(<CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />);
     // The dropdown is portal-based and not in the DOM when closed
@@ -234,6 +250,28 @@ describe("CustomSelect — hide/unhide feature", () => {
     await user.click(screen.getByText(/Show hidden/i));
     // Option B should now appear in the hidden section
     expect(screen.getAllByText("Option B").length).toBeGreaterThan(0);
+  });
+
+  it("provides hover text for options shown from the hidden section", async () => {
+    const user = userEvent.setup();
+    const longLabel = "opencode/very-long-model-name-that-overflows-the-menu";
+    render(
+      <CustomSelect
+        value="a"
+        onChange={vi.fn()}
+        options={[
+          { value: "a", label: "Option A" },
+          { value: "long", label: longLabel },
+        ]}
+        namespace="models"
+        hiddenValues={["long"]}
+      />
+    );
+
+    await user.click(getTrigger());
+    await user.click(screen.getByText(/Show hidden/i));
+
+    expect(screen.getByTitle(longLabel)).toHaveClass("truncate");
   });
 
   it("calls onUnhideOption when unhide button clicked on hidden row", async () => {
