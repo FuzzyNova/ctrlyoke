@@ -147,6 +147,29 @@ interface DefinitionRollbackInvalidation {
   descriptorRevision: number;
 }
 
+function buildPromptStepChange(
+  text: string,
+  properties: unknown,
+  promptName?: string,
+  clearProperties?: string[]
+): { updates: Partial<WorkflowStep> } | { replace: WorkflowStep } {
+  const props = properties as Record<string, unknown>;
+  return props?.type === STEP_TYPES.SCRIPT
+    ? {
+        replace: buildScriptStepFromProperties(text, props, promptName),
+      }
+    : {
+        updates: {
+          prompt: text,
+          ...(promptName !== undefined && {
+            name: promptName || undefined,
+          }),
+          ...buildPromptStepProperties(properties),
+          ...buildClearUpdates(clearProperties),
+        },
+      };
+}
+
 /**
  * The view address an instance's own queue currently describes: its draft while
  * the lineage has never executed, otherwise the run it holds open. `null` until
@@ -2643,37 +2666,91 @@ export class WorkflowOrchestrator {
           promptName,
           clearProperties
         ),
-      (workspaceRoot) => {
-        const props = properties as Record<string, unknown>;
-        const change:
-          | { updates: Partial<WorkflowStep> }
-          | { replace: WorkflowStep } =
-          props?.type === STEP_TYPES.SCRIPT
-            ? {
-                replace: buildScriptStepFromProperties(text, props, promptName),
-              }
-            : {
-                updates: {
-                  prompt: text,
-                  ...(promptName !== undefined && {
-                    name: promptName || undefined,
-                  }),
-                  ...buildPromptStepProperties(properties),
-                  ...buildClearUpdates(clearProperties),
-                },
-              };
-        return WorkingFileManager.updateStepAtRun(
+      (workspaceRoot) =>
+        WorkingFileManager.updateStepAtRun(
           workspaceRoot,
           runAddress.workflowKey,
           runAddress.runRef,
           index,
-          change,
+          buildPromptStepChange(text, properties, promptName, clearProperties),
           mutation.expectedDefinitionRevision,
           mutation.expectedDescriptorRevision,
           this.lineageRepository
-        ).then(() => undefined);
-      }
+        ).then(() => undefined)
     );
+  }
+
+  /**
+   * Edit a completed nonzero step as one backend-coordinated continuation
+   * action. The durable rewind snapshot is created before the prompt changes,
+   * so Discard Continuation restores the exact completed definition. The edit
+   * then targets the revision pair produced by the rewind instead of racing a
+   * separately posted SET_START_POSITION with the client's stale pair.
+   */
+  async updateCompletedPromptInQueue(
+    mutation: WorkflowDefinitionMutation,
+    index: number,
+    text: string,
+    properties: unknown,
+    promptName?: string,
+    clearProperties?: string[],
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    if (mutation.address.kind !== "run" || index <= 0) {
+      throw new Error(
+        "A same-run completed-step continuation requires a nonzero run step"
+      );
+    }
+    const runAddress = mutation.address;
+    const rewind = await this.setStartPositionAtRun(
+      runAddress,
+      index,
+      mutation.expectedDefinitionRevision,
+      mutation.expectedDescriptorRevision,
+      clientId,
+      { invalidateViews: false }
+    );
+    if (rewind.kind !== "rewind") {
+      throw new Error("Completed-step edit did not create a pending rewind");
+    }
+
+    try {
+      const live = this.findResidentInstanceForRun(
+        runAddress.workflowKey,
+        runAddress.runRef
+      );
+      if (live) {
+        // beginPendingRewind updated both disk and the resident queue. Arm the
+        // following definition write with that new disk revision, not the
+        // client's superseded pre-rewind revision.
+        live.expectDefinitionRevision(rewind.definitionRevision);
+        await live.updatePromptInQueue(
+          index,
+          text,
+          properties,
+          promptName,
+          clearProperties
+        );
+      } else {
+        await WorkingFileManager.updateStepAtRun(
+          this.requireWorkspaceRoot(),
+          runAddress.workflowKey,
+          runAddress.runRef,
+          index,
+          buildPromptStepChange(text, properties, promptName, clearProperties),
+          rewind.definitionRevision,
+          rewind.descriptorRevision,
+          this.lineageRepository
+        );
+      }
+    } catch (error) {
+      // The rewind is already durable even if the content edit fails. Publish
+      // it so clients see the continuation state they can discard or retry.
+      await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
+      throw error;
+    }
+
+    await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
   }
 
   async insertWorkflowStepAfterIndex(
@@ -2890,7 +2967,8 @@ export class WorkflowOrchestrator {
     toIndex: number,
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    options: { invalidateViews?: boolean } = {}
   ): Promise<
     | {
         kind: "seeded";
@@ -3009,7 +3087,9 @@ export class WorkflowOrchestrator {
       result.definitionRevision,
       JSON.parse(await fs.promises.readFile(targetPath, "utf8")) as WorkingFile
     );
-    await this.invalidateRunViews(address.workflowKey, address.runRef);
+    if (options.invalidateViews !== false) {
+      await this.invalidateRunViews(address.workflowKey, address.runRef);
+    }
     return { kind: "rewind", ...result };
   }
 

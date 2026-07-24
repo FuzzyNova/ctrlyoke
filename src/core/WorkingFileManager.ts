@@ -1072,8 +1072,7 @@ export class WorkingFileManager {
         if (index < 0 || index >= steps.length) {
           throw new Error(`Invalid prompt index: ${index}`);
         }
-        const rewindBoundary =
-          source._runtime?.pendingRewind?.fromStepIndex;
+        const rewindBoundary = source._runtime?.pendingRewind?.fromStepIndex;
         if (rewindBoundary !== undefined && index < rewindBoundary) {
           throw new Error(
             `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`

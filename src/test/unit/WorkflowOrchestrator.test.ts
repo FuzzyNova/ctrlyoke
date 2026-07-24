@@ -7,6 +7,7 @@ import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -1634,6 +1635,145 @@ suite("WorkflowOrchestrator addressed start position", () => {
         .map((line) => JSON.parse(line));
       assert.deepStrictEqual(events[0].payload.definition.rewindBoundary, 1);
       assert.strictEqual(events[0].payload.definitionRevision, 2);
+    } finally {
+      await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("editing a completed suffix rewinds before editing and discard restores the completed head", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-completed-edit-rewind-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const completedSteps = [
+        {
+          prompt: "completed prefix",
+          _runtime: { startedAt: 1, completedAt: 2 },
+        },
+        {
+          prompt: "completed suffix",
+          _runtime: { startedAt: 3, completedAt: 4 },
+        },
+      ];
+      const draftManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => completedSteps,
+        getCurrentIndex: () => completedSteps.length,
+        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Completed edit",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await draftManager.createWorkingFile(
+        "completed-edit",
+        completedSteps,
+        workspace,
+        "Completed edit"
+      );
+      const promoted = await draftManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        promoted.runRef,
+        promoted.runDir,
+        promoted.runId,
+        Date.now()
+      );
+      const descriptorBefore =
+        await new WorkflowLineageRepository().readDescriptor(
+          workspace,
+          workflowKey
+        );
+      const completedHead = await fs.readFile(promoted.workingFilePath);
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.viewAddressRegistry = new Map([
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey, kind: "run", runRef: promoted.runRef },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map();
+      internal.lineageRepository = new WorkflowLineageRepository();
+
+      await orchestrator.updateCompletedPromptInQueue(
+        {
+          address: {
+            workflowKey,
+            kind: "run",
+            runRef: promoted.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptorBefore.revision,
+        },
+        1,
+        "edited suffix",
+        {},
+        undefined,
+        undefined,
+        PANEL_CLIENT_ID
+      );
+
+      const edited = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf8")
+      );
+      const descriptorAfter =
+        await new WorkflowLineageRepository().readDescriptor(
+          workspace,
+          workflowKey
+        );
+      assert.strictEqual(edited.definitionRevision, 3);
+      assert.strictEqual(
+        descriptorAfter.revision,
+        descriptorBefore.revision + 2
+      );
+      assert.strictEqual(edited._runtime.pendingRewind.fromStepIndex, 1);
+      assert.strictEqual(edited._runtime.currentIndex, 1);
+      assert.ok(edited.steps[0]._runtime?.completedAt);
+      assert.strictEqual(edited.steps[1].prompt, "edited suffix");
+      assert.strictEqual(edited.steps[1]._runtime, undefined);
+      assert.deepStrictEqual(
+        await fs.readFile(
+          WorkflowPaths.pendingRewindBaseFilePath(
+            workspace,
+            workflowKey,
+            promoted.runRef
+          )
+        ),
+        completedHead,
+        "Discard must retain the exact pre-edit completed definition"
+      );
+
+      const discarded = await WorkingFileManager.discardPendingRewind(
+        workspace,
+        workflowKey,
+        promoted.runRef,
+        edited.definitionRevision,
+        descriptorAfter.revision,
+        true
+      );
+      assert.strictEqual(discarded.discarded, true);
+      assert.deepStrictEqual(
+        await fs.readFile(promoted.workingFilePath),
+        completedHead
+      );
     } finally {
       await history?.flushPendingIndexRefresh();
       await fs.rm(workspace, { recursive: true, force: true });

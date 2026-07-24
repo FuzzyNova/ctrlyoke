@@ -1764,7 +1764,9 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleUpdatePrompt(message: UpdatePromptMessage): Promise<void> {
+  private async handleUpdatePrompt(
+    message: UpdatePromptMessage
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");

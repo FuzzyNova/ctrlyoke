@@ -22,10 +22,13 @@ vi.mock("@components/shared/HarnessIcon", () => ({
 import { PromptEditor } from "@components/editor/PromptEditor";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import {
   MESSAGE_TYPES,
   ACTION_TYPES,
   FINAL_STEP_PHASES,
+  EXECUTION_STATES,
+  STEP_STATUS,
 } from "@/types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 
@@ -34,6 +37,11 @@ const postMessageSpy = vi.fn();
 
 beforeEach(() => {
   useEditorStore.getState().resetEditor();
+  useWorkflowStore.setState({
+    steps: [],
+    currentStep: 0,
+    executionState: EXECUTION_STATES.IDLE,
+  });
   useUiStore.setState({
     displayedViewAddress: null,
     displayedDefinitionRevision: null,
@@ -121,6 +129,63 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
         expectedDescriptorRevision: 9,
       },
     });
+  });
+
+  it("coordinates a completed-step edit in one update message instead of posting a stale rewind", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      steps: [
+        { prompt: "completed prefix", status: STEP_STATUS.COMPLETED },
+        { prompt: "completed suffix", status: STEP_STATUS.COMPLETED },
+      ],
+      currentStep: 2,
+      executionState: EXECUTION_STATES.COMPLETED,
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
+        { prompt: "completed suffix" }
+      );
+    useEditorStore.getState().setPromptText("edited suffix");
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 7,
+    });
+
+    const { container } = render(<PromptEditor />);
+    const updateButton = container.querySelector(
+      ".btn-editor-update"
+    ) as HTMLButtonElement;
+    expect(updateButton).not.toBeNull();
+    await user.click(updateButton);
+
+    const updateMessages = postMessageSpy.mock.calls
+      .map(([message]) => message as Record<string, unknown>)
+      .filter((message) => message.type === MESSAGE_TYPES.UPDATE_PROMPT);
+    expect(updateMessages).toHaveLength(1);
+    expect(updateMessages[0]).toMatchObject({
+      index: 1,
+      text: "edited suffix",
+      rewindCompletedStep: true,
+      mutation: {
+        address: { workflowKey: "wf-1", kind: "run", runRef: "run-1" },
+        expectedDefinitionRevision: 2,
+        expectedDescriptorRevision: 7,
+      },
+    });
+    expect(
+      postMessageSpy.mock.calls.some(
+        ([message]) =>
+          (message as { type?: string }).type ===
+          MESSAGE_TYPES.SET_START_POSITION
+      )
+    ).toBe(false);
   });
 
   it("omits the mutation when no persisted draft/run view is displayed", async () => {
