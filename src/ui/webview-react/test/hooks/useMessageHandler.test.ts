@@ -2189,6 +2189,37 @@ describe("EXECUTION_STARTED", () => {
 // ---------------------------------------------------------------------------
 
 describe("TERMINAL_STARTED", () => {
+  it("keeps terminal lifecycle messages live while viewing a historical run", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "commit" as never,
+        kind: "run",
+        runRef: "run-2026-06-08T21-27-08-408Z" as never,
+      },
+      executionRunRef: "run-2026-07-24T04-29-37-398Z" as never,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "shell-session-1",
+        stepName: "Shell",
+        kind: SESSION_KINDS.SHELL,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    expect(useTerminalStore.getState().sessions["workflow-1"]).toMatchObject([
+      {
+        id: "shell-session-1",
+        status: TERMINAL_SESSION_STATUS.RUNNING,
+      },
+    ]);
+  });
+
   it("expands the output section and shows terminal when auto-focus is enabled", () => {
     renderHook(() => useMessageHandler());
 

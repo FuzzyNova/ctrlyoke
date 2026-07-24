@@ -161,7 +161,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       [
         "execution-instance",
         {
-          getQueueState: () => ({ workflowKey, runRef: executingRun }),
+          getQueueState: () => ({
+            workflowKey,
+            runRef: executingRun,
+            status: EXECUTION_STATES.RUNNING,
+          }),
           getExecutionRunRef: () => executingRun,
         },
       ],
@@ -179,6 +183,32 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       runRef: viewedRun,
     });
     assert.strictEqual(internal.findExecutionRunRef(workflowKey), executingRun);
+  });
+
+  test("does not treat an idle resident instance as a lineage execution owner", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "demo" as never;
+    const restoredRun = "run-2026-06-08T21-27-08-408Z" as never;
+
+    internal.instances = new Map([
+      [
+        "restored-instance",
+        {
+          getQueueState: () => ({
+            workflowKey,
+            runRef: restoredRun,
+            status: EXECUTION_STATES.IDLE,
+          }),
+          getExecutionRunRef: () => restoredRun,
+        },
+      ],
+    ]);
+    internal.cliSessions = new Map();
+
+    assert.strictEqual(internal.findExecutionRunRef(workflowKey), undefined);
   });
 
   test("registers the client's view sink so draft viewers follow their promoted run", async () => {

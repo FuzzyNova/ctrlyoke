@@ -1,10 +1,9 @@
 # Run Navigation and Run-Number Display
 
-Status: **In progress** — delivery steps 1–6 are implemented (unified row model,
-row run metadata, `RunSummaryRow`/`RunPanel`, two-view dropdown, the
-`RunIdentityBadge` header segment, and removal of the legacy `RunSelector`).
-Steps 7–9 remain: terminal execution-run labeling, the full responsive/gapped-ID
-manual pass, and the 1,000/10,000-run measurement.
+Status: **In progress** — delivery steps 1–7 and 9 are implemented. The
+automated portion of step 8 is complete (compile, typecheck, lint, and all
+extension/webview tests pass; task-owned files pass Prettier). The responsive,
+gapped-ID, and live-terminal manual pass remains.
 
 ## Goal
 
@@ -438,6 +437,27 @@ If pagination becomes necessary, use a cursor keyed by
 `{ workflowKey, beforeRunId? }`, never page numbers or indices. Retention and
 deletion can change positions between requests.
 
+#### Measurement result (2026-07-23)
+
+Measured on the Windows development workstation with Node 22.17.0. Each
+fixture used real run directories containing both `manifest.json` and
+`workflow.ctrlyoke.json`. Generation numbers are three production
+`OutputHistoryManager.getRunSummaries()` samples; serialization, parse, and
+row-projection numbers are 20 samples.
+
+| Runs   | Generation cold / warm | JSON payload            | Stringify median / p95 | Parse median / p95 | Row projection median / p95 |
+| ------ | ---------------------- | ----------------------- | ---------------------- | ------------------ | --------------------------- |
+| 1,000  | 160.3 / 154.9 ms       | 322,062 B (0.307 MiB)   | 0.96 / 1.05 ms         | 0.87 / 1.41 ms     | 0.01 / 0.08 ms              |
+| 10,000 | 1,594.7 / 1,508.0 ms   | 3,229,065 B (3.079 MiB) | 8.78 / 11.29 ms        | 9.19 / 13.35 ms    | 0.09 / 0.13 ms              |
+
+The first 10,000-run attempt exposed unbounded `Promise.all` fan-out:
+Windows returned `EMFILE` and the loader silently omitted 1,811 runs.
+`getRunSummaries()` now reads in bounded batches of 32, with regression
+coverage that fails if manifest-read concurrency exceeds 64. The rerun
+returned all 10,000 summaries. Payload parsing and projection remain within
+one 16.7 ms frame at p95, so cursor pagination is not warranted for this
+delivery.
+
 ## Terminal semantics
 
 Run navigation was removed from `OutputSectionHeader` rather than made visible
@@ -716,13 +736,16 @@ button — so no alternate mobile navigation model is necessary.
    delete its count/index props and popup-height plumbing, and remove obsolete
    store fields — plus the extension-side plumbing that only fed them (see
    the `OutputSectionHeader.tsx` section above).
-7. Add terminal execution-run labeling when viewed and executing addresses
+7. ✅ Add terminal execution-run labeling when viewed and executing addresses
    differ.
-8. Run compile, typecheck, lint, formatting, and the full webview/extension
-   test suites; manually exercise 1, 2, 1,000, and gapped run IDs across
-   responsive tiers.
-9. Measure manifest-summary generation and payload/application with 1,000 and
-   10,000 runs. Add cursor pagination only if the targets above fail.
+8. **Automated checks complete; manual pass remains.** Compile, typecheck,
+   lint, and the full webview/extension test suites pass. Task-owned files
+   pass Prettier; the repository-wide formatting check still reports five
+   unrelated pre-existing files. Manually exercise 1, 2, 1,000, and gapped
+   run IDs across responsive tiers.
+9. ✅ Measure manifest-summary generation and payload/application with 1,000
+   and 10,000 runs. The complete-array payload meets the target, so cursor
+   pagination was not added. See the recorded measurement above.
 
 ## Decision summary
 

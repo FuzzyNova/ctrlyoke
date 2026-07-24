@@ -22,6 +22,8 @@ export interface OutputSectionHeaderProps {
   refCallback: (node: HTMLDivElement | null) => void;
   showTerminalTab: boolean;
   terminalCanCloseActiveSession: boolean;
+  /** Executing run identity shown only while a different run/draft is viewed. */
+  terminalExecutionRunLabel: string | null;
   terminalFontSize: number;
   terminalSessionActive: boolean;
   useCompactLabels: boolean;
@@ -56,6 +58,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   refCallback,
   showTerminalTab,
   terminalCanCloseActiveSession,
+  terminalExecutionRunLabel,
   terminalFontSize,
   terminalSessionActive,
   useCompactLabels,
@@ -120,11 +123,26 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             <button
               className={`fp-tab fp-tab-hc ${activeOutputTab === "terminal" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectTerminalTab}
+              aria-label={
+                terminalExecutionRunLabel
+                  ? `Terminal · ${terminalExecutionRunLabel}`
+                  : "Terminal"
+              }
+              title={
+                terminalExecutionRunLabel
+                  ? `Terminal · ${terminalExecutionRunLabel}`
+                  : undefined
+              }
             >
               <i
                 className={`codicon codicon-terminal codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
               />
               {!isHeaderNarrow && <span>Terminal</span>}
+              {!isHeaderNarrow && terminalExecutionRunLabel && (
+                <span className="text-description-fg">
+                  · {terminalExecutionRunLabel}
+                </span>
+              )}
               {terminalSessionActive && (
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
               )}

@@ -201,12 +201,21 @@ vi.mock("@components/layout/output-section/ExportOutputModal", () => ({
 vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
   OutputSectionHeader: ({
     onToggleCollapse,
+    terminalExecutionRunLabel,
   }: {
     onToggleCollapse: () => void;
+    terminalExecutionRunLabel: string | null;
   }) => (
-    <button type="button" onClick={onToggleCollapse}>
-      Collapse output
-    </button>
+    <>
+      <button type="button" onClick={onToggleCollapse}>
+        Collapse output
+      </button>
+      {terminalExecutionRunLabel && (
+        <span data-testid="terminal-execution-run-label">
+          {terminalExecutionRunLabel}
+        </span>
+      )}
+    </>
   ),
 }));
 
@@ -320,5 +329,76 @@ describe("OutputSection", () => {
     render(<OutputSection />);
 
     expect(applyScrollTargetSpy).toHaveBeenCalledWith("auto-scroll");
+  });
+
+  it("labels terminal ownership with the exact executing run ID while viewing another run", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-historical" as never,
+      },
+      executionRunRef: "run-live",
+      runSummaries: [
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-live" as never,
+          runId: 1042,
+          startedAt: 1042,
+          executionState: "running" as never,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-historical" as never,
+          runId: 1031,
+          startedAt: 1031,
+          executionState: "completed" as never,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+
+    render(<OutputSection />);
+
+    expect(
+      screen.getByTestId("terminal-execution-run-label")
+    ).toHaveTextContent("Live Run 1042");
+  });
+
+  it("does not add an execution label while the executing run is viewed", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-live" as never,
+      },
+      executionRunRef: "run-live",
+      runSummaries: [
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-live" as never,
+          runId: 1042,
+          startedAt: 1042,
+          executionState: "running" as never,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+
+    render(<OutputSection />);
+
+    expect(
+      screen.queryByTestId("terminal-execution-run-label")
+    ).not.toBeInTheDocument();
   });
 });

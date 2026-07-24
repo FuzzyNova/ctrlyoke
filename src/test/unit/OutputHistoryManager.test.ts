@@ -1258,6 +1258,78 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(summaries[1]?.hasMixedModels, false);
   });
 
+  test("getRunSummaries bounds manifest read concurrency for large lineages", async () => {
+    const workflowKey = (
+      await new WorkflowLineageRepository().createLineage(
+        tempWorkspace,
+        "wf-summary-concurrency",
+        "wf-summary-concurrency"
+      )
+    ).workflowKey;
+    const runCount = 100;
+    for (let runId = 1; runId <= runCount; runId += 1) {
+      const runRef = WorkflowPaths.formatRunRef(Date.UTC(2025, 0, 1) + runId);
+      await fs.mkdir(WorkflowPaths.runDir(tempWorkspace, workflowKey, runRef), {
+        recursive: true,
+      });
+    }
+
+    let activeReads = 0;
+    let maxActiveReads = 0;
+    const recorderForTest = (
+      manager as unknown as {
+        timelineRecorder: {
+          readManifest: (manifestPath: string) => Promise<WorkflowRunManifest>;
+        };
+      }
+    ).timelineRecorder;
+    recorderForTest.readManifest = async (manifestPath) => {
+      activeReads += 1;
+      maxActiveReads = Math.max(maxActiveReads, activeReads);
+      try {
+        if (activeReads > 64) {
+          const error = new Error(
+            "Too many open files"
+          ) as NodeJS.ErrnoException;
+          error.code = "EMFILE";
+          throw error;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 1));
+        const parsed = WorkflowPaths.parseRunArtifactPath(
+          tempWorkspace,
+          manifestPath
+        );
+        assert.ok(parsed);
+        const startedAt =
+          WorkflowPaths.parseRunRefTimestamp(parsed.runRef) ?? 0;
+        return {
+          schemaVersion: "2.3.0",
+          storageKind: "timeline",
+          workflowId: workflowKey,
+          runId: startedAt - Date.UTC(2025, 0, 1),
+          startedAt,
+          completedAt: startedAt + 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          eventCount: 0,
+          nextSequence: 1,
+          lastUpdatedAt: startedAt + 1,
+        };
+      } finally {
+        activeReads -= 1;
+      }
+    };
+
+    const summaries = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(summaries.length, runCount);
+    assert.ok(
+      maxActiveReads <= 64,
+      `expected bounded reads, observed ${maxActiveReads} concurrent manifests`
+    );
+  });
+
   test("getRunNavigationSummary reports the latest run's id and total run count", async () => {
     const { workflowKey } = await initTestRun(
       manager,

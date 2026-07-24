@@ -56,6 +56,14 @@ import {
 } from "./StreamingHistoryBuffer";
 
 /**
+ * Each summary reads a manifest and then its small working definition. Keeping
+ * this below common Windows per-process file-handle limits prevents a large,
+ * unbounded lineage from turning transient EMFILE errors into silently omitted
+ * run rows.
+ */
+const RUN_SUMMARY_READ_BATCH_SIZE = 32;
+
+/**
  * OutputHistoryManager
  *
  * RESPONSIBILITY: Workflow Output History Storage & Retrieval
@@ -750,9 +758,22 @@ export class OutputHistoryManager {
    */
   async getRunSummaries(workflowKey: WorkflowKey): Promise<RunSummary[]> {
     const runs = await this.getRunsForWorkflow(workflowKey);
-    const summaries = await Promise.all(
-      runs.map((runRef) => this.readRunSummary(workflowKey, runRef))
-    );
+    const summaries: Array<RunSummary | null> = [];
+    for (
+      let startIndex = 0;
+      startIndex < runs.length;
+      startIndex += RUN_SUMMARY_READ_BATCH_SIZE
+    ) {
+      const batch = runs.slice(
+        startIndex,
+        startIndex + RUN_SUMMARY_READ_BATCH_SIZE
+      );
+      summaries.push(
+        ...(await Promise.all(
+          batch.map((runRef) => this.readRunSummary(workflowKey, runRef))
+        ))
+      );
+    }
     return summaries.filter(
       (summary): summary is RunSummary => summary !== null
     );

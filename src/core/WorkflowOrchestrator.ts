@@ -125,6 +125,22 @@ function sameWorkingFilePath(
   return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
 }
 
+/**
+ * Whether a resident instance still owns an execution for its lineage.
+ *
+ * Instances can remain resident while idle (for example, after startup
+ * restoration), so registry membership alone must not be interpreted as a
+ * running workflow.
+ */
+function isExecutionOwnerState(status: QueueState["status"]): boolean {
+  return (
+    status === EXECUTION_STATES.RUNNING ||
+    status === EXECUTION_STATES.PAUSING ||
+    status === EXECUTION_STATES.PAUSED ||
+    status === EXECUTION_STATES.CANCELLING
+  );
+}
+
 interface DefinitionRollbackInvalidation {
   fromRevision: number;
   restoredRevision: number;
@@ -2370,7 +2386,10 @@ export class WorkflowOrchestrator {
   private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {
     for (const instance of this.instances.values()) {
       const state = instance.getQueueState();
-      if (state.workflowKey === workflowKey) {
+      if (
+        state.workflowKey === workflowKey &&
+        isExecutionOwnerState(state.status)
+      ) {
         return instance.getExecutionRunRef() ?? state.runRef;
       }
     }
@@ -2864,10 +2883,7 @@ export class WorkflowOrchestrator {
       const state = instance.getQueueState();
       return (
         state.workflowKey === address.workflowKey &&
-        (state.status === EXECUTION_STATES.RUNNING ||
-          state.status === EXECUTION_STATES.PAUSING ||
-          state.status === EXECUTION_STATES.PAUSED ||
-          state.status === EXECUTION_STATES.CANCELLING)
+        isExecutionOwnerState(state.status)
       );
     });
     if (
@@ -3309,10 +3325,7 @@ export class WorkflowOrchestrator {
       const state = instance.getQueueState();
       return (
         state.workflowKey === address.workflowKey &&
-        (state.status === EXECUTION_STATES.RUNNING ||
-          state.status === EXECUTION_STATES.PAUSING ||
-          state.status === EXECUTION_STATES.PAUSED ||
-          state.status === EXECUTION_STATES.CANCELLING)
+        isExecutionOwnerState(state.status)
       );
     });
     if (

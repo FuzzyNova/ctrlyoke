@@ -80,6 +80,19 @@ export interface UseMessageHandlerReturn {
   sendMessage: (type: string, payload?: Record<string, unknown>) => void;
 }
 
+/**
+ * Messages whose state belongs to the live PTY transport rather than the
+ * definition/output snapshot currently displayed by run navigation.
+ */
+const RUN_VIEW_INDEPENDENT_MESSAGE_TYPES = new Set<string>([
+  MESSAGE_TYPES.TERMINAL_STARTED,
+  MESSAGE_TYPES.TERMINAL_OUTPUT,
+  MESSAGE_TYPES.TERMINAL_ENDED,
+  MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+  MESSAGE_TYPES.TERMINAL_SIZE_CHANGED,
+  MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+]);
+
 // ============================================================================
 // Send Message Helper
 // ============================================================================
@@ -2368,17 +2381,17 @@ export function useMessageHandler(): UseMessageHandlerReturn {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       const view = useUiStore.getState();
-      // Live sink messages still carry an in-memory instance id today. They do
-      // not contain a run ref, so the only safe policy while browsing another
-      // promoted run is to drop them wholesale. The next RUN_VIEW_LOADED is
-      // authoritative and restores the selected definition/output together.
+      // Definition/output sink messages still carry an in-memory instance id
+      // rather than a run ref, so they cannot safely update a different
+      // historical run. Terminal transport is execution-owned, however, and
+      // must remain usable while the editor browses history.
       if (
         message.workflowId &&
         view.displayedViewAddress?.kind === "run" &&
         view.executionRunRef !== null &&
         view.executionRunRef !== view.displayedViewAddress.runRef &&
         message.type !== MESSAGE_TYPES.RUN_VIEW_LOADED &&
-        message.type !== MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS
+        !RUN_VIEW_INDEPENDENT_MESSAGE_TYPES.has(message.type)
       ) {
         return;
       }

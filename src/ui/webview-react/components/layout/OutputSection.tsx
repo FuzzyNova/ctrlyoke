@@ -121,6 +121,27 @@ const OutputSectionInner: React.FC = () => {
       ? s.displayedViewAddress.runRef
       : null
   );
+  // Terminal sessions remain owned by the executing run when the client
+  // navigates to a historical run (or the lineage draft). Resolve that run's
+  // manifest-backed ID so the terminal context can state the split explicitly
+  // without implying that navigation rebound the PTY.
+  const terminalExecutionRunLabel = useUiStore((s) => {
+    const displayedAddress = s.displayedViewAddress;
+    const executionRunRef = s.executionRunRef;
+    if (
+      !displayedAddress ||
+      !executionRunRef ||
+      (displayedAddress.kind === "run" &&
+        displayedAddress.runRef === executionRunRef)
+    ) {
+      return null;
+    }
+
+    const executionRunId = s.runSummaries.find(
+      (summary) => summary.runRef === executionRunRef
+    )?.runId;
+    return executionRunId === undefined ? null : `Live Run ${executionRunId}`;
+  });
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
@@ -1103,6 +1124,7 @@ const OutputSectionInner: React.FC = () => {
           refCallback={mergedHeaderRef}
           showTerminalTab={showTerminalTab}
           terminalCanCloseActiveSession={terminalCanCloseActiveSession}
+          terminalExecutionRunLabel={terminalExecutionRunLabel}
           terminalFontSize={terminalFontSize}
           terminalSessionActive={terminalSessionActive}
           useCompactLabels={useCompactOutputHeaderLabels}
