@@ -132,4 +132,17 @@ suite("OpenCodeCliProvider", () => {
       await fs.rm(extensionPath, { recursive: true, force: true });
     }
   });
+
+  test("formatFileReference drops the @ prefix so the TUI cannot reinterpret it as an agent mention", () => {
+    const provider = new OpenCodeCliProvider();
+
+    assert.strictEqual(
+      provider.formatFileReference(".ctrlyoke/temp/prompt.md"),
+      ".ctrlyoke/temp/prompt.md"
+    );
+    assert.strictEqual(
+      provider.formatFileReference('"path with space/a.ts"'),
+      '"path with space/a.ts"'
+    );
+  });
 });

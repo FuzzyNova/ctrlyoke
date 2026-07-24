@@ -235,6 +235,24 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   /**
+   * Format a file path for OpenCode file references.
+   *
+   * OpenCode's TUI treats a leading `@` as an agent-mention trigger: in inject
+   * mode we write text straight into the running TUI, so an `@path` prefix gets
+   * intercepted and rewritten to an agent invocation (e.g. `@explore`) before it
+   * ever reaches the model. OpenCode does not auto-read `@`-prefixed paths anyway
+   * — it decides to read referenced files on its own from the plain path — so we
+   * drop the `@` entirely, mirroring Codex. This applies uniformly to simple,
+   * injected, and categorized prompts because every ref routes through here.
+   *
+   * @param relativeFilePath Relative or absolute file path
+   * @returns File path without an `@` prefix
+   */
+  formatFileReference(relativeFilePath: string): string {
+    return relativeFilePath;
+  }
+
+  /**
    * Generate MCP server configuration for OpenCode CLI.
    *
    * OpenCode reads MCP config from .opencode/opencode.json in the project root.
