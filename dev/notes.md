@@ -13,6 +13,6 @@ add hover text to model dropdowns to show full name, or make dropdown wider (mod
 
 ☑️ Opencode converts typed "@" file references to an agent mode like "@explore" in inject mode
 
-fix how editting completed prompts works, right now it forces a rewind but throws due to revision issue.
+☑️ fix how editting completed prompts works, right now it forces a rewind but throws due to revision issue.
 
-Bug with new workflow showing draft with 2 runs that don't belong to it.
+☑️ Bug with new workflow showing draft with 2 runs that don't belong to it.

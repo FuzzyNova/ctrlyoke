@@ -68,6 +68,10 @@ const WORKFLOW_ROW_SELECTOR =
 const WORKFLOW_SCROLL_CONTAINER_SELECTOR =
   ".workflow-menu-items, .run-panel-items";
 const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
+// Keep the fallback slightly longer than the shared 220ms Tailwind
+// slide-out-right animation so a missed animationend cannot strand the
+// dropdown in its departing run-panel state.
+const RUN_PANEL_EXIT_FALLBACK_MS = 320;
 
 const WORKFLOW_STATE_OPTIONS = ALL_WORKFLOW_STATES.map((state) => ({
   value: state,
@@ -337,12 +341,18 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [dropdownView, setDropdownView] = useState<"workflows" | "runs">(
     "workflows"
   );
+  // The run panel remains mounted while returning to the workflow list so its
+  // slide-right exit is visible instead of the two views swapping abruptly.
+  const [isRunPanelLeaving, setIsRunPanelLeaving] = useState(false);
   const [drilledWorkflow, setDrilledWorkflow] = useState<{
     workflowKey: WorkflowKey;
     workflowName: string;
   } | null>(null);
   const workflowListHandleRef = useRef<WorkflowListHandle>(null);
   const savedWorkflowListScrollOffsetRef = useRef(0);
+  const runPanelExitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   // While a cross-lineage switch is in flight the workflow store still holds
   // the previous workflow's definition. Show the switch target immediately so
@@ -573,6 +583,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
     setIsDropdownClosing(false);
     setIsDropdownOpen(false);
+    if (runPanelExitTimeoutRef.current) {
+      clearTimeout(runPanelExitTimeoutRef.current);
+      runPanelExitTimeoutRef.current = null;
+    }
+    setIsRunPanelLeaving(false);
     setWorkflowSearch("");
     // Dropdown view state is per-open-session — reset so the next open
     // starts from whichever entry view its own trigger implies.
@@ -584,6 +599,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     return () => {
       if (closeDropdownTimeoutRef.current) {
         clearTimeout(closeDropdownTimeoutRef.current);
+      }
+      if (runPanelExitTimeoutRef.current) {
+        clearTimeout(runPanelExitTimeoutRef.current);
       }
     };
   }, []);
@@ -693,22 +711,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [closeDropdown, isDropdownOpen]);
 
-  // Escape closes the dropdown from either view and restores focus to
-  // whichever segment opened it.
-  useEffect(() => {
-    if (!isDropdownOpen) {
-      return;
-    }
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      const opener = dropdownOpenerRef.current;
-      closeDropdown();
-      opener?.focus();
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [closeDropdown, isDropdownOpen]);
-
   // Focus input when editing starts
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -765,6 +767,47 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   };
 
+  const finishRunPanelExit = useCallback(() => {
+    if (runPanelExitTimeoutRef.current) {
+      clearTimeout(runPanelExitTimeoutRef.current);
+      runPanelExitTimeoutRef.current = null;
+    }
+    setIsRunPanelLeaving(false);
+    setDropdownView("workflows");
+    setDrilledWorkflow(null);
+    requestAnimationFrame(() => {
+      workflowListHandleRef.current?.setScrollOffset(
+        savedWorkflowListScrollOffsetRef.current
+      );
+    });
+  }, []);
+
+  // Back always returns to the workflow list — even entering via the badge —
+  // and restores the list's pre-drill scroll position (RUN_NAVIGATION_UX_PLAN.md:
+  // "the badge is a shortcut into the hierarchy, not a separate widget").
+  const handleBackToWorkflowList = useCallback(() => {
+    if (dropdownView !== "runs" || isRunPanelLeaving) {
+      return;
+    }
+    setIsRunPanelLeaving(true);
+    if (runPanelExitTimeoutRef.current) {
+      clearTimeout(runPanelExitTimeoutRef.current);
+    }
+    runPanelExitTimeoutRef.current = setTimeout(
+      finishRunPanelExit,
+      RUN_PANEL_EXIT_FALLBACK_MS
+    );
+  }, [dropdownView, finishRunPanelExit, isRunPanelLeaving]);
+
+  const handleRunPanelAnimationEnd = useCallback(
+    (event: React.AnimationEvent<HTMLDivElement>) => {
+      if (event.target === event.currentTarget && isRunPanelLeaving) {
+        finishRunPanelExit();
+      }
+    },
+    [finishRunPanelExit, isRunPanelLeaving]
+  );
+
   // Toggle dropdown
   const toggleDropdown = useCallback(() => {
     if (!isDropdownOpen) {
@@ -784,6 +827,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
       setIsDropdownClosing(false);
       setIsDropdownOpen(true);
+      setIsRunPanelLeaving(false);
       setDropdownView("workflows");
       setDrilledWorkflow(null);
       return;
@@ -798,8 +842,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     // workflow list instead of closing outright — matching the badge's own
     // "switch views, don't close" behavior when the other view is active.
     if (dropdownView !== "workflows") {
-      setDropdownView("workflows");
-      setDrilledWorkflow(null);
+      handleBackToWorkflowList();
       return;
     }
     closeDropdown();
@@ -815,6 +858,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     workflowName,
     updateDropdownTop,
     closeDropdown,
+    handleBackToWorkflowList,
   ]);
 
   // Switch to a loaded workflow
@@ -883,6 +927,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         workflowKey: workflow.address.workflowKey,
         workflowName: workflow.workflowName,
       });
+      setIsRunPanelLeaving(false);
       setDropdownView("runs");
       if (workflow.address.workflowKey !== displayedViewAddress?.workflowKey) {
         useRunSummaryCacheStore
@@ -912,6 +957,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     updateDropdownTop();
     setIsDropdownClosing(false);
     setIsDropdownOpen(true);
+    setIsRunPanelLeaving(false);
     setDrilledWorkflow({
       workflowKey: displayedViewAddress.workflowKey,
       workflowName: displayName,
@@ -928,18 +974,26 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     displayName,
   ]);
 
-  // Back always returns to the workflow list — even entering via the badge —
-  // and restores the list's pre-drill scroll position (RUN_NAVIGATION_UX_PLAN.md:
-  // "the badge is a shortcut into the hierarchy, not a separate widget").
-  const handleBackToWorkflowList = useCallback(() => {
-    setDropdownView("workflows");
-    setDrilledWorkflow(null);
-    requestAnimationFrame(() => {
-      workflowListHandleRef.current?.setScrollOffset(
-        savedWorkflowListScrollOffsetRef.current
-      );
-    });
-  }, []);
+  // Escape backs out of the drilled-in run panel, using the same slide-right
+  // transition as the visible back button. From the workflow list it still
+  // closes the dropdown and restores focus to the segment that opened it.
+  useEffect(() => {
+    if (!isDropdownOpen) {
+      return;
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (dropdownView === "runs") {
+        handleBackToWorkflowList();
+        return;
+      }
+      const opener = dropdownOpenerRef.current;
+      closeDropdown();
+      opener?.focus();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [closeDropdown, dropdownView, handleBackToWorkflowList, isDropdownOpen]);
 
   const handleSelectRunPanelRow = useCallback(
     (address: WorkflowViewAddress) => {
@@ -1564,30 +1618,39 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           clipPath: dropdownRevealed ? "inset(0 0 0 0)" : "inset(0 0 100% 0)",
         }}
       >
-        {/* Two dropdown views share one panel: the workflow list, and a
-            per-lineage run panel reached by drilling in. Both stay mounted
-            only while active — switching views is a full swap, not a
-            slide/accordion (RUN_NAVIGATION_UX_PLAN.md's drill-in design). */}
+        {/* Two dropdown views share one panel. The run panel enters from the
+            right, and stays mounted long enough to slide back right on Back
+            or Escape before the workflow list is restored underneath it. */}
         <div className="flex-1 min-h-0 overflow-clip flex flex-col">
           {dropdownView === "runs" && drilledWorkflow ? (
-            <RunPanel
-              workflowKey={drilledWorkflow.workflowKey}
-              workflowName={drilledWorkflow.workflowName}
-              rows={runPanelRows}
-              isLoading={runPanelIsLoading}
-              loadError={runPanelLoadError}
-              tier={dropdownRowTier}
-              displayedAddress={displayedViewAddress}
-              isViewingHistory={isViewingHistory}
-              executionRunRef={runPanelExecutionRunRef}
-              confirmDeleteOperations={globalSettings.confirmDeleteOperations}
-              onBack={handleBackToWorkflowList}
-              onClose={closeDropdown}
-              onSelectRow={handleSelectRunPanelRow}
-              onDeleteRun={handleDeleteRunPanelRow}
-              onDeleteAllRuns={handleDeleteAllRunsInPanel}
-              scrollToKey={runPanelScrollToKey}
-            />
+            <div
+              className={`flex h-full min-h-0 flex-col ${
+                isRunPanelLeaving
+                  ? "pointer-events-none animate-slide-out-right"
+                  : "animate-slide-in-right"
+              }`}
+              aria-hidden={isRunPanelLeaving}
+              onAnimationEnd={handleRunPanelAnimationEnd}
+            >
+              <RunPanel
+                workflowKey={drilledWorkflow.workflowKey}
+                workflowName={drilledWorkflow.workflowName}
+                rows={runPanelRows}
+                isLoading={runPanelIsLoading}
+                loadError={runPanelLoadError}
+                tier={dropdownRowTier}
+                displayedAddress={displayedViewAddress}
+                isViewingHistory={isViewingHistory}
+                executionRunRef={runPanelExecutionRunRef}
+                confirmDeleteOperations={globalSettings.confirmDeleteOperations}
+                onBack={handleBackToWorkflowList}
+                onClose={closeDropdown}
+                onSelectRow={handleSelectRunPanelRow}
+                onDeleteRun={handleDeleteRunPanelRow}
+                onDeleteAllRuns={handleDeleteAllRunsInPanel}
+                scrollToKey={runPanelScrollToKey}
+              />
+            </div>
           ) : (
             <WorkflowList
               ref={workflowListHandleRef}

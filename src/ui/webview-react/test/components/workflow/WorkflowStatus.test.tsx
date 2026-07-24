@@ -318,6 +318,11 @@ describe("WorkflowStatus — loaded state", () => {
     expect(
       screen.getByRole("button", { name: "Back to workflow list" })
     ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: "Back to workflow list" })
+        .closest(".animate-slide-in-right")
+    ).toBeInTheDocument();
   });
 
   it("shows no pinned running region when nothing is running", async () => {
@@ -1006,17 +1011,63 @@ describe("WorkflowStatus — run navigation panel", () => {
     await user.click(
       screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );
+    const backButton = screen.getByRole("button", {
+      name: "Back to workflow list",
+    });
+    await user.click(backButton);
+
+    const departingPanel = backButton.closest(".animate-slide-out-right");
+    expect(departingPanel).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(".animate-slide-out-right")
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
+    expect(screen.getByText("Other Workflow")).toBeInTheDocument();
+  });
+
+  it("returns to the workflow list with the same exit animation on Escape", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "multi-wf" as never;
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Multi-run Workflow",
+        filePath: "/path/multi.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+        address: { workflowKey, kind: "run", runRef: "run-2" as never },
+        runNav: {
+          primaryAddress: {
+            workflowKey,
+            kind: "run",
+            runRef: "run-2" as never,
+          },
+          primaryRunId: 2,
+          runCount: 2,
+          hasDraft: false,
+        },
+      },
+    ]);
+
     await user.click(
-      screen.getByRole("button", { name: "Back to workflow list" })
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );
 
-    expect(
-      screen.queryByRole("button", { name: "Back to workflow list" })
-    ).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    const departingPanel = document.querySelector(".animate-slide-out-right");
+    expect(departingPanel).toBeInTheDocument();
+
     await waitFor(() => {
-      expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
+      expect(
+        document.querySelector(".animate-slide-out-right")
+      ).not.toBeInTheDocument();
     });
-    expect(screen.getByText("Other Workflow")).toBeInTheDocument();
+    expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
   });
 
   it("hides the run identity badge for a single-run displayed lineage", () => {
