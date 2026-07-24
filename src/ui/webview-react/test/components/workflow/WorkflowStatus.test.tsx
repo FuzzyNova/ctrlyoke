@@ -897,6 +897,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     expect(
       screen.getByRole("button", { name: "Back to workflow list" })
     ).toBeInTheDocument();
+    expect(document.querySelector(".recent-workflows")).toBeInTheDocument();
     expect(screen.getAllByText("Multi-run Workflow").length).toBeGreaterThan(0);
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_SUMMARIES })
@@ -972,8 +973,13 @@ describe("WorkflowStatus — run navigation panel", () => {
 
     await user.click(dropdownTrigger);
     expect(
-      screen.queryByRole("button", { name: "Back to workflow list" })
-    ).not.toBeInTheDocument();
+      document.querySelector(".animate-slide-out-right")
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        document.querySelector(".animate-slide-out-right")
+      ).not.toBeInTheDocument();
+    });
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
   });
 
@@ -1018,6 +1024,9 @@ describe("WorkflowStatus — run navigation panel", () => {
 
     const departingPanel = backButton.closest(".animate-slide-out-right");
     expect(departingPanel).toBeInTheDocument();
+    // The workflow list is already beneath the departing drawer; it does not
+    // wait for the exit animation before remounting.
+    expect(screen.getByText("Other Workflow")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(
@@ -1146,6 +1155,11 @@ describe("WorkflowStatus — run navigation panel", () => {
     expect(
       screen.getByRole("button", { name: "Back to workflow list" })
     ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: "Back to workflow list" })
+        .closest(".animate-slide-in-right")
+    ).not.toBeInTheDocument();
     // Already the displayed lineage — no summary fetch needed.
     expect(postMessageSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_SUMMARIES })
