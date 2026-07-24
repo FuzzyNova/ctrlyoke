@@ -15,6 +15,7 @@ import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
 import { FileBrowserModal } from "../workflow/FileBrowserModal";
+import { SuffixEditConfirmModal } from "../shared/SuffixEditConfirmModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { HEADER_BUTTON_SIZES } from "../../constants";
@@ -107,6 +108,8 @@ export const Header: React.FC<{
     isHistorySearchOpen,
     toggleGlobalSettings,
     toggleHistorySearch,
+    suffixEditConfirmation,
+    setSuffixEditConfirmation,
   } = useUiStore();
 
   const activeWorkflow = loadedWorkflows.find(
@@ -263,6 +266,31 @@ export const Header: React.FC<{
   const handleDiscardContinuation = useCallback(() => {
     postViewedRunAction(MESSAGE_TYPES.DISCARD_CONTINUATION);
   }, [postViewedRunAction]);
+
+  const handleCancelSuffixEditConfirmation = useCallback(() => {
+    setSuffixEditConfirmation(null);
+  }, [setSuffixEditConfirmation]);
+
+  const handleConfirmSuffixEditDiscard = useCallback(() => {
+    if (!suffixEditConfirmation) return;
+    const {
+      action,
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+    } = suffixEditConfirmation;
+    vscode.postMessage({
+      type:
+        action === "startNewRunInstead"
+          ? MESSAGE_TYPES.START_NEW_RUN_INSTEAD
+          : MESSAGE_TYPES.DISCARD_CONTINUATION,
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      confirmEditedSuffix: true,
+    });
+    setSuffixEditConfirmation(null);
+  }, [suffixEditConfirmation, vscode, setSuffixEditConfirmation]);
 
   const handleUndoRedoAction = useCallback(
     (
@@ -571,6 +599,31 @@ export const Header: React.FC<{
         {/* File Browser Modal — controlled by uiStore.fileBrowserState; one
             canonical instance shared by every standalone-mode caller. */}
         <FileBrowserModal />
+
+        {/* Suffix-edit discard confirmation — controlled by
+            uiStore.suffixEditConfirmation, set when the extension reports that
+            a discard-continuation/start-new-run-instead request hit unsaved
+            edits to the rewound suffix. */}
+        <SuffixEditConfirmModal
+          isOpen={suffixEditConfirmation !== null}
+          title={
+            suffixEditConfirmation?.action === "startNewRunInstead"
+              ? "Start New Run Instead"
+              : "Discard Continuation"
+          }
+          message={
+            suffixEditConfirmation?.action === "startNewRunInstead"
+              ? "Discard continuation edits and start a new run? Your changes to the rewound suffix will be lost."
+              : "Discard continuation edits? Your changes to the rewound suffix will be lost."
+          }
+          confirmLabel={
+            suffixEditConfirmation?.action === "startNewRunInstead"
+              ? "Start New Run"
+              : "Discard Continuation"
+          }
+          onConfirm={handleConfirmSuffixEditDiscard}
+          onCancel={handleCancelSuffixEditConfirmation}
+        />
 
         {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
             move into the shared center lane so they can negotiate width together. */}

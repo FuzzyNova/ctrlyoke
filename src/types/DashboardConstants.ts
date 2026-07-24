@@ -269,6 +269,7 @@ export const MESSAGE_TYPES = {
 
   // Queue Position Control — Extension → Webview
   REORDER_PROMPTS_CONFIRMED: "reorderPromptsConfirmed",
+  SUFFIX_EDIT_CONFIRMATION_REQUIRED: "suffixEditConfirmationRequired", // discardContinuation/startNewRunInstead hit unsaved rewound-suffix edits; { action, address, expectedDefinitionRevision, expectedDescriptorRevision }. Rendered as an in-app modal (never a native OS dialog) so hosted browser clients see it too.
 
   // Undo/Redo — Webview → Extension: sync restored state after undo/redo
   UNDO_REDO_SYNC: "undoRedoSync",

@@ -1650,6 +1650,34 @@ describe("run view revision snapshots", () => {
   });
 });
 
+describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
+  const address = {
+    workflowKey: "workflow-a" as never,
+    kind: "run" as const,
+    runRef: "run-2026-07-20T10-30-00-000Z" as never,
+  };
+
+  it("stores the pending confirmation so the UI can render its own modal", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED, {
+        action: "discardContinuation",
+        address,
+        expectedDefinitionRevision: 3,
+        expectedDescriptorRevision: 5,
+      });
+    });
+
+    expect(useUiStore.getState().suffixEditConfirmation).toEqual({
+      action: "discardContinuation",
+      address,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+  });
+});
+
 describe("history search messages", () => {
   it("opens the history search drawer when requested", () => {
     renderHook(() => useMessageHandler());

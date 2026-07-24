@@ -1293,6 +1293,21 @@ export interface DiscardContinuationMessage {
 }
 
 /**
+ * Sent when a `DiscardContinuationMessage`/`StartNewRunInsteadMessage` request
+ * hit unsaved edits to the rewound suffix. Rendered as an in-app confirmation
+ * modal — never a native OS/VS Code dialog — so hosted browser clients (which
+ * never see VS Code's own UI) can see and act on it too. Confirming resends
+ * the original message with `confirmEditedSuffix: true`.
+ */
+export interface SuffixEditConfirmationRequiredMessage {
+  type: typeof MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED;
+  action: "discardContinuation" | "startNewRunInstead";
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  expectedDefinitionRevision: number;
+  expectedDescriptorRevision: number;
+}
+
+/**
  * Append a prompt file's steps to the queue (webview -> extension). A `"run"`-kind
  * `mutation` re-addresses this through the append-and-continue contract instead of
  * the legacy instance-bound queue append; a draft/ephemeral target keeps the

@@ -96,6 +96,64 @@ describe("Header execution controls", () => {
     });
   });
 
+  it("renders the suffix-edit confirmation as our own modal (never a native dialog) and confirms via postMessage", () => {
+    useUiStore.setState({
+      suffixEditConfirmation: {
+        action: "discardContinuation",
+        address: { workflowKey: "workflow-a" as never, kind: "run", runRef },
+        expectedDefinitionRevision: 3,
+        expectedDescriptorRevision: 7,
+      },
+    });
+
+    render(<Header />);
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(
+        "Discard continuation edits? Your changes to the rewound suffix will be lost."
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Discard Continuation" })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DISCARD_CONTINUATION,
+      address: { workflowKey: "workflow-a", kind: "run", runRef },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 7,
+      confirmEditedSuffix: true,
+    });
+    expect(useUiStore.getState().suffixEditConfirmation).toBeNull();
+  });
+
+  it("clears the suffix-edit confirmation on cancel without posting a message", () => {
+    useUiStore.setState({
+      suffixEditConfirmation: {
+        action: "startNewRunInstead",
+        address: { workflowKey: "workflow-a" as never, kind: "run", runRef },
+        expectedDefinitionRevision: 3,
+        expectedDescriptorRevision: 7,
+      },
+    });
+
+    render(<Header />);
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("button", { name: "Start New Run" })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ confirmEditedSuffix: true })
+    );
+    expect(useUiStore.getState().suffixEditConfirmation).toBeNull();
+  });
+
   it("shows Run, Pause, and Stop for a newly loaded draft", () => {
     useUiStore.setState({
       displayedViewAddress: {

@@ -1308,6 +1308,87 @@ suite("WebviewMessageRouter stable run actions", () => {
     assert.strictEqual(identities.length, 2);
     assert.strictEqual(identities[0].descriptorRevision, 6);
   });
+
+  test("discard continuation with unsaved suffix edits asks the webview to confirm instead of a native dialog", async () => {
+    const emitted: any[] = [];
+    const orchestrator = {
+      discardContinuationAtRun: async () => ({
+        discarded: false,
+        hasSuffixEdits: true,
+      }),
+    } as any;
+    const router = new WebviewMessageRouter(
+      (message: unknown) => emitted.push(message),
+      {} as any,
+      {} as any,
+      () => orchestrator,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.DISCARD_CONTINUATION,
+      address: runAddress,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepStrictEqual(
+      emitted.filter(
+        (message) =>
+          message.type === MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED
+      ),
+      [
+        {
+          type: MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED,
+          action: "discardContinuation",
+          address: runAddress,
+          expectedDefinitionRevision: 3,
+          expectedDescriptorRevision: 5,
+        },
+      ]
+    );
+  });
+
+  test("start new run instead with unsaved suffix edits asks the webview to confirm instead of a native dialog", async () => {
+    const emitted: any[] = [];
+    const orchestrator = {
+      startNewRunInsteadAtRun: async () => ({ hasSuffixEdits: true }),
+    } as any;
+    const router = new WebviewMessageRouter(
+      (message: unknown) => emitted.push(message),
+      {} as any,
+      {} as any,
+      () => orchestrator,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.START_NEW_RUN_INSTEAD,
+      address: runAddress,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepStrictEqual(
+      emitted.filter(
+        (message) =>
+          message.type === MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED
+      ),
+      [
+        {
+          type: MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED,
+          action: "startNewRunInstead",
+          address: runAddress,
+          expectedDefinitionRevision: 3,
+          expectedDescriptorRevision: 5,
+        },
+      ]
+    );
+  });
 });
 
 suite("WebviewMessageRouter APPEND_FILE routing", () => {

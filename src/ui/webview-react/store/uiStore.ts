@@ -339,6 +339,19 @@ interface UiState {
     ref: string;
   } | null;
 
+  /**
+   * Discard-continuation/start-new-run-instead hit unsaved edits to the
+   * rewound suffix and needs the user to confirm losing them. Rendered as an
+   * in-app modal — never a native OS dialog — so hosted browser clients see
+   * it too. Transient, not persisted.
+   */
+  suffixEditConfirmation: {
+    action: "discardContinuation" | "startNewRunInstead";
+    address: Extract<WorkflowViewAddress, { kind: "run" }>;
+    expectedDefinitionRevision: number;
+    expectedDescriptorRevision: number;
+  } | null;
+
   // Footer quick picker state (transient, not persisted)
   footerOpenPicker: FooterPicker | null;
 
@@ -507,6 +520,16 @@ interface UiActions {
     } | null
   ) => void;
 
+  // Suffix-edit discard confirmation modal
+  setSuffixEditConfirmation: (
+    confirmation: {
+      action: "discardContinuation" | "startNewRunInstead";
+      address: Extract<WorkflowViewAddress, { kind: "run" }>;
+      expectedDefinitionRevision: number;
+      expectedDescriptorRevision: number;
+    } | null
+  ) => void;
+
   // Terminal tab switching
   setActiveOutputTab: (workflowId: string, tab: "output" | "terminal") => void;
   setTerminalSessionActive: (workflowId: string, active: boolean) => void;
@@ -643,6 +666,7 @@ const initialState: UiState = {
   terminalFontSize: 14,
   toast: null,
   contentPreviewModal: null,
+  suffixEditConfirmation: null,
   activeOutputTabs: {},
   terminalActiveWorkflows: new Set<string>(),
   terminalRailCollapsed: true,
@@ -1030,6 +1054,8 @@ export const useUiStore = create<UiState & UiActions>()(
       hideToast: () => set({ toast: null }),
 
       setContentPreviewModal: (modal) => set({ contentPreviewModal: modal }),
+      setSuffixEditConfirmation: (confirmation) =>
+        set({ suffixEditConfirmation: confirmation }),
 
       // ============================================================================
       // TERMINAL TAB STATE
@@ -1343,6 +1369,7 @@ export const useUiStore = create<UiState & UiActions>()(
           toast: null,
           footerOpenPicker: null,
           horizontalPanelResizeActive: false,
+          suffixEditConfirmation: null,
         }),
 
       resetLayoutState: () => {

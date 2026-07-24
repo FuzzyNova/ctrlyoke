@@ -2089,17 +2089,16 @@ export class WebviewMessageRouter {
         this.clientId
       );
       if (result && "hasSuffixEdits" in result) {
-        const confirmation = await vscode.window.showWarningMessage(
-          "Discard continuation edits and start a new run? Your changes to the rewound suffix will be lost.",
-          { modal: true },
-          "Start New Run"
-        );
-        if (confirmation === "Start New Run") {
-          await this.handleStartNewRunInstead({
-            ...message,
-            confirmEditedSuffix: true,
-          });
-        }
+        // Never a native VS Code dialog here — hosted browser clients never see
+        // those. Ask the webview to render its own confirmation modal instead;
+        // confirming resends this same message with confirmEditedSuffix: true.
+        this.emitMessage({
+          type: MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED,
+          action: "startNewRunInstead",
+          address: message.address,
+          expectedDefinitionRevision: message.expectedDefinitionRevision,
+          expectedDescriptorRevision: message.expectedDescriptorRevision,
+        });
       }
     } catch (error) {
       this.showRunActionFailure("start new run", error);
@@ -2208,17 +2207,16 @@ export class WebviewMessageRouter {
         this.clientId
       );
       if (!result.discarded && result.hasSuffixEdits) {
-        const confirmation = await vscode.window.showWarningMessage(
-          "Discard continuation edits? Your changes to the rewound suffix will be lost.",
-          { modal: true },
-          "Discard Continuation"
-        );
-        if (confirmation === "Discard Continuation") {
-          await this.handleDiscardContinuation({
-            ...message,
-            confirmEditedSuffix: true,
-          });
-        }
+        // Never a native VS Code dialog here — hosted browser clients never see
+        // those. Ask the webview to render its own confirmation modal instead;
+        // confirming resends this same message with confirmEditedSuffix: true.
+        this.emitMessage({
+          type: MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED,
+          action: "discardContinuation",
+          address: message.address,
+          expectedDefinitionRevision: message.expectedDefinitionRevision,
+          expectedDescriptorRevision: message.expectedDescriptorRevision,
+        });
       }
     } catch (error) {
       this.showRunActionFailure("discard continuation", error);

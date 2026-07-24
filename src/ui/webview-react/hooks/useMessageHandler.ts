@@ -1747,6 +1747,20 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // SUFFIX_EDIT_CONFIRMATION_REQUIRED - discardContinuation/startNewRunInstead
+  // hit unsaved rewound-suffix edits; show our own modal (never a native
+  // OS/VS Code dialog) so hosted browser clients can see and act on it too.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED] = (message) => {
+    useUiStore.getState().setSuffixEditConfirmation({
+      action: message.action,
+      address: message.address,
+      expectedDefinitionRevision: message.expectedDefinitionRevision,
+      expectedDescriptorRevision: message.expectedDescriptorRevision,
+    });
+  };
+
+  // --------------------------------------------------------------------------
   // RUN_SUMMARIES_LOADED - manifest-only run listing for one lineage's
   // run-panel drill-in (never switches the client's own displayed view)
   // --------------------------------------------------------------------------

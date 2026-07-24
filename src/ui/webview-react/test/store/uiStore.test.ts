@@ -665,3 +665,45 @@ describe("setContentPreviewModal", () => {
     expect(store().contentPreviewModal).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// suffixEditConfirmation
+// ---------------------------------------------------------------------------
+
+describe("setSuffixEditConfirmation", () => {
+  const address = {
+    workflowKey: "workflow-a" as never,
+    kind: "run" as const,
+    runRef: "run-2026-07-20T10-30-00-000Z" as never,
+  };
+
+  it("starts as null", () => {
+    expect(store().suffixEditConfirmation).toBeNull();
+  });
+
+  it("sets the pending confirmation", () => {
+    store().setSuffixEditConfirmation({
+      action: "discardContinuation",
+      address,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+    expect(store().suffixEditConfirmation).toEqual({
+      action: "discardContinuation",
+      address,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+  });
+
+  it("clears the pending confirmation when set to null", () => {
+    store().setSuffixEditConfirmation({
+      action: "startNewRunInstead",
+      address,
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 5,
+    });
+    store().setSuffixEditConfirmation(null);
+    expect(store().suffixEditConfirmation).toBeNull();
+  });
+});
