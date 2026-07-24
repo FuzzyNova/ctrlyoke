@@ -1,6 +1,13 @@
 # WebviewMessageRouter Refactor Plan
 
-Status: **Phases 0–1 complete** (2026-07-24). Phases 2–4 proposed.
+Status: **Phases 0–2 complete** (2026-07-24).
+Sub-phases 2a–2e landed. Phases 3–4 remain proposed.
+
+> **Uncommitted.** Phases 0–2 are in the working tree, not committed. Verified green
+> (`npm run typecheck`, `npx eslint`, 1982 extension tests, 1180 UI tests) but the
+> router carries ~19 pre-existing Prettier deviations that predate this work and
+> were deliberately not touched — run `npx prettier --write src/ui/WebviewMessageRouter.ts`
+> as a separate cleanup before committing, so the reformat doesn't mix into the motion diff.
 
 Target: `src/ui/WebviewMessageRouter.ts` — 3,285 lines, of which `buildDispatchTable()`
 is a single ~1,500-line method (lines 230–1736).
@@ -183,7 +190,52 @@ required, confirming this was pure code motion.
 
 Each of these has near-zero router coupling and is the bulk of the win.
 
-### 2a. `src/ui/PromptEditorSupportService.ts` (~750 lines out)
+**Progress: 2a ✅, 2b ✅, 2c ✅ (2026-07-24). 2d and 2e not started.**
+
+Router went 3,222 → 2,209 lines across the three. Each sub-phase left
+`src/test/unit/WebviewSettingsSync.test.ts` passing untouched — the plan's stated
+signal that a phase was pure motion. All line numbers cited in the sub-sections
+below are from the pre-Phase-0 file and are now badly stale; use the method and
+message-type names as the durable reference.
+
+### 2a. `src/ui/PromptEditorSupportService.ts` ✅ **DONE**
+
+Landed 2026-07-24, 875 lines out (router 3,186 → 2,364). All 16 named methods
+moved; the plan's method list was accurate. The methods were contiguous at
+2,170–2,967, not the 2,275–3,077 cited below.
+
+```ts
+constructor(
+  private readonly getWorkspaceRoot: () => string,
+  private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
+  private readonly resolveImageWebviewUri: (absolutePath: string) => string | undefined
+) {}
+```
+
+Exactly the three dependencies predicted. Both callbacks are wired as thunks, not
+bound references, so late binding through `this.callbacks` is preserved. No client-id
+or postMessage state — the Phase-0 `ctx: WebviewClientContext` remains the only
+source, including for `handleFilePreviewUriRequest`'s `PANEL_CLIENT_ID` branch.
+
+Nine methods are public (`buildPriorContextContent` among them, because
+`REQUEST_PRIOR_CONTEXT_PREVIEW` calls it directly); the other seven stayed private.
+Both load-bearing security comment blocks moved verbatim. One Phase-1-style
+normalization: `buildPriorContextContent`'s inline
+`import("../types/CtrlYokeTypes").WorkflowStep` became a top-level `import type`.
+
+Instruction-file updates: four `ui.instructions.md` edits (the three
+`<criticalPatterns>` bullets on inline image previews, `OPEN_FILE`, and
+`ExternalFileTrustPrompt`, plus a new `<relatedFiles>` entry). The image-preview
+bullet's closing clause "the gate belongs in the router" became "the gate belongs
+host-side, in `PromptEditorSupportService`" — the one sentence the move falsified.
+The `<architecture>` bullet was deliberately left alone: it only claims the router
+is the inbound control plane with a dispatch table plus chained `routeQueue`, all
+still true because the table stayed. Six further stale symbol citations were fixed
+in `completions.instructions.md` (5) and `utils.instructions.md` (2).
+
+Original specification, kept for reference:
+
+#### (original) 2a. `src/ui/PromptEditorSupportService.ts` (~750 lines out)
 
 Moves lines 2275–3077: completions (`handleCompletionRequest`,
 `emitCompletionsResponse`, `getCompletionItems`), `handleFileRefValidation`,
@@ -206,7 +258,45 @@ and the `handleOpenFile` trust flow are load-bearing and cross-referenced from
 `WebviewMessageRouter.handleFilePreviewUriRequest` and the `OPEN_FILE` handler to
 point at the new file.
 
-### 2b. Move git validation down to `GitUtils.ts`
+### 2b. Move git validation down to `GitUtils.ts` ✅ **DONE**
+
+Landed 2026-07-24. `GitUtils.ts` +56 lines (378 → 434), router −36.
+
+```ts
+export async function gitRefExists(
+  workspaceRoot: string,
+  gitRef: string
+): Promise<{ exists: boolean; message?: string }>
+```
+
+Placed between `searchCommitsBySubject` and `getGitTrackedFiles`, reusing the
+module's `execFileAsync` and `GIT_TIMEOUT_MS`. It handles the `diff`/`staged`
+pseudo-refs and abbreviated/full hashes. Its doc comment flags the one module
+convention it breaks — it never throws, because the sole consumer drives a lint
+marker where a rejection is indistinguishable from "not found".
+
+**Timeout decision, made deliberately:** `GIT_TIMEOUT_MS` is 10,000 ms, so ref
+validation moved from 5s to 10s. Took the reuse option; did **not** add an optional
+timeout parameter, since a second timeout constant would reintroduce exactly the
+duplication this sub-phase removes, and the only cost is a delayed lint marker.
+
+Deleted from the router: `execFileAsync`, `GIT_VALIDATION_TIMEOUT_MS`, and the
+`execFile`/`promisify` imports (grep-confirmed unused). Every returned message
+string is byte-identical from the webview's point of view.
+
+**One seam where the split isn't free:** stash refs deliberately stay in the router
+(`gitRefExists` matches none of them and its doc comment points callers at
+`getStashList`), so the stash branch needed its own `try/catch` to preserve the
+`"git context not found"` fallback the shared outer catch used to provide. That's
+4 lines of `catch` that would disappear if `gitRefExists` also owned stash resolution.
+
+`GitUtils.ts` had **no test file at all**; added `src/test/unit/GitUtils.test.ts`
+(8 tests, temp-git-repo pattern borrowed from `WorkspaceSnapshotService.test.ts`),
+including one pinning that `gitRefExists` does not claim `stash:N`.
+
+Original specification, kept for reference:
+
+#### (original) 2b. Move git validation down to `GitUtils.ts`
 
 `validateGitContextReference` (lines 2795–2848) is pure git and does not belong in
 the UI layer at all — this is the clearest "doesn't belong in the router" case.
@@ -225,7 +315,63 @@ Note the timeout changes from 5s to `GitUtils`' 10s. That is acceptable for
 validation (it only delays a lint marker), but decide it deliberately rather than
 by accident — if 5s matters, add an optional timeout parameter instead.
 
-### 2c. `src/ui/HarnessFileMessageService.ts` (~210 lines → ~80)
+### 2c. `src/ui/HarnessFileMessageService.ts` ✅ **DONE**
+
+Landed 2026-07-24, 207 lines (router 2,364 → 2,209). Larger than the ~80 estimate
+because the whole section moved, not just the five duplicated handlers.
+
+```ts
+constructor(private readonly getWorkspaceRoot: () => string) {}
+
+private async runFileOp(
+  ctx: WebviewClientContext,
+  fileType: HarnessFileType,
+  op: (workspaceRoot: string) => Promise<void>
+): Promise<void>
+```
+
+`runFileOp` passes the workspace root **into** the op rather than taking the
+plan's bare `() => Promise<void>` — it already resolves the root once, outside the
+`try`, exactly as the originals did, so handing it over saves five re-resolutions.
+A second helper, `resolveFileView(workspaceRoot, fileType)`, returns
+`{ files, targetDirectories }`.
+
+**Scope deviation:** all seven handlers in the section moved, not the plan's five.
+`REQUEST_HARNESS_FILES` was a *sixth* copy of the `resolveAllLocations` +
+`resolveTargetDirectories` pair (hence `resolveFileView`), and `OPEN_HARNESS_DIR`
+was the router's last `fs` consumer. Taking both is what let `HarnessFileManager`
+and `import * as fs` leave the router entirely.
+
+**The `DELETE_ALL_FROM_HARNESS` `targetDirectories` question — resolved: the
+omission was unintentional, and the payload is now uniform.** Three independent
+findings, and the middle one is the durable gotcha:
+
+1. `HarnessFileManager.resolveTargetDirectories` is pure path derivation over a
+   fixed target list × both scopes. It never stats the filesystem and never
+   inspects what an op just did, so its result before and after a delete-all is
+   identical by construction.
+2. **The store treats an absent `targetDirectories` as "keep the previous value",
+   not "clear it"** — `useHarnessFileStore.ts` does `targetDirectories ?? state.targetDirectories`,
+   and `useMessageHandler.ts` passes `message.targetDirectories` through *without*
+   a `?? []`, unlike the `HARNESS_FILES_RESULT` handler directly above it, which
+   does coalesce. That asymmetry is why the omission never blanked the UI.
+3. The preserved list was the same list anyway: delete-all is always issued for the
+   active `fileType`, whose directories were already loaded by `requestFiles()`.
+
+So including the field is a no-op for every realistic sequence and strictly more
+correct for the pathological one (a client whose store still holds directories for
+a previously active `fileType`). **Behavior change, flagged:** the wire payload now
+carries `targetDirectories`; observable UI state does not change.
+`HarnessFileOpResultMessage` already declared the field optional, so no type change.
+
+`HARNESS_FILE_OP_RESULT` had **zero** coverage on either side; added
+`src/test/unit/HarnessFileMessageService.test.ts` (3 tests), one of which pins the
+identical success key set across all five mutating ops — that's the assertion
+holding the collapse in place. One `<relatedFiles>` line added to `ui.instructions.md`.
+
+Original specification, kept for reference:
+
+#### (original) 2c. `src/ui/HarnessFileMessageService.ts` (~210 lines → ~80)
 
 Lines 769–981 are **five near-verbatim copies** of the same shape: perform an op,
 re-run `HarnessFileManager.resolveAllLocations` + `resolveTargetDirectories`, emit
@@ -239,7 +385,24 @@ confirming against the webview consumer before collapsing.
 Collapse to a single `private async runFileOp(ctx, fileType, op: () => Promise<void>)`
 plus five one-line callers. This is the single largest DRY violation in the file.
 
-### 2d. `src/ui/McpManagerService.ts` (~150 lines out)
+### 2d. `src/ui/McpManagerService.ts` ✅ **DONE**
+
+Landed 2026-07-24, 174 lines. The complete `// ── MCP Manager ──` concern moved:
+all seven dispatch entries now delegate to the service, and the registry-manager,
+harness-exporter, discovery, save/delete/search, and local-scan implementations
+left the router. The constructor needs only `getWorkspaceRoot`, matching the
+dependency shape discovered in 2a/2c.
+
+The duplicated post-mutation discovery tail is now one private `emitLocalScan`
+helper, also used by the explicit `REQUEST_MCP_LOCAL_SCAN` handler. Export's
+zero-count early return remains before that helper, preserving the original rule
+that a no-op export shows a warning without re-scanning. `McpDiscoveryUtils`,
+`HarnessMcpExporter`, and `McpRegistryFileManager` are no longer router imports.
+
+No behavior changed and no test needed construction changes. Verified through
+the existing router suite and the full extension/UI suites.
+
+#### (original spec)
 
 Moves lines 3111–3236 (`getMcpRegistryFileManager`, `getHarnessMcpExporter`,
 `emitManagedMcpRegistryServers`, `handleSaveMcpRegistryServer`,
@@ -249,20 +412,23 @@ entries at 720–766. `handleExportMcpToHarness` and `handleDeleteMcpFromHarness
 share an identical "re-scan and emit `MCP_LOCAL_SCAN_RESULT`" tail — fold it into
 one private helper while moving.
 
-### 2e. `src/ui/TerminalMessageHandlers.ts` (~230 lines out)
+### 2e. `src/ui/TerminalMessageHandlers.ts` ✅ **DONE**
 
-Moves the PTY block at lines 1546–1722 **and** the panel-reconnect loop currently
-inlined in the `READY` handler (lines 331–370), which is the same concern living in
-two places.
+Landed 2026-07-24, 250 lines. The complete PTY dispatch block and the panel's
+active-session reconnect loop moved. The router retains READY ordering and
+panel-only lifecycle decisions, but delegates both the `skipTerminalReplay`
+choice and reconnect replay to `TerminalMessageHandlers`; every terminal dispatch
+entry is now a thin delegation.
 
-`TERMINAL_SPAWN_SHELL` (1601) and `TERMINAL_RESTART_SHELL` (1649) pass byte-identical
-`onData`/`onExit` callbacks; extract one `buildSessionCallbacks()` factory. The
-controller-gate check is also duplicated verbatim between `TERMINAL_INPUT` (1553)
-and `TERMINAL_RESIZE` (1567) — extract `isController(session, ctx)`.
+The duplicated spawn/restart callbacks collapsed into `buildSessionCallbacks()`,
+and input/resize share `isController(session, ctx)`. The load-bearing explanation
+for skipping panel terminal replay moved to `shouldSkipClientReadyReplay`, while
+the viewport-hint no-gate explanation moved intact with its handler. Controller
+assignment, broadcast-vs-targeted delivery, reconnect-buffer clearing, and shell
+error notifications are behavior-identical.
 
-Keep the comments explaining why viewport hints need no gate (1591–1593) and why
-the panel skips terminal replay (1252–1258) — both are non-obvious and both are
-called out in `ui.instructions.md`.
+No router test construction changed. Verified through the existing router suite
+and the full extension/UI suites.
 
 ## Phase 3 — Extract the step / run-lifecycle handlers
 
@@ -345,14 +511,18 @@ of near-uniform delegation.
 
 | File                             | Approx. lines | Status |
 | -------------------------------- | ------------: | ------ |
-| `WebviewMessageRouter.ts`        |    ~700–800 (currently 3,222) | Phases 2–4 pending |
-| `PromptEditorSupportService.ts`  |        ~750 | proposed |
+| `WebviewMessageRouter.ts`        |    ~700–800 target (currently 1,867, was 3,222) | Phases 3–4 pending |
+| `PromptEditorSupportService.ts`  |        875 | ✅ done (2a) |
 | `WorkflowStepHandlers.ts`        |        ~450 | proposed |
-| `TerminalMessageHandlers.ts`     |        ~240 | proposed |
-| `McpManagerService.ts`           |        ~160 | proposed |
+| `TerminalMessageHandlers.ts`     |        250 | ✅ done (2e) |
+| `McpManagerService.ts`           |        174 | ✅ done (2d) |
 | `WorkflowMutationCoordinator.ts` |        196 | ✅ done |
-| `HarnessFileMessageService.ts`   |         ~90 | proposed |
-| `GitUtils.ts`                    |    +~55 | proposed |
+| `HarnessFileMessageService.ts`   |        207 | ✅ done (2c) |
+| `GitUtils.ts`                    |    +56 (378 → 434) | ✅ done (2b) |
+
+Test files added along the way: `src/test/unit/GitUtils.test.ts` (8 tests, 2b) and
+`src/test/unit/HarnessFileMessageService.test.ts` (3 tests, 2c) — both areas had
+zero prior coverage. Extension suite went 1,971 → 1,982 passing.
 
 ## Sequencing and risk
 
@@ -363,9 +533,16 @@ Phases are independently shippable **in order**; Phase 0 gates everything.
   alone, in its own commit. ✅ done.
 - **Phase 1** ✅ done — pure code motion, verified against the Phase 0 regression
   test plus the rest of the router suite with no test changes needed.
-- **Phase 2** is the largest by volume but the lowest risk: near-pure code motion
-  with no shared mutable state. 2b/2c/2d/2e are independent of each other. Not
-  started.
+- **Phase 2** ✅ done — the largest by volume but the lowest risk: near-pure code
+  motion with no shared mutable state. The claim
+  that the sub-phases are mutually independent held, with one exception worth
+  knowing: **2b must precede 2a**, because 2a moves `validateContextReference`,
+  which is `validateGitContextReference`'s caller. Order them that way if this is
+  ever replayed. 2d and 2e were genuinely independent of each other and of the
+  earlier sub-phases.
+- **Sub-phases are not safely parallelizable** despite being logically independent:
+  every one of them edits `buildDispatchTable()` in the same file, so concurrent
+  agents conflict. Run them one at a time.
 - **Phase 3** depends on Phase 1 (done) and can now proceed. **Phase 4** should be
   last, when the registrars are already thin. Neither started.
 
@@ -383,3 +560,11 @@ the current name hides where router coverage actually lives.
 `OPEN_FILE` binary-file branching), in the `ExternalFileTrustPrompt` bullet, and in
 `<relatedFiles>`. Update all five as the corresponding phase lands — not in a
 batch at the end, or the file will describe a layout that does not exist yet.
+
+Status after Phase 2: the three prompt-editor `<criticalPatterns>` bullets, the
+terminal-ownership bullet, utils' MCP-consumer reference, and `<relatedFiles>` are
+updated to the extracted owners. The `<architecture>` router bullet was checked
+and deliberately left as-is — it describes the router as the inbound control
+plane with a dispatch table plus chained `routeQueue`, which stays true through
+every phase here, since the table itself never leaves the router. Revisit it only
+if Phase 4 changes that.

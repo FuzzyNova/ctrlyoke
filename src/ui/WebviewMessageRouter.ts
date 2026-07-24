@@ -1,57 +1,15 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  getVsCodeWorkspaceRoot,
-  getVsCodeTrustedWorkspaceRoots,
-  getVsCodeNamedWorkspaceRoots,
-} from "../platform/VsCodeWorkspaceRoot";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
-  SESSION_KINDS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
-  MAX_PASTED_IMAGE_BYTES,
-  mimeTypeToImageExtension,
-  imageExtensionToMimeType,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
-import { TempFileManager } from "../utils/TempFileManager";
-import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
-import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
-import { evaluateFileAccess } from "../utils/FileAccessPolicy";
-import {
-  openResolvedTarget,
-  confirmExternalFileTrustAndOpen,
-  type FileOpenTarget,
-} from "./ExternalFileTrustPrompt";
-import {
-  resolveNamedRelativePath,
-  type ResolverWorkspaceFolder,
-} from "../platform/WorkspaceRootResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
-import {
-  getFileCompletions,
-  getHashCompletions,
-  getHashSelectionCompletions,
-  getGitChangeCompletions,
-  getPromptFileCompletions,
-  getPriorContextCompletions,
-  findSymbolKindForReference,
-  getPathSuggestions,
-  type PlainCompletionItem,
-} from "../completions/CompletionHelpers";
-import { getStashList } from "../utils/GitUtils";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import * as fs from "fs";
-import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
-import { ContextExpander } from "../utils/ContextExpander";
-import { decodePriorContextTokenRef } from "../utils/FileReferenceParser";
-import { encode } from "gpt-tokenizer";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
@@ -76,30 +34,25 @@ import type {
   UndoWorkflowChangesMessage,
   RedoWorkflowChangesMessage,
   DevDashboardAction,
+  RequestHarnessFilesMessage,
+  ExportToHarnessMessage,
+  ImportToCtrlYokeMessage,
+  DeleteFromHarnessMessage,
+  SyncAllToHarnessMessage,
+  DeleteAllFromHarnessMessage,
+  OpenHarnessDirMessage,
 } from "../types/WebviewMessageTypes";
 import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
 import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
+import { PromptEditorSupportService } from "./PromptEditorSupportService";
+import { HarnessFileMessageService } from "./HarnessFileMessageService";
+import { McpManagerService } from "./McpManagerService";
+import { TerminalMessageHandlers } from "./TerminalMessageHandlers";
 import {
   createWebviewClientContext,
   type WebviewClientContext,
 } from "./WebviewClientContext";
-import {
-  getPtyProcessManager,
-  ptyPostMessage,
-} from "../core/harness/PtyProcessManager";
-import {
-  safeDiscoverLocalMcpServers,
-  safeFetchMcpRegistry,
-} from "../utils/McpDiscoveryUtils";
-import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
-import * as WorkflowPaths from "../utils/WorkflowPaths";
-import { HarnessFileManager } from "../utils/HarnessFileManager";
-import { HarnessMcpExporter } from "../utils/HarnessMcpExporter";
-import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
-
-const execFileAsync = promisify(execFile);
-const GIT_VALIDATION_TIMEOUT_MS = 5000;
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -126,6 +79,10 @@ export class WebviewMessageRouter {
   private readonly handlers: Map<string, WebviewMessageHandler>;
   private readonly undoRedoCoordinator: UndoRedoCoordinator;
   private readonly mutationCoordinator: WorkflowMutationCoordinator;
+  private readonly promptEditorSupport: PromptEditorSupportService;
+  private readonly harnessFiles: HarnessFileMessageService;
+  private readonly mcpManager: McpManagerService;
+  private readonly terminalHandlers: TerminalMessageHandlers;
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
@@ -137,6 +94,16 @@ export class WebviewMessageRouter {
   ) {
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
+    this.promptEditorSupport = new PromptEditorSupportService(
+      () => this.getWorkspaceRoot(),
+      getOrchestrator,
+      (absolutePath) => this.callbacks.resolveImageWebviewUri?.(absolutePath)
+    );
+    this.harnessFiles = new HarnessFileMessageService(() =>
+      this.getWorkspaceRoot()
+    );
+    this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
+    this.terminalHandlers = new TerminalMessageHandlers();
     this.handlers = this.buildDispatchTable();
   }
 
@@ -241,15 +208,9 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
 
       if (orchestrator) {
-        // The panel has a dedicated PTY reconnect loop later in this handler
-        // that sends TERMINAL_STARTED + reconnect buffers. Skip terminal replay
-        // inside handleClientReady for the panel to avoid double-sending and the
-        // associated xterm dispose+recreate cycle that caused the
-        // "briefly see scrollback then goes blank" bug. Browser clients (which
-        // have no separate PTY loop) use the default skipTerminalReplay: false
-        // so they receive terminal state on initial connect and reload.
         await orchestrator.handleClientReady(ctx.clientId, ctx.postMessage, {
-          skipTerminalReplay: ctx.clientId === PANEL_CLIENT_ID,
+          skipTerminalReplay:
+            this.terminalHandlers.shouldSkipClientReadyReplay(ctx),
           preferredViewAddress:
             message.preferredViewAddress &&
             typeof message.preferredViewAddress.workflowKey === "string" &&
@@ -312,46 +273,7 @@ export class WebviewMessageRouter {
             availableIps,
           });
         }
-        // Reconnect active PTY sessions to the fresh webview
-        const ptyManager = getPtyProcessManager();
-        if (ptyManager) {
-          for (const session of ptyManager.getAllSessions()) {
-            // Auto-claim controller if the session has no owner.
-            // Use assignController (not direct mutation) so workflowRunControllers is
-            // updated, then broadcast TERMINAL_CONTROLLER_CHANGED to all clients so
-            // no other client keeps thinking it is still the controller.
-            if (session.controllerClientId === undefined) {
-              ptyManager.assignController(session.id, ctx.clientId);
-              ptyPostMessage({
-                type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
-                workflowId: session.workflowId,
-                sessionId: session.id,
-                controllerClientId: ctx.clientId,
-              });
-            }
-            ctx.emit({
-              type: MESSAGE_TYPES.TERMINAL_STARTED,
-              workflowId: session.workflowId,
-              sessionId: session.id,
-              stepName: session.stepName,
-              kind: session.kind,
-              promptNumber: session.promptNumber,
-              harnessId: session.harnessId,
-              shellKind: session.shellKind,
-              controllerClientId: session.controllerClientId,
-            });
-            // Flush reconnect buffer
-            for (const chunk of session.reconnectBuffer) {
-              ctx.emit({
-                type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-                workflowId: session.workflowId,
-                sessionId: session.id,
-                data: chunk,
-              });
-            }
-            session.clearReconnectBuffer();
-          }
-        }
+        this.terminalHandlers.reconnectPanel(ctx);
       }
     });
 
@@ -623,7 +545,7 @@ export class WebviewMessageRouter {
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_COMPLETIONS, async (message, ctx) => {
-      await this.handleCompletionRequest(
+      await this.promptEditorSupport.handleCompletionRequest(
         ctx,
         message.trigger,
         message.prefix,
@@ -633,7 +555,11 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.OPEN_FILE, (message) => {
-      this.handleOpenFile(message.path, message.lineStart, message.lineEnd);
+      this.promptEditorSupport.handleOpenFile(
+        message.path,
+        message.lineStart,
+        message.lineEnd
+      );
     });
 
     table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
@@ -650,7 +576,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.OPEN_PRIOR_CONTEXT, async (message, ctx) => {
-      await this.handleOpenPriorContext(
+      await this.promptEditorSupport.handleOpenPriorContext(
         ctx,
         message.ref as string,
         (message.stepCount as number) ?? 0
@@ -660,7 +586,7 @@ export class WebviewMessageRouter {
     table.set(
       MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
       async (message, ctx) => {
-        const content = await this.buildPriorContextContent(
+        const content = await this.promptEditorSupport.buildPriorContextContent(
           ctx,
           message.ref as string,
           (message.stepCount as number) ?? 0
@@ -686,11 +612,14 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message, ctx) => {
-      await this.handleFileRefValidation(ctx, message.filePath);
+      await this.promptEditorSupport.handleFileRefValidation(
+        ctx,
+        message.filePath
+      );
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_CONTEXT_REFS, async (message, ctx) => {
-      await this.handleContextRefsValidation(
+      await this.promptEditorSupport.handleContextRefsValidation(
         ctx,
         message.references ?? [],
         message.seq
@@ -698,17 +627,20 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.SAVE_PASTED_IMAGE, async (message, ctx) => {
-      await this.handleSavePastedImage(ctx, message);
+      await this.promptEditorSupport.handleSavePastedImage(ctx, message);
     });
 
     table.set(MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI, async (message, ctx) => {
-      await this.handleFilePreviewUriRequest(ctx, message);
+      await this.promptEditorSupport.handleFilePreviewUriRequest(ctx, message);
     });
 
     table.set(
       MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS,
       async (message, ctx) => {
-        await this.handleAttachmentTokenCountRequest(ctx, message.references);
+        await this.promptEditorSupport.handleAttachmentTokenCountRequest(
+          ctx,
+          message.references
+        );
       }
     );
 
@@ -716,18 +648,12 @@ export class WebviewMessageRouter {
     table.set(
       MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS,
       async (_message, ctx) => {
-        try {
-          await this.emitManagedMcpRegistryServers(ctx);
-        } catch (error) {
-          const message = `Failed to load MCP registry servers: ${getErrorMessage(error)}`;
-          Log.error(message);
-          void vscode.window.showErrorMessage(message);
-        }
+        await this.mcpManager.handleRequestRegistryServers(ctx);
       }
     );
 
     table.set(MESSAGE_TYPES.SAVE_MCP_REGISTRY_SERVER, async (message, ctx) => {
-      await this.handleSaveMcpRegistryServer(
+      await this.mcpManager.handleSaveRegistryServer(
         ctx,
         message as SaveMcpRegistryServerMessage
       );
@@ -736,7 +662,7 @@ export class WebviewMessageRouter {
     table.set(
       MESSAGE_TYPES.DELETE_MCP_REGISTRY_SERVER,
       async (message, ctx) => {
-        await this.handleDeleteMcpRegistryServer(
+        await this.mcpManager.handleDeleteRegistryServer(
           ctx,
           message as DeleteMcpRegistryServerMessage
         );
@@ -744,19 +670,13 @@ export class WebviewMessageRouter {
     );
 
     table.set(MESSAGE_TYPES.REQUEST_MCP_LOCAL_SCAN, async (_message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      const result = await safeDiscoverLocalMcpServers(workspaceRoot);
-      ctx.emit({
-        type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
-        servers: result.servers,
-        ...(result.error ? { error: result.error } : {}),
-      });
+      await this.mcpManager.handleRequestLocalScan(ctx);
     });
 
     table.set(
       MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH,
       async (message, ctx) => {
-        await this.handleRequestMcpRegistrySearch(
+        await this.mcpManager.handleRequestRegistrySearch(
           ctx,
           message as RequestMcpRegistrySearchMessage
         );
@@ -764,14 +684,14 @@ export class WebviewMessageRouter {
     );
 
     table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message, ctx) => {
-      await this.handleExportMcpToHarness(
+      await this.mcpManager.handleExportToHarness(
         ctx,
         message as ExportMcpToHarnessMessage
       );
     });
 
     table.set(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, async (message, ctx) => {
-      await this.handleDeleteMcpFromHarness(
+      await this.mcpManager.handleDeleteFromHarness(
         ctx,
         message as DeleteMcpFromHarnessMessage
       );
@@ -779,217 +699,52 @@ export class WebviewMessageRouter {
 
     // ── Harness File Manager ─────────────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      const files = await HarnessFileManager.resolveAllLocations(
-        workspaceRoot,
-        message.fileType
+      await this.harnessFiles.handleRequestHarnessFiles(
+        ctx,
+        message as RequestHarnessFilesMessage
       );
-      const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-        workspaceRoot,
-        message.fileType
-      );
-      ctx.emit({
-        type: MESSAGE_TYPES.HARNESS_FILES_RESULT,
-        files,
-        targetDirectories,
-      });
     });
 
     table.set(MESSAGE_TYPES.EXPORT_TO_HARNESS, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      try {
-        await HarnessFileManager.exportToHarness(
-          message.sourcePath,
-          message.harnessId,
-          workspaceRoot,
-          message.fileType,
-          message.overwrite ?? false,
-          message.scope ?? "workspace"
-        );
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-          workspaceRoot,
-          message.fileType
-        );
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-          targetDirectories,
-        });
-      } catch (error) {
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
+      await this.harnessFiles.handleExportToHarness(
+        ctx,
+        message as ExportToHarnessMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.IMPORT_TO_CTRLYOKE, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      try {
-        await HarnessFileManager.importToCtrlYoke(
-          message.sourcePath,
-          workspaceRoot,
-          message.fileType,
-          message.overwrite ?? false
-        );
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-          workspaceRoot,
-          message.fileType
-        );
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-          targetDirectories,
-        });
-      } catch (error) {
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
+      await this.harnessFiles.handleImportToCtrlYoke(
+        ctx,
+        message as ImportToCtrlYokeMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.DELETE_FROM_HARNESS, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      try {
-        await HarnessFileManager.deleteFromHarness(
-          message.name,
-          message.harnessId,
-          workspaceRoot,
-          message.fileType,
-          message.scope ?? "workspace"
-        );
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-          workspaceRoot,
-          message.fileType
-        );
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-          targetDirectories,
-        });
-      } catch (error) {
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
+      await this.harnessFiles.handleDeleteFromHarness(
+        ctx,
+        message as DeleteFromHarnessMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.SYNC_ALL_TO_HARNESS, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      try {
-        const sourcePaths: string[] = (message.files ?? []).map(
-          (f: { sourcePath: string }) => f.sourcePath
-        );
-        for (const sourcePath of sourcePaths) {
-          await HarnessFileManager.exportToHarness(
-            sourcePath,
-            message.targetHarnessId,
-            workspaceRoot,
-            message.fileType,
-            true,
-            message.scope ?? "workspace"
-          );
-        }
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-          workspaceRoot,
-          message.fileType
-        );
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-          targetDirectories,
-        });
-      } catch (error) {
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
+      await this.harnessFiles.handleSyncAllToHarness(
+        ctx,
+        message as SyncAllToHarnessMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      try {
-        await HarnessFileManager.deleteAllFromHarness(
-          message.harnessId,
-          workspaceRoot,
-          message.fileType,
-          message.scope ?? "workspace"
-        );
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-        });
-      } catch (error) {
-        ctx.emit({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
+      await this.harnessFiles.handleDeleteAllFromHarness(
+        ctx,
+        message as DeleteAllFromHarnessMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.OPEN_HARNESS_DIR, async (message, ctx) => {
-      const workspaceRoot = this.getWorkspaceRoot();
-      try {
-        const dirPath = HarnessFileManager.getTargetDir(
-          message.harnessId,
-          workspaceRoot,
-          message.fileType,
-          message.scope ?? "workspace"
-        );
-        if (!fs.existsSync(dirPath)) {
-          throw new Error(
-            `The ${message.scope ?? "workspace"} ${message.fileType} folder does not exist yet: ${dirPath}`
-          );
-        }
-
-        await vscode.commands.executeCommand(
-          "revealFileInOS",
-          vscode.Uri.file(dirPath)
-        );
-        ctx.emit({
-          type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
-          success: true,
-        });
-      } catch (error) {
-        ctx.emit({
-          type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
+      await this.harnessFiles.handleOpenHarnessDir(
+        ctx,
+        message as OpenHarnessDirMessage
+      );
     });
 
     // ── Output History ───────────────────────────────────────────────────
@@ -1567,182 +1322,36 @@ export class WebviewMessageRouter {
     });
 
     // ── Terminal I/O ─────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.TERMINAL_INPUT, async (msg, ctx) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.sessionId || !msg.data) return;
-      const session = ptyManager.getSession(msg.sessionId as string);
-      if (!session) return;
-      // Only the designated controller may send input. If no controller is set,
-      // any client may send (e.g. during an unowned shell session).
-      if (
-        session.controllerClientId !== undefined &&
-        ctx.clientId !== session.controllerClientId
-      )
-        return;
-      ptyManager.writeToSession(msg.sessionId as string, msg.data as string);
+    table.set(MESSAGE_TYPES.TERMINAL_INPUT, (message, ctx) => {
+      this.terminalHandlers.handleInput(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg, ctx) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.sessionId || !msg.cols || !msg.rows) return;
-      const session = ptyManager.getSession(msg.sessionId as string);
-      if (!session) return;
-      // Only the controller may drive PTY dimensions.
-      if (
-        session.controllerClientId !== undefined &&
-        ctx.clientId !== session.controllerClientId
-      )
-        return;
-      ptyManager.resizeSession(
-        msg.sessionId as string,
-        msg.cols as number,
-        msg.rows as number
-      );
-      // Broadcast the new dimensions to all clients so viewers can match the
-      // controller's terminal width and avoid line-wrap display artifacts.
-      ptyPostMessage({
-        type: MESSAGE_TYPES.TERMINAL_SIZE_CHANGED,
-        workflowId: session.workflowId,
-        sessionId: session.id,
-        cols: msg.cols as number,
-        rows: msg.rows as number,
-      });
+    table.set(MESSAGE_TYPES.TERMINAL_RESIZE, (message, ctx) => {
+      this.terminalHandlers.handleResize(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, (msg, ctx) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.cols || !msg.rows) return;
-      // Store the viewport under THIS client's id. spawnPty reads only the
-      // resolved controller's entry, so a viewer's (or another controller's) hint
-      // can never affect a spawn controlled by a different client — no gate needed.
-      ptyManager.setSpawnDimensions(
-        ctx.clientId,
-        msg.cols as number,
-        msg.rows as number
-      );
+    table.set(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, (message, ctx) => {
+      this.terminalHandlers.handleViewportHint(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg, ctx) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.workflowId) return;
-      const workflowId = msg.workflowId as string;
-      const cwd = (msg.cwd as string | undefined) ?? process.cwd();
-      let session: ReturnType<typeof ptyManager.spawnShell>;
-      try {
-        session = ptyManager.spawnShell({
-          workflowId,
-          cwd,
-          onData: (s, chunk) => {
-            ptyPostMessage({
-              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-              workflowId: s.workflowId,
-              sessionId: s.id,
-              data: chunk,
-            });
-          },
-          onExit: (s, exitCode) => {
-            ptyPostMessage({
-              type: MESSAGE_TYPES.TERMINAL_ENDED,
-              workflowId: s.workflowId,
-              sessionId: s.id,
-              kind: s.kind,
-              exitCode,
-            });
-          },
-        });
-      } catch (error) {
-        const message = getErrorMessage(error);
-        Log.warn(`Failed to spawn embedded shell: ${message}`);
-        void vscode.window.showWarningMessage(message);
-        return;
-      }
-      // Register the spawning client as controller and update workflowRunControllers
-      // so that subsequent restarts inherit the same controller via assignController.
-      ptyManager.assignController(session.id, ctx.clientId);
-      ptyPostMessage({
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId,
-        sessionId: session.id,
-        stepName: session.stepName,
-        kind: SESSION_KINDS.SHELL,
-        shellKind: session.shellKind,
-        controllerClientId: session.controllerClientId,
-      });
+    table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, (message, ctx) => {
+      this.terminalHandlers.handleSpawnShell(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, async (msg) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
-      const workflowId = msg.workflowId as string;
-      let newSession: ReturnType<typeof ptyManager.restartShellSession>;
-      try {
-        newSession = ptyManager.restartShellSession(msg.sessionId as string, {
-          onData: (s, chunk) => {
-            ptyPostMessage({
-              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-              workflowId: s.workflowId,
-              sessionId: s.id,
-              data: chunk,
-            });
-          },
-          onExit: (s, exitCode) => {
-            ptyPostMessage({
-              type: MESSAGE_TYPES.TERMINAL_ENDED,
-              workflowId: s.workflowId,
-              sessionId: s.id,
-              kind: s.kind,
-              exitCode,
-            });
-          },
-        });
-      } catch (error) {
-        const message = getErrorMessage(error);
-        Log.warn(`Failed to restart embedded shell: ${message}`);
-        void vscode.window.showWarningMessage(message);
-        return;
-      }
-      if (newSession) {
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_STARTED,
-          workflowId,
-          sessionId: newSession.id,
-          stepName: newSession.stepName,
-          kind: SESSION_KINDS.SHELL,
-          shellKind: newSession.shellKind,
-          controllerClientId: newSession.controllerClientId,
-        });
-      }
+    table.set(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, (message) => {
+      this.terminalHandlers.handleRestartShell(message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, async (msg) => {
-      const ptyManager = getPtyProcessManager();
-      if (ptyManager && msg.sessionId) {
-        ptyManager.killSession(msg.sessionId as string);
-      }
+    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, (message) => {
+      this.terminalHandlers.handleCloseShell(message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI, async (msg) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.sessionId) return;
-      await ptyManager.gracefulKillAiCliSession(msg.sessionId as string);
+    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI, async (message) => {
+      await this.terminalHandlers.handleCloseAiCli(message);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, async (msg, ctx) => {
-      const ptyManager = getPtyProcessManager();
-      if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
-      const session = ptyManager.assignController(
-        msg.sessionId as string,
-        ctx.clientId
-      );
-      if (session) {
-        // Broadcast updated controller to all clients so they can update isController
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
-          workflowId: session.workflowId,
-          sessionId: session.id,
-          controllerClientId: session.controllerClientId,
-        });
-      }
+    table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, (message, ctx) => {
+      this.terminalHandlers.handleClaimControl(ctx, message);
     });
 
     // ── Workspace initialization ────────────────────────────────────────────
@@ -2173,836 +1782,6 @@ export class WebviewMessageRouter {
   }
 
   // ============================================================================
-  // CodeMirror Editor Handlers
-  // ============================================================================
-
-  private async handleCompletionRequest(
-    ctx: WebviewClientContext,
-    trigger: string,
-    prefix: string,
-    position: number,
-    seq?: number
-  ): Promise<void> {
-    try {
-      // Progressive `#` completion: emit the current editor selection(s)
-      // immediately so the dropdown populates instantly, then follow up with
-      // the full list once the (potentially slow, on large codebases)
-      // workspace-symbol query resolves. Marked `partial` so the editor knows
-      // a second, authoritative response is still coming.
-      if (trigger === "#") {
-        const selectionItems = getHashSelectionCompletions();
-        if (selectionItems.length > 0) {
-          this.emitCompletionsResponse(
-            ctx,
-            selectionItems,
-            position,
-            seq,
-            true
-          );
-        }
-        const fullItems = await getHashCompletions(prefix.substring(1));
-        this.emitCompletionsResponse(ctx, fullItems, position, seq, false);
-        return;
-      }
-
-      const items = await this.getCompletionItems(trigger, prefix);
-      this.emitCompletionsResponse(ctx, items, position, seq, false);
-    } catch (error) {
-      Log.error("Failed to get completions:", error);
-      this.emitCompletionsResponse(ctx, [], position, seq, false);
-    }
-  }
-
-  private emitCompletionsResponse(
-    ctx: WebviewClientContext,
-    items: PlainCompletionItem[],
-    position: number,
-    seq: number | undefined,
-    partial: boolean
-  ): void {
-    Log.trace(
-      `[Dashboard] Completion response: position=${position}, partial=${partial} → ${items.length} items`
-    );
-
-    ctx.emit({
-      type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
-      items: items.map((item) => ({
-        label: item.label,
-        kind: item.kind,
-        insertText: item.insertText,
-        detail: item.detail,
-        documentation: item.documentation,
-        sortText: item.sortText,
-        filterText: item.filterText,
-      })),
-      from: position,
-      seq,
-      partial,
-    });
-  }
-
-  /**
-   * Get completion items based on trigger (@file, #file, or path)
-   */
-  private async getCompletionItems(
-    trigger: string,
-    prefix: string
-  ): Promise<any[]> {
-    if (trigger === "@") {
-      return await getFileCompletions(prefix.substring(1)); // Remove @
-    } else if (trigger === "#") {
-      return await getHashCompletions(prefix.substring(1)); // Remove #
-    } else if (trigger === "~") {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : "";
-      return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
-    } else if (trigger === "$") {
-      return getPriorContextCompletions(prefix.substring(1)); // Remove $
-    } else if (trigger === "path") {
-      return await getPromptFileCompletions(prefix);
-    }
-
-    Log.warn(`[Dashboard] Unknown trigger: "${trigger}"`);
-    return [];
-  }
-
-  /**
-   * Validate whether a file-ref path typed in the prompt editor resolves to
-   * an actual file.  Resolution order mirrors PromptFileParser:
-   *   1. Absolute path
-   *   2. Relative to workspace root
-   *   3. Relative to .ctrlyoke directory inside workspace root
-   */
-  private async handleFileRefValidation(
-    ctx: WebviewClientContext,
-    filePath: string
-  ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : null;
-    let exists = false;
-
-    try {
-      if (path.isAbsolute(filePath)) {
-        await fs.promises.stat(filePath);
-        exists = true;
-      } else if (workspaceRoot) {
-        const candidates = [
-          resolveNamedRelativePath(
-            filePath,
-            workspaceRoot,
-            getVsCodeNamedWorkspaceRoots()
-          ),
-          path.resolve(
-            workspaceRoot,
-            PATH_CONSTANTS.CTRLYOKE_DIR,
-            filePath.replace(/^\.\.?\//, "")
-          ),
-        ];
-        for (const candidate of candidates) {
-          try {
-            await fs.promises.stat(candidate);
-            exists = true;
-            break;
-          } catch {
-            // try next candidate
-          }
-        }
-      }
-    } catch {
-      exists = false;
-    }
-
-    ctx.emit({
-      type: MESSAGE_TYPES.FILE_REF_VALIDATION,
-      exists,
-      filePath,
-    });
-  }
-
-  private getTempFileManager(): TempFileManager {
-    return new TempFileManager(this.getWorkspaceRoot());
-  }
-
-  /**
-   * Save a pasted clipboard image to disk and reply with the workspace-relative
-   * `@`-reference the editor should insert. Every paste — saved workflow or new
-   * unsaved prompt — lands in the flat, content-addressed `.ctrlyoke/attachments/`
-   * store, so identical images dedup across all workflows (see
-   * TempFileManager.getAttachmentsDir / createPastedImageFile).
-   */
-  private async handleSavePastedImage(
-    ctx: WebviewClientContext,
-    message: {
-      seq?: number;
-      dataBase64?: string;
-      mimeType?: string;
-    }
-  ): Promise<void> {
-    const { seq } = message;
-    try {
-      const workspaceRoot = this.getWorkspaceRoot();
-      if (!workspaceRoot) {
-        throw new Error("No workspace folder open");
-      }
-
-      const extension = mimeTypeToImageExtension(message.mimeType);
-      if (!extension) {
-        throw new Error(
-          `Unsupported image type: ${message.mimeType ?? "unknown"}`
-        );
-      }
-      if (!message.dataBase64) {
-        throw new Error("Missing pasted image data");
-      }
-
-      const buffer = Buffer.from(message.dataBase64, "base64");
-      if (buffer.length === 0) {
-        throw new Error("Pasted image is empty");
-      }
-      if (buffer.length > MAX_PASTED_IMAGE_BYTES) {
-        throw new Error("Pasted image exceeds the maximum allowed size");
-      }
-
-      const tempFileManager = this.getTempFileManager();
-      const absolutePath = await tempFileManager.createPastedImageFile(
-        buffer,
-        extension,
-        tempFileManager.getAttachmentsDir()
-      );
-      const relativePath = buildFileReferenceValue(
-        tempFileManager.getRelativePath(absolutePath)
-      );
-
-      ctx.emit({
-        type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
-        seq,
-        relativePath,
-      });
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      Log.error(`Failed to save pasted image: ${errorMessage}`);
-      ctx.emit({
-        type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
-        seq,
-        error: errorMessage,
-      });
-    }
-  }
-
-  /**
-   * Resolve a workspace image path to a displayable URI for an inline thumbnail.
-   * Any image anywhere in an open workspace folder is previewable — not just
-   * pasted images under `.ctrlyoke/` — so a harness that references an existing
-   * repo image (`docs/diagram.png`, `root2/assets/logo.webp`, …) gets a thumbnail
-   * too. The path is resolved with the same multi-root logic as `@`-references
-   * (`resolveNamedRelativePath` + trusted-root containment), so folder-name
-   * prefixes and every folder of a multi-root `.code-workspace` are honored, and
-   * any path that escapes every trusted root returns an error so the webview
-   * falls back to a plain file-ref rather than leaking arbitrary filesystem
-   * paths as images.
-   *
-   * Transport-aware, so both the VS Code panel and the hosted browser dashboard
-   * render thumbnails:
-   * - **Panel** → a lightweight `vscode-webview://` resource URI via
-   *   `asWebviewUri` (streams from disk, no payload bloat). Every workspace
-   *   folder is on `localResourceRoots` (see `getImageResourceRoots`), so the
-   *   panel can load a resolved image from anywhere in the workspace.
-   * - **Hosted browser** (and panel fallback) → an inline `data:` URI, since a
-   *   browser can't load a `vscode-webview://` URI. Both webview CSPs already
-   *   allow `img-src data:`.
-   */
-  private async handleFilePreviewUriRequest(
-    ctx: WebviewClientContext,
-    message: {
-      seq?: number;
-      relativePath?: string;
-    }
-  ): Promise<void> {
-    const { seq } = message;
-    const fail = (error: string): void => {
-      ctx.emit({
-        type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
-        seq,
-        error,
-      });
-    };
-    const succeed = (uri: string): void => {
-      ctx.emit({
-        type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
-        seq,
-        uri,
-      });
-    };
-
-    try {
-      const workspaceRoot = this.getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return fail("No workspace folder open");
-      }
-      if (!message.relativePath) {
-        return fail("Missing image path");
-      }
-
-      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
-      const resolved = resolveNamedRelativePath(
-        message.relativePath,
-        workspaceRoot,
-        getVsCodeNamedWorkspaceRoots()
-      );
-      if (!isPathWithinAnyDirectory(resolved, trustedRoots)) {
-        return fail("Image is not inside an open workspace folder");
-      }
-
-      try {
-        await fs.promises.access(resolved);
-      } catch {
-        return fail("Image file no longer exists");
-      }
-
-      // Only ever hand back an allowed image type, regardless of transport —
-      // the webview requests previews only for image-extension paths, but this
-      // is the host-side gate that keeps a non-image workspace file from being
-      // surfaced as a thumbnail URI.
-      const extension = path.extname(resolved).replace(/^\./, "");
-      const mimeType = imageExtensionToMimeType(extension);
-      if (!mimeType) {
-        return fail("Unsupported image type for inline preview");
-      }
-
-      // Panel: prefer the lightweight webview-resource URI.
-      if (ctx.clientId === PANEL_CLIENT_ID) {
-        const uri = this.callbacks.resolveImageWebviewUri?.(resolved);
-        if (uri) {
-          return succeed(uri);
-        }
-        // Panel view unavailable (e.g. not resolved yet) — fall through to a
-        // data URI, which the panel CSP also permits.
-      }
-
-      // Hosted browser (and panel fallback): serve an inline data URI.
-      const stats = await fs.promises.stat(resolved);
-      if (stats.size > MAX_PASTED_IMAGE_BYTES) {
-        return fail("Image is too large to preview inline");
-      }
-      const bytes = await fs.promises.readFile(resolved);
-      return succeed(`data:${mimeType};base64,${bytes.toString("base64")}`);
-    } catch (error) {
-      fail(getErrorMessage(error));
-    }
-  }
-
-  private async handleContextRefsValidation(
-    ctx: WebviewClientContext,
-    references: Array<{
-      id: string;
-      type: "file" | "directory" | "lineRange" | "symbol" | "git";
-      path?: string;
-      gitRef?: string;
-      lineStart?: string;
-      lineEnd?: string;
-      symbolName?: string;
-    }>,
-    seq?: number
-  ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : null;
-    const namedRoots = getVsCodeNamedWorkspaceRoots();
-
-    const results = await Promise.all(
-      references.map(async (reference) => {
-        const validation = await this.validateContextReference(
-          reference,
-          workspaceRoot,
-          namedRoots
-        );
-        return {
-          id: reference.id,
-          ...validation,
-        };
-      })
-    );
-
-    ctx.emit({
-      type: MESSAGE_TYPES.CONTEXT_REFS_VALIDATION,
-      results,
-      seq,
-    });
-  }
-
-  private async validateContextReference(
-    reference: {
-      type: "file" | "directory" | "lineRange" | "symbol" | "git";
-      path?: string;
-      gitRef?: string;
-      lineStart?: string;
-      lineEnd?: string;
-      symbolName?: string;
-    },
-    workspaceRoot: string | null,
-    namedRoots: readonly ResolverWorkspaceFolder[]
-  ): Promise<{
-    exists: boolean;
-    message?: string;
-    symbolKind?: number;
-    suggestions?: string[];
-  }> {
-    if (reference.type === "git") {
-      return this.validateGitContextReference(reference.gitRef, workspaceRoot);
-    }
-
-    if (!reference.path) {
-      return { exists: false, message: "context not found" };
-    }
-
-    const pathValidation = await this.resolveContextReferencePath(
-      reference.path,
-      workspaceRoot,
-      namedRoots
-    );
-
-    if (!pathValidation.exists || !pathValidation.resolvedPath) {
-      // Type-agnostic exit (nothing exists on disk at the typed path), so word
-      // the message by reference type — a missing directory ref reads "file not
-      // found" otherwise. file/lineRange/symbol all point at a file, so they
-      // keep "file not found".
-      const message =
-        reference.type === "directory"
-          ? "directory not found"
-          : "file not found";
-      return this.notFoundWithSuggestions(reference, message);
-    }
-
-    if (reference.type === "directory") {
-      return pathValidation.isDirectory
-        ? { exists: true }
-        : this.notFoundWithSuggestions(reference, "directory not found");
-    }
-
-    if (!pathValidation.isFile) {
-      return this.notFoundWithSuggestions(reference, "file not found");
-    }
-
-    if (reference.type === "lineRange" || reference.type === "symbol") {
-      const startLine = Number.parseInt(reference.lineStart ?? "", 10);
-      const endLine = Number.parseInt(reference.lineEnd ?? "", 10);
-      const missingSymbolName =
-        reference.type === "symbol" && !reference.symbolName;
-      if (
-        missingSymbolName ||
-        !Number.isInteger(startLine) ||
-        !Number.isInteger(endLine) ||
-        startLine < 1 ||
-        endLine < startLine
-      ) {
-        return {
-          exists: false,
-          message:
-            reference.type === "symbol"
-              ? "symbol not found"
-              : "selection not found",
-        };
-      }
-
-      try {
-        const document = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(pathValidation.resolvedPath)
-        );
-        if (endLine > document.lineCount) {
-          return {
-            exists: false,
-            message:
-              reference.type === "symbol"
-                ? "symbol not found"
-                : "selection not found",
-          };
-        }
-        if (reference.type === "symbol" && reference.symbolName) {
-          // Best-effort: the reference text itself carries no kind, only a
-          // live completion item does. A miss here (renamed/moved symbol,
-          // no provider) just leaves the icon at its generic fallback.
-          const symbolKind = await findSymbolKindForReference(
-            document.uri,
-            reference.symbolName,
-            startLine,
-            endLine
-          );
-          return symbolKind === undefined
-            ? { exists: true }
-            : { exists: true, symbolKind };
-        }
-        return { exists: true };
-      } catch {
-        return {
-          exists: false,
-          message:
-            reference.type === "symbol"
-              ? "symbol not found"
-              : "selection not found",
-        };
-      }
-    }
-
-    return { exists: true };
-  }
-
-  /**
-   * Build a not-found validation result, attaching "did you mean?" path
-   * suggestions for @file / @directory references so the editor can offer
-   * one-click lint quick-fixes (see getPathSuggestions). Only file/directory
-   * refs get suggestions — for symbol/lineRange the file usually resolves and
-   * it's the symbol/line-range that's wrong, which a path swap can't fix.
-   */
-  private async notFoundWithSuggestions(
-    reference: { type: string; path?: string },
-    message: string
-  ): Promise<{ exists: false; message: string; suggestions?: string[] }> {
-    if (
-      reference.path &&
-      (reference.type === "file" || reference.type === "directory")
-    ) {
-      const suggestions = await getPathSuggestions(
-        reference.path,
-        reference.type
-      );
-      if (suggestions.length > 0) {
-        return { exists: false, message, suggestions };
-      }
-    }
-    return { exists: false, message };
-  }
-
-  private async resolveContextReferencePath(
-    filePath: string,
-    workspaceRoot: string | null,
-    namedRoots: readonly ResolverWorkspaceFolder[]
-  ): Promise<{
-    exists: boolean;
-    resolvedPath?: string;
-    isFile?: boolean;
-    isDirectory?: boolean;
-  }> {
-    const candidates = path.isAbsolute(filePath)
-      ? [filePath]
-      : workspaceRoot
-        ? [
-            resolveNamedRelativePath(filePath, workspaceRoot, namedRoots),
-            path.resolve(
-              workspaceRoot,
-              PATH_CONSTANTS.CTRLYOKE_DIR,
-              filePath.replace(/^\.\.?\//, "")
-            ),
-          ]
-        : [];
-
-    for (const candidate of candidates) {
-      try {
-        const stat = await fs.promises.stat(candidate);
-        return {
-          exists: true,
-          resolvedPath: candidate,
-          isFile: stat.isFile(),
-          isDirectory: stat.isDirectory(),
-        };
-      } catch {
-        // try next candidate
-      }
-    }
-
-    return { exists: false };
-  }
-
-  private async validateGitContextReference(
-    gitRef: string | undefined,
-    workspaceRoot: string | null
-  ): Promise<{ exists: boolean; message?: string }> {
-    if (!gitRef || !workspaceRoot) {
-      return { exists: false, message: "git context not found" };
-    }
-
-    try {
-      if (gitRef === "diff") {
-        const { stdout } = await execFileAsync(
-          "git",
-          ["-C", workspaceRoot, "status", "--short"],
-          { timeout: GIT_VALIDATION_TIMEOUT_MS }
-        );
-        return stdout.trim()
-          ? { exists: true }
-          : { exists: false, message: "git diff not found" };
-      }
-
-      if (gitRef === "staged") {
-        const { stdout } = await execFileAsync(
-          "git",
-          ["-C", workspaceRoot, "diff", "--cached", "--name-only"],
-          { timeout: GIT_VALIDATION_TIMEOUT_MS }
-        );
-        return stdout.trim()
-          ? { exists: true }
-          : { exists: false, message: "staged changes not found" };
-      }
-
-      const stashMatch = gitRef.match(/^stash:(\d+)$/);
-      if (stashMatch) {
-        const stashes = await getStashList(workspaceRoot);
-        const stashIndex = Number.parseInt(stashMatch[1], 10);
-        return stashes.some((stash) => stash.index === stashIndex)
-          ? { exists: true }
-          : { exists: false, message: "stash not found" };
-      }
-
-      if (/^[0-9a-f]{7,40}$/i.test(gitRef)) {
-        await execFileAsync(
-          "git",
-          ["-C", workspaceRoot, "cat-file", "-e", `${gitRef}^{commit}`],
-          { timeout: GIT_VALIDATION_TIMEOUT_MS }
-        );
-        return { exists: true };
-      }
-    } catch {
-      return { exists: false, message: "git context not found" };
-    }
-
-    return { exists: false, message: "git context not found" };
-  }
-
-  private async handleOpenFile(
-    relativePath: string,
-    lineStart?: number,
-    lineEnd?: number
-  ): Promise<void> {
-    try {
-      if (!vscode.workspace.workspaceFolders?.length) {
-        Log.warn("No workspace folder open");
-        return;
-      }
-      const workspaceRoot = getVsCodeWorkspaceRoot();
-      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
-      const namedRoots = getVsCodeNamedWorkspaceRoots();
-
-      const normalizeCodexAbsPath = (rawPath: string): string => {
-        const pathWithDrive = rawPath.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
-        if (pathWithDrive) {
-          return `${pathWithDrive[1].toUpperCase()}${pathWithDrive[2]}`;
-        }
-
-        const slashDrivePath = rawPath.match(/^\/([A-Za-z]:)(\/.*)$/);
-        if (slashDrivePath) {
-          return `${slashDrivePath[1].toUpperCase()}${slashDrivePath[2]}`;
-        }
-
-        return rawPath;
-      };
-
-      const normalizedPath = normalizeCodexAbsPath(
-        relativePath.replace(/\\/g, "/")
-      );
-      const isDirectory = normalizedPath.endsWith("/");
-      const trimmedPath = isDirectory
-        ? normalizedPath.replace(/\/+$/, "")
-        : normalizedPath;
-
-      // Resolve via the same folder-name-prefixed multi-root logic as every
-      // other @-reference (`resolveNamedRelativePath`): absolute paths pass
-      // through as-is, a `root2/...` prefix resolves against that named root,
-      // and an unprefixed path resolves against the primary root.
-      const resolvedFsPath = resolveNamedRelativePath(
-        trimmedPath,
-        workspaceRoot,
-        namedRoots
-      );
-      const targetUri = vscode.Uri.file(resolvedFsPath);
-
-      const workspaceIdentity =
-        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-      const approvedExternalRoots =
-        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-          workspaceIdentity
-        );
-      const decision = evaluateFileAccess(targetUri.fsPath, {
-        workspaceRoots: trustedRoots,
-        approvedExternalRoots,
-      });
-      const target: FileOpenTarget = {
-        path: targetUri.fsPath,
-        isDirectory,
-        startLine: lineStart,
-        endLine: lineEnd,
-      };
-
-      if (!decision.allowed) {
-        Log.warn(
-          `Blocked dashboard request to open path outside every trusted root: ${relativePath}`
-        );
-        await confirmExternalFileTrustAndOpen(target);
-        return;
-      }
-
-      await openResolvedTarget(target);
-    } catch (error) {
-      Log.error("Error opening file:", error);
-      vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
-    }
-  }
-
-  /** Build the prior-context XML preview without opening it in an editor. */
-  private async buildPriorContextContent(
-    ctx: WebviewClientContext,
-    ref: string,
-    stepCount: number
-  ): Promise<string> {
-    if (!ref) return "";
-    const orchestrator = this.getOrchestrator();
-    const workingFilePath = orchestrator?.getQueueState(
-      ctx.clientId
-    )?.workingFilePath;
-    if (workingFilePath && fs.existsSync(workingFilePath)) {
-      try {
-        const raw = fs.readFileSync(workingFilePath, "utf-8");
-        const workingFile = JSON.parse(raw) as { steps?: unknown[] };
-        const steps = (workingFile.steps ??
-          []) as import("../types/CtrlYokeTypes").WorkflowStep[];
-        const address =
-          WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-        if (!address?.runRef) {
-          return `<!-- $${ref}: no executed run output is available for this draft -->`;
-        }
-        const outputHistoryManager = orchestrator.getOutputHistoryManager();
-        return await PriorContextPreviewBuilder.buildPreview(
-          ref,
-          stepCount,
-          steps,
-          outputHistoryManager.getRunOutputResolver(),
-          outputHistoryManager.getHistoryFilePath(
-            address.workflowKey,
-            address.runRef
-          )
-        );
-      } catch {
-        return `<!-- Could not read workflow state for $${ref} -->`;
-      }
-    }
-    return `<!-- No active workflow — $${ref} will be resolved at execution time -->`;
-  }
-
-  /**
-   * Open an untitled XML preview showing the exact <priorContext> block that
-   * a $prior-context ref will expand to when the prompt runs.
-   * Uses the same buildPriorContextXmlFromItems codepath as live harness injection.
-   */
-  private async handleOpenPriorContext(
-    ctx: WebviewClientContext,
-    ref: string,
-    stepCount: number
-  ): Promise<void> {
-    if (!ref) return;
-    const content = await this.buildPriorContextContent(ctx, ref, stepCount);
-
-    try {
-      const doc = await vscode.workspace.openTextDocument({
-        content,
-        language: "xml",
-      });
-      await vscode.window.showTextDocument(doc, { preview: true });
-    } catch (error) {
-      Log.error("handleOpenPriorContext: failed to open document", error);
-    }
-  }
-
-  /**
-   * Handle request to count tokens for attachment references.
-   */
-  private async handleAttachmentTokenCountRequest(
-    ctx: WebviewClientContext,
-    references: string[]
-  ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
-    if (!workspaceRoot || !references || references.length === 0) {
-      ctx.emit({
-        type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
-        counts: {},
-      });
-      return;
-    }
-
-    const counts: Record<string, number> = {};
-
-    const workspaceIdentity =
-      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-    const trustedRoots = [
-      ...getVsCodeTrustedWorkspaceRoots(),
-      ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-        workspaceIdentity
-      ),
-    ];
-    const namedRoots = getVsCodeNamedWorkspaceRoots();
-
-    await Promise.all(
-      references.map(async (rawRef) => {
-        try {
-          // Prior-context refs ($previous, $step:N …) expand to the actual
-          // output of earlier steps — count that exact XML. When no run output
-          // exists yet, buildPriorContextContent returns an `<!-- … -->`
-          // placeholder; treat that as zero tokens.
-          const priorRef = decodePriorContextTokenRef(rawRef);
-          if (priorRef) {
-            const content = await this.buildPriorContextContent(
-              ctx,
-              priorRef.body,
-              priorRef.stepCount
-            );
-            counts[rawRef] = content.startsWith("<!--")
-              ? 0
-              : encode(content).length;
-            return;
-          }
-
-          const expander = new ContextExpander(
-            workspaceRoot,
-            trustedRoots,
-            namedRoots
-          );
-
-          // Images are billed by pixel area, not raw byte content — estimate
-          // them directly instead of tokenizing the binary file as text.
-          const imageTokens =
-            await expander.estimateImageReferenceTokens(rawRef);
-          if (imageTokens !== null) {
-            counts[rawRef] = imageTokens;
-            return;
-          }
-
-          const expanded = await expander.expandContext(rawRef);
-
-          if (expanded === rawRef) {
-            counts[rawRef] = 0;
-            return;
-          }
-
-          const attachmentContent = expanded.slice(
-            0,
-            expanded.lastIndexOf(`\n\n${rawRef}`)
-          );
-          counts[rawRef] = encode(attachmentContent).length;
-        } catch (error) {
-          Log.warn(`Failed to count tokens for reference "${rawRef}":`, error);
-          counts[rawRef] = 0;
-        }
-      })
-    );
-
-    ctx.emit({
-      type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
-      counts,
-    });
-  }
-
-  // ============================================================================
   // Webview Logging
   // ============================================================================
 
@@ -3036,140 +1815,6 @@ export class WebviewMessageRouter {
     return vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : "";
-  }
-
-  private getMcpRegistryFileManager(): McpRegistryFileManager {
-    const workspaceRoot = this.getWorkspaceRoot();
-    return new McpRegistryFileManager(workspaceRoot || undefined);
-  }
-
-  private getHarnessMcpExporter(): HarnessMcpExporter {
-    const workspaceRoot = this.getWorkspaceRoot();
-    return new HarnessMcpExporter(workspaceRoot || undefined);
-  }
-
-  private async emitManagedMcpRegistryServers(
-    ctx: WebviewClientContext
-  ): Promise<void> {
-    const servers = await this.getMcpRegistryFileManager().readAll();
-    ctx.emit({
-      type: MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE,
-      servers,
-    });
-  }
-
-  private async handleSaveMcpRegistryServer(
-    ctx: WebviewClientContext,
-    message: SaveMcpRegistryServerMessage
-  ): Promise<void> {
-    try {
-      const manager = this.getMcpRegistryFileManager();
-      if (message.previousId && message.previousId !== message.server.id) {
-        await manager.remove(message.previousId, message.scope);
-      }
-      await manager.addOrUpdate(message.server, message.scope);
-      await this.emitManagedMcpRegistryServers(ctx);
-    } catch (error) {
-      const errorMessage = `Failed to save MCP registry server: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
-    }
-  }
-
-  private async handleDeleteMcpRegistryServer(
-    ctx: WebviewClientContext,
-    message: DeleteMcpRegistryServerMessage
-  ): Promise<void> {
-    try {
-      await this.getMcpRegistryFileManager().remove(message.id, message.scope);
-      await this.emitManagedMcpRegistryServers(ctx);
-    } catch (error) {
-      const errorMessage = `Failed to delete MCP registry server: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
-    }
-  }
-
-  private async handleRequestMcpRegistrySearch(
-    ctx: WebviewClientContext,
-    message: RequestMcpRegistrySearchMessage
-  ): Promise<void> {
-    const result = await safeFetchMcpRegistry({
-      cursor: message.cursor,
-      search: message.query || undefined,
-      updatedSince: message.updatedSince,
-    });
-    ctx.emit({
-      type: MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT,
-      servers: result.servers,
-      nextCursor: result.nextCursor,
-      ...(result.error ? { error: result.error } : {}),
-    });
-  }
-
-  private async handleExportMcpToHarness(
-    ctx: WebviewClientContext,
-    message: ExportMcpToHarnessMessage
-  ): Promise<void> {
-    try {
-      const result = await this.getHarnessMcpExporter().export(
-        message.servers ?? [],
-        message.targetId,
-        message.scope
-      );
-      if (result.exportedCount === 0) {
-        void vscode.window.showWarningMessage(
-          `No stdio MCP servers were exported to ${result.filePath}.`
-        );
-        return;
-      }
-      void vscode.window.showInformationMessage(
-        `Exported ${result.exportedCount} MCP server${result.exportedCount === 1 ? "" : "s"} to ${result.filePath}.`
-      );
-      const localScanResult = await safeDiscoverLocalMcpServers(
-        this.getWorkspaceRoot()
-      );
-      ctx.emit({
-        type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
-        servers: localScanResult.servers,
-        ...(localScanResult.error ? { error: localScanResult.error } : {}),
-      });
-    } catch (error) {
-      const errorMessage = `Failed to export MCP servers: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
-    }
-  }
-
-  private async handleDeleteMcpFromHarness(
-    ctx: WebviewClientContext,
-    message: DeleteMcpFromHarnessMessage
-  ): Promise<void> {
-    try {
-      const result = await this.getHarnessMcpExporter().remove(
-        message.ids ?? [],
-        message.targetId,
-        message.scope,
-        message.filePath
-      );
-      void vscode.window.showInformationMessage(
-        result.removedCount > 0
-          ? `Removed ${result.removedCount} MCP server${result.removedCount === 1 ? "" : "s"} from ${result.filePath}.`
-          : `No matching MCP servers were found in ${result.filePath}.`
-      );
-      const localScanResult = await safeDiscoverLocalMcpServers(
-        this.getWorkspaceRoot()
-      );
-      ctx.emit({
-        type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
-        servers: localScanResult.servers,
-        ...(localScanResult.error ? { error: localScanResult.error } : {}),
-      });
-    } catch (error) {
-      const errorMessage = `Failed to delete MCP servers from harness config: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
-    }
   }
 }
 

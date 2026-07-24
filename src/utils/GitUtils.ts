@@ -312,6 +312,62 @@ export async function searchCommitsBySubject(
 }
 
 /**
+ * Reports whether a git context reference resolves to something that exists in
+ * the repo at `workspaceRoot`.
+ *
+ * Understands the two pseudo-refs used by `@git:` context references — `"diff"`
+ * (any working-tree change) and `"staged"` (anything in the index) — plus
+ * abbreviated or full commit hashes. Stash references are not handled here;
+ * callers resolve those through {@link getStashList}.
+ *
+ * Unlike the rest of this module this never throws: an unrecognized ref, a
+ * non-repo root, or an unavailable git all resolve to `{ exists: false }` with
+ * a caller-displayable `message`, because the only consumer drives an editor
+ * lint marker where a rejection is indistinguishable from "not found".
+ */
+export async function gitRefExists(
+  workspaceRoot: string,
+  gitRef: string
+): Promise<{ exists: boolean; message?: string }> {
+  try {
+    if (gitRef === "diff") {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["-C", workspaceRoot, "status", "--short"],
+        { timeout: GIT_TIMEOUT_MS }
+      );
+      return stdout.trim()
+        ? { exists: true }
+        : { exists: false, message: "git diff not found" };
+    }
+
+    if (gitRef === "staged") {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["-C", workspaceRoot, "diff", "--cached", "--name-only"],
+        { timeout: GIT_TIMEOUT_MS }
+      );
+      return stdout.trim()
+        ? { exists: true }
+        : { exists: false, message: "staged changes not found" };
+    }
+
+    if (/^[0-9a-f]{7,40}$/i.test(gitRef)) {
+      await execFileAsync(
+        "git",
+        ["-C", workspaceRoot, "cat-file", "-e", `${gitRef}^{commit}`],
+        { timeout: GIT_TIMEOUT_MS }
+      );
+      return { exists: true };
+    }
+  } catch {
+    return { exists: false, message: "git context not found" };
+  }
+
+  return { exists: false, message: "git context not found" };
+}
+
+/**
  * Returns all non-gitignored file paths (relative to repoRoot) using
  * `git ls-files --cached --others --exclude-standard -z`.
  *
