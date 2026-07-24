@@ -15,9 +15,12 @@ export const ExitButton: React.FC<ExitButtonProps> = ({
 }) => (
   <button
     type={type}
-    className={`control-button flex h-6 w-6 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover ${className}`}
+    className={`control-button flex h-6 w-6 appearance-none items-center justify-center rounded border border-btn-border bg-btn-secondary-bg p-0 leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover ${className}`}
     {...props}
   >
-    <span className="codicon codicon-close leading-none" aria-hidden="true" />
+    <span
+      className="codicon codicon-close block leading-none"
+      aria-hidden="true"
+    />
   </button>
 );

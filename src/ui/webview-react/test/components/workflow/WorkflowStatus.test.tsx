@@ -545,11 +545,27 @@ describe("WorkflowStatus — loaded state", () => {
       .getByText("Workflow A")
       .closest(".workflow-menu-item");
     expect(workflowARow).not.toBeNull();
-    await user.click(
-      within(workflowARow as HTMLElement).getByRole("button", {
+    const favoriteButton = within(workflowARow as HTMLElement).getByRole(
+      "button",
+      {
         name: "Add to favorites",
-      })
+      }
     );
+    expect(favoriteButton).toHaveClass(
+      "flex",
+      "h-8",
+      "w-6",
+      "items-center",
+      "justify-center",
+      "px-0",
+      "py-0",
+      "leading-none"
+    );
+    expect(favoriteButton.firstElementChild).toHaveClass(
+      "block",
+      "leading-none"
+    );
+    await user.click(favoriteButton);
 
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
@@ -723,7 +739,12 @@ describe("WorkflowStatus — loaded state", () => {
     await user.click(
       screen.getByRole("button", { name: /Show recent workflows/i })
     );
-    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    const filterButton = screen.getByRole("button", {
+      name: "Filter workflows",
+    });
+    expect(filterButton).toHaveClass("appearance-none", "p-0", "leading-none");
+    expect(filterButton.firstElementChild).toHaveClass("block", "leading-none");
+    await user.click(filterButton);
     await user.click(document.getElementById("workflow-state-filter")!);
     await user.click(
       // Anchored: row buttons now carry their state in their accessible name,

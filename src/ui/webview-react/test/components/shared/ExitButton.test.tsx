@@ -8,8 +8,15 @@ describe("ExitButton", () => {
     render(<ExitButton aria-label="Close panel" />);
 
     const button = screen.getByRole("button", { name: "Close panel" });
-    expect(button).toHaveClass("h-6", "w-6", "control-button");
-    expect(button.firstElementChild).toHaveClass("leading-none");
+    expect(button).toHaveClass(
+      "h-6",
+      "w-6",
+      "control-button",
+      "appearance-none",
+      "p-0",
+      "leading-none"
+    );
+    expect(button.firstElementChild).toHaveClass("block", "leading-none");
   });
 
   it("forwards click handlers and button attributes", async () => {

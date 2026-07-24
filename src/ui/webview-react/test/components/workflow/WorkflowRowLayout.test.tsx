@@ -158,6 +158,17 @@ describe("RunIndicatorCell", () => {
     renderCell(drillable, "stacked");
     expect(screen.getByRole("button", { name: /#7 —/ })).toBeInTheDocument();
   });
+
+  it("uses an explicit height and zero vertical padding to center its contents", () => {
+    renderCell(drillable, "flat");
+
+    const button = screen.getByRole("button", { name: /Run 7 —/ });
+    expect(button).toHaveClass("h-8", "items-center", "py-0", "leading-none");
+    expect(button.querySelector(".codicon")).toHaveClass(
+      "block",
+      "leading-none"
+    );
+  });
 });
 
 describe("composeRowAccessibleName", () => {

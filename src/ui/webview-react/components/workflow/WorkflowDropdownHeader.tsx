@@ -60,14 +60,14 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
                   filtersOpen ? "Close workflow filters" : "Filter workflows"
                 }
                 aria-expanded={filtersOpen}
-                className={`control-button flex h-6 w-6 items-center justify-center rounded border transition-colors ${
+                className={`control-button flex h-6 w-6 appearance-none items-center justify-center rounded border p-0 leading-none transition-colors ${
                   filtersOpen || filtersActive
                     ? "border-focus-border bg-btn-bg text-btn-fg"
                     : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 }`}
               >
                 <span
-                  className="codicon codicon-filter leading-none"
+                  className="codicon codicon-filter block leading-none"
                   aria-hidden="true"
                 />
               </button>
