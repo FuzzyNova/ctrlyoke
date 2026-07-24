@@ -104,6 +104,7 @@ export interface GlobalSettings {
   outputVirtualizationRowThreshold: number;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
+  confirmContinuationDiscardOperations: boolean;
   hideGitIgnoredFiles: boolean;
   isMultiRoot: boolean;
   priorContext: string;
@@ -327,6 +328,7 @@ const initialGlobalSettings: GlobalSettings = {
   outputVirtualizationRowThreshold: 200,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
+  confirmContinuationDiscardOperations: true,
   hideGitIgnoredFiles: false,
   isMultiRoot: false,
   priorContext: "none",

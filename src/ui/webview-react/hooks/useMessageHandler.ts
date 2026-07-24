@@ -1750,8 +1750,28 @@ function createMessageHandlers(): MessageHandlerMap {
   // SUFFIX_EDIT_CONFIRMATION_REQUIRED - discardContinuation/startNewRunInstead
   // hit unsaved rewound-suffix edits; show our own modal (never a native
   // OS/VS Code dialog) so hosted browser clients can see and act on it too.
+  // Mirrors the delete/reset "don't ask me again" settings: when the user has
+  // turned the confirmation off, resend the same action with
+  // confirmEditedSuffix: true instead of ever surfacing the modal.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED] = (message) => {
+    if (
+      !useSettingsStore.getState().globalSettings
+        .confirmContinuationDiscardOperations
+    ) {
+      sendMessage(
+        message.action === "startNewRunInstead"
+          ? MESSAGE_TYPES.START_NEW_RUN_INSTEAD
+          : MESSAGE_TYPES.DISCARD_CONTINUATION,
+        {
+          address: message.address,
+          expectedDefinitionRevision: message.expectedDefinitionRevision,
+          expectedDescriptorRevision: message.expectedDescriptorRevision,
+          confirmEditedSuffix: true,
+        }
+      );
+      return;
+    }
     useUiStore.getState().setSuffixEditConfirmation({
       action: message.action,
       address: message.address,

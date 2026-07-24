@@ -391,6 +391,7 @@ describe("INIT", () => {
             respectGitignore: true,
             confirmDeleteOperations: true,
             confirmResetOperations: true,
+            confirmContinuationDiscardOperations: true,
             priorContext: "none",
           },
         },
@@ -1675,6 +1676,51 @@ describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
       expectedDefinitionRevision: 3,
       expectedDescriptorRevision: 5,
     });
+  });
+
+  it("resends the action with confirmEditedSuffix instead of showing the modal when the setting is off", () => {
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmContinuationDiscardOperations: false,
+      },
+    }));
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+
+    try {
+      renderHook(() => useMessageHandler());
+
+      act(() => {
+        dispatch(MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED, {
+          action: "startNewRunInstead",
+          address,
+          expectedDefinitionRevision: 3,
+          expectedDescriptorRevision: 5,
+        });
+      });
+
+      expect(postMessageMock).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.START_NEW_RUN_INSTEAD,
+        address,
+        expectedDefinitionRevision: 3,
+        expectedDescriptorRevision: 5,
+        confirmEditedSuffix: true,
+      });
+      expect(useUiStore.getState().suffixEditConfirmation).toBeNull();
+    } finally {
+      // globalSettings is not part of resetSettings()'s reset scope (it stays
+      // global on purpose), so this test must restore it itself to avoid
+      // leaking into tests that run later in this file.
+      useSettingsStore.setState((state) => ({
+        globalSettings: {
+          ...state.globalSettings,
+          confirmContinuationDiscardOperations: true,
+        },
+      }));
+    }
   });
 });
 

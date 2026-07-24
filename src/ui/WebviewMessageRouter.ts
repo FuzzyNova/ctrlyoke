@@ -1497,6 +1497,18 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(
+      MESSAGE_TYPES.UPDATE_CONFIRM_CONTINUATION_DISCARD,
+      async (message) => {
+        const { value } = message;
+        if (typeof value === "boolean") {
+          await ConfigurationUtils.setConfirmContinuationDiscardOperations(
+            value
+          );
+        }
+      }
+    );
+
     // ── Prompt Undo ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.UNDO_PROMPT_CHANGES, async (message) => {
       await this.undoRedoCoordinator.handleUndoPromptChanges(

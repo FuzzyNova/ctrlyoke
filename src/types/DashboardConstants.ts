@@ -260,6 +260,7 @@ export const MESSAGE_TYPES = {
 
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }
+  UPDATE_CONFIRM_CONTINUATION_DISCARD: "updateConfirmContinuationDiscard", // Update confirmContinuationDiscardOperations setting: { value: boolean }
 
   // Queue Position Control — Webview → Extension
   SET_START_POSITION: "setStartPosition",

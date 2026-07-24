@@ -207,6 +207,16 @@ export function GeneralSection({
           {...rowProps}
         />
         <SettingToggleRow
+          label="Confirm continuation discard operations"
+          description="Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead)."
+          checked={ui.confirmContinuationDiscardOperations}
+          onChange={(v) =>
+            onUpdate("ui.confirmContinuationDiscardOperations", v)
+          }
+          path="ui.confirmContinuationDiscardOperations"
+          {...rowProps}
+        />
+        <SettingToggleRow
           label="Hide git-ignored files"
           description="Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."
           checked={ui.hideGitIgnoredFiles}

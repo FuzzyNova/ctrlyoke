@@ -124,6 +124,7 @@ export interface CtrlYokeGlobalSettings {
     outputVirtualizationRowThreshold: number;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
+    confirmContinuationDiscardOperations: boolean;
     hideGitIgnoredFiles: boolean;
     /**
      * Treat `@file`/`#symbol`/`~git`/`$context` references in the prompt editor
@@ -332,6 +333,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     outputVirtualizationRowThreshold: 200,
     confirmDeleteOperations: true,
     confirmResetOperations: true,
+    confirmContinuationDiscardOperations: true,
     hideGitIgnoredFiles: false,
     atomicContextReferences: false,
     offerTrustForUntrustedFileLinks: true,

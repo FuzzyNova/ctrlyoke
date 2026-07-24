@@ -72,6 +72,8 @@ export const CONFIG_KEYS = {
   SERVER_TLS_KEY_PATH: "server.tls.keyPath",
   UI_CONFIRM_DELETE_OPERATIONS: "ui.confirmDeleteOperations",
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
+  UI_CONFIRM_CONTINUATION_DISCARD_OPERATIONS:
+    "ui.confirmContinuationDiscardOperations",
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
@@ -1020,6 +1022,25 @@ export const ConfigurationUtils = {
   async setConfirmResetOperations(enabled: boolean): Promise<void> {
     await configService.set(
       CONFIG_KEYS.UI_CONFIRM_RESET_OPERATIONS,
+      enabled,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /**
+   * Check if a confirmation dialog should be shown before discarding a
+   * continuation's edited suffix (Discard Continuation, Start New Run Instead).
+   */
+  shouldConfirmContinuationDiscardOperations(): boolean {
+    return configService.get(CONFIG_KEYS.UI)
+      .confirmContinuationDiscardOperations;
+  },
+
+  async setConfirmContinuationDiscardOperations(
+    enabled: boolean
+  ): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.UI_CONFIRM_CONTINUATION_DISCARD_OPERATIONS,
       enabled,
       CONFIG_SCOPE.USER
     );

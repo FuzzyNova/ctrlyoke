@@ -493,6 +493,10 @@
           "type": "boolean",
           "description": "Show a confirmation dialog before resetting workflow start position."
         },
+        "confirmContinuationDiscardOperations": {
+          "type": "boolean",
+          "description": "Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead)."
+        },
         "hideGitIgnoredFiles": {
           "type": "boolean",
           "description": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."

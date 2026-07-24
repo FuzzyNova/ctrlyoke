@@ -169,6 +169,7 @@ describe("setGlobalSettings", () => {
       outputVirtualizationRowThreshold: 200,
       confirmDeleteOperations: false,
       confirmResetOperations: false,
+      confirmContinuationDiscardOperations: false,
       hideGitIgnoredFiles: true,
       isMultiRoot: false,
       priorContext: "none",
