@@ -50,6 +50,7 @@ import { promisify } from "util";
 import * as fs from "fs";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
+import { decodePriorContextTokenRef } from "../utils/FileReferenceParser";
 import { encode } from "gpt-tokenizer";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
@@ -59,6 +60,7 @@ import type {
   DeleteMcpRegistryServerMessage,
   ExportMcpToHarnessMessage,
   InsertWorkflowStepMessage,
+  UpdatePromptMessage,
   ExecuteDraftMessage,
   SeedNewRunMessage,
   StartNewRunInsteadMessage,
@@ -1762,27 +1764,52 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleUpdatePrompt(message: any): Promise<void> {
+  private async handleUpdatePrompt(message: UpdatePromptMessage): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
-    await this.prepareDefinitionMutation(message);
-
     const { index, text, properties, clearProperties, promptName } = message;
+    const mutation = this.asWorkflowDefinitionMutation(message);
 
     try {
-      await orchestrator.updatePromptInQueue(
-        this.asWorkflowDefinitionMutation(message),
-        index,
-        text,
-        properties,
-        promptName,
-        clearProperties,
-        this.clientId
-      );
+      // A nonzero completed-step edit is one logical action: establish the
+      // durable pre-edit rewind snapshot first, then write the changed suffix
+      // against the revisions that rewind produced. Posting UPDATE_PROMPT and
+      // SET_START_POSITION independently raced both operations with the same
+      // stale definitionRevision.
+      if (
+        message.rewindCompletedStep === true &&
+        index > 0 &&
+        mutation?.address.kind === "run"
+      ) {
+        await orchestrator.updateCompletedPromptInQueue(
+          mutation,
+          index,
+          text,
+          properties,
+          promptName,
+          clearProperties,
+          this.clientId
+        );
+      } else {
+        // Step zero deliberately keeps full-rerun semantics: editing advances
+        // the selected run head, while the header's Re-run action allocates a
+        // fresh RunRef. Same-run pending continuations begin only after a
+        // preserved prefix.
+        await this.prepareDefinitionMutation(message);
+        await orchestrator.updatePromptInQueue(
+          mutation,
+          index,
+          text,
+          properties,
+          promptName,
+          clearProperties,
+          this.clientId
+        );
+      }
       await this.refreshDefinitionMutationView(message);
     } catch (error) {
       Log.error("Failed to update prompt:", error);
@@ -2948,11 +2975,37 @@ export class WebviewMessageRouter {
     await Promise.all(
       references.map(async (rawRef) => {
         try {
+          // Prior-context refs ($previous, $step:N …) expand to the actual
+          // output of earlier steps — count that exact XML. When no run output
+          // exists yet, buildPriorContextContent returns an `<!-- … -->`
+          // placeholder; treat that as zero tokens.
+          const priorRef = decodePriorContextTokenRef(rawRef);
+          if (priorRef) {
+            const content = await this.buildPriorContextContent(
+              priorRef.body,
+              priorRef.stepCount
+            );
+            counts[rawRef] = content.startsWith("<!--")
+              ? 0
+              : encode(content).length;
+            return;
+          }
+
           const expander = new ContextExpander(
             workspaceRoot,
             trustedRoots,
             namedRoots
           );
+
+          // Images are billed by pixel area, not raw byte content — estimate
+          // them directly instead of tokenizing the binary file as text.
+          const imageTokens =
+            await expander.estimateImageReferenceTokens(rawRef);
+          if (imageTokens !== null) {
+            counts[rawRef] = imageTokens;
+            return;
+          }
+
           const expanded = await expander.expandContext(rawRef);
 
           if (expanded === rawRef) {

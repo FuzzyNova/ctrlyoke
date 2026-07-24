@@ -281,6 +281,56 @@ export function parseInlinePriorContextRefs(
 }
 
 // ============================================================================
+// Prior-context token-count reference encoding
+// ============================================================================
+//
+// Prior-context refs ($previous, $step:1,3, …) expand to the *actual output* of
+// earlier steps, so their token cost depends on how many steps precede the
+// prompt being edited (`stepCount`), not just the ref text. The editor's token
+// counter therefore can't cache them by ref text alone. These helpers encode a
+// `(body, stepCount)` pair into a single opaque reference string (NUL-delimited,
+// so it can never collide with a real `@`/`#`/`~` ref or prompt text) that the
+// count request carries end to end and the frontend caches by. The encoded
+// string is only ever produced by the editor hook and consumed by the counter
+// (never parsed back out of prompt text), so it can't collide with a real ref.
+// Single-sourced here so the hook and the extension-host counter stay in sync.
+
+const PRIOR_CONTEXT_TOKEN_PREFIX = "PRIOR ";
+
+/**
+ * Encode a prior-context ref body (e.g. "previous", "step:1,3") plus the
+ * count of preceding steps into a token-count reference string.
+ */
+export function encodePriorContextTokenRef(
+  body: string,
+  stepCount: number
+): string {
+  return `${PRIOR_CONTEXT_TOKEN_PREFIX}${stepCount} ${body}`;
+}
+
+/**
+ * Decode a token-count reference produced by {@link encodePriorContextTokenRef},
+ * or null if it is not a prior-context ref.
+ */
+export function decodePriorContextTokenRef(
+  ref: string
+): { body: string; stepCount: number } | null {
+  if (!ref.startsWith(PRIOR_CONTEXT_TOKEN_PREFIX)) {
+    return null;
+  }
+  const rest = ref.slice(PRIOR_CONTEXT_TOKEN_PREFIX.length);
+  const separator = rest.indexOf(" ");
+  if (separator < 0) {
+    return null;
+  }
+  const stepCount = parseInt(rest.slice(0, separator), 10);
+  if (Number.isNaN(stepCount)) {
+    return null;
+  }
+  return { body: rest.slice(separator + 1), stepCount };
+}
+
+// ============================================================================
 // Git Change References (~diff, ~staged, ~stash:N, ~<hash>)
 // ============================================================================
 

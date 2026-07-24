@@ -38,7 +38,6 @@ const EditorSectionInner: React.FC = () => {
     setStepType,
     setStepEnabled,
   } = useEditorStore();
-  const tokenCount = useAttachmentTokenCount(promptText);
   const {
     editorCollapsed,
     toggleEditorCollapse,
@@ -56,6 +55,16 @@ const EditorSectionInner: React.FC = () => {
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = steps.length;
+
+  // Steps preceding this prompt — folds into prior-context ($previous, $step:N)
+  // token estimates. Editing queue step i: steps 0..i-1 precede it. New prompt
+  // or final step: every queue step precedes it. Mirrors PromptEditor.
+  const stepCount =
+    selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+      ? selectionTarget.index
+      : steps.length;
+  const tokenCount = useAttachmentTokenCount(promptText, stepCount);
+
   const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>(600);
 
   // Inline name editing state

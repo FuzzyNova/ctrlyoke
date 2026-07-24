@@ -29,7 +29,6 @@ import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
-import { postRunLifecycleMutation } from "../../utils/workflowMutation";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -578,13 +577,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           properties: scriptProperties,
           clearProperties,
           promptName: promptName.trim(),
+          ...(isPromptCompleted && { rewindCompletedStep: true }),
         });
-        if (isPromptCompleted) {
-          postRunLifecycleMutation(vscode, {
-            type: MESSAGE_TYPES.SET_START_POSITION,
-            toIndex: selectionTarget.index,
-          });
-        }
       } else if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
@@ -628,14 +622,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         properties: propertyValues,
         clearProperties,
         promptName: promptName.trim(),
+        ...(isPromptCompleted && { rewindCompletedStep: true }),
       });
-      // If editing a completed prompt, reset execution back to this step so it can be re-run
-      if (isPromptCompleted) {
-        postRunLifecycleMutation(vscode, {
-          type: MESSAGE_TYPES.SET_START_POSITION,
-          toIndex: selectionTarget.index,
-        });
-      }
     } else if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,

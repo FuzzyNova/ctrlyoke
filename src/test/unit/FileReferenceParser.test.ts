@@ -7,6 +7,8 @@ import {
   parseDirectoryReferences,
   parseAllFileReferences,
   parseInlinePriorContextRefs,
+  encodePriorContextTokenRef,
+  decodePriorContextTokenRef,
 } from "../../utils/FileReferenceParser";
 
 suite("FileReferenceParser", () => {
@@ -357,6 +359,37 @@ suite("FileReferenceParser", () => {
         "@src/a.ts #selection:src/b.ts:1-5 #sym:src/c.ts:myFunc:10-20";
       const refs = parseAllFileReferences(prompt);
       assert.strictEqual(refs.length, 3);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("prior-context token ref encoding", () => {
+    test("round-trips a simple body and step count", () => {
+      const encoded = encodePriorContextTokenRef("previous", 3);
+      assert.deepStrictEqual(decodePriorContextTokenRef(encoded), {
+        body: "previous",
+        stepCount: 3,
+      });
+    });
+
+    test("round-trips a step-range body containing separators", () => {
+      const encoded = encodePriorContextTokenRef("step:1,3-5", 12);
+      assert.deepStrictEqual(decodePriorContextTokenRef(encoded), {
+        body: "step:1,3-5",
+        stepCount: 12,
+      });
+    });
+
+    test("distinct step counts encode to distinct refs (cache safety)", () => {
+      assert.notStrictEqual(
+        encodePriorContextTokenRef("previous", 2),
+        encodePriorContextTokenRef("previous", 3)
+      );
+    });
+
+    test("returns null for a non-prior-context reference", () => {
+      assert.strictEqual(decodePriorContextTokenRef("@src/index.ts"), null);
+      assert.strictEqual(decodePriorContextTokenRef("~diff"), null);
     });
   });
 });

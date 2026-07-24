@@ -1305,6 +1305,23 @@ export interface AppendFileMessage {
 }
 
 /**
+ * Update an existing queue step. When a completed nonzero step is edited,
+ * `rewindCompletedStep` asks the backend to begin the same durable pending
+ * continuation as Set Start Position before applying the edit. The backend
+ * coordinates both writes so the edit uses the rewind's advanced revisions.
+ */
+export interface UpdatePromptMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_PROMPT;
+  index: number;
+  text: string;
+  properties: unknown;
+  clearProperties?: string[];
+  promptName?: string;
+  rewindCompletedStep?: boolean;
+  mutation?: WorkflowDefinitionMutation;
+}
+
+/**
  * Insert workflow step message (webview -> extension)
  * `afterIndex` is the existing queue index after which the pasted step should be inserted.
  */

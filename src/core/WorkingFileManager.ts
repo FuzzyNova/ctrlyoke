@@ -1072,6 +1072,13 @@ export class WorkingFileManager {
         if (index < 0 || index >= steps.length) {
           throw new Error(`Invalid prompt index: ${index}`);
         }
+        const rewindBoundary =
+          source._runtime?.pendingRewind?.fromStepIndex;
+        if (rewindBoundary !== undefined && index < rewindBoundary) {
+          throw new Error(
+            `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`
+          );
+        }
         const nextSteps = [...steps];
         nextSteps[index] =
           "replace" in change
@@ -1082,7 +1089,10 @@ export class WorkingFileManager {
           result: undefined,
         };
       },
-      { lineageRepository }
+      // Content/type edits are safe inside the rewound suffix. Structural
+      // insert/delete/reorder operations retain the stricter pending-edit
+      // guard until their prefix-identity behavior is explicitly audited.
+      { lineageRepository, allowDuringPendingRewind: true }
     );
   }
 

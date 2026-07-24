@@ -3,9 +3,11 @@ import * as fs from "fs/promises";
 import {
   FileReference,
   parseAllFileReferences,
+  parseAtReferences,
   parseGitChangeReferences,
 } from "./FileReferenceParser";
 import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
+import { estimateImageTokens } from "./ImageTokenEstimator";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
 import {
   resolveNamedRelativePath,
@@ -22,6 +24,7 @@ import {
 import {
   ATTACHMENT_PREFIXES,
   GIT_CHANGE_KINDS,
+  isImageRefPath,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 
@@ -166,6 +169,30 @@ export class ContextExpander {
       Log.error("Error expanding context:", error);
       // Return original prompt on error
       return promptText;
+    }
+  }
+
+  /**
+   * If `rawRef` is a full-file `@` reference to an image that exists within a
+   * trusted root, return a pixel-area-based token estimate for it; otherwise
+   * return null so the caller falls back to normal text tokenization.
+   *
+   * Images must never be tokenized as raw file bytes — a small PNG icon reads
+   * as thousands of "tokens" of binary garbage. Vision models bill by pixel
+   * area instead (see {@link estimateImageTokens}).
+   */
+  async estimateImageReferenceTokens(rawRef: string): Promise<number | null> {
+    const ref = parseAtReferences(this.maskBacktickBlocks(rawRef))[0];
+    if (!ref || ref.isDirectory || !isImageRefPath(ref.path)) {
+      return null;
+    }
+    try {
+      const absolutePath = this.resolveWorkspacePath(ref.path);
+      await fs.access(absolutePath);
+      return estimateImageTokens(absolutePath);
+    } catch {
+      // Unreadable / out-of-workspace — let the normal path handle (and log) it.
+      return null;
     }
   }
 
