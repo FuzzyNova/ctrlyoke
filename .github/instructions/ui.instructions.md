@@ -62,6 +62,7 @@ Key roles:
 <relatedFiles>
 - `src/ui/CtrlYokeWebviewProvider.ts` — outer shell for HTML/bootstrap, READY/RECONNECT, panel-only behavior
 - `src/ui/WebviewMessageRouter.ts` — inbound dispatch table and client-scoped routing rules
+- `src/ui/WorkflowStepHandlers.ts` — step-definition mutations, workflow-property writes, undo/redo step synchronization, and stable-address run lifecycle actions delegated by the router
 - `src/ui/PromptEditorSupportService.ts` — prompt-editor support handlers the router delegates to (completions, ref validation, pasted images, inline image previews, `OPEN_FILE`, prior-context preview, attachment token counts)
 - `src/ui/HarnessFileMessageService.ts` — agent/skill file-manager handlers the router delegates to (enumerate, export/import, delete, sync-all, reveal target dir)
 - `src/ui/McpManagerService.ts` — MCP registry, discovery, export, and harness-config removal handlers the router delegates to

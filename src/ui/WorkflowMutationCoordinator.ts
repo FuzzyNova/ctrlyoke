@@ -8,7 +8,7 @@ import type { WebviewClientContext } from "./WebviewClientContext";
 
 /**
  * The addressed-mutation / revision-republish protocol shared by every
- * definition-writing message handler in `WebviewMessageRouter`.
+ * definition-writing message handler delegated by `WebviewMessageRouter`.
  *
  * Every definition write must leave the originating client holding the
  * revisions its *next* mutation needs (`publishViewIdentity`), and every
