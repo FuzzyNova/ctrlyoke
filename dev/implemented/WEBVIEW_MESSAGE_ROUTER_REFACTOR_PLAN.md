@@ -1,18 +1,16 @@
 # WebviewMessageRouter Refactor Plan
 
-Status: **Phases 0–3 complete** (2026-07-24).
-Sub-phases 2a–2e and Phase 3 landed. Phase 4 remains proposed.
+Status: **Complete — Phases 0–4 implemented** (2026-07-24).
+Sub-phases 2a–2e and Phases 0–4 are complete.
 
-> **Phase 3 is uncommitted.** Phases 0–2 are committed in `6b1e8040`, `7d740f92`,
-> and `7acfbf5d`. The complete Phase 0–3 tree is verified green (`npm run typecheck`,
-> changed-file `npx eslint`, 1982 extension tests, 1180 UI tests), but the
-> router carries ~19 pre-existing Prettier deviations that predate this work and
-> were deliberately not touched — run `npx prettier --write src/ui/WebviewMessageRouter.ts`
-> as a separate cleanup before committing, so the reformat doesn't mix into the motion diff.
+The final tree is verified green with `npm run typecheck`, changed-file ESLint,
+and the full `npm test` run: 1,982 extension tests and 1,180 UI tests. The
+router-only Prettier cleanup noted during Phase 3 was also applied.
 
 Original target: `src/ui/WebviewMessageRouter.ts` — 3,285 lines, of which
 `buildDispatchTable()` was a single ~1,500-line method (lines 230–1736).
-After Phase 3 the router is 1,417 lines and `WorkflowStepHandlers.ts` is 547 lines.
+After Phase 4 and final formatting the router is 1,485 lines and
+`WorkflowStepHandlers.ts` is 547 lines.
 
 ## Verdict: refactor, but not by message category
 
@@ -32,7 +30,7 @@ reasons:
    the catch-all in `routeSingleMessage` (lines 211–223). Any category split still
    has to share it, so the shared piece must come out first regardless.
 
-Equally, "leave it as a god object" should be rejected — but note it is *not*
+Equally, "leave it as a god object" should be rejected — but note it is _not_
 actually a god object. It holds three fields of state (`routeQueue`,
 `scopedPostMessage`, `clientId`) and already delegates the heavy lifting to
 `WebviewSettingsSync`, `WorkflowSerializer`, `WorkflowOrchestrator`, and
@@ -63,8 +61,8 @@ execution cannot deadlock the shared `routeQueue` (documented in
   `STOP_RUN` (lines 1427–1461) — all `void this.handleXxx(...)`
 - `CREATE_CUSTOM_TEMPLATE` (line 1124) — `.catch()`, never awaited
 
-For these, `withScopedContext`'s `finally` restores the previous scope *while the
-handler is still running_. Any `this.clientId` / `this.scopedPostMessage` read
+For these, `withScopedContext`'s `finally` restores the previous scope \*while the
+handler is still running\_. Any `this.clientId` / `this.scopedPostMessage` read
 **after an `await`** therefore sees the restored (usually panel) scope, not the
 originating client's.
 
@@ -87,9 +85,9 @@ as parameters rather than reading router state), so the precedent exists in-tree
 Landed 2026-07-24 in `src/ui/WebviewClientContext.ts` + `WebviewMessageRouter.ts`.
 
 The drift was confirmed real, and the observed failure was worse than predicted
-above. In `publishViewIdentity`, `this.clientId` was read *synchronously* in the
+above. In `publishViewIdentity`, `this.clientId` was read _synchronously_ in the
 argument list (still the browser client) but `this.scopedPostMessage(identity)`
-ran *after* the await, by which time the restore had fired. So the identity was
+ran _after_ the await, by which time the restore had fired. So the identity was
 **computed for `browser:1` and delivered to the panel transport** — the failing
 client got nothing at all, and the panel got an identity describing a different
 client's view.
@@ -145,7 +143,7 @@ export interface WebviewClientContext {
 
 **Test:** add a regression test that routes a fire-and-forget message under a
 browser `clientTag` whose orchestrator call rejects, and asserts the failure reply
-and republished identity go to the *browser* `postMessage`, not the default one.
+and republished identity go to the _browser_ `postMessage`, not the default one.
 Today that test fails. `src/test/unit/WebviewSettingsSync.test.ts` already builds
 routers directly (11 construction sites) and is the natural home.
 
@@ -192,7 +190,7 @@ required, confirming this was pure code motion.
 
 Each of these has near-zero router coupling and is the bulk of the win.
 
-**Progress: 2a ✅, 2b ✅, 2c ✅ (2026-07-24). 2d and 2e not started.**
+**Progress: 2a–2e ✅ (2026-07-24).**
 
 Router went 3,222 → 2,209 lines across the three. Each sub-phase left
 `src/test/unit/WebviewSettingsSync.test.ts` passing untouched — the plan's stated
@@ -268,7 +266,7 @@ Landed 2026-07-24. `GitUtils.ts` +56 lines (378 → 434), router −36.
 export async function gitRefExists(
   workspaceRoot: string,
   gitRef: string
-): Promise<{ exists: boolean; message?: string }>
+): Promise<{ exists: boolean; message?: string }>;
 ```
 
 Placed between `searchCommitsBySubject` and `getGitTrackedFiles`, reusing the
@@ -339,7 +337,7 @@ A second helper, `resolveFileView(workspaceRoot, fileType)`, returns
 `{ files, targetDirectories }`.
 
 **Scope deviation:** all seven handlers in the section moved, not the plan's five.
-`REQUEST_HARNESS_FILES` was a *sixth* copy of the `resolveAllLocations` +
+`REQUEST_HARNESS_FILES` was a _sixth_ copy of the `resolveAllLocations` +
 `resolveTargetDirectories` pair (hence `resolveFileView`), and `OPEN_HARNESS_DIR`
 was the router's last `fs` consumer. Taking both is what let `HarnessFileManager`
 and `import * as fs` leave the router entirely.
@@ -354,7 +352,7 @@ findings, and the middle one is the durable gotcha:
    identical by construction.
 2. **The store treats an absent `targetDirectories` as "keep the previous value",
    not "clear it"** — `useHarnessFileStore.ts` does `targetDirectories ?? state.targetDirectories`,
-   and `useMessageHandler.ts` passes `message.targetDirectories` through *without*
+   and `useMessageHandler.ts` passes `message.targetDirectories` through _without_
    a `?? []`, unlike the `HARNESS_FILES_RESULT` handler directly above it, which
    does coalesce. That asymmetry is why the omission never blanked the UI.
 3. The preserved list was the same list anyway: delete-all is always issued for the
@@ -460,7 +458,24 @@ No test construction or assertions changed, preserving Phase 3 as code motion.
 Verified with `npm run typecheck`, changed-file ESLint, the 16-test
 `WebviewMessageRouter` grep, all 1,982 extension tests, and all 1,180 UI tests.
 
-## Phase 4 — Split the dispatch table into registrars
+## Phase 4 — Split the dispatch table into registrars ✅ **DONE**
+
+Landed 2026-07-24. `buildDispatchTable()` is now a short composition root that
+creates one typed `DispatchTable` and invokes 17 category registrars in the
+original order. All 132 `MESSAGE_TYPES` registrations remain in the router, in
+the same order, with no duplicates. Handler bodies and the fire-and-forget
+boundaries are unchanged.
+
+The lifecycle and developer-action registrations are separate registrars even
+though the original table had no banner between them; a developer-actions banner
+was added to preserve the same navigability as the other categories. The two
+settings banners remain together under `registerSettings`.
+
+No tests required construction or assertion changes, confirming this phase was
+pure structural motion. Final validation covered type checking, changed-file
+ESLint, the complete extension suite, and the complete UI suite.
+
+Original specification, kept for reference:
 
 The table stays in `WebviewMessageRouter.ts` — this preserves the single lookup
 point — but `buildDispatchTable()` becomes ~20 lines:
@@ -516,24 +531,22 @@ of near-uniform delegation.
 
 ## Expected shape
 
-| File                             |                           Approx. lines | Status                           |
-| -------------------------------- | --------------------------------------: | -------------------------------- |
-| `WebviewMessageRouter.ts`        | 1,417 (was 3,285); ~1,400 after Phase 4 | ✅ Phase 3 done; Phase 4 pending |
-| `PromptEditorSupportService.ts`  |                                     875 | ✅ done (2a)                     |
-| `WorkflowStepHandlers.ts`        |                                     547 | ✅ done (Phase 3)                |
-| `TerminalMessageHandlers.ts`     |                                     250 | ✅ done (2e)                     |
-| `McpManagerService.ts`           |                                     174 | ✅ done (2d)                     |
-| `WorkflowMutationCoordinator.ts` |                                     196 | ✅ done                          |
-| `HarnessFileMessageService.ts`   |                                     207 | ✅ done (2c)                     |
-| `GitUtils.ts`                    |                         +56 (378 → 434) | ✅ done (2b)                     |
+| File                             |     Approx. lines | Status                               |
+| -------------------------------- | ----------------: | ------------------------------------ |
+| `WebviewMessageRouter.ts`        | 1,485 (was 3,285) | ✅ done (Phase 4 + final formatting) |
+| `PromptEditorSupportService.ts`  |               875 | ✅ done (2a)                         |
+| `WorkflowStepHandlers.ts`        |               547 | ✅ done (Phase 3)                    |
+| `TerminalMessageHandlers.ts`     |               250 | ✅ done (2e)                         |
+| `McpManagerService.ts`           |               174 | ✅ done (2d)                         |
+| `WorkflowMutationCoordinator.ts` |               196 | ✅ done                              |
+| `HarnessFileMessageService.ts`   |               207 | ✅ done (2c)                         |
+| `GitUtils.ts`                    |   +56 (378 → 434) | ✅ done (2b)                         |
 
 **Line-count correction:** the earlier ~700–800 final-router target was
-inconsistent with Phase 4's stated design. Phase 4 moves dispatch blocks into
-registrar methods in the same file; it makes `buildDispatchTable()` ~20 lines but
-does not remove the registrar bodies from `WebviewMessageRouter.ts`. Unless Phase
-4 is deliberately re-scoped to put registrars in other files (contrary to the
-"table stays in the router" decision), the final router should remain around
-1,400 lines.
+inconsistent with Phase 4's stated design. Phase 4 moved dispatch blocks into
+registrar methods in the same file; it made `buildDispatchTable()` ~20 lines but
+did not remove the registrar bodies from `WebviewMessageRouter.ts`. The final
+1,485-line count also includes the deferred router-wide Prettier cleanup.
 
 Test files added along the way: `src/test/unit/GitUtils.test.ts` (8 tests, 2b) and
 `src/test/unit/HarnessFileMessageService.test.ts` (3 tests, 2c) — both areas had
@@ -561,13 +574,13 @@ Phases are independently shippable **in order**; Phase 0 gates everything.
 - **Phase 3** ✅ done — pure code motion into `WorkflowStepHandlers`; the
   fire-and-forget routing boundary and shared mutation coordinator instance are
   unchanged.
-- **Phase 4** is the only remaining phase. It should stay last, now that the
-  registrars are thin.
+- **Phase 4** ✅ done — the registrar split stayed last, after the delegated
+  handlers were thin, and preserved registration order.
 
 Testing: `src/test/unit/WebviewSettingsSync.test.ts` constructs `WebviewMessageRouter`
-at 11 sites and is the de facto router test file. Phase 0 changes its construction
-and routing expectations; every later phase should leave it passing untouched, which
-is the signal that a phase was pure motion. Consider renaming it to
+at 11 sites and is the de facto router test file. Phase 0 changed its construction
+and routing expectations; every later phase left it passing untouched, which was
+the signal that those phases were pure motion. Consider renaming it to
 `WebviewMessageRouter.test.ts` (or splitting out the router cases) once Phase 0 lands —
 the current name hides where router coverage actually lives.
 
@@ -584,9 +597,13 @@ terminal-ownership bullet, utils' MCP-consumer reference, and `<relatedFiles>` a
 updated to the extracted owners. The `<architecture>` router bullet was checked
 and deliberately left as-is — it describes the router as the inbound control
 plane with a dispatch table plus chained `routeQueue`, which stays true through
-every phase here, since the table itself never leaves the router. Revisit it only
-if Phase 4 changes that.
+every phase here, since the table itself never leaves the router. Phase 4 did not
+change that.
 
 Status after Phase 3: `WorkflowStepHandlers.ts` is listed in `<relatedFiles>`.
 The `<architecture>` router bullet remains accurate because the router still owns
 the dispatch table, queue, and fire-and-forget boundary.
+
+Status after Phase 4: no instruction-file change was needed. The architecture
+summary remains accurate because the router still owns the complete dispatch
+table, its registration order, the route queue, and the fire-and-forget boundary.

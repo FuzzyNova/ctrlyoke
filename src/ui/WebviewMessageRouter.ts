@@ -62,6 +62,8 @@ type WebviewMessageHandler = (
   ctx: WebviewClientContext
 ) => void | Promise<void>;
 
+type DispatchTable = Map<string, WebviewMessageHandler>;
+
 /**
  * WebviewMessageRouter
  *
@@ -75,7 +77,7 @@ export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
-  private readonly handlers: Map<string, WebviewMessageHandler>;
+  private readonly handlers: DispatchTable;
   private readonly undoRedoCoordinator: UndoRedoCoordinator;
   private readonly mutationCoordinator: WorkflowMutationCoordinator;
   private readonly promptEditorSupport: PromptEditorSupportService;
@@ -185,7 +187,11 @@ export class WebviewMessageRouter {
         message?.mutation ||
         message?.expectedDefinitionRevision !== undefined
       ) {
-        await this.mutationCoordinator.reportActionFailure(ctx, message.type, error);
+        await this.mutationCoordinator.reportActionFailure(
+          ctx,
+          message.type,
+          error
+        );
       }
     }
   }
@@ -194,9 +200,29 @@ export class WebviewMessageRouter {
   // Dispatch Table
   // ============================================================================
 
-  private buildDispatchTable(): Map<string, WebviewMessageHandler> {
-    const table = new Map<string, WebviewMessageHandler>();
+  private buildDispatchTable(): DispatchTable {
+    const table: DispatchTable = new Map();
+    this.registerLifecycle(table);
+    this.registerDevActions(table);
+    this.registerWorkflowControl(table);
+    this.registerPromptEditor(table);
+    this.registerEditorSupport(table);
+    this.registerMcpManager(table);
+    this.registerHarnessFiles(table);
+    this.registerOutputHistory(table);
+    this.registerWorkflowModal(table);
+    this.registerWorkflowStatus(table);
+    this.registerSettings(table);
+    this.registerSaveWorkflow(table);
+    this.registerMultiWorkflow(table);
+    this.registerRunLifecycle(table);
+    this.registerUndoRedo(table);
+    this.registerTerminal(table);
+    this.registerWorkspaceInit(table);
+    return table;
+  }
 
+  private registerLifecycle(table: DispatchTable): void {
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async (message, ctx) => {
       if (ctx.clientId === PANEL_CLIENT_ID) {
@@ -281,7 +307,10 @@ export class WebviewMessageRouter {
         this.terminalHandlers.reconnectPanel(ctx);
       }
     });
+  }
 
+  private registerDevActions(table: DispatchTable): void {
+    // ── Developer Actions ──────────────────────────────────────────────────
     const routeDevAction =
       (action: DevDashboardAction): WebviewMessageHandler =>
       async (_message, ctx) => {
@@ -353,7 +382,9 @@ export class WebviewMessageRouter {
         ctx.postMessage
       );
     });
+  }
 
+  private registerWorkflowControl(table: DispatchTable): void {
     // ── Dashboard — Workflow Control ──────────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_PROMPT, () => {
       vscode.commands.executeCommand("ctrlyoke.createDraftPrompt");
@@ -365,7 +396,8 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
       if (message.filePath) {
-        const mutation = this.mutationCoordinator.asWorkflowDefinitionMutation(message);
+        const mutation =
+          this.mutationCoordinator.asWorkflowDefinitionMutation(message);
         const isRunAddressed = mutation?.address.kind === "run";
         try {
           await this.getOrchestrator()?.appendFromFileForClient(
@@ -437,7 +469,9 @@ export class WebviewMessageRouter {
         message.fileName
       );
     });
+  }
 
+  private registerPromptEditor(table: DispatchTable): void {
     // ── Dashboard — Prompt Editor ────────────────────────────────────────
     table.set(MESSAGE_TYPES.EXECUTE_PROMPT, (message, ctx) => {
       void this.workflowStepHandlers.handleExecutePrompt(ctx, message);
@@ -487,13 +521,18 @@ export class WebviewMessageRouter {
         message.newPendingOrder as number[],
         ctx.clientId
       );
-      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(
+        ctx,
+        message
+      );
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message, ctx) => {
       await this.workflowStepHandlers.handleUndoRedoSync(ctx, message);
     });
+  }
 
+  private registerEditorSupport(table: DispatchTable): void {
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_COMPLETIONS, async (message, ctx) => {
       await this.promptEditorSupport.handleCompletionRequest(
@@ -594,7 +633,9 @@ export class WebviewMessageRouter {
         );
       }
     );
+  }
 
+  private registerMcpManager(table: DispatchTable): void {
     // ── MCP Manager ─────────────────────────────────────────────────────
     table.set(
       MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS,
@@ -647,7 +688,9 @@ export class WebviewMessageRouter {
         message as DeleteMcpFromHarnessMessage
       );
     });
+  }
 
+  private registerHarnessFiles(table: DispatchTable): void {
     // ── Harness File Manager ─────────────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message, ctx) => {
       await this.harnessFiles.handleRequestHarnessFiles(
@@ -697,7 +740,9 @@ export class WebviewMessageRouter {
         message as OpenHarnessDirMessage
       );
     });
+  }
 
+  private registerOutputHistory(table: DispatchTable): void {
     // ── Output History ───────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.LOAD_RUN_VIEW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
@@ -803,11 +848,17 @@ export class WebviewMessageRouter {
             ctx.clientId
           );
         } catch (error) {
-          await this.mutationCoordinator.reportActionFailure(ctx, "delete all runs", error);
+          await this.mutationCoordinator.reportActionFailure(
+            ctx,
+            "delete all runs",
+            error
+          );
         }
       }
     );
+  }
 
+  private registerWorkflowModal(table: DispatchTable): void {
     // ── Dashboard — New Workflow Modal ───────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_WORKFLOW, (_message, ctx) => {
       this.serializer.handleNewWorkflow(ctx.postMessage);
@@ -873,7 +924,9 @@ export class WebviewMessageRouter {
         message.defaultDir
       );
     });
+  }
 
+  private registerWorkflowStatus(table: DispatchTable): void {
     // ── Dashboard — Workflow Status ──────────────────────────────────────
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
@@ -941,7 +994,9 @@ export class WebviewMessageRouter {
         this.getOrchestrator()?.clearWorkingFilePath(ctx.clientId);
       }
     });
+  }
 
+  private registerSettings(table: DispatchTable): void {
     // ── Settings — Harness & Model Selection ─────────────────────────────
     table.set(MESSAGE_TYPES.CHANGE_HARNESS, (message) => {
       this.settingsSync.handleHarnessChange(message.harness);
@@ -1020,7 +1075,10 @@ export class WebviewMessageRouter {
 
     // ── Settings — Workflow Properties ───────────────────────────────────
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY, (message, ctx) => {
-      return this.workflowStepHandlers.handleUpdateWorkflowProperty(ctx, message);
+      return this.workflowStepHandlers.handleUpdateWorkflowProperty(
+        ctx,
+        message
+      );
     });
 
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message, ctx) => {
@@ -1056,7 +1114,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.LOG_MESSAGE, (message, ctx) => {
       this.handleWebviewLog(ctx, message.level, message.message);
     });
+  }
 
+  private registerSaveWorkflow(table: DispatchTable): void {
     // ── Save Workflow ────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async (message, ctx) => {
       await this.serializer.handleSaveWorkflowRequest(
@@ -1098,7 +1158,9 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     });
+  }
 
+  private registerMultiWorkflow(table: DispatchTable): void {
     // ── Multi-workflow coordination ──────────────────────────────────────
     table.set(MESSAGE_TYPES.GET_WORKFLOWS_LIST, (_message, ctx) => {
       const orchestrator = this.getOrchestrator();
@@ -1145,7 +1207,9 @@ export class WebviewMessageRouter {
         Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`);
       }
     });
+  }
 
+  private registerRunLifecycle(table: DispatchTable): void {
     // ── Stable-address run lifecycle controls ──────────────────────────────
     table.set(MESSAGE_TYPES.EXECUTE_DRAFT, (message, ctx) => {
       void this.workflowStepHandlers.handleExecuteDraft(
@@ -1250,7 +1314,9 @@ export class WebviewMessageRouter {
         }
       }
     );
+  }
 
+  private registerUndoRedo(table: DispatchTable): void {
     // ── Prompt Undo ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.UNDO_PROMPT_CHANGES, async (message, ctx) => {
       await this.undoRedoCoordinator.handleUndoPromptChanges(
@@ -1283,7 +1349,9 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     });
+  }
 
+  private registerTerminal(table: DispatchTable): void {
     // ── Terminal I/O ─────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.TERMINAL_INPUT, (message, ctx) => {
       this.terminalHandlers.handleInput(ctx, message);
@@ -1316,7 +1384,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, (message, ctx) => {
       this.terminalHandlers.handleClaimControl(ctx, message);
     });
+  }
 
+  private registerWorkspaceInit(table: DispatchTable): void {
     // ── Workspace initialization ────────────────────────────────────────────
     table.set(MESSAGE_TYPES.INITIALIZE_WORKSPACE, async () => {
       const orchestrator = this.getOrchestrator();
@@ -1327,8 +1397,6 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       await orchestrator?.handleLayoutPreference();
     });
-
-    return table;
   }
 
   // ============================================================================
