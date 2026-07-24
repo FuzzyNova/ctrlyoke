@@ -1501,3 +1501,93 @@ suite("WebviewMessageRouter APPEND_FILE routing", () => {
     ]);
   });
 });
+
+/**
+ * A dispatch entry that is deliberately fire-and-forget (so long-running
+ * execution cannot deadlock the shared route queue) keeps running after
+ * `route()` has already returned. While the router held the sending client's
+ * scope in mutable fields and restored them in a `finally`, every scope read
+ * that happened after an `await` inside such a handler saw the *next* (usually
+ * panel) client. The failure reply and the republished revisions were then
+ * posted to the panel, leaving the client that actually failed wedged on a
+ * superseded `definitionRevision` — the exact wedge `reportActionFailure`
+ * exists to prevent.
+ */
+suite("WebviewMessageRouter client scoping", () => {
+  const draftAddress = {
+    workflowKey: "workflow-a" as never,
+    kind: "draft" as const,
+  };
+
+  test("a detached handler's failure reply reaches the originating client, not the panel", async () => {
+    const panelMessages: any[] = [];
+    const browserMessages: any[] = [];
+    const identityClientIds: string[] = [];
+
+    let signalDone: () => void = () => {};
+    const identityPublished = new Promise<void>((resolve) => {
+      signalDone = resolve;
+    });
+
+    const orchestrator = {
+      isInitialized: () => true,
+      executeDraftAtAddress: async () => {
+        // Suspend once so `route()` has already resolved before this handler
+        // resumes — precisely the window the restore used to fire in.
+        await Promise.resolve();
+        throw new Error("superseded definitionRevision");
+      },
+      publishViewIdentityToViewers: async (clientId: string) => {
+        identityClientIds.push(clientId);
+        signalDone();
+        return { type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, clientId };
+      },
+    } as any;
+
+    const router = new WebviewMessageRouter(
+      (message: unknown) => panelMessages.push(message),
+      {} as any,
+      {} as any,
+      () => orchestrator,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    const originalShowError = vscode.window.showErrorMessage;
+    (vscode.window as any).showErrorMessage = () => Promise.resolve(undefined);
+    try {
+      await router.route(
+        {
+          type: MESSAGE_TYPES.EXECUTE_DRAFT,
+          address: draftAddress,
+          expectedDefinitionRevision: 2,
+          expectedDescriptorRevision: 5,
+        },
+        {
+          postMessage: (message: unknown) => browserMessages.push(message),
+          clientTag: "browser:1",
+        }
+      );
+      await identityPublished;
+    } finally {
+      (vscode.window as any).showErrorMessage = originalShowError;
+    }
+
+    assert.deepStrictEqual(
+      identityClientIds,
+      ["browser:1"],
+      "revisions must be republished for the client that failed"
+    );
+    assert.ok(
+      browserMessages.some(
+        (m) => m.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      ),
+      "the failing client must be told its action failed"
+    );
+    assert.deepStrictEqual(
+      panelMessages,
+      [],
+      "nothing may leak to the panel transport"
+    );
+  });
+});

@@ -1,6 +1,6 @@
 # WebviewMessageRouter Refactor Plan
 
-Status: **Proposed** (not started)
+Status: **Phase 0 complete** (2026-07-24). Phases 1–4 proposed.
 
 Target: `src/ui/WebviewMessageRouter.ts` — 3,285 lines, of which `buildDispatchTable()`
 is a single ~1,500-line method (lines 230–1736).
@@ -73,10 +73,44 @@ context object and thread it through, so no post-await read can drift. That is t
 same shape `UndoRedoCoordinator` already uses (it takes `postMessage` and `clientId`
 as parameters rather than reading router state), so the precedent exists in-tree.
 
-## Phase 0 — Introduce an explicit dispatch context (prerequisite)
+## Phase 0 — Introduce an explicit dispatch context ✅ **DONE**
 
-Nothing else should land before this; it is both the bug fix and the mechanism that
-makes every later extraction possible.
+Landed 2026-07-24 in `src/ui/WebviewClientContext.ts` + `WebviewMessageRouter.ts`.
+
+The drift was confirmed real, and the observed failure was worse than predicted
+above. In `publishViewIdentity`, `this.clientId` was read *synchronously* in the
+argument list (still the browser client) but `this.scopedPostMessage(identity)`
+ran *after* the await, by which time the restore had fired. So the identity was
+**computed for `browser:1` and delivered to the panel transport** — the failing
+client got nothing at all, and the panel got an identity describing a different
+client's view.
+
+The regression test (`WebviewMessageRouter client scoping` in
+`src/test/unit/WebviewSettingsSync.test.ts`) pins exactly this, and was verified
+to fail against the pre-Phase-0 router with:
+
+```
+AssertionError: nothing may leak to the panel transport
++ [ { clientId: 'browser:1', type: 'workflowViewIdentity' } ]
+- []
+```
+
+What landed, versus what this section originally specified:
+
+- `WebviewClientContext` + `createWebviewClientContext` in their own file (not
+  inline in the router) so Phases 1–3 can import it without a cycle.
+- `type WebviewMessageHandler = (message, ctx) => void | Promise<void>` — the
+  dispatch table's value type, replacing the inline signature.
+- `withScopedContext`, `getCurrentPostMessage`, `emitMessage`, `scopedPostMessage`
+  and `clientId` are all **deleted**. `route()` builds the context once.
+- 39 private handler methods took `ctx` as their first parameter (85 call sites);
+  90 dispatch-table lambdas took it as their second.
+- The `READY` handler's hand-rolled `const send = …; const clientId = …` snapshot
+  before the detached `completeBrowserReadyAfterStartup` call is gone — that was a
+  manual workaround for this very bug, applied in the one place someone noticed
+  it. `ctx` now makes it unnecessary everywhere.
+
+Original specification, kept for reference:
 
 Add to `src/ui/` (co-located with the router):
 

@@ -3300,7 +3300,28 @@ export class WorkflowInstance {
           };
         }
       },
-      (_deletedFilePath: string) => {
+      (deletedFilePath: string) => {
+        // A promoted draft is moved, not lost. `WorkingFileManager.finalizeRun`
+        // removes `draft/workflow.ctrlyoke.json` once its content lives on in
+        // `run-<ts>/workflow.ctrlyoke.json`, and the watcher is never
+        // re-pointed off the draft — so that delete lands here, asynchronously,
+        // often only after the user has already pressed Run again. The queue
+        // has switched to the run's file by then, so a delete for anything
+        // other than the queue's *current* working file means the definition
+        // moved rather than disappeared. Clearing `currentPromptFile` on it
+        // made the next Run bail at the "No prompt file loaded" guard and
+        // silently do nothing — a real re-run-after-completion failure that
+        // reproduced about half the time, purely on watcher delivery timing.
+        const activeWorkingFile = this.promptQueue.getState().workingFilePath;
+        if (
+          activeWorkingFile &&
+          !WorkflowPaths.pathsEqualForPlatform(
+            activeWorkingFile,
+            deletedFilePath
+          )
+        ) {
+          return;
+        }
         this.currentPromptFile = undefined;
       }
     );

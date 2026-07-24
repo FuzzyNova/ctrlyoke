@@ -79,6 +79,10 @@ import type {
 } from "../types/WebviewMessageTypes";
 import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
 import {
+  createWebviewClientContext,
+  type WebviewClientContext,
+} from "./WebviewClientContext";
+import {
   getPtyProcessManager,
   ptyPostMessage,
 } from "../core/harness/PtyProcessManager";
@@ -97,6 +101,15 @@ const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
 
 /**
+ * A dispatch-table entry. Every handler receives the originating client's scope
+ * explicitly; none of them may read it off the router.
+ */
+type WebviewMessageHandler = (
+  message: any,
+  ctx: WebviewClientContext
+) => void | Promise<void>;
+
+/**
  * WebviewMessageRouter
  *
  * Dispatch table replacing the giant switch statement in CtrlYokeWebviewProvider.
@@ -107,14 +120,9 @@ const GIT_VALIDATION_TIMEOUT_MS = 5000;
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
-  private scopedPostMessage: PostMessageFn;
-  private clientId: string;
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
-  private readonly handlers: Map<
-    string,
-    (message: any) => void | Promise<void>
-  >;
+  private readonly handlers: Map<string, WebviewMessageHandler>;
   private readonly undoRedoCoordinator: UndoRedoCoordinator;
 
   constructor(
@@ -125,8 +133,6 @@ export class WebviewMessageRouter {
     private readonly historySearchService: HistorySearchService,
     private readonly callbacks: WebviewRouterCallbacks
   ) {
-    this.scopedPostMessage = defaultPostMessage;
-    this.clientId = PANEL_CLIENT_ID;
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.handlers = this.buildDispatchTable();
   }
@@ -139,72 +145,58 @@ export class WebviewMessageRouter {
 
   /**
    * Route a webview message to the appropriate handler.
+   *
+   * The sending client's scope is resolved once, here, and then passed by value
+   * to the handler. Handlers must not reach back to the router for it — see
+   * {@link WebviewClientContext} for why holding it as router state was unsafe.
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
+    const ctx = createWebviewClientContext(
+      options?.clientTag ?? PANEL_CLIENT_ID,
+      options?.postMessage ?? this.defaultPostMessage
+    );
     this.routeQueue = this.routeQueue.then(() =>
-      this.withScopedContext(options?.postMessage, options?.clientTag, () =>
-        this.routeSingleMessage(message)
-      )
+      this.routeSingleMessage(message, ctx)
     );
 
     await this.routeQueue;
   }
 
-  private async withScopedContext(
-    postMessage: PostMessageFn | undefined,
-    clientTag: string | undefined,
-    action: () => Promise<void>
-  ): Promise<void> {
-    const prevPostMessage = this.scopedPostMessage;
-    const prevClientId = this.clientId;
-    if (postMessage !== undefined) this.scopedPostMessage = postMessage;
-    if (clientTag !== undefined) this.clientId = clientTag;
-    try {
-      await action();
-    } finally {
-      this.scopedPostMessage = prevPostMessage;
-      this.clientId = prevClientId;
-    }
-  }
-
-  private getCurrentPostMessage(): PostMessageFn {
-    return this.scopedPostMessage ?? this.defaultPostMessage;
-  }
-
-  private emitMessage(message: any): void {
-    this.getCurrentPostMessage()(message);
-  }
-
   private async completeBrowserReadyAfterStartup(
-    orchestrator: WorkflowOrchestrator,
-    send: PostMessageFn,
-    clientId: string
+    ctx: WebviewClientContext,
+    orchestrator: WorkflowOrchestrator
   ): Promise<void> {
     try {
       const loadedWorkflowId = await orchestrator.awaitStartupAutoLoad();
-      const alreadyReplayed = orchestrator.hasViewedWorkflow(clientId);
+      const alreadyReplayed = orchestrator.hasViewedWorkflow(ctx.clientId);
       if (loadedWorkflowId && !alreadyReplayed) {
         await orchestrator.replayWorkflowStateTo(
           loadedWorkflowId,
-          send,
-          clientId
+          ctx.postMessage,
+          ctx.clientId
         );
       }
 
-      await this.settingsSync.sendWorkflowPropertiesToSettings(send, clientId);
-      this.settingsSync.sendStartupComplete(send);
+      await this.settingsSync.sendWorkflowPropertiesToSettings(
+        ctx.postMessage,
+        ctx.clientId
+      );
+      this.settingsSync.sendStartupComplete(ctx.postMessage);
     } catch (error) {
       Log.error(
-        `[WebviewMessageRouter] browser READY follow-up failed clientId=${clientId}: ${getErrorMessage(error)}`
+        `[WebviewMessageRouter] browser READY follow-up failed clientId=${ctx.clientId}: ${getErrorMessage(error)}`
       );
     }
   }
 
-  private async routeSingleMessage(message: any): Promise<void> {
+  private async routeSingleMessage(
+    message: any,
+    ctx: WebviewClientContext
+  ): Promise<void> {
     try {
       const handler = this.handlers.get(message.type);
       if (handler) {
-        await handler(message);
+        await handler(message, ctx);
       } else {
         Log.warn(`Unknown message type: ${message.type}`);
       }
@@ -218,7 +210,7 @@ export class WebviewMessageRouter {
         message?.mutation ||
         message?.expectedDefinitionRevision !== undefined
       ) {
-        await this.reportActionFailure(message.type, error);
+        await this.reportActionFailure(ctx, message.type, error);
       }
     }
   }
@@ -227,24 +219,21 @@ export class WebviewMessageRouter {
   // Dispatch Table
   // ============================================================================
 
-  private buildDispatchTable(): Map<
-    string,
-    (message: any) => void | Promise<void>
-  > {
-    const table = new Map<string, (message: any) => void | Promise<void>>();
+  private buildDispatchTable(): Map<string, WebviewMessageHandler> {
+    const table = new Map<string, WebviewMessageHandler>();
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.READY, async (message) => {
-      if (this.clientId === PANEL_CLIENT_ID) {
+    table.set(MESSAGE_TYPES.READY, async (message, ctx) => {
+      if (ctx.clientId === PANEL_CLIENT_ID) {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
         this.callbacks.onPanelReady?.();
       }
-      await this.settingsSync.sendInitialState(this.getCurrentPostMessage());
+      await this.settingsSync.sendInitialState(ctx.postMessage);
       // Tell the webview its own client identity so it can compute isController
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.CLIENT_ID_ASSIGNED,
-        clientId: this.clientId,
+        clientId: ctx.clientId,
       });
       const orchestrator = this.getOrchestrator();
 
@@ -256,73 +245,65 @@ export class WebviewMessageRouter {
         // "briefly see scrollback then goes blank" bug. Browser clients (which
         // have no separate PTY loop) use the default skipTerminalReplay: false
         // so they receive terminal state on initial connect and reload.
-        await orchestrator.handleClientReady(
-          this.clientId,
-          this.scopedPostMessage,
-          {
-            skipTerminalReplay: this.clientId === PANEL_CLIENT_ID,
-            preferredViewAddress:
-              message.preferredViewAddress &&
-              typeof message.preferredViewAddress.workflowKey === "string" &&
-              (message.preferredViewAddress.kind === "draft" ||
-                (message.preferredViewAddress.kind === "run" &&
-                  typeof message.preferredViewAddress.runRef === "string"))
-                ? message.preferredViewAddress
-                : undefined,
-          }
-        );
+        await orchestrator.handleClientReady(ctx.clientId, ctx.postMessage, {
+          skipTerminalReplay: ctx.clientId === PANEL_CLIENT_ID,
+          preferredViewAddress:
+            message.preferredViewAddress &&
+            typeof message.preferredViewAddress.workflowKey === "string" &&
+            (message.preferredViewAddress.kind === "draft" ||
+              (message.preferredViewAddress.kind === "run" &&
+                typeof message.preferredViewAddress.runRef === "string"))
+              ? message.preferredViewAddress
+              : undefined,
+        });
         // For browser clients: SESSION_RESTORED (sent during replay) triggers
         // applyWorkflowChange() which no longer clears workflowProperties, but
         // WORKFLOW_PROPERTIES_UPDATE is still needed to replace any stale values
         // from the previously-viewed workflow with the correct ones.
-        if (this.clientId !== PANEL_CLIENT_ID) {
-          const send = this.scopedPostMessage;
-          const clientId = this.clientId;
+        if (ctx.clientId !== PANEL_CLIENT_ID) {
           // Do not await the browser startup follow-up while holding the
           // shared routeQueue. Browser READY can arrive before panel READY
           // during extension reloads, and awaitStartupAutoLoad() depends on
           // the panel READY path reaching setDashboardReady(). Running this
           // continuation in the background avoids deadlocking panel startup.
-          void this.completeBrowserReadyAfterStartup(
-            orchestrator,
-            send,
-            clientId
-          );
+          // `ctx` is safe to hand to a detached continuation: it is a captured
+          // value, not the router's live scope.
+          void this.completeBrowserReadyAfterStartup(ctx, orchestrator);
         }
       }
 
       // Panel-only extras:
-      if (this.clientId === PANEL_CLIENT_ID) {
+      if (ctx.clientId === PANEL_CLIENT_ID) {
         if (orchestrator) {
           // Register the callback before setDashboardReady so it's in place
           // whether the auto-load runs immediately (orchestrator already init'd)
           // or is deferred until initialize() completes.
           orchestrator.setPostAutoLoadCallback(async () => {
             await this.settingsSync.sendWorkflowPropertiesToSettings(
-              this.getCurrentPostMessage(),
-              this.clientId
+              ctx.postMessage,
+              ctx.clientId
             );
           });
-          await orchestrator.setDashboardReady(this.scopedPostMessage);
+          await orchestrator.setDashboardReady(ctx.postMessage);
           // setDashboardReady may replay an existing workflow (webview reload).
           // If it did, sendWorkflowPropertiesToSettings is needed here too since
           // the callback only fires from triggerAutoLoad (not from the replay).
           await this.settingsSync.sendWorkflowPropertiesToSettings(
-            this.getCurrentPostMessage(),
-            this.clientId
+            ctx.postMessage,
+            ctx.clientId
           );
           // Fast-path: if auto-load has already settled (webview reload or
           // panel reconnect), triggerAutoLoad won't re-run so the hub broadcast
           // won't fire again. Send STARTUP_COMPLETE directly so the overlay lifts.
           if (orchestrator.isAutoLoadTriggered) {
-            this.settingsSync.sendStartupComplete(this.getCurrentPostMessage());
+            this.settingsSync.sendStartupComplete(ctx.postMessage);
           }
         }
         // Reconnect server running state (handles webview reload while server is up)
         const serverUrl = this.callbacks.getServerUrl?.();
         if (serverUrl) {
           const availableIps = this.callbacks.getAvailableIps?.() ?? [];
-          this.emitMessage({
+          ctx.emit({
             type: MESSAGE_TYPES.SERVER_STARTED,
             url: serverUrl,
             availableIps,
@@ -337,15 +318,15 @@ export class WebviewMessageRouter {
             // updated, then broadcast TERMINAL_CONTROLLER_CHANGED to all clients so
             // no other client keeps thinking it is still the controller.
             if (session.controllerClientId === undefined) {
-              ptyManager.assignController(session.id, this.clientId);
+              ptyManager.assignController(session.id, ctx.clientId);
               ptyPostMessage({
                 type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
                 workflowId: session.workflowId,
                 sessionId: session.id,
-                controllerClientId: this.clientId,
+                controllerClientId: ctx.clientId,
               });
             }
-            this.emitMessage({
+            ctx.emit({
               type: MESSAGE_TYPES.TERMINAL_STARTED,
               workflowId: session.workflowId,
               sessionId: session.id,
@@ -358,7 +339,7 @@ export class WebviewMessageRouter {
             });
             // Flush reconnect buffer
             for (const chunk of session.reconnectBuffer) {
-              this.emitMessage({
+              ctx.emit({
                 type: MESSAGE_TYPES.TERMINAL_OUTPUT,
                 workflowId: session.workflowId,
                 sessionId: session.id,
@@ -371,20 +352,19 @@ export class WebviewMessageRouter {
       }
     });
 
-    const routeDevAction = (action: DevDashboardAction) => async () => {
-      if (!this.callbacks.handleDevAction) {
-        this.emitMessage({
-          type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
-          command: action,
-          reason: "Developer actions are unavailable in this build.",
-        });
-        return;
-      }
-      await this.callbacks.handleDevAction(
-        action,
-        this.getCurrentPostMessage()
-      );
-    };
+    const routeDevAction =
+      (action: DevDashboardAction): WebviewMessageHandler =>
+      async (_message, ctx) => {
+        if (!this.callbacks.handleDevAction) {
+          ctx.emit({
+            type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+            command: action,
+            reason: "Developer actions are unavailable in this build.",
+          });
+          return;
+        }
+        await this.callbacks.handleDevAction(action, ctx.postMessage);
+      };
 
     table.set(
       MESSAGE_TYPES.DEV_BUILD_EXTENSION,
@@ -414,10 +394,8 @@ export class WebviewMessageRouter {
       MESSAGE_TYPES.DEV_SEND_TEST_NOTIFICATION,
       routeDevAction("sendTestNotification")
     );
-    table.set(MESSAGE_TYPES.DEV_REQUEST_STATUS, async () => {
-      await this.callbacks.handleDevStatusRequest?.(
-        this.getCurrentPostMessage()
-      );
+    table.set(MESSAGE_TYPES.DEV_REQUEST_STATUS, async (_message, ctx) => {
+      await this.callbacks.handleDevStatusRequest?.(ctx.postMessage);
     });
 
     // UX Snapshot capture — carries a payload (markdown + optional png), unlike
@@ -426,9 +404,9 @@ export class WebviewMessageRouter {
     // no file-write path exists. Resolves the workspace root here so the same
     // handler serves both the VS Code panel and phone/browser clients (whose
     // messages arrive via routeExternalMessage on this same router).
-    table.set(MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE, async (message) => {
+    table.set(MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE, async (message, ctx) => {
       if (!this.callbacks.handleUxSnapshot) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
           command: MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE,
           reason: "Developer actions are unavailable in this build.",
@@ -442,7 +420,7 @@ export class WebviewMessageRouter {
           png: typeof message.png === "string" ? message.png : undefined,
         },
         this.getWorkspaceRoot(),
-        this.getCurrentPostMessage()
+        ctx.postMessage
       );
     });
 
@@ -455,7 +433,7 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("ctrlyoke.selectPromptFile");
     });
 
-    table.set(MESSAGE_TYPES.APPEND_FILE, async (message) => {
+    table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
       if (message.filePath) {
         const mutation = this.asWorkflowDefinitionMutation(message);
         const isRunAddressed = mutation?.address.kind === "run";
@@ -463,12 +441,16 @@ export class WebviewMessageRouter {
           await this.getOrchestrator()?.appendFromFileForClient(
             mutation,
             message.filePath,
-            this.clientId,
+            ctx.clientId,
             QUEUE_POSITION.END
           );
         } catch (error) {
           if (!isRunAddressed) throw error;
-          this.showRunActionFailure("append and continue from file", error);
+          this.showRunActionFailure(
+            ctx,
+            "append and continue from file",
+            error
+          );
         }
         return;
       }
@@ -479,17 +461,17 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("ctrlyoke.editCurrentPromptFile");
     });
 
-    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async (_message) => {
+    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async (_message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         await orchestrator.createWorkflowForClient(
-          this.scopedPostMessage,
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
         // A new workflow has no working file, so sendWorkflowPropertiesToSettings
         // returns early without sending anything. Explicitly clear the panel so it
         // shows global defaults instead of the previous workflow's properties.
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
           workflowProperties: {},
         });
@@ -527,61 +509,65 @@ export class WebviewMessageRouter {
     });
 
     // ── Dashboard — Prompt Editor ────────────────────────────────────────
-    table.set(MESSAGE_TYPES.EXECUTE_PROMPT, (message) => {
-      this.handleExecutePrompt(message);
+    table.set(MESSAGE_TYPES.EXECUTE_PROMPT, (message, ctx) => {
+      this.handleExecutePrompt(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_PROMPT, (message) => {
-      this.handleUpdatePrompt(message);
+    table.set(MESSAGE_TYPES.UPDATE_PROMPT, (message, ctx) => {
+      this.handleUpdatePrompt(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, async (message) => {
-      await this.handleInsertWorkflowStep(message);
+    table.set(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, async (message, ctx) => {
+      await this.handleInsertWorkflowStep(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, async (message) => {
-      await this.handleUpdateFinalStep(message);
+    table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, async (message, ctx) => {
+      await this.handleUpdateFinalStep(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, (message) => {
-      this.emitMessage({
+    table.set(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, (message, ctx) => {
+      ctx.emit({
         type: MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT,
         index: message.index,
       });
     });
 
-    table.set(MESSAGE_TYPES.DELETE_PROMPT, async (message) => {
-      await this.handleDeletePrompt(message);
+    table.set(MESSAGE_TYPES.DELETE_PROMPT, async (message, ctx) => {
+      await this.handleDeletePrompt(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.SET_START_POSITION, async (message) => {
-      await this.handleSetStartPosition(message as SetStartPositionMessage);
+    table.set(MESSAGE_TYPES.SET_START_POSITION, async (message, ctx) => {
+      await this.handleSetStartPosition(
+        ctx,
+        message as SetStartPositionMessage
+      );
     });
 
-    table.set(MESSAGE_TYPES.DISCARD_CONTINUATION, async (message) => {
+    table.set(MESSAGE_TYPES.DISCARD_CONTINUATION, async (message, ctx) => {
       await this.handleDiscardContinuation(
+        ctx,
         message as DiscardContinuationMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
-      await this.prepareDefinitionMutation(message);
+    table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message, ctx) => {
+      await this.prepareDefinitionMutation(ctx, message);
       await this.getOrchestrator()?.reorderPendingPrompts(
         this.asWorkflowDefinitionMutation(message),
         message.newPendingOrder as number[],
-        this.clientId
+        ctx.clientId
       );
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
-      await this.prepareDefinitionMutation(message);
+    table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message, ctx) => {
+      await this.prepareDefinitionMutation(ctx, message);
       const mutation = this.asWorkflowDefinitionMutation(message);
       const latest = await this.getOrchestrator()?.syncStepsForUndoRedo(
         mutation,
         message.steps,
         message.finalStep ?? null,
-        this.clientId
+        ctx.clientId
       );
       if ("workflowProperties" in message) {
         const raw = {
@@ -624,17 +610,18 @@ export class WebviewMessageRouter {
           await this.settingsSync.handleUpdateWorkflowProperties(
             propertiesMutation,
             workflowProperties,
-            this.getCurrentPostMessage(),
-            this.clientId
+            ctx.postMessage,
+            ctx.clientId
           );
         }
       }
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     });
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
-    table.set(MESSAGE_TYPES.REQUEST_COMPLETIONS, async (message) => {
+    table.set(MESSAGE_TYPES.REQUEST_COMPLETIONS, async (message, ctx) => {
       await this.handleCompletionRequest(
+        ctx,
         message.trigger,
         message.prefix,
         message.position,
@@ -659,24 +646,29 @@ export class WebviewMessageRouter {
       });
     });
 
-    table.set(MESSAGE_TYPES.OPEN_PRIOR_CONTEXT, async (message) => {
+    table.set(MESSAGE_TYPES.OPEN_PRIOR_CONTEXT, async (message, ctx) => {
       await this.handleOpenPriorContext(
+        ctx,
         message.ref as string,
         (message.stepCount as number) ?? 0
       );
     });
 
-    table.set(MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW, async (message) => {
-      const content = await this.buildPriorContextContent(
-        message.ref as string,
-        (message.stepCount as number) ?? 0
-      );
-      this.emitMessage({
-        type: MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT,
-        ref: message.ref,
-        content,
-      });
-    });
+    table.set(
+      MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+      async (message, ctx) => {
+        const content = await this.buildPriorContextContent(
+          ctx,
+          message.ref as string,
+          (message.stepCount as number) ?? 0
+        );
+        ctx.emit({
+          type: MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT,
+          ref: message.ref,
+          content,
+        });
+      }
+    );
 
     table.set(MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW, async (message) => {
       try {
@@ -690,83 +682,100 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
-      await this.handleFileRefValidation(message.filePath);
+    table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message, ctx) => {
+      await this.handleFileRefValidation(ctx, message.filePath);
     });
 
-    table.set(MESSAGE_TYPES.VALIDATE_CONTEXT_REFS, async (message) => {
+    table.set(MESSAGE_TYPES.VALIDATE_CONTEXT_REFS, async (message, ctx) => {
       await this.handleContextRefsValidation(
+        ctx,
         message.references ?? [],
         message.seq
       );
     });
 
-    table.set(MESSAGE_TYPES.SAVE_PASTED_IMAGE, async (message) => {
-      await this.handleSavePastedImage(message);
+    table.set(MESSAGE_TYPES.SAVE_PASTED_IMAGE, async (message, ctx) => {
+      await this.handleSavePastedImage(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI, async (message) => {
-      await this.handleFilePreviewUriRequest(message);
+    table.set(MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI, async (message, ctx) => {
+      await this.handleFilePreviewUriRequest(ctx, message);
     });
 
     table.set(
       MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS,
-      async (message) => {
-        await this.handleAttachmentTokenCountRequest(message.references);
+      async (message, ctx) => {
+        await this.handleAttachmentTokenCountRequest(ctx, message.references);
       }
     );
 
     // ── MCP Manager ─────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS, async () => {
-      try {
-        await this.emitManagedMcpRegistryServers();
-      } catch (error) {
-        const message = `Failed to load MCP registry servers: ${getErrorMessage(error)}`;
-        Log.error(message);
-        void vscode.window.showErrorMessage(message);
+    table.set(
+      MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS,
+      async (_message, ctx) => {
+        try {
+          await this.emitManagedMcpRegistryServers(ctx);
+        } catch (error) {
+          const message = `Failed to load MCP registry servers: ${getErrorMessage(error)}`;
+          Log.error(message);
+          void vscode.window.showErrorMessage(message);
+        }
       }
-    });
+    );
 
-    table.set(MESSAGE_TYPES.SAVE_MCP_REGISTRY_SERVER, async (message) => {
+    table.set(MESSAGE_TYPES.SAVE_MCP_REGISTRY_SERVER, async (message, ctx) => {
       await this.handleSaveMcpRegistryServer(
+        ctx,
         message as SaveMcpRegistryServerMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.DELETE_MCP_REGISTRY_SERVER, async (message) => {
-      await this.handleDeleteMcpRegistryServer(
-        message as DeleteMcpRegistryServerMessage
-      );
-    });
+    table.set(
+      MESSAGE_TYPES.DELETE_MCP_REGISTRY_SERVER,
+      async (message, ctx) => {
+        await this.handleDeleteMcpRegistryServer(
+          ctx,
+          message as DeleteMcpRegistryServerMessage
+        );
+      }
+    );
 
-    table.set(MESSAGE_TYPES.REQUEST_MCP_LOCAL_SCAN, async () => {
+    table.set(MESSAGE_TYPES.REQUEST_MCP_LOCAL_SCAN, async (_message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       const result = await safeDiscoverLocalMcpServers(workspaceRoot);
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
         servers: result.servers,
         ...(result.error ? { error: result.error } : {}),
       });
     });
 
-    table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH, async (message) => {
-      await this.handleRequestMcpRegistrySearch(
-        message as RequestMcpRegistrySearchMessage
+    table.set(
+      MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH,
+      async (message, ctx) => {
+        await this.handleRequestMcpRegistrySearch(
+          ctx,
+          message as RequestMcpRegistrySearchMessage
+        );
+      }
+    );
+
+    table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message, ctx) => {
+      await this.handleExportMcpToHarness(
+        ctx,
+        message as ExportMcpToHarnessMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message) => {
-      await this.handleExportMcpToHarness(message as ExportMcpToHarnessMessage);
-    });
-
-    table.set(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, async (message) => {
+    table.set(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, async (message, ctx) => {
       await this.handleDeleteMcpFromHarness(
+        ctx,
         message as DeleteMcpFromHarnessMessage
       );
     });
 
     // ── Harness File Manager ─────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message) => {
+    table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       const files = await HarnessFileManager.resolveAllLocations(
         workspaceRoot,
@@ -776,14 +785,14 @@ export class WebviewMessageRouter {
         workspaceRoot,
         message.fileType
       );
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.HARNESS_FILES_RESULT,
         files,
         targetDirectories,
       });
     });
 
-    table.set(MESSAGE_TYPES.EXPORT_TO_HARNESS, async (message) => {
+    table.set(MESSAGE_TYPES.EXPORT_TO_HARNESS, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
         await HarnessFileManager.exportToHarness(
@@ -802,14 +811,14 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
           targetDirectories,
         });
       } catch (error) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: false,
           error: getErrorMessage(error),
@@ -817,7 +826,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.IMPORT_TO_CTRLYOKE, async (message) => {
+    table.set(MESSAGE_TYPES.IMPORT_TO_CTRLYOKE, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
         await HarnessFileManager.importToCtrlYoke(
@@ -834,14 +843,14 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
           targetDirectories,
         });
       } catch (error) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: false,
           error: getErrorMessage(error),
@@ -849,7 +858,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.DELETE_FROM_HARNESS, async (message) => {
+    table.set(MESSAGE_TYPES.DELETE_FROM_HARNESS, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
         await HarnessFileManager.deleteFromHarness(
@@ -867,14 +876,14 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
           targetDirectories,
         });
       } catch (error) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: false,
           error: getErrorMessage(error),
@@ -882,7 +891,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.SYNC_ALL_TO_HARNESS, async (message) => {
+    table.set(MESSAGE_TYPES.SYNC_ALL_TO_HARNESS, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
         const sourcePaths: string[] = (message.files ?? []).map(
@@ -906,14 +915,14 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
           targetDirectories,
         });
       } catch (error) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: false,
           error: getErrorMessage(error),
@@ -921,7 +930,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, async (message) => {
+    table.set(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
         await HarnessFileManager.deleteAllFromHarness(
@@ -934,13 +943,13 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
         });
       } catch (error) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: false,
           error: getErrorMessage(error),
@@ -948,7 +957,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.OPEN_HARNESS_DIR, async (message) => {
+    table.set(MESSAGE_TYPES.OPEN_HARNESS_DIR, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
         const dirPath = HarnessFileManager.getTargetDir(
@@ -967,12 +976,12 @@ export class WebviewMessageRouter {
           "revealFileInOS",
           vscode.Uri.file(dirPath)
         );
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
           success: true,
         });
       } catch (error) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
           success: false,
           error: getErrorMessage(error),
@@ -981,35 +990,41 @@ export class WebviewMessageRouter {
     });
 
     // ── Output History ───────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.LOAD_RUN_VIEW, async (message) => {
+    table.set(MESSAGE_TYPES.LOAD_RUN_VIEW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
       try {
         await orchestrator.loadRunViewForClient(
           message.address,
-          this.scopedPostMessage,
-          this.clientId,
+          ctx.postMessage,
+          ctx.clientId,
           message.requestId
         );
       } catch (error) {
         // The requestId must come back: the client suppresses run-view
         // snapshots and view-identity updates while its own request is in
         // flight, so a silent failure would freeze its revisions permanently.
-        await this.reportActionFailure("load run", error, message.requestId);
+        await this.reportActionFailure(
+          ctx,
+          "load run",
+          error,
+          message.requestId
+        );
       }
     });
 
-    table.set(MESSAGE_TYPES.LOAD_RUN_SUMMARIES, async (message) => {
+    table.set(MESSAGE_TYPES.LOAD_RUN_SUMMARIES, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
       try {
         await orchestrator.loadRunSummariesForClient(
           message.workflowKey,
-          this.scopedPostMessage,
+          ctx.postMessage,
           message.requestId
         );
       } catch (error) {
         await this.reportActionFailure(
+          ctx,
           "load run summaries",
           error,
           message.requestId
@@ -1017,7 +1032,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message) => {
+    table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message, ctx) => {
       const query =
         typeof message.query === "string" ? message.query.trim() : "";
       const limit =
@@ -1026,7 +1041,7 @@ export class WebviewMessageRouter {
           : 50;
       const workspacePath = this.getWorkspaceRoot();
       if (!workspacePath) {
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
           query,
           results: [],
@@ -1050,64 +1065,67 @@ export class WebviewMessageRouter {
         },
         workspacePath
       );
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
         ...response,
         cursor: typeof message.cursor === "string" ? message.cursor : undefined,
       });
     });
 
-    table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message) => {
+    table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message, ctx) => {
       // Phase 2 requires stable refs. Index deletion is intentionally not
       // accepted here; old clients must refresh to the run-address contract.
       if (!message.address || message.address.kind !== "run") return;
       await this.serializer.handleDeleteRunByAddress(
         message.address,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE, async (message) => {
-      if (!message.workflowKey) return;
-      try {
-        await this.serializer.handleDeleteAllRunsForLineage(
-          message.workflowKey,
-          this.getCurrentPostMessage(),
-          this.clientId
-        );
-      } catch (error) {
-        await this.reportActionFailure("delete all runs", error);
+    table.set(
+      MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE,
+      async (message, ctx) => {
+        if (!message.workflowKey) return;
+        try {
+          await this.serializer.handleDeleteAllRunsForLineage(
+            message.workflowKey,
+            ctx.postMessage,
+            ctx.clientId
+          );
+        } catch (error) {
+          await this.reportActionFailure(ctx, "delete all runs", error);
+        }
       }
-    });
+    );
 
     // ── Dashboard — New Workflow Modal ───────────────────────────────────
-    table.set(MESSAGE_TYPES.NEW_WORKFLOW, () => {
-      this.serializer.handleNewWorkflow(this.getCurrentPostMessage());
+    table.set(MESSAGE_TYPES.NEW_WORKFLOW, (_message, ctx) => {
+      this.serializer.handleNewWorkflow(ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.TEMPLATE_SELECTED, (message) => {
+    table.set(MESSAGE_TYPES.TEMPLATE_SELECTED, (message, ctx) => {
       this.serializer.handleTemplateSelected(
         message.templateId,
-        this.getCurrentPostMessage()
+        ctx.postMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.SET_DEFAULT_TEMPLATE, (message) => {
+    table.set(MESSAGE_TYPES.SET_DEFAULT_TEMPLATE, (message, ctx) => {
       this.serializer.handleSetDefaultTemplate(
         message.templateId,
-        this.getCurrentPostMessage()
+        ctx.postMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.CREATE_WORKFLOW, async (message) => {
+    table.set(MESSAGE_TYPES.CREATE_WORKFLOW, async (message, ctx) => {
       // createWorkflowFromTemplateForClient scopes the new instance to clientId,
       // so panel and browser clients share this path without touching each
       // other's viewed workflow.
       const created = await this.serializer.handleCreateWorkflow(
         message,
-        this.clientId,
-        this.getCurrentPostMessage()
+        ctx.clientId,
+        ctx.postMessage
       );
 
       if (created) {
@@ -1115,61 +1133,61 @@ export class WebviewMessageRouter {
         // previous workflow properties in the webview. Send the newly-created
         // working file's seeded defaults so the properties panel reflects it.
         await this.settingsSync.sendWorkflowPropertiesToSettings(
-          this.getCurrentPostMessage(),
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
       }
     });
 
-    table.set(MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE, (message) => {
+    table.set(MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE, (message, ctx) => {
       this.serializer
         .handleCreateCustomTemplate(
           message.name,
           message.scope,
-          this.getCurrentPostMessage()
+          ctx.postMessage
         )
         .catch((err) => Log.warn(`CREATE_CUSTOM_TEMPLATE failed: ${err}`));
     });
 
-    table.set(MESSAGE_TYPES.BROWSE_TEMPLATE_FILE, (message) => {
+    table.set(MESSAGE_TYPES.BROWSE_TEMPLATE_FILE, (message, ctx) => {
       this.serializer.handleBrowseTemplateFile(
         message.variable,
         message.fileFilter,
-        this.getCurrentPostMessage(),
+        ctx.postMessage,
         message.selectFolder
       );
     });
 
-    table.set(MESSAGE_TYPES.BROWSE_SAVE_LOCATION, (message) => {
+    table.set(MESSAGE_TYPES.BROWSE_SAVE_LOCATION, (message, ctx) => {
       this.serializer.handleBrowseSaveLocation(
-        this.getCurrentPostMessage(),
+        ctx.postMessage,
         message.defaultDir
       );
     });
 
     // ── Dashboard — Workflow Status ──────────────────────────────────────
-    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, async (message) => {
+    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         await orchestrator.updateWorkflowName(
           this.asWorkflowDefinitionMutation(message),
           message.workflowName,
-          this.clientId
+          ctx.clientId
         );
         // Renaming a brand-new workflow is what materializes its lineage/draft,
         // so this is often the client's first chance to learn its own address.
-        await this.publishViewIdentity();
+        await this.publishViewIdentity(ctx);
         return;
       }
       this.serializer.handleUpdateWorkflowName(
         message,
         this.callbacks.updateWorkflowName,
-        this.clientId
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.GET_RECENT_WORKFLOWS, () => {
-      this.serializer.handleGetRecentWorkflows(this.getCurrentPostMessage());
+    table.set(MESSAGE_TYPES.GET_RECENT_WORKFLOWS, (_message, ctx) => {
+      this.serializer.handleGetRecentWorkflows(ctx.postMessage);
     });
 
     table.set(MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE, async (message) => {
@@ -1178,21 +1196,21 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.LOAD_WORKFLOW, async (message) => {
+    table.set(MESSAGE_TYPES.LOAD_WORKFLOW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         if (!message.address) return;
         await orchestrator.loadRunViewForClient(
           message.address,
-          this.scopedPostMessage,
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
         // FILE_SELECTED (emitted during replay) calls applyWorkflowChange() which
         // clears workflowProperties. Repopulate them so the PropertiesPanel reflects
         // the loaded workflow's saved configuration — same pattern as SWITCH_WORKFLOW.
         await this.settingsSync.sendWorkflowPropertiesToSettings(
-          this.getCurrentPostMessage(),
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
         return;
       }
@@ -1200,18 +1218,18 @@ export class WebviewMessageRouter {
       this.serializer.handleLoadWorkflow(message);
     });
 
-    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async () => {
+    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async (_message, ctx) => {
       const currentWorkingFilePath = this.getOrchestrator()?.getQueueState(
-        this.clientId
+        ctx.clientId
       )?.workingFilePath;
       const deleted = await this.serializer.handleClearWorkflowHistory(
-        this.getCurrentPostMessage()
+        ctx.postMessage
       );
       // Clear the stale working file path if it was deleted by the history clear.
       // Same logic as REMOVE_WORKFLOW_HISTORY — we do NOT call clearWorkflow() to
       // preserve the user's prompts and source file reference.
       if (deleted && currentWorkingFilePath) {
-        this.getOrchestrator()?.clearWorkingFilePath(this.clientId);
+        this.getOrchestrator()?.clearWorkingFilePath(ctx.clientId);
       }
     });
 
@@ -1248,60 +1266,56 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("workbench.mcp.browseServers");
     });
 
-    table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, () => {
-      this.settingsSync.handleGlobalSettingsLoadRequest(
-        this.getCurrentPostMessage()
-      );
+    table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, (_message, ctx) => {
+      this.settingsSync.handleGlobalSettingsLoadRequest(ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message) => {
+    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message, ctx) => {
       this.settingsSync.handleUpdateGlobalSetting(
         message.path,
         message.value,
         message.scope,
-        this.getCurrentPostMessage()
+        ctx.postMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.ENABLE_SERVER, () => {
-      this.settingsSync.handleEnableServer(this.getCurrentPostMessage());
+    table.set(MESSAGE_TYPES.ENABLE_SERVER, (_message, ctx) => {
+      this.settingsSync.handleEnableServer(ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.DISABLE_SERVER, () => {
-      this.settingsSync.handleDisableServer(this.getCurrentPostMessage());
+    table.set(MESSAGE_TYPES.DISABLE_SERVER, (_message, ctx) => {
+      this.settingsSync.handleDisableServer(ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.REGENERATE_SERVER_TOKEN, () => {
-      this.settingsSync.handleRegenerateServerToken(
-        this.getCurrentPostMessage()
-      );
+    table.set(MESSAGE_TYPES.REGENERATE_SERVER_TOKEN, (_message, ctx) => {
+      this.settingsSync.handleRegenerateServerToken(ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.GENERATE_SERVER_CERT, (message) => {
+    table.set(MESSAGE_TYPES.GENERATE_SERVER_CERT, (message, ctx) => {
       void this.settingsSync.handleGenerateServerCert(
-        this.getCurrentPostMessage(),
+        ctx.postMessage,
         message.scope
       );
     });
 
-    table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message) => {
+    table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message, ctx) => {
       // Only the trusted in-panel VS Code webview may update the shared theme
       // snapshot — it gets spliced into server-rendered HTML served to every
       // hosted-dashboard visitor, so accepting it from external browser
       // clients would let anyone holding a server token plant a stored
       // injection that persists for every future visitor.
-      if (this.clientId === PANEL_CLIENT_ID) {
+      if (ctx.clientId === PANEL_CLIENT_ID) {
         this.themeVarsCapturedCallback?.(message.vars);
       }
     });
 
     // ── Settings — Workflow Properties ───────────────────────────────────
-    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY, (message) => {
-      return this.handleUpdateWorkflowProperty(message);
+    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY, (message, ctx) => {
+      return this.handleUpdateWorkflowProperty(ctx, message);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message) => {
-      return this.handleUpdateWorkflowProperties(message);
+    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message, ctx) => {
+      return this.handleUpdateWorkflowProperties(ctx, message);
     });
 
     table.set(MESSAGE_TYPES.SET_AS_DEFAULT, (message) => {
@@ -1312,91 +1326,88 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.GET_CONFIG, (message) => {
-      this.settingsSync.handleGetConfig(
-        message.key,
-        this.getCurrentPostMessage()
-      );
+    table.set(MESSAGE_TYPES.GET_CONFIG, (message, ctx) => {
+      this.settingsSync.handleGetConfig(message.key, ctx.postMessage);
     });
 
     table.set(MESSAGE_TYPES.UPDATE_CONFIG, (message) => {
       this.settingsSync.handleUpdateConfig(message.key, message.value);
     });
 
-    table.set(MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT, (message) => {
+    table.set(MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT, (message, ctx) => {
       this.settingsSync.handleBrowseAndAddExternalRoot(
         message.scope,
-        this.getCurrentPostMessage()
+        ctx.postMessage
       );
     });
 
-    table.set(MESSAGE_TYPES.LOG_MESSAGE, (message) => {
-      this.handleWebviewLog(message.level, message.message);
+    table.set(MESSAGE_TYPES.LOG_MESSAGE, (message, ctx) => {
+      this.handleWebviewLog(ctx, message.level, message.message);
     });
 
     // ── Save Workflow ────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async (message) => {
+    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async (message, ctx) => {
       await this.serializer.handleSaveWorkflowRequest(
         message.requestId,
         message.address,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.CHECK_SAVE_PATH, async (message) => {
+    table.set(MESSAGE_TYPES.CHECK_SAVE_PATH, async (message, ctx) => {
       await this.serializer.handleCheckSavePath(
         message.requestId,
         message.path,
         message.address,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.SAVE_WORKFLOW, async (message) => {
+    table.set(MESSAGE_TYPES.SAVE_WORKFLOW, async (message, ctx) => {
       await this.serializer.handleSaveWorkflow(
         message.requestId,
         message.address,
         message.filePath,
         message.format,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE, async (message) => {
+    table.set(MESSAGE_TYPES.SAVE_WORKFLOW_AS_TEMPLATE, async (message, ctx) => {
       await this.serializer.handleSaveWorkflowAsTemplate(
         message.requestId,
         message.address,
         message.name,
         message.scope,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
     // ── Multi-workflow coordination ──────────────────────────────────────
-    table.set(MESSAGE_TYPES.GET_WORKFLOWS_LIST, () => {
+    table.set(MESSAGE_TYPES.GET_WORKFLOWS_LIST, (_message, ctx) => {
       const orchestrator = this.getOrchestrator();
       const summaries = orchestrator?.getWorkflowSummaries() ?? [];
       Log.trace(
         `[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState})`).join(", ") || "(none)"}`
       );
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.WORKFLOWS_LIST,
         workflows: summaries,
       });
       // The dropdown fetches this when opened; refresh the global active-terminal
       // set at the same time so the per-row terminal icon is accurate for every
       // workflow, not just the one this client is viewing.
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
         workflows: orchestrator?.getActiveTerminalWorkflowRefs() ?? [],
       });
     });
 
-    table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, async (message) => {
+    table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, async (message, ctx) => {
       const workflowId = (message as any).workflowId as string;
       if (!workflowId) return;
       const orchestrator = this.getOrchestrator();
@@ -1409,14 +1420,14 @@ export class WebviewMessageRouter {
         // avoiding the old "briefly see scrollback then blank" flicker.
         await orchestrator.replayWorkflowStateTo(
           workflowId,
-          this.scopedPostMessage,
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
         // SESSION_RESTORED (sent by the replay) clears workflowProperties via applyWorkflowChange().
         // Repopulate them immediately so the PropertiesPanel shows the correct state.
         await this.settingsSync.sendWorkflowPropertiesToSettings(
-          this.getCurrentPostMessage(),
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
       } catch (err) {
         Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`);
@@ -1424,38 +1435,48 @@ export class WebviewMessageRouter {
     });
 
     // ── Stable-address run lifecycle controls ──────────────────────────────
-    table.set(MESSAGE_TYPES.EXECUTE_DRAFT, (message) => {
-      void this.handleExecuteDraft(message as ExecuteDraftMessage);
+    table.set(MESSAGE_TYPES.EXECUTE_DRAFT, (message, ctx) => {
+      void this.handleExecuteDraft(ctx, message as ExecuteDraftMessage);
     });
-    table.set(MESSAGE_TYPES.SEED_NEW_RUN, (message) => {
-      void this.handleSeedNewRun(message as SeedNewRunMessage);
+    table.set(MESSAGE_TYPES.SEED_NEW_RUN, (message, ctx) => {
+      void this.handleSeedNewRun(ctx, message as SeedNewRunMessage);
     });
-    table.set(MESSAGE_TYPES.START_NEW_RUN_INSTEAD, (message) => {
-      void this.handleStartNewRunInstead(message as StartNewRunInsteadMessage);
+    table.set(MESSAGE_TYPES.START_NEW_RUN_INSTEAD, (message, ctx) => {
+      void this.handleStartNewRunInstead(
+        ctx,
+        message as StartNewRunInsteadMessage
+      );
     });
-    table.set(MESSAGE_TYPES.CONTINUE_RUN, (message) => {
-      void this.handleContinueRun(message as ContinueRunMessage);
+    table.set(MESSAGE_TYPES.CONTINUE_RUN, (message, ctx) => {
+      void this.handleContinueRun(ctx, message as ContinueRunMessage);
     });
-    table.set(MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN, (message) => {
-      void this.handleAppendAndContinue(message as AppendAndContinueRunMessage);
+    table.set(MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN, (message, ctx) => {
+      void this.handleAppendAndContinue(
+        ctx,
+        message as AppendAndContinueRunMessage
+      );
     });
-    table.set(MESSAGE_TYPES.PAUSE_RUN, (message) => {
+    table.set(MESSAGE_TYPES.PAUSE_RUN, (message, ctx) => {
       void this.handleRunExecutionControl(
+        ctx,
         message as RunExecutionControlMessage
       );
     });
-    table.set(MESSAGE_TYPES.CANCEL_PAUSE_RUN, (message) => {
+    table.set(MESSAGE_TYPES.CANCEL_PAUSE_RUN, (message, ctx) => {
       void this.handleRunExecutionControl(
+        ctx,
         message as RunExecutionControlMessage
       );
     });
-    table.set(MESSAGE_TYPES.RESUME_RUN, (message) => {
+    table.set(MESSAGE_TYPES.RESUME_RUN, (message, ctx) => {
       void this.handleRunExecutionControl(
+        ctx,
         message as RunExecutionControlMessage
       );
     });
-    table.set(MESSAGE_TYPES.STOP_RUN, (message) => {
+    table.set(MESSAGE_TYPES.STOP_RUN, (message, ctx) => {
       void this.handleRunExecutionControl(
+        ctx,
         message as RunExecutionControlMessage
       );
     });
@@ -1467,7 +1488,7 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message) => {
+    table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message, ctx) => {
       if (message.address) {
         await this.serializer.handleRemoveWorkflowHistory(message.address);
         // Only the instance whose own file was just deleted may be reset. Keying
@@ -1475,10 +1496,10 @@ export class WebviewMessageRouter {
         // workflow's path, and its next write would then fork a duplicate
         // lineage while the queue still held the original steps.
         if (
-          this.getOrchestrator()?.getQueueState(this.clientId)?.workflowKey ===
+          this.getOrchestrator()?.getQueueState(ctx.clientId)?.workflowKey ===
           message.address.workflowKey
         ) {
-          this.getOrchestrator()?.clearWorkingFilePath(this.clientId);
+          this.getOrchestrator()?.clearWorkingFilePath(ctx.clientId);
         }
       }
     });
@@ -1510,40 +1531,40 @@ export class WebviewMessageRouter {
     );
 
     // ── Prompt Undo ──────────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.UNDO_PROMPT_CHANGES, async (message) => {
+    table.set(MESSAGE_TYPES.UNDO_PROMPT_CHANGES, async (message, ctx) => {
       await this.undoRedoCoordinator.handleUndoPromptChanges(
         message as UndoPromptChangesMessage,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.REDO_PROMPT_CHANGES, async (message) => {
+    table.set(MESSAGE_TYPES.REDO_PROMPT_CHANGES, async (message, ctx) => {
       await this.undoRedoCoordinator.handleRedoPromptChanges(
         message as RedoPromptChangesMessage,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, async (message) => {
+    table.set(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, async (message, ctx) => {
       await this.undoRedoCoordinator.handleUndoWorkflowChanges(
         message as UndoWorkflowChangesMessage,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
-    table.set(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, async (message) => {
+    table.set(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, async (message, ctx) => {
       await this.undoRedoCoordinator.handleRedoWorkflowChanges(
         message as RedoWorkflowChangesMessage,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
     });
 
     // ── Terminal I/O ─────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.TERMINAL_INPUT, async (msg) => {
+    table.set(MESSAGE_TYPES.TERMINAL_INPUT, async (msg, ctx) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.data) return;
       const session = ptyManager.getSession(msg.sessionId as string);
@@ -1552,13 +1573,13 @@ export class WebviewMessageRouter {
       // any client may send (e.g. during an unowned shell session).
       if (
         session.controllerClientId !== undefined &&
-        this.clientId !== session.controllerClientId
+        ctx.clientId !== session.controllerClientId
       )
         return;
       ptyManager.writeToSession(msg.sessionId as string, msg.data as string);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg) => {
+    table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg, ctx) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.cols || !msg.rows) return;
       const session = ptyManager.getSession(msg.sessionId as string);
@@ -1566,7 +1587,7 @@ export class WebviewMessageRouter {
       // Only the controller may drive PTY dimensions.
       if (
         session.controllerClientId !== undefined &&
-        this.clientId !== session.controllerClientId
+        ctx.clientId !== session.controllerClientId
       )
         return;
       ptyManager.resizeSession(
@@ -1585,20 +1606,20 @@ export class WebviewMessageRouter {
       });
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, (msg) => {
+    table.set(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, (msg, ctx) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.cols || !msg.rows) return;
       // Store the viewport under THIS client's id. spawnPty reads only the
       // resolved controller's entry, so a viewer's (or another controller's) hint
       // can never affect a spawn controlled by a different client — no gate needed.
       ptyManager.setSpawnDimensions(
-        this.clientId,
+        ctx.clientId,
         msg.cols as number,
         msg.rows as number
       );
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {
+    table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg, ctx) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
@@ -1634,7 +1655,7 @@ export class WebviewMessageRouter {
       }
       // Register the spawning client as controller and update workflowRunControllers
       // so that subsequent restarts inherit the same controller via assignController.
-      ptyManager.assignController(session.id, this.clientId);
+      ptyManager.assignController(session.id, ctx.clientId);
       ptyPostMessage({
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId,
@@ -1703,12 +1724,12 @@ export class WebviewMessageRouter {
       await ptyManager.gracefulKillAiCliSession(msg.sessionId as string);
     });
 
-    table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, async (msg) => {
+    table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, async (msg, ctx) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
       const session = ptyManager.assignController(
         msg.sessionId as string,
-        this.clientId
+        ctx.clientId
       );
       if (session) {
         // Broadcast updated controller to all clients so they can update isController
@@ -1739,7 +1760,10 @@ export class WebviewMessageRouter {
   // Dashboard Prompt Handlers
   // ============================================================================
 
-  private async handleExecutePrompt(message: any): Promise<void> {
+  private async handleExecutePrompt(
+    ctx: WebviewClientContext,
+    message: any
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");
@@ -1755,28 +1779,29 @@ export class WebviewMessageRouter {
         action,
         promptName,
         forceNewWorkflow,
-        this.clientId,
+        ctx.clientId,
         this.asWorkflowDefinitionMutation(message)
       );
       // Queueing a step is a definition mutation with no other back-channel, so
       // without this the following property edit would carry a stale revision.
-      await this.publishViewIdentity();
+      await this.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);
       vscode.window.showErrorMessage(
         `Failed to execute prompt: ${getErrorMessage(error)}`
       );
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text,
       });
       // A rejection is usually a superseded revision; hand the authoritative
       // revisions back so the next submission isn't rejected identically.
-      await this.publishViewIdentity();
+      await this.publishViewIdentity(ctx);
     }
   }
 
   private async handleUpdatePrompt(
+    ctx: WebviewClientContext,
     message: UpdatePromptMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -1806,14 +1831,14 @@ export class WebviewMessageRouter {
           properties,
           promptName,
           clearProperties,
-          this.clientId
+          ctx.clientId
         );
       } else {
         // Step zero deliberately keeps full-rerun semantics: editing advances
         // the selected run head, while the header's Re-run action allocates a
         // fresh RunRef. Same-run pending continuations begin only after a
         // preserved prefix.
-        await this.prepareDefinitionMutation(message);
+        await this.prepareDefinitionMutation(ctx, message);
         await orchestrator.updatePromptInQueue(
           mutation,
           index,
@@ -1821,10 +1846,10 @@ export class WebviewMessageRouter {
           properties,
           promptName,
           clearProperties,
-          this.clientId
+          ctx.clientId
         );
       }
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
@@ -1834,6 +1859,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleInsertWorkflowStep(
+    ctx: WebviewClientContext,
     message: InsertWorkflowStepMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -1842,16 +1868,16 @@ export class WebviewMessageRouter {
       return;
     }
 
-    await this.prepareDefinitionMutation(message);
+    await this.prepareDefinitionMutation(ctx, message);
 
     try {
       await orchestrator.insertWorkflowStepAfterIndex(
         this.asWorkflowDefinitionMutation(message),
         message.afterIndex,
         message.step,
-        this.clientId
+        ctx.clientId
       );
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to insert workflow step:", error);
       vscode.window.showErrorMessage(
@@ -1860,23 +1886,26 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleUpdateFinalStep(message: any): Promise<void> {
+  private async handleUpdateFinalStep(
+    ctx: WebviewClientContext,
+    message: any
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
-    await this.prepareDefinitionMutation(message);
+    await this.prepareDefinitionMutation(ctx, message);
 
     try {
       await orchestrator.updateFinalStepInQueue(
         this.asWorkflowDefinitionMutation(message),
         message.finalStep ?? null,
         message.clearProperties,
-        this.clientId
+        ctx.clientId
       );
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
       vscode.window.showErrorMessage(
@@ -1885,14 +1914,17 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleDeletePrompt(message: any): Promise<void> {
+  private async handleDeletePrompt(
+    ctx: WebviewClientContext,
+    message: any
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
-    await this.prepareDefinitionMutation(message);
+    await this.prepareDefinitionMutation(ctx, message);
 
     const { index } = message;
 
@@ -1900,9 +1932,9 @@ export class WebviewMessageRouter {
       await orchestrator.deletePromptFromQueue(
         this.asWorkflowDefinitionMutation(message),
         index,
-        this.clientId
+        ctx.clientId
       );
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
@@ -1911,29 +1943,43 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleUpdateWorkflowProperty(message: any): Promise<void> {
-    await this.prepareWorkflowPropertiesMutation(message);
+  private async handleUpdateWorkflowProperty(
+    ctx: WebviewClientContext,
+    message: any
+  ): Promise<void> {
+    await this.prepareWorkflowPropertiesMutation(ctx, message);
     const createdWorkingFile =
       await this.settingsSync.handleUpdateWorkflowProperty(
         this.asWorkflowDefinitionMutation(message),
         message.property,
         message.value,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
-    await this.finishWorkflowPropertiesMutation(message, createdWorkingFile);
+    await this.finishWorkflowPropertiesMutation(
+      ctx,
+      message,
+      createdWorkingFile
+    );
   }
 
-  private async handleUpdateWorkflowProperties(message: any): Promise<void> {
-    await this.prepareWorkflowPropertiesMutation(message);
+  private async handleUpdateWorkflowProperties(
+    ctx: WebviewClientContext,
+    message: any
+  ): Promise<void> {
+    await this.prepareWorkflowPropertiesMutation(ctx, message);
     const createdWorkingFile =
       await this.settingsSync.handleUpdateWorkflowProperties(
         this.asWorkflowDefinitionMutation(message),
         message.properties,
-        this.getCurrentPostMessage(),
-        this.clientId
+        ctx.postMessage,
+        ctx.clientId
       );
-    await this.finishWorkflowPropertiesMutation(message, createdWorkingFile);
+    await this.finishWorkflowPropertiesMutation(
+      ctx,
+      message,
+      createdWorkingFile
+    );
   }
 
   /**
@@ -1948,41 +1994,48 @@ export class WebviewMessageRouter {
    * lineage view (address, run summaries, workflow name).
    */
   private async finishWorkflowPropertiesMutation(
+    ctx: WebviewClientContext,
     message: { mutation?: unknown },
     createdWorkingFile: boolean
   ): Promise<void> {
     if (createdWorkingFile) {
-      await this.refreshDefinitionMutationView(message);
+      await this.refreshDefinitionMutationView(ctx, message);
     } else {
-      await this.publishViewIdentity();
+      await this.publishViewIdentity(ctx);
     }
   }
 
   /** Validate a promoted-run edit in place, or step this client onto its draft. */
-  private async prepareDefinitionMutation(message: {
-    mutation?: unknown;
-  }): Promise<void> {
+  private async prepareDefinitionMutation(
+    ctx: WebviewClientContext,
+    message: {
+      mutation?: unknown;
+    }
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       throw new Error("WorkflowOrchestrator not initialized");
     }
     await orchestrator.prepareDefinitionMutation(
       this.asWorkflowDefinitionMutation(message),
-      this.clientId
+      ctx.clientId
     );
   }
 
   /** Keep workflow settings on an executing run's own definition head. */
-  private async prepareWorkflowPropertiesMutation(message: {
-    mutation?: unknown;
-  }): Promise<void> {
+  private async prepareWorkflowPropertiesMutation(
+    ctx: WebviewClientContext,
+    message: {
+      mutation?: unknown;
+    }
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       throw new Error("WorkflowOrchestrator not initialized");
     }
     await orchestrator.prepareWorkflowPropertiesMutation(
       this.asWorkflowDefinitionMutation(message),
-      this.clientId
+      ctx.clientId
     );
   }
 
@@ -2002,23 +2055,26 @@ export class WebviewMessageRouter {
    * itself, so a follow-up single-client refresh here would be redundant.
    * Draft/ephemeral edits have no such broadcast and still need it.
    */
-  private async refreshDefinitionMutationView(message?: {
-    mutation?: unknown;
-  }): Promise<void> {
+  private async refreshDefinitionMutationView(
+    ctx: WebviewClientContext,
+    message?: {
+      mutation?: unknown;
+    }
+  ): Promise<void> {
     if (
       this.asWorkflowDefinitionMutation(message ?? {})?.address.kind !== "run"
     ) {
       const orchestrator = this.getOrchestrator();
-      const address = orchestrator?.getViewAddress(this.clientId);
+      const address = orchestrator?.getViewAddress(ctx.clientId);
       if (orchestrator && address) {
         await orchestrator.loadRunViewForClient(
           address,
-          this.scopedPostMessage,
-          this.clientId
+          ctx.postMessage,
+          ctx.clientId
         );
       }
     }
-    await this.publishViewIdentity();
+    await this.publishViewIdentity(ctx);
   }
 
   /**
@@ -2028,12 +2084,12 @@ export class WebviewMessageRouter {
    * left holding a superseded `definitionRevision` has its next edit rejected
    * as a conflict.
    */
-  private async publishViewIdentity(): Promise<void> {
+  private async publishViewIdentity(ctx: WebviewClientContext): Promise<void> {
     const identity = await this.getOrchestrator()?.publishViewIdentityToViewers(
-      this.clientId
+      ctx.clientId
     );
     if (identity) {
-      this.scopedPostMessage(identity);
+      ctx.postMessage(identity);
     }
   }
 
@@ -2048,17 +2104,18 @@ export class WebviewMessageRouter {
    * Re-publishing turns a wedge into a single failed attempt.
    */
   private async reportActionFailure(
+    ctx: WebviewClientContext,
     action: string,
     error: unknown,
     requestId?: string
   ): Promise<void> {
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
       action,
       error: getErrorMessage(error),
       ...(requestId ? { requestId } : {}),
     });
-    await this.publishViewIdentity();
+    await this.publishViewIdentity(ctx);
   }
 
   /**
@@ -2069,7 +2126,7 @@ export class WebviewMessageRouter {
    * restart, which launched a whole run seconds after VS Code came back. Pause /
    * cancel-pause / stop stay ungated: they only ever reduce activity.
    */
-  private canStartRun(action: string): boolean {
+  private canStartRun(ctx: WebviewClientContext, action: string): boolean {
     if (this.getOrchestrator()?.isInitialized()) {
       return true;
     }
@@ -2077,6 +2134,7 @@ export class WebviewMessageRouter {
       `Refused to ${action}: ctrlyoke is still starting up. Run-starting commands are ignored until initialization completes.`
     );
     this.showRunActionFailure(
+      ctx,
       action,
       new Error("ctrlyoke is still starting up — try again in a moment")
     );
@@ -2084,52 +2142,57 @@ export class WebviewMessageRouter {
   }
 
   private async handleExecuteDraft(
+    ctx: WebviewClientContext,
     message: ExecuteDraftMessage
   ): Promise<void> {
-    if (!this.canStartRun("run draft")) return;
+    if (!this.canStartRun(ctx, "run draft")) return;
     try {
       await this.getOrchestrator()?.executeDraftAtAddress(
         message.address,
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
-        this.clientId
+        ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure("run draft", error);
+      this.showRunActionFailure(ctx, "run draft", error);
     }
   }
 
-  private async handleSeedNewRun(message: SeedNewRunMessage): Promise<void> {
-    if (!this.canStartRun("re-run")) return;
+  private async handleSeedNewRun(
+    ctx: WebviewClientContext,
+    message: SeedNewRunMessage
+  ): Promise<void> {
+    if (!this.canStartRun(ctx, "re-run")) return;
     try {
       await this.getOrchestrator()?.seedAndExecuteAtRun(
         message.address,
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
-        this.clientId
+        ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure("re-run", error);
+      this.showRunActionFailure(ctx, "re-run", error);
     }
   }
 
   private async handleStartNewRunInstead(
+    ctx: WebviewClientContext,
     message: StartNewRunInsteadMessage
   ): Promise<void> {
-    if (!this.canStartRun("start new run")) return;
+    if (!this.canStartRun(ctx, "start new run")) return;
     try {
       const result = await this.getOrchestrator()?.startNewRunInsteadAtRun(
         message.address,
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
         message.confirmEditedSuffix === true,
-        this.clientId
+        ctx.clientId
       );
       if (result && "hasSuffixEdits" in result) {
         // Never a native VS Code dialog here — hosted browser clients never see
         // those. Ask the webview to render its own confirmation modal instead;
         // confirming resends this same message with confirmEditedSuffix: true.
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED,
           action: "startNewRunInstead",
           address: message.address,
@@ -2138,47 +2201,52 @@ export class WebviewMessageRouter {
         });
       }
     } catch (error) {
-      this.showRunActionFailure("start new run", error);
+      this.showRunActionFailure(ctx, "start new run", error);
     }
   }
 
-  private async handleContinueRun(message: ContinueRunMessage): Promise<void> {
-    if (!this.canStartRun("continue run")) return;
+  private async handleContinueRun(
+    ctx: WebviewClientContext,
+    message: ContinueRunMessage
+  ): Promise<void> {
+    if (!this.canStartRun(ctx, "continue run")) return;
     try {
       await this.getOrchestrator()?.continueAtRun(
         message.address,
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
-        this.clientId
+        ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure("continue run", error);
+      this.showRunActionFailure(ctx, "continue run", error);
     }
   }
 
   private async handleAppendAndContinue(
+    ctx: WebviewClientContext,
     message: AppendAndContinueRunMessage
   ): Promise<void> {
-    if (!this.canStartRun("append and continue")) return;
+    if (!this.canStartRun(ctx, "append and continue")) return;
     try {
       await this.getOrchestrator()?.appendAndContinueAtRun(
         message.address,
         message.tail,
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
-        this.clientId
+        ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure("append and continue", error);
+      this.showRunActionFailure(ctx, "append and continue", error);
     }
   }
 
   private async handleRunExecutionControl(
+    ctx: WebviewClientContext,
     message: RunExecutionControlMessage
   ): Promise<void> {
     if (
       message.type === MESSAGE_TYPES.RESUME_RUN &&
-      !this.canStartRun("resume run")
+      !this.canStartRun(ctx, "resume run")
     ) {
       return;
     }
@@ -2196,21 +2264,26 @@ export class WebviewMessageRouter {
         await orchestrator.stopAtRun(message.address);
       }
     } catch (error) {
-      this.showRunActionFailure("control execution", error);
+      this.showRunActionFailure(ctx, "control execution", error);
     }
   }
 
-  private showRunActionFailure(action: string, error: unknown): void {
+  private showRunActionFailure(
+    ctx: WebviewClientContext,
+    action: string,
+    error: unknown
+  ): void {
     Log.error(`Failed to ${action}:`, error);
     void vscode.window.showErrorMessage(
       `Failed to ${action}: ${getErrorMessage(error)}`
     );
     // A hosted browser client never sees the VS Code notification, so without
     // this the rejected run action is indistinguishable from a dead button.
-    void this.reportActionFailure(action, error);
+    void this.reportActionFailure(ctx, action, error);
   }
 
   private async handleSetStartPosition(
+    ctx: WebviewClientContext,
     message: SetStartPositionMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -2228,14 +2301,15 @@ export class WebviewMessageRouter {
         message.toIndex,
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
-        this.clientId
+        ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure("set start position", error);
+      this.showRunActionFailure(ctx, "set start position", error);
     }
   }
 
   private async handleDiscardContinuation(
+    ctx: WebviewClientContext,
     message: DiscardContinuationMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
@@ -2249,13 +2323,13 @@ export class WebviewMessageRouter {
         message.expectedDefinitionRevision,
         message.expectedDescriptorRevision,
         message.confirmEditedSuffix,
-        this.clientId
+        ctx.clientId
       );
       if (!result.discarded && result.hasSuffixEdits) {
         // Never a native VS Code dialog here — hosted browser clients never see
         // those. Ask the webview to render its own confirmation modal instead;
         // confirming resends this same message with confirmEditedSuffix: true.
-        this.emitMessage({
+        ctx.emit({
           type: MESSAGE_TYPES.SUFFIX_EDIT_CONFIRMATION_REQUIRED,
           action: "discardContinuation",
           address: message.address,
@@ -2264,7 +2338,7 @@ export class WebviewMessageRouter {
         });
       }
     } catch (error) {
-      this.showRunActionFailure("discard continuation", error);
+      this.showRunActionFailure(ctx, "discard continuation", error);
     }
   }
 
@@ -2273,6 +2347,7 @@ export class WebviewMessageRouter {
   // ============================================================================
 
   private async handleCompletionRequest(
+    ctx: WebviewClientContext,
     trigger: string,
     prefix: string,
     position: number,
@@ -2287,22 +2362,29 @@ export class WebviewMessageRouter {
       if (trigger === "#") {
         const selectionItems = getHashSelectionCompletions();
         if (selectionItems.length > 0) {
-          this.emitCompletionsResponse(selectionItems, position, seq, true);
+          this.emitCompletionsResponse(
+            ctx,
+            selectionItems,
+            position,
+            seq,
+            true
+          );
         }
         const fullItems = await getHashCompletions(prefix.substring(1));
-        this.emitCompletionsResponse(fullItems, position, seq, false);
+        this.emitCompletionsResponse(ctx, fullItems, position, seq, false);
         return;
       }
 
       const items = await this.getCompletionItems(trigger, prefix);
-      this.emitCompletionsResponse(items, position, seq, false);
+      this.emitCompletionsResponse(ctx, items, position, seq, false);
     } catch (error) {
       Log.error("Failed to get completions:", error);
-      this.emitCompletionsResponse([], position, seq, false);
+      this.emitCompletionsResponse(ctx, [], position, seq, false);
     }
   }
 
   private emitCompletionsResponse(
+    ctx: WebviewClientContext,
     items: PlainCompletionItem[],
     position: number,
     seq: number | undefined,
@@ -2312,7 +2394,7 @@ export class WebviewMessageRouter {
       `[Dashboard] Completion response: position=${position}, partial=${partial} → ${items.length} items`
     );
 
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
       items: items.map((item) => ({
         label: item.label,
@@ -2362,7 +2444,10 @@ export class WebviewMessageRouter {
    *   2. Relative to workspace root
    *   3. Relative to .ctrlyoke directory inside workspace root
    */
-  private async handleFileRefValidation(filePath: string): Promise<void> {
+  private async handleFileRefValidation(
+    ctx: WebviewClientContext,
+    filePath: string
+  ): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : null;
@@ -2399,7 +2484,7 @@ export class WebviewMessageRouter {
       exists = false;
     }
 
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
       exists,
       filePath,
@@ -2417,11 +2502,14 @@ export class WebviewMessageRouter {
    * store, so identical images dedup across all workflows (see
    * TempFileManager.getAttachmentsDir / createPastedImageFile).
    */
-  private async handleSavePastedImage(message: {
-    seq?: number;
-    dataBase64?: string;
-    mimeType?: string;
-  }): Promise<void> {
+  private async handleSavePastedImage(
+    ctx: WebviewClientContext,
+    message: {
+      seq?: number;
+      dataBase64?: string;
+      mimeType?: string;
+    }
+  ): Promise<void> {
     const { seq } = message;
     try {
       const workspaceRoot = this.getWorkspaceRoot();
@@ -2457,7 +2545,7 @@ export class WebviewMessageRouter {
         tempFileManager.getRelativePath(absolutePath)
       );
 
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
         seq,
         relativePath,
@@ -2465,7 +2553,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       Log.error(`Failed to save pasted image: ${errorMessage}`);
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
         seq,
         error: errorMessage,
@@ -2495,20 +2583,23 @@ export class WebviewMessageRouter {
    *   browser can't load a `vscode-webview://` URI. Both webview CSPs already
    *   allow `img-src data:`.
    */
-  private async handleFilePreviewUriRequest(message: {
-    seq?: number;
-    relativePath?: string;
-  }): Promise<void> {
+  private async handleFilePreviewUriRequest(
+    ctx: WebviewClientContext,
+    message: {
+      seq?: number;
+      relativePath?: string;
+    }
+  ): Promise<void> {
     const { seq } = message;
     const fail = (error: string): void => {
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
         seq,
         error,
       });
     };
     const succeed = (uri: string): void => {
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
         seq,
         uri,
@@ -2551,7 +2642,7 @@ export class WebviewMessageRouter {
       }
 
       // Panel: prefer the lightweight webview-resource URI.
-      if (this.clientId === PANEL_CLIENT_ID) {
+      if (ctx.clientId === PANEL_CLIENT_ID) {
         const uri = this.callbacks.resolveImageWebviewUri?.(resolved);
         if (uri) {
           return succeed(uri);
@@ -2573,6 +2664,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleContextRefsValidation(
+    ctx: WebviewClientContext,
     references: Array<{
       id: string;
       type: "file" | "directory" | "lineRange" | "symbol" | "git";
@@ -2603,7 +2695,7 @@ export class WebviewMessageRouter {
       })
     );
 
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.CONTEXT_REFS_VALIDATION,
       results,
       seq,
@@ -2928,13 +3020,14 @@ export class WebviewMessageRouter {
 
   /** Build the prior-context XML preview without opening it in an editor. */
   private async buildPriorContextContent(
+    ctx: WebviewClientContext,
     ref: string,
     stepCount: number
   ): Promise<string> {
     if (!ref) return "";
     const orchestrator = this.getOrchestrator();
     const workingFilePath = orchestrator?.getQueueState(
-      this.clientId
+      ctx.clientId
     )?.workingFilePath;
     if (workingFilePath && fs.existsSync(workingFilePath)) {
       try {
@@ -2971,11 +3064,12 @@ export class WebviewMessageRouter {
    * Uses the same buildPriorContextXmlFromItems codepath as live harness injection.
    */
   private async handleOpenPriorContext(
+    ctx: WebviewClientContext,
     ref: string,
     stepCount: number
   ): Promise<void> {
     if (!ref) return;
-    const content = await this.buildPriorContextContent(ref, stepCount);
+    const content = await this.buildPriorContextContent(ctx, ref, stepCount);
 
     try {
       const doc = await vscode.workspace.openTextDocument({
@@ -2992,13 +3086,14 @@ export class WebviewMessageRouter {
    * Handle request to count tokens for attachment references.
    */
   private async handleAttachmentTokenCountRequest(
+    ctx: WebviewClientContext,
     references: string[]
   ): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : undefined;
     if (!workspaceRoot || !references || references.length === 0) {
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
         counts: {},
       });
@@ -3027,6 +3122,7 @@ export class WebviewMessageRouter {
           const priorRef = decodePriorContextTokenRef(rawRef);
           if (priorRef) {
             const content = await this.buildPriorContextContent(
+              ctx,
               priorRef.body,
               priorRef.stepCount
             );
@@ -3070,7 +3166,7 @@ export class WebviewMessageRouter {
       })
     );
 
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
       counts,
     });
@@ -3080,8 +3176,12 @@ export class WebviewMessageRouter {
   // Webview Logging
   // ============================================================================
 
-  private handleWebviewLog(level: WebviewLogLevel, message: string): void {
-    const tag = this.clientId;
+  private handleWebviewLog(
+    ctx: WebviewClientContext,
+    level: WebviewLogLevel,
+    message: string
+  ): void {
+    const tag = ctx.clientId;
     const prefixed = `[${tag}] ${message}`;
     switch (level) {
       case LOG_LEVELS.DEBUG:
@@ -3118,15 +3218,18 @@ export class WebviewMessageRouter {
     return new HarnessMcpExporter(workspaceRoot || undefined);
   }
 
-  private async emitManagedMcpRegistryServers(): Promise<void> {
+  private async emitManagedMcpRegistryServers(
+    ctx: WebviewClientContext
+  ): Promise<void> {
     const servers = await this.getMcpRegistryFileManager().readAll();
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE,
       servers,
     });
   }
 
   private async handleSaveMcpRegistryServer(
+    ctx: WebviewClientContext,
     message: SaveMcpRegistryServerMessage
   ): Promise<void> {
     try {
@@ -3135,7 +3238,7 @@ export class WebviewMessageRouter {
         await manager.remove(message.previousId, message.scope);
       }
       await manager.addOrUpdate(message.server, message.scope);
-      await this.emitManagedMcpRegistryServers();
+      await this.emitManagedMcpRegistryServers(ctx);
     } catch (error) {
       const errorMessage = `Failed to save MCP registry server: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
@@ -3144,11 +3247,12 @@ export class WebviewMessageRouter {
   }
 
   private async handleDeleteMcpRegistryServer(
+    ctx: WebviewClientContext,
     message: DeleteMcpRegistryServerMessage
   ): Promise<void> {
     try {
       await this.getMcpRegistryFileManager().remove(message.id, message.scope);
-      await this.emitManagedMcpRegistryServers();
+      await this.emitManagedMcpRegistryServers(ctx);
     } catch (error) {
       const errorMessage = `Failed to delete MCP registry server: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
@@ -3157,6 +3261,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleRequestMcpRegistrySearch(
+    ctx: WebviewClientContext,
     message: RequestMcpRegistrySearchMessage
   ): Promise<void> {
     const result = await safeFetchMcpRegistry({
@@ -3164,7 +3269,7 @@ export class WebviewMessageRouter {
       search: message.query || undefined,
       updatedSince: message.updatedSince,
     });
-    this.emitMessage({
+    ctx.emit({
       type: MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT,
       servers: result.servers,
       nextCursor: result.nextCursor,
@@ -3173,6 +3278,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleExportMcpToHarness(
+    ctx: WebviewClientContext,
     message: ExportMcpToHarnessMessage
   ): Promise<void> {
     try {
@@ -3193,7 +3299,7 @@ export class WebviewMessageRouter {
       const localScanResult = await safeDiscoverLocalMcpServers(
         this.getWorkspaceRoot()
       );
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
         servers: localScanResult.servers,
         ...(localScanResult.error ? { error: localScanResult.error } : {}),
@@ -3206,6 +3312,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleDeleteMcpFromHarness(
+    ctx: WebviewClientContext,
     message: DeleteMcpFromHarnessMessage
   ): Promise<void> {
     try {
@@ -3223,7 +3330,7 @@ export class WebviewMessageRouter {
       const localScanResult = await safeDiscoverLocalMcpServers(
         this.getWorkspaceRoot()
       );
-      this.emitMessage({
+      ctx.emit({
         type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
         servers: localScanResult.servers,
         ...(localScanResult.error ? { error: localScanResult.error } : {}),
