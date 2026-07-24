@@ -137,13 +137,17 @@
     );
   }
 
+  function isReadyMessage(msg) {
+    return !!msg && msg.type === CONNECTION_CONFIG.readyType;
+  }
+
   function sendNow(socket, msg) {
     try {
       socket.send(JSON.stringify(msg));
     } catch {
       return false;
     }
-    if (msg && msg.type === "ready") {
+    if (isReadyMessage(msg)) {
       readySentForSocket = true;
       lastSentReadyPreferredViewAddress = JSON.stringify(
         msg.preferredViewAddress
@@ -188,7 +192,9 @@
 
   function buildReadyMessage() {
     const preferredViewAddress = getUrlViewAddress();
-    const baseReadyMessage = lastReadyMessage || { type: "ready" };
+    const baseReadyMessage = lastReadyMessage || {
+      type: CONNECTION_CONFIG.readyType,
+    };
     const { preferredViewAddress: _ignored, ...readyMessage } =
       baseReadyMessage;
     return {
@@ -526,9 +532,7 @@
       hideConnectionErrorBanner();
       reconnectAttempt = 0;
       lastInboundAt = Date.now();
-      const hasQueuedReady = pendingOutbound.some(
-        (msg) => msg && msg.type === "ready"
-      );
+      const hasQueuedReady = pendingOutbound.some(isReadyMessage);
       // Register this WebSocket with the extension immediately. Any replay this
       // triggers is buffered below until React posts its own READY, so no state
       // is delivered before useMessageHandler has installed its listener.
@@ -759,7 +763,7 @@
 
   window.vscodeApi = {
     postMessage(msg) {
-      if (msg && msg.type === "ready") {
+      if (isReadyMessage(msg)) {
         reactReady = true;
         lastReadyMessage = msg;
         queueMicrotask(flushInbound);
@@ -769,8 +773,28 @@
             lastSentReadyPreferredViewAddress;
         if (duplicateReady) return;
       }
-      if (ws && ws.readyState === WebSocket.OPEN) sendNow(ws, msg);
-      else pendingOutbound.push(msg);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        sendNow(ws, msg);
+        return;
+      }
+      // Anything posted while the socket is down is DROPPED, never queued.
+      // pendingOutbound is flushed the instant a socket opens, which is exactly
+      // when the extension host has just restarted — so queuing user commands
+      // here replayed a pre-outage "Re-run"/"Resume" click into a freshly
+      // started extension and launched a workflow with no user action at all.
+      // Only the READY handshake may wait for a socket (React posts it before
+      // the first socket opens); connection diagnostics queue themselves via
+      // connectionLog(). The reconnect replays full state anyway, so a dropped
+      // command leaves the client consistent rather than silently stale.
+      if (isReadyMessage(msg)) {
+        pendingOutbound.push(msg);
+        return;
+      }
+      connectionLog(
+        CONNECTION_CONFIG.logLevels.warn,
+        `dropped outbound message while disconnected type=${msg && msg.type}`,
+        true
+      );
     },
     getState() {
       return _state;

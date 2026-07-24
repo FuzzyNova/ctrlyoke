@@ -35,6 +35,7 @@ Key supporting pieces:
 - It must be injected **before** React modules in `buildHtml()`.
 - It opens `/ws?token=...`, sends `READY`, buffers inbound messages until React posts its own `READY`, and re-sends the latest `READY` after reconnects so the new socket gets targeted replay.
 - Connection liveness has two layers: the server's protocol ping/pong plus an application heartbeat/ack, and the shim's visible-page inbound watchdog plus foreground probe. Timing and message names come from `HOSTED_CONNECTION_LIVENESS` / `MESSAGE_TYPES` and are injected by `HostedStandaloneShimScript`; keep both sides aligned there rather than hardcoding raw-shim values. The shim must be able to abandon a socket still reported as `OPEN` because iOS can omit its close event after a mobile/VPN route change.
+- **Outbound messages are never queued across a disconnect.** `pendingOutbound` is flushed the instant a socket opens — which is exactly when the extension host has just restarted — so queuing a user command there replays a pre-outage click into a freshly started extension. That is how a stale "Re-run" launched a whole workflow seconds after VS Code came back, looking like ctrlyoke auto-started a run on launch. Only the READY handshake (React posts it before the first socket exists) and shim connection diagnostics may wait in `pendingOutbound`; everything else posted while the socket is down is dropped with a warning, and the reconnect's full state replay re-syncs the client. Do not "fix" the dropped messages by re-queuing them.
 - Per-tab state is isolated with `sessionStorage` tab IDs and `localStorage` keys derived from that tab ID; do not collapse this to a single global browser state.
 - Because browser/PWA closes can clear `sessionStorage`, `standalone-shim.js` also keeps `fpLastTabId`, an open-tab heartbeat registry, and a `fpState-last` fallback so unsent prompt drafts survive a one-tab close/reopen without forcing live tabs to share one state object.
 - Theme updates bypass React: the shim applies `THEME_VARS_UPDATED` directly to `:root` and `body` classes to avoid startup flashes and dark-mode mismatches.
@@ -77,6 +78,8 @@ Current unit coverage is concentrated in:
 - `src/test/unit/CtrlYokeHostedServer.test.ts` (message-factory shape only, not full server integration)
 
 If you change route contracts, path-safety logic, or service-worker placeholder behavior, update these focused tests before reaching for broader integration coverage.
+
+`HostedStandaloneShimScript.test.ts` evaluates the _rendered_ shim in a `vm` sandbox (fake `WebSocket`/storage/document) to cover real shim behavior, not just template substitution. It therefore reads `out/server/standalone-shim.js`, which is copied by `npm run compile:extension` — **not** by `compile-tests`/`npm test`. Edit `src/server/standalone-shim.js`, run only `compile-tests`, and the suite silently exercises the previous copy: shim tests pass or fail against stale code with nothing reporting why. Run `npm run compile:extension` after touching the shim.
 </testing>
 
 <relatedFiles>

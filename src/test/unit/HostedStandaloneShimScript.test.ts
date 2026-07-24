@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as vm from "vm";
 import { suite, test } from "mocha";
 import {
   HOSTED_CONNECTION_LIVENESS,
@@ -8,6 +9,116 @@ import {
   buildHostedStandaloneShimScript,
   renderHostedStandaloneShimScript,
 } from "../../server/HostedStandaloneShimScript";
+
+/** Minimal Storage stand-in — the shim only uses get/set/removeItem. */
+function makeStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) =>
+      void values.set(key, String(value)),
+    removeItem: (key: string) => void values.delete(key),
+  } as unknown as Storage;
+}
+
+interface FakeSocket {
+  url: string;
+  readyState: number;
+  sent: any[];
+  listeners: Map<string, ((event?: any) => void)[]>;
+  emit(event: string, payload?: any): void;
+}
+
+/**
+ * Evaluates the rendered shim against just enough browser surface to reach
+ * `window.vscodeApi`. Returns the sockets it opened so a test can drive the
+ * connect/reconnect lifecycle by hand.
+ */
+function loadShim(): { api: any; sockets: FakeSocket[] } {
+  const sockets: FakeSocket[] = [];
+
+  class FakeWebSocket implements FakeSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
+    readyState = FakeWebSocket.CONNECTING;
+    sent: any[] = [];
+    listeners = new Map<string, ((event?: any) => void)[]>();
+    constructor(public url: string) {
+      sockets.push(this);
+    }
+    addEventListener(event: string, handler: (event?: any) => void): void {
+      const handlers = this.listeners.get(event) ?? [];
+      handlers.push(handler);
+      this.listeners.set(event, handlers);
+    }
+    send(raw: string): void {
+      this.sent.push(JSON.parse(raw));
+    }
+    close(): void {
+      this.readyState = FakeWebSocket.CLOSED;
+    }
+    emit(event: string, payload?: any): void {
+      for (const handler of this.listeners.get(event) ?? []) {
+        handler(payload);
+      }
+    }
+  }
+
+  const noop = () => {};
+  const context: any = {
+    console,
+    JSON,
+    Math,
+    Date,
+    URLSearchParams,
+    WebSocket: FakeWebSocket,
+    MessageEvent: class {
+      constructor(
+        public type: string,
+        public init: any
+      ) {}
+    },
+    localStorage: makeStorage(),
+    sessionStorage: makeStorage(),
+    location: {
+      protocol: "https:",
+      host: "127.0.0.1:4747",
+      search: "?token=t",
+    },
+    document: {
+      visibilityState: "visible",
+      addEventListener: noop,
+      getElementById: () => null,
+      createElement: () => ({ setAttribute: noop, querySelector: () => null }),
+      body: null,
+      documentElement: { style: { setProperty: noop } },
+      querySelector: () => null,
+    },
+    // Timers are inert: every test drives the socket lifecycle explicitly.
+    setTimeout: () => 0,
+    clearTimeout: noop,
+    setInterval: () => 0,
+    clearInterval: noop,
+    queueMicrotask: (fn: () => void) => fn(),
+  };
+  context.window = context;
+  context.window.addEventListener = noop;
+  context.window.dispatchEvent = noop;
+  context.window.setTimeout = context.setTimeout;
+  context.window.clearTimeout = context.clearTimeout;
+  context.window.setInterval = context.setInterval;
+
+  vm.runInNewContext(buildHostedStandaloneShimScript(), context);
+  return { api: context.window.vscodeApi, sockets };
+}
+
+/** Brings the shim's current socket to OPEN, which flushes pendingOutbound. */
+function openSocket(socket: FakeSocket): void {
+  socket.readyState = 1;
+  socket.emit("open");
+}
 
 suite("HostedStandaloneShimScript", () => {
   test("renders shared liveness configuration into the template", () => {
@@ -25,6 +136,7 @@ suite("HostedStandaloneShimScript", () => {
         JSON.stringify(MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT_ACK)
       )
     );
+    assert.ok(rendered.includes(JSON.stringify(MESSAGE_TYPES.READY)));
     assert.ok(
       rendered.includes(
         `"CLIENT_STALE_TIMEOUT_MS":${HOSTED_CONNECTION_LIVENESS.CLIENT_STALE_TIMEOUT_MS}`
@@ -37,5 +149,50 @@ suite("HostedStandaloneShimScript", () => {
 
     assert.match(rendered, /function checkInboundLiveness\(\)/);
     assert.ok(!rendered.includes("__CTRLYOKE_HOSTED_CONNECTION_CONFIG__"));
+  });
+
+  // pendingOutbound is flushed the instant a socket opens, and a socket opens
+  // right after the extension host restarts. Queuing user commands there
+  // replayed a pre-outage "Re-run" click into the freshly started extension and
+  // launched a workflow nobody asked for.
+  test("drops commands posted while disconnected instead of replaying them on reconnect", () => {
+    const { api, sockets } = loadShim();
+    assert.strictEqual(sockets.length, 1, "shim connects on load");
+
+    api.postMessage({ type: MESSAGE_TYPES.SEED_NEW_RUN, address: {} });
+    api.postMessage({ type: MESSAGE_TYPES.RESUME_RUN, address: {} });
+    openSocket(sockets[0]);
+
+    const replayedTypes = sockets[0].sent.map((message) => message.type);
+    assert.ok(
+      !replayedTypes.includes(MESSAGE_TYPES.SEED_NEW_RUN),
+      `re-run must not be replayed on connect, got ${replayedTypes.join(", ")}`
+    );
+    assert.ok(!replayedTypes.includes(MESSAGE_TYPES.RESUME_RUN));
+  });
+
+  test("still delivers the READY handshake posted before the socket opened", () => {
+    const { api, sockets } = loadShim();
+
+    api.postMessage({ type: MESSAGE_TYPES.READY });
+    openSocket(sockets[0]);
+
+    assert.ok(
+      sockets[0].sent.some((message) => message.type === MESSAGE_TYPES.READY),
+      "READY is the one message allowed to wait for a socket"
+    );
+  });
+
+  test("sends commands normally once the socket is open", () => {
+    const { api, sockets } = loadShim();
+    openSocket(sockets[0]);
+
+    api.postMessage({ type: MESSAGE_TYPES.SEED_NEW_RUN, address: {} });
+
+    assert.ok(
+      sockets[0].sent.some(
+        (message) => message.type === MESSAGE_TYPES.SEED_NEW_RUN
+      )
+    );
   });
 });

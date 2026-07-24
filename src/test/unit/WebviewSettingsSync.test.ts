@@ -1172,8 +1172,10 @@ suite("WebviewMessageRouter stable run actions", () => {
     runRef: "run-2026-07-20T10-30-00-000Z" as never,
   };
 
-  function makeRouter(calls: string[]) {
+  function makeRouter(calls: string[], initialized: boolean = true) {
     const orchestrator = {
+      isInitialized: () => initialized,
+      publishViewIdentityToViewers: async () => undefined,
       executeDraftAtAddress: async () => calls.push("draft"),
       seedAndExecuteAtRun: async () => {
         calls.push("seed");
@@ -1245,6 +1247,56 @@ suite("WebviewMessageRouter stable run actions", () => {
       "resume",
       "stop",
     ]);
+  });
+
+  test("refuses run-starting actions until the orchestrator finished initializing", async () => {
+    const calls: string[] = [];
+    const router = makeRouter(calls, false);
+    const revision = {
+      address: runAddress,
+      expectedDefinitionRevision: 2,
+      expectedDescriptorRevision: 5,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.EXECUTE_DRAFT,
+      ...revision,
+      address: { workflowKey: runAddress.workflowKey, kind: "draft" },
+    });
+    await router.route({ type: MESSAGE_TYPES.SEED_NEW_RUN, ...revision });
+    await router.route({
+      type: MESSAGE_TYPES.START_NEW_RUN_INSTEAD,
+      ...revision,
+    });
+    await router.route({ type: MESSAGE_TYPES.CONTINUE_RUN, ...revision });
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN,
+      ...revision,
+      tail: [{ prompt: "tail" }],
+    });
+    await router.route({ type: MESSAGE_TYPES.RESUME_RUN, address: runAddress });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(
+      calls,
+      [],
+      "no run may start while the extension is still starting up"
+    );
+  });
+
+  test("still honors pause, cancel-pause and stop during startup", async () => {
+    const calls: string[] = [];
+    const router = makeRouter(calls, false);
+
+    await router.route({ type: MESSAGE_TYPES.PAUSE_RUN, address: runAddress });
+    await router.route({
+      type: MESSAGE_TYPES.CANCEL_PAUSE_RUN,
+      address: runAddress,
+    });
+    await router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runAddress });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(calls, ["pause", "cancel-pause", "stop"]);
   });
 
   test("a rejected discard or set-start-position republishes the authoritative revisions", async () => {
@@ -1354,6 +1406,7 @@ suite("WebviewMessageRouter stable run actions", () => {
   test("start new run instead with unsaved suffix edits asks the webview to confirm instead of a native dialog", async () => {
     const emitted: any[] = [];
     const orchestrator = {
+      isInitialized: () => true,
       startNewRunInsteadAtRun: async () => ({ hasSuffixEdits: true }),
     } as any;
     const router = new WebviewMessageRouter(

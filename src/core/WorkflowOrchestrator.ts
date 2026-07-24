@@ -1253,6 +1253,17 @@ export class WorkflowOrchestrator {
     }
   }
 
+  /**
+   * True once `initialize()` has finished. Commands that *start* execution are
+   * refused until then: nothing in ctrlyoke ever auto-starts a workflow, so a
+   * run-starting command arriving mid-startup is a replayed/stray one (a hosted
+   * client flushing a queued click across an extension-host restart is the
+   * known case), and honoring it launches AI work the user never asked for.
+   */
+  isInitialized(): boolean {
+    return this.orchestratorInitialized;
+  }
+
   private async triggerStartupAutoLoadIfReady(): Promise<void> {
     if (
       this.startupAutoLoadTriggered ||

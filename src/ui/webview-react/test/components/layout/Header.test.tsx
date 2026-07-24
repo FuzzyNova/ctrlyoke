@@ -362,6 +362,98 @@ describe("Header execution controls", () => {
     }
   });
 
+  // `runSummaries` is frozen at the last RUN_VIEW_LOADED. A run seeded and
+  // started in one gesture leaves that snapshot reading "idle" for its whole
+  // lifetime, which used to win over the live state — hiding the pausing banner
+  // and leaving slot 2 on a disabled Pause with no way to resume.
+  const stalelyLoadedPausingRun = (
+    executionState:
+      | typeof EXECUTION_STATES.PAUSING
+      | typeof EXECUTION_STATES.PAUSED
+  ) => {
+    useUiStore.setState({
+      activeWorkflowId: "workflow-instance",
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: runRef,
+      pendingRewind: null,
+      runSummaries: [
+        {
+          workflowKey: "workflow-a" as never,
+          runRef,
+          runId: 4,
+          startedAt: 1,
+          executionState: EXECUTION_STATES.IDLE,
+          stepCount: 2,
+          definitionRevision: 3,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+      loadedWorkflows: [
+        {
+          id: "workflow-instance",
+          workflowKey: "workflow-a" as never,
+          runRef,
+          workflowName: "Run view",
+          filePath: "workflow.ctrlyoke.json",
+          executionState,
+          currentStep: 1,
+          totalSteps: 2,
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(executionState);
+  };
+
+  it("shows the pausing banner and Cancel pause while the run snapshot is stale", () => {
+    stalelyLoadedPausingRun(EXECUTION_STATES.PAUSING);
+
+    render(<Header />);
+
+    expect(
+      screen.getByText("Workflow will pause after the current step completes")
+    ).toBeInTheDocument();
+    const executionControls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    expect(
+      within(executionControls).getByRole("button", { name: "Cancel pause" })
+    ).toBeEnabled();
+    expect(
+      within(executionControls).getByRole("button", { name: "Stop" })
+    ).toBeEnabled();
+  });
+
+  it("offers Resume for a paused run whose snapshot still reads idle", () => {
+    stalelyLoadedPausingRun(EXECUTION_STATES.PAUSED);
+
+    render(<Header />);
+
+    expect(
+      screen.queryByText("Workflow will pause after the current step completes")
+    ).not.toBeInTheDocument();
+    const executionControls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    const resumeButton = within(executionControls).getByRole("button", {
+      name: "Resume",
+    });
+    expect(resumeButton).toBeEnabled();
+    expect(
+      within(executionControls).getByRole("button", { name: "Stop" })
+    ).toBeEnabled();
+
+    fireEvent.click(resumeButton);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.RESUME_RUN,
+      address: { workflowKey: "workflow-a", kind: "run", runRef },
+    });
+  });
+
   it("targets the active workflow run when an append continuation has not refreshed executionRunRef yet", () => {
     useUiStore.setState({
       activeWorkflowId: "workflow-instance",

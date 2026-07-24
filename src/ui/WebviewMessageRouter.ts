@@ -2061,9 +2061,32 @@ export class WebviewMessageRouter {
     await this.publishViewIdentity();
   }
 
+  /**
+   * Gate for every command that *starts* execution. ctrlyoke has no path that
+   * auto-starts a workflow, so a run-starting command that arrives before the
+   * orchestrator finished initializing was never a live user click — the known
+   * source is a hosted client flushing a command queued before an extension-host
+   * restart, which launched a whole run seconds after VS Code came back. Pause /
+   * cancel-pause / stop stay ungated: they only ever reduce activity.
+   */
+  private canStartRun(action: string): boolean {
+    if (this.getOrchestrator()?.isInitialized()) {
+      return true;
+    }
+    Log.warn(
+      `Refused to ${action}: ctrlyoke is still starting up. Run-starting commands are ignored until initialization completes.`
+    );
+    this.showRunActionFailure(
+      action,
+      new Error("ctrlyoke is still starting up — try again in a moment")
+    );
+    return false;
+  }
+
   private async handleExecuteDraft(
     message: ExecuteDraftMessage
   ): Promise<void> {
+    if (!this.canStartRun("run draft")) return;
     try {
       await this.getOrchestrator()?.executeDraftAtAddress(
         message.address,
@@ -2077,6 +2100,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleSeedNewRun(message: SeedNewRunMessage): Promise<void> {
+    if (!this.canStartRun("re-run")) return;
     try {
       await this.getOrchestrator()?.seedAndExecuteAtRun(
         message.address,
@@ -2092,6 +2116,7 @@ export class WebviewMessageRouter {
   private async handleStartNewRunInstead(
     message: StartNewRunInsteadMessage
   ): Promise<void> {
+    if (!this.canStartRun("start new run")) return;
     try {
       const result = await this.getOrchestrator()?.startNewRunInsteadAtRun(
         message.address,
@@ -2118,6 +2143,7 @@ export class WebviewMessageRouter {
   }
 
   private async handleContinueRun(message: ContinueRunMessage): Promise<void> {
+    if (!this.canStartRun("continue run")) return;
     try {
       await this.getOrchestrator()?.continueAtRun(
         message.address,
@@ -2133,6 +2159,7 @@ export class WebviewMessageRouter {
   private async handleAppendAndContinue(
     message: AppendAndContinueRunMessage
   ): Promise<void> {
+    if (!this.canStartRun("append and continue")) return;
     try {
       await this.getOrchestrator()?.appendAndContinueAtRun(
         message.address,
@@ -2149,6 +2176,12 @@ export class WebviewMessageRouter {
   private async handleRunExecutionControl(
     message: RunExecutionControlMessage
   ): Promise<void> {
+    if (
+      message.type === MESSAGE_TYPES.RESUME_RUN &&
+      !this.canStartRun("resume run")
+    ) {
+      return;
+    }
     try {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator)

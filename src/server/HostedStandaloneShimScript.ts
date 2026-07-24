@@ -30,6 +30,7 @@ export function renderHostedStandaloneShimScript(template: string): string {
       heartbeatType: MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT,
       heartbeatAckType: MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT_ACK,
       logMessageType: MESSAGE_TYPES.LOG_MESSAGE,
+      readyType: MESSAGE_TYPES.READY,
       logLevels: {
         debug: LOG_LEVELS.DEBUG,
         info: LOG_LEVELS.INFO,

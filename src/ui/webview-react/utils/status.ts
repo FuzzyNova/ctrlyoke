@@ -299,6 +299,12 @@ export interface WorkflowExecutionControlsInput {
   hasFile: boolean;
   hasSteps: boolean;
   pendingRewind: boolean;
+  /**
+   * State of the lineage's executing run when it is not the run being viewed.
+   * Only an *active* value is authoritative here: callers derive it from
+   * summaries that can be frozen snapshots, and a snapshot that still reads
+   * "idle"/"completed" must never mask the live viewed state (see below).
+   */
   executionRunState?: ExecutionState | null;
   executionRunLabel?: string | null;
 }
@@ -318,7 +324,16 @@ export function getWorkflowExecutionControls({
   executionRunState,
   executionRunLabel,
 }: WorkflowExecutionControlsInput): WorkflowExecutionControlsState {
-  const executionState = executionRunState ?? viewedExecutionState;
+  // The executing run's state only wins while it is genuinely active. Callers
+  // can only supply it from summaries, and the addressed `runSummaries`
+  // snapshot is frozen at the last RUN_VIEW_LOADED — a run seeded and started
+  // in one gesture leaves a summary reading "idle" for the entire run. Letting
+  // that stale value win reported "nothing is executing" (disabled Pause/Stop)
+  // over live PAUSING/PAUSED and suppressed the pausing banner outright.
+  const executionState =
+    executionRunState && isWorkflowActive(executionRunState)
+      ? executionRunState
+      : viewedExecutionState;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const isPausing = executionState === EXECUTION_STATES.PAUSING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
@@ -431,7 +446,8 @@ export function getWorkflowExecutionControls({
             label: "Restart",
             icon: "codicon-debug-restart",
             enabled: true,
-            title: "Start a new run from the beginning, discarding this continuation",
+            title:
+              "Start a new run from the beginning, discarding this continuation",
           }
         : {
             action: "rerun" as const,

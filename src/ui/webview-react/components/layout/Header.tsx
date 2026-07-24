@@ -123,6 +123,18 @@ export const Header: React.FC<{
   const executionRunSummary = executionRunRef
     ? runSummaries.find((summary) => summary.runRef === executionRunRef)
     : undefined;
+  // `runSummaries` is a snapshot frozen at the last RUN_VIEW_LOADED, so its
+  // executionState goes stale the moment the executing run transitions
+  // (running → pausing → paused) — a run seeded and started in one gesture
+  // leaves that snapshot reading "idle" for its whole lifetime. loadedWorkflows
+  // mirrors every *active* workflow and is kept current by WORKFLOW_ADDED /
+  // WORKFLOW_SUMMARY_UPDATED / WORKFLOW_DISMISSED, so it is the live source for
+  // the executing run's state; the snapshot is only the fallback.
+  const liveExecutionRunState = loadedWorkflows.find((workflow) =>
+    executionRunRef
+      ? workflow.runRef === executionRunRef
+      : workflow.id === activeWorkflowId
+  )?.executionState;
   const executionRunAddress = useMemo<Extract<
     WorkflowViewAddress,
     { kind: "run" }
@@ -156,7 +168,8 @@ export const Header: React.FC<{
       hasFile,
       hasSteps,
       pendingRewind: pendingRewind !== null,
-      executionRunState: executionRunSummary?.executionState,
+      executionRunState:
+        liveExecutionRunState ?? executionRunSummary?.executionState,
       executionRunLabel: executionRunSummary
         ? `run ${executionRunSummary.runId}`
         : executionRunRef

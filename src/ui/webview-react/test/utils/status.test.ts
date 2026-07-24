@@ -357,4 +357,44 @@ describe("getWorkflowExecutionControls", () => {
     expect(controls.slot2.action).toBe("cancel-pause");
     expect(controls.slot3.action).toBe("stop");
   });
+
+  // The executing run's state can only be read from a summary, and the
+  // addressed `runSummaries` snapshot is frozen at the last RUN_VIEW_LOADED —
+  // a run seeded and started in one gesture leaves it reading "idle" for the
+  // whole run. Letting that stale value win reported "nothing is executing"
+  // over the live viewed state.
+  it("ignores a non-active executionRunState in favour of the live viewed state", () => {
+    for (const stale of [
+      EXECUTION_STATES.IDLE,
+      EXECUTION_STATES.COMPLETED,
+      EXECUTION_STATES.STOPPED,
+    ] as const) {
+      const pausing = getControls(EXECUTION_STATES.PAUSING, {
+        executionRunState: stale,
+      });
+      expect(pausing.isPausing).toBe(true);
+      expect(pausing.slot2).toMatchObject({
+        action: "cancel-pause",
+        enabled: true,
+      });
+      expect(pausing.slot3).toMatchObject({ action: "stop", enabled: true });
+
+      const paused = getControls(EXECUTION_STATES.PAUSED, {
+        executionRunState: stale,
+      });
+      expect(paused.isPaused).toBe(true);
+      expect(paused.slot2).toMatchObject({ action: "resume", enabled: true });
+      expect(paused.slot3).toMatchObject({ action: "stop", enabled: true });
+    }
+  });
+
+  it("still prefers an active executionRunState over the viewed run's state", () => {
+    const controls = getControls(EXECUTION_STATES.COMPLETED, {
+      executionRunState: EXECUTION_STATES.PAUSED,
+      executionRunLabel: "run 4",
+    });
+    expect(controls.isPaused).toBe(true);
+    expect(controls.slot2).toMatchObject({ action: "resume", enabled: true });
+    expect(controls.slot2.title).toContain("run 4");
+  });
 });
