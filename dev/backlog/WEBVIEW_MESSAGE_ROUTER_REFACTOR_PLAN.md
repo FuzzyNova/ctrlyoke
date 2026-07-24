@@ -1,6 +1,6 @@
 # WebviewMessageRouter Refactor Plan
 
-Status: **Phase 0 complete** (2026-07-24). Phases 1–4 proposed.
+Status: **Phases 0–1 complete** (2026-07-24). Phases 2–4 proposed.
 
 Target: `src/ui/WebviewMessageRouter.ts` — 3,285 lines, of which `buildDispatchTable()`
 is a single ~1,500-line method (lines 230–1736).
@@ -140,24 +140,44 @@ and republished identity go to the *browser* `postMessage`, not the default one.
 Today that test fails. `src/test/unit/WebviewSettingsSync.test.ts` already builds
 routers directly (11 construction sites) and is the natural home.
 
-## Phase 1 — Extract the mutation protocol
+## Phase 1 — Extract the mutation protocol ✅ **DONE**
 
-New `src/ui/WorkflowMutationCoordinator.ts` (~140 lines moved), taking
-`getOrchestrator` in the constructor and a `WebviewClientContext` per call:
+Landed 2026-07-24 in `src/ui/WorkflowMutationCoordinator.ts` (204 lines).
 
-Moves lines 1950–2084: `finishWorkflowPropertiesMutation`, `prepareDefinitionMutation`,
+Moved `finishWorkflowPropertiesMutation`, `prepareDefinitionMutation`,
 `prepareWorkflowPropertiesMutation`, `asWorkflowDefinitionMutation`,
 `refreshDefinitionMutationView`, `publishViewIdentity`, `reportActionFailure`,
-`showRunActionFailure`, `canStartRun`.
+`canStartRun`, and `showRunActionFailure` into a new `WorkflowMutationCoordinator`
+class, taking `getOrchestrator` in the constructor exactly as specified. All doc
+comments moved verbatim, including the wedge-prevention rationale on
+`publishViewIdentity`/`reportActionFailure`, the run-addressed-broadcast redundancy
+note on `refreshDefinitionMutationView`, and the run-start gate's
+hosted-client-replay origin on `canStartRun`.
 
-Every doc comment on these methods must move with them verbatim — they encode why
-each call exists (the wedge-prevention rationale, the run-addressed-broadcast
-redundancy rule, the run-start gate's hosted-client-replay origin) and none of it is
-recoverable from the code.
+One deviation from the original text: `showRunActionFailure` was not adjacent to
+the other eight methods (six Phase-3 run-lifecycle handlers — `handleExecuteDraft`
+through `handleRunExecutionControl` — sit between `canStartRun` and it in the
+router). It moved as a second, non-contiguous edit rather than one block copy; the
+method bodies themselves are unchanged.
 
-The router's own `routeSingleMessage` catch keeps calling
-`coordinator.reportActionFailure(...)`, which is why this must be a shared
-collaborator rather than living inside a step-handler file.
+The router gained a `private readonly mutationCoordinator: WorkflowMutationCoordinator`
+field, constructed alongside `undoRedoCoordinator` in the constructor. Every
+remaining call site in the router (the `routeSingleMessage` catch-all, the
+Phase-3 step/run handlers that still live in the router, and the still-inline
+`LOAD_WORKFLOW`/`UPDATE_PROMPT`/etc. handlers) now calls
+`this.mutationCoordinator.xxx(...)`; internal calls between the coordinator's own
+methods (e.g. `finishWorkflowPropertiesMutation` → `refreshDefinitionMutationView`)
+stayed as plain `this.xxx(...)` since they moved together into the same class.
+
+`asWorkflowDefinitionMutation`'s inline `import("../types/WebviewMessageTypes").WorkflowDefinitionMutation`
+return-type annotations were replaced with a normal top-level `import type` in the
+new file — the inline form was working around not wanting a router-wide import for
+a single method; the new file has no such constraint.
+
+Verified with `npm run typecheck`, `npx eslint` on both files, and the extension-host
+suite grepped to `WebviewMessageRouter|WebviewSettingsSync` (32 passing, including
+the Phase-0 client-scoping regression test) — all green with no test changes
+required, confirming this was pure code motion.
 
 ## Phase 2 — Extract the genuine services
 
@@ -303,8 +323,14 @@ of near-uniform delegation.
 
 ## What deliberately stays
 
-- `route` / `withScopedContext` / `routeSingleMessage` — the actual routing contract
-  and the serialization guarantee.
+> Line numbers below (and in the Phase 2–4 sections above) predate Phases 0–1 and
+> have drifted — Phase 0 deleted `withScopedContext` and Phase 1 moved ~170 lines
+> out of the router. Re-verify against the current file before acting on any of
+> them; treat the method/handler names as the durable reference.
+
+- `route` / `routeSingleMessage` — the actual routing contract and the
+  serialization guarantee. (`withScopedContext` no longer exists — deleted in
+  Phase 0.)
 - The `READY` handler's non-terminal body (237–330): startup ordering, the
   browser-vs-panel asymmetry, and the deliberate non-awaited
   `completeBrowserReadyAfterStartup`. This is genuinely router lifecycle, its
@@ -317,16 +343,16 @@ of near-uniform delegation.
 
 ## Expected shape
 
-| File                             | Approx. lines |
-| -------------------------------- | ------------: |
-| `WebviewMessageRouter.ts`        |    ~700–800 |
-| `PromptEditorSupportService.ts`  |        ~750 |
-| `WorkflowStepHandlers.ts`        |        ~450 |
-| `TerminalMessageHandlers.ts`     |        ~240 |
-| `McpManagerService.ts`           |        ~160 |
-| `WorkflowMutationCoordinator.ts` |        ~150 |
-| `HarnessFileMessageService.ts`   |         ~90 |
-| `GitUtils.ts`                    |    +~55 |
+| File                             | Approx. lines | Status |
+| -------------------------------- | ------------: | ------ |
+| `WebviewMessageRouter.ts`        |    ~700–800 (currently 3,222) | Phases 2–4 pending |
+| `PromptEditorSupportService.ts`  |        ~750 | proposed |
+| `WorkflowStepHandlers.ts`        |        ~450 | proposed |
+| `TerminalMessageHandlers.ts`     |        ~240 | proposed |
+| `McpManagerService.ts`           |        ~160 | proposed |
+| `WorkflowMutationCoordinator.ts` |        196 | ✅ done |
+| `HarnessFileMessageService.ts`   |         ~90 | proposed |
+| `GitUtils.ts`                    |    +~55 | proposed |
 
 ## Sequencing and risk
 
@@ -334,11 +360,14 @@ Phases are independently shippable **in order**; Phase 0 gates everything.
 
 - **Phase 0** is the only risky one — it touches every handler signature. It is also
   the only phase that fixes a bug, so it carries its own regression test. Do it
-  alone, in its own commit.
+  alone, in its own commit. ✅ done.
+- **Phase 1** ✅ done — pure code motion, verified against the Phase 0 regression
+  test plus the rest of the router suite with no test changes needed.
 - **Phase 2** is the largest by volume but the lowest risk: near-pure code motion
-  with no shared mutable state. 2b/2c/2d/2e are independent of each other.
-- **Phase 3** depends on Phase 1. **Phase 4** should be last, when the registrars
-  are already thin.
+  with no shared mutable state. 2b/2c/2d/2e are independent of each other. Not
+  started.
+- **Phase 3** depends on Phase 1 (done) and can now proceed. **Phase 4** should be
+  last, when the registrars are already thin. Neither started.
 
 Testing: `src/test/unit/WebviewSettingsSync.test.ts` constructs `WebviewMessageRouter`
 at 11 sites and is the de facto router test file. Phase 0 changes its construction

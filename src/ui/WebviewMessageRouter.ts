@@ -78,6 +78,7 @@ import type {
   DevDashboardAction,
 } from "../types/WebviewMessageTypes";
 import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
+import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 import {
   createWebviewClientContext,
   type WebviewClientContext,
@@ -124,6 +125,7 @@ export class WebviewMessageRouter {
 
   private readonly handlers: Map<string, WebviewMessageHandler>;
   private readonly undoRedoCoordinator: UndoRedoCoordinator;
+  private readonly mutationCoordinator: WorkflowMutationCoordinator;
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
@@ -134,6 +136,7 @@ export class WebviewMessageRouter {
     private readonly callbacks: WebviewRouterCallbacks
   ) {
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
+    this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
     this.handlers = this.buildDispatchTable();
   }
 
@@ -210,7 +213,7 @@ export class WebviewMessageRouter {
         message?.mutation ||
         message?.expectedDefinitionRevision !== undefined
       ) {
-        await this.reportActionFailure(ctx, message.type, error);
+        await this.mutationCoordinator.reportActionFailure(ctx, message.type, error);
       }
     }
   }
@@ -435,7 +438,7 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
       if (message.filePath) {
-        const mutation = this.asWorkflowDefinitionMutation(message);
+        const mutation = this.mutationCoordinator.asWorkflowDefinitionMutation(message);
         const isRunAddressed = mutation?.address.kind === "run";
         try {
           await this.getOrchestrator()?.appendFromFileForClient(
@@ -446,7 +449,7 @@ export class WebviewMessageRouter {
           );
         } catch (error) {
           if (!isRunAddressed) throw error;
-          this.showRunActionFailure(
+          this.mutationCoordinator.showRunActionFailure(
             ctx,
             "append and continue from file",
             error
@@ -551,18 +554,18 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message, ctx) => {
-      await this.prepareDefinitionMutation(ctx, message);
+      await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
       await this.getOrchestrator()?.reorderPendingPrompts(
-        this.asWorkflowDefinitionMutation(message),
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.newPendingOrder as number[],
         ctx.clientId
       );
-      await this.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message, ctx) => {
-      await this.prepareDefinitionMutation(ctx, message);
-      const mutation = this.asWorkflowDefinitionMutation(message);
+      await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
+      const mutation = this.mutationCoordinator.asWorkflowDefinitionMutation(message);
       const latest = await this.getOrchestrator()?.syncStepsForUndoRedo(
         mutation,
         message.steps,
@@ -615,7 +618,7 @@ export class WebviewMessageRouter {
           );
         }
       }
-      await this.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
     });
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
@@ -1004,7 +1007,7 @@ export class WebviewMessageRouter {
         // The requestId must come back: the client suppresses run-view
         // snapshots and view-identity updates while its own request is in
         // flight, so a silent failure would freeze its revisions permanently.
-        await this.reportActionFailure(
+        await this.mutationCoordinator.reportActionFailure(
           ctx,
           "load run",
           error,
@@ -1023,7 +1026,7 @@ export class WebviewMessageRouter {
           message.requestId
         );
       } catch (error) {
-        await this.reportActionFailure(
+        await this.mutationCoordinator.reportActionFailure(
           ctx,
           "load run summaries",
           error,
@@ -1094,7 +1097,7 @@ export class WebviewMessageRouter {
             ctx.clientId
           );
         } catch (error) {
-          await this.reportActionFailure(ctx, "delete all runs", error);
+          await this.mutationCoordinator.reportActionFailure(ctx, "delete all runs", error);
         }
       }
     );
@@ -1170,13 +1173,13 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         await orchestrator.updateWorkflowName(
-          this.asWorkflowDefinitionMutation(message),
+          this.mutationCoordinator.asWorkflowDefinitionMutation(message),
           message.workflowName,
           ctx.clientId
         );
         // Renaming a brand-new workflow is what materializes its lineage/draft,
         // so this is often the client's first chance to learn its own address.
-        await this.publishViewIdentity(ctx);
+        await this.mutationCoordinator.publishViewIdentity(ctx);
         return;
       }
       this.serializer.handleUpdateWorkflowName(
@@ -1780,11 +1783,11 @@ export class WebviewMessageRouter {
         promptName,
         forceNewWorkflow,
         ctx.clientId,
-        this.asWorkflowDefinitionMutation(message)
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message)
       );
       // Queueing a step is a definition mutation with no other back-channel, so
       // without this the following property edit would carry a stale revision.
-      await this.publishViewIdentity(ctx);
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);
       vscode.window.showErrorMessage(
@@ -1796,7 +1799,7 @@ export class WebviewMessageRouter {
       });
       // A rejection is usually a superseded revision; hand the authoritative
       // revisions back so the next submission isn't rejected identically.
-      await this.publishViewIdentity(ctx);
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     }
   }
 
@@ -1811,7 +1814,7 @@ export class WebviewMessageRouter {
     }
 
     const { index, text, properties, clearProperties, promptName } = message;
-    const mutation = this.asWorkflowDefinitionMutation(message);
+    const mutation = this.mutationCoordinator.asWorkflowDefinitionMutation(message);
 
     try {
       // A nonzero completed-step edit is one logical action: establish the
@@ -1838,7 +1841,7 @@ export class WebviewMessageRouter {
         // the selected run head, while the header's Re-run action allocates a
         // fresh RunRef. Same-run pending continuations begin only after a
         // preserved prefix.
-        await this.prepareDefinitionMutation(ctx, message);
+        await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
         await orchestrator.updatePromptInQueue(
           mutation,
           index,
@@ -1849,7 +1852,7 @@ export class WebviewMessageRouter {
           ctx.clientId
         );
       }
-      await this.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
@@ -1868,16 +1871,16 @@ export class WebviewMessageRouter {
       return;
     }
 
-    await this.prepareDefinitionMutation(ctx, message);
+    await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
     try {
       await orchestrator.insertWorkflowStepAfterIndex(
-        this.asWorkflowDefinitionMutation(message),
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.afterIndex,
         message.step,
         ctx.clientId
       );
-      await this.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to insert workflow step:", error);
       vscode.window.showErrorMessage(
@@ -1896,16 +1899,16 @@ export class WebviewMessageRouter {
       return;
     }
 
-    await this.prepareDefinitionMutation(ctx, message);
+    await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
     try {
       await orchestrator.updateFinalStepInQueue(
-        this.asWorkflowDefinitionMutation(message),
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.finalStep ?? null,
         message.clearProperties,
         ctx.clientId
       );
-      await this.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
       vscode.window.showErrorMessage(
@@ -1924,17 +1927,17 @@ export class WebviewMessageRouter {
       return;
     }
 
-    await this.prepareDefinitionMutation(ctx, message);
+    await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
     const { index } = message;
 
     try {
       await orchestrator.deletePromptFromQueue(
-        this.asWorkflowDefinitionMutation(message),
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         index,
         ctx.clientId
       );
-      await this.refreshDefinitionMutationView(ctx, message);
+      await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
@@ -1947,16 +1950,16 @@ export class WebviewMessageRouter {
     ctx: WebviewClientContext,
     message: any
   ): Promise<void> {
-    await this.prepareWorkflowPropertiesMutation(ctx, message);
+    await this.mutationCoordinator.prepareWorkflowPropertiesMutation(ctx, message);
     const createdWorkingFile =
       await this.settingsSync.handleUpdateWorkflowProperty(
-        this.asWorkflowDefinitionMutation(message),
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.property,
         message.value,
         ctx.postMessage,
         ctx.clientId
       );
-    await this.finishWorkflowPropertiesMutation(
+    await this.mutationCoordinator.finishWorkflowPropertiesMutation(
       ctx,
       message,
       createdWorkingFile
@@ -1967,185 +1970,26 @@ export class WebviewMessageRouter {
     ctx: WebviewClientContext,
     message: any
   ): Promise<void> {
-    await this.prepareWorkflowPropertiesMutation(ctx, message);
+    await this.mutationCoordinator.prepareWorkflowPropertiesMutation(ctx, message);
     const createdWorkingFile =
       await this.settingsSync.handleUpdateWorkflowProperties(
-        this.asWorkflowDefinitionMutation(message),
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.properties,
         ctx.postMessage,
         ctx.clientId
       );
-    await this.finishWorkflowPropertiesMutation(
+    await this.mutationCoordinator.finishWorkflowPropertiesMutation(
       ctx,
       message,
       createdWorkingFile
     );
   }
 
-  /**
-   * A property-only write leaves steps and output untouched, so it must not
-   * trigger the full `RUN_VIEW_LOADED` snapshot replay — the webview treats
-   * that snapshot as a workflow load and rebuilds its entire output model,
-   * visibly redrawing already-rendered output rows. `WORKFLOW_PROPERTIES_UPDATE`
-   * (sent by the settings sync / run-view invalidation) carries the values, and
-   * `publishViewIdentity()` republishes the bumped revisions every definition
-   * write requires. Only a first edit that just seeded the client's ephemeral
-   * working file still needs the full snapshot, so the client learns its new
-   * lineage view (address, run summaries, workflow name).
-   */
-  private async finishWorkflowPropertiesMutation(
-    ctx: WebviewClientContext,
-    message: { mutation?: unknown },
-    createdWorkingFile: boolean
-  ): Promise<void> {
-    if (createdWorkingFile) {
-      await this.refreshDefinitionMutationView(ctx, message);
-    } else {
-      await this.publishViewIdentity(ctx);
-    }
-  }
-
-  /** Validate a promoted-run edit in place, or step this client onto its draft. */
-  private async prepareDefinitionMutation(
-    ctx: WebviewClientContext,
-    message: {
-      mutation?: unknown;
-    }
-  ): Promise<void> {
-    const orchestrator = this.getOrchestrator();
-    if (!orchestrator) {
-      throw new Error("WorkflowOrchestrator not initialized");
-    }
-    await orchestrator.prepareDefinitionMutation(
-      this.asWorkflowDefinitionMutation(message),
-      ctx.clientId
-    );
-  }
-
-  /** Keep workflow settings on an executing run's own definition head. */
-  private async prepareWorkflowPropertiesMutation(
-    ctx: WebviewClientContext,
-    message: {
-      mutation?: unknown;
-    }
-  ): Promise<void> {
-    const orchestrator = this.getOrchestrator();
-    if (!orchestrator) {
-      throw new Error("WorkflowOrchestrator not initialized");
-    }
-    await orchestrator.prepareWorkflowPropertiesMutation(
-      this.asWorkflowDefinitionMutation(message),
-      ctx.clientId
-    );
-  }
-
-  private asWorkflowDefinitionMutation(message: {
-    mutation?: unknown;
-  }):
-    | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
-    | undefined {
-    return message.mutation as
-      | import("../types/WebviewMessageTypes").WorkflowDefinitionMutation
-      | undefined;
-  }
-
-  /**
-   * A run-addressed mutation refreshes every viewer of that run (including
-   * this client) via `invalidateRunViews` inside the orchestrator call
-   * itself, so a follow-up single-client refresh here would be redundant.
-   * Draft/ephemeral edits have no such broadcast and still need it.
-   */
-  private async refreshDefinitionMutationView(
-    ctx: WebviewClientContext,
-    message?: {
-      mutation?: unknown;
-    }
-  ): Promise<void> {
-    if (
-      this.asWorkflowDefinitionMutation(message ?? {})?.address.kind !== "run"
-    ) {
-      const orchestrator = this.getOrchestrator();
-      const address = orchestrator?.getViewAddress(ctx.clientId);
-      if (orchestrator && address) {
-        await orchestrator.loadRunViewForClient(
-          address,
-          ctx.postMessage,
-          ctx.clientId
-        );
-      }
-    }
-    await this.publishViewIdentity(ctx);
-  }
-
-  /**
-   * Hands the client the revisions its next mutation must carry. Required after
-   * every definition write, including the ones that broadcast nothing else
-   * (queueing a step, renaming, creating a lineage's first draft) — a client
-   * left holding a superseded `definitionRevision` has its next edit rejected
-   * as a conflict.
-   */
-  private async publishViewIdentity(ctx: WebviewClientContext): Promise<void> {
-    const identity = await this.getOrchestrator()?.publishViewIdentityToViewers(
-      ctx.clientId
-    );
-    if (identity) {
-      ctx.postMessage(identity);
-    }
-  }
-
-  /**
-   * Reports a rejected addressed action to the client *and* re-publishes the
-   * authoritative revisions.
-   *
-   * A conflict is nearly always the client holding a superseded
-   * `definitionRevision`, and until this ran the rejection was terminal: the
-   * stale revision stayed in the store, so every following edit and every Run
-   * press was rejected the same way and the header looked like a dead button.
-   * Re-publishing turns a wedge into a single failed attempt.
-   */
-  private async reportActionFailure(
-    ctx: WebviewClientContext,
-    action: string,
-    error: unknown,
-    requestId?: string
-  ): Promise<void> {
-    ctx.emit({
-      type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
-      action,
-      error: getErrorMessage(error),
-      ...(requestId ? { requestId } : {}),
-    });
-    await this.publishViewIdentity(ctx);
-  }
-
-  /**
-   * Gate for every command that *starts* execution. ctrlyoke has no path that
-   * auto-starts a workflow, so a run-starting command that arrives before the
-   * orchestrator finished initializing was never a live user click — the known
-   * source is a hosted client flushing a command queued before an extension-host
-   * restart, which launched a whole run seconds after VS Code came back. Pause /
-   * cancel-pause / stop stay ungated: they only ever reduce activity.
-   */
-  private canStartRun(ctx: WebviewClientContext, action: string): boolean {
-    if (this.getOrchestrator()?.isInitialized()) {
-      return true;
-    }
-    Log.warn(
-      `Refused to ${action}: ctrlyoke is still starting up. Run-starting commands are ignored until initialization completes.`
-    );
-    this.showRunActionFailure(
-      ctx,
-      action,
-      new Error("ctrlyoke is still starting up — try again in a moment")
-    );
-    return false;
-  }
-
   private async handleExecuteDraft(
     ctx: WebviewClientContext,
     message: ExecuteDraftMessage
   ): Promise<void> {
-    if (!this.canStartRun(ctx, "run draft")) return;
+    if (!this.mutationCoordinator.canStartRun(ctx, "run draft")) return;
     try {
       await this.getOrchestrator()?.executeDraftAtAddress(
         message.address,
@@ -2154,7 +1998,7 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure(ctx, "run draft", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "run draft", error);
     }
   }
 
@@ -2162,7 +2006,7 @@ export class WebviewMessageRouter {
     ctx: WebviewClientContext,
     message: SeedNewRunMessage
   ): Promise<void> {
-    if (!this.canStartRun(ctx, "re-run")) return;
+    if (!this.mutationCoordinator.canStartRun(ctx, "re-run")) return;
     try {
       await this.getOrchestrator()?.seedAndExecuteAtRun(
         message.address,
@@ -2171,7 +2015,7 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure(ctx, "re-run", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "re-run", error);
     }
   }
 
@@ -2179,7 +2023,7 @@ export class WebviewMessageRouter {
     ctx: WebviewClientContext,
     message: StartNewRunInsteadMessage
   ): Promise<void> {
-    if (!this.canStartRun(ctx, "start new run")) return;
+    if (!this.mutationCoordinator.canStartRun(ctx, "start new run")) return;
     try {
       const result = await this.getOrchestrator()?.startNewRunInsteadAtRun(
         message.address,
@@ -2201,7 +2045,7 @@ export class WebviewMessageRouter {
         });
       }
     } catch (error) {
-      this.showRunActionFailure(ctx, "start new run", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "start new run", error);
     }
   }
 
@@ -2209,7 +2053,7 @@ export class WebviewMessageRouter {
     ctx: WebviewClientContext,
     message: ContinueRunMessage
   ): Promise<void> {
-    if (!this.canStartRun(ctx, "continue run")) return;
+    if (!this.mutationCoordinator.canStartRun(ctx, "continue run")) return;
     try {
       await this.getOrchestrator()?.continueAtRun(
         message.address,
@@ -2218,7 +2062,7 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure(ctx, "continue run", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "continue run", error);
     }
   }
 
@@ -2226,7 +2070,7 @@ export class WebviewMessageRouter {
     ctx: WebviewClientContext,
     message: AppendAndContinueRunMessage
   ): Promise<void> {
-    if (!this.canStartRun(ctx, "append and continue")) return;
+    if (!this.mutationCoordinator.canStartRun(ctx, "append and continue")) return;
     try {
       await this.getOrchestrator()?.appendAndContinueAtRun(
         message.address,
@@ -2236,7 +2080,7 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure(ctx, "append and continue", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "append and continue", error);
     }
   }
 
@@ -2246,7 +2090,7 @@ export class WebviewMessageRouter {
   ): Promise<void> {
     if (
       message.type === MESSAGE_TYPES.RESUME_RUN &&
-      !this.canStartRun(ctx, "resume run")
+      !this.mutationCoordinator.canStartRun(ctx, "resume run")
     ) {
       return;
     }
@@ -2264,22 +2108,8 @@ export class WebviewMessageRouter {
         await orchestrator.stopAtRun(message.address);
       }
     } catch (error) {
-      this.showRunActionFailure(ctx, "control execution", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "control execution", error);
     }
-  }
-
-  private showRunActionFailure(
-    ctx: WebviewClientContext,
-    action: string,
-    error: unknown
-  ): void {
-    Log.error(`Failed to ${action}:`, error);
-    void vscode.window.showErrorMessage(
-      `Failed to ${action}: ${getErrorMessage(error)}`
-    );
-    // A hosted browser client never sees the VS Code notification, so without
-    // this the rejected run action is indistinguishable from a dead button.
-    void this.reportActionFailure(ctx, action, error);
   }
 
   private async handleSetStartPosition(
@@ -2304,7 +2134,7 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     } catch (error) {
-      this.showRunActionFailure(ctx, "set start position", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "set start position", error);
     }
   }
 
@@ -2338,7 +2168,7 @@ export class WebviewMessageRouter {
         });
       }
     } catch (error) {
-      this.showRunActionFailure(ctx, "discard continuation", error);
+      this.mutationCoordinator.showRunActionFailure(ctx, "discard continuation", error);
     }
   }
 
