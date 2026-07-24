@@ -50,6 +50,21 @@ function mergeDescriptorRevision(
 }
 
 /**
+ * Run summaries are lineage-owned even while FILE_SELECTED/SESSION_RESTORED
+ * temporarily clear the displayed address. Use the summaries' own stable
+ * workflowKey to prevent a later identity for another lineage from adopting
+ * that stale run-navigation state.
+ */
+function areRunSummariesForLineage(
+  summaries: RunSummary[],
+  address: WorkflowViewAddress
+): boolean {
+  return summaries.every(
+    (summary) => summary.workflowKey === address.workflowKey
+  );
+}
+
+/**
  * A single template variable — name plus optional UI metadata.
  * Mirrors TemplateVariable in TemplateManager.ts.
  */
@@ -1074,23 +1089,39 @@ export const useUiStore = create<UiState & UiActions>()(
           isViewingHistory: address.kind === "run",
         })),
 
-      // Address + revisions only. Unlike setDisplayedRunView this never touches
-      // run summaries or history framing, so it is safe to apply after an
-      // ordinary edit without disturbing what the user is looking at.
+      // Address + revisions, plus one cross-lineage coherence guard. Ordinary
+      // same-lineage edits retain their run summaries and history framing.
+      // After FILE_SELECTED/SESSION_RESTORED clears the old address, however,
+      // the next identity may belong to a different lineage; summaries carry
+      // their own workflowKey, so discard them instead of attaching phantom
+      // runs (and the old execution/rewind state) to the new address.
       setDisplayedViewIdentity: (
         address,
         definitionRevision,
         descriptorRevision
       ) =>
-        set((state) => ({
-          displayedViewAddress: address,
-          displayedDefinitionRevision: definitionRevision,
-          displayedDescriptorRevision: mergeDescriptorRevision(
-            state,
-            address,
-            descriptorRevision
-          ),
-        })),
+        set((state) => {
+          const summariesBelongToAddress = areRunSummariesForLineage(
+            state.runSummaries,
+            address
+          );
+          return {
+            displayedViewAddress: address,
+            displayedDefinitionRevision: definitionRevision,
+            displayedDescriptorRevision: mergeDescriptorRevision(
+              state,
+              address,
+              descriptorRevision
+            ),
+            ...(summariesBelongToAddress
+              ? {}
+              : {
+                  runSummaries: [],
+                  executionRunRef: null,
+                  pendingRewind: null,
+                }),
+          };
+        }),
 
       // Descriptor knowledge only, and only for the address the client is
       // already displaying. This is how a snapshot whose *definition* portion

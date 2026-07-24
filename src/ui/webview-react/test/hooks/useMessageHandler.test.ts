@@ -158,6 +158,71 @@ describe("FILE_SELECTED", () => {
     expect(useUiStore.getState().isViewingHistory).toBe(false);
   });
 
+  it("does not attach the previous lineage's runs to a new workflow identity", () => {
+    const previousWorkflowKey = "previous-workflow" as never;
+    const previousRunRef = "run-previous-2" as never;
+    useUiStore.getState().setDisplayedRunView(
+      {
+        workflowKey: previousWorkflowKey,
+        kind: "run",
+        runRef: previousRunRef,
+      },
+      [
+        {
+          workflowKey: previousWorkflowKey,
+          runRef: previousRunRef,
+          runId: 2,
+          startedAt: 200,
+          executionState: EXECUTION_STATES.RUNNING,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey: previousWorkflowKey,
+          runRef: "run-previous-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+      previousRunRef,
+      { definitionRevision: 1, descriptorRevision: 2 },
+      { fromStepIndex: 0, baseDefinitionRevision: 1 }
+    );
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "new-workflow.ctrlyoke.json",
+        steps: [makePrompt("New workflow step")],
+      });
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address: {
+          workflowKey: "new-workflow" as never,
+          kind: "draft",
+        },
+        definitionRevision: 1,
+        descriptorRevision: 1,
+      });
+    });
+
+    const ui = useUiStore.getState();
+    expect(ui.displayedViewAddress).toEqual({
+      workflowKey: "new-workflow",
+      kind: "draft",
+    });
+    expect(ui.runSummaries).toEqual([]);
+    expect(ui.executionRunRef).toBeNull();
+    expect(ui.pendingRewind).toBeNull();
+  });
+
   it("loads workflow properties included with the file selection payload", () => {
     renderHook(() => useMessageHandler());
 
