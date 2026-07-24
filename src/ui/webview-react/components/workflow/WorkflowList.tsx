@@ -210,7 +210,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
               e.stopPropagation();
               onToggleFavorite(workflow.address);
             }}
-            className={`flex-shrink-0 p-0.5 rounded transition-colors ${
+            className={`flex-shrink-0 py-2 px-1 rounded transition-colors ${
               workflow.isFavorite
                 ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
                 : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
@@ -232,7 +232,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
               e.stopPropagation();
               onRemove(workflow.address);
             }}
-            className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 px-1 py-2 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
           >
             <i className="codicon codicon-trash" />
           </button>
