@@ -1,15 +1,27 @@
 import React from "react";
-import { WORKFLOW_ROW_TRACKS } from "../../constants";
+import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "../../constants";
 import { runNavIndicatorLabel, isDrillableRunNav } from "@utils/runNavigation";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 
+/**
+ * Whether this tier renders the *content* of a row compactly — today the
+ * state badge's icon-only form. Stacking alone doesn't imply it: a 500px
+ * popup has room for two lines and full-text badges both.
+ *
+ * Every row kind asks this rather than comparing tiers itself, so "which tier
+ * abbreviates" stays a single decision.
+ */
+export function isCompactRow(tier: WorkflowRowTier): boolean {
+  return tier === "compact";
+}
+
 interface WorkflowRowLayoutProps {
   /**
-   * Two-line layout: label on its own line, metadata on a muted second line.
-   * Driven by the *dropdown's* width, not the trigger's — see
-   * `WORKFLOW_DROPDOWN_NARROW_WIDTH`.
+   * How much this row compacts. `stacked`/`compact` put the label on its own
+   * line with metadata beneath. Driven by the *dropdown's* width, not the
+   * trigger's — see `resolveWorkflowRowTier`.
    */
-  isStacked: boolean;
+  tier: WorkflowRowTier;
   onClick: () => void;
   ariaLabel?: string;
   className?: string;
@@ -36,7 +48,7 @@ function hasContent(node: React.ReactNode): boolean {
 interface RunIndicatorCellProps {
   runNav: WorkflowRunNavigationSummary | undefined;
   workflowName: string;
-  isNarrow: boolean;
+  tier: WorkflowRowTier;
   /** Omitted when the lineage can't be drilled into; the track is still reserved. */
   onDrill?: () => void;
 }
@@ -46,39 +58,54 @@ interface RunIndicatorCellProps {
  * primary button (never nested inside it).
  *
  * The track is fixed-width and reserved list-wide whenever *any* row is
- * drillable, including across the running/recent split: everything to its
- * right is what positions the state and time columns, so a row that dropped
- * the track would sit its badge 64px out of line with its neighbours.
+ * drillable, including across the running/recent split, and at every tier:
+ * everything to its right is what positions the state badge (and, when flat,
+ * the time column), so a row that dropped the track sits its badge tens of
+ * pixels out of line with its neighbours. Stacked rows abandon cross-row
+ * alignment *within* the primary button's grid — that is not licence to
+ * unalign the siblings outside it, which is what the badge's position
+ * actually depends on.
+ *
+ * Only the reserved width follows the tier, since stacked rows render the
+ * short `#1042` label rather than `Run 1042`.
  */
 export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
   runNav,
   workflowName,
-  isNarrow,
+  tier,
   onDrill,
-}) => (
-  <span
-    className="flex flex-shrink-0 justify-end"
-    style={{ width: WORKFLOW_ROW_TRACKS.runIndicator }}
-  >
-    {runNav && isDrillableRunNav(runNav) && onDrill ? (
-      <button
-        type="button"
-        title={`Browse runs of ${workflowName}`}
-        aria-label={`${runNavIndicatorLabel(runNav, isNarrow)} — browse runs of ${workflowName}`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onDrill();
-        }}
-        className="fp-dropdown-row flex items-center gap-0.5 rounded px-1 py-0.5 text-xs text-description-fg hover:bg-list-hover-bg hover:text-foreground"
-      >
-        <span className="truncate">
-          {runNavIndicatorLabel(runNav, isNarrow)}
-        </span>
-        <i className="codicon codicon-chevron-right text-xxs" />
-      </button>
-    ) : null}
-  </span>
-);
+}) => {
+  const isStacked = tier !== "flat";
+  const drill =
+    runNav && isDrillableRunNav(runNav) && onDrill
+      ? { label: runNavIndicatorLabel(runNav, isStacked), onDrill }
+      : null;
+
+  return (
+    <span
+      className="flex flex-shrink-0 justify-end"
+      style={{
+        width: WORKFLOW_ROW_TRACKS.runIndicator[isStacked ? "stacked" : "flat"],
+      }}
+    >
+      {drill && (
+        <button
+          type="button"
+          title={`Browse runs of ${workflowName}`}
+          aria-label={`${drill.label} — browse runs of ${workflowName}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            drill.onDrill();
+          }}
+          className="fp-dropdown-row flex items-center gap-0.5 rounded px-1 py-0.5 text-xs text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+        >
+          <span className="truncate">{drill.label}</span>
+          <i className="codicon codicon-chevron-right text-xxs" />
+        </button>
+      )}
+    </span>
+  );
+};
 
 /**
  * RowActionRail - the fixed-width trailing cluster every row kind ends with
@@ -123,13 +150,13 @@ export function composeRowAccessibleName(
  * each caller supplies the same six pieces of content and this decides whether
  * they render as one aligned line or two stacked ones.
  *
- * Callers always pass full-length content. The compact forms the flat layout
- * once needed (`4` for `4 steps`, an icon for `COMPLETED`) exist to survive a
- * cramped single line; the stacked layout has room, so squeezing there would
- * cost legibility for nothing.
+ * Callers pass full-length text content at every tier — abbreviating `4 steps`
+ * to `4` saves ~40px on a line that has already been given its own row. The
+ * one exception is the state badge, which is both the widest fixed item and
+ * the only one with a colour-carrying icon form: see {@link isCompactRow}.
  */
 export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
-  isStacked,
+  tier,
   onClick,
   ariaLabel,
   className = "",
@@ -142,6 +169,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   badge,
   time,
 }) => {
+  const isStacked = tier !== "flat";
   const buttonClassName = `workflow-row-primary ${
     isStacked ? "workflow-row-primary-stacked" : "workflow-row-primary-flat"
   } min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
@@ -154,9 +182,9 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
         aria-label={ariaLabel}
         className={buttonClassName}
         // Published from WORKFLOW_ROW_TRACKS rather than hard-coded in CSS:
-        // WORKFLOW_DROPDOWN_NARROW_WIDTH is derived from these widths, so a
-        // track that could be widened in the stylesheet alone would silently
-        // invalidate the breakpoint and collapse the name column.
+        // both tier breakpoints are derived from these widths, so a track that
+        // could be widened in the stylesheet alone would silently invalidate
+        // them and collapse the name column.
         style={
           {
             "--workflow-row-state-col": `${WORKFLOW_ROW_TRACKS.state}px`,

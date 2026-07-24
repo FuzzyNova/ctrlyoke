@@ -13,14 +13,16 @@ import {
   RunIndicatorCell,
   RowActionRail,
   composeRowAccessibleName,
+  isCompactRow,
 } from "./WorkflowRowLayout";
+import type { WorkflowRowTier } from "../../constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
   isCurrent: boolean;
   hasActiveTerminal: boolean;
-  isNarrow?: boolean;
+  tier?: WorkflowRowTier;
   /**
    * Run-navigation summary for this lineage, resolved from the recent-workflow
    * entry it is hidden behind while running. A running lineage's earlier runs
@@ -64,7 +66,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   workflow,
   isCurrent,
   hasActiveTerminal,
-  isNarrow = false,
+  tier = "flat",
   runNav,
   showRunIndicatorTrack = false,
   onDrillIntoRuns,
@@ -112,7 +114,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       title={workflow.filePath}
     >
       <WorkflowRowLayout
-        isStacked={isNarrow}
+        tier={tier}
         onClick={onClick}
         // Deliberately excludes `elapsed` — it ticks every second, and an
         // accessible name that changes on a timer re-announces the row.
@@ -148,7 +150,12 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             />
           )
         }
-        badge={<ExecutionStateBadge state={workflow.executionState} />}
+        badge={
+          <ExecutionStateBadge
+            state={workflow.executionState}
+            isNarrow={isCompactRow(tier)}
+          />
+        }
         time={<span className="font-mono">{elapsed}</span>}
       />
 
@@ -159,7 +166,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         <RunIndicatorCell
           runNav={runNav}
           workflowName={workflow.workflowName}
-          isNarrow={isNarrow}
+          tier={tier}
           onDrill={onDrillIntoRuns}
         />
       )}

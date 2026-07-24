@@ -45,13 +45,14 @@ import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
 import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
-import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import {
-  WORKFLOW_DROPDOWN_NARROW_WIDTH,
+  resolveWorkflowRowTier,
   WORKFLOW_DROPDOWN_TARGET_WIDTH,
   WORKFLOW_STATUS_BUTTON_SIZES,
+  type WorkflowRowTier,
 } from "../../constants";
 
 interface WorkflowStatusProps {
@@ -358,14 +359,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const wfStatusSize = isMobile
     ? WORKFLOW_STATUS_BUTTON_SIZES.touch
     : WORKFLOW_STATUS_BUTTON_SIZES.default;
-  // Two independent narrowness measurements: the split button's own width
-  // drives the header segments, while the dropdown popup's width drives its
-  // rows. They differ by hundreds of pixels on mobile (a ~180px trigger opening
-  // a full-width popup), so sharing one measurement compacted rows that had
-  // room to spare.
+  // Two independent width measurements: the split button's own width drives
+  // the header segments, while the dropdown popup's width drives its rows.
+  // They differ by hundreds of pixels on mobile (a ~180px trigger opening a
+  // full-width popup), so sharing one measurement compacted rows that had room
+  // to spare. The popup's is a three-way tier rather than a boolean — stacking
+  // and abbreviating happen at different widths.
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(300);
-  const [dropdownNarrowRef, isDropdownNarrow] =
-    useElementNarrow<HTMLDivElement>(WORKFLOW_DROPDOWN_NARROW_WIDTH);
+  const [dropdownTierRef, dropdownRowTier] = useElementTier<
+    WorkflowRowTier,
+    HTMLDivElement
+  >(resolveWorkflowRowTier, "flat");
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -386,9 +390,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const mergedDropdownRef = useCallback(
     (node: HTMLDivElement | null) => {
       dropdownRef.current = node;
-      dropdownNarrowRef(node);
+      dropdownTierRef(node);
     },
-    [dropdownNarrowRef]
+    [dropdownTierRef]
   );
 
   const updateDropdownTop = useCallback(() => {
@@ -1572,7 +1576,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               rows={runPanelRows}
               isLoading={runPanelIsLoading}
               loadError={runPanelLoadError}
-              isNarrow={isDropdownNarrow}
+              tier={dropdownRowTier}
               displayedAddress={displayedViewAddress}
               isViewingHistory={isViewingHistory}
               executionRunRef={runPanelExecutionRunRef}
@@ -1602,7 +1606,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
               onDrillIntoRuns={handleDrillIntoRuns}
-              isNarrow={isDropdownNarrow}
+              tier={dropdownRowTier}
               onClose={closeDropdown}
               searchValue={workflowSearch}
               onSearchChange={setWorkflowSearch}

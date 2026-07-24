@@ -3,7 +3,10 @@ import { ExitButton } from "@components/shared";
 import { VirtualizedDropdownList } from "../shared";
 import { RunSummaryRow, type RunPanelRow } from "./RunSummaryRow";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
-import { WORKFLOW_DROPDOWN_ROW_HEIGHT } from "../../constants";
+import {
+  workflowRowHeightEstimate,
+  type WorkflowRowTier,
+} from "../../constants";
 import type {
   WorkflowKey,
   WorkflowViewAddress,
@@ -35,7 +38,7 @@ interface RunPanelProps {
   rows: RunPanelRow[];
   isLoading: boolean;
   loadError?: string;
-  isNarrow?: boolean;
+  tier?: WorkflowRowTier;
   /** The client's own currently displayed address, for the viewed-row highlight and newer/older. */
   displayedAddress: WorkflowViewAddress | null;
   /**
@@ -71,7 +74,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   rows,
   isLoading,
   loadError,
-  isNarrow = false,
+  tier = "flat",
   displayedAddress,
   isViewingHistory,
   executionRunRef,
@@ -222,11 +225,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
             getItemKey={(row) => runPanelRowKey(workflowKey, row)}
             scrollContainerRef={scrollContainerRef}
             scrollToKey={scrollToKey}
-            estimatedRowHeight={
-              isNarrow
-                ? WORKFLOW_DROPDOWN_ROW_HEIGHT.stacked
-                : WORKFLOW_DROPDOWN_ROW_HEIGHT.flat
-            }
+            estimatedRowHeight={workflowRowHeightEstimate(tier)}
             renderItem={(row) => {
               const rowKey = runPanelRowKey(workflowKey, row);
               const isViewed = isRowViewed(row);
@@ -238,7 +237,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   isViewed={isViewed}
                   isPending={pendingRowKey === rowKey}
                   isLive={isLive}
-                  isNarrow={isNarrow}
+                  tier={tier}
                   canDelete={row.kind === "run" && !isLive}
                   onSelect={() => handleSelect(row)}
                   onDelete={

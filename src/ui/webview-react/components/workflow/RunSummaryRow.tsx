@@ -5,7 +5,9 @@ import {
   WorkflowRowLayout,
   RowActionRail,
   composeRowAccessibleName,
+  isCompactRow,
 } from "./WorkflowRowLayout";
+import type { WorkflowRowTier } from "../../constants";
 import { HARNESS_INFO, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
@@ -25,7 +27,7 @@ interface RunSummaryRowProps {
   isPending: boolean;
   /** This run is the lineage's currently executing run. */
   isLive: boolean;
-  isNarrow?: boolean;
+  tier?: WorkflowRowTier;
   canDelete: boolean;
   onSelect: () => void;
   onDelete?: () => void;
@@ -50,7 +52,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
   isViewed,
   isPending,
   isLive,
-  isNarrow = false,
+  tier = "flat",
   canDelete,
   onSelect,
   onDelete,
@@ -99,7 +101,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       } ${isPending && !isViewed ? "opacity-70" : ""}`}
     >
       <WorkflowRowLayout
-        isStacked={isNarrow}
+        tier={tier}
         onClick={onSelect}
         ariaLabel={accessibleName}
         harness={harness && <HarnessIcon harnessId={harness} size={14} />}
@@ -118,7 +120,14 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
             <i className="codicon codicon-loading codicon-modifier-spin text-xxs text-description-fg" />
           ) : undefined
         }
-        badge={executionState && <ExecutionStateBadge state={executionState} />}
+        badge={
+          executionState && (
+            <ExecutionStateBadge
+              state={executionState}
+              isNarrow={isCompactRow(tier)}
+            />
+          )
+        }
         time={timeAgo}
       />
 

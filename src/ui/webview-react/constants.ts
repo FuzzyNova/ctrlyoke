@@ -90,10 +90,10 @@ export const HEADER_BUTTON_SIZES = {
  * Fixed track widths (px) for the flat workflow row layout.
  *
  * These are the source of truth: `WorkflowRowLayout` publishes them as CSS
- * custom properties on the row, and `WORKFLOW_DROPDOWN_NARROW_WIDTH` is derived
- * from them. globals.css only carries matching fallbacks. Sizing lives here
- * because the breakpoint has to be computed from it — a track widened in CSS
- * alone would quietly collapse the name column instead.
+ * custom properties on the row, and both breakpoints below are derived from
+ * them. globals.css only carries matching fallbacks. Sizing lives here because
+ * the breakpoints have to be computed from it — a track widened in CSS alone
+ * would quietly collapse the name column instead.
  */
 export const WORKFLOW_ROW_TRACKS = {
   /** Mirrors the fixed `14px` first track; here so the budget below is complete. */
@@ -109,8 +109,20 @@ export const WORKFLOW_ROW_TRACKS = {
    * line with the recent rows directly below.
    */
   time: 96,
-  /** `Run 12 ›` drill affordance, reserved list-wide once any row is drillable. */
-  runIndicator: 64,
+  /**
+   * `Run 12 ›` drill affordance, reserved list-wide once any row is drillable
+   * — at *every* tier. Everything to a row's right is what positions its state
+   * badge, so a row that dropped the track (or sized it to its own content)
+   * sits its badge tens of pixels out of line with its neighbours; that is
+   * true whether or not the rest of the row is stacked.
+   *
+   * Only the width varies: stacked rows render the short `#1042` label, so
+   * they reserve less than the flat layout's `Run 1042`.
+   */
+  runIndicator: {
+    flat: 64,
+    stacked: 52,
+  },
   /** Trailing action rail: two icon buttons and the gap between them. */
   actions: 44,
 } as const;
@@ -146,6 +158,41 @@ export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
 export const WORKFLOW_DROPDOWN_NARROW_WIDTH = 560;
 
 /**
+ * Width (px) below which stacked rows also drop their state badge to its
+ * icon-only form (and their run indicator to `#12`).
+ *
+ * Stacking alone only buys the name a line of its own — it does not shrink
+ * anything sharing that line. A stacked first line still spends ~238px on the
+ * harness icon, a full-text badge ("CANCELLING" ≈ 88px), the run indicator and
+ * the action rail, so at a phone- or sidebar-width popup the name is back to a
+ * few characters. Dropping the badge to its icon returns ~60px of that.
+ *
+ * Set so the name keeps ~140px on the stacked first line while the badge still
+ * carries text; below it the icon buys that width back instead. See
+ * `workflowRowWidths.test.ts`.
+ */
+export const WORKFLOW_DROPDOWN_COMPACT_WIDTH = 380;
+
+/**
+ * How much a workflow dropdown row compacts at the width it is rendered at.
+ *
+ * - `flat` — one line, fixed metadata tracks aligned down the whole list.
+ * - `stacked` — name on its own line, metadata on a muted second line.
+ * - `compact` — stacked, plus icon-only badges and `#12` run indicators.
+ *
+ * One value rather than a pair of booleans: the tiers are ordered, and two
+ * independent flags would let `compact && !stacked` exist.
+ */
+export type WorkflowRowTier = "flat" | "stacked" | "compact";
+
+/** Resolves the row tier for a measured dropdown width. */
+export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
+  if (width < WORKFLOW_DROPDOWN_COMPACT_WIDTH) return "compact";
+  if (width < WORKFLOW_DROPDOWN_NARROW_WIDTH) return "stacked";
+  return "flat";
+}
+
+/**
  * Virtualizer size estimates for the workflow dropdown's two row layouts.
  *
  * `flat` is one line of metadata; `stacked` adds the second (meta) line used
@@ -159,6 +206,13 @@ export const WORKFLOW_DROPDOWN_ROW_HEIGHT = {
   flat: 36,
   stacked: 54,
 } as const;
+
+/** The virtualizer estimate for a tier — `compact` is stacked, just narrower. */
+export function workflowRowHeightEstimate(tier: WorkflowRowTier): number {
+  return tier === "flat"
+    ? WORKFLOW_DROPDOWN_ROW_HEIGHT.flat
+    : WORKFLOW_DROPDOWN_ROW_HEIGHT.stacked;
+}
 
 /**
  * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.

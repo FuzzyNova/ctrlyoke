@@ -9,8 +9,12 @@ import {
   RunIndicatorCell,
   RowActionRail,
   composeRowAccessibleName,
+  isCompactRow,
 } from "./WorkflowRowLayout";
-import { WORKFLOW_DROPDOWN_ROW_HEIGHT } from "../../constants";
+import {
+  workflowRowHeightEstimate,
+  type WorkflowRowTier,
+} from "../../constants";
 import { HARNESS_INFO } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
@@ -80,7 +84,7 @@ interface WorkflowListProps {
   onToggleFilters?: () => void;
   filterControls?: React.ReactNode;
   isFiltering?: boolean;
-  isNarrow?: boolean;
+  tier?: WorkflowRowTier;
   className?: string;
 }
 
@@ -88,7 +92,7 @@ interface RecentWorkflowRowProps {
   workflow: RecentWorkflow;
   currentAddress: WorkflowViewAddress | null;
   hasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
-  isNarrow: boolean;
+  tier: WorkflowRowTier;
   onSelect: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   onRemove?: (address: WorkflowViewAddress) => void;
@@ -101,7 +105,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   workflow,
   currentAddress,
   hasActiveTerminal,
-  isNarrow,
+  tier,
   onSelect,
   onToggleFavorite,
   onRemove,
@@ -126,7 +130,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
       }`}
     >
       <WorkflowRowLayout
-        isStacked={isNarrow}
+        tier={tier}
         onClick={() => onSelect(workflow.address)}
         ariaLabel={composeRowAccessibleName([
           workflow.workflowName,
@@ -168,6 +172,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         badge={
           <ExecutionStateBadge
             state={workflow.executionState}
+            isNarrow={isCompactRow(tier)}
             className="workflow-menu-item-state"
           />
         }
@@ -184,7 +189,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         <RunIndicatorCell
           runNav={workflow.runNav}
           workflowName={workflow.workflowName}
-          isNarrow={isNarrow}
+          tier={tier}
           onDrill={
             onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
           }
@@ -292,7 +297,7 @@ export const WorkflowList = React.forwardRef<
     onToggleFilters,
     filterControls,
     isFiltering = false,
-    isNarrow = false,
+    tier = "flat",
     className = "",
   },
   ref
@@ -328,9 +333,7 @@ export const WorkflowList = React.forwardRef<
   // recent rows directly beneath it. A list with no drillable rows renders
   // without the track at all.
   const hasDrillableRow = rows.some((row) => isDrillableRunNav(rowRunNav(row)));
-  const estimatedRowHeight = isNarrow
-    ? WORKFLOW_DROPDOWN_ROW_HEIGHT.stacked
-    : WORKFLOW_DROPDOWN_ROW_HEIGHT.flat;
+  const estimatedRowHeight = workflowRowHeightEstimate(tier);
 
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
@@ -384,7 +387,7 @@ export const WorkflowList = React.forwardRef<
                   workflow={row.workflow}
                   isCurrent={row.workflow.id === activeWorkflowId}
                   hasActiveTerminal={runningHasActiveTerminal(row.workflow.id)}
-                  isNarrow={isNarrow}
+                  tier={tier}
                   runNav={row.lineage?.runNav}
                   showRunIndicatorTrack={hasDrillableRow}
                   onDrillIntoRuns={
@@ -426,7 +429,7 @@ export const WorkflowList = React.forwardRef<
                 workflow={row.workflow}
                 currentAddress={currentAddress}
                 hasActiveTerminal={recentHasActiveTerminal}
-                isNarrow={isNarrow}
+                tier={tier}
                 onSelect={onSelectRecent}
                 onToggleFavorite={onToggleFavorite}
                 onRemove={onRemove}

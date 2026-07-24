@@ -14,7 +14,7 @@ import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameR
 const DEFAULT_THRESHOLD = 380;
 
 /**
- * Hook that tracks whether a DOM element's content width is below a threshold.
+ * Hook that classifies a DOM element's content width into a discrete tier.
  *
  * Uses `ResizeObserver` so it reacts to panel resizes, not just viewport
  * changes. This is essential in a resizable-panels layout where individual
@@ -27,20 +27,30 @@ const DEFAULT_THRESHOLD = 380;
  * because `useEffect` only re-runs on dependency changes, not when
  * `ref.current` changes.
  *
- * @param threshold   Width in pixels below which the element is "narrow".
- *                    Defaults to {@link DEFAULT_THRESHOLD}.
- * @param deferWhile  When true, suppresses narrow-state updates until it
- *                    becomes false, then applies the most recent observed
- *                    width. Useful for avoiding layout churn while a
- *                    higher-priority resize (e.g. a panel drag) is active.
- * @returns           A tuple of `[callbackRef, isNarrow]`. Attach `callbackRef`
- *                    to the element you want to observe.
+ * The tier — not the raw width — is what enters React state, so a resize only
+ * re-renders when it actually crosses a boundary. That makes two requirements
+ * of `resolveTier`: it must return a **primitive** (so React's `Object.is`
+ * bail-out works) and it must be **referentially stable** (module-level
+ * function or `useCallback`), since changing its identity re-measures.
+ *
+ * @param resolveTier  Maps an observed width to its tier.
+ * @param initialTier  Tier assumed before the element is first measured.
+ * @param deferWhile   When true, suppresses tier updates until it becomes
+ *                     false, then applies the most recent observed width.
+ *                     Useful for avoiding layout churn while a higher-priority
+ *                     resize (e.g. a panel drag) is active.
+ * @returns            A tuple of `[callbackRef, tier]`. Attach `callbackRef`
+ *                     to the element you want to observe.
  */
-export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
-  threshold: number = DEFAULT_THRESHOLD,
+export function useElementTier<
+  Tier extends string | number | boolean,
+  T extends HTMLElement = HTMLDivElement,
+>(
+  resolveTier: (width: number) => Tier,
+  initialTier: Tier,
   deferWhile: boolean = false
-): [RefCallback<T>, boolean] {
-  const [isNarrow, setIsNarrow] = useState(false);
+): [RefCallback<T>, Tier] {
+  const [tier, setTier] = useState<Tier>(initialTier);
   const disconnectRef = useRef<(() => void) | null>(null);
   const nodeRef = useRef<T | null>(null);
   const lastWidthRef = useRef<number | null>(null);
@@ -50,9 +60,9 @@ export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
     (width: number) => {
       lastWidthRef.current = width;
       deferredWidthRef.current = null;
-      setIsNarrow(width < threshold);
+      setTier(resolveTier(width));
     },
-    [threshold]
+    [resolveTier]
   );
 
   const callbackRef = useCallback(
@@ -114,5 +124,25 @@ export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
     }
   }, [applyWidth, deferWhile]);
 
-  return [callbackRef, isNarrow];
+  return [callbackRef, tier];
+}
+
+/**
+ * Two-tier {@link useElementTier}: tracks whether an element's content width is
+ * below a single threshold.
+ *
+ * @param threshold   Width in pixels below which the element is "narrow".
+ *                    Defaults to {@link DEFAULT_THRESHOLD}.
+ * @param deferWhile  See {@link useElementTier}.
+ * @returns           A tuple of `[callbackRef, isNarrow]`.
+ */
+export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
+  threshold: number = DEFAULT_THRESHOLD,
+  deferWhile: boolean = false
+): [RefCallback<T>, boolean] {
+  const resolveNarrow = useCallback(
+    (width: number) => width < threshold,
+    [threshold]
+  );
+  return useElementTier<boolean, T>(resolveNarrow, false, deferWhile);
 }
