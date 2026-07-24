@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { HarnessIcon } from "../shared/HarnessIcon";
-import { HARNESS_INFO, type HarnessId } from "../../types/messages";
+import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import {
-  getExecutionStateBadgeClass,
-  getExecutionStateBadgeIcon,
-} from "../../utils/status";
+  WorkflowRowLayout,
+  RowActionRail,
+  composeRowAccessibleName,
+} from "./WorkflowRowLayout";
+import { HARNESS_INFO, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 
@@ -32,8 +34,14 @@ interface RunSummaryRowProps {
 /**
  * RunSummaryRow - one draft or run entry in RunPanel's virtualized list.
  *
- * Manifest values render directly — the run number is always
- * `summary.runId`, never a display index, so deletion gaps stay visible
+ * Shares `WorkflowRowLayout` with the workflow list's rows — harness icon,
+ * label, step count, status glyph, state badge, time — so drilling in doesn't
+ * reshuffle where each piece of metadata lives, and both surfaces stack onto
+ * two lines at the same width. The lineage name's slot carries the run
+ * identity, and the live/pending glyph takes the terminal icon's track.
+ *
+ * Manifest values render directly — the run number is always `summary.runId`,
+ * never a display index, so deletion gaps stay visible
  * (RUN_NAVIGATION_UX_PLAN.md's identity invariant).
  */
 export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
@@ -64,19 +72,19 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     : harnessLabel;
 
   const label = isDraft ? "Draft" : `Run ${summary!.runId}`;
-  const narrowLabel = isDraft ? "Draft" : `#${summary!.runId}`;
-  const accessibleName = [
+  const stepCount = summary?.stepCount ?? 0;
+  const stepLabel =
+    stepCount > 0
+      ? `${stepCount} step${stepCount === 1 ? "" : "s"}`
+      : undefined;
+  const accessibleName = composeRowAccessibleName([
     label,
-    isLive ? "live" : undefined,
+    isLive && "live",
     executionState,
     harnessTitle,
-    summary && summary.stepCount > 0
-      ? `${summary.stepCount} step${summary.stepCount === 1 ? "" : "s"}`
-      : undefined,
+    stepLabel,
     timeAgo,
-  ]
-    .filter(Boolean)
-    .join(" — ");
+  ]);
 
   return (
     <div
@@ -84,89 +92,41 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       role="option"
       aria-selected={isViewed}
       title={accessibleName}
-      className={`run-panel-row group flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+      className={`run-panel-row group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
         isViewed
           ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
       } ${isPending && !isViewed ? "opacity-70" : ""}`}
     >
-      <button
-        type="button"
+      <WorkflowRowLayout
+        isStacked={isNarrow}
         onClick={onSelect}
-        aria-label={accessibleName}
-        className="run-panel-row-primary flex min-w-0 flex-1 items-center gap-2 appearance-none border-none bg-transparent p-0 text-left text-inherit cursor-pointer"
-      >
-        {/* Live/pending indicator */}
-        <span className="flex w-2.5 flex-shrink-0 items-center justify-center">
-          {isLive && (
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-indicator-success animate-pulse" />
-          )}
-          {!isLive && isPending && !isViewed && (
+        ariaLabel={accessibleName}
+        harness={harness && <HarnessIcon harnessId={harness} size={14} />}
+        harnessTitle={harnessTitle}
+        label={label}
+        labelClassName="font-mono"
+        count={stepCount > 0 ? stepLabel : undefined}
+        glyph={
+          isLive ? (
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full bg-indicator-success animate-pulse"
+              title="Executing now"
+              aria-label="Executing now"
+            />
+          ) : isPending && !isViewed ? (
             <i className="codicon codicon-loading codicon-modifier-spin text-xxs text-description-fg" />
-          )}
-        </span>
+          ) : undefined
+        }
+        badge={executionState && <ExecutionStateBadge state={executionState} />}
+        time={timeAgo}
+      />
 
-        {/* Run number / Draft label */}
-        <span className="w-14 flex-shrink-0 font-mono text-xs">
-          {isNarrow ? narrowLabel : label}
-        </span>
-
-        {!isDraft && (
-          <>
-            {/* Harness icon */}
-            {harness && (
-              <span
-                className="flex w-[14px] flex-shrink-0 items-center justify-center"
-                title={harnessTitle}
-              >
-                <HarnessIcon harnessId={harness} size={14} />
-              </span>
-            )}
-
-            {!isNarrow && (
-              <>
-                {/* State badge */}
-                {executionState && (
-                  <span
-                    className={`flex-shrink-0 rounded px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(executionState)}`}
-                  >
-                    {executionState}
-                  </span>
-                )}
-
-                {/* Step count */}
-                {summary && summary.stepCount > 0 && (
-                  <span className="flex-shrink-0 font-mono text-xs text-description-fg">
-                    {summary.stepCount} step
-                    {summary.stepCount === 1 ? "" : "s"}
-                  </span>
-                )}
-              </>
-            )}
-
-            {isNarrow && executionState && (
-              <i
-                className={`codicon ${getExecutionStateBadgeIcon(executionState)} flex-shrink-0 text-xs`}
-              />
-            )}
-
-            {/* Spacer pushes time to the right */}
-            <span className="min-w-[8px] flex-1" />
-
-            {!isNarrow && timeAgo && (
-              <span className="flex-shrink-0 text-xs text-description-fg">
-                {timeAgo}
-              </span>
-            )}
-          </>
-        )}
-
-        {isDraft && <span className="min-w-[8px] flex-1" />}
-      </button>
-
-      {canDelete && (
-        <span className="flex flex-shrink-0 items-center">
-          {confirmingDelete ? (
+      {/* Delete track is reserved on every row (draft and executing runs can't
+          be deleted) so the time column stays aligned down the list. */}
+      <RowActionRail>
+        {canDelete &&
+          (confirmingDelete ? (
             <span className="flex items-center gap-0.5">
               <button
                 type="button"
@@ -207,9 +167,8 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
             >
               <i className="codicon codicon-trash text-xs" />
             </button>
-          )}
-        </span>
-      )}
+          ))}
+      </RowActionRail>
     </div>
   );
 };

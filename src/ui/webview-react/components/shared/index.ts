@@ -1,5 +1,6 @@
 export { Button } from "./Button";
 export { ExitButton } from "./ExitButton";
+export { ExecutionStateBadge } from "./ExecutionStateBadge";
 export { CustomSelect, type SelectOption } from "./CustomSelect";
 export {
   getAgentDisplayName,

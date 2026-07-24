@@ -26,6 +26,10 @@ beforeEach(() => {
   useWorkflowStore.getState().resetWorkflow();
   useWorkflowStore.temporal.getState().clear();
   useUiStore.getState().resetUi();
+  // resetUi() deliberately leaves the loaded-instance list alone (it survives
+  // view resets in production), so a test that seeds a running workflow would
+  // otherwise leak it into every test after it.
+  useUiStore.setState({ loadedWorkflows: [], activeWorkflowId: null });
   useSettingsStore.getState().resetSettings();
   useTerminalStore.setState({
     sessions: {},
@@ -254,6 +258,68 @@ describe("WorkflowStatus — loaded state", () => {
     ).toBeNull();
   });
 
+  it("gives a running row the same run indicator and trailing rails as recent rows", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "running-multi" as never;
+    const runNav = {
+      primaryAddress: {
+        workflowKey,
+        kind: "run" as const,
+        runRef: "r8" as never,
+      },
+      primaryRunId: 8,
+      runCount: 3,
+      hasDraft: false,
+    };
+    useUiStore.setState({
+      activeWorkflowId: "workflow-running",
+      loadedWorkflows: [
+        {
+          id: "workflow-running",
+          workflowKey,
+          workflowName: "Running Multi",
+          filePath: "/path/running-multi.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 2,
+          runRef: "r8",
+        } as never,
+      ],
+    });
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Running Multi",
+        executionState: EXECUTION_STATES.RUNNING,
+        address: { workflowKey, kind: "run", runRef: "r8" as never },
+        runNav,
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    // The lineage is hidden from the recent list while running, so its run
+    // metadata has to come from the recent entry behind it.
+    const runningRow = document.querySelector(".running-workflow-item")!;
+    expect(runningRow).toBeInTheDocument();
+    expect(
+      within(runningRow as HTMLElement).getByRole("button", {
+        name: /browse runs of Running Multi/i,
+      })
+    ).toBeInTheDocument();
+    // Drilling in from a running row opens that lineage's run panel.
+    await user.click(
+      within(runningRow as HTMLElement).getByRole("button", {
+        name: /browse runs of Running Multi/i,
+      })
+    );
+    expect(
+      screen.getByRole("button", { name: "Back to workflow list" })
+    ).toBeInTheDocument();
+  });
+
   it("shows no pinned running region when nothing is running", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
@@ -314,8 +380,10 @@ describe("WorkflowStatus — loaded state", () => {
     });
     await user.click(dropdownTrigger);
     await user.click(
+      // Row buttons carry an explicit accessible name covering the whole row
+      // (name, state, steps, time), so match the identity prefix.
       within(screen.getByTitle("test-0")).getByRole("button", {
-        name: "My Workflow",
+        name: /^My Workflow\b/,
       })
     );
 
@@ -354,7 +422,7 @@ describe("WorkflowStatus — loaded state", () => {
     );
     await user.click(
       within(screen.getByTitle("test-1")).getByRole("button", {
-        name: "Another Workflow",
+        name: /^Another Workflow\b/,
       })
     );
 
@@ -584,7 +652,13 @@ describe("WorkflowStatus — loaded state", () => {
     setRecentWorkflows([
       {
         workflowName: "Completed Workflow",
-        filePath: "/workspace/my-workflow.ctrlyoke.yaml",
+        // The row's own run address is what the broadcast is matched against —
+        // there is no loaded instance left to correlate through.
+        address: {
+          workflowKey: "test-0" as never,
+          kind: "run",
+          runRef: "run-2026-01-01T00-00-00-000Z" as never,
+        },
         executionState: EXECUTION_STATES.COMPLETED,
       },
     ]);
@@ -647,8 +721,10 @@ describe("WorkflowStatus — loaded state", () => {
     await user.click(screen.getByRole("button", { name: "Filter workflows" }));
     await user.click(document.getElementById("workflow-state-filter")!);
     await user.click(
+      // Anchored: row buttons now carry their state in their accessible name,
+      // so an unanchored /completed/ also matches the "Completed Workflow" row.
       within(document.body).getByRole("button", {
-        name: new RegExp(EXECUTION_STATES.COMPLETED),
+        name: new RegExp(`^${EXECUTION_STATES.COMPLETED}$`),
       })
     );
 
@@ -894,6 +970,53 @@ describe("WorkflowStatus — run navigation panel", () => {
       screen.queryByRole("button", { name: "Back to workflow list" })
     ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
+  });
+
+  it("restores the workflow list when Back is pressed from the run panel", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "multi-wf" as never;
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        workflowName: "Multi-run Workflow",
+        filePath: "/path/multi.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+        address: { workflowKey, kind: "run", runRef: "run-2" as never },
+        runNav: {
+          primaryAddress: {
+            workflowKey,
+            kind: "run",
+            runRef: "run-2" as never,
+          },
+          primaryRunId: 2,
+          runCount: 2,
+          hasDraft: false,
+        },
+      },
+      {
+        workflowName: "Other Workflow",
+        filePath: "/path/other.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Back to workflow list" })
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Back to workflow list" })
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Other Workflow")).toBeInTheDocument();
   });
 
   it("hides the run identity badge for a single-run displayed lineage", () => {

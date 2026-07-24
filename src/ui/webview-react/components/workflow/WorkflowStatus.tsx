@@ -43,16 +43,16 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
-import {
-  getExecutionStateBadgeClass,
-  getExecutionStateBadgeIcon,
-  isWorkflowActive,
-  isWorkflowRunning,
-} from "../../utils/status";
+import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
+import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
-import { WORKFLOW_STATUS_BUTTON_SIZES } from "../../constants";
+import {
+  WORKFLOW_DROPDOWN_NARROW_WIDTH,
+  WORKFLOW_DROPDOWN_TARGET_WIDTH,
+  WORKFLOW_STATUS_BUTTON_SIZES,
+} from "../../constants";
 
 interface WorkflowStatusProps {
   className?: string;
@@ -60,7 +60,12 @@ interface WorkflowStatusProps {
 
 const ALL_WORKFLOW_STATES = Object.values(EXECUTION_STATES);
 const ALL_WORKFLOW_HARNESSES = Object.values(HARNESS_IDS);
-const WORKFLOW_ROW_SELECTOR = ".running-workflow-item, .workflow-menu-item";
+const WORKFLOW_ROW_SELECTOR =
+  ".running-workflow-item, .workflow-menu-item, .run-panel-row";
+// Both dropdown views scroll vertically and need the same usable-row-width
+// lock; only one of them is mounted at a time.
+const WORKFLOW_SCROLL_CONTAINER_SELECTOR =
+  ".workflow-menu-items, .run-panel-items";
 const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
 
 const WORKFLOW_STATE_OPTIONS = ALL_WORKFLOW_STATES.map((state) => ({
@@ -353,7 +358,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const wfStatusSize = isMobile
     ? WORKFLOW_STATUS_BUTTON_SIZES.touch
     : WORKFLOW_STATUS_BUTTON_SIZES.default;
+  // Two independent narrowness measurements: the split button's own width
+  // drives the header segments, while the dropdown popup's width drives its
+  // rows. They differ by hundreds of pixels on mobile (a ~180px trigger opening
+  // a full-width popup), so sharing one measurement compacted rows that had
+  // room to spare.
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(300);
+  const [dropdownNarrowRef, isDropdownNarrow] =
+    useElementNarrow<HTMLDivElement>(WORKFLOW_DROPDOWN_NARROW_WIDTH);
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -371,6 +383,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [narrowRef]
   );
 
+  const mergedDropdownRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      dropdownRef.current = node;
+      dropdownNarrowRef(node);
+    },
+    [dropdownNarrowRef]
+  );
+
   const updateDropdownTop = useCallback(() => {
     const container = containerRef.current;
     if (!container) {
@@ -385,7 +405,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     // header bottom would leave that controls row wedged between the status button and the dropdown
     // list. Opening from the control's bottom makes the list expand directly from where it's invoked.
     const rect = container.getBoundingClientRect();
-    const desktopDropdownWidth = Math.min(500, window.innerWidth);
+    const desktopDropdownWidth = Math.min(
+      WORKFLOW_DROPDOWN_TARGET_WIDTH,
+      window.innerWidth
+    );
     const alignedDropdownWidth = isMobile
       ? rect.width
       : Math.max(rect.width, desktopDropdownWidth);
@@ -405,7 +428,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // stay visible and metadata columns cannot jump sideways.
   const syncWorkflowRowWidthLock = useCallback(() => {
     const dropdown = dropdownRef.current;
-    const scrollContainer = dropdown?.querySelector(".workflow-menu-items");
+    const scrollContainer = dropdown?.querySelector(
+      WORKFLOW_SCROLL_CONTAINER_SELECTOR
+    );
     if (!dropdown || !scrollContainer) {
       return;
     }
@@ -495,7 +520,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       scheduleWidthLock();
     });
     resizeObserver.observe(dropdown);
-    const scrollContainer = dropdown.querySelector(".workflow-menu-items");
+    const scrollContainer = dropdown.querySelector(
+      WORKFLOW_SCROLL_CONTAINER_SELECTOR
+    );
     if (scrollContainer) {
       resizeObserver.observe(scrollContainer);
     }
@@ -1179,6 +1206,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         kind: "running",
         key: `running:${workflow.workflowKey ?? workflow.id}`,
         workflow,
+        // The lineage's recent entry is excluded from the recent rows below
+        // while it is running, but it is still the only source of the run
+        // metadata the row's drill affordance needs.
+        lineage: sortedRecentWorkflows.find(
+          (recentWorkflow) =>
+            recentWorkflow.address.workflowKey === workflow.workflowKey
+        ),
       })
     ),
     ...filteredRecentWorkflows.map(
@@ -1418,18 +1452,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
               {/* Execution State */}
               {executionState && executionState !== EXECUTION_STATES.IDLE && (
-                <span
-                  className={`text-xs px-1.5 py-px rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(executionState)}`}
-                  title={isNarrow ? executionState : undefined}
-                >
-                  {isNarrow ? (
-                    <i
-                      className={`codicon ${getExecutionStateBadgeIcon(executionState)}`}
-                    />
-                  ) : (
-                    executionState
-                  )}
-                </span>
+                <ExecutionStateBadge
+                  state={executionState}
+                  isNarrow={isNarrow}
+                  className="flex-shrink-0"
+                />
               )}
             </div>
           </button>
@@ -1521,7 +1548,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
       {/* Dropdown Menu */}
       <div
-        ref={dropdownRef}
+        ref={mergedDropdownRef}
         onTransitionEnd={handleDropdownTransitionEnd}
         className={`workflow-dropdown-menu select-none [-webkit-touch-callout:none] fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-[opacity,clip-path,visibility] ${dropdownRevealed ? "duration-[250ms] ease-out opacity-100 visible" : "duration-[220ms] ease-in opacity-0 invisible pointer-events-none"}`}
         style={{
@@ -1545,7 +1572,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               rows={runPanelRows}
               isLoading={runPanelIsLoading}
               loadError={runPanelLoadError}
-              isNarrow={isNarrow}
+              isNarrow={isDropdownNarrow}
               displayedAddress={displayedViewAddress}
               isViewingHistory={isViewingHistory}
               executionRunRef={runPanelExecutionRunRef}
@@ -1575,7 +1602,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
               onDrillIntoRuns={handleDrillIntoRuns}
-              isNarrow={isNarrow}
+              isNarrow={isDropdownNarrow}
               onClose={closeDropdown}
               searchValue={workflowSearch}
               onSearchChange={setWorkflowSearch}

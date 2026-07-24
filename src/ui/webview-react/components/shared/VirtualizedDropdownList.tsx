@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -59,6 +59,23 @@ export function VirtualizedDropdownList<T>({
     getItemKey: (index) => getItemKey(items[index], index) ?? index,
   });
 
+  // The scroll container is owned by the *parent* (WorkflowList, RunPanel …),
+  // and React attaches a host element's ref only after its children's layout
+  // effects have run. So during this component's own mount the virtualizer
+  // resolves `getScrollElement()` to null, never observes the scroller, and
+  // renders zero rows — with nothing scheduled to re-resolve it. On the app's
+  // first mount unrelated store updates re-rendered the list and hid the
+  // problem; a list remounted with already-final props — returning from the
+  // run panel to the workflow list — got no such re-render and stayed
+  // permanently blank. This one-shot state flip re-renders after mount (before
+  // paint), when the parent's ref is attached, so the virtualizer resolves and
+  // observes the real scroll element. Flipping an already-true value bails out,
+  // so it costs exactly one extra render.
+  const [, markScrollElementResolvable] = useState(false);
+  useLayoutEffect(() => {
+    markScrollElementResolvable(true);
+  }, []);
+
   // Tracks the key already scrolled-to so a re-render with the same target
   // (e.g. items array identity changing but not content) doesn't keep
   // re-issuing scrollIntoView/scrollToIndex and fighting the user's own scroll.
@@ -114,8 +131,11 @@ export function VirtualizedDropdownList<T>({
       }}
     >
       {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        // Guards an index the virtualizer produced for a stale count; an
+        // explicit undefined check (not falsiness) so lists of primitives
+        // don't silently drop 0/""/false rows.
         const item = items[virtualRow.index];
-        if (!item) return null;
+        if (item === undefined) return null;
 
         return (
           <div

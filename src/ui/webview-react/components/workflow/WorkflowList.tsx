@@ -1,19 +1,25 @@
 import React, { useImperativeHandle, useRef } from "react";
-import {
-  getExecutionStateBadgeClass,
-  getExecutionStateBadgeIcon,
-} from "../../utils/status";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { HarnessIcon } from "../shared/HarnessIcon";
-import { VirtualizedDropdownList } from "../shared";
+import { ExecutionStateBadge, VirtualizedDropdownList } from "../shared";
+import {
+  WorkflowRowLayout,
+  RunIndicatorCell,
+  RowActionRail,
+  composeRowAccessibleName,
+} from "./WorkflowRowLayout";
+import { WORKFLOW_DROPDOWN_ROW_HEIGHT } from "../../constants";
 import { HARNESS_INFO } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 import type { RecentWorkflow } from "../../store/uiStore";
-import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowRunNavigationSummary,
+  WorkflowViewAddress,
+} from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
-import { isDrillableRunNav, runNavIndicatorLabel } from "@utils/runNavigation";
+import { isDrillableRunNav } from "@utils/runNavigation";
 
 /**
  * One row of the unified workflow dropdown list: either a lineage with an
@@ -22,8 +28,25 @@ import { isDrillableRunNav, runNavIndicatorLabel } from "@utils/runNavigation";
  * per lineage, never a duplicate between a "running" and a "recent" section.
  */
 export type UnifiedWorkflowRow =
-  | { kind: "running"; key: string; workflow: WorkflowSummary }
+  | {
+      kind: "running";
+      key: string;
+      workflow: WorkflowSummary;
+      /**
+       * The lineage's recent-workflow entry, which the running row is hidden
+       * behind while it executes. Carries the run-navigation summary and the
+       * address a drill-in targets — `WorkflowSummary` itself has neither.
+       */
+      lineage?: RecentWorkflow;
+    }
   | { kind: "recent"; key: string; workflow: RecentWorkflow };
+
+/** The run-navigation summary a row's drill affordance reads, whichever kind it is. */
+function rowRunNav(
+  row: UnifiedWorkflowRow
+): WorkflowRunNavigationSummary | undefined {
+  return row.kind === "recent" ? row.workflow.runNav : row.lineage?.runNav;
+}
 
 /** Imperative handle for saving/restoring the recent-list scroll position across a drill-in/back round trip. */
 export interface WorkflowListHandle {
@@ -85,7 +108,6 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   onDrillIntoRuns,
   showRunIndicatorTrack,
 }) => {
-  const isDrillable = isDrillableRunNav(workflow.runNav);
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
   const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
   const showStepCount =
@@ -103,144 +125,114 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
       }`}
     >
-      <button
-        type="button"
+      <WorkflowRowLayout
+        isStacked={isNarrow}
         onClick={() => onSelect(workflow.address)}
-        className={`workflow-row-primary workflow-row-primary-recent min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${isNarrow ? "workflow-row-primary-narrow" : ""}`}
-      >
-        {/* Harness icon */}
-        <span
-          className="col-start-1 flex w-[14px] items-center justify-center"
-          title={
-            workflow.harness
-              ? (HARNESS_INFO[workflow.harness]?.name ?? workflow.harness)
-              : undefined
-          }
-        >
-          {workflow.harness && (
+        ariaLabel={composeRowAccessibleName([
+          workflow.workflowName,
+          workflow.executionState,
+          showStepCount &&
+            `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
+          timeAgo,
+          showTerminalIcon && "terminal session is still running",
+        ])}
+        harness={
+          workflow.harness && (
             <HarnessIcon harnessId={workflow.harness} size={14} />
-          )}
-        </span>
-
-        {/* Workflow Name */}
-        <span className="workflow-menu-item-name col-start-2 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-          {workflow.workflowName}
-        </span>
-
-        {/* Step count */}
-        <span
-          className="col-start-3 text-xs text-description-fg font-mono"
-          title={
-            showStepCount
-              ? `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
-              : undefined
-          }
-        >
-          {showStepCount
-            ? isNarrow
-              ? `${workflow.totalSteps}`
-              : `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
-            : ""}
-        </span>
-
-        <span
-          className="col-start-4 w-4 flex items-center justify-center text-description-fg"
-          title={
-            showTerminalIcon ? "Terminal session is still running" : undefined
-          }
-          aria-label={
-            showTerminalIcon ? "Terminal session is still running" : undefined
-          }
-        >
-          {showTerminalIcon && <i className="codicon codicon-terminal" />}
-        </span>
-
-        {/* Execution State Badge — fixed-width column so badges align across rows */}
-        <span className="col-start-5 flex justify-center">
-          <span
-            className={`workflow-menu-item-state inline-flex items-center text-xs px-1.5 py-px rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
-            title={isNarrow ? workflow.executionState : undefined}
-          >
-            {isNarrow ? (
-              <i
-                className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`}
-              />
-            ) : (
-              workflow.executionState
-            )}
+          )
+        }
+        harnessTitle={
+          workflow.harness
+            ? (HARNESS_INFO[workflow.harness]?.name ?? workflow.harness)
+            : undefined
+        }
+        label={
+          <span className="workflow-menu-item-name">
+            {workflow.workflowName}
           </span>
-        </span>
-
-        {/* Time — fixed-width column so timestamps align across rows */}
-        <span className="workflow-menu-item-time col-start-6 text-xs text-description-fg w-[80px] text-right">
-          {timeAgo || ""}
-        </span>
-      </button>
+        }
+        count={
+          showStepCount
+            ? `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
+            : undefined
+        }
+        glyph={
+          showTerminalIcon && (
+            <i
+              className="codicon codicon-terminal"
+              title="Terminal session is still running"
+              aria-label="Terminal session is still running"
+            />
+          )
+        }
+        badge={
+          <ExecutionStateBadge
+            state={workflow.executionState}
+            className="workflow-menu-item-state"
+          />
+        }
+        time={
+          timeAgo ? (
+            <span className="workflow-menu-item-time">{timeAgo}</span>
+          ) : undefined
+        }
+      />
 
       {/* Run indicator — sibling of the primary button, not part of its grid.
           Drills into the run panel without selecting/loading the lineage. */}
       {showRunIndicatorTrack && (
-        <span className="flex w-[64px] flex-shrink-0 justify-end">
-          {isDrillable && workflow.runNav && onDrillIntoRuns ? (
-            <button
-              type="button"
-              title={`Browse runs of ${workflow.workflowName}`}
-              aria-label={`${runNavIndicatorLabel(workflow.runNav, isNarrow)} — browse runs of ${workflow.workflowName}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDrillIntoRuns(workflow);
-              }}
-              className="fp-dropdown-row flex items-center gap-0.5 rounded px-1 py-0.5 text-xs text-description-fg hover:bg-list-hover-bg hover:text-foreground"
-            >
-              <span className="truncate">
-                {runNavIndicatorLabel(workflow.runNav, isNarrow)}
-              </span>
-              <i className="codicon codicon-chevron-right text-xxs" />
-            </button>
-          ) : null}
-        </span>
+        <RunIndicatorCell
+          runNav={workflow.runNav}
+          workflowName={workflow.workflowName}
+          isNarrow={isNarrow}
+          onDrill={
+            onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
+          }
+        />
       )}
 
-      {onToggleFavorite && (
-        <button
-          type="button"
-          title={
-            workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
-          }
-          aria-label={
-            workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
-          }
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(workflow.address);
-          }}
-          className={`flex-shrink-0 p-0.5 rounded transition-colors ${
-            workflow.isFavorite
-              ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-              : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
-          }`}
-        >
-          <i
-            className={`codicon ${workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"}`}
-          />
-        </button>
-      )}
+      <RowActionRail>
+        {onToggleFavorite && (
+          <button
+            type="button"
+            title={
+              workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
+            }
+            aria-label={
+              workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(workflow.address);
+            }}
+            className={`flex-shrink-0 p-0.5 rounded transition-colors ${
+              workflow.isFavorite
+                ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+                : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+            }`}
+          >
+            <i
+              className={`codicon ${workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"}`}
+            />
+          </button>
+        )}
 
-      {/* Delete button — visible only on row hover */}
-      {onRemove && (
-        <button
-          type="button"
-          title="Remove from history"
-          aria-label="Remove from history"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(workflow.address);
-          }}
-          className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
-        >
-          <i className="codicon codicon-trash" />
-        </button>
-      )}
+        {/* Delete button — visible only on row hover */}
+        {onRemove && (
+          <button
+            type="button"
+            title="Remove from history"
+            aria-label="Remove from history"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(workflow.address);
+            }}
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+          >
+            <i className="codicon codicon-trash" />
+          </button>
+        )}
+      </RowActionRail>
     </div>
   );
 };
@@ -330,12 +322,15 @@ export const WorkflowList = React.forwardRef<
   );
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;
-  // List-scoped, not row-scoped: reserve the indicator track on every recent
-  // row only when at least one is drillable, so time/badge columns stay
-  // aligned. A list with no drillable rows renders pixel-identical to today.
-  const hasDrillableRecentRow = recentRows.some((row) =>
-    isDrillableRunNav(row.workflow.runNav)
-  );
+  // List-scoped, not row-scoped, and spanning *both* regions: reserve the
+  // indicator track on every row as soon as one row anywhere is drillable, so
+  // the state/time columns stay aligned between a pinned running row and the
+  // recent rows directly beneath it. A list with no drillable rows renders
+  // without the track at all.
+  const hasDrillableRow = rows.some((row) => isDrillableRunNav(rowRunNav(row)));
+  const estimatedRowHeight = isNarrow
+    ? WORKFLOW_DROPDOWN_ROW_HEIGHT.stacked
+    : WORKFLOW_DROPDOWN_ROW_HEIGHT.flat;
 
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
@@ -383,12 +378,20 @@ export const WorkflowList = React.forwardRef<
               items={runningRows}
               getItemKey={(row) => row.key}
               scrollContainerRef={runningScrollContainerRef}
+              estimatedRowHeight={estimatedRowHeight}
               renderItem={(row) => (
                 <RunningWorkflowItem
                   workflow={row.workflow}
                   isCurrent={row.workflow.id === activeWorkflowId}
                   hasActiveTerminal={runningHasActiveTerminal(row.workflow.id)}
                   isNarrow={isNarrow}
+                  runNav={row.lineage?.runNav}
+                  showRunIndicatorTrack={hasDrillableRow}
+                  onDrillIntoRuns={
+                    row.lineage && onDrillIntoRuns
+                      ? () => onDrillIntoRuns(row.lineage!)
+                      : undefined
+                  }
                   onClick={() => onSwitchRunning(row.workflow.id)}
                   onPause={() => onPauseRunning(row.workflow)}
                   onCancelPause={() => onCancelPauseRunning(row.workflow)}
@@ -410,12 +413,14 @@ export const WorkflowList = React.forwardRef<
         }`}
       >
         {hasRecentRows ? (
-          // Rows have no wrapping text (name/time truncate to one line), so
-          // the default estimated height in VirtualizedDropdownList is fine.
+          // Rows never wrap (every line truncates), so a flat per-layout
+          // estimate is enough — but it has to follow the layout, since
+          // stacked rows are half again as tall.
           <VirtualizedDropdownList
             items={recentRows}
             getItemKey={(row) => row.key}
             scrollContainerRef={recentScrollContainerRef}
+            estimatedRowHeight={estimatedRowHeight}
             renderItem={(row) => (
               <RecentWorkflowRow
                 workflow={row.workflow}
@@ -426,12 +431,11 @@ export const WorkflowList = React.forwardRef<
                 onToggleFavorite={onToggleFavorite}
                 onRemove={onRemove}
                 onDrillIntoRuns={onDrillIntoRuns}
-                showRunIndicatorTrack={hasDrillableRecentRow}
+                showRunIndicatorTrack={hasDrillableRow}
               />
             )}
           />
-        ) : hasRunningRows ? // prompt while workflows are actively running. // region needs neither a "no match" message nor a New Workflow // Running matches fill the pinned region above; an empty recent
-        null : isFiltering ? (
+        ) : hasRunningRows ? null : isFiltering ? ( // prompt while workflows are actively running. // region needs neither a "no match" message nor a New Workflow // Running matches fill the pinned region above; an empty recent
           <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
             No workflows match your search.
           </div>

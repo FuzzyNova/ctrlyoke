@@ -87,6 +87,80 @@ export const HEADER_BUTTON_SIZES = {
 } as const;
 
 /**
+ * Fixed track widths (px) for the flat workflow row layout.
+ *
+ * These are the source of truth: `WorkflowRowLayout` publishes them as CSS
+ * custom properties on the row, and `WORKFLOW_DROPDOWN_NARROW_WIDTH` is derived
+ * from them. globals.css only carries matching fallbacks. Sizing lives here
+ * because the breakpoint has to be computed from it — a track widened in CSS
+ * alone would quietly collapse the name column instead.
+ */
+export const WORKFLOW_ROW_TRACKS = {
+  /** Mirrors the fixed `14px` first track; here so the budget below is complete. */
+  harness: 14,
+  /** Mirrors the fixed `16px` terminal-icon / live-dot track. */
+  glyph: 16,
+  /** Fits the longest execution state label, "CANCELLING". */
+  state: 88,
+  /**
+   * Fits the longest verbose stamp, "59 minutes ago". Deliberately one width
+   * for every row kind — running rows show a short elapsed timer and would fit
+   * in half of it, but a narrower track there shifts their state badge out of
+   * line with the recent rows directly below.
+   */
+  time: 96,
+  /** `Run 12 ›` drill affordance, reserved list-wide once any row is drillable. */
+  runIndicator: 64,
+  /** Trailing action rail: two icon buttons and the gap between them. */
+  actions: 44,
+} as const;
+
+/**
+ * Width (px) the workflow dropdown opens to on desktop, before being clamped to
+ * the viewport and re-centred on its trigger. The popup is a fixed-position
+ * overlay, so it may exceed its trigger and overlap neighbouring panels — the
+ * limit is legibility of the row content, not the header's own width.
+ */
+export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
+
+/**
+ * Width (px) below which the workflow dropdown's rows stack onto two lines.
+ *
+ * Derived from what the flat layout costs, not picked for feel. Its fixed
+ * tracks and sibling actions — harness 14, terminal 16, badge 88, time 96,
+ * run indicator 64, favourite/remove 40, row padding and gaps ~60 — total
+ * ~378px before the flexible name column gets a single pixel, plus a
+ * `max-content` step count on top. So the name is left roughly:
+ *
+ *     440px → ~20px   500px → ~80px   560px → ~140px   640px → ~220px
+ *
+ * Below this threshold the name collapses toward zero and the `max-content`
+ * tracks start wrapping instead ("3 steps" onto two lines, "39 minutes ago"
+ * onto three) — which also silently doubles the row height the virtualizer
+ * estimated. Stacking instead gives the name ~250px at the same width.
+ *
+ * Measured on the dropdown popup itself, never on the WorkflowStatus split
+ * button that opens it — see the two `useElementNarrow` calls in
+ * `WorkflowStatus`.
+ */
+export const WORKFLOW_DROPDOWN_NARROW_WIDTH = 560;
+
+/**
+ * Virtualizer size estimates for the workflow dropdown's two row layouts.
+ *
+ * `flat` is one line of metadata; `stacked` adds the second (meta) line used
+ * below {@link WORKFLOW_DROPDOWN_NARROW_WIDTH}. The virtualizer corrects to the
+ * real measured height once a row is realized, but the estimate drives total
+ * scroll height and `scrollToIndex` before that — a 36px estimate against 54px
+ * rows makes the scrollbar lie and drops seeks well short of their target on a
+ * long list.
+ */
+export const WORKFLOW_DROPDOWN_ROW_HEIGHT = {
+  flat: 36,
+  stacked: 54,
+} as const;
+
+/**
  * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.
  * Does not affect the expanded dropdown list items.
  * Touch target height controlled by --fp-touch-target in globals.css.

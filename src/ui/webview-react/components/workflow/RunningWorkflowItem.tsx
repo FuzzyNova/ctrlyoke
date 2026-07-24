@@ -6,17 +6,30 @@ import {
   workflowDisplayStep,
 } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
-import {
-  getExecutionStateBadgeClass,
-  getExecutionStateBadgeIcon,
-} from "../../utils/status";
 import { HarnessIcon } from "../shared/HarnessIcon";
+import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
+import {
+  WorkflowRowLayout,
+  RunIndicatorCell,
+  RowActionRail,
+  composeRowAccessibleName,
+} from "./WorkflowRowLayout";
+import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
   isCurrent: boolean;
   hasActiveTerminal: boolean;
   isNarrow?: boolean;
+  /**
+   * Run-navigation summary for this lineage, resolved from the recent-workflow
+   * entry it is hidden behind while running. A running lineage's earlier runs
+   * are browsable like any other's.
+   */
+  runNav?: WorkflowRunNavigationSummary;
+  /** List-scoped: reserve the indicator track whenever any row in either region is drillable. */
+  showRunIndicatorTrack?: boolean;
+  onDrillIntoRuns?: () => void;
   onClick: () => void;
   onPause: () => void;
   onCancelPause: () => void;
@@ -52,6 +65,9 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   isCurrent,
   hasActiveTerminal,
   isNarrow = false,
+  runNav,
+  showRunIndicatorTrack = false,
+  onDrillIntoRuns,
   onClick,
   onPause,
   onCancelPause,
@@ -85,155 +101,139 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
 
   return (
     <div
-      className={`running-workflow-item flex items-center pl-3 pr-5 py-2 text-sm transition-colors gap-2 ${
+      // Padding matches the recent rows below exactly — the two regions are
+      // separate scroll containers, so any difference in row padding offsets
+      // every column between them.
+      className={`running-workflow-item group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
         isCurrent
           ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
       }`}
       title={workflow.filePath}
     >
-      <button
-        type="button"
+      <WorkflowRowLayout
+        isStacked={isNarrow}
         onClick={onClick}
-        className={`workflow-row-primary workflow-row-primary-running min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${isNarrow ? "workflow-row-primary-narrow" : ""}`}
-      >
-        {/* Harness icon */}
-        <span
-          className="col-start-1 flex w-[14px] items-center justify-center"
-          title={
-            workflow.harness
-              ? (HARNESS_INFO[workflow.harness]?.name ?? workflow.harness)
-              : undefined
-          }
-        >
-          {workflow.harness && (
+        // Deliberately excludes `elapsed` — it ticks every second, and an
+        // accessible name that changes on a timer re-announces the row.
+        ariaLabel={composeRowAccessibleName([
+          workflow.workflowName,
+          workflow.executionState,
+          workflow.totalSteps > 0 &&
+            `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
+          hasActiveTerminal && "terminal session is still running",
+        ])}
+        harness={
+          workflow.harness && (
             <HarnessIcon harnessId={workflow.harness} size={14} />
-          )}
-        </span>
+          )
+        }
+        harnessTitle={
+          workflow.harness
+            ? (HARNESS_INFO[workflow.harness]?.name ?? workflow.harness)
+            : undefined
+        }
+        label={<span className="text-sm">{workflow.workflowName}</span>}
+        count={
+          workflow.totalSteps > 0
+            ? `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
+            : undefined
+        }
+        glyph={
+          hasActiveTerminal && (
+            <i
+              className="codicon codicon-terminal"
+              title="Terminal session is still running"
+              aria-label="Terminal session is still running"
+            />
+          )
+        }
+        badge={<ExecutionStateBadge state={workflow.executionState} />}
+        time={<span className="font-mono">{elapsed}</span>}
+      />
 
-        {/* Workflow name */}
-        <span className="col-start-2 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
-          {workflow.workflowName}
-        </span>
-
-        {/* Step progress */}
-        <span
-          className="col-start-3 text-xs text-description-fg font-mono"
-          title={
-            workflow.totalSteps > 0
-              ? `Step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`
-              : undefined
-          }
-        >
-          {workflow.totalSteps > 0
-            ? isNarrow
-              ? `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}`
-              : `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
-            : ""}
-        </span>
-
-        <span
-          className="col-start-4 w-4 flex items-center justify-center text-description-fg"
-          title={
-            hasActiveTerminal ? "Terminal session is still running" : undefined
-          }
-          aria-label={
-            hasActiveTerminal ? "Terminal session is still running" : undefined
-          }
-        >
-          {hasActiveTerminal && <i className="codicon codicon-terminal" />}
-        </span>
-
-        {/* Status badge — fixed-width column matches recent workflow rows */}
-        <span className="col-start-5 flex justify-center">
-          <span
-            className={`inline-flex items-center text-xs px-1.5 py-px rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
-            title={isNarrow ? workflow.executionState : undefined}
-          >
-            {isNarrow ? (
-              <i
-                className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`}
-              />
-            ) : (
-              workflow.executionState
-            )}
-          </span>
-        </span>
-
-        {/* Elapsed time — fixed-width column for consistent m:ss alignment */}
-        <span className="col-start-6 text-xs text-description-fg font-mono w-[36px] text-right">
-          {elapsed}
-        </span>
-      </button>
+      {/* Run indicator — same track and position as the recent rows', so a
+          running lineage's earlier runs stay one click away and the columns
+          to its right line up across both regions. */}
+      {showRunIndicatorTrack && (
+        <RunIndicatorCell
+          runNav={runNav}
+          workflowName={workflow.workflowName}
+          isNarrow={isNarrow}
+          onDrill={onDrillIntoRuns}
+        />
+      )}
 
       {/* Action buttons — CLI pill for CLI-managed workflows, pause/stop for VS Code-managed */}
-      {workflow.managedBy === RUNNER_IDS.CLI ? (
-        <span className="px-1.5 py-0.5 rounded text-xxs font-semibold bg-btn-bg text-btn-fg border border-btn-border flex-shrink-0">
-          CLI
-        </span>
-      ) : (
-        (isRunning || isPausing || isPaused) && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {isRunning ? (
-              <button
-                type="button"
-                title="Pause"
-                aria-label="Pause"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPause();
-                }}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-              >
-                <i className="codicon codicon-debug-pause" />
-              </button>
-            ) : isPausing ? (
-              <button
-                type="button"
-                title="Cancel pause"
-                aria-label="Cancel pause"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancelPause();
-                }}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-              >
-                <i className="codicon codicon-debug-continue" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                title="Resume"
-                aria-label="Resume"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onResume();
-                }}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-              >
-                <i className="codicon codicon-play" />
-              </button>
-            )}
+      <RowActionRail>
+        {workflow.managedBy === RUNNER_IDS.CLI ? (
+          <span className="rounded border border-btn-border bg-btn-bg px-1.5 py-0.5 text-xxs font-semibold text-btn-fg">
+            CLI
+          </span>
+        ) : (
+          (isRunning || isPausing || isPaused) && (
+            <>
+              {isRunning ? (
+                <button
+                  type="button"
+                  title="Pause"
+                  aria-label="Pause"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPause();
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+                >
+                  <i className="codicon codicon-debug-pause" />
+                </button>
+              ) : isPausing ? (
+                <button
+                  type="button"
+                  title="Cancel pause"
+                  aria-label="Cancel pause"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelPause();
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+                >
+                  <i className="codicon codicon-debug-continue" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title="Resume"
+                  aria-label="Resume"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onResume();
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+                >
+                  <i className="codicon codicon-play" />
+                </button>
+              )}
 
-            <button
-              type="button"
-              title="Stop"
-              aria-label="Stop"
-              onClick={(e) => {
-                e.stopPropagation();
-                onStop();
-              }}
-              onKeyDown={(e) => e.stopPropagation()}
-              className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
-            >
-              <i className="codicon codicon-debug-stop" />
-            </button>
-          </div>
-        )
-      )}
+              <button
+                type="button"
+                title="Stop"
+                aria-label="Stop"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStop();
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+              >
+                <i className="codicon codicon-debug-stop" />
+              </button>
+            </>
+          )
+        )}
+      </RowActionRail>
     </div>
   );
 };

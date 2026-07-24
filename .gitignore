@@ -21,6 +21,7 @@ package.json.backup
 .ctrlyoke/.search-index/
 .ctrlyoke/capabilities.json
 .ctrlyoke/snapshots/
+.ctrlyoke/attachments/
 manual-test/hooks/output/
 
 # VitePress build artifacts

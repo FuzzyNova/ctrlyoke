@@ -3,6 +3,7 @@ import { ExitButton } from "@components/shared";
 import { VirtualizedDropdownList } from "../shared";
 import { RunSummaryRow, type RunPanelRow } from "./RunSummaryRow";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { WORKFLOW_DROPDOWN_ROW_HEIGHT } from "../../constants";
 import type {
   WorkflowKey,
   WorkflowViewAddress,
@@ -221,6 +222,11 @@ export const RunPanel: React.FC<RunPanelProps> = ({
             getItemKey={(row) => runPanelRowKey(workflowKey, row)}
             scrollContainerRef={scrollContainerRef}
             scrollToKey={scrollToKey}
+            estimatedRowHeight={
+              isNarrow
+                ? WORKFLOW_DROPDOWN_ROW_HEIGHT.stacked
+                : WORKFLOW_DROPDOWN_ROW_HEIGHT.flat
+            }
             renderItem={(row) => {
               const rowKey = runPanelRowKey(workflowKey, row);
               const isViewed = isRowViewed(row);

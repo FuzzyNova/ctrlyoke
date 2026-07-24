@@ -538,32 +538,59 @@ button .codicon {
      measures the usable row width once the dropdown opens so high-contrast
      outlines stay visible and metadata columns do not jump on touch/hover. */
   .workflow-dropdown-menu .workflow-menu-item,
-  .workflow-dropdown-menu .running-workflow-item {
+  .workflow-dropdown-menu .running-workflow-item,
+  .workflow-dropdown-menu .run-panel-row {
     width: var(--workflow-row-usable-width, 100%);
     max-width: var(--workflow-row-usable-width, 100%);
     box-sizing: border-box;
   }
 
+  /* Two row layouts for the workflow dropdown's rows (workflow list, running
+     region, and run panel — see WorkflowRowLayout.tsx).
+
+     `flat` is one line with fixed metadata tracks, so badges and times align
+     down the whole list. `stacked` (narrow dropdowns) gives the label its own
+     line and collapses the metadata onto a second, muted line, with the harness
+     icon spanning both. Cross-row column alignment is deliberately traded away
+     there: below WORKFLOW_DROPDOWN_NARROW_WIDTH the six fixed tracks cost more
+     than the popup has, so keeping them would starve the name column — and the
+     name is what the list is scanned by. */
   .workflow-row-primary {
     display: grid;
-    grid-template-columns:
-      14px minmax(0, 1fr) max-content 16px
-      var(--workflow-row-state-col, 76px)
-      var(--workflow-row-time-col);
     column-gap: 0.25rem;
     align-items: center;
   }
 
-  .workflow-row-primary-recent {
-    --workflow-row-time-col: 80px;
+  /* Track widths come from WORKFLOW_ROW_TRACKS, which WorkflowRowLayout
+     publishes as custom properties on each row — the values below are only
+     fallbacks. They are sized so no cell ever wraps: a wrapped cell silently
+     doubles the row height the virtualizer estimated. */
+  .workflow-row-primary-flat {
+    grid-template-columns:
+      14px minmax(0, 1fr) max-content 16px
+      var(--workflow-row-state-col, 88px)
+      var(--workflow-row-time-col, 96px);
   }
 
-  .workflow-row-primary-running {
-    --workflow-row-time-col: 36px;
+  .workflow-row-primary-stacked {
+    grid-template-columns: 14px minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "icon label badge"
+      "icon meta  meta";
+    row-gap: 1px;
   }
 
-  .workflow-row-primary-narrow {
-    --workflow-row-state-col: 28px;
+  .workflow-row-primary-stacked > .workflow-row-cell-icon {
+    grid-area: icon;
+  }
+  .workflow-row-primary-stacked > .workflow-row-cell-label {
+    grid-area: label;
+  }
+  .workflow-row-primary-stacked > .workflow-row-cell-badge {
+    grid-area: badge;
+  }
+  .workflow-row-primary-stacked > .workflow-row-cell-meta {
+    grid-area: meta;
   }
 
   /* ── File / SCM / commit list rows ──────────────────────────────────────────
