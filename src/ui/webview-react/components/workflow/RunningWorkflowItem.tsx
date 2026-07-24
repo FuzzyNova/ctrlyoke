@@ -43,12 +43,26 @@ interface RunningWorkflowItemProps {
  * Format elapsed time as m:ss (e.g. "5:43", "0:07")
  * No leading zero on minutes; leading zero on seconds.
  */
-function formatElapsed(startedAt: number | undefined): string {
-  if (!startedAt) return "0:00";
-  const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+function formatElapsed(elapsedMs: number): string {
+  const elapsed = Math.max(0, Math.floor(elapsedMs / 1000));
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function getElapsedMs(
+  executionTimeMs: number | undefined,
+  executionTimeUpdatedAt: number | undefined,
+  startedAt: number | undefined,
+  isActivelyTiming: boolean
+): number {
+  if (executionTimeMs !== undefined) {
+    if (isActivelyTiming && executionTimeUpdatedAt !== undefined) {
+      return executionTimeMs + Math.max(0, Date.now() - executionTimeUpdatedAt);
+    }
+    return executionTimeMs;
+  }
+  return startedAt ? Math.max(0, Date.now() - startedAt) : 0;
 }
 
 /**
@@ -79,27 +93,48 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   const isRunning = workflow.executionState === EXECUTION_STATES.RUNNING;
   const isPausing = workflow.executionState === EXECUTION_STATES.PAUSING;
   const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
+  const isActivelyTiming = isRunning || isPausing;
 
   const [elapsed, setElapsed] = useState(() =>
-    formatElapsed(workflow.startedAt)
+    formatElapsed(
+      getElapsedMs(
+        workflow.executionTimeMs,
+        workflow.executionTimeUpdatedAt,
+        workflow.startedAt,
+        isActivelyTiming
+      )
+    )
   );
 
   useEffect(() => {
-    // Always compute immediately when startedAt or state changes
-    setElapsed(formatElapsed(workflow.startedAt));
+    const updateElapsed = () =>
+      setElapsed(
+        formatElapsed(
+          getElapsedMs(
+            workflow.executionTimeMs,
+            workflow.executionTimeUpdatedAt,
+            workflow.startedAt,
+            isActivelyTiming
+          )
+        )
+      );
+    updateElapsed();
 
-    if (!isRunning && !isPausing) {
+    if (!isActivelyTiming) {
       // PAUSED — freeze the display, no interval needed
       return;
     }
 
     // RUNNING / PAUSING — tick every second
-    const interval = setInterval(() => {
-      setElapsed(formatElapsed(workflow.startedAt));
-    }, 1000);
+    const interval = setInterval(updateElapsed, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, isPausing, workflow.startedAt]);
+  }, [
+    isActivelyTiming,
+    workflow.executionTimeMs,
+    workflow.executionTimeUpdatedAt,
+    workflow.startedAt,
+  ]);
 
   return (
     <div
@@ -211,8 +246,8 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
               ) : (
                 <button
                   type="button"
-                  title="Resume"
-                  aria-label="Resume"
+                  title="Continue"
+                  aria-label="Continue"
                   onClick={(e) => {
                     e.stopPropagation();
                     onResume();
@@ -220,7 +255,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                   onKeyDown={(e) => e.stopPropagation()}
                   className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
-                  <i className="codicon codicon-play" />
+                  <i className="codicon codicon-debug-continue" />
                 </button>
               )}
 

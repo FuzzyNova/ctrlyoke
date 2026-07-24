@@ -200,6 +200,8 @@ export class WorkflowInstance {
     runIndex: number;
     attemptIndex: number;
   };
+  /** Events that arrive in the monitor-to-session-watcher handoff window. */
+  private pendingSessionActivityEvents: CliEvent[] = [];
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -643,6 +645,7 @@ export class WorkflowInstance {
 
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
+    const executionTimeUpdatedAt = Date.now();
     const workflowHarness =
       this.currentPromptFile?.promptFile?.harness ??
       this.promptQueue.getWorkflowFile().harness;
@@ -661,6 +664,8 @@ export class WorkflowInstance {
       currentStep: state.currentIndex,
       totalSteps: state.steps.length,
       startedAt: this.startedAt || undefined,
+      executionTimeMs: this.workflowRuntime.getActiveExecutionTime(),
+      executionTimeUpdatedAt,
       harness,
     };
   }
@@ -1553,19 +1558,19 @@ export class WorkflowInstance {
 
     await this.promptQueue.commitRuntimeTransition();
 
-    if (this.workflowExecutor.hasPendingResponse()) {
-      Log.debug(
-        "▶️ Resuming with pending response (Copilot finished while paused)"
-      );
-      this.workflowExecutor.resumePendingResponse();
-      return;
-    }
-
     if (this.workflowExecutor.isAwaitingResponse()) {
       Log.debug(
         "▶️ Resuming while Copilot is still responding - will continue when response completes"
       );
       return;
+    }
+
+    if (this.startPending) {
+      Log.debug("▶️ Waiting for the paused execution cycle to settle");
+      await this.executionSettledPromise;
+      if (this.workflowRuntime.status !== EXECUTION_STATES.RUNNING) {
+        return;
+      }
     }
 
     Log.info("▶️ Resuming workflow from paused position");
@@ -1663,7 +1668,7 @@ export class WorkflowInstance {
 
     await integration.cancel();
 
-    this.workflowExecutor.clearPendingState();
+    this.workflowExecutor.clearResponseWaitState();
     this.startPending = false;
   }
 
@@ -2380,6 +2385,26 @@ export class WorkflowInstance {
   /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
   private clearOutputBuffers(): void {
     this.outputCaptureBuffer.clear();
+    this.lastCompletedActivityTarget = undefined;
+    this.pendingSessionActivityEvents = [];
+  }
+
+  private recordCompletedActivityTarget(
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number
+  ): void {
+    this.lastCompletedActivityTarget = { target, runIndex, attemptIndex };
+    if (this.pendingSessionActivityEvents.length === 0) {
+      return;
+    }
+    const pendingEvents = this.pendingSessionActivityEvents.splice(0);
+    void this.handleSessionActivityResumed(pendingEvents);
+  }
+
+  private beginActivityTargetCapture(): void {
+    this.lastCompletedActivityTarget = undefined;
+    this.pendingSessionActivityEvents = [];
   }
 
   private getExecutionTargetRunKey(
@@ -2407,8 +2432,9 @@ export class WorkflowInstance {
     const activityTarget = this.lastCompletedActivityTarget;
     if (!activityTarget) {
       Log.debug(
-        `[inst:${this.id.slice(0, 8)}] Session activity resumed with no known step target — dropping`
+        `[inst:${this.id.slice(0, 8)}] Session activity resumed before completed step attribution — buffering`
       );
+      this.pendingSessionActivityEvents.push(...events);
       return;
     }
     const { target, runIndex, attemptIndex } = activityTarget;
@@ -2756,11 +2782,11 @@ export class WorkflowInstance {
       },
       captureCompletedOutput: (stepIndex, output) => {
         this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
-        this.lastCompletedActivityTarget = {
-          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          runIndex: output.runIndex ?? 0,
-          attemptIndex: output.attemptIndex ?? 0,
-        };
+        this.recordCompletedActivityTarget(
+          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+          output.runIndex ?? 0,
+          output.attemptIndex ?? 0
+        );
       },
       captureFinalStepOutputInit: (
         loopIndex,
@@ -2785,6 +2811,8 @@ export class WorkflowInstance {
           runIndex
         );
       },
+      beginSessionActivityTargetCapture: () =>
+        this.beginActivityTargetCapture(),
       captureFinalStepChunk: (loopIndex, chunk) => {
         this.outputCaptureBuffer.captureFinalStepChunk(loopIndex, chunk);
       },
@@ -2799,11 +2827,11 @@ export class WorkflowInstance {
           loopIndex,
           output
         );
-        this.lastCompletedActivityTarget = {
-          target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
-          runIndex: output.runIndex ?? 0,
-          attemptIndex: output.attemptIndex ?? 0,
-        };
+        this.recordCompletedActivityTarget(
+          { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+          output.runIndex ?? 0,
+          output.attemptIndex ?? 0
+        );
       },
       onFinalStepStatusMessage: (loopIndex, message, severity) => {
         this.outputCaptureBuffer.onFinalStepStatusMessage(

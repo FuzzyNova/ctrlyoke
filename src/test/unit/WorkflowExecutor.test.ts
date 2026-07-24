@@ -48,9 +48,8 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }
 
-async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
+async function requestQueuePause(queue: PromptQueue): Promise<void> {
   if (queue.getRuntimeStateMachine().pause()) {
-    queue.getRuntimeStateMachine().confirmPaused();
     await queue.commitRuntimeTransition({ persist: false });
   }
 }
@@ -269,7 +268,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(finalRuns, 1);
   });
 
-  test("preserves finalStep runtime phase on pause during finalStep", async () => {
+  test("fully finalizes a finalStep before honoring pause", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -280,7 +279,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           success: true,
           responseText: "ok",
           afterResponse: async () => {
-            await pauseQueueExecution(queue);
+            await requestQueuePause(queue);
           },
         };
       }
@@ -294,10 +293,61 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     await executor.execute(integration, makeContext(integration));
 
-    assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
     const runtime = queue.getFinalStepRuntime();
     assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtime?.loopCount, 0);
+    assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
+    assert.ok(runtime?.completedAt);
+  });
+
+  test("finalizes output, stats, and queue position before pausing", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    let completedOutput: { response?: string; elapsed?: number } | undefined;
+    const statusUpdates: Array<{ state: string; duration?: number }> = [];
+    const dashboardProvider = new Proxy(
+      {
+        updateStepStatus: (
+          _stepIndex: number,
+          status: { state: string; duration?: number }
+        ) => statusUpdates.push(status),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (() => undefined),
+      }
+    );
+
+    integration.onSend = async (prompt) => ({
+      success: true,
+      responseText: `done:${prompt.prompt}`,
+      afterResponse: async () => requestQueuePause(queue),
+    });
+    queue.loadPrompts({
+      steps: [{ prompt: "pause-after-me" }, { prompt: "not-yet" }],
+    });
+
+    await executor.execute(integration, {
+      ...makeContext(integration),
+      captureCompletedOutput: (_stepIndex, output) => {
+        completedOutput = output;
+      },
+      dashboardProvider: dashboardProvider as any,
+    });
+
+    const state = queue.getState();
+    assert.strictEqual(state.status, EXECUTION_STATES.PAUSED);
+    assert.strictEqual(state.currentIndex, 1);
+    assert.strictEqual(state.results[0]?.status, STEP_STATUS.COMPLETED);
+    assert.ok(state.steps[0]?._runtime?.completedAt);
+    assert.deepStrictEqual(integration.sentPrompts, ["pause-after-me"]);
+    assert.strictEqual(completedOutput?.response, "done:pause-after-me");
+    assert.strictEqual(typeof completedOutput?.elapsed, "number");
+    assert.ok(
+      statusUpdates.some((status) => status.state === STEP_STATUS.COMPLETED)
+    );
   });
 
   test("preserves finalStep runtime phase on stop/error during finalStep", async () => {

@@ -2,8 +2,10 @@ import * as fs from "fs/promises";
 import type {
   RunRef,
   WorkflowKey,
+  WorkflowRuntimeState,
   WorkflowStep,
   WorkingFile,
+  WorkingFileRuntime,
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
@@ -135,6 +137,9 @@ export interface IWorkingFileQueueAccess {
 
   /** Current execution status */
   getStatus(): ExecutionState;
+
+  /** Authoritative workflow execution status/timing snapshot. */
+  getRuntimeState?(): WorkflowRuntimeState;
 
   /** Current in-memory definition revision counter (see `WorkingFile.definitionRevision`) */
   getDefinitionRevision(): number;
@@ -447,6 +452,7 @@ export class WorkingFileManager {
       _runtime: {
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
+        ...this.getPersistedExecutionTiming(),
         ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
       },
     };
@@ -1554,6 +1560,7 @@ export class WorkingFileManager {
       workingFile._runtime = {
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
+        ...this.getPersistedExecutionTiming(),
         ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
         ...(this.queueAccess.getPendingRewind?.()
           ? { pendingRewind: this.queueAccess.getPendingRewind() }
@@ -1565,6 +1572,26 @@ export class WorkingFileManager {
         skipLock: true,
       });
     });
+  }
+
+  private getPersistedExecutionTiming(): Pick<
+    WorkingFileRuntime,
+    "startTime" | "pausedTime" | "totalPausedDuration" | "executionEndTime"
+  > {
+    const { startTime, pausedTime, totalPausedDuration, executionEndTime } =
+      this.queueAccess.getRuntimeState?.() ?? {
+        status: this.queueAccess.getStatus(),
+        stopped: false,
+        totalPausedDuration: 0,
+      };
+    return {
+      ...(startTime !== undefined ? { startTime } : {}),
+      ...(pausedTime !== undefined ? { pausedTime } : {}),
+      ...(startTime !== undefined || totalPausedDuration > 0
+        ? { totalPausedDuration }
+        : {}),
+      ...(executionEndTime !== undefined ? { executionEndTime } : {}),
+    };
   }
 
   /**

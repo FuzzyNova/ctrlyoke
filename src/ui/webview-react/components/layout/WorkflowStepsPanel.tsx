@@ -24,7 +24,10 @@ import {
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PromptChipRail } from "../prompts/PromptChipRail";
-import { ExecutingStepHighlight } from "../prompts/ExecutingStepHighlight";
+import {
+  ExecutingStepHighlight,
+  PauseBoundary,
+} from "../prompts/ExecutingStepHighlight";
 import {
   MESSAGE_TYPES,
   STEP_STATUS,
@@ -84,12 +87,14 @@ type SortableWrapperProps = Omit<
   disabled: boolean;
   /** Visual 1-based slot number rendered outside the draggable area */
   slotNumber: number;
+  showPauseBoundaryBefore?: boolean;
 };
 
 function SortableWorkflowStepWrapper({
   id,
   disabled,
   slotNumber,
+  showPauseBoundaryBefore = false,
   ...stepItemProps
 }: SortableWrapperProps) {
   const {
@@ -113,6 +118,7 @@ function SortableWorkflowStepWrapper({
       className="relative flex items-stretch"
       data-workflow-step-index={stepItemProps.index}
     >
+      {showPauseBoundaryBefore && <PauseBoundary />}
       <div className="w-[2px] flex-shrink-0 self-stretch" />
       <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
         {slotNumber}
@@ -180,6 +186,7 @@ const WorkflowStepsPanelInner: React.FC<{
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
   // Determine if workflow is running
   const isRunning = isWorkflowRunning(executionState);
+  const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
@@ -985,6 +992,9 @@ const WorkflowStepsPanelInner: React.FC<{
                       id={id}
                       disabled={!canReorder || isExecutionTargetLocked}
                       slotNumber={slotNumber}
+                      showPauseBoundaryBefore={
+                        isPaused && currentStep > 0 && visualIdx === 0
+                      }
                       text={getStepText(step)}
                       index={index}
                       name={step.name}
@@ -1033,6 +1043,14 @@ const WorkflowStepsPanelInner: React.FC<{
         )}
       </div>
 
+      {isPaused &&
+        currentStep === steps.length &&
+        finalStep &&
+        finalStep.enabled !== false && (
+          <div className="relative h-0 flex-shrink-0">
+            <PauseBoundary />
+          </div>
+        )}
       <FinalStepFooter
         finalStep={finalStep}
         status={finalStepStatus}

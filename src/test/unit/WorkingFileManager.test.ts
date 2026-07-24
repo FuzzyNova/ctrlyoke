@@ -20,6 +20,11 @@ function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
     getSteps: () => [],
     getCurrentIndex: () => 0,
     getStatus: () => EXECUTION_STATES.IDLE,
+    getRuntimeState: () => ({
+      status: EXECUTION_STATES.IDLE,
+      stopped: false,
+      totalPausedDuration: 0,
+    }),
     getWorkflowName: () => undefined,
     mergeDiskSteps: () => [],
     emitStateChange: () => {
@@ -280,6 +285,41 @@ suite("WorkingFileManager", () => {
       const content = await fs.readFile(workingFilePath, "utf-8");
       const parsed = JSON.parse(content) as WorkingFile;
       assert.strictEqual(parsed.definitionRevision, 3);
+    });
+
+    test("updateWorkingFileDirect persists pause-aware execution timing", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const { workingFilePath } = await new WorkingFileManager(
+        makeMockAccess()
+      ).createWorkingFile(
+        "timed-run",
+        [{ prompt: "step" }],
+        tmpWorkspace,
+        "timed-workflow"
+      );
+      const access = makeMockAccess(workingFilePath);
+      access.getStatus = () => EXECUTION_STATES.PAUSED;
+      access.getRuntimeState = () => ({
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        startTime: 1_000,
+        pausedTime: 1_600,
+        totalPausedDuration: 200,
+        executionEndTime: undefined,
+      });
+
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const parsed = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(parsed._runtime, {
+        currentIndex: 0,
+        executionState: EXECUTION_STATES.PAUSED,
+        startTime: 1_000,
+        pausedTime: 1_600,
+        totalPausedDuration: 200,
+      });
     });
 
     test("preserves an externally appended tail's disk revision during a runtime flush", async () => {

@@ -249,6 +249,51 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a yellow pause boundary before the next full-size step", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Completed step" }, { prompt: "Continue here" }],
+      executionState: EXECUTION_STATES.PAUSED,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    const boundary = screen.getByTestId("pause-boundary");
+    expect(boundary).toHaveClass(
+      "h-[2px]",
+      "bg-[var(--status-warning)]",
+      "top-0"
+    );
+    expect(boundary.closest("[data-workflow-step-index]")).toHaveAttribute(
+      "data-workflow-step-index",
+      "1"
+    );
+    expect(screen.getByLabelText(STEP_STATUS.COMPLETED)).toBeInTheDocument();
+  });
+
+  it("renders the same pause boundary before the next collapsed chip", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Completed step" }, { prompt: "Continue here" }],
+      executionState: EXECUTION_STATES.PAUSED,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+    useUiStore.setState({ stepsCollapsed: true });
+
+    render(<WorkflowStepsPanel />);
+
+    const boundary = screen.getByTestId("pause-boundary");
+    expect(
+      boundary.closest('[data-workflow-chip-index="1"]')
+    ).toBeInTheDocument();
+    expect(boundary).toHaveClass("inset-y-0", "left-0", "w-[2px]");
+  });
+
   it("renders the execution highlight without measured inline geometry", () => {
     render(<ExecutingStepHighlight />);
 

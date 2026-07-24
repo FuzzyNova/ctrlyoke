@@ -271,7 +271,7 @@ suite("WorkflowInstance finalStep replay", () => {
 });
 
 suite("WorkflowInstance session activity forwarding", () => {
-  test("forwards SessionActivityWatcher events as soon as the integration is created, not only after the run finalizes", () => {
+  test("buffers SessionActivityWatcher handoff events until the completed step target is known", () => {
     const platform = new MockPlatform();
     const streamingEventsCalls: Array<{
       stepIndex: number;
@@ -323,19 +323,16 @@ suite("WorkflowInstance session activity forwarding", () => {
       () => {},
       process.cwd()
     );
-
-    // Simulate a step that already completed mid-run (this is how
-    // WorkflowInstance normally records where resumed activity attributes to).
     (instance as any).lastCompletedActivityTarget = {
-      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 7 },
       runIndex: 0,
       attemptIndex: 0,
     };
+    (instance as any).beginActivityTargetCapture();
 
     // createIntegrationForMode() is what every step dispatch uses to obtain its
-    // integration — this must wire onSessionActivityResumed immediately so
-    // activity captured by SessionActivityWatcher between step completions (long
-    // before this run's startWorkflowExecution() finally block runs) isn't lost.
+    // integration. The session watcher can win the narrow race against output
+    // finalization, so its event must wait for completed-target attribution.
     const integration = (instance as any).createIntegrationForMode(
       HARNESS_IDS.COPILOT_CLI
     ) as HarnessIntegration;
@@ -345,6 +342,13 @@ suite("WorkflowInstance session activity forwarding", () => {
         { type: "userSteer", timestamp: Date.now(), data: { text: "hello" } },
       ],
     });
+
+    assert.strictEqual(streamingEventsCalls.length, 0);
+    (instance as any).recordCompletedActivityTarget(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      0,
+      0
+    );
 
     assert.strictEqual(streamingEventsCalls.length, 1);
     assert.strictEqual(streamingEventsCalls[0].stepIndex, 0);

@@ -276,6 +276,37 @@ suite("WorkflowStateMachine", () => {
     );
   });
 
+  test("restores a persisted paused timer without counting paused wall time", async () => {
+    const runtime = new WorkflowStateMachine();
+    const now = Date.now();
+    runtime.restore({
+      status: EXECUTION_STATES.PAUSED,
+      stopped: false,
+      startTime: now - 1_000,
+      pausedTime: now - 400,
+      totalPausedDuration: 100,
+    });
+
+    const frozenTime = runtime.getActiveExecutionTime();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(
+      Math.abs(runtime.getActiveExecutionTime() - frozenTime) < 10,
+      "paused execution time should remain frozen after restoration"
+    );
+
+    runtime.resume();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(runtime.getActiveExecutionTime() >= frozenTime + 15);
+
+    runtime.complete();
+    const completedTime = runtime.getActiveExecutionTime();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(
+      Math.abs(runtime.getActiveExecutionTime() - completedTime) < 10,
+      "completed execution time should remain frozen"
+    );
+  });
+
   test("confirms stop only after a stop request", () => {
     const runtime = new WorkflowStateMachine();
 

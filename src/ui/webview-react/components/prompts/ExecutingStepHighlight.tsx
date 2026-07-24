@@ -23,3 +23,24 @@ export function ExecutingStepHighlight({
     />
   );
 }
+
+/** Yellow continuation boundary shown between completed and pending work. */
+export function PauseBoundary({
+  testId = "pause-boundary",
+  orientation = "horizontal",
+}: {
+  testId?: string;
+  orientation?: "horizontal" | "vertical";
+}) {
+  return (
+    <div
+      data-testid={testId}
+      className={`pointer-events-none absolute z-raised bg-[var(--status-warning)] ${
+        orientation === "horizontal"
+          ? "inset-x-0 top-0 h-[2px]"
+          : "inset-y-0 left-0 w-[2px]"
+      }`}
+      aria-hidden="true"
+    />
+  );
+}

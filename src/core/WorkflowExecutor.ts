@@ -122,6 +122,12 @@ export interface WorkflowExecutionContext {
     rawTextOutput?: boolean,
     runIndex?: number
   ) => void;
+  /**
+   * Switch post-completion session activity attribution to the prompt about to
+   * be dispatched. Called immediately before sendPrompt synchronously parks the
+   * prior step's watcher.
+   */
+  beginSessionActivityTargetCapture?: () => void;
   captureFinalStepChunk?: (loopIndex: number, chunk: string) => void;
   captureFinalStepEvents?: (loopIndex: number, events: CliEvent[]) => void;
   captureFinalStepCompletedOutput?: (loopIndex: number, output: any) => void;
@@ -195,12 +201,11 @@ type PromptFailureDisposition =
  *      If the gate appends new prompts, the outer loop repeats
  *      (queue → finalStep → queue → …).
  *
- * Pause/resume is implemented by holding the response promise until
- * `resumePendingResponse()` is called by `WorkflowOrchestrator`.
+ * Pause requests are honored only at a fully finalized step boundary: response
+ * persistence, post-conditions, attempt completion, stats, and queue advancement
+ * all finish before execution transitions from PAUSING to PAUSED.
  */
 export class WorkflowExecutor {
-  private pendingResponseResolver: ((text: string) => void) | null = null;
-  private pendingResponseText: string | null = null;
   private isWaitingForResponse: boolean = false;
 
   constructor(
@@ -224,7 +229,7 @@ export class WorkflowExecutor {
     _defaultIntegration: HarnessIntegration,
     context: WorkflowExecutionContext
   ): Promise<void> {
-    this.clearPendingState();
+    this.clearResponseWaitState();
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -286,6 +291,14 @@ export class WorkflowExecutor {
       runFinalStepFirst = false;
 
       const statusAfterQueue = runtime.status;
+      // Resume can race the short unwind after a confirmed pause. If it does,
+      // keep using this execution loop instead of skipping the remaining queue.
+      if (
+        statusAfterQueue === EXECUTION_STATES.RUNNING &&
+        this.promptQueue.hasNext()
+      ) {
+        continue;
+      }
       if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
         break;
       }
@@ -331,7 +344,11 @@ export class WorkflowExecutor {
       }
 
       const statusAfterFinal = runtime.status;
-      if (statusAfterFinal !== EXECUTION_STATES.RUNNING) {
+      if (
+        statusAfterFinal === EXECUTION_STATES.STOPPED ||
+        statusAfterFinal === EXECUTION_STATES.CANCELLING ||
+        statusAfterFinal === EXECUTION_STATES.ERROR
+      ) {
         await this.persistInterruptedFinalStepRuntime(context);
         break;
       }
@@ -355,6 +372,14 @@ export class WorkflowExecutor {
           completedAt: Date.now(),
         });
 
+        if (
+          await this.confirmPauseAndStop(
+            "Workflow paused after final step appended queue work"
+          )
+        ) {
+          break;
+        }
+
         continue;
       }
 
@@ -365,6 +390,10 @@ export class WorkflowExecutor {
         startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt,
         completedAt: Date.now(),
       });
+
+      if (await this.confirmPauseAndStop("Workflow paused after final step")) {
+        break;
+      }
 
       break;
     }
@@ -562,7 +591,6 @@ export class WorkflowExecutor {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
             await this.promptQueue.markCurrentAsSent();
           }
-          this.isWaitingForResponse = true;
         }
       );
 
@@ -635,7 +663,11 @@ export class WorkflowExecutor {
 
       if (!shouldContinue) {
         Log.info("Workflow stopped due to end condition failure");
-        if (runtime.status === EXECUTION_STATES.RUNNING) {
+        if (
+          runtime.status === EXECUTION_STATES.RUNNING ||
+          runtime.status === EXECUTION_STATES.PAUSING ||
+          runtime.status === EXECUTION_STATES.PAUSED
+        ) {
           this.promptQueue.finalizeFailedInFlightPrompt();
           runtime.fail();
           await this.promptQueue.commitRuntimeTransition();
@@ -1695,17 +1727,8 @@ export class WorkflowExecutor {
   /**
    * Waits for the integration to fire `onResponseComplete`.
    *
-   * If the workflow is paused at the moment the response arrives, the resolver
-   * is parked in `pendingResponseResolver` and the promise stays open until
-   * `resumePendingResponse()` is called.
-   *
-   * Exception: if this is the exact last queue step (currentIndex ===
-   * steps.length - 1), the response is resolved immediately even when paused.
-   * The executor then calls `finalizeWorkflowExecution()` which transitions to
-   * COMPLETED instead of leaving the workflow stuck in PAUSED indefinitely.
-   * The finalStep is intentionally excluded from this exception — its response
-   * is parked normally so `resumePendingResponse()` can continue the same
-   * execute() call on resume without re-triggering the AI.
+   * A pause request never intercepts this response. The caller finishes the
+   * complete terminal pipeline and then honors PAUSING at the step boundary.
    *
    * There is intentionally no per-prompt timeout here. Complex prompts (large
    * refactors, full audits) can legitimately run for hours. The workflow-level
@@ -1720,41 +1743,12 @@ export class WorkflowExecutor {
       let responseHandled = false;
 
       const disposable = integration.onResponseComplete(
-        async (responseText: string) => {
+        (responseText: string) => {
           if (responseHandled) {
             return;
           }
           responseHandled = true;
           disposable.dispose();
-
-          if (
-            this.getRuntime().status === EXECUTION_STATES.PAUSED ||
-            this.getRuntime().status === EXECUTION_STATES.PAUSING
-          ) {
-            // Confirm the pause transition synchronously if still in PAUSING state.
-            // The state machine update is sync; persist the runtime transition
-            // in the background since we're inside a Promise constructor.
-            if (this.getRuntime().status === EXECUTION_STATES.PAUSING) {
-              this.getRuntime().confirmPaused();
-              void this.promptQueue.commitRuntimeTransition();
-            }
-            // Park the response only when there is a next step to pause before.
-            // For the last queue step specifically (currentIndex === steps.length - 1),
-            // resolve immediately so finalizeWorkflowExecution can complete the workflow
-            // rather than leaving it stuck in PAUSED forever.
-            // The finalStep (currentIndex === steps.length) is intentionally excluded:
-            // its response must be parked so resume can continue the same execute()
-            // call via resumePendingResponse() without re-triggering the AI.
-            const state = this.promptQueue.getState();
-            const isLastQueueStep =
-              state.currentIndex === state.steps.length - 1;
-            if (!isLastQueueStep) {
-              this.pendingResponseResolver = resolve;
-              this.pendingResponseText = responseText;
-              this.isWaitingForResponse = false;
-              return;
-            }
-          }
 
           this.isWaitingForResponse = false;
           resolve(responseText);
@@ -1942,8 +1936,11 @@ export class WorkflowExecutor {
       promptReadyDisposable?.dispose();
     };
 
+    this.isWaitingForResponse = true;
+    context.beginSessionActivityTargetCapture?.();
     const success = await integration.sendPrompt(promptStep, true, sendOptions);
     if (!success) {
+      this.isWaitingForResponse = false;
       disposeListeners();
       return null;
     }
@@ -2053,33 +2050,12 @@ export class WorkflowExecutor {
     };
   }
 
-  clearPendingState(): void {
-    this.pendingResponseResolver = null;
-    this.pendingResponseText = null;
+  clearResponseWaitState(): void {
     this.isWaitingForResponse = false;
-  }
-
-  hasPendingResponse(): boolean {
-    return (
-      this.pendingResponseResolver !== null && this.pendingResponseText !== null
-    );
   }
 
   isAwaitingResponse(): boolean {
     return this.isWaitingForResponse;
-  }
-
-  /** Called by `WorkflowOrchestrator.resume()` when there is a held response. */
-  resumePendingResponse(): void {
-    if (this.pendingResponseResolver && this.pendingResponseText !== null) {
-      const resolver = this.pendingResponseResolver;
-      const responseText = this.pendingResponseText;
-
-      this.pendingResponseResolver = null;
-      this.pendingResponseText = null;
-
-      resolver(responseText);
-    }
   }
 
   private logWorkflowStart(
@@ -2646,16 +2622,22 @@ export class WorkflowExecutor {
 
   private async finalizeWorkflowExecution(): Promise<void> {
     const finalState = this.getRuntime().status;
+    if (finalState === EXECUTION_STATES.RUNNING && this.promptQueue.hasNext()) {
+      return;
+    }
     const hasExecutableFinalStep = isStepEnabled(
       this.promptQueue.getWorkflowFile().finalStep
     );
-    // When paused and the queue is fully drained with no finalStep defined,
-    // auto-complete rather than leaving the workflow stuck in PAUSED indefinitely.
-    // Workflows WITH a finalStep stay paused so the user can resume and run/continue it.
+    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+    const finalStepCompleted =
+      finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
+      finalStepRuntime.status === STEP_STATUS.COMPLETED;
+    // A pause on the last executable step has no continuation boundary, so the
+    // run completes. An unexecuted finalStep still keeps a drained queue paused.
     const pausedWithQueueDrained =
       finalState === EXECUTION_STATES.PAUSED &&
       !this.promptQueue.hasNext() &&
-      !hasExecutableFinalStep;
+      (!hasExecutableFinalStep || finalStepCompleted);
     if (
       pausedWithQueueDrained ||
       (finalState !== EXECUTION_STATES.PAUSED &&

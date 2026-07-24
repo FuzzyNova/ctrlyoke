@@ -40,7 +40,10 @@ import {
   isWorkflowRunning,
 } from "../../utils/status";
 import { buildWorkflowStepEnabledState } from "@utils/stepClipboard";
-import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
+import {
+  ExecutingStepHighlight,
+  PauseBoundary,
+} from "./ExecutingStepHighlight";
 import {
   DndContext,
   closestCenter,
@@ -86,6 +89,7 @@ type ChipProps = {
   contextPct: number | undefined;
   canReorder: boolean;
   isExecuting: boolean;
+  showPauseBoundaryBefore: boolean;
   isScript: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
@@ -98,6 +102,7 @@ function ChipContent({
   contextPct,
   canReorder,
   isExecuting,
+  showPauseBoundaryBefore,
   isScript,
   onChipClick,
   onOpenContextMenu,
@@ -125,6 +130,7 @@ function ChipContent({
       {...longPressHandlers}
       title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
     >
+      {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {isExecuting && (
         <ExecutingStepHighlight
           borderClassName="border"
@@ -179,6 +185,7 @@ type FinalStepChipProps = {
   status: StepStatus;
   hasFinalStep: boolean;
   isDisabled: boolean;
+  showPauseBoundaryBefore: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
 };
@@ -187,6 +194,7 @@ function FinalStepChip({
   status,
   hasFinalStep,
   isDisabled,
+  showPauseBoundaryBefore,
   onChipClick,
   onOpenContextMenu,
 }: FinalStepChipProps) {
@@ -212,6 +220,7 @@ function FinalStepChip({
       {...longPressHandlers}
       title="Final Step — right-click for options"
     >
+      {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {/* Left status border bar */}
       <div
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
@@ -299,6 +308,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     RUNNER_IDS.CLI;
 
   const isRunning = isWorkflowRunning(executionState);
+  const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
@@ -479,6 +489,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   contextPct={contextPct}
                   canReorder={false}
                   isExecuting={false}
+                  showPauseBoundaryBefore={false}
                   isScript={isScriptStep(prompt)}
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
@@ -531,6 +542,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       contextPct={contextPct}
                       canReorder={canReorder && !isCurrentStep}
                       isExecuting={isRunning && isCurrentStep}
+                      showPauseBoundaryBefore={
+                        isPaused && currentStep > 0 && visualIdx === 0
+                      }
                       isScript={isScriptStep(prompt)}
                       onChipClick={() => handleStepClick(index)}
                       onOpenContextMenu={(x, y) =>
@@ -560,6 +574,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
         status={finalStepEffectiveStatus}
         hasFinalStep={hasFinalStep}
         isDisabled={finalStep?.enabled === false}
+        showPauseBoundaryBefore={
+          isPaused &&
+          currentStep === prompts.length &&
+          hasFinalStep &&
+          finalStep?.enabled !== false
+        }
         onChipClick={handleFinalStepClick}
         onOpenContextMenu={openFinalStepContextMenu}
       />

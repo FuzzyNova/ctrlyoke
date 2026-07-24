@@ -126,6 +126,7 @@ export class PromptQueue {
       getSteps: () => this.state.steps,
       getCurrentIndex: () => this.state.currentIndex,
       getStatus: () => this.stateMachine.status,
+      getRuntimeState: () => this.stateMachine.getSnapshot(),
       getWorkflowName: () => this.state.workflowName,
       mergeDiskSteps: (diskSteps: WorkflowStep[]) =>
         this.mergeDiskSteps(diskSteps),
@@ -459,7 +460,10 @@ export class PromptQueue {
       this.stateMachine.restore({
         status: executionState,
         stopped: executionState === EXECUTION_STATES.STOPPED,
-        totalPausedDuration: 0,
+        startTime: runtime?.startTime,
+        pausedTime: runtime?.pausedTime,
+        totalPausedDuration: runtime?.totalPausedDuration ?? 0,
+        executionEndTime: runtime?.executionEndTime,
       });
 
       // Rebuild results array with proper status based on completion state
@@ -608,6 +612,7 @@ export class PromptQueue {
   getState(): QueueState {
     return {
       ...this.state,
+      totalExecutionTime: this.stateMachine.getActiveExecutionTime(),
       ...this.stateMachine.getSnapshot(),
     };
   }

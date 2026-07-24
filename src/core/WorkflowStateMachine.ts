@@ -27,6 +27,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
  *   - startTime:            when the execution timer was started
  *   - pausedTime:           when the current pause began (cleared on resume)
  *   - totalPausedDuration:  accumulated pause time across the run (milliseconds)
+ *   - executionEndTime:     terminal timestamp that freezes active execution time
  *
  * PromptQueue delegates all status transitions here. Queue topology concerns
  * (currentIndex, prompts, results, completedIndices) remain in PromptQueue.
@@ -40,6 +41,7 @@ export class WorkflowStateMachine {
   private _startTime: number | undefined = undefined;
   private _pausedTime: number | undefined = undefined;
   private _totalPausedDuration: number = 0;
+  private _executionEndTime: number | undefined = undefined;
   private readonly onTransitionEmitter =
     new TypedEmitter<WorkflowRuntimeTransition>();
   private readonly onAttemptTransitionEmitter =
@@ -73,6 +75,10 @@ export class WorkflowStateMachine {
     return this._totalPausedDuration;
   }
 
+  get executionEndTime(): number | undefined {
+    return this._executionEndTime;
+  }
+
   getSnapshot(): WorkflowRuntimeState {
     return {
       status: this._status,
@@ -80,6 +86,7 @@ export class WorkflowStateMachine {
       startTime: this._startTime,
       pausedTime: this._pausedTime,
       totalPausedDuration: this._totalPausedDuration,
+      executionEndTime: this._executionEndTime,
     };
   }
 
@@ -371,6 +378,7 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.RUNNING;
     this._stopped = false;
+    this._executionEndTime = undefined;
     this.emitTransition("startExecution", previous);
     return true;
   }
@@ -442,6 +450,7 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this._stopped = false;
     this._status = EXECUTION_STATES.RUNNING;
+    this._executionEndTime = undefined;
     this.emitTransition("resume", previous);
     return true;
   }
@@ -475,7 +484,7 @@ export class WorkflowStateMachine {
     }
 
     const previous = this.getSnapshot();
-    this._pausedTime = undefined;
+    this.finishExecutionTimer();
     this._status = EXECUTION_STATES.STOPPED;
     this.emitTransition("confirmStopped", previous);
     return true;
@@ -490,7 +499,7 @@ export class WorkflowStateMachine {
     }
 
     const previous = this.getSnapshot();
-    this._pausedTime = undefined;
+    this.finishExecutionTimer();
     this._stopped = false;
     this._status = EXECUTION_STATES.COMPLETED;
     this.emitTransition("complete", previous);
@@ -506,7 +515,7 @@ export class WorkflowStateMachine {
     }
 
     const previous = this.getSnapshot();
-    this._pausedTime = undefined;
+    this.finishExecutionTimer();
     this._stopped = false;
     this._status = EXECUTION_STATES.ERROR;
     this.emitTransition("fail", previous);
@@ -524,13 +533,15 @@ export class WorkflowStateMachine {
       this._stopped ||
       this._startTime !== undefined ||
       this._pausedTime !== undefined ||
-      this._totalPausedDuration !== 0;
+      this._totalPausedDuration !== 0 ||
+      this._executionEndTime !== undefined;
 
     this._status = EXECUTION_STATES.IDLE;
     this._stopped = false;
     this._startTime = undefined;
     this._pausedTime = undefined;
     this._totalPausedDuration = 0;
+    this._executionEndTime = undefined;
     this.attempts.clear();
     this.activeAttemptKey = undefined;
     return changed;
@@ -568,6 +579,7 @@ export class WorkflowStateMachine {
 
     this._startTime = Date.now();
     this._totalPausedDuration = 0;
+    this._executionEndTime = undefined;
     return true;
   }
 
@@ -580,11 +592,12 @@ export class WorkflowStateMachine {
       return 0;
     }
 
+    const referenceTime = this._executionEndTime ?? Date.now();
     const activePauseDuration =
-      this._pausedTime !== undefined ? Date.now() - this._pausedTime : 0;
+      this._pausedTime !== undefined ? referenceTime - this._pausedTime : 0;
 
     return (
-      Date.now() -
+      referenceTime -
       this._startTime -
       this._totalPausedDuration -
       activePauseDuration
@@ -604,7 +617,17 @@ export class WorkflowStateMachine {
     this._startTime = snapshot.startTime;
     this._pausedTime = snapshot.pausedTime;
     this._totalPausedDuration = snapshot.totalPausedDuration;
+    this._executionEndTime = snapshot.executionEndTime;
     this.attempts.clear();
     this.activeAttemptKey = undefined;
+  }
+
+  private finishExecutionTimer(): void {
+    const now = Date.now();
+    if (this._pausedTime !== undefined) {
+      this._totalPausedDuration += now - this._pausedTime;
+      this._pausedTime = undefined;
+    }
+    this._executionEndTime = this._startTime !== undefined ? now : undefined;
   }
 }

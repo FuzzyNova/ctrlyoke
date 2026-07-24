@@ -319,6 +319,14 @@ export interface WorkflowLineageDescriptor {
 export interface WorkingFileRuntime {
   currentIndex: number;
   executionState: ExecutionState;
+  /** Wall-clock timestamp when active execution timing began. */
+  startTime?: number;
+  /** Wall-clock timestamp when the current pause began. */
+  pausedTime?: number;
+  /** Accumulated time spent paused before the current pause, in milliseconds. */
+  totalPausedDuration?: number;
+  /** Wall-clock timestamp when execution reached a terminal state. */
+  executionEndTime?: number;
   finalStep?: FinalStepRuntimeState;
   /**
    * Durable marker for an in-place, nonzero rewind. The full pre-rewind file is
@@ -340,6 +348,7 @@ export interface WorkflowRuntimeState {
   startTime?: number;
   pausedTime?: number;
   totalPausedDuration: number;
+  executionEndTime?: number;
 }
 
 export type WorkflowRuntimeCommand =
@@ -638,6 +647,10 @@ export interface WorkflowSummary {
   currentStep: number;
   totalSteps: number;
   startedAt?: number;
+  /** Active workflow execution time, excluding confirmed pauses. */
+  executionTimeMs?: number;
+  /** Timestamp when executionTimeMs was sampled for a live-running summary. */
+  executionTimeUpdatedAt?: number;
   completedAt?: number;
   /** Set to "cli" when the workflow is being executed by the ctrlyoke CLI. Undefined means vscode-managed. */
   managedBy?: RunnerId;
