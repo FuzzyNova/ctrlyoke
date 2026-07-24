@@ -106,21 +106,6 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
-  notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[],
-    workflowId?: string
-  ): void {
-    this.send({
-      type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
-      runCount,
-      runTimestamps,
-      runStates,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
   updateProgress(current: number, total: number, workflowId?: string): void {
     this.send({
       type: MESSAGE_TYPES.PROGRESS_UPDATE,

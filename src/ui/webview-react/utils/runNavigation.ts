@@ -1,7 +1,8 @@
 /**
  * Shared LOAD_RUN_VIEW sender for every surface that lets a user switch the
- * displayed draft/run: the recent-workflows list, the run-navigation panel,
- * and (eventually) the legacy output-header run selector. Centralizing it is
+ * displayed draft/run: the recent-workflows list and the run-navigation panel.
+ * It is the only such sender — the output header's legacy run selector, which
+ * used to duplicate it, is gone. Centralizing it is
  * what keeps the "selecting the executing run returns to live output instead
  * of replaying a snapshot" rule from drifting out of sync between callers —
  * see RUN_NAVIGATION_UX_PLAN.md's "Deletion and live-run behavior" section.

@@ -341,19 +341,6 @@ export class CtrlYokeHostedServer
       isInjectMode
     );
   }
-  notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[],
-    workflowId?: string
-  ): void {
-    this.sink.notifyRunHistoryUpdated(
-      runCount,
-      runTimestamps,
-      runStates,
-      workflowId
-    );
-  }
   updateProgress(current: number, total: number, workflowId?: string): void {
     this.sink.updateProgress(current, total, workflowId);
   }

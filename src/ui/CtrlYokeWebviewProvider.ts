@@ -547,19 +547,6 @@ export class CtrlYokeWebviewProvider
       isInjectMode
     );
   }
-  public notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[],
-    workflowId?: string
-  ): void {
-    this.sink.notifyRunHistoryUpdated(
-      runCount,
-      runTimestamps,
-      runStates,
-      workflowId
-    );
-  }
   public updateProgress(
     current: number,
     total: number,
@@ -1047,12 +1034,8 @@ export class CtrlYokeWebviewProvider
       );
 
       const history = await this.outputHistoryManager.loadHistory(historyPath);
-      const [runTimestamps, runStates] = await Promise.all([
-        this.outputHistoryManager.getRunTimestamps(workflowKey),
-        this.outputHistoryManager.getRunStates(workflowKey),
-      ]);
       Log.debug(
-        `[CtrlYokeWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`
+        `[CtrlYokeWebviewProvider] loadOutputHistoryForWorkflow: sending run ${currentRunIndex + 1} of ${runs.length}`
       );
 
       this.postMessage({
@@ -1060,8 +1043,6 @@ export class CtrlYokeWebviewProvider
         history,
         availableRuns: runs.length,
         currentRunIndex,
-        runTimestamps,
-        runStates,
         ...(workflowInstanceId !== undefined
           ? { workflowId: workflowInstanceId }
           : {}),

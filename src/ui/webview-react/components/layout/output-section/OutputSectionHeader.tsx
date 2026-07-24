@@ -2,7 +2,6 @@ import React from "react";
 import {
   ExpandCollapseAllDiffsButton,
   IconToggleButton,
-  RunSelector,
 } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
@@ -14,8 +13,6 @@ export interface OutputSectionHeaderProps {
   activeOutputTab: OutputTab;
   activeTerminalSession: TerminalSession | null;
   anyDiffCollapsed: boolean;
-  availableRuns: number;
-  currentRunIndex: number;
   executionModeInteractive: boolean;
   hasOutput: boolean;
   isExecutionActive: boolean;
@@ -23,25 +20,18 @@ export interface OutputSectionHeaderProps {
   isHeaderVeryNarrow: boolean;
   isTerminalCompact: boolean;
   refCallback: (node: HTMLDivElement | null) => void;
-  runStates: (string | undefined)[];
-  runTimestamps: (number | undefined)[];
   showTerminalTab: boolean;
   terminalCanCloseActiveSession: boolean;
   terminalFontSize: number;
   terminalSessionActive: boolean;
   useCompactLabels: boolean;
-  viewingHistory: boolean;
   workflowRedoEntries: WorkflowStepEntry[];
   workflowUndoEntries: WorkflowStepEntry[];
-  onBackToLive: () => void;
-  onClearHistory: () => void;
-  onDeleteRun: (runIndex: number) => void;
   onCollapseAllDiffs: () => void;
   onExecutionModeToggle: (active: boolean) => void;
   onExpandAllDiffs: () => void;
   onExport: () => void;
   onNewTerminal: () => void;
-  onRunSelect: (runIndex: number) => void;
   onSelectOutputTab: () => void;
   onSelectTerminalTab: () => void;
   onTerminalFontSizeChange: (size: number) => void;
@@ -57,8 +47,6 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   activeOutputTab,
   activeTerminalSession,
   anyDiffCollapsed,
-  availableRuns,
-  currentRunIndex,
   executionModeInteractive,
   hasOutput,
   isExecutionActive,
@@ -66,25 +54,18 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   isHeaderVeryNarrow,
   isTerminalCompact,
   refCallback,
-  runStates,
-  runTimestamps,
   showTerminalTab,
   terminalCanCloseActiveSession,
   terminalFontSize,
   terminalSessionActive,
   useCompactLabels,
-  viewingHistory,
   workflowRedoEntries,
   workflowUndoEntries,
-  onBackToLive,
-  onClearHistory,
-  onDeleteRun,
   onCollapseAllDiffs,
   onExecutionModeToggle,
   onExpandAllDiffs,
   onExport,
   onNewTerminal,
-  onRunSelect,
   onSelectOutputTab,
   onSelectTerminalTab,
   onTerminalFontSizeChange,
@@ -287,22 +268,6 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                   </span>
                 )}
               </button>
-            )}
-            {availableRuns > 0 && (
-              <RunSelector
-                availableRuns={availableRuns}
-                currentRunIndex={currentRunIndex}
-                isViewingHistory={viewingHistory}
-                isLiveRunActive={isExecutionActive}
-                narrow={useCompactLabels}
-                veryNarrow={isHeaderVeryNarrow}
-                runTimestamps={runTimestamps}
-                runStates={runStates}
-                onSelectRun={onRunSelect}
-                onBackToLive={onBackToLive}
-                onClearHistory={onClearHistory}
-                onDeleteRun={onDeleteRun}
-              />
             )}
             {hasOutput && (
               <ExpandCollapseAllDiffsButton

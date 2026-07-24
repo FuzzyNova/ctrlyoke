@@ -126,19 +126,6 @@ export class WorkflowTaggedSink implements IDashboardSink {
     }
   }
 
-  notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[]
-  ): void {
-    this.inner.notifyRunHistoryUpdated(
-      runCount,
-      runTimestamps,
-      runStates,
-      this.workflowId
-    );
-  }
-
   updateProgress(current: number, total: number): void {
     this.inner.updateProgress(current, total, this.workflowId);
   }

@@ -232,11 +232,8 @@ interface UiState {
 
   // Run history display state
   isViewingHistory: boolean; // true when showing a historical run (not live)
-  viewingRunIndex: number; // 0 = most recent, 1 = second most recent, etc.
-  availableRuns: number; // Total runs saved for this workflow
-  runTimestamps: (number | undefined)[]; // startedAt timestamps, index 0 = most recent
-  runStates: (string | undefined)[]; // executionState for each run, index 0 = most recent
-  /** Stable identities backing the run selector; indices are display-only. */
+  /** The displayed lineage's runs, newest first. Stable identities only — run
+   * navigation addresses runs by `runRef`, never by position in this array. */
   runSummaries: RunSummary[];
   displayedViewAddress: WorkflowViewAddress | null;
   /** Latest client-initiated run-view request; not persisted across reloads. */
@@ -504,14 +501,7 @@ interface UiActions {
   setTerminalRailSizePx: (px: number) => void;
 
   // Run history view
-  setHistoryView: (
-    runIndex: number,
-    availableRuns: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[]
-  ) => void;
-  setRunTimestamps: (timestamps: (number | undefined)[]) => void;
-  setRunStates: (states: (string | undefined)[]) => void;
+  setHistoryView: () => void;
   clearHistoryView: () => void;
   setDisplayedRunView: (
     address: WorkflowViewAddress,
@@ -643,10 +633,6 @@ const initialState: UiState = {
   terminalRailCollapsed: true,
   terminalRailSizePx: 140,
   isViewingHistory: false,
-  viewingRunIndex: 0,
-  availableRuns: 0,
-  runTimestamps: [],
-  runStates: [],
   runSummaries: [],
   displayedViewAddress: null,
   pendingRunViewRequestId: null,
@@ -1063,21 +1049,9 @@ export const useUiStore = create<UiState & UiActions>()(
       // RUN HISTORY VIEW
       // ============================================================================
 
-      setHistoryView: (runIndex, availableRuns, runTimestamps, runStates) =>
-        set({
-          isViewingHistory: true,
-          viewingRunIndex: runIndex,
-          availableRuns,
-          ...(runTimestamps !== undefined ? { runTimestamps } : {}),
-          ...(runStates !== undefined ? { runStates } : {}),
-        }),
+      setHistoryView: () => set({ isViewingHistory: true }),
 
-      setRunTimestamps: (timestamps) => set({ runTimestamps: timestamps }),
-
-      setRunStates: (states) => set({ runStates: states }),
-
-      clearHistoryView: () =>
-        set({ isViewingHistory: false, viewingRunIndex: 0 }),
+      clearHistoryView: () => set({ isViewingHistory: false }),
 
       setDisplayedRunView: (
         address,
@@ -1097,17 +1071,7 @@ export const useUiStore = create<UiState & UiActions>()(
           ),
           pendingRewind: pendingRewind ?? null,
           runSummaries: summaries,
-          availableRuns: summaries.length,
-          runTimestamps: summaries.map((summary) => summary.startedAt),
-          runStates: summaries.map((summary) => summary.executionState),
           isViewingHistory: address.kind === "run",
-          viewingRunIndex:
-            address.kind === "run"
-              ? Math.max(
-                  0,
-                  summaries.findIndex((run) => run.runRef === address.runRef)
-                )
-              : 0,
         })),
 
       // Address + revisions only. Unlike setDisplayedRunView this never touches
@@ -1151,7 +1115,7 @@ export const useUiStore = create<UiState & UiActions>()(
       // `executionRunRef` whose summary still reads "running" and the header
       // stays stuck on the active Pause/Stop controls instead of offering
       // Re-run. Folding the terminal state into that run's own summary keeps the
-      // run selector honest until the next RUN_VIEW_LOADED replaces it.
+      // run panel honest until the next RUN_VIEW_LOADED replaces it.
       markExecutionRunFinished: (executionState) =>
         set((state) =>
           state.executionRunRef === null
@@ -1191,7 +1155,7 @@ export const useUiStore = create<UiState & UiActions>()(
           // A cross-lineage request is a workflow switch: until its snapshot
           // arrives the panels still render the previous workflow, so record
           // the target for instant header feedback and the switch overlay.
-          // Same-lineage loads (run selector) keep the panels they refine.
+          // Same-lineage loads (run panel) keep the panels they refine.
           pendingRunViewSwitch: sameLineage
             ? null
             : { requestId, workflowName: targetWorkflowName ?? null },

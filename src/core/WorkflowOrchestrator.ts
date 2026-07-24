@@ -628,7 +628,7 @@ export class WorkflowOrchestrator {
       // Update viewerRegistry immediately — before any awaits — so that retireWorkflow
       // called from a concurrent state-change event sees isViewed=true and keeps the
       // instance in retiredInstances rather than discarding it. Moving this after the
-      // awaits created a race: the workflow could complete during replayRunHistoryTo or
+      // awaits created a race: the workflow could complete during
       // replayOutputHistoryTo, causing retirement with stale (false) isViewed.
       this.setViewedWorkflowId(clientId, workflowId);
 
@@ -652,7 +652,6 @@ export class WorkflowOrchestrator {
       }
 
       instance.replayFullStateTo(sink);
-      await instance.replayRunHistoryTo(sink);
       await instance.replayOutputHistoryTo(send);
       // The addressed RUN_VIEW_LOADED above set the client's displayed view
       // address, but replayFullStateTo's SESSION_RESTORED then ran
@@ -1204,21 +1203,6 @@ export class WorkflowOrchestrator {
       // subsequent READY messages (App.tsx, CLIENT_ID_ASSIGNED) are suppressed by
       // the panelStartupReplayedWorkflowId guard. triggerAutoLoad skips the replay
       // when handleClientReady has already sent one for the same workflowId.
-    } else {
-      // Fallback path when the panel send function is not available (e.g. during tests
-      // or before the webview mounts). Re-send run history so any already-connected
-      // browser clients see the RunSelector on reconnect.
-      const panelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-      const viewed = panelId
-        ? (this.instances.get(panelId) ?? this.retiredInstances.get(panelId))
-        : null;
-      if (viewed) {
-        viewed
-          .sendRunHistoryToDashboard()
-          .catch((err) =>
-            Log.warn(`setDashboardReady: failed to send run history: ${err}`)
-          );
-      }
     }
 
     if (this.orchestratorInitialized) {
@@ -1325,7 +1309,7 @@ export class WorkflowOrchestrator {
               workingFilePath
             );
             // Replay full state to the panel (SESSION_RESTORED + ACTIVE_WORKFLOW_CHANGED
-            // + RUN_HISTORY_UPDATED + OUTPUT_HISTORY_LOADED). This is required because
+            // + OUTPUT_HISTORY_LOADED). This is required because
             // DashboardBroadcastHub.updateSessionRestored() is a no-op — SESSION_RESTORED
             // is only sent via direct PostMessageDashboardSink (inside replayWorkflowStateTo),
             // never via the hub. Without this call the panel receives no step state and all
@@ -3623,10 +3607,9 @@ export class WorkflowOrchestrator {
 
   /**
    * Deletes every non-executing run of a lineage — the run-navigation panel's
-   * "Delete all runs" footer action. Unlike `CLEAR_RUN_HISTORY`, this targets
-   * an explicit `workflowKey` rather than the requesting client's own active
-   * queue, so it works for a drilled-into lineage the client isn't executing
-   * or even currently viewing.
+   * "Delete all runs" footer action. Targets an explicit `workflowKey` rather
+   * than the requesting client's own active queue, so it works for a
+   * drilled-into lineage the client isn't executing or even currently viewing.
    */
   async deleteAllRunsForLineage(
     workflowKey: WorkflowKey,

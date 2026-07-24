@@ -45,10 +45,7 @@ import {
   shouldLogScrollFrame,
 } from "@utils/performanceProfiler";
 import { WebviewLog } from "@utils/logger";
-import {
-  captureViewportRowAnchor,
-  getResizeObserverEntryHeight,
-} from "@utils/outputDom";
+import { captureViewportRowAnchor } from "@utils/outputDom";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
   OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
@@ -115,10 +112,15 @@ const OutputSectionInner: React.FC = () => {
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const toggleOutputCollapse = useUiStore((s) => s.toggleOutputCollapse);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
-  const viewingRunIndex = useUiStore((s) => s.viewingRunIndex);
-  const availableRuns = useUiStore((s) => s.availableRuns);
-  const runTimestamps = useUiStore((s) => s.runTimestamps);
-  const runStates = useUiStore((s) => s.runStates);
+  // Stable identity of the run being displayed. Row measurements are cached by
+  // row key, and the same key can have a very different height in another run,
+  // so anything keyed on "which run am I looking at" must key on the address —
+  // never on a list position, which shifts when runs are deleted.
+  const displayedRunRef = useUiStore((s) =>
+    s.displayedViewAddress?.kind === "run"
+      ? s.displayedViewAddress.runRef
+      : null
+  );
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
@@ -277,48 +279,6 @@ const OutputSectionInner: React.FC = () => {
     null
   );
 
-  const lastRunSelectorObserverHeightRef = useRef<number | null>(null);
-  const lastRunSelectorMaxHeightRef = useRef<number | null>(null);
-
-  // Keep --run-selector-max-h in sync with the output section height so the
-  // RunSelector dropdown never overflows the panel boundary.
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
-    const { observer, disconnect } = createAnimationFrameResizeObserver(
-      (entries) => {
-        const nextHeight = getResizeObserverEntryHeight(entries[0]);
-        if (
-          nextHeight != null &&
-          lastRunSelectorObserverHeightRef.current != null
-        ) {
-          if (
-            Math.abs(lastRunSelectorObserverHeightRef.current - nextHeight) <
-            0.5
-          ) {
-            return;
-          }
-        }
-        if (nextHeight != null) {
-          lastRunSelectorObserverHeightRef.current = nextHeight;
-        }
-        const headerH = 30; // matches the h-[30px] header
-        const available = el.clientHeight - headerH - 8; // 8px breathing room
-        const nextMaxHeight = Math.max(80, available);
-        if (lastRunSelectorMaxHeightRef.current === nextMaxHeight) {
-          return;
-        }
-        lastRunSelectorMaxHeightRef.current = nextMaxHeight;
-        const nextValue = `${nextMaxHeight}px`;
-        if (el.style.getPropertyValue("--run-selector-max-h") !== nextValue) {
-          el.style.setProperty("--run-selector-max-h", nextValue);
-        }
-      }
-    );
-    observer.observe(el);
-    return disconnect;
-  }, []);
-
   // Build chronologically sorted list of all messages from the single ordered entries array.
   const isExecutionActive =
     executionState === EXECUTION_STATES.RUNNING ||
@@ -397,7 +357,7 @@ const OutputSectionInner: React.FC = () => {
   });
 
   const rowRenderIdentity = `${fileName ?? ""}:${
-    isViewingHistory ? viewingRunIndex : "live"
+    isViewingHistory ? (displayedRunRef ?? "history") : "live"
   }`;
   const scrollSeekRowsRef = useRef(rows);
   scrollSeekRowsRef.current = rows;
@@ -573,23 +533,23 @@ const OutputSectionInner: React.FC = () => {
   ]);
 
   // When switching between live output and a history run (including when the
-  // history run index changes), the same row keys can appear with very different
+  // viewed run changes), the same row keys can appear with very different
   // heights — e.g., a row measured as 500 px during a live run where diffs were
   // expanded will still be in the cache when the same run is opened in history
   // view with diffs collapsed (74 px estimate).  Flush the cache so rowLayout
   // re-estimates from scratch for the incoming content.
   const previousIsViewingHistory = useRef(isViewingHistory);
-  const previousViewingRunIndex = useRef(viewingRunIndex);
+  const previousDisplayedRunRef = useRef(displayedRunRef);
   useEffect(() => {
     const viewChanged =
       previousIsViewingHistory.current !== isViewingHistory ||
-      previousViewingRunIndex.current !== viewingRunIndex;
+      previousDisplayedRunRef.current !== displayedRunRef;
     previousIsViewingHistory.current = isViewingHistory;
-    previousViewingRunIndex.current = viewingRunIndex;
+    previousDisplayedRunRef.current = displayedRunRef;
     if (!viewChanged) return;
 
     clearMeasurements();
-  }, [clearMeasurements, isViewingHistory, viewingRunIndex]);
+  }, [clearMeasurements, isViewingHistory, displayedRunRef]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -1066,44 +1026,6 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [activeTerminalSession, setActiveOutputTab, terminalWorkflowId]);
 
-  const handleSelectRun = useCallback((runIndex: number) => {
-    const { displayedViewAddress, runSummaries, requestRunViewLoad } =
-      useUiStore.getState();
-    const selected = runSummaries[runIndex];
-    if (!displayedViewAddress || !selected) return;
-    const address = {
-      workflowKey: displayedViewAddress.workflowKey,
-      kind: "run" as const,
-      runRef: selected.runRef,
-    };
-    const requestId = requestRunViewLoad(address, runSummaries);
-    getVsCodeApi()?.postMessage({
-      type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-      address,
-      requestId,
-    });
-  }, []);
-
-  const handleClearHistory = useCallback(() => {
-    getVsCodeApi()?.postMessage({
-      type: MESSAGE_TYPES.CLEAR_RUN_HISTORY,
-    });
-  }, []);
-
-  const handleDeleteRun = useCallback((runIndex: number) => {
-    const { displayedViewAddress, runSummaries } = useUiStore.getState();
-    const selected = runSummaries[runIndex];
-    if (!displayedViewAddress || !selected) return;
-    getVsCodeApi()?.postMessage({
-      type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
-      address: {
-        workflowKey: displayedViewAddress.workflowKey,
-        kind: "run",
-        runRef: selected.runRef,
-      },
-    });
-  }, []);
-
   const handleFindQueryChange = useCallback(
     (query: string) => {
       runSearch(query);
@@ -1170,8 +1092,6 @@ const OutputSectionInner: React.FC = () => {
           activeOutputTab={activeOutputTab}
           activeTerminalSession={activeTerminalSession}
           anyDiffCollapsed={anyDiffCollapsed}
-          availableRuns={availableRuns}
-          currentRunIndex={viewingRunIndex}
           executionModeInteractive={
             executionMode === EXECUTION_MODES.INTERACTIVE
           }
@@ -1181,26 +1101,19 @@ const OutputSectionInner: React.FC = () => {
           isHeaderVeryNarrow={isHeaderVeryNarrow}
           isTerminalCompact={isTerminalCompact}
           refCallback={mergedHeaderRef}
-          runStates={runStates}
-          runTimestamps={runTimestamps}
           showTerminalTab={showTerminalTab}
           terminalCanCloseActiveSession={terminalCanCloseActiveSession}
           terminalFontSize={terminalFontSize}
           terminalSessionActive={terminalSessionActive}
           useCompactLabels={useCompactOutputHeaderLabels}
-          viewingHistory={isViewingHistory}
           workflowRedoEntries={workflowUndoRedoData.redoEntries}
           workflowUndoEntries={workflowUndoRedoData.undoEntries}
-          onBackToLive={handleBackToLive}
-          onClearHistory={handleClearHistory}
-          onDeleteRun={handleDeleteRun}
           onCollapseAllDiffs={collapseAllDiffs}
           onExecutionModeToggle={handleExecutionModeChange}
           onExpandAllDiffs={expandAllDiffs}
           onExport={outputExport.openModal}
           onNewTerminal={handleSpawnTerminal}
           onOutputFontSizeChange={setOutputFontSize}
-          onRunSelect={handleSelectRun}
           onSelectOutputTab={handleSelectOutputTab}
           onSelectTerminalTab={handleSelectTerminalTab}
           onTerminalFontSizeChange={updateTerminalFontSize}

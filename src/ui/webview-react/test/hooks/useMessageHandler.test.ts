@@ -144,7 +144,7 @@ describe("FILE_SELECTED", () => {
 
   it("clears history view when a new workflow is loaded", () => {
     // Prime history state
-    useUiStore.getState().setHistoryView(1, 3);
+    useUiStore.getState().setHistoryView();
 
     renderHook(() => useMessageHandler());
 
@@ -761,7 +761,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
 
     act(() => {
       useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
-      useUiStore.getState().setHistoryView(0, 1);
+      useUiStore.getState().setHistoryView();
       useWorkflowStore.getState().appendLiveEntry({
         ...persistedEntry,
         cliOutput: {
@@ -784,14 +784,10 @@ describe("OUTPUT_HISTORY_LOADED", () => {
         },
         availableRuns: 1,
         currentRunIndex: 0,
-        runTimestamps: [1000],
-        runStates: [EXECUTION_STATES.RUNNING],
       });
     });
 
     expect(useUiStore.getState().isViewingHistory).toBe(false);
-    expect(useUiStore.getState().availableRuns).toBe(1);
-    expect(useUiStore.getState().runTimestamps).toEqual([1000]);
     expect(useWorkflowStore.getState().historyOutputs).toBeNull();
     expect(useWorkflowStore.getState().liveOrderedEntries).toHaveLength(1);
     const [liveEntry] = useWorkflowStore.getState().liveOrderedEntries;
@@ -821,8 +817,6 @@ describe("OUTPUT_HISTORY_LOADED", () => {
         },
         availableRuns: 1,
         currentRunIndex: 0,
-        runTimestamps: [1000],
-        runStates: [EXECUTION_STATES.COMPLETED],
       });
     });
 

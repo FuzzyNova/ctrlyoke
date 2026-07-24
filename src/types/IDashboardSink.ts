@@ -64,13 +64,6 @@ export interface IDashboardSink {
     isInjectMode?: boolean
   ): void;
 
-  notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[],
-    workflowId?: string
-  ): void;
-
   updateProgress(current: number, total: number, workflowId?: string): void;
 
   updateExecutionState(state: string, workflowId?: string): void;

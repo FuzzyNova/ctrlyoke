@@ -42,7 +42,6 @@ import type {
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
-import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import { WebviewLog } from "@utils/logger";
 import {
   isExecutionFinished,
@@ -255,7 +254,6 @@ function applyWorkflowChange(options?: {
     });
   }
   useUiStore.getState().setFinalStepFooterExpanded(false);
-  useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
   const editorStore = useEditorStore.getState();
   editorStore.clearAllPendingEdits();
@@ -1643,35 +1641,6 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE] = () => {};
 
   // --------------------------------------------------------------------------
-  // RUN_HISTORY_UPDATED - Available run count changed (new run initialized)
-  // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.RUN_HISTORY_UPDATED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
-    WebviewLog.debug(
-      `[MessageHandler] RUN_HISTORY_UPDATED: runCount=${message.runCount}, runTimestamps=${JSON.stringify(message.runTimestamps)}`
-    );
-    const update: {
-      availableRuns: number;
-      runTimestamps?: (number | undefined)[];
-      runStates?: (string | undefined)[];
-    } = {
-      availableRuns: message.runCount,
-    };
-    if (message.runTimestamps !== undefined) {
-      update.runTimestamps = message.runTimestamps;
-    }
-    if (message.runStates !== undefined) {
-      update.runStates = message.runStates;
-    }
-    useUiStore.setState(update);
-  };
-
-  // --------------------------------------------------------------------------
   // OUTPUT_HISTORY_LOADED - Load a historical run for display
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {
@@ -1681,23 +1650,11 @@ function createMessageHandlers(): MessageHandlerMap {
         return;
       }
     }
-    const {
-      history,
-      availableRuns,
-      currentRunIndex,
-      runTimestamps,
-      runStates,
-    } = message;
+    const { history, availableRuns, currentRunIndex } = message;
     if (!history || availableRuns === 0) {
-      // History was cleared — reset to live view with no available runs
+      // History was cleared — reset to live view
       useWorkflowStore.getState().clearHistoryOutputs();
       useUiStore.getState().clearHistoryView();
-      // Also clear availableRuns since all history was deleted
-      useUiStore.setState({
-        availableRuns: 0,
-        runTimestamps: [],
-        runStates: [],
-      });
     } else {
       const workflowStore = useWorkflowStore.getState();
       const uiStore = useUiStore.getState();
@@ -1718,22 +1675,13 @@ function createMessageHandlers(): MessageHandlerMap {
         // buffered events that were replayed between those two messages.
         workflowStore.hydrateLiveRunHistory(history);
         uiStore.clearHistoryView();
-        uiStore.setRunTimestamps(runTimestamps ?? []);
-        uiStore.setRunStates(runStates ?? []);
-        useUiStore.setState({ availableRuns });
         return;
       }
 
       WebviewLog.debug(
-        `[MessageHandler] OUTPUT_HISTORY_LOADED: availableRuns=${availableRuns}, runTimestamps=${JSON.stringify(runTimestamps)}`
+        `[MessageHandler] OUTPUT_HISTORY_LOADED: availableRuns=${availableRuns}, currentRunIndex=${currentRunIndex}`
       );
-      workflowStore.loadHistoryRun(history, availableRuns, currentRunIndex);
-      if (runTimestamps !== undefined) {
-        uiStore.setRunTimestamps(runTimestamps);
-      }
-      if (runStates !== undefined) {
-        uiStore.setRunStates(runStates);
-      }
+      workflowStore.loadHistoryRun(history);
     }
   };
 
@@ -1973,17 +1921,7 @@ function createMessageHandlers(): MessageHandlerMap {
         useWorkflowStore.getState().hydrateLiveRunHistory(history);
         ui.clearHistoryView();
       } else {
-        useWorkflowStore.getState().loadHistoryRun(
-          history,
-          runSummaries.length,
-          Math.max(
-            0,
-            runSummaries.findIndex(
-              (run: RunSummary) =>
-                address.kind === "run" && run.runRef === address.runRef
-            )
-          )
-        );
+        useWorkflowStore.getState().loadHistoryRun(history);
       }
     }
     const pendingNavigation = ui.pendingHistorySearchNavigation;

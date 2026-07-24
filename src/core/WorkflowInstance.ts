@@ -494,29 +494,6 @@ export class WorkflowInstance {
     );
   }
 
-  /**
-   * Replay run history count to an explicit sink.
-   * Unlike sendRunHistoryToDashboard(), this sends to the provided sink directly.
-   */
-  async replayRunHistoryTo(sink: IDashboardSink): Promise<void> {
-    const workflowKey = this.promptQueue.getState().workflowKey;
-    if (!workflowKey) {
-      return;
-    }
-    try {
-      const [runs, runTimestamps, runStates] = await Promise.all([
-        this.outputHistoryManager.getRunsForWorkflow(workflowKey),
-        this.outputHistoryManager.getRunTimestamps(workflowKey),
-        this.outputHistoryManager.getRunStates(workflowKey),
-      ]);
-      if (runs.length > 0) {
-        sink.notifyRunHistoryUpdated(runs.length, runTimestamps, runStates);
-      }
-    } catch (err) {
-      Log.warn(`[inst:${this.id.slice(0, 8)}] replayRunHistoryTo failed:`, err);
-    }
-  }
-
   async replayOutputHistoryTo(send: (msg: unknown) => void): Promise<void> {
     const { workflowKey, runRef } = this.promptQueue.getState();
     if (!workflowKey || !runRef) {
@@ -528,55 +505,17 @@ export class WorkflowInstance {
       const currentRunIndex = runs.indexOf(runRef);
       if (currentRunIndex >= 0) {
         const historyPath = om.getHistoryFilePath(workflowKey, runRef);
-        const [history, runTimestamps, runStates] = await Promise.all([
-          om.loadHistory(historyPath),
-          om.getRunTimestamps(workflowKey),
-          om.getRunStates(workflowKey),
-        ]);
+        const history = await om.loadHistory(historyPath);
         send({
           type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
           history,
           availableRuns: runs.length,
           currentRunIndex,
-          runTimestamps,
-          runStates,
         });
       }
     } catch (err) {
       Log.warn(
         `[inst:${this.id.slice(0, 8)}] replayOutputHistoryTo failed:`,
-        err
-      );
-    }
-  }
-
-  /**
-   * Asynchronously read this workflow's run history from disk and send
-   * RUN_HISTORY_UPDATED to the dashboard so the RunSelector appears after
-   * switching back to a running/paused workflow.
-   * Must NOT put the UI into history-view mode — only updates the counter.
-   */
-  async sendRunHistoryToDashboard(): Promise<void> {
-    const workflowKey = this.promptQueue.getState().workflowKey;
-    if (!workflowKey) {
-      return;
-    }
-    try {
-      const [runs, runTimestamps, runStates] = await Promise.all([
-        this.outputHistoryManager.getRunsForWorkflow(workflowKey),
-        this.outputHistoryManager.getRunTimestamps(workflowKey),
-        this.outputHistoryManager.getRunStates(workflowKey),
-      ]);
-      if (runs.length > 0) {
-        this.dashboardSink?.notifyRunHistoryUpdated(
-          runs.length,
-          runTimestamps,
-          runStates
-        );
-      }
-    } catch (err) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] sendRunHistoryToDashboard failed:`,
         err
       );
     }
@@ -1351,17 +1290,6 @@ export class WorkflowInstance {
             workflowKey,
             promoted.runRef
           );
-          if (historyInit.runCount > 0) {
-            const [runTimestamps, runStates] = await Promise.all([
-              this.outputHistoryManager.getRunTimestamps(workflowKey),
-              this.outputHistoryManager.getRunStates(workflowKey),
-            ]);
-            this.dashboardSink?.notifyRunHistoryUpdated(
-              historyInit.runCount,
-              runTimestamps,
-              runStates
-            );
-          }
         }
       } else if (isAppendContinuation && workflowKey) {
         const runRef = currentQueueState.runRef;

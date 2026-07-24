@@ -1055,13 +1055,6 @@ export class WebviewMessageRouter {
       });
     });
 
-    table.set(MESSAGE_TYPES.CLEAR_RUN_HISTORY, async () => {
-      await this.serializer.handleClearRunHistory(
-        this.getCurrentPostMessage(),
-        this.clientId
-      );
-    });
-
     table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message) => {
       // Phase 2 requires stable refs. Index deletion is intentionally not
       // accepted here; old clients must refresh to the run-address contract.

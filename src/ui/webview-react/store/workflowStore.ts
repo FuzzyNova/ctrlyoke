@@ -254,11 +254,7 @@ interface WorkflowActions {
   setStepStatus: (stepIndex: number, status: StepStatus) => void;
 
   // History management
-  loadHistoryRun: (
-    history: WorkflowOutputHistory,
-    availableRuns: number,
-    runIndex: number
-  ) => void;
+  loadHistoryRun: (history: WorkflowOutputHistory) => void;
   /** Seed an executing run's live output view from its complete persisted timeline. */
   hydrateLiveRunHistory: (history: WorkflowOutputHistory) => void;
   clearHistoryOutputs: () => void;
@@ -908,11 +904,11 @@ export const useWorkflowStore = create<
       // HISTORY MANAGEMENT
       // ============================================================================
 
-      loadHistoryRun: (history, availableRuns, runIndex) =>
+      loadHistoryRun: (history) =>
         withUndoPause(() =>
           set((state) => {
             // Update uiStore for history view state
-            useUiStore.getState().setHistoryView(runIndex, availableRuns);
+            useUiStore.getState().setHistoryView();
 
             // Populate self-contained history snapshot.
             // Clear live-store undo records and snapshots so stale state from

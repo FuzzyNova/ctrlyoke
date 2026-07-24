@@ -1,6 +1,10 @@
 # Run Navigation and Run-Number Display
 
-Status: **Proposed**
+Status: **In progress** — delivery steps 1–6 are implemented (unified row model,
+row run metadata, `RunSummaryRow`/`RunPanel`, two-view dropdown, the
+`RunIdentityBadge` header segment, and removal of the legacy `RunSelector`).
+Steps 7–9 remain: terminal execution-run labeling, the full responsive/gapped-ID
+manual pass, and the 1,000/10,000-run measurement.
 
 ## Goal
 
@@ -23,18 +27,18 @@ hierarchy that works equally well on desktop and mobile:
 7. The Terminal tab continues to describe execution-owned terminals honestly;
    selecting a historical run does not imply that the terminal changed runs.
 
-## Current problem
+## Original problem (now resolved — `RunSelector` is deleted)
 
-`RunSelector` still reflects the old output-history mental model:
+`RunSelector` reflected the old output-history mental model:
 
-- it is rendered only inside `OutputSectionHeader` and disappears on the
+- it was rendered only inside `OutputSectionHeader` and disappeared on the
   Terminal tab;
-- its trigger calculates a display number as
-  `availableRuns - currentRunIndex`, which renumbers surviving runs after a
+- its trigger calculated a display number as
+  `availableRuns - currentRunIndex`, which renumbered surviving runs after a
   deletion instead of using `RunSummary.runId`;
-- it accepts parallel count/index/timestamp/state props even though `uiStore`
-  already holds the manifest-backed `RunSummary[]`; and
-- its popup renders all rows directly.
+- it accepted parallel count/index/timestamp/state props even though `uiStore`
+  already held the manifest-backed `RunSummary[]`; and
+- its popup rendered all rows directly.
 
 After the working-file-per-run work, selecting a run changes the definition,
 steps, properties, output, save target, and continuation target together. Run
@@ -436,7 +440,7 @@ deletion can change positions between requests.
 
 ## Terminal semantics
 
-Remove run navigation from `OutputSectionHeader` rather than making it visible
+Run navigation was removed from `OutputSectionHeader` rather than made visible
 on both tabs. The Terminal tab shows sessions owned by the executing workflow
 run and does not change merely because the client views a historical run.
 
@@ -506,7 +510,7 @@ old design.
 
 ### Workflow/run navigation components
 
-Replace the trigger-oriented legacy `RunSelector` with focused pieces:
+The trigger-oriented legacy `RunSelector` is replaced by focused pieces:
 
 - `RunIdentityBadge` — the header's third split-button segment; displays
   viewed identity and opens the run panel;
@@ -522,30 +526,43 @@ workflow rows and run rows genuinely share semantics.
 Do not preserve the legacy count/index component API under a new wrapper.
 Components accept `RunSummary[]` and stable addresses.
 
-### `OutputSectionHeader.tsx` and `OutputSection.tsx`
+### `OutputSectionHeader.tsx` and `OutputSection.tsx` (done)
 
-- Remove `RunSelector` and all run-selection props from
-  `OutputSectionHeaderProps`.
-- Remove OutputSection's run-selector popup-height observer/CSS variable if no
-  other popup consumes it.
-- Move the stable `LOAD_RUN_VIEW` sender into a shared navigation helper or
-  `WorkflowStatus`; do not duplicate it.
-- Keep output-specific undo/redo, diff, export, font, and execution-mode
-  controls unchanged.
+- `RunSelector` and every run-selection prop are gone from
+  `OutputSectionHeaderProps`; the component file itself is deleted.
+- OutputSection's `--run-selector-max-h` observer is gone (nothing else
+  consumed the variable).
+- `utils/runNavigation.ts` is the **only** `LOAD_RUN_VIEW` sender; OutputSection's
+  duplicate `handleSelectRun` is gone.
+- Output-specific undo/redo, diff, export, font, and execution-mode controls
+  are unchanged.
+- Removing the last consumer of the legacy count/index/timestamp/state store
+  fields made a whole extension→webview chain dead, and it was removed with
+  them: `RUN_HISTORY_UPDATED` end to end (message type,
+  `IDashboardSink.notifyRunHistoryUpdated` and all five implementations,
+  `WorkflowInstance.replayRunHistoryTo`/`sendRunHistoryToDashboard` and their
+  orchestrator call sites), the `runTimestamps`/`runStates` fields on
+  `OUTPUT_HISTORY_LOADED` and their senders, and
+  `OutputHistoryManager.getRunTimestamps`/`getRunStates`. `CLEAR_RUN_HISTORY`
+  went too — `DELETE_ALL_RUNS_FOR_LINEAGE` had already replaced it, and
+  OutputSection was its last sender. `OUTPUT_HISTORY_LOADED` itself stays: its
+  `availableRuns`/`currentRunIndex` still drive the handler's
+  cleared-history and live-current-run branches on the session-replay path.
 
 ### `uiStore.ts`
 
-`runSummaries` and `displayedViewAddress` remain the displayed lineage's
-sources of truth. After all callers migrate, remove legacy derived fields if
-unused:
+`runSummaries` and `displayedViewAddress` are the displayed lineage's sources
+of truth. The legacy derived fields — `availableRuns`, `viewingRunIndex`,
+`runTimestamps`, `runStates` — are removed, along with `setRunTimestamps`,
+`setRunStates`, and `setHistoryView`/`loadHistoryRun`'s index/count
+parameters. `isViewingHistory` alone survives as the live-vs-history flag.
 
-- `availableRuns`;
-- `viewingRunIndex`;
-- `runTimestamps`; and
-- `runStates`.
-
-If another consumer needs a position, derive it from `runRef` at presentation
-time. Never persist or send the position across the webview boundary.
+Never reintroduce a position: OutputSection's row-measurement cache key and
+its cache-flush effect now key on `displayedViewAddress.runRef` rather than an
+index, precisely because a deletion shifts indices under a viewport that
+hasn't changed. If another consumer needs a position, derive it from `runRef`
+at presentation time, and never persist or send it across the webview
+boundary.
 
 Dropdown view state, drilled lineage, keyboard-active row, and the workflow
 list's saved scroll offset are ephemeral per-open-session state. The summary
@@ -695,9 +712,10 @@ button — so no alternate mobile navigation model is necessary.
 5. Add the three-segment header with `RunIdentityBadge` as a run-panel
    trigger, including narrow `#1042` and the hidden state for single-target
    lineages (header collapses back to today's two segments).
-6. Remove the legacy selector from `OutputSectionHeader`/`OutputSection`,
+6. ✅ Remove the legacy selector from `OutputSectionHeader`/`OutputSection`,
    delete its count/index props and popup-height plumbing, and remove obsolete
-   store fields after a caller audit.
+   store fields — plus the extension-side plumbing that only fed them (see
+   the `OutputSectionHeader.tsx` section above).
 7. Add terminal execution-run labeling when viewed and executing addresses
    differ.
 8. Run compile, typecheck, lint, formatting, and the full webview/extension

@@ -1238,63 +1238,6 @@ export class WorkflowSerializer {
   // Run History
   // ============================================================================
 
-  /**
-   * Handle CLEAR_RUN_HISTORY: delete all history files for the current workflow.
-   */
-  async handleClearRunHistory(
-    postMessage?: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
-  ): Promise<void> {
-    const pm = postMessage ?? this.postMessage;
-    const outputHistoryManager = this.getOutputHistoryManager();
-    if (!outputHistoryManager) {
-      return;
-    }
-
-    const confirm = await vscode.window.showWarningMessage(
-      "Delete all output history for this workflow?",
-      { modal: true },
-      "Delete All"
-    );
-
-    if (confirm !== "Delete All") {
-      return;
-    }
-
-    try {
-      const workflowId = this.getManager()?.getQueueState(clientId).workflowKey;
-      if (!workflowId) {
-        return;
-      }
-
-      // Resolve the complete list once, then delete by immutable references.
-      // A display index is never a durable deletion target.
-      try {
-        const runRefs =
-          await outputHistoryManager.getRunsForWorkflow(workflowId);
-        for (const runRef of runRefs) {
-          await outputHistoryManager.deleteRunByRef(workflowId, runRef);
-        }
-      } catch (error) {
-        Log.warn("Failed to delete history directory:", error);
-      }
-
-      pm({
-        type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-        history: null,
-        availableRuns: 0,
-        currentRunIndex: 0,
-      });
-
-      vscode.window.showInformationMessage("Output history cleared.");
-    } catch (error) {
-      Log.error("Failed to clear run history:", error);
-      vscode.window.showErrorMessage(
-        `Failed to clear run history: ${getErrorMessage(error)}`
-      );
-    }
-  }
-
   /** Stable-address deletion with deterministic client fallback. */
   async handleDeleteRunByAddress(
     address: Extract<WorkflowViewAddress, { kind: "run" }>,

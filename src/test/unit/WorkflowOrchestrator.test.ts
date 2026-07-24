@@ -758,7 +758,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
           replayFullStateTo: () => operations.push("live-output"),
-          replayRunHistoryTo: async () => operations.push("run-history"),
           replayOutputHistoryTo: async () => operations.push("output-history"),
         },
       ],
@@ -790,7 +789,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.deepStrictEqual(operations, [
       "run-view",
       "live-output",
-      "run-history",
       "output-history",
     ]);
   });
@@ -989,7 +987,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
             operations.push("live-output");
             sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
           },
-          replayRunHistoryTo: async () => operations.push("run-history"),
           replayOutputHistoryTo: async () => operations.push("output-history"),
         },
       ],
@@ -1023,7 +1020,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.deepStrictEqual(operations, [
       "run-view",
       "live-output",
-      "run-history",
       "output-history",
       "view-identity",
     ]);

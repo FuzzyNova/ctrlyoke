@@ -714,52 +714,6 @@ export class OutputHistoryManager {
   }
 
   /**
-   * Get startedAt timestamps for all runs of a workflow, newest first.
-   * Matches the order of getRunsForWorkflow() (index 0 = most recent run).
-   * Returns undefined for any run whose file cannot be read or lacks startedAt.
-   */
-  async getRunTimestamps(
-    workflowKey: WorkflowKey
-  ): Promise<(number | undefined)[]> {
-    const runs = await this.getRunsForWorkflow(workflowKey);
-    const timestamps = await Promise.all(
-      runs.map(async (runRef) => {
-        try {
-          const filePath = this.getHistoryFilePath(workflowKey, runRef);
-          const metadata = await this.readRunMetadata(filePath);
-          return metadata.startedAt;
-        } catch {
-          return undefined;
-        }
-      })
-    );
-    return timestamps;
-  }
-
-  /**
-   * Get executionState for all runs of a workflow, newest first.
-   * Matches the order of getRunsForWorkflow() (index 0 = most recent run).
-   * Returns undefined for any run whose file cannot be read.
-   */
-  async getRunStates(
-    workflowKey: WorkflowKey
-  ): Promise<(string | undefined)[]> {
-    const runs = await this.getRunsForWorkflow(workflowKey);
-    const states = await Promise.all(
-      runs.map(async (runRef) => {
-        try {
-          const filePath = this.getHistoryFilePath(workflowKey, runRef);
-          const metadata = await this.readRunMetadata(filePath);
-          return metadata.executionState as string;
-        } catch {
-          return undefined;
-        }
-      })
-    );
-    return states;
-  }
-
-  /**
    * Cheap run-count plus the latest run's manifest `runId`, for workflow-list rows that
    * need to know whether a lineage is drillable without loading every run's summary.
    * `runCount` comes from `getRunsForWorkflow` (directory listing only, no manifest I/O),
@@ -1210,16 +1164,6 @@ export class OutputHistoryManager {
       payload: {
         statusMessage,
       },
-    };
-  }
-
-  private async readRunMetadata(
-    historyFilePath: string
-  ): Promise<Pick<WorkflowOutputHistory, "startedAt" | "executionState">> {
-    const manifest = await this.timelineRecorder.readManifest(historyFilePath);
-    return {
-      startedAt: manifest.startedAt,
-      executionState: manifest.executionState,
     };
   }
 

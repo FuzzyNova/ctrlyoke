@@ -1084,16 +1084,6 @@ export interface NotificationEventMessage {
   event: CompletionNotificationEventPayload;
 }
 
-/**
- * Run history updated message (extension -> webview)
- */
-export interface RunHistoryUpdatedMessage {
-  type: typeof MESSAGE_TYPES.RUN_HISTORY_UPDATED;
-  runCount: number;
-  runTimestamps?: (number | undefined)[];
-  runStates?: (string | undefined)[];
-}
-
 export interface SearchHistoryMessage extends Partial<HistorySearchQuery> {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY;
   query: string;
@@ -1113,8 +1103,6 @@ export interface OutputHistoryLoadedMessage {
   history: unknown;
   availableRuns: number;
   currentRunIndex: number;
-  runTimestamps?: (number | undefined)[];
-  runStates?: (string | undefined)[];
   workflowId?: string;
 }
 
@@ -1219,10 +1207,10 @@ export interface RunSummariesLoadedMessage {
 
 /**
  * Webview → Extension: delete every non-executing run of an explicit lineage —
- * the run-navigation panel's "Delete all runs" footer action. Unlike the legacy
- * `CLEAR_RUN_HISTORY`, this targets `workflowKey` directly rather than the
- * client's own active queue, and has no native confirm dialog (the client
- * gates confirmation itself, per `confirmDeleteOperations`).
+ * the run-navigation panel's "Delete all runs" footer action. Targets
+ * `workflowKey` directly rather than the client's own active queue, and has no
+ * native confirm dialog (the client gates confirmation itself, per
+ * `confirmDeleteOperations`).
  */
 export interface DeleteAllRunsForLineageMessage {
   type: typeof MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE;
@@ -1824,7 +1812,6 @@ export type IncomingMessage =
   | ActiveWorkflowChangedMessage
   | PromptEditorInsertMessage
   | GlobalSettingsUpdatedMessage
-  | RunHistoryUpdatedMessage
   | SearchHistoryResultsMessage
   | OutputHistoryLoadedMessage
   | StepUndoDataUpdatedMessage

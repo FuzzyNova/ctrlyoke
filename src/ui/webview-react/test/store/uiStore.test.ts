@@ -320,16 +320,9 @@ describe("showToast / hideToast", () => {
 // ---------------------------------------------------------------------------
 
 describe("setHistoryView", () => {
-  it("enters history mode with runIndex and availableRuns", () => {
-    store().setHistoryView(2, 5);
+  it("enters history mode", () => {
+    store().setHistoryView();
     expect(store().isViewingHistory).toBe(true);
-    expect(store().viewingRunIndex).toBe(2);
-    expect(store().availableRuns).toBe(5);
-  });
-
-  it("stores run timestamps when provided", () => {
-    store().setHistoryView(0, 3, [1000, 900, 800]);
-    expect(store().runTimestamps).toEqual([1000, 900, 800]);
   });
 });
 
@@ -528,11 +521,10 @@ describe("requestRunViewLoad", () => {
 });
 
 describe("clearHistoryView", () => {
-  it("exits history mode and resets to run 0", () => {
-    store().setHistoryView(2, 5);
+  it("exits history mode", () => {
+    store().setHistoryView();
     store().clearHistoryView();
     expect(store().isViewingHistory).toBe(false);
-    expect(store().viewingRunIndex).toBe(0);
   });
 });
 

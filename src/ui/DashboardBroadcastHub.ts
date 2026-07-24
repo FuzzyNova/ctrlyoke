@@ -142,22 +142,6 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[],
-    workflowId?: string
-  ): void {
-    for (const client of this.clients) {
-      client.notifyRunHistoryUpdated?.(
-        runCount,
-        runTimestamps,
-        runStates,
-        workflowId
-      );
-    }
-  }
-
   updateProgress(current: number, total: number, workflowId?: string): void {
     for (const client of this.clients) {
       client.updateProgress?.(current, total, workflowId);

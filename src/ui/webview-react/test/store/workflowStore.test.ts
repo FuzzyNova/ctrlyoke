@@ -651,7 +651,7 @@ describe("loadHistoryRun", () => {
       orderedEntries,
     };
 
-    store().loadHistoryRun(history, 4, 1);
+    store().loadHistoryRun(history);
 
     expect(store().historyOutputs?.orderedEntries).toEqual(orderedEntries);
     expect(store().historyOutputs?.promptOutputs).toEqual({});
@@ -863,11 +863,11 @@ describe("snapshot replay structural sharing", () => {
       ],
     });
 
-    store().loadHistoryRun(makeHistory(), 4, 1);
+    store().loadHistoryRun(makeHistory());
     const historyOutputs = store().historyOutputs;
     expect(historyOutputs).not.toBeNull();
 
-    store().loadHistoryRun(makeHistory(), 4, 1);
+    store().loadHistoryRun(makeHistory());
 
     expect(store().historyOutputs).toBe(historyOutputs);
   });
