@@ -1285,4 +1285,73 @@ describe("WorkflowStatus — run navigation panel", () => {
       workflowKey,
     });
   });
+
+  it("confirms deleting all runs through the shared delete modal", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "wf-badge" as never;
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmDeleteOperations: true,
+      },
+    }));
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: "run",
+        runRef: "run-1" as never,
+      },
+      runSummaries: [
+        {
+          workflowKey,
+          runRef: "run-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey,
+          runRef: "run-2" as never,
+          runId: 2,
+          startedAt: 200,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.setState({
+      fileName: "/workspace/badge.ctrlyoke.yaml",
+      workflowName: "Badge Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 1 — browse runs of Badge Workflow/i,
+      })
+    );
+    await user.click(screen.getByRole("button", { name: "Delete all runs" }));
+
+    const modal = screen.getByRole("dialog");
+    expect(
+      within(modal).getByText('Delete all runs for "Badge Workflow"?')
+    ).toBeInTheDocument();
+    expect(postMessageSpy).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE,
+      workflowKey,
+    });
+
+    await user.click(within(modal).getByRole("button", { name: "Delete" }));
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE,
+      workflowKey,
+    });
+  });
 });

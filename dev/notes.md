@@ -16,3 +16,7 @@ add hover text to model dropdowns to show full name, or make dropdown wider (mod
 ☑️ fix how editting completed prompts works, right now it forces a rewind but throws due to revision issue.
 
 ☑️ Bug with new workflow showing draft with 2 runs that don't belong to it.
+
+do a follow up for agy and see if we can get better context window stats
+
+render all references as chips in output history

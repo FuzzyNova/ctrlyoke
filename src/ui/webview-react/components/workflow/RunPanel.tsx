@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ExitButton } from "@components/shared";
+import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { VirtualizedDropdownList } from "../shared";
 import { RunSummaryRow, type RunPanelRow } from "./RunSummaryRow";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
@@ -87,7 +88,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   scrollToKey = null,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [pendingRowKey, setPendingRowKey] = useState<string | null>(null);
 
   const isDisplayedLineage = displayedAddress?.workflowKey === workflowKey;
@@ -128,7 +129,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   }, [displayedAddress]);
 
   useEffect(() => {
-    setConfirmingDeleteAll(false);
+    setShowDeleteAllModal(false);
   }, [workflowKey]);
 
   const handleSelect = (row: RunPanelRow) => {
@@ -147,6 +148,19 @@ export const RunPanel: React.FC<RunPanelProps> = ({
     const target = rows[targetIndex];
     if (!target) return;
     handleSelect(target);
+  };
+
+  const handleDeleteAllRuns = () => {
+    if (confirmDeleteOperations) {
+      setShowDeleteAllModal(true);
+      return;
+    }
+    onDeleteAllRuns();
+  };
+
+  const handleConfirmDeleteAllRuns = () => {
+    setShowDeleteAllModal(false);
+    onDeleteAllRuns();
   };
 
   const canGoNewer = viewedIndex > 0;
@@ -254,44 +268,24 @@ export const RunPanel: React.FC<RunPanelProps> = ({
 
       {hasRuns && (
         <div className="run-panel-footer flex-shrink-0 border-t border-dropdown-border bg-editor-bg p-1">
-          {confirmingDeleteAll ? (
-            <div className="flex items-center gap-1 px-2 py-1">
-              <span className="flex-1 text-xs text-description-fg">
-                Delete all runs of this workflow?
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmingDeleteAll(false);
-                  onDeleteAllRuns();
-                }}
-                className="rounded px-2 py-1 text-xs font-semibold text-terminal-ansiRed hover:bg-list-hover-bg"
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingDeleteAll(false)}
-                className="rounded px-2 py-1 text-xs text-description-fg hover:bg-list-hover-bg"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() =>
-                confirmDeleteOperations
-                  ? setConfirmingDeleteAll(true)
-                  : onDeleteAllRuns()
-              }
-              className="fp-dropdown-row w-full cursor-pointer rounded border-none bg-transparent px-3 py-1.5 text-center text-xs text-link-fg transition-colors hover:bg-list-hover-bg"
-            >
-              Delete all runs
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleDeleteAllRuns}
+            className="fp-dropdown-row w-full cursor-pointer rounded border-none bg-transparent px-3 py-1.5 text-center text-xs text-link-fg transition-colors hover:bg-list-hover-bg"
+          >
+            Delete all runs
+          </button>
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={showDeleteAllModal}
+        onCancel={() => setShowDeleteAllModal(false)}
+        onConfirm={handleConfirmDeleteAllRuns}
+        title="Delete All Runs"
+        message={`Delete all runs for "${workflowName}"?`}
+        detail="This will permanently delete all run history for this workflow. This action cannot be undone."
+      />
     </div>
   );
 };
