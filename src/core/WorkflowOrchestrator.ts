@@ -2208,6 +2208,40 @@ export class WorkflowOrchestrator {
     }
 
     if (mutation.address.kind === "run") {
+      // Editing the *currently executing* run is done in place against its live
+      // instance queue (which serializes edits with the executor and locks the
+      // completed/running region itself), so it must bypass the continuation
+      // validator — that validator rejects any edit while the lineage lock is
+      // held. This mirrors `prepareWorkflowPropertiesMutation`'s executing-run
+      // carve-out; only the pending tail is editable, enforced in `PromptQueue`.
+      const resident = this.findResidentInstanceForRun(
+        mutation.address.workflowKey,
+        mutation.address.runRef
+      );
+      const isExecutingRun =
+        resident !== undefined &&
+        this.findExecutionRunRef(mutation.address.workflowKey) ===
+          mutation.address.runRef;
+      if (isExecutingRun) {
+        const liveRevision = resident.getQueueState().definitionRevision;
+        if (liveRevision !== mutation.expectedDefinitionRevision) {
+          throw new Error(
+            `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${liveRevision}`
+          );
+        }
+        const descriptor = await this.lineageRepository.readDescriptor(
+          workspaceRoot,
+          mutation.address.workflowKey
+        );
+        if (descriptor.revision !== mutation.expectedDescriptorRevision) {
+          throw new Error(
+            `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
+          );
+        }
+        resident.expectDefinitionRevision(mutation.expectedDefinitionRevision);
+        return;
+      }
+
       const target = await RunContinuationService.validateContinuationTarget(
         workspaceRoot,
         mutation.address.workflowKey,

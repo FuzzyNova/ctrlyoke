@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
@@ -338,6 +339,59 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
         "Workflow continued after failure: Rate limited by harness"
       )
     ).toBeInTheDocument();
+  });
+
+  it("lets not-yet-run steps be dragged during a run while pinning the running and completed steps", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Done step" },
+        { prompt: "Running step" },
+        { prompt: "Pending A" },
+        { prompt: "Pending B" },
+      ],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    // Only the two pending steps after the running step expose a drag handle.
+    expect(screen.getAllByLabelText("Drag to reorder")).toHaveLength(2);
+
+    // The running step (current) and the completed step cannot be dragged.
+    const runningRow = screen
+      .getByText("Running step")
+      .closest("[data-workflow-step-index]") as HTMLElement;
+    expect(
+      within(runningRow).queryByLabelText("Drag to reorder")
+    ).not.toBeInTheDocument();
+    const doneRow = screen
+      .getByText("Done step")
+      .closest("[data-workflow-step-index]") as HTMLElement;
+    expect(
+      within(doneRow).queryByLabelText("Drag to reorder")
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps every pending step draggable when idle", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Step 1" },
+        { prompt: "Step 2" },
+        { prompt: "Step 3" },
+      ],
+      executionState: EXECUTION_STATES.IDLE,
+      currentStep: 0,
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(screen.getAllByLabelText("Drag to reorder")).toHaveLength(3);
   });
 
   it("shows a getting-started CTA when no steps are loaded and posts NEW_WORKFLOW on click", () => {

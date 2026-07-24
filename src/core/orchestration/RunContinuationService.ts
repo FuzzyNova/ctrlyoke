@@ -53,7 +53,15 @@ export class RunContinuationService {
       lock.runRef === runRef &&
       executionState === EXECUTION_STATES.RUNNING;
     if (lock && lockStatus !== LOCK_STATUS.STALE && !activeTargetAppend) {
-      throw new Error("Another run in this workflow lineage is executing");
+      // Editing an idle run is allowed even while a *different* run of the same
+      // lineage holds the lock — only starting work (append/continue) is gated by
+      // another run executing. A lock naming *this* run still blocks a static
+      // edit here: the live-executing-run edit path is handled in-place by the
+      // orchestrator before it ever reaches this validator, so reaching here with
+      // the lock on this run means a non-resident (e.g. CLI) owner.
+      if (action !== "edit" || lock.runRef === runRef) {
+        throw new Error("Another run in this workflow lineage is executing");
+      }
     }
     const pendingRewindOnThisRun =
       descriptor.pendingEdit?.kind === "rewind" &&

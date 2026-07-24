@@ -1288,6 +1288,9 @@ export class PromptQueue {
       throw new Error(`Invalid insert index: ${afterIndex}`);
     }
     this.assertPendingRewindSuffixIndex(afterIndex + 1, "insert");
+    // During execution an insert must land strictly after the running step so it
+    // cannot shift the running/completed region (insertIndex = afterIndex + 1).
+    this.assertEditableDuringExecution(afterIndex + 1, "insert");
 
     await this.workingFileManager.runInQueue(async () => {
       const insertIndex = afterIndex + 1;
@@ -1627,6 +1630,7 @@ export class PromptQueue {
       throw new Error(`Invalid prompt index: ${index}`);
     }
     this.assertPendingRewindSuffixIndex(index, "update");
+    this.assertEditableDuringExecution(index, "edit");
 
     // Merge updates into existing step
     this.state.steps[index] = {
@@ -1658,6 +1662,7 @@ export class PromptQueue {
       throw new Error(`Invalid prompt index: ${index}`);
     }
     this.assertPendingRewindSuffixIndex(index, "replace");
+    this.assertEditableDuringExecution(index, "replace");
     this.state.steps[index] = step;
     this.bumpDefinitionRevision();
     await this.updateWorkingFile(true);
@@ -1668,26 +1673,18 @@ export class PromptQueue {
   /**
    * Delete a prompt from the queue
    * @param index - Prompt index (0-based)
-   * @throws Error if index is out of range or if deleting the currently executing prompt
+   * @throws Error if index is out of range, or (while executing) if the step is
+   *   the running step or an already-completed step — only the pending tail after
+   *   the running step is deletable mid-run.
    */
   public async deletePrompt(index: number): Promise<void> {
     if (index < 0 || index >= this.state.steps.length) {
       throw new Error(`Invalid prompt index: ${index}`);
     }
     this.assertPendingRewindSuffixIndex(index, "delete");
-
-    // Don't allow deleting the prompt that is actively being processed.
-    // When the workflow is idle, stopped, or completed nothing is executing, so
-    // any non-completed prompt may be deleted freely.
-    const isActivelyExecuting =
-      this.stateMachine.status === EXECUTION_STATES.RUNNING ||
-      this.stateMachine.status === EXECUTION_STATES.PAUSING ||
-      this.stateMachine.status === EXECUTION_STATES.PAUSED ||
-      this.stateMachine.status === EXECUTION_STATES.CANCELLING;
-
-    if (isActivelyExecuting && index === this.state.currentIndex) {
-      throw new Error("Cannot delete the currently executing prompt");
-    }
+    // While executing, only steps after the running step may be deleted;
+    // completed steps and the running step stay locked.
+    this.assertEditableDuringExecution(index, "delete");
 
     this.state.steps.forEach((step, stepIndex) => {
       this.archiveStepRuntime(step, stepIndex, "deletePrompt");
@@ -1761,18 +1758,37 @@ export class PromptQueue {
    *   the second reorder because state.steps has already been mutated.
    */
   async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
-    const currentIndex = this.state.currentIndex;
-    const donePrompts = this.state.steps.slice(0, currentIndex);
-    const doneResults = this.state.results.slice(0, currentIndex);
-    const pendingPrompts = this.state.steps.slice(currentIndex);
-    const pendingResults = this.state.results.slice(currentIndex);
-    const newPending = newPendingOrder.map((i) => pendingPrompts[i]);
-    const newPendingResults = newPendingOrder.map((i) => pendingResults[i]);
-    this.state.steps = [...donePrompts, ...newPending];
-    this.state.results = [...doneResults, ...newPendingResults];
-    this.bumpDefinitionRevision();
-    this.emitStateChange();
-    await this.updateWorkingFile();
+    const status = this.stateMachine.status;
+    const isActive =
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSING ||
+      status === EXECUTION_STATES.PAUSED ||
+      status === EXECUTION_STATES.CANCELLING;
+    // While executing (and not in a pending rewind, where the whole suffix —
+    // including slice position 0 — is reorderable), the running step is
+    // pending-slice position 0 and must stay first so the executor's currentIndex
+    // keeps pointing at it. Only the tail after it may be reordered.
+    if (isActive && !this.state.pendingRewind && newPendingOrder[0] !== 0) {
+      throw new Error(
+        "Cannot move the currently executing step while the workflow is running"
+      );
+    }
+    // Serialize with the executor's own working-file writes (parity with
+    // insert/delete) so a mid-run reorder cannot race a step-completion write.
+    await this.workingFileManager.runInQueue(async () => {
+      const currentIndex = this.state.currentIndex;
+      const donePrompts = this.state.steps.slice(0, currentIndex);
+      const doneResults = this.state.results.slice(0, currentIndex);
+      const pendingPrompts = this.state.steps.slice(currentIndex);
+      const pendingResults = this.state.results.slice(currentIndex);
+      const newPending = newPendingOrder.map((i) => pendingPrompts[i]);
+      const newPendingResults = newPendingOrder.map((i) => pendingResults[i]);
+      this.state.steps = [...donePrompts, ...newPending];
+      this.state.results = [...doneResults, ...newPendingResults];
+      this.bumpDefinitionRevision();
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect();
+    });
   }
 
   /**
@@ -1877,6 +1893,40 @@ export class PromptQueue {
     if (boundary !== undefined && index < boundary) {
       throw new Error(
         `Cannot ${operation} a preserved prefix step while a continuation is pending`
+      );
+    }
+  }
+
+  /**
+   * While the workflow is actively executing, only steps that have not started
+   * yet may be edited: completed steps `[0, currentIndex)` and the running step
+   * `currentIndex` are locked. Steps after the running step are freely editable
+   * so the pending tail can be reordered/edited/disabled mid-run. When idle,
+   * nothing is executing (currentIndex is the start position) so no restriction
+   * applies. This is defense-in-depth behind the dashboard gating — the queue
+   * must never corrupt an executing run if a stale/rogue message arrives.
+   */
+  private assertEditableDuringExecution(index: number, operation: string): void {
+    // A pending rewind is a distinct suffix-editing mode: `currentIndex` is the
+    // rewind boundary (a PENDING suffix step, not a running one), and prefix vs.
+    // suffix editability is governed by `assertPendingRewindSuffixIndex`. Defer to
+    // it entirely rather than treating the boundary as a locked running step.
+    if (this.state.pendingRewind) return;
+    const status = this.stateMachine.status;
+    const isActive =
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSING ||
+      status === EXECUTION_STATES.PAUSED ||
+      status === EXECUTION_STATES.CANCELLING;
+    if (!isActive) return;
+    if (index < this.state.currentIndex) {
+      throw new Error(
+        `Cannot ${operation} a completed step while the workflow is running`
+      );
+    }
+    if (index === this.state.currentIndex) {
+      throw new Error(
+        `Cannot ${operation} the currently executing step`
       );
     }
   }

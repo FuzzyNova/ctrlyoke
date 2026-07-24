@@ -215,7 +215,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       await assert.rejects(
         queue.deletePrompt(0),
-        /Cannot delete the currently executing prompt/
+        /Cannot delete the currently executing step/
       );
     });
   });
@@ -1161,6 +1161,107 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual((state.steps[0] as PromptStep).prompt, "p2");
       assert.strictEqual((state.steps[1] as PromptStep).prompt, "p0");
       assert.strictEqual((state.steps[2] as PromptStep).prompt, "p1");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("Editing during execution — pending region only", () => {
+    const fiveSteps: PromptStep[] = [
+      { prompt: "s0" },
+      { prompt: "s1" },
+      { prompt: "s2" },
+      { prompt: "s3" },
+      { prompt: "s4" },
+    ];
+
+    // Loads five steps, enters RUNNING, then places execution at step 1 so that
+    // step 0 is completed, step 1 is the running step, and steps 2–4 are pending.
+    async function runningAtStepOne(q: PromptQueue): Promise<void> {
+      q.loadPrompts(createPromptFile(fiveSteps));
+      await startQueueExecution(q);
+      (q as any).state.currentIndex = 1;
+      assert.strictEqual(q.getState().status, EXECUTION_STATES.RUNNING);
+    }
+
+    test("reorder keeps the running step pinned and reorders the tail", async () => {
+      await runningAtStepOne(queue);
+      // Pending slice is [s1, s2, s3, s4]; keep s1 first, move s4 ahead of s2/s3.
+      await queue.reorderPendingPrompts([0, 3, 1, 2]);
+      const steps = queue.getState().steps as PromptStep[];
+      assert.deepStrictEqual(
+        steps.map((s) => s.prompt),
+        ["s0", "s1", "s4", "s2", "s3"]
+      );
+    });
+
+    test("reorder rejects moving the running step out of position 0", async () => {
+      await runningAtStepOne(queue);
+      await assert.rejects(
+        () => queue.reorderPendingPrompts([1, 0, 2, 3]),
+        /currently executing step/i
+      );
+    });
+
+    test("delete rejects the running step and completed steps, allows pending", async () => {
+      await runningAtStepOne(queue);
+      await assert.rejects(
+        () => queue.deletePrompt(1),
+        /currently executing step/i
+      );
+      await assert.rejects(
+        () => queue.deletePrompt(0),
+        /completed step while the workflow is running/i
+      );
+      await queue.deletePrompt(3);
+      const steps = queue.getState().steps as PromptStep[];
+      assert.deepStrictEqual(
+        steps.map((s) => s.prompt),
+        ["s0", "s1", "s2", "s4"]
+      );
+    });
+
+    test("update rejects the running/completed steps, allows a pending step", async () => {
+      await runningAtStepOne(queue);
+      await assert.rejects(
+        () => queue.updatePrompt(1, { prompt: "edited running" }),
+        /currently executing step/i
+      );
+      await assert.rejects(
+        () => queue.updatePrompt(0, { prompt: "edited completed" }),
+        /completed step while the workflow is running/i
+      );
+      await queue.updatePrompt(3, { prompt: "edited pending" });
+      assert.strictEqual(
+        (queue.getState().steps[3] as PromptStep).prompt,
+        "edited pending"
+      );
+    });
+
+    test("insert must land after the running step", async () => {
+      await runningAtStepOne(queue);
+      // afterIndex 0 → insertIndex 1 (the running step slot) → rejected.
+      await assert.rejects(
+        () => queue.insertStepAfterIndex(0, { prompt: "nope" }),
+        /currently executing step/i
+      );
+      // afterIndex 1 → insertIndex 2 (right after the running step) → allowed.
+      await queue.insertStepAfterIndex(1, { prompt: "inserted" });
+      const steps = queue.getState().steps as PromptStep[];
+      assert.deepStrictEqual(
+        steps.map((s) => s.prompt),
+        ["s0", "s1", "inserted", "s2", "s3", "s4"]
+      );
+    });
+
+    test("idle editing is unrestricted (completed/current steps remain editable)", async () => {
+      queue.loadPrompts(createPromptFile(fiveSteps));
+      (queue as any).state.currentIndex = 2;
+      // IDLE: nothing is executing, so any step may be edited/deleted.
+      await queue.updatePrompt(0, { prompt: "edited idle" });
+      await queue.deletePrompt(1);
+      const steps = queue.getState().steps as PromptStep[];
+      assert.strictEqual((steps[0] as PromptStep).prompt, "edited idle");
+      assert.strictEqual(steps.length, 4);
     });
   });
 

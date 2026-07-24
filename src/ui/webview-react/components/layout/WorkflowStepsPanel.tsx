@@ -631,7 +631,16 @@ const WorkflowStepsPanelInner: React.FC<{
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
-  const canReorder = canChangeStartPosition && steps.length - currentStep > 1;
+  // While execution owns the queue (RUNNING/PAUSING/PAUSED), the step at
+  // `currentStep` is the running step: it stays pinned at pending-slice position
+  // 0 and is not draggable, but the pending tail after it can still be reordered.
+  // Idle keeps today's behavior (the whole pending slice is reorderable).
+  const executionOwnsCurrentStep = isWorkflowActive(executionState);
+  const reorderableStepCount = executionOwnsCurrentStep
+    ? steps.length - currentStep - 1
+    : steps.length - currentStep;
+  const canReorder =
+    executionState !== EXECUTION_STATES.CANCELLING && reorderableStepCount > 1;
 
   // Local sortable ID state — dnd-kit owns this for smooth drop animations.
   // IDs are stable absolute indices ("step-pending-N") so dnd-kit can track
@@ -654,8 +663,17 @@ const WorkflowStepsPanelInner: React.FC<{
       if (!over || active.id === over.id) return;
 
       const oldIdx = sortableIds.indexOf(String(active.id));
-      const newIdx = sortableIds.indexOf(String(over.id));
+      let newIdx = sortableIds.indexOf(String(over.id));
       if (oldIdx === -1 || newIdx === -1) return;
+
+      // While execution owns the queue, keep the running step pinned at slice
+      // position 0: it can't be dragged (defensive — its handle is disabled) and
+      // nothing can be dropped above it. This preserves `newPendingOrder[0] === 0`,
+      // which the backend also enforces.
+      if (executionOwnsCurrentStep) {
+        if (oldIdx === 0) return;
+        if (newIdx === 0) newIdx = 1;
+      }
 
       // Update local state first so dnd-kit animates to the new position (not back)
       const newSortableIds = arrayMove(sortableIds, oldIdx, newIdx);
@@ -678,7 +696,7 @@ const WorkflowStepsPanelInner: React.FC<{
         editorStore.cancelEdit();
       }
     },
-    [sortableIds]
+    [sortableIds, executionOwnsCurrentStep]
   );
 
   // In mobile mode (onRequestClose present), disable all collapse interactions —
@@ -965,7 +983,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     <SortableWorkflowStepWrapper
                       key={id}
                       id={id}
-                      disabled={!canReorder}
+                      disabled={!canReorder || isExecutionTargetLocked}
                       slotNumber={slotNumber}
                       text={getStepText(step)}
                       index={index}
