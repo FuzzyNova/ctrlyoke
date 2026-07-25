@@ -736,7 +736,7 @@ export const Header: React.FC<{
         </div>
       </header>
       {isPausing && (
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-[var(--btn-fg)] border-b border-btn-border">
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-black border-b border-btn-border">
           <i className="codicon codicon-debug-pause animate-pulse-cancelling" />
           <span>Workflow will pause after the current step completes</span>
           <button
