@@ -142,3 +142,120 @@ suite("RunContinuationService.validateContinuationTarget — edit vs execution l
     }
   });
 });
+
+/**
+ * A paused run whose owning process is gone is adoptable, not permanently
+ * stuck. Pause is an in-memory executor state, so the original design treated
+ * "paused with no live owner" as impossible and refused it — but a host restart
+ * produces exactly that shape routinely, which left paused runs unresumable
+ * forever. The lock is the evidence that decides it, identically to an
+ * interrupted RUNNING run; a paused run is if anything safer to adopt, having
+ * no in-flight harness turn and a `currentIndex` on a clean step boundary.
+ */
+suite(
+  "RunContinuationService.validateContinuationTarget — orphaned paused runs",
+  () => {
+    const workflowKey = "orphan-paused-2026-01-01T00-00-00" as WorkflowKey;
+    const targetRun = "run-2026-01-01T00-00-00-000Z" as RunRef;
+
+    async function seedPausedRun(workspaceRoot: string): Promise<void> {
+      const descriptorPath = WorkflowPaths.descriptorPath(
+        workspaceRoot,
+        workflowKey
+      );
+      await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
+      await fs.writeFile(
+        descriptorPath,
+        JSON.stringify({
+          schemaVersion: 1,
+          workflowKey,
+          workflowName: "Orphan Paused",
+          isFavorite: false,
+          createdAt: 0,
+          lastModifiedAt: 0,
+          latestRunRef: targetRun,
+          nextRunId: 2,
+          revision: 1,
+        }),
+        "utf8"
+      );
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        targetRun
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify({
+          steps: [{ prompt: "s0" }, { prompt: "s1" }],
+          definitionRevision: 1,
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.PAUSED,
+          },
+        }),
+        "utf8"
+      );
+    }
+
+    test("adopts a paused run that no live lock claims", async () => {
+      const ws = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-orphan-paused-")
+      );
+      try {
+        await seedPausedRun(ws);
+
+        const target = await RunContinuationService.validateContinuationTarget(
+          ws,
+          workflowKey,
+          targetRun,
+          new WorkflowLineageRepository(),
+          "continue"
+        );
+
+        assert.strictEqual(
+          target.allowInterruptedRun,
+          true,
+          "an ownerless paused run must be adoptable by a fresh execution owner"
+        );
+        assert.strictEqual(target.definitionRevision, 1);
+      } finally {
+        await fs.rm(ws, { recursive: true, force: true });
+      }
+    });
+
+    test("still refuses a paused run that a live lock claims for another process", async () => {
+      const ws = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-owned-paused-")
+      );
+      try {
+        await seedPausedRun(ws);
+        await WorkflowLockManager.acquireLock(ws, workflowKey, {
+          workflowKey,
+          runRef: targetRun,
+          runner: RUNNER_IDS.VSCODE,
+          pid: process.pid,
+          ownerToken: WorkflowLockManager.generateOwnerToken(),
+          instanceId: "test-host",
+          startedAt: Date.now(),
+          lastHeartbeat: Date.now(),
+        });
+
+        await assert.rejects(
+          RunContinuationService.validateContinuationTarget(
+            ws,
+            workflowKey,
+            targetRun,
+            new WorkflowLineageRepository(),
+            "continue"
+          ),
+          /executing/i,
+          "a paused run with a live owner must not be stolen"
+        );
+      } finally {
+        await fs.rm(ws, { recursive: true, force: true });
+      }
+    });
+  }
+);

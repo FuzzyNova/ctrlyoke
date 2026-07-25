@@ -3519,23 +3519,27 @@ export class WorkflowOrchestrator {
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
     const activeTarget =
       activeInstance?.getExecutionRunRef() === address.runRef;
+    // An orphaned run is adoptable: no resident instance owns it and no live
+    // lock names it, so nothing can be executing it and a fresh execution owner
+    // can take it over from its own persisted position. This covers PAUSED as
+    // well as RUNNING — a host restart routinely leaves paused runs with no
+    // owner, and a paused run is the safer of the two to adopt (no in-flight
+    // harness turn, and `currentIndex` sits on a clean step boundary). The lock
+    // check is what makes it safe in both cases.
     const interruptedRun =
-      targetState === EXECUTION_STATES.RUNNING &&
+      (targetState === EXECUTION_STATES.RUNNING ||
+        targetState === EXECUTION_STATES.PAUSED) &&
       !activeTarget &&
       (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
     if (
       targetState === EXECUTION_STATES.PAUSING ||
       targetState === EXECUTION_STATES.CANCELLING ||
-      (targetState === EXECUTION_STATES.RUNNING &&
+      ((targetState === EXECUTION_STATES.RUNNING ||
+        targetState === EXECUTION_STATES.PAUSED) &&
         !activeTarget &&
         !interruptedRun)
     ) {
       throw new Error(`Cannot continue while run is in state ${targetState}`);
-    }
-    if (targetState === EXECUTION_STATES.PAUSED && !activeTarget) {
-      throw new Error(
-        "Cannot continue a paused run without its live execution owner"
-      );
     }
     return {
       workspaceRoot,

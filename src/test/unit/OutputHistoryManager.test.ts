@@ -1258,6 +1258,120 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(summaries[1]?.hasMixedModels, false);
   });
 
+  test("getRunSummaries prefers the run's working file when it disagrees with the manifest", async () => {
+    // The two records diverge whenever a manifest write is skipped (e.g. an
+    // execution that ran with no history file path), leaving the run panel —
+    // which lists from manifests — showing a state the run left long ago while
+    // the header, reading the working file, shows the truth. The working file is
+    // written by the executor itself on every transition, so it wins.
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-divergent",
+      { runId: 1, startedAt: 1000 }
+    );
+    await recorder.updateManifest(filePath, (manifest) => ({
+      ...manifest,
+      executionState: EXECUTION_STATES.PAUSED,
+      completedAt: 2000,
+    }));
+
+    const runFilePath = WorkflowPaths.runFilePath(
+      tempWorkspace,
+      workflowKey,
+      runRef
+    );
+    await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        workflowName: "wf-divergent",
+        definitionRevision: 1,
+        steps: [{ prompt: "s0" }],
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+          executionEndTime: 9999,
+        },
+      }),
+      "utf8"
+    );
+
+    const [summary] = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(
+      summary?.executionState,
+      EXECUTION_STATES.COMPLETED,
+      "the working file's state must win over a stale manifest"
+    );
+    assert.strictEqual(summary?.completedAt, 9999);
+  });
+
+  test("getRunSummaries falls back to the manifest when the run file is unreadable", async () => {
+    const { workflowKey, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-no-run-file",
+      { runId: 1, startedAt: 1000 }
+    );
+    await manager.finalizeRun(filePath, EXECUTION_STATES.ERROR, 2);
+
+    // No workflow.ctrlyoke.json was ever written for this run.
+    const [summary] = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(summary?.executionState, EXECUTION_STATES.ERROR);
+    assert.ok(
+      summary?.completedAt,
+      "manifest completedAt remains the fallback"
+    );
+  });
+
+  test("deletion protection keeps a run either record calls active, even when the summary reads idle", async () => {
+    // A seeded-but-not-yet-started run is the case that splits the two records:
+    // the manifest is already RUNNING while the working file is still idle. The
+    // summary (working-file-preferred) reads idle, but the run must not be
+    // deletable — protection takes the union, display does not.
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-seeded",
+      { runId: 1, startedAt: 1000 }
+    );
+    const runFilePath = WorkflowPaths.runFilePath(
+      tempWorkspace,
+      workflowKey,
+      runRef
+    );
+    await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        workflowName: "wf-seeded",
+        definitionRevision: 1,
+        steps: [{ prompt: "s0" }],
+        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.IDLE },
+      }),
+      "utf8"
+    );
+
+    const manifest = (await recorder.readManifest(
+      filePath
+    )) as WorkflowRunManifest;
+    assert.strictEqual(manifest.executionState, EXECUTION_STATES.RUNNING);
+    const [summary] = await manager.getRunSummaries(workflowKey);
+    assert.strictEqual(
+      summary?.executionState,
+      EXECUTION_STATES.IDLE,
+      "display still prefers the working file"
+    );
+
+    await assert.rejects(
+      () => manager.deleteRunByRef(workflowKey, runRef),
+      /protected/,
+      "a run the manifest still calls active must not be deletable"
+    );
+  });
+
   test("getRunSummaries bounds manifest read concurrency for large lineages", async () => {
     const workflowKey = (
       await new WorkflowLineageRepository().createLineage(

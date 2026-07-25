@@ -81,19 +81,18 @@ export class RunContinuationService {
         `Cannot ${action} while run is in state ${executionState}`
       );
     }
-    if (executionState === EXECUTION_STATES.PAUSED) {
-      throw new Error(
-        `Cannot ${action} a paused run without its live execution owner`
-      );
-    }
+    // Mirrors `WorkflowOrchestrator.validateExplicitContinuationTarget`: an
+    // orphaned run (no live lock naming it) can be adopted by a fresh execution
+    // owner from its own persisted position, whether it was left RUNNING by a
+    // dead process or PAUSED by one. Keep the two in step — this is the same
+    // contract reached from the CLI and MCP server instead of the dashboard.
+    const isAdoptableState =
+      executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.PAUSED;
     const allowInterruptedRun =
-      executionState === EXECUTION_STATES.RUNNING &&
+      isAdoptableState &&
       (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
-    if (
-      executionState === EXECUTION_STATES.RUNNING &&
-      !allowInterruptedRun &&
-      !activeTargetAppend
-    ) {
+    if (isAdoptableState && !allowInterruptedRun && !activeTargetAppend) {
       throw new Error(
         `Cannot ${action} while run is in state ${executionState}`
       );

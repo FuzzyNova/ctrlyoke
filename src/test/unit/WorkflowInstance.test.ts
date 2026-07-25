@@ -687,6 +687,137 @@ suite("WorkflowInstance runtime transitions", () => {
     }
   });
 
+  test("records runtime transitions to the run manifest after restoring a paused run", async () => {
+    // Reproduces the post-restart shape: the previous host died while this run
+    // was paused, so the instance is rebuilt from the run's working file and has
+    // never called startWorkflowExecution. Its history file path is therefore
+    // unset, and before resolveHistoryFilePath() every history write silently
+    // no-op'd — the run resumed and completed on disk while manifest.json stayed
+    // frozen at "paused", which is what desynced the run panel from the header.
+    const platform = new MockPlatform();
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-restored-paused-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const dashboardSink: any = {
+        updateFileSelected: async () => {},
+        updateSessionRestored: async () => {},
+        updateExecutionStarted: () => {},
+        updateProgress: () => {},
+        updateExecutionState: () => {},
+        updateWorkflowName: () => {},
+        updateStepStatus: () => {},
+        updateRetryAttempt: () => {},
+        updateCliOutput: () => {},
+        updateCliStreamingChunk: () => {},
+        updateCliStreamingEvents: () => {},
+        updateStepsExtended: () => {},
+        updatePromptDeleted: () => {},
+        updateFinalStep: () => {},
+        updateFinalStepStatus: () => {},
+        updateFinalStepOutput: () => {},
+        updateFinalStepStreamingChunk: () => {},
+        updateFinalStepStreamingEvents: () => {},
+        updateStatusMessage: () => {},
+        notifyPromptsReordered: () => {},
+      };
+
+      instance = new WorkflowInstance(
+        platform,
+        dashboardSink,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempDir
+      );
+
+      // A promoted run on disk: lineage, run directory, manifest, and the run's
+      // own working file left behind mid-run at PAUSED.
+      const workflowKey = await WorkflowPaths.allocateWorkflowKey(
+        tempDir,
+        "restored-paused"
+      );
+      const runRef = WorkflowPaths.formatRunRef(Date.now());
+      const runDir = WorkflowPaths.runDir(tempDir, workflowKey, runRef);
+      await instance.outputHistoryManager.initializeRunAt(
+        workflowKey,
+        runRef,
+        runDir,
+        1,
+        Date.now()
+      );
+
+      // initializeRunAt seeds RUNNING; the dead process left it at PAUSED, and
+      // starting there is what makes the assertion below meaningful.
+      const manifestPath = WorkflowPaths.manifestPath(
+        tempDir,
+        workflowKey,
+        runRef
+      );
+      await new TimelineRecorder().updateManifest(manifestPath, (manifest) => ({
+        ...manifest,
+        executionState: EXECUTION_STATES.PAUSED,
+      }));
+
+      const runFilePath = path.join(runDir, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify(
+          {
+            workflowName: "restored-paused",
+            startedAt: Date.now(),
+            lastModifiedAt: Date.now(),
+            definitionRevision: 1,
+            steps: [{ prompt: "done" }, { prompt: "pending" }],
+            _runtime: {
+              currentIndex: 1,
+              executionState: EXECUTION_STATES.PAUSED,
+            },
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      let started = false;
+      (instance as any).startWorkflowExecution = async () => {
+        started = true;
+      };
+
+      await instance.loadWorkingFile(runFilePath);
+      assert.strictEqual(
+        instance.getQueueState().status,
+        EXECUTION_STATES.PAUSED,
+        "restored run should still be paused"
+      );
+      assert.strictEqual(started, false, "restore must not auto-start");
+      assert.strictEqual(
+        JSON.parse(await fs.readFile(manifestPath, "utf8")).executionState,
+        EXECUTION_STATES.PAUSED,
+        "manifest must start stale-paused or the assertion below proves nothing"
+      );
+
+      await instance.resume();
+      // The transition write is queued off the transition callback, not awaited
+      // by resume() itself.
+      await (instance as any).pendingRuntimeTransitionHistoryWrite;
+
+      const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+      assert.strictEqual(
+        manifest.executionState,
+        EXECUTION_STATES.RUNNING,
+        "resuming a restored run must advance its manifest, not leave it stale"
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("drives execution-state updates and cancelled-step status from runtime transitions", async () => {
     const platform = new MockPlatform();
 

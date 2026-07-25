@@ -627,11 +627,38 @@ export class WorkflowInstance {
     await this.flushDurableState();
   }
 
+  /**
+   * The manifest this instance's history/timeline writes belong to.
+   *
+   * `activeHistoryFilePath` is only assigned by `startWorkflowExecution`, so it
+   * is empty on an instance that was restored from a working file rather than
+   * started here — exactly the shape a host restart leaves behind for a run that
+   * was paused when the previous host died. Every history writer early-returns on
+   * an empty path, so without this fallback a resumed run executes to completion
+   * while `manifest.json` stays frozen at whatever the dead process last wrote,
+   * and the run panel (which lists from manifests) disagrees with the header
+   * (which reads the run's `workflow.ctrlyoke.json`) forever after.
+   *
+   * The queue's own `workflowKey`/`runRef` are restored with the working file and
+   * identify the run's manifest exactly, so derive from them. A draft has no
+   * `runRef` yet and correctly resolves to "" — it has no manifest to write to.
+   */
+  private resolveHistoryFilePath(): string {
+    if (this.activeHistoryFilePath) {
+      return this.activeHistoryFilePath;
+    }
+    const { workflowKey, runRef } = this.promptQueue.getState();
+    if (!workflowKey || !runRef) {
+      return "";
+    }
+    return this.outputHistoryManager.getHistoryFilePath(workflowKey, runRef);
+  }
+
   /** Write pending history/working-file state for this instance. */
   private async flushDurableState(): Promise<void> {
     await this.pendingRuntimeTransitionHistoryWrite;
     await this.outputHistoryManager.flushPendingWrites(
-      this.activeHistoryFilePath || undefined
+      this.resolveHistoryFilePath() || undefined
     );
   }
 
@@ -1576,7 +1603,7 @@ export class WorkflowInstance {
     Log.info("▶️ Resuming workflow from paused position");
     await this.startWorkflowExecution(
       undefined,
-      historyFilePath ?? this.activeHistoryFilePath,
+      historyFilePath ?? this.resolveHistoryFilePath(),
       this.promptQueue.getState().workingFilePath,
       targetRunIndices
     );
@@ -2467,7 +2494,7 @@ export class WorkflowInstance {
     // Follow-up output is persisted to the timeline before it enters the small
     // active-only cache. Prior-context consumers always resolve the timeline.
     const followUpText = extractTextFromEvents({ events: contentEvents });
-    const historyFilePath = this.activeHistoryFilePath;
+    const historyFilePath = this.resolveHistoryFilePath();
     const latestContextWindowSync = [...events]
       .reverse()
       .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
@@ -3006,7 +3033,7 @@ export class WorkflowInstance {
 
   private async startWorkflowExecution(
     integration?: HarnessIntegration,
-    historyFilePath = this.activeHistoryFilePath,
+    historyFilePath = this.resolveHistoryFilePath(),
     workingFilePath?: string,
     targetRunIndices?: Map<string, number>
   ): Promise<void> {
@@ -3122,6 +3149,20 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: historyFilePath="${historyFilePath}"`
       );
+      // A promoted run always has a manifest, so an empty path here means every
+      // history write for this execution will silently no-op — the run finishes
+      // on disk while its manifest keeps whatever state it had before. Loud,
+      // because the symptom (run panel disagreeing with the header) only shows
+      // up much later and nowhere near this code.
+      if (!historyFilePath) {
+        const { workflowKey, runRef } = this.promptQueue.getState();
+        if (workflowKey && runRef) {
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: no history file for promoted run ` +
+              `${workflowKey}/${runRef} — timeline and manifest writes will be skipped for this execution`
+          );
+        }
+      }
       const workflowContext = this.buildWorkflowExecutionContext(
         activeIntegration,
         historyFilePath,
@@ -3371,8 +3412,12 @@ export class WorkflowInstance {
       return;
     }
 
-    if (this.activeHistoryFilePath) {
-      const historyFilePath = this.activeHistoryFilePath;
+    // Resolved rather than read straight off the field: the transition that
+    // starts a resume (paused -> running) fires *before* startWorkflowExecution
+    // assigns the field, so a restored instance would otherwise drop the very
+    // transition that reopens the run.
+    const historyFilePath = this.resolveHistoryFilePath();
+    if (historyFilePath) {
       this.pendingRuntimeTransitionHistoryWrite =
         this.pendingRuntimeTransitionHistoryWrite
           .then(() =>

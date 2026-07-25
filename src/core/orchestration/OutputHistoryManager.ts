@@ -63,6 +63,23 @@ import {
  */
 const RUN_SUMMARY_READ_BATCH_SIZE = 32;
 
+/** Lifecycle states in which a run may still be owned by an executor. */
+const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
+  EXECUTION_STATES.RUNNING,
+  EXECUTION_STATES.PAUSING,
+  EXECUTION_STATES.PAUSED,
+  EXECUTION_STATES.CANCELLING,
+]);
+
+/**
+ * One run's summary plus the manifest's own lifecycle state, which the resolved
+ * summary may have overridden with the working file's. Internal to this class.
+ */
+interface RunSummaryRecord {
+  summary: RunSummary;
+  manifestExecutionState: ExecutionState;
+}
+
 /**
  * OutputHistoryManager
  *
@@ -757,8 +774,26 @@ export class OutputHistoryManager {
    * recovery candidates and excluded rather than returned as malformed rows.
    */
   async getRunSummaries(workflowKey: WorkflowKey): Promise<RunSummary[]> {
+    return (await this.getRunSummaryRecords(workflowKey)).map(
+      (record) => record.summary
+    );
+  }
+
+  /**
+   * Batched read of every run's summary plus the manifest's own lifecycle state.
+   *
+   * The manifest copy is deliberately kept alongside the resolved summary rather
+   * than discarded: display answers "what state is this run in" (the working file
+   * wins — see `readRunSummaryRecord`), while deletion safety answers "could this
+   * run be active" and must not narrow as a side effect of that. Both come from
+   * the same pair of file reads, so carrying the extra field is free and keeps
+   * `RunSummary` — a webview-facing contract — free of protection plumbing.
+   */
+  private async getRunSummaryRecords(
+    workflowKey: WorkflowKey
+  ): Promise<RunSummaryRecord[]> {
     const runs = await this.getRunsForWorkflow(workflowKey);
-    const summaries: Array<RunSummary | null> = [];
+    const records: Array<RunSummaryRecord | null> = [];
     for (
       let startIndex = 0;
       startIndex < runs.length;
@@ -768,45 +803,59 @@ export class OutputHistoryManager {
         startIndex,
         startIndex + RUN_SUMMARY_READ_BATCH_SIZE
       );
-      summaries.push(
+      records.push(
         ...(await Promise.all(
-          batch.map((runRef) => this.readRunSummary(workflowKey, runRef))
+          batch.map((runRef) => this.readRunSummaryRecord(workflowKey, runRef))
         ))
       );
     }
-    return summaries.filter(
-      (summary): summary is RunSummary => summary !== null
+    return records.filter(
+      (record): record is RunSummaryRecord => record !== null
     );
   }
 
-  private async readRunSummary(
+  private async readRunSummaryRecord(
     workflowKey: WorkflowKey,
     runRef: RunRef
-  ): Promise<RunSummary | null> {
+  ): Promise<RunSummaryRecord | null> {
     const historyFilePath = this.getHistoryFilePath(workflowKey, runRef);
     try {
       const manifest =
         await this.timelineRecorder.readManifest(historyFilePath);
       const {
+        executionState,
+        executionEndTime,
         primaryHarness,
         primaryModel,
         hasMixedHarnesses,
         hasMixedModels,
-      } = await this.readRunHarnessDisclosure(workflowKey, runRef);
+      } = await this.readRunFileSummaryFields(workflowKey, runRef);
 
       return {
-        workflowKey,
-        runRef,
-        runId: manifest.runId,
-        startedAt: manifest.startedAt,
-        completedAt: manifest.completedAt,
-        executionState: manifest.executionState,
-        definitionRevision: manifest.definitionRevision,
-        stepCount: manifest.stepCount,
-        primaryHarness,
-        primaryModel,
-        hasMixedHarnesses,
-        hasMixedModels,
+        manifestExecutionState: manifest.executionState,
+        summary: {
+          workflowKey,
+          runRef,
+          runId: manifest.runId,
+          startedAt: manifest.startedAt,
+          // The run's own working file wins over the manifest's denormalized
+          // copy whenever the two disagree. `_runtime.executionState` is written
+          // on every transition by the executor itself, while the manifest copy
+          // is written by a separate best-effort path that can be skipped
+          // entirely (see `appendRuntimeTransition`'s empty-path early return) —
+          // so the manifest can lag permanently behind a run that actually
+          // finished. Reading it here is free: this file is already open for
+          // harness disclosure. Manifest values remain the fallback for a run
+          // whose working file is missing or unreadable.
+          completedAt: executionEndTime ?? manifest.completedAt,
+          executionState: executionState ?? manifest.executionState,
+          definitionRevision: manifest.definitionRevision,
+          stepCount: manifest.stepCount,
+          primaryHarness,
+          primaryModel,
+          hasMixedHarnesses,
+          hasMixedModels,
+        },
       };
     } catch (error) {
       Log.warn(
@@ -818,15 +867,24 @@ export class OutputHistoryManager {
   }
 
   /**
-   * Best-effort harness/model disclosure for a run: the resolved value each queue
-   * step actually executed with (`_runtime.harness`/`_runtime.model`) falling back to
-   * its declared step/workflow-level override for steps that have not executed yet.
-   * Script-only runs and runs whose steps disclose nothing report both as undefined.
+   * Best-effort read of a run's `workflow.ctrlyoke.json` for summary purposes.
+   * @internal see `getRunSummaryRecords`
+   *
+   * Harness/model disclosure is the resolved value each queue step actually
+   * executed with (`_runtime.harness`/`_runtime.model`), falling back to its
+   * declared step/workflow-level override for steps that have not executed yet.
+   * Script-only runs and runs whose steps disclose nothing report both as
+   * undefined.
+   *
+   * Also returns the run's own lifecycle state, which `readRunSummary` prefers
+   * over the manifest's copy — see the divergence note there.
    */
-  private async readRunHarnessDisclosure(
+  private async readRunFileSummaryFields(
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): Promise<{
+    executionState?: ExecutionState;
+    executionEndTime?: number;
     primaryHarness?: string;
     primaryModel?: string;
     hasMixedHarnesses: boolean;
@@ -843,6 +901,10 @@ export class OutputHistoryManager {
       const workingFile = JSON.parse(content) as {
         harness?: string;
         model?: string;
+        _runtime?: {
+          executionState?: ExecutionState;
+          executionEndTime?: number;
+        };
         steps?: Array<{
           type?: string;
           harness?: string;
@@ -869,6 +931,8 @@ export class OutputHistoryManager {
       }
 
       return {
+        executionState: workingFile._runtime?.executionState,
+        executionEndTime: workingFile._runtime?.executionEndTime,
         primaryHarness: harnesses.values().next().value,
         primaryModel: models.values().next().value,
         hasMixedHarnesses: harnesses.size > 1,
@@ -971,13 +1035,20 @@ export class OutputHistoryManager {
     } catch {
       // A missing/corrupt descriptor cannot make an active run safe to delete.
     }
-    const summaries = await this.getRunSummaries(workflowKey);
-    for (const summary of summaries) {
+    // Deletion protection takes the *union* of both lifecycle records, unlike
+    // display which prefers the working file's. The two answer different
+    // questions: "what state is this run in" has one right answer, but "could
+    // this run still be owned by an executor" must stay conservative — keeping a
+    // finished run costs nothing, deleting a live one is unrecoverable. A run
+    // seeded but not yet started is the case that splits them (manifest already
+    // RUNNING, working file still idle), and it must survive a bulk delete.
+    for (const {
+      summary,
+      manifestExecutionState,
+    } of await this.getRunSummaryRecords(workflowKey)) {
       if (
-        summary.executionState === EXECUTION_STATES.RUNNING ||
-        summary.executionState === EXECUTION_STATES.PAUSING ||
-        summary.executionState === EXECUTION_STATES.PAUSED ||
-        summary.executionState === EXECUTION_STATES.CANCELLING
+        ACTIVE_EXECUTION_STATES.has(summary.executionState) ||
+        ACTIVE_EXECUTION_STATES.has(manifestExecutionState)
       ) {
         protectedRunRefs.add(summary.runRef);
       }
