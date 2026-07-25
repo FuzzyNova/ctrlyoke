@@ -189,6 +189,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     useWorkflowStore();
   const {
     loadedWorkflows,
+    observedRunningWorkflowIds,
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
     displayedViewAddress,
@@ -276,6 +277,35 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         ? [...loadedWorkflows, syntheticActiveWorkflow]
         : loadedWorkflows,
     [loadedWorkflows, syntheticActiveWorkflow]
+  );
+
+  // Which loaded instances belong in the dropdown's pinned running region.
+  // Executing (RUNNING/PAUSING) always qualifies; PAUSED only qualifies for a
+  // workflow that was observed executing here (see
+  // `uiStore.observedRunningWorkflowIds`). A lineage merely *opened* while its
+  // latest run sits paused on disk therefore stays an ordinary lineage row,
+  // where its PAUSED badge already comes straight off disk, and where a
+  // Resume/Stop pair can't claim a run it doesn't identify: a lineage may hold
+  // many paused runs while only ever executing one.
+  const runningSectionWorkflows = useMemo(
+    () =>
+      effectiveLoadedWorkflows.filter(
+        (workflow) =>
+          isWorkflowRunning(workflow.executionState) ||
+          observedRunningWorkflowIds.has(workflow.id)
+      ),
+    [effectiveLoadedWorkflows, observedRunningWorkflowIds]
+  );
+  // Lineages represented by a running row — the only ones a recent row must
+  // stand down for, so that one lineage never renders twice.
+  const runningSectionWorkflowKeys = useMemo(
+    () =>
+      new Set(
+        runningSectionWorkflows
+          .map((workflow) => workflow.workflowKey)
+          .filter((key): key is WorkflowKey => key !== undefined)
+      ),
+    [runningSectionWorkflows]
   );
 
   const recentWorkflowHasActiveTerminal = useCallback(
@@ -1239,24 +1269,22 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ].some((value) => value?.toLowerCase().includes(normalizedWorkflowSearch));
   };
 
-  const filteredEffectiveLoadedWorkflows = effectiveLoadedWorkflows.filter(
+  const filteredRunningWorkflows = runningSectionWorkflows.filter(
     workflowMatchesSearch
   );
   const filteredRecentWorkflows = sortedRecentWorkflows.filter(
     (recentWorkflow) =>
       workflowMatchesSearch(recentWorkflow) &&
-      !effectiveLoadedWorkflows.some(
-        (loadedWorkflow) =>
-          loadedWorkflow.workflowKey === recentWorkflow.address.workflowKey
-      )
+      !runningSectionWorkflowKeys.has(recentWorkflow.address.workflowKey)
   );
   // One lineage-keyed row per entry, running lineages first — this is the
   // unified navigation model step 0 of the run-navigation plan calls for:
   // running state is a property of a row, not a separate section, and a
   // lineage never appears twice (filteredRecentWorkflows already excludes
-  // whatever is represented by a loaded/running workflow above).
+  // whatever is represented by a running row above — and only those, so a
+  // loaded-but-not-running lineage keeps its recent row rather than vanishing).
   const workflowListRows: UnifiedWorkflowRow[] = [
-    ...filteredEffectiveLoadedWorkflows.map(
+    ...filteredRunningWorkflows.map(
       (workflow): UnifiedWorkflowRow => ({
         kind: "running",
         key: `running:${workflow.workflowKey ?? workflow.id}`,

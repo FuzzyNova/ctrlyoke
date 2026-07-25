@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useUiStore } from "@store/uiStore";
+import { EXECUTION_STATES } from "@/types/messages";
+import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 
 // Zustand store is a module singleton — reset between tests.
 beforeEach(() => {
@@ -705,5 +707,94 @@ describe("setSuffixEditConfirmation", () => {
     });
     store().setSuffixEditConfirmation(null);
     expect(store().suffixEditConfirmation).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Observed-running ledger (workflow dropdown's pinned "Running" region)
+// ---------------------------------------------------------------------------
+
+describe("observedRunningWorkflowIds", () => {
+  const summary = (
+    id: string,
+    executionState: ExecutionState
+  ): WorkflowSummary => ({
+    id,
+    workflowKey: `key-${id}` as WorkflowSummary["workflowKey"],
+    workflowName: `Workflow ${id}`,
+    filePath: `/workspace/${id}.ctrlyoke.json`,
+    executionState,
+    currentStep: 0,
+    totalSteps: 1,
+  });
+
+  beforeEach(() => {
+    // resetUi() deliberately leaves the loaded-instance list (and therefore the
+    // ledger derived from it) alone, so clear both explicitly.
+    useUiStore.setState({
+      loadedWorkflows: [],
+      observedRunningWorkflowIds: new Set<string>(),
+    });
+  });
+
+  it("starts empty", () => {
+    expect(store().observedRunningWorkflowIds.size).toBe(0);
+  });
+
+  it("admits a workflow observed running", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.RUNNING));
+    expect([...store().observedRunningWorkflowIds]).toEqual(["a"]);
+  });
+
+  it("admits a workflow observed pausing", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSING));
+    expect([...store().observedRunningWorkflowIds]).toEqual(["a"]);
+  });
+
+  it("does not admit a workflow first seen already paused", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSED));
+    expect(store().observedRunningWorkflowIds.size).toBe(0);
+  });
+
+  it("retains an admitted workflow across running → pausing → paused", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.RUNNING));
+    store().updateLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSING));
+    store().updateLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSED));
+    expect([...store().observedRunningWorkflowIds]).toEqual(["a"]);
+  });
+
+  it("retains an admitted workflow through a wholesale list replacement", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.RUNNING));
+    store().setLoadedWorkflows([summary("a", EXECUTION_STATES.PAUSED)]);
+    expect([...store().observedRunningWorkflowIds]).toEqual(["a"]);
+  });
+
+  it("evicts a workflow removed from the loaded list", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.RUNNING));
+    store().removeLoadedWorkflow("a");
+    expect(store().observedRunningWorkflowIds.size).toBe(0);
+  });
+
+  it("prunes ids missing from a wholesale list replacement", () => {
+    store().setLoadedWorkflows([
+      summary("a", EXECUTION_STATES.RUNNING),
+      summary("b", EXECUTION_STATES.RUNNING),
+    ]);
+    store().setLoadedWorkflows([summary("b", EXECUTION_STATES.PAUSED)]);
+    expect([...store().observedRunningWorkflowIds]).toEqual(["b"]);
+  });
+
+  it("does not re-admit a paused workflow whose instance reappears after eviction", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.RUNNING));
+    store().removeLoadedWorkflow("a");
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSED));
+    expect(store().observedRunningWorkflowIds.size).toBe(0);
+  });
+
+  it("keeps the same Set identity when nothing moved", () => {
+    store().addLoadedWorkflow(summary("a", EXECUTION_STATES.RUNNING));
+    const first = store().observedRunningWorkflowIds;
+    store().updateLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSED));
+    expect(store().observedRunningWorkflowIds).toBe(first);
   });
 });

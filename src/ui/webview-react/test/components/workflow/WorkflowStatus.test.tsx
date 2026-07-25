@@ -28,8 +28,13 @@ beforeEach(() => {
   useUiStore.getState().resetUi();
   // resetUi() deliberately leaves the loaded-instance list alone (it survives
   // view resets in production), so a test that seeds a running workflow would
-  // otherwise leak it into every test after it.
-  useUiStore.setState({ loadedWorkflows: [], activeWorkflowId: null });
+  // otherwise leak it — and its running-region admission — into every test
+  // after it.
+  useUiStore.setState({
+    loadedWorkflows: [],
+    observedRunningWorkflowIds: new Set<string>(),
+    activeWorkflowId: null,
+  });
   useSettingsStore.getState().resetSettings();
   useTerminalStore.setState({
     sessions: {},
@@ -256,6 +261,111 @@ describe("WorkflowStatus — loaded state", () => {
         .querySelector(".workflow-menu-items")
         ?.querySelector(".running-workflow-item")
     ).toBeNull();
+  });
+
+  // The pinned region is earned by executing here, not by execution state
+  // alone: `loadedWorkflows` mirrors every loaded instance, so opening a
+  // lineage whose latest run was left paused on disk must not pin it.
+  describe("pinned region admission", () => {
+    const workflowKey = "paused-lineage" as never;
+    const pausedSummary = (executionState: string) => ({
+      id: "workflow-paused",
+      workflowKey,
+      runRef: "run-2" as never,
+      workflowName: "Paused Workflow",
+      filePath: "/workspace/paused.ctrlyoke.json",
+      executionState: executionState as never,
+      currentStep: 1,
+      totalSteps: 3,
+    });
+
+    beforeEach(() => {
+      useWorkflowStore.setState({
+        fileName: "/workspace/paused.ctrlyoke.yaml",
+        workflowName: "Paused Workflow",
+      });
+    });
+
+    async function openDropdown(): Promise<void> {
+      const user = userEvent.setup();
+      render(<WorkflowStatus />);
+      setRecentWorkflows([
+        {
+          address: { workflowKey, kind: "run", runRef: "run-2" as never },
+          workflowName: "Paused Workflow",
+          executionState: EXECUTION_STATES.PAUSED,
+          isFavorite: false,
+        },
+      ]);
+      await user.click(
+        screen.getByRole("button", { name: /Show recent workflows/i })
+      );
+    }
+
+    it("leaves a workflow first seen paused out of the pinned region", async () => {
+      // Seeded directly, exactly as a WORKFLOWS_LIST for a lineage that was
+      // merely opened would arrive: paused, never observed running.
+      useUiStore.setState({ loadedWorkflows: [pausedSummary("paused")] });
+
+      await openDropdown();
+
+      expect(
+        document.querySelector(".running-workflows-region")
+      ).not.toBeInTheDocument();
+      expect(
+        document.querySelector(".running-workflow-item")
+      ).not.toBeInTheDocument();
+      // It is still reachable — as an ordinary lineage row carrying the
+      // paused state read off disk.
+      const recentRows = document.querySelectorAll(".workflow-menu-item");
+      expect(recentRows).toHaveLength(1);
+      expect(recentRows[0]).toHaveTextContent("Paused Workflow");
+    });
+
+    it("keeps a workflow pinned after it pauses, once it has executed here", async () => {
+      act(() => {
+        useUiStore.getState().addLoadedWorkflow(pausedSummary("running"));
+      });
+
+      await openDropdown();
+      expect(
+        document.querySelector(".running-workflow-item")
+      ).toBeInTheDocument();
+
+      act(() => {
+        useUiStore.getState().updateLoadedWorkflow(pausedSummary("paused"));
+      });
+
+      const runningRegion = document.querySelector(".running-workflows-region");
+      expect(runningRegion).toBeInTheDocument();
+      expect(
+        runningRegion?.querySelector(".running-workflow-item")
+      ).toBeInTheDocument();
+      // Still exactly one row for the lineage — the pinned row suppresses the
+      // recent row rather than doubling it.
+      expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(0);
+    });
+
+    it("releases the pinned row when the paused run reaches a terminal state", async () => {
+      act(() => {
+        useUiStore.getState().addLoadedWorkflow(pausedSummary("running"));
+        useUiStore.getState().updateLoadedWorkflow(pausedSummary("paused"));
+      });
+
+      await openDropdown();
+      expect(
+        document.querySelector(".running-workflow-item")
+      ).toBeInTheDocument();
+
+      act(() => {
+        useUiStore.getState().removeLoadedWorkflow("workflow-paused");
+      });
+
+      expect(
+        document.querySelector(".running-workflow-item")
+      ).not.toBeInTheDocument();
+      expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(1);
+    });
   });
 
   it("gives a running row the same run indicator and trailing rails as recent rows", async () => {

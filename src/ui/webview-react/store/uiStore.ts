@@ -18,9 +18,46 @@ import type {
   WorkflowRunNavigationSummary,
 } from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { isWorkflowRunning } from "@utils/status";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 let runViewRequestSequence = 0;
+
+/**
+ * Rebuild the observed-running ledger (see {@link UiState.observedRunningWorkflowIds})
+ * from the authoritative live workflow list.
+ *
+ * Admission requires an observation of RUNNING/PAUSING; a PAUSED observation
+ * neither admits nor evicts, which is the whole point — a pause is still the
+ * run you started, but a run merely *loaded* while already paused on disk was
+ * never executed here and must not be treated as such. Ids absent from
+ * `workflows` are pruned, keeping the ledger a strict subset of the live list
+ * so a retired instance can never resurrect its admission.
+ *
+ * Returns `previous` unchanged when nothing moved, so subscribers selecting
+ * the ledger don't re-render on every summary update.
+ */
+function reconcileObservedRunning(
+  previous: Set<string>,
+  workflows: WorkflowSummary[]
+): Set<string> {
+  const next = new Set<string>();
+  for (const workflow of workflows) {
+    if (
+      isWorkflowRunning(workflow.executionState) ||
+      previous.has(workflow.id)
+    ) {
+      next.add(workflow.id);
+    }
+  }
+  if (
+    next.size === previous.size &&
+    [...next].every((id) => previous.has(id))
+  ) {
+    return previous;
+  }
+  return next;
+}
 
 /**
  * Descriptor revisions are monotonic per lineage, so when a message targets the
@@ -303,6 +340,25 @@ interface UiState {
 
   // Multi-workflow support
   loadedWorkflows: WorkflowSummary[];
+  /**
+   * Instance ids observed RUNNING/PAUSING during this dashboard session — the
+   * admission ledger for the workflow dropdown's pinned "Running" region.
+   *
+   * The region can't be a pure function of execution state. `loadedWorkflows`
+   * mirrors the orchestrator's instance registry, which holds *every* loaded
+   * instance — so merely opening a lineage whose latest run was left paused on
+   * disk would otherwise pin it as if it were executing here. Membership is
+   * therefore earned by running: a workflow enters on RUNNING/PAUSING and is
+   * retained across the subsequent PAUSED (the run is still the one you
+   * started, and its Resume/Stop still have exactly one referent), until it
+   * reaches a terminal state or the instance goes away.
+   *
+   * Deliberately not persisted: a stale ledger restored after a window reload
+   * would re-pin paused runs this session never executed. Reloading the webview
+   * mid-pause therefore demotes the row to an ordinary lineage row, still
+   * badged PAUSED — the safe direction to fail.
+   */
+  observedRunningWorkflowIds: Set<string>;
   activeWorkflowId: string | null;
   activeWorkflowWorkingFilePath: string | null;
 
@@ -658,6 +714,7 @@ const initialState: UiState = {
   recentWorkflows: [],
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
+  observedRunningWorkflowIds: new Set<string>(),
   activeWorkflowId: null,
   activeWorkflowWorkingFilePath: null,
   isLoading: false,
@@ -993,29 +1050,59 @@ export const useUiStore = create<UiState & UiActions>()(
       // MULTI-WORKFLOW SUPPORT
       // ============================================================================
 
-      setLoadedWorkflows: (workflows) => set({ loadedWorkflows: workflows }),
+      // Every mutation of `loadedWorkflows` reconciles the observed-running
+      // ledger from the resulting list, so the two can never drift apart.
+      setLoadedWorkflows: (workflows) =>
+        set((state) => ({
+          loadedWorkflows: workflows,
+          observedRunningWorkflowIds: reconcileObservedRunning(
+            state.observedRunningWorkflowIds,
+            workflows
+          ),
+        })),
 
       addLoadedWorkflow: (workflow) =>
-        set((state) => ({
-          loadedWorkflows: [
+        set((state) => {
+          const loadedWorkflows = [
             ...state.loadedWorkflows.filter((w) => w.id !== workflow.id),
             workflow,
-          ],
-        })),
+          ];
+          return {
+            loadedWorkflows,
+            observedRunningWorkflowIds: reconcileObservedRunning(
+              state.observedRunningWorkflowIds,
+              loadedWorkflows
+            ),
+          };
+        }),
 
       removeLoadedWorkflow: (workflowId) =>
-        set((state) => ({
-          loadedWorkflows: state.loadedWorkflows.filter(
+        set((state) => {
+          const loadedWorkflows = state.loadedWorkflows.filter(
             (w) => w.id !== workflowId
-          ),
-        })),
+          );
+          return {
+            loadedWorkflows,
+            observedRunningWorkflowIds: reconcileObservedRunning(
+              state.observedRunningWorkflowIds,
+              loadedWorkflows
+            ),
+          };
+        }),
 
       updateLoadedWorkflow: (workflow) =>
-        set((state) => ({
-          loadedWorkflows: state.loadedWorkflows.map((w) =>
+        set((state) => {
+          const loadedWorkflows = state.loadedWorkflows.map((w) =>
             w.id === workflow.id ? workflow : w
-          ),
-        })),
+          );
+          return {
+            loadedWorkflows,
+            observedRunningWorkflowIds: reconcileObservedRunning(
+              state.observedRunningWorkflowIds,
+              loadedWorkflows
+            ),
+          };
+        }),
 
       setActiveWorkflowId: (id) => set({ activeWorkflowId: id }),
 

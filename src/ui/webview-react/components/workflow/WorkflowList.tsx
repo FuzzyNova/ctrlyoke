@@ -26,10 +26,15 @@ import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isDrillableRunNav } from "@utils/runNavigation";
 
 /**
- * One row of the unified workflow dropdown list: either a lineage with an
- * active instance (running/pausing/paused) or a lineage known only from
- * history. Running state lives on the row itself — there is exactly one row
- * per lineage, never a duplicate between a "running" and a "recent" section.
+ * One row of the unified workflow dropdown list: either a lineage executing
+ * here or a lineage known only from history. Running state lives on the row
+ * itself — there is exactly one row per lineage, never a duplicate between a
+ * "running" and a "recent" section.
+ *
+ * "Executing here" is decided by the caller and is not simply "the state is
+ * active": a run enters on RUNNING/PAUSING and is retained across a following
+ * PAUSED, but a lineage whose latest run was merely *found* paused on disk
+ * renders as a `recent` row (see `uiStore.observedRunningWorkflowIds`).
  */
 export type UnifiedWorkflowRow =
   | {
@@ -256,7 +261,9 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
  * Pinning is the point: a running lineage stays reachable (and its controls
  * usable) no matter how far down the recent list the user has scrolled.
  * With nothing running, the region (and its caption) is absent entirely and
- * the list renders exactly as a single flat list.
+ * the list renders exactly as a single flat list. That scarcity is why
+ * membership is earned by executing rather than by state alone — paused runs
+ * accumulate without bound and would crowd live work out of the cap.
  *
  * Features:
  * - Shows workflow name, state, and relative time (or a live elapsed timer
