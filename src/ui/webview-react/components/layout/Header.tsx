@@ -91,6 +91,7 @@ export const Header: React.FC<{
   const openWorkspaceViewer = useWorkspaceViewerStore((s) => s.open);
   const { fileName, executionState } = useWorkflowStore();
   const hasSteps = useWorkflowStore((s) => s.steps.length > 0);
+  const hasFinalStep = useWorkflowStore((s) => s.finalStep !== null);
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -166,7 +167,10 @@ export const Header: React.FC<{
       viewedExecutionState: executionState,
       viewedKind: displayedViewAddress?.kind ?? null,
       hasFile,
-      hasSteps,
+      // A workflow can begin with its final step, which may append its first
+      // queue steps. Keep the execution gate open for that final-step-only
+      // workflow shape while retaining `hasSteps` for save affordances.
+      hasSteps: hasSteps || hasFinalStep,
       pendingRewind: pendingRewind !== null,
       executionRunState:
         liveExecutionRunState ?? executionRunSummary?.executionState,
@@ -186,7 +190,10 @@ export const Header: React.FC<{
     }
   }, [vscode, activeWorkflowId]);
 
-  const canSave = hasFile && hasSteps;
+  const canSave = hasFile;
+  const saveTitle = hasFile
+    ? "Save workflow to file"
+    : "Load a workflow to save";
 
   const handleSave = useCallback(() => {
     if (!canSave || !displayedViewAddress) return;
@@ -346,13 +353,7 @@ export const Header: React.FC<{
         }`}
         onClick={handleSave}
         disabled={!canSave}
-        title={
-          !hasFile
-            ? "Load a workflow to save"
-            : !hasSteps
-              ? "Add steps to save"
-              : "Save workflow to file"
-        }
+        title={saveTitle}
         aria-label="Save workflow"
       >
         <i className={`codicon codicon-save ${btnSize.icon}`} />
@@ -511,13 +512,7 @@ export const Header: React.FC<{
               }`}
               onClick={handleSave}
               disabled={!canSave}
-              title={
-                !hasFile
-                  ? "Load a workflow to save"
-                  : !hasSteps
-                    ? "Add steps to save"
-                    : "Save workflow to file"
-              }
+              title={saveTitle}
               aria-label="Save workflow"
             >
               <i className={`codicon codicon-save ${btnSize.icon}`} />

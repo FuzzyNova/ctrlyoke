@@ -181,10 +181,48 @@ describe("Header execution controls", () => {
     });
   });
 
+  it("runs a final-step-only draft", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-b" as never,
+        kind: "draft",
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "final-step-only.ctrlyoke.json",
+      workflowName: "Final step only",
+      steps: [],
+      finalStep: { prompt: "Generate the workflow steps" },
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(<Header />);
+
+    const runButton = screen.getByRole("button", { name: "Run" });
+    expect(runButton).toBeEnabled();
+    for (const saveButton of screen.getAllByRole("button", {
+      name: "Save workflow",
+    })) {
+      expect(saveButton).toBeEnabled();
+    }
+
+    fireEvent.click(runButton);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.EXECUTE_DRAFT,
+      address: { workflowKey: "workflow-b", kind: "draft" },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 7,
+    });
+  });
+
   // The primary Run affordance must remain discoverable even when an empty new
-  // workflow cannot run yet. Secondary inactive slots can still collapse below
-  // xs; assert the responsive classes because jsdom does not apply breakpoints.
-  it("keeps disabled Run visible while collapsing inactive secondary slots below xs", () => {
+  // workflow cannot run yet. Saving an empty workflow is valid; secondary
+  // inactive execution slots can still collapse below xs. Assert the responsive
+  // classes because jsdom does not apply breakpoints.
+  it("keeps disabled Run visible but saves an empty draft", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
@@ -211,6 +249,16 @@ describe("Header execution controls", () => {
     expect(runButton).toBeDisabled();
     expect(runButton.className).toContain("flex bg-btn-secondary-bg");
     expect(runButton.className).not.toContain("hidden");
+    const [saveButton] = screen.getAllByRole("button", {
+      name: "Save workflow",
+    });
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST,
+      requestId: expect.stringMatching(/^save-/),
+      address: { workflowKey: "workflow-b", kind: "draft" },
+    });
     for (const label of ["Pause", "Stop"]) {
       expect(screen.getByRole("button", { name: label }).className).toContain(
         "hidden xs:flex"
