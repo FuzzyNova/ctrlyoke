@@ -8,6 +8,7 @@ import { PromptFileLoader } from "../../core/orchestration/PromptFileLoader";
 import { PromptQueue } from "../../core/PromptQueue";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("PromptFileLoader Tests", () => {
   const tempDirs: string[] = [];
@@ -19,6 +20,27 @@ suite("PromptFileLoader Tests", () => {
   });
 
   suite("populateSettingsDefaults", () => {
+    test("should seed executionMode from settings when not explicitly set", () => {
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+
+      assert.strictEqual(
+        defaults.executionMode,
+        ConfigurationUtils.getCliExecutionMode()
+      );
+      assert.ok(
+        defaults.executionMode === "interactive" ||
+          defaults.executionMode === "headless"
+      );
+    });
+
+    test("should not overwrite an explicit executionMode", () => {
+      const defaults = PromptFileLoader.populateSettingsDefaults({
+        executionMode: "headless",
+      });
+
+      assert.strictEqual(defaults.executionMode, undefined);
+    });
+
     test("should seed toolPermissions from VS Code settings when not explicitly set", () => {
       const explicitValues: Record<string, unknown> = {
         harness: "copilot-cli",

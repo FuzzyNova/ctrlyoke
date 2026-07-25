@@ -1,7 +1,13 @@
 import * as assert from "assert";
+import { teardown } from "mocha";
 import { PropertyResolver } from "../../utils/PropertyResolver";
 import { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
-import { PERMISSION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  HARNESS_IDS,
+  EXECUTION_MODES,
+} from "../../types/DashboardConstants";
+import { configService } from "../../config/CtrlYokeConfigService";
 
 suite("PropertyResolver Tests", () => {
   suite("resolveHarness", () => {
@@ -173,6 +179,64 @@ suite("PropertyResolver Tests", () => {
       const resolved = PropertyResolver.resolve(prompt, workflow);
       // Should default to ConfigurationUtils.shouldResumeExistingSession()
       assert.strictEqual(typeof resolved.resumeSession, "boolean");
+    });
+  });
+
+  suite("resolveExecutionMode", () => {
+    teardown(() => {
+      PropertyResolver.setHostCanProvidePty(true);
+      configService.setCliOverlay({});
+    });
+
+    test("uses prompt over workflow over settings", () => {
+      configService.setCliOverlay({
+        defaults: { executionMode: EXECUTION_MODES.HEADLESS },
+      });
+
+      const workflow: PromptFile = {
+        steps: [],
+        executionMode: EXECUTION_MODES.HEADLESS,
+      };
+      const prompt: PromptStep = {
+        prompt: "test",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+      };
+
+      assert.strictEqual(
+        PropertyResolver.resolve(prompt, workflow).executionMode,
+        EXECUTION_MODES.INTERACTIVE
+      );
+      assert.strictEqual(
+        PropertyResolver.resolve({ prompt: "test" }, workflow).executionMode,
+        EXECUTION_MODES.HEADLESS
+      );
+      assert.strictEqual(
+        PropertyResolver.resolve({ prompt: "test" }, { steps: [] })
+          .executionMode,
+        EXECUTION_MODES.HEADLESS
+      );
+    });
+
+    test("undefined inherits and an unavailable host clamps interactive to headless", () => {
+      configService.setCliOverlay({
+        defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
+      });
+      PropertyResolver.setHostCanProvidePty(false);
+
+      assert.strictEqual(
+        PropertyResolver.resolve(
+          { prompt: "test" },
+          { steps: [], executionMode: EXECUTION_MODES.INTERACTIVE }
+        ).executionMode,
+        EXECUTION_MODES.HEADLESS
+      );
+      assert.strictEqual(
+        PropertyResolver.resolve(
+          { prompt: "test" },
+          { steps: [], executionMode: EXECUTION_MODES.HEADLESS }
+        ).executionMode,
+        EXECUTION_MODES.HEADLESS
+      );
     });
   });
 

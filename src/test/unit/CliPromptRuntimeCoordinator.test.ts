@@ -145,6 +145,7 @@ suite("CliPromptRuntimeCoordinator", () => {
         resolvedProperties: {
           harness: HARNESS_IDS.CLAUDE_CLI,
           model: "sonnet",
+          executionMode: "headless",
           agent: "reviewer",
           resumeSession: true,
           mcpServers: null,
@@ -196,6 +197,7 @@ suite("CliPromptRuntimeCoordinator", () => {
       resolvedProperties: {
         harness: HARNESS_IDS.CODEX_CLI,
         model: "gpt-5.2-codex",
+        executionMode: "headless",
         resumeSession: true,
         mcpServers: null,
         hooks: null,

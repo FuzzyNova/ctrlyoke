@@ -5,6 +5,7 @@ import {
   parseClipboardWorkflowStep,
   sanitizeClipboardWorkflowStep,
   serializeWorkflowStepForClipboard,
+  buildPromptStepProperties,
   stripTimelineDuplicatedWorkingFileOutput,
 } from "../../core/WorkflowStepSanitizer";
 
@@ -17,6 +18,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       enabled: false,
       harness: "codex-cli",
       model: "gpt-5.4",
+      executionMode: "headless",
       agent: null,
       skills: ["review"],
       resumeSession: true,
@@ -77,6 +79,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       enabled: false,
       harness: "codex-cli",
       model: "gpt-5.4",
+      executionMode: "headless",
       agent: null,
       skills: ["review"],
       resumeSession: true,
@@ -126,6 +129,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       type: STEP_TYPES.SCRIPT,
       name: "Copied script",
       script: "npm test",
+      executionMode: "interactive",
       enabled: true,
       timeout: 45,
       onPass: CONDITION_ACTIONS.CONTINUE,
@@ -145,10 +149,18 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       type: STEP_TYPES.SCRIPT,
       name: "Copied script",
       script: "npm test",
+      executionMode: "interactive",
       timeout: 45,
       onPass: CONDITION_ACTIONS.CONTINUE,
       onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
     });
+  });
+
+  test("drops invalid executionMode values instead of persisting them", () => {
+    assert.deepStrictEqual(
+      buildPromptStepProperties({ executionMode: "sideways" }),
+      {}
+    );
   });
 });
 

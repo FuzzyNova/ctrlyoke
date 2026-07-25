@@ -13,6 +13,7 @@ import {
   type ConditionAction,
   type CompareSource,
   type HarnessId,
+  type ExecutionMode,
   type HookEvent,
   type FailureKind,
 } from "./DashboardConstants";
@@ -126,6 +127,17 @@ export interface ExecutionProperties {
 
   /** AI model to use */
   model?: string;
+
+  /**
+   * Where this step runs.
+   * - "interactive": live PTY/TUI — user can steer and answer questions
+   * - "headless": background child process — output in the Output panel
+   * - undefined: inherit from workflow, then settings (defaults.executionMode)
+   *
+   * Not nullable: there is no "no mode" state, so the tri-state null pattern
+   * used by agent/skills/additionalArgs does not apply.
+   */
+  executionMode?: ExecutionMode;
 
   /**
    * Custom agent file (.agent.md).
@@ -442,6 +454,8 @@ export interface PromptStep extends ExecutionProperties {
 export interface ScriptStep extends ScriptProperties {
   type: typeof STEP_TYPES.SCRIPT;
   name?: string;
+  /** Execution mode for this script step; undefined inherits from settings. */
+  executionMode?: ExecutionMode;
   /** When false, the step remains in the workflow but never executes. */
   enabled?: boolean;
   /** What to do when the script passes. Default: "continue". */

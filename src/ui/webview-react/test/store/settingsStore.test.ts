@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useSettingsStore } from "@store/settingsStore";
 import { HARNESS_IDS, HARNESS_STATUS_STRINGS } from "@/types/messages";
-import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  EXECUTION_MODES,
+} from "@root/types/DashboardConstants";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 
 // Zustand stores are module singletons — reset between tests.
@@ -277,6 +280,29 @@ describe("getEffectiveModel", () => {
       .updateWorkflowProperty("model", "claude-opus-4");
     expect(useSettingsStore.getState().getEffectiveModel()).toBe(
       "claude-opus-4"
+    );
+  });
+});
+
+describe("getEffectiveExecutionMode", () => {
+  it("returns the global mode when no workflow override exists", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", EXECUTION_MODES.HEADLESS);
+    expect(useSettingsStore.getState().getEffectiveExecutionMode()).toBe(
+      EXECUTION_MODES.HEADLESS
+    );
+  });
+
+  it("returns the workflow mode when overridden", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", EXECUTION_MODES.HEADLESS);
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("executionMode", EXECUTION_MODES.INTERACTIVE);
+    expect(useSettingsStore.getState().getEffectiveExecutionMode()).toBe(
+      EXECUTION_MODES.INTERACTIVE
     );
   });
 });

@@ -10,6 +10,7 @@ import type { IDashboardSink } from "../../types/IDashboardSink";
 const WORKFLOW_PROPERTY_KEYS = [
   "harness",
   "model",
+  "executionMode",
   "agent",
   "skills",
   "resumeSession",
@@ -360,6 +361,9 @@ export class PromptFileLoader {
           typeof ConfigurationUtils.getModelForHarness
         >[0]
       );
+    }
+    if (explicitValues.executionMode === undefined) {
+      defaults.executionMode = ConfigurationUtils.getCliExecutionMode();
     }
     if (explicitValues.agent === undefined) {
       defaults.agent = ConfigurationUtils.getDefaultAgent();

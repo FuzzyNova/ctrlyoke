@@ -2,6 +2,8 @@ import {
   STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  EXECUTION_MODES,
+  type ExecutionMode,
 } from "../types/DashboardConstants";
 import type {
   ErrorBehavior,
@@ -366,6 +368,10 @@ function buildClipboardExecutionProperties(
       harness: step.harness as PromptStep["harness"],
     }),
     ...(typeof step.model === "string" && { model: step.model }),
+    ...((step.executionMode === EXECUTION_MODES.INTERACTIVE ||
+      step.executionMode === EXECUTION_MODES.HEADLESS) && {
+      executionMode: step.executionMode,
+    }),
     ...((typeof step.agent === "string" || step.agent === null) && {
       agent: step.agent as PromptStep["agent"],
     }),
@@ -422,6 +428,10 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       type: STEP_TYPES.SCRIPT,
       script: step.script,
       ...commonFields,
+      ...((step.executionMode === EXECUTION_MODES.INTERACTIVE ||
+        step.executionMode === EXECUTION_MODES.HEADLESS) && {
+        executionMode: step.executionMode,
+      }),
       ...(typeof step.timeout === "number" && { timeout: step.timeout }),
       ...(typeof step.compareSource === "string" && {
         compareSource: step.compareSource as ScriptStep["compareSource"],
@@ -498,6 +508,10 @@ export function buildScriptStepFromProperties(
   return {
     type: STEP_TYPES.SCRIPT,
     script,
+    ...((props.executionMode === EXECUTION_MODES.INTERACTIVE ||
+      props.executionMode === EXECUTION_MODES.HEADLESS) && {
+      executionMode: props.executionMode as ExecutionMode,
+    }),
     ...(name?.trim() ? { name: name.trim() } : {}),
     ...(props.enabled !== undefined && {
       enabled: props.enabled as boolean,
@@ -557,14 +571,26 @@ export function buildPromptStepProperties(
   // For tri-state nullable properties like agent, skills, and additionalArgs,
   // null is stored as-is to represent an explicit "none/disabled" override.
   // "Clear to inherit" is handled separately via buildClearUpdates / clearProperties.
-  const coerce = <T>(v: unknown): T | undefined =>
-    v === null ? undefined : (v as T);
+  const coerce = <T>(
+    v: unknown,
+    isValid?: (value: unknown) => boolean
+  ): T | undefined =>
+    v === null || (isValid !== undefined && !isValid(v))
+      ? undefined
+      : (v as T);
+  const executionMode = coerce<ExecutionMode>(
+    props?.executionMode,
+    (value) =>
+      value === EXECUTION_MODES.INTERACTIVE ||
+      value === EXECUTION_MODES.HEADLESS
+  );
 
   return {
     ...(props?.harness !== undefined && {
       harness: coerce<HarnessId>(props.harness),
     }),
     ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
+    ...(executionMode !== undefined && { executionMode }),
     ...(props?.agent !== undefined && {
       agent: props.agent as string | null,
     }),

@@ -123,6 +123,7 @@ export interface GlobalSettings {
 export interface WorkflowProperties {
   harness?: string;
   model?: string;
+  executionMode?: ExecutionMode;
   agent?: string | null;
   skills?: string[] | null;
   resumeSession?: boolean;
@@ -288,6 +289,7 @@ interface SettingsActions {
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
   getEffectiveModel: () => string;
+  getEffectiveExecutionMode: () => ExecutionMode;
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
   getEffectiveMcpServers: () => (string | object)[] | null;
@@ -584,6 +586,11 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     getEffectiveModel: () => {
       const { workflowProperties, globalSettings } = get();
       return workflowProperties.model ?? globalSettings.model;
+    },
+
+    getEffectiveExecutionMode: () => {
+      const { workflowProperties, globalSettings } = get();
+      return workflowProperties.executionMode ?? globalSettings.executionMode;
     },
 
     getEffectiveAgent: () => {

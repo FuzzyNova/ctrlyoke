@@ -288,6 +288,7 @@ export class WorkflowStepHandlers {
       const raw = {
         harness: message.workflowProperties?.harness,
         model: message.workflowProperties?.model,
+        executionMode: message.workflowProperties?.executionMode,
         agent: message.workflowProperties?.agent,
         skills: message.workflowProperties?.skills,
         resumeSession: message.workflowProperties?.resumeSession,

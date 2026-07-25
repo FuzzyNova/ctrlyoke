@@ -15,6 +15,8 @@ import { ConfigurationUtils } from "./ConfigurationUtils";
 import {
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
+  EXECUTION_MODES,
+  type ExecutionMode,
 } from "../types/DashboardConstants";
 
 /**
@@ -27,6 +29,9 @@ export interface ResolvedProperties {
 
   /** AI model to use (always resolved) */
   model: string;
+
+  /** Execution mode for the step (always resolved) */
+  executionMode: ExecutionMode;
 
   /** Custom agent file (.agent.md) - undefined if not specified or explicitly disabled */
   agent?: string;
@@ -88,6 +93,18 @@ export interface ResolvedProperties {
  */
 export class PropertyResolver {
   /**
+   * Process-level capability hook for hosts that cannot provide a PTY.
+   * CLI/hosted entry points should set this before resolving workflow steps.
+   * It defaults to true so existing hosts retain their current behavior until
+   * those entry points opt into the clamp.
+   */
+  private static hostCanProvidePty = true;
+
+  static setHostCanProvidePty(canProvidePty: boolean): void {
+    this.hostCanProvidePty = canProvidePty;
+  }
+
+  /**
    * Resolve all execution properties for a prompt.
    *
    * Applies three-tier precedence for each property:
@@ -106,6 +123,7 @@ export class PropertyResolver {
     return {
       harness,
       model,
+      executionMode: this.resolveExecutionMode(prompt, workflow),
       agent: this.resolveAgent(prompt, workflow),
       skills: this.resolveSkills(prompt, workflow),
       resumeSession: this.resolveResumeSession(prompt, workflow),
@@ -294,6 +312,30 @@ export class PropertyResolver {
 
     // 3. VS Code setting fallback
     return ConfigurationUtils.shouldResumeExistingSession();
+  }
+
+  /**
+   * Resolve executionMode with three-tier precedence, then clamp to headless
+   * when the current process cannot provide a PTY.
+   *
+   * Precedence order:
+   * 1. Prompt-level override
+   * 2. Workflow-level default
+   * 3. VS Code/global setting (defaults.executionMode)
+   */
+  private static resolveExecutionMode(
+    prompt: PromptStep,
+    workflow: PromptFile
+  ): ExecutionMode {
+    if (!this.hostCanProvidePty) {
+      return EXECUTION_MODES.HEADLESS;
+    }
+
+    return (
+      prompt.executionMode ??
+      workflow.executionMode ??
+      (ConfigurationUtils.getCliExecutionMode() as ExecutionMode)
+    );
   }
 
   /**

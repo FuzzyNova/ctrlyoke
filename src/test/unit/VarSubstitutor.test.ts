@@ -115,6 +115,7 @@ suite("VarSubstitutor Tests", () => {
       return {
         harness: HARNESS_IDS.CLAUDE_CLI,
         model: "claude-sonnet-4.6",
+        executionMode: "headless",
         resumeSession: false,
         mcpServers: null,
         hooks: null,

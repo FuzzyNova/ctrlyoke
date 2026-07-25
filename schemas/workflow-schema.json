@@ -142,6 +142,11 @@
             "sonnet[1m]"
           ]
         },
+        "executionMode": {
+          "type": "string",
+          "enum": ["interactive", "headless"],
+          "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default."
+        },
         "agent": {
           "oneOf": [
             {
@@ -392,6 +397,11 @@
         "enabled": {
           "type": "boolean",
           "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+        },
+        "executionMode": {
+          "type": "string",
+          "enum": ["interactive", "headless"],
+          "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Omitting this field inherits the global default."
         },
         "script": {
           "type": "string",
