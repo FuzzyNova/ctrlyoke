@@ -93,7 +93,17 @@ export function navigateToWorkflowAddress(
   targetWorkflowName?: string
 ): void {
   const ui = useUiStore.getState();
-  if (areWorkflowAddressesEqual(address, ui.displayedViewAddress)) {
+  // Only no-op when the address is both the navigation target AND the address
+  // whose content workflowStore actually holds, with no request still in
+  // flight. displayedViewAddress alone can match while the matching snapshot
+  // was rejected/never applied (e.g. a backend-initiated switch whose
+  // RUN_VIEW_LOADED lost a stale-snapshot race) — short-circuiting on that
+  // alone leaves the click that would otherwise recover permanently inert.
+  if (
+    areWorkflowAddressesEqual(address, ui.displayedViewAddress) &&
+    areWorkflowAddressesEqual(address, ui.appliedViewAddress) &&
+    ui.pendingRunViewRequestId === null
+  ) {
     WebviewLog.debug(
       `[runNavigation] already viewing ${addressLabel(address)} — no load requested`
     );

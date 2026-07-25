@@ -262,6 +262,7 @@ function applyWorkflowChange(options?: {
     // follows the first write to a brand-new workflow.
     useUiStore.setState({
       displayedViewAddress: null,
+      appliedViewAddress: null,
       displayedDefinitionRevision: null,
       displayedDescriptorRevision: null,
     });
@@ -1824,9 +1825,16 @@ function createMessageHandlers(): MessageHandlerMap {
     // the step list either: live queue growth reaches the client before the
     // follow-up WORKFLOW_VIEW_IDENTITY is published when execution completes.
     const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
+    // Compared against the address whose *content* is actually loaded into
+    // workflowStore, not the optimistic navigation target. An identity-only
+    // publish (WORKFLOW_VIEW_IDENTITY) can advance displayedViewAddress/
+    // displayedDefinitionRevision to a new workflow without ever applying its
+    // snapshot — comparing against displayedViewAddress here would then treat
+    // the *previous* workflow's still-resident content as "the current
+    // address" and permanently reject the real snapshot as regressive.
     const isCurrentAddress = areWorkflowAddressesEqual(
       address,
-      uiStore.displayedViewAddress
+      uiStore.appliedViewAddress
     );
     const currentDefinitionRevision = uiStore.displayedDefinitionRevision;
     const currentDescriptorRevision = uiStore.displayedDescriptorRevision;
@@ -1940,6 +1948,10 @@ function createMessageHandlers(): MessageHandlerMap {
     useSettingsStore.getState().setWorkflowProperties(normalized);
     useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
     const ui = useUiStore.getState();
+    // workflowStore now genuinely holds this address's content — record it
+    // separately from the optimistic displayedViewAddress below so a later
+    // requestless snapshot's stale-check has an honest baseline.
+    ui.markViewAddressApplied(address);
     ui.setDisplayedRunView(
       address,
       runSummaries,

@@ -288,6 +288,19 @@ interface UiState {
    * navigation addresses runs by `runRef`, never by position in this array. */
   runSummaries: RunSummary[];
   displayedViewAddress: WorkflowViewAddress | null;
+  /**
+   * The address whose *content* is actually loaded into `workflowStore` right
+   * now — set only when a RUN_VIEW_LOADED snapshot is applied, never by an
+   * optimistic navigation or an identity-only publish (WORKFLOW_VIEW_IDENTITY).
+   * `displayedViewAddress` is the navigation target and can outrun this by one
+   * in-flight request; RUN_VIEW_LOADED's stale-snapshot guard must compare
+   * against this field, not `displayedViewAddress`, or a snapshot for a target
+   * that was announced but never actually applied gets rejected as regressive
+   * against the *previous* workflow's still-resident content. Not persisted —
+   * a fresh reload has applied nothing yet regardless of what address was last
+   * displayed.
+   */
+  appliedViewAddress: WorkflowViewAddress | null;
   /** Latest client-initiated run-view request; not persisted across reloads. */
   pendingRunViewRequestId: string | null;
   /**
@@ -298,6 +311,7 @@ interface UiState {
   pendingRunViewSwitch: {
     requestId: string;
     workflowName: string | null;
+    address: WorkflowViewAddress;
   } | null;
   executionRunRef: string | null;
   /** Optimistic revisions paired with the current addressed definition snapshot. */
@@ -614,6 +628,8 @@ interface UiActions {
     descriptorRevision: number
   ) => void;
   markExecutionRunFinished: (executionState: ExecutionState) => void;
+  /** Marks `address` as the content actually applied to `workflowStore`. */
+  markViewAddressApplied: (address: WorkflowViewAddress) => void;
   requestRunViewLoad: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
@@ -731,6 +747,7 @@ const initialState: UiState = {
   isViewingHistory: false,
   runSummaries: [],
   displayedViewAddress: null,
+  appliedViewAddress: null,
   pendingRunViewRequestId: null,
   pendingRunViewSwitch: null,
   executionRunRef: null,
@@ -1274,6 +1291,8 @@ export const useUiStore = create<UiState & UiActions>()(
               }
         ),
 
+      markViewAddressApplied: (address) => set({ appliedViewAddress: address }),
+
       requestRunViewLoad: (
         address,
         summaries,
@@ -1302,7 +1321,7 @@ export const useUiStore = create<UiState & UiActions>()(
           // Same-lineage loads (run panel) keep the panels they refine.
           pendingRunViewSwitch: sameLineage
             ? null
-            : { requestId, workflowName: targetWorkflowName ?? null },
+            : { requestId, workflowName: targetWorkflowName ?? null, address },
         });
         return requestId;
       },

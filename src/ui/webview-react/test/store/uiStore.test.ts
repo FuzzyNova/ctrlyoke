@@ -483,8 +483,9 @@ describe("requestRunViewLoad", () => {
       summary.runRef
     );
 
+    const targetAddress = { workflowKey: "wf-2" as never, kind: "draft" as const };
     const switchRequestId = store().requestRunViewLoad(
-      { workflowKey: "wf-2" as never, kind: "draft" },
+      targetAddress,
       [],
       undefined,
       "Target workflow"
@@ -492,6 +493,7 @@ describe("requestRunViewLoad", () => {
     expect(store().pendingRunViewSwitch).toEqual({
       requestId: switchRequestId,
       workflowName: "Target workflow",
+      address: targetAddress,
     });
 
     // A same-lineage follow-up supersedes the switch: its snapshot refines the
@@ -519,6 +521,29 @@ describe("requestRunViewLoad", () => {
     store().clearPendingRunViewLoad();
     expect(store().pendingRunViewRequestId).toBeNull();
     expect(store().pendingRunViewSwitch).toBeNull();
+  });
+
+  it("does not mark the requested address as applied — only markViewAddressApplied does", () => {
+    // requestRunViewLoad is the optimistic navigation step; it must not claim
+    // that workflowStore holds the new address's content yet, or a snapshot
+    // rejected/lost after this point would be indistinguishable from one that
+    // genuinely arrived and applied.
+    store().requestRunViewLoad(
+      { workflowKey: "wf-9" as never, kind: "draft" },
+      []
+    );
+    expect(store().appliedViewAddress).toBeNull();
+  });
+});
+
+describe("markViewAddressApplied", () => {
+  it("records the address whose content workflowStore actually holds", () => {
+    const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
+    expect(store().appliedViewAddress).toBeNull();
+
+    store().markViewAddressApplied(address);
+
+    expect(store().appliedViewAddress).toEqual(address);
   });
 });
 

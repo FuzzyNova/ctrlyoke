@@ -150,6 +150,7 @@ describe("navigateToWorkflowAddress", () => {
     useUiStore.getState().resetUi();
     useUiStore.setState({
       displayedViewAddress: null,
+      appliedViewAddress: null,
       runSummaries: [],
       executionRunRef: null,
       pendingRunViewSwitch: null,
@@ -158,17 +159,74 @@ describe("navigateToWorkflowAddress", () => {
     useWorkflowStore.getState().resetWorkflow();
   });
 
-  it("no-ops when the address is already displayed", () => {
+  it("no-ops when the address is already displayed and its content applied", () => {
     const address = {
       workflowKey: WORKFLOW_KEY,
       kind: "run" as const,
       runRef: "run-1" as never,
     };
-    useUiStore.setState({ displayedViewAddress: address });
+    useUiStore.setState({
+      displayedViewAddress: address,
+      appliedViewAddress: address,
+    });
 
     navigateToWorkflowAddress(vscode, address);
 
     expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("retries when the address is displayed but its content was never applied", () => {
+    // Reproduces the "New workflow switch shows test in the title" bug: a
+    // backend-initiated switch (or a rejected snapshot) can leave
+    // displayedViewAddress pointing at the target while workflowStore still
+    // holds the previous workflow's content. The old displayedViewAddress-only
+    // check silently no-op'd here, permanently freezing the mismatch.
+    const address = {
+      workflowKey: WORKFLOW_KEY,
+      kind: "run" as const,
+      runRef: "run-1" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: address,
+      appliedViewAddress: {
+        workflowKey: "wf-other" as never,
+        kind: "run",
+        runRef: "run-old" as never,
+      },
+    });
+
+    navigateToWorkflowAddress(vscode, address);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address,
+        requestId: expect.any(String),
+      })
+    );
+  });
+
+  it("retries when a load for the same address is already pending", () => {
+    const address = {
+      workflowKey: WORKFLOW_KEY,
+      kind: "run" as const,
+      runRef: "run-1" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: address,
+      appliedViewAddress: address,
+      pendingRunViewRequestId: "run-view-stuck",
+    });
+
+    navigateToWorkflowAddress(vscode, address);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address,
+        requestId: expect.any(String),
+      })
+    );
   });
 
   it("sends LOAD_RUN_VIEW for an ordinary address switch", () => {

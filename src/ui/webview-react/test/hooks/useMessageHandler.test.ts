@@ -82,7 +82,11 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
-  useUiStore.setState({ displayedViewAddress: null, executionRunRef: null });
+  useUiStore.setState({
+    displayedViewAddress: null,
+    appliedViewAddress: null,
+    executionRunRef: null,
+  });
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   handleCompletionNotificationEventMock.mockReset();
@@ -1439,6 +1443,84 @@ describe("run view revision snapshots", () => {
     });
   });
 
+  it("applies a genuinely new workflow's snapshot even though its identity was already published without content", () => {
+    // Reproduces the "new workflow switch shows test in the title" bug: a
+    // WORKFLOW_VIEW_IDENTITY publish (e.g. re-emitted after a replay) can
+    // advance displayedViewAddress/displayedDefinitionRevision to a new
+    // lineage before that lineage's own RUN_VIEW_LOADED snapshot is applied.
+    // The stale-snapshot guard must not treat the *previous* workflow's still
+    // -resident 4-step content as "the current address" just because
+    // displayedViewAddress now points at the 2-step target.
+    renderHook(() => useMessageHandler());
+    const previousAddress = {
+      workflowKey: "test" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-24T00-00-00-000Z" as never,
+    };
+    const targetAddress = {
+      workflowKey: "new-workflow-switch" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-25T00-00-00-000Z" as never,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: previousAddress,
+        workingFile: {
+          workflowName: "test",
+          definitionRevision: 1,
+          steps: [
+            makePrompt("a"),
+            makePrompt("b"),
+            makePrompt("c"),
+            makePrompt("d"),
+          ],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+      });
+    });
+    expect(useWorkflowStore.getState().steps).toHaveLength(4);
+
+    act(() => {
+      // Identity-only publish for the new lineage — no matching content ever
+      // applied to workflowStore.
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address: targetAddress,
+        definitionRevision: 1,
+        descriptorRevision: 1,
+      });
+    });
+    expect(useUiStore.getState().displayedViewAddress).toEqual(targetAddress);
+    expect(useUiStore.getState().appliedViewAddress).toEqual(previousAddress);
+    expect(useWorkflowStore.getState().workflowName).toBe("test");
+
+    act(() => {
+      // The new lineage's own authoritative (but requestless) snapshot,
+      // finally arriving on reconnect/replay.
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: targetAddress,
+        workingFile: {
+          workflowName: "New workflow switch",
+          definitionRevision: 1,
+          steps: [makePrompt("x"), makePrompt("y")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+      });
+    });
+
+    expect(useWorkflowStore.getState().workflowName).toBe(
+      "New workflow switch"
+    );
+    expect(useWorkflowStore.getState().steps).toHaveLength(2);
+    expect(useUiStore.getState().appliedViewAddress).toEqual(targetAddress);
+  });
+
   it("adopts a regressive snapshot's newer descriptor revision while ignoring its definition", () => {
     renderHook(() => useMessageHandler());
     const address = {
@@ -1449,6 +1531,7 @@ describe("run view revision snapshots", () => {
     act(() => {
       useUiStore.setState({
         displayedViewAddress: address,
+        appliedViewAddress: address,
         displayedDefinitionRevision: 3,
         displayedDescriptorRevision: 5,
       });

@@ -2112,6 +2112,9 @@ export class WorkflowOrchestrator {
     requestId?: string,
     definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void> {
+    const startTime = Date.now();
+    const addressLabel = `${address.workflowKey}/${address.kind === "run" ? address.runRef : "draft"}`;
+    const logPrefix = `[loadRunViewForClient] request=${requestId ?? "none"} address=${addressLabel}`;
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
@@ -2126,6 +2129,7 @@ export class WorkflowOrchestrator {
     const filePath = this.resolveAddressFilePath(workspaceRoot, address);
     const content = await fs.promises.readFile(filePath, "utf-8");
     const workingFile = JSON.parse(content) as WorkingFile;
+    Log.debug(`${logPrefix} definition read at ${Date.now() - startTime}ms`);
     const historyManager = new OutputHistoryManager(workspaceRoot);
     const [history, runSummaries, descriptor] = await Promise.all([
       address.kind === "run"
@@ -2139,6 +2143,9 @@ export class WorkflowOrchestrator {
       historyManager.getRunSummaries(address.workflowKey),
       this.lineageRepository.readDescriptor(workspaceRoot, address.workflowKey),
     ]);
+    Log.debug(
+      `${logPrefix} summaries/descriptor/history read at ${Date.now() - startTime}ms`
+    );
     const executionRunRef = this.findExecutionRunRef(address.workflowKey);
     const { prompt, steps, finalStep, ...workflowProperties } = workingFile;
     void prompt;
@@ -2205,6 +2212,7 @@ export class WorkflowOrchestrator {
     // the addressed switch. Nothing after it may emit FILE_SELECTED,
     // SESSION_RESTORED, RUN_VIEW_LOADED, or OUTPUT_HISTORY_LOADED.
     send(snapshot);
+    Log.debug(`${logPrefix} snapshot sent at ${Date.now() - startTime}ms`);
 
     // Overlay only in-memory output that may have arrived after the timeline
     // read, then restore PTY metadata/scrollback. Neither path resets the
