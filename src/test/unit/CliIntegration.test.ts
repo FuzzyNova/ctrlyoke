@@ -159,7 +159,7 @@ function createTestIntegration(
 suite("CliIntegration", () => {
   setup(() => {
     configService.setCliOverlay({
-      execution: { mode: EXECUTION_MODES.HEADLESS },
+      defaults: { executionMode: EXECUTION_MODES.HEADLESS },
     });
   });
 

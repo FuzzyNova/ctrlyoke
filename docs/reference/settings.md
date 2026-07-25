@@ -58,9 +58,11 @@ These settings apply to both the extension and the standalone CLI where relevant
 ```json
 {
   "execution": {
-    "mode": "interactive",
     "scriptTimeout": 30,
     "maxPromptTimeout": 10800
+  },
+  "defaults": {
+    "executionMode": "interactive"
   }
 }
 ```
@@ -82,7 +84,7 @@ These settings apply to both the extension and the standalone CLI where relevant
 Current defaults include:
 
 - `harness: "copilot-cli"`
-- `execution.mode: "interactive"`
+- `defaults.executionMode: "interactive"`
 - `execution.scriptTimeout: 30`
 - `workflow.defaultFormat: "yaml"`
 - `workflow.resumeExistingSession: false`

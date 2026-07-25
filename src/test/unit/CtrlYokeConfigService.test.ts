@@ -40,8 +40,8 @@ suite("CtrlYokeConfigService", () => {
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.harness
     );
     assert.strictEqual(
-      all.execution.mode,
-      CTRLYOKE_SETTINGS_DEFAULTS.execution.mode
+      all.defaults.executionMode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode
     );
     assert.strictEqual(
       all.queue.maxSize,
@@ -65,8 +65,8 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(all.enableDiagnosticLogs, true);
     // Other defaults should still be present
     assert.strictEqual(
-      all.execution.mode,
-      CTRLYOKE_SETTINGS_DEFAULTS.execution.mode
+      all.defaults.executionMode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode
     );
   });
 
@@ -91,12 +91,12 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(service.get("defaults").harness, "antigravity-cli");
   });
 
-  test("deep merge: workspace execution.mode does not wipe execution.scriptTimeout", () => {
+  test("deep merge: workspace defaults.executionMode does not wipe execution.scriptTimeout", () => {
     service.setWorkspaceBackend(
-      makeBackend({ execution: { mode: "headless" } })
+      makeBackend({ defaults: { executionMode: "headless" } })
     );
     const all = service.getAll();
-    assert.strictEqual(all.execution.mode, "headless");
+    assert.strictEqual(all.defaults.executionMode, "headless");
     // scriptTimeout should still come from defaults
     assert.strictEqual(
       all.execution.scriptTimeout,
@@ -159,16 +159,22 @@ suite("CtrlYokeConfigService", () => {
     });
   });
 
-  test('getNested("execution.mode") returns correct nested value', () => {
+  test('getNested("defaults.executionMode") returns correct nested value', () => {
     service.setWorkspaceBackend(
-      makeBackend({ execution: { mode: "headless" } })
+      makeBackend({ defaults: { executionMode: "headless" } })
     );
-    assert.strictEqual(service.getNested("execution.mode"), "headless");
+    assert.strictEqual(
+      service.getNested("defaults.executionMode"),
+      "headless"
+    );
   });
 
   test("getNested returns default for unset nested key", () => {
-    const defaultMode = CTRLYOKE_SETTINGS_DEFAULTS.execution.mode;
-    assert.strictEqual(service.getNested("execution.mode"), defaultMode);
+    const defaultMode = CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
+    assert.strictEqual(
+      service.getNested("defaults.executionMode"),
+      defaultMode
+    );
   });
 
   suite("getScoped(key, scope)", () => {
@@ -302,13 +308,17 @@ suite("FileConfigBackend", () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ execution: { mode: "interactive", scriptTimeout: 60 } }),
+      JSON.stringify({
+        defaults: { executionMode: "interactive", harness: "copilot-cli" },
+        execution: { scriptTimeout: 60 },
+      }),
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
-    await backend.set("execution.mode", "headless");
+    await backend.set("defaults.executionMode", "headless");
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    assert.strictEqual(content.execution.mode, "headless");
+    assert.strictEqual(content.defaults.executionMode, "headless");
+    assert.strictEqual(content.defaults.harness, "copilot-cli");
     assert.strictEqual(content.execution.scriptTimeout, 60);
   });
 

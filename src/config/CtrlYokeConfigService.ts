@@ -110,7 +110,7 @@ export class CtrlYokeConfigService {
     return backend?.getAll()[key];
   }
 
-  /** Get a nested setting value using dot notation (e.g. "execution.mode") */
+  /** Get a nested setting value using dot notation (e.g. "execution.injectMode") */
   getNested(path: string): unknown {
     const parts = path.split(".");
     let current: unknown = this.getAll();

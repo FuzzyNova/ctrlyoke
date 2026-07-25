@@ -894,6 +894,7 @@ suite("WebviewSettingsSync", () => {
       "additionalArgs.*",
       "agent",
       "skills",
+      "executionMode",
       "resumeSession",
       "priorContext",
       "mcpServers",
@@ -1015,6 +1016,12 @@ suite("WebviewSettingsSync", () => {
           value: ["refactor", "test"],
           expectedKey: CONFIG_KEYS.DEFAULTS_SKILLS,
           expectedValue: ["refactor", "test"],
+        },
+        {
+          property: PROMPT_PROPERTIES.EXECUTION_MODE,
+          value: "headless",
+          expectedKey: CONFIG_KEYS.EXECUTION_MODE,
+          expectedValue: "headless",
         },
         {
           property: PROMPT_PROPERTIES.RESUME_SESSION,

@@ -366,14 +366,14 @@ async function runCommand(
     };
   }
   if (options.headless) {
-    overlay.execution = { mode: "headless" };
+    overlay.defaults = { executionMode: "headless" };
   } else if (options.interactive) {
-    overlay.execution = { mode: "interactive" };
+    overlay.defaults = { executionMode: "interactive" };
   } else {
     // Write TTY-detected execution mode to the overlay so that
     // ConfigurationUtils.getCliExecutionMode() always returns the effective value
     // regardless of what the user's config file says.
-    overlay.execution = { mode: executionMode };
+    overlay.defaults = { executionMode };
   }
   if (options.permissionMode) {
     overlay.defaults = {

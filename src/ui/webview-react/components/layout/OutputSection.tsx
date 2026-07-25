@@ -175,7 +175,7 @@ const OutputSectionInner: React.FC = () => {
   // Execution mode toggle
   const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
   const executionModeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["execution.mode"] ===
+    s.globalSettings.settingSources["defaults.executionMode"] ===
     SETTING_SCOPES.WORKSPACE
       ? SETTING_SCOPES.WORKSPACE
       : SETTING_SCOPES.USER
@@ -185,7 +185,7 @@ const OutputSectionInner: React.FC = () => {
       const vscode = getVsCodeApi();
       vscode?.postMessage({
         type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-        path: "execution.mode",
+        path: "defaults.executionMode",
         value: active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS,
         scope: executionModeScope,
       });

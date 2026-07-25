@@ -9,6 +9,7 @@ import {
   type NotificationEventMode,
   type BrowserNotificationMode,
   type HookEvent,
+  type ExecutionMode,
 } from "./DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -39,6 +40,7 @@ export interface CtrlYokeGlobalSettings {
     additionalArgs: Partial<Record<HarnessId, string>>;
     agent: string;
     skills: string[];
+    executionMode: ExecutionMode;
     resumeSession: boolean;
     priorContext: string;
     mcpServers: (string | McpServerConfig)[];
@@ -73,7 +75,6 @@ export interface CtrlYokeGlobalSettings {
 
   // Execution
   execution: {
-    mode: "interactive" | "headless";
     /** When true, keep the TUI alive and write follow-up prompts directly into the PTY. */
     injectMode: boolean;
     maxPromptTimeout: number; // seconds, -1 = unlimited
@@ -244,6 +245,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     additionalArgs: {},
     agent: "",
     skills: [],
+    executionMode: "interactive",
     resumeSession: false,
     priorContext: "none",
     mcpServers: [],
@@ -291,7 +293,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     allowedExternalFileRoots: [],
   },
   execution: {
-    mode: "interactive",
     injectMode: false,
     maxPromptTimeout: -1,
     scriptTimeout: 300,

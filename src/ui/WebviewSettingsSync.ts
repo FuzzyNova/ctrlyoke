@@ -571,6 +571,8 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultAgent(value || "");
     } else if (property === PROMPT_PROPERTIES.SKILLS) {
       await ConfigurationUtils.setDefaultSkills(value || []);
+    } else if (property === PROMPT_PROPERTIES.EXECUTION_MODE) {
+      await ConfigurationUtils.setCliExecutionMode(value);
     } else if (property === PROMPT_PROPERTIES.RESUME_SESSION) {
       await ConfigurationUtils.updateSetting(
         CONFIG_KEYS.DEFAULTS_RESUME_SESSION,

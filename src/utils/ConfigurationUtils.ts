@@ -66,7 +66,7 @@ export const CONFIG_KEYS = {
   GENERAL_DEFAULT_TEMPLATE: "general.defaultTemplate",
   GENERAL_INCLUDE_FULL_DIFFS_IN_PRIOR_CONTEXT:
     "general.includeFullDiffsInPriorContext",
-  EXECUTION_MODE: "execution.mode",
+  EXECUTION_MODE: "defaults.executionMode",
   SERVER_ENABLED: "server.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
   SERVER_TLS_KEY_PATH: "server.tls.keyPath",
@@ -533,7 +533,7 @@ export const ConfigurationUtils = {
    * Get CLI execution mode (interactive terminal or headless)
    */
   getCliExecutionMode(): string {
-    return configService.get(CONFIG_KEYS.EXECUTION).mode;
+    return configService.get(CONFIG_KEYS.DEFAULTS).executionMode;
   },
 
   /**
@@ -802,7 +802,7 @@ export const ConfigurationUtils = {
 
   /**
    * Get a ctrlyoke configuration value by dot-notation path
-   * @param key The setting path (dot-notation, e.g. "execution.mode")
+   * @param key The setting path (dot-notation, e.g. "defaults.executionMode")
    * @param defaultValue The default value if setting is not defined
    * @returns The configuration value
    */
@@ -816,7 +816,7 @@ export const ConfigurationUtils = {
 
   /**
    * Update a ctrlyoke configuration setting
-   * @param key The setting path (dot-notation, e.g. "execution.mode")
+   * @param key The setting path (dot-notation, e.g. "defaults.executionMode")
    * @param value The new value
    * @param _target Ignored — always writes to user scope via config service
    */

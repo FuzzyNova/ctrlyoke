@@ -3,7 +3,6 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { CustomSelect } from "../shared/CustomSelect";
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -14,11 +13,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const MODE_OPTIONS = [
-  { value: "interactive", label: "Interactive" },
-  { value: "headless", label: "Headless" },
-];
 
 export function ExecutionSection({
   settings,
@@ -36,19 +30,6 @@ export function ExecutionSection({
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Execution
       </h3>
-      <SettingInputRow
-        label="Execution mode"
-        id="exec-mode"
-        path="execution.mode"
-        {...rowProps}
-      >
-        <CustomSelect
-          id="exec-mode"
-          value={exec.mode}
-          onChange={(v) => onUpdate("execution.mode", v)}
-          options={MODE_OPTIONS}
-        />
-      </SettingInputRow>
       <SettingInputRow
         label="Max prompt timeout (seconds, -1 = unlimited)"
         id="exec-max-prompt-timeout"

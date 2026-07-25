@@ -85,6 +85,11 @@
           "items": { "type": "string" },
           "description": "Default skills to include in new workflows."
         },
+        "executionMode": {
+          "type": "string",
+          "enum": ["interactive", "headless"],
+          "description": "Default execution mode for new workflows. 'interactive' spawns a live terminal (TUI) the user can steer; 'headless' runs in the background with output in the Output panel. Workflows and individual steps can override this."
+        },
         "resumeSession": {
           "type": "boolean",
           "description": "Resume an existing session when running a workflow."
@@ -308,11 +313,6 @@
       "description": "Execution settings.",
       "additionalProperties": false,
       "properties": {
-        "mode": {
-          "type": "string",
-          "enum": ["interactive", "headless"],
-          "description": "Whether prompts run in an interactive terminal or headless mode."
-        },
         "injectMode": {
           "type": "boolean",
           "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug."

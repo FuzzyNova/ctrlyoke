@@ -28,7 +28,7 @@ export class FileConfigBackend implements ConfigBackend {
     return this.cache;
   }
 
-  /** Write a setting using dot-notation path (e.g. "execution.mode") */
+  /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
   async set(settingPath: string, value: unknown): Promise<void> {
     const current = this.load();
     this.setNestedValue(

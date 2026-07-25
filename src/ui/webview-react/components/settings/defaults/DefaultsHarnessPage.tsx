@@ -3,6 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { EXECUTION_MODE_OPTIONS } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
@@ -40,6 +41,25 @@ export function DefaultsHarnessPage({
         onUpdate={onUpdate}
         onReset={onReset}
       />
+      <div className="border-t border-panel-border pt-4 space-y-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Execution Defaults
+        </h3>
+        <SettingInputRow
+          label="Execution mode"
+          description="Where steps run by default. Interactive spawns a live terminal you can steer; headless runs in the background. Workflows and steps can override this. Pre/end-condition scripts always run headless."
+          id="defaults-execution-mode"
+          path="defaults.executionMode"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="defaults-execution-mode"
+            value={wf.executionMode}
+            onChange={(v) => onUpdate("defaults.executionMode", v)}
+            options={EXECUTION_MODE_OPTIONS}
+          />
+        </SettingInputRow>
+      </div>
       <div className="border-t border-panel-border pt-4 space-y-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Agent & Skill Defaults

@@ -722,6 +722,11 @@ export const EXECUTION_MODES = {
 export type ExecutionMode =
   (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
 
+export const EXECUTION_MODE_OPTIONS = [
+  { value: EXECUTION_MODES.INTERACTIVE, label: "Interactive" },
+  { value: EXECUTION_MODES.HEADLESS, label: "Headless" },
+];
+
 // ============================================================================
 // DEFAULT MODELS - Default model per harness
 // ============================================================================
@@ -1131,6 +1136,7 @@ export const PROMPT_PROPERTIES = {
 
   // CLI overrides
   ADDITIONAL_ARGS: "additionalArgs",
+  EXECUTION_MODE: "executionMode",
   TOOL_PERMISSIONS: "toolPermissions",
   ERROR_BEHAVIOR: "errorBehavior",
 } as const;
