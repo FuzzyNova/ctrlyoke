@@ -251,6 +251,9 @@ export class WorkflowOrchestrator {
   >();
   /** Clients mid-rebind, so the replay's own run-view load cannot re-enter. */
   private readonly lineageBindingClients = new Set<string>();
+  /** Lineage → instance most recently prepared to execute it (see
+   * {@link getLineageExecutionOwners}); disambiguates retired duplicates. */
+  private readonly lineageExecutionOwners = new Map<WorkflowKey, string>();
 
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
@@ -1980,11 +1983,37 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * lineage → the instance most recently prepared to execute it. Entries are
+   * only ever read as a tie-break between *resident* instances, so one going
+   * stale (its instance disposed) is inert rather than wrong, and a lineage
+   * never accumulates more than one entry.
+   *
+   * Defensive for lightweight unit-test instances created without constructors.
+   */
+  private getLineageExecutionOwners(): Map<WorkflowKey, string> {
+    const initialized = this.lineageExecutionOwners;
+    if (initialized) return initialized;
+    const partial = this as unknown as {
+      lineageExecutionOwners?: Map<WorkflowKey, string>;
+    };
+    return (partial.lineageExecutionOwners ??= new Map());
+  }
+
+  /**
    * Instances are lineage-scoped: viewing *any* run of a lineage binds to its
-   * single runtime owner. Live wins over retired. If stale retired duplicates
-   * exist, the instance that owns the lineage's running PTY wins so every run
-   * view renders the same TerminalView; the addressed RunRef only controls the
-   * definition/history snapshot and its live-run indicator.
+   * single runtime owner. Live wins over retired. If retired duplicates exist,
+   * the instance most recently prepared to execute this lineage wins, then the
+   * one that owns the lineage's running PTY, so every run view renders the same
+   * TerminalView; the addressed RunRef only controls the definition/history
+   * snapshot and its live-run indicator.
+   *
+   * The prepared-execution check must come first because a re-run parks its
+   * incoming instance in `retiredInstances` until the RUNNING transition
+   * promotes it (see {@link switchClientToPreparedExecution}). During that
+   * window the outgoing run's instance still owns the PTY being torn down, so
+   * the terminal heuristic alone would hand the re-running client straight back
+   * to the run it just left — with the new run's terminal and output then
+   * filtered out as belonging to a non-active workflow.
    */
   private findInstanceForLineage(
     workflowKey: WorkflowKey
@@ -1999,6 +2028,14 @@ export class WorkflowOrchestrator {
     const retired = [...this.retiredInstances.values()].filter(matches);
     if (retired.length <= 1) {
       return retired[0];
+    }
+
+    const preparedId = this.getLineageExecutionOwners().get(workflowKey);
+    const prepared = preparedId
+      ? retired.find((instance) => instance.id === preparedId)
+      : undefined;
+    if (prepared) {
+      return prepared;
     }
 
     const activeTerminalOwnerIds = new Set(
@@ -3205,6 +3242,15 @@ export class WorkflowOrchestrator {
       // Keep the prepared ID discoverable during replay. The RUNNING state
       // transition promotes it into the live registry immediately afterward.
       this.retiredInstances.set(instance.id, instance);
+    }
+    // Until that promotion the incoming instance is indistinguishable from the
+    // outgoing run's — which is still retired, still owns the PTY being torn
+    // down, and therefore wins every heuristic in findInstanceForLineage. Claim
+    // the lineage now so the replay below (and any later addressed navigation)
+    // resolves to the run the client was just switched to.
+    const workflowKey = instance.getQueueState().workflowKey;
+    if (workflowKey) {
+      this.getLineageExecutionOwners().set(workflowKey, instance.id);
     }
 
     const send =

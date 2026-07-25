@@ -66,6 +66,7 @@ function createLineageBindingHarness() {
   internal.viewAddressRegistry = new Map();
   internal.viewMessageSinks = new Map();
   internal.lineageBindingClients = new Set<string>();
+  internal.lineageExecutionOwners = new Map<string, string>();
 
   const replays: string[] = [];
   const replayOptions: unknown[] = [];
@@ -401,6 +402,81 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.strictEqual(
       internal.viewerRegistry.get("client-a"),
       "instance-terminal-owner"
+    );
+  });
+
+  test("keeps a re-running client on the prepared instance while the old run's PTY dies", async () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+    const outgoingRun = "run-2026-07-24T18-55-53-230Z" as never;
+    const seededRun = "run-2026-07-25T01-26-33-951Z" as never;
+
+    // Re-run of a completed run: the outgoing instance retired but still owns
+    // the ai-cli PTY being gracefully killed, and the seeded instance is parked
+    // in retiredInstances until its RUNNING transition promotes it.
+    internal.instances.delete("instance-bound");
+    internal.retiredInstances.set("instance-outgoing", {
+      id: "instance-outgoing",
+      getQueueState: () => ({ workflowKey: boundKey, runRef: outgoingRun }),
+    });
+    internal.retiredInstances.set("instance-seeded", {
+      id: "instance-seeded",
+      getQueueState: () => ({ workflowKey: boundKey, runRef: seededRun }),
+    });
+    internal.lineageExecutionOwners.set(boundKey, "instance-seeded");
+    internal.viewerRegistry.set("client-a", "instance-seeded");
+    internal.getActiveTerminalWorkflowRefs = () => [
+      {
+        workflowId: "instance-outgoing",
+        workflowKey: boundKey,
+        runRef: outgoingRun,
+      },
+    ];
+
+    await internal.bindClientToAddressedLineage(
+      { workflowKey: boundKey, kind: "run", runRef: seededRun },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-seeded",
+      "the run-view load inside the switch must not hand the client back to the run it just re-ran"
+    );
+  });
+
+  test("claims the lineage for the instance prepared to execute it", async () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+    const outgoingRun = "run-2026-07-24T18-55-53-230Z" as never;
+    const seededRun = "run-2026-07-25T01-26-33-951Z" as never;
+
+    internal.instances.delete("instance-bound");
+    internal.retiredInstances.set("instance-outgoing", {
+      id: "instance-outgoing",
+      getQueueState: () => ({ workflowKey: boundKey, runRef: outgoingRun }),
+    });
+    internal.getActiveTerminalWorkflowRefs = () => [
+      {
+        workflowId: "instance-outgoing",
+        workflowKey: boundKey,
+        runRef: outgoingRun,
+      },
+    ];
+    const prepared = {
+      id: "instance-seeded",
+      getQueueState: () => ({ workflowKey: boundKey, runRef: seededRun }),
+    };
+
+    await internal.switchClientToPreparedExecution(prepared, "client-a");
+
+    assert.strictEqual(
+      internal.lineageExecutionOwners.get(boundKey),
+      "instance-seeded"
+    );
+    assert.strictEqual(
+      internal.findInstanceForLineage(boundKey),
+      prepared,
+      "the prepared instance must outrank the outgoing run's terminal owner"
     );
   });
 
