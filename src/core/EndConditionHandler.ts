@@ -40,6 +40,11 @@ export interface RetryContext {
   runtime: WorkflowStateMachine;
   attemptTarget: WorkflowAttemptTarget;
   attemptIndex: number;
+  /** Receives each end-condition re-evaluation performed after a retry prompt. */
+  onEvaluation?: (
+    evaluationResult: EvaluationResult,
+    attemptIndex: number
+  ) => Promise<void>;
 }
 
 /**
@@ -403,6 +408,7 @@ export class EndConditionHandler {
           prompt.endCondition!,
           retryContext.workspaceFolderPath
         );
+      await retryContext.onEvaluation?.(retryEvaluation, nextAttemptIndex);
 
       // Check if the retry succeeded
       if (retryEvaluation.passed) {

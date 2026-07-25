@@ -307,6 +307,24 @@ export class WorkflowOrchestrator {
    */
   private panelStartupReplayedWorkflowId: string | null = null;
 
+  /**
+   * The panel's viewed workflowId as of the last `setDashboardReady()`, i.e. the
+   * instance startup hydration left the panel on. `triggerAutoLoad` compares the
+   * panel's *current* viewed id against this to detect that something moved the
+   * view while the auto-load was still deferred behind `initialize()`.
+   *
+   * Only the user can move it in that window (new workflow, switch, open a run),
+   * so a mismatch means the auto-load would be loading the most-recent session
+   * *into the instance the user just chose* — `triggerAutoLoad` resolves the
+   * target through `getActiveInstance()`, which is whatever the panel views now,
+   * not the instance startup picked. That silently replaced a brand-new workflow
+   * with the previous session's steps and name, then rebound the view to the
+   * recent lineage's older instance. The pre-existing `panelWorkingFilePath`
+   * guard does not cover it: a just-created workflow has no working file until
+   * the user types, so the guard falls through precisely in the racy case.
+   */
+  private startupPanelViewedId: string | null = null;
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     dashboardProvider?: DashboardClient
@@ -1247,6 +1265,18 @@ export class WorkflowOrchestrator {
       // when handleClientReady has already sent one for the same workflowId.
     }
 
+    // Snapshot the instance startup hydration left the panel on, so a deferred
+    // auto-load can tell whether the view has since moved. Re-recorded on each
+    // pre-settle READY (the panel sends three during boot, and the first can land
+    // before handleClientReady has finished hydrating the persisted view — a stale
+    // null here would read as "the user moved it" on a perfectly healthy startup).
+    // Frozen once startup settles so a later reconnect can't rewrite history.
+    if (!this._autoLoadHasSettled) {
+      this.startupPanelViewedId = this.getViewedWorkflowId(
+        this.PANEL_CLIENT_ID
+      );
+    }
+
     if (this.orchestratorInitialized) {
       await this.triggerStartupAutoLoadIfReady();
     } else {
@@ -1307,6 +1337,22 @@ export class WorkflowOrchestrator {
             this.retiredInstances.get(panelViewedId))
           : null;
         const panelWorkingFilePath = panelViewed?.getSummary().workingFilePath;
+
+        // The user moved the view while this auto-load sat behind initialize().
+        // Loading the most-recent session now would land in *their* instance
+        // (getActiveInstance() follows the panel), overwriting the workflow they
+        // just created or opened. Their choice wins; the recent session stays on
+        // disk and is still reachable from the workflow dropdown.
+        if (panelViewedId && panelViewedId !== this.startupPanelViewedId) {
+          Log.info(
+            `triggerAutoLoad: skipping auto-load — panel view moved during startup ` +
+              `(inst:${this.startupPanelViewedId?.slice(0, 8) ?? "null"} → inst:${panelViewedId.slice(0, 8)}); ` +
+              `keeping the user's workflow`
+          );
+          loadedWorkflowId = panelViewedId;
+          return;
+        }
+
         if (panelViewedId && panelWorkingFilePath) {
           Log.debug(
             `triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
@@ -1328,10 +1374,6 @@ export class WorkflowOrchestrator {
             Log.debug(
               `triggerAutoLoad: skipping panel replay — already replayed during startup for inst:${panelViewedId.slice(0, 8)}`
             );
-          }
-          if (this.storedPostAutoLoadCallback) {
-            await this.storedPostAutoLoadCallback();
-            this.storedPostAutoLoadCallback = undefined;
           }
           return;
         }
@@ -1375,10 +1417,6 @@ export class WorkflowOrchestrator {
                 this.PANEL_CLIENT_ID
               );
             }
-            if (this.storedPostAutoLoadCallback) {
-              await this.storedPostAutoLoadCallback();
-              this.storedPostAutoLoadCallback = undefined;
-            }
             // Capture the loaded workflow ID so the finally block can resolve
             // the promise and browser clients can replay the correct session.
             loadedWorkflowId = instance.id;
@@ -1386,6 +1424,23 @@ export class WorkflowOrchestrator {
         );
       }
     } finally {
+      // The panel's WORKFLOW_PROPERTIES_UPDATE / WORKFLOW_LOADED follow-up must
+      // fire on every exit path, not just the two that load something: the
+      // webview treats WORKFLOW_LOADED as "startup settled, editing is safe", so
+      // a path that settled without it (no recent session found, auto-load
+      // disabled, the user-took-over skip above, or a thrown error) left the
+      // properties panel disabled with no second chance. Ordered before the
+      // broadcast so STARTUP_COMPLETE stays the last startup message.
+      if (this.storedPostAutoLoadCallback) {
+        const callback = this.storedPostAutoLoadCallback;
+        this.storedPostAutoLoadCallback = undefined;
+        try {
+          await callback();
+        } catch (error) {
+          Log.error("[startup] post-auto-load callback failed:", error);
+        }
+      }
+
       // Always settle the promise and broadcast STARTUP_COMPLETE, regardless of
       // whether a session was found or an exception occurred. This ensures:
       // - Browser clients awaiting awaitStartupAutoLoad() unblock immediately.

@@ -20,3 +20,7 @@ add hover text to model dropdowns to show full name, or make dropdown wider (mod
 do a follow up for agy and see if we can get better context window stats
 
 render all references as chips in output history
+
+fix formatting of output history
+
+commit message generation should use CLI ouput and display the raw output of the harness.

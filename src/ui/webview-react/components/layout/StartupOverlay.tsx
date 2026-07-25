@@ -1,17 +1,33 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 
-const STARTUP_TIMEOUT_MS = 8000;
+/**
+ * Last-resort dismissal if STARTUP_COMPLETE never arrives at all.
+ *
+ * This is a "the extension host is broken" escape hatch, not a budget for normal
+ * startup — so it must sit above the slowest *healthy* cold start, not near it.
+ * A real workspace measured 15.9s from panel READY to STARTUP_COMPLETE (six
+ * harness version probes + model discovery + 833 prompt files), so the previous
+ * 8s value fired routinely on healthy startups, reopening the exact interaction
+ * window this overlay exists to close: workflows created or switched to in it
+ * were overwritten by the auto-load arriving seconds later.
+ */
+const STARTUP_TIMEOUT_MS = 45000;
+
+/** How long to wait before reassuring the user that a slow startup isn't a hang. */
+const STARTUP_SLOW_HINT_MS = 12000;
 
 /**
  * StartupOverlay
  *
  * Full-screen semi-transparent overlay shown immediately on first render.
  *
- * - Normal startup: shows a spinner until STARTUP_COMPLETE arrives (or 8-second safety timeout).
+ * - Normal startup: shows a spinner until STARTUP_COMPLETE arrives (or the
+ *   safety timeout above). A slow-startup hint appears after
+ *   STARTUP_SLOW_HINT_MS so a long-but-healthy startup doesn't read as a hang.
  * - Uninitialized workspace: shows an "Initialize ctrlyoke" prompt instead of the spinner.
  *   The safety timeout is suppressed so the init button stays visible indefinitely.
  * - First install layout preference: after init, shows a panel placement choice (step 2).
@@ -21,6 +37,9 @@ const STARTUP_TIMEOUT_MS = 8000;
  * the dashboard during the startup window when the extension hasn't finished
  * loading the auto-load session. This eliminates the race condition where a
  * user edit made during startup gets overwritten by the arriving auto-load.
+ *
+ * Only STARTUP_COMPLETE (and this timeout) may dismiss it — see the
+ * WORKFLOW_LOADED handler in `useMessageHandler` for why that message must not.
  */
 export const StartupOverlay: React.FC = () => {
   const startupReady = useUiStore((s) => s.startupReady);
@@ -30,7 +49,21 @@ export const StartupOverlay: React.FC = () => {
   const setStartupReady = useUiStore((s) => s.setStartupReady);
   const setShowLayoutPreference = useUiStore((s) => s.setShowLayoutPreference);
 
+  const [slowStartup, setSlowStartup] = useState(false);
+
   const suppressTimeout = workspaceInitRequired || showLayoutPreference;
+
+  // A healthy cold start can run well past ten seconds on a large workspace.
+  // Say so rather than leaving a bare spinner that looks wedged — the overlay
+  // is blocking input, so silence here is what makes users force-interact.
+  useEffect(() => {
+    if (startupReady || suppressTimeout) {
+      setSlowStartup(false);
+      return;
+    }
+    const id = setTimeout(() => setSlowStartup(true), STARTUP_SLOW_HINT_MS);
+    return () => clearTimeout(id);
+  }, [startupReady, suppressTimeout]);
 
   // Safety timeout: dismiss overlay if STARTUP_COMPLETE never arrives.
   // Suppressed when workspace initialization or layout preference is pending —
@@ -103,13 +136,19 @@ export const StartupOverlay: React.FC = () => {
       ) : showLayoutPreference ? (
         <LayoutPreferenceStep onChoose={setShowLayoutPreference} />
       ) : (
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3 max-w-xs text-center px-4">
           <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
           <span className="text-xs text-description-fg select-none">
             {devRestarting
               ? "VS Code is reloading. Active workflows have been stopped. Reconnecting..."
               : "Loading..."}
           </span>
+          {!devRestarting && slowStartup && (
+            <span className="text-xs text-description-fg opacity-70 select-none leading-relaxed">
+              Still starting up — checking installed harnesses and scanning
+              workflows. This can take a while on a large workspace.
+            </span>
+          )}
         </div>
       )}
     </div>

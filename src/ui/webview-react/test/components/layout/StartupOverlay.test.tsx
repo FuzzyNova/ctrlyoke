@@ -1,0 +1,114 @@
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StartupOverlay } from "@components/layout/StartupOverlay";
+import { useUiStore } from "@store/uiStore";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+
+const SLOW_HINT = /Still starting up/;
+
+describe("StartupOverlay", () => {
+  beforeEach(() => {
+    (getVsCodeApi().postMessage as ReturnType<typeof vi.fn>).mockClear();
+    useUiStore.getState().resetUi();
+    // resetUi() leaves the startup gate fields alone, so reset them explicitly —
+    // a leftover workspaceInitRequired suppresses the spinner in the next test.
+    useUiStore.setState({
+      startupReady: false,
+      workspaceInitRequired: false,
+      showLayoutPreference: false,
+      devRestarting: false,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("blocks the dashboard until startup completes", () => {
+    render(<StartupOverlay />);
+
+    expect(screen.getByLabelText("Loading ctrlyoke…")).toBeInTheDocument();
+
+    act(() => {
+      useUiStore.getState().setStartupReady(true);
+    });
+    expect(screen.queryByLabelText("Loading ctrlyoke…")).toBeNull();
+  });
+
+  // The safety timeout is a "the extension host is broken" escape hatch, not a
+  // budget for normal startup. A real workspace measured 15.9s from panel READY
+  // to STARTUP_COMPLETE, and the previous 8s value dismissed the overlay mid-
+  // startup — reopening the interaction window where a workflow the user created
+  // or switched to got overwritten by the auto-load arriving seconds later.
+  it("stays up through a slow but healthy startup", () => {
+    vi.useFakeTimers();
+    render(<StartupOverlay />);
+
+    act(() => {
+      vi.advanceTimersByTime(20000);
+    });
+
+    expect(useUiStore.getState().startupReady).toBe(false);
+    expect(screen.getByLabelText("Loading ctrlyoke…")).toBeInTheDocument();
+  });
+
+  it("explains the delay rather than showing a bare spinner", () => {
+    vi.useFakeTimers();
+    render(<StartupOverlay />);
+
+    expect(screen.queryByText(SLOW_HINT)).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(12000);
+    });
+
+    expect(screen.getByText(SLOW_HINT)).toBeInTheDocument();
+  });
+
+  it("dismisses itself if STARTUP_COMPLETE never arrives at all", () => {
+    vi.useFakeTimers();
+    render(<StartupOverlay />);
+
+    act(() => {
+      vi.advanceTimersByTime(45000);
+    });
+
+    expect(useUiStore.getState().startupReady).toBe(true);
+    expect(screen.queryByLabelText("Loading ctrlyoke…")).toBeNull();
+  });
+
+  it("never times out while the workspace-init prompt is waiting on the user", () => {
+    vi.useFakeTimers();
+    act(() => {
+      useUiStore.getState().setWorkspaceInitRequired(true);
+    });
+    render(<StartupOverlay />);
+
+    act(() => {
+      vi.advanceTimersByTime(120000);
+    });
+
+    expect(useUiStore.getState().startupReady).toBe(false);
+    expect(
+      screen.getByLabelText("Initialize ctrlyoke in this workspace")
+    ).toBeInTheDocument();
+    // The init prompt owns the overlay; the slow-startup hint would contradict it.
+    expect(screen.queryByText(SLOW_HINT)).toBeNull();
+  });
+
+  it("shows the reconnect message instead of the slow-startup hint while restarting", () => {
+    vi.useFakeTimers();
+    act(() => {
+      useUiStore.getState().setDevRestarting(true);
+      useUiStore.setState({ startupReady: false });
+    });
+    render(<StartupOverlay />);
+
+    act(() => {
+      vi.advanceTimersByTime(12000);
+    });
+
+    expect(screen.getByText(/Reconnecting/)).toBeInTheDocument();
+    expect(screen.queryByText(SLOW_HINT)).toBeNull();
+  });
+});

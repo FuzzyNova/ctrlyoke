@@ -435,7 +435,8 @@ interface UiState {
   globalSettingsOpen: boolean;
   globalSettingsActiveTab: string;
 
-  // Startup overlay — true once STARTUP_COMPLETE (or WORKFLOW_LOADED) is received.
+  // Startup overlay — true once STARTUP_COMPLETE is received (or StartupOverlay's
+  // safety timeout fires). WORKFLOW_LOADED deliberately does not set this.
   // NOT persisted: every panel open should show the overlay until startup settles.
   startupReady: boolean;
   devRestarting: boolean;

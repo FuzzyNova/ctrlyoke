@@ -141,6 +141,102 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(queue.getFinalStepRuntime(), undefined);
   });
 
+  test("publishes and persists pre- and end-condition output", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const liveStatuses: Array<{
+      stepIndex: number;
+      message: string;
+      severity: string;
+    }> = [];
+    const persistedStatuses: Array<{
+      target: unknown;
+      message: string;
+      severity: string;
+    }> = [];
+
+    const outputHistoryManager = new Proxy(
+      {
+        appendStatusMessage: async (
+          _historyFilePath: string,
+          target: unknown,
+          statusMessage: { message: string; severity: string }
+        ) => {
+          persistedStatuses.push({
+            target,
+            message: statusMessage.message,
+            severity: statusMessage.severity,
+          });
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    );
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "condition-output",
+          preCondition: {
+            script: `node -e "process.stdout.write('pre-output')"`,
+            compareSource: "stdout",
+            returns: "pre-output",
+          },
+          endCondition: {
+            script: `node -e "process.stdout.write('end-output')"`,
+            compareSource: "stdout",
+            returns: "end-output",
+          },
+        },
+      ],
+    });
+
+    await executor.execute(integration, {
+      ...makeContext(integration),
+      historyFilePath: "manifest.json",
+      outputHistoryManager: outputHistoryManager as any,
+      onStatusMessage: (stepIndex, message, severity) => {
+        liveStatuses.push({ stepIndex, message, severity });
+      },
+    });
+
+    const preResult = liveStatuses.find((status) =>
+      status.message.startsWith("Pre-condition Passed")
+    );
+    assert.ok(preResult);
+    assert.match(preResult.message, /action: continue/);
+    assert.match(preResult.message, /pre-output/);
+    assert.strictEqual(preResult.severity, "info");
+
+    const endResult = liveStatuses.find((status) =>
+      status.message.startsWith("End condition Passed")
+    );
+    assert.ok(endResult);
+    assert.match(endResult.message, /end-output/);
+    assert.strictEqual(endResult.severity, "info");
+
+    assert.deepStrictEqual(
+      persistedStatuses.map(({ message, severity }) => ({
+        message,
+        severity,
+      })),
+      liveStatuses.map(({ message, severity }) => ({ message, severity }))
+    );
+    assert.ok(
+      persistedStatuses.every(
+        ({ target }) =>
+          JSON.stringify(target) ===
+          JSON.stringify({
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: 0,
+          })
+      )
+    );
+  });
+
   test("skips disabled queue steps without sending them to the harness", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

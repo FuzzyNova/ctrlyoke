@@ -564,7 +564,53 @@ describe("restart lifecycle", () => {
   });
 });
 
+describe("WORKFLOW_LOADED", () => {
+  // On a cold start the panel READY path emits WORKFLOW_LOADED as soon as the
+  // persisted view is hydrated — on a slow workspace that is many seconds before
+  // initialize() completes and the deferred auto-load runs. Lifting the overlay
+  // there handed the user an interactive dashboard mid-startup, and a workflow
+  // created or switched to in that window was overwritten by the arriving
+  // auto-load. Only STARTUP_COMPLETE may dismiss the overlay.
+  it("enables the editing UI without dismissing the startup overlay", () => {
+    useUiStore.setState({ startupReady: false });
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_LOADED);
+    });
+
+    expect(useSettingsStore.getState().workflowLoaded).toBe(true);
+    expect(useEditorStore.getState().hasActiveQueue).toBe(true);
+    expect(useUiStore.getState().startupReady).toBe(false);
+  });
+
+  it("leaves the overlay dismissed when startup already completed", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
+      dispatch(MESSAGE_TYPES.WORKFLOW_LOADED);
+    });
+
+    expect(useUiStore.getState().startupReady).toBe(true);
+  });
+});
+
 describe("STARTUP_COMPLETE", () => {
+  it("dismisses the startup overlay", () => {
+    // resetUi() leaves startupReady alone, so clear it explicitly.
+    useUiStore.setState({ startupReady: false });
+    renderHook(() => useMessageHandler());
+
+    expect(useUiStore.getState().startupReady).toBe(false);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
+    });
+
+    expect(useUiStore.getState().startupReady).toBe(true);
+  });
+
   it("requests CLEAR_WORKFLOW when startup completes with no workflow or persisted path", () => {
     const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
       typeof vi.fn

@@ -29,8 +29,12 @@ import { HarnessIntegration } from "./HarnessIntegration";
 import {
   EndConditionHandler,
   SendRetryPromptCallback,
+  type RetryContext,
 } from "./EndConditionHandler";
-import { EndConditionEvaluator } from "./EndConditionEvaluator";
+import {
+  EndConditionEvaluator,
+  type EvaluationResult,
+} from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
 import {
   PropertyResolver,
@@ -472,6 +476,14 @@ export class WorkflowExecutor {
       resolvedPreCondition !== undefined &&
       resolvedPreCondition.script?.trim()
     ) {
+      await this.trackStatusMessage(
+        context,
+        target,
+        `Evaluating pre-condition: Running ${this.getConditionScriptName(
+          resolvedPreCondition.script
+        )}`
+      );
+
       const preResult = await this.endConditionEvaluator.evaluateCondition(
         resolvedPreCondition,
         context.workspaceFolderPath,
@@ -485,19 +497,14 @@ export class WorkflowExecutor {
         `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
       );
 
-      // A gate that could not run at all (spawn failure, timeout, unsupported
-      // script type) currently falls into the onFail branch. Until errored
-      // gates get their own errorBehavior routing, at least surface the error
-      // in the dashboard — a silently mis-firing gate reads as "pre-condition
-      // never ran".
-      if (!preResult.passed && preResult.error && !preResult.stderr) {
-        await this.trackStatusMessage(
-          context,
-          target,
-          `Pre-condition could not run: ${preResult.error} → ${preAction}`,
-          STATUS_MESSAGE_SEVERITY.WARNING
-        );
-      }
+      await this.trackConditionResult(
+        context,
+        target,
+        "Pre-condition",
+        preResult,
+        preAction,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
 
       if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
         return this.handleSkippedStep(step, target, context);
@@ -1514,6 +1521,54 @@ export class WorkflowExecutor {
     }
   }
 
+  private getConditionScriptName(script: string): string {
+    return script.split(/[\\/]/).pop() || script;
+  }
+
+  private formatConditionOutput(result: EvaluationResult): string {
+    const stdout = result.stdout.trim();
+    const stderr = result.stderr.trim();
+
+    if (stdout && stderr) {
+      return `stdout:\n${stdout}\nstderr:\n${stderr}`;
+    }
+    if (stdout) {
+      return stdout;
+    }
+    if (stderr) {
+      return stderr;
+    }
+    return result.error?.trim() || "(no output)";
+  }
+
+  /**
+   * Publishes a condition's completed output through the same ordered status
+   * timeline used by the output pane. `trackStatusMessage` mirrors the entry to
+   * the live dashboard/capture buffer and persists it to events.jsonl.
+   */
+  private async trackConditionResult(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    label: string,
+    result: EvaluationResult,
+    action?: string,
+    failureSeverity: string = STATUS_MESSAGE_SEVERITY.ERROR
+  ): Promise<void> {
+    const resultStatus = result.passed ? "Passed" : "Failed";
+    const severity = result.passed
+      ? STATUS_MESSAGE_SEVERITY.INFO
+      : failureSeverity;
+    const actionSuffix = action ? ` → action: ${action}` : "";
+    const output = this.formatConditionOutput(result);
+
+    await this.trackStatusMessage(
+      context,
+      target,
+      `${label} ${resultStatus}${actionSuffix} - Output:\n${output}`,
+      severity
+    );
+  }
+
   private getBufferedCliOutput(
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
@@ -1654,13 +1709,12 @@ export class WorkflowExecutor {
       return false;
     }
 
-    const scriptName =
-      prompt.endCondition.script.split(/[\\/]/).pop() ||
-      prompt.endCondition.script;
     await this.trackStatusMessage(
       context,
       target,
-      `Evaluating end condition: Running ${scriptName}`
+      `Evaluating end condition: Running ${this.getConditionScriptName(
+        prompt.endCondition.script
+      )}`
     );
 
     const evaluationResult = await this.endConditionEvaluator.evaluateCondition(
@@ -1669,23 +1723,16 @@ export class WorkflowExecutor {
       vars
     );
 
-    {
-      const resultStatus = evaluationResult.passed ? "Passed" : "Failed";
-      const severity = evaluationResult.passed
-        ? STATUS_MESSAGE_SEVERITY.INFO
-        : STATUS_MESSAGE_SEVERITY.ERROR;
-      const output = evaluationResult.error
-        ? evaluationResult.error
-        : evaluationResult.stdout.trim();
-      await this.trackStatusMessage(
-        context,
-        target,
-        `End condition ${resultStatus} - Output: ${output}`,
-        severity
-      );
-    }
+    await this.trackConditionResult(
+      context,
+      target,
+      "End condition",
+      evaluationResult,
+      undefined,
+      STATUS_MESSAGE_SEVERITY.ERROR
+    );
 
-    const retryContext = {
+    const retryContext: RetryContext = {
       integration,
       totalSteps: this.promptQueue.getState().steps.length,
       workspaceFolderPath: context.workspaceFolderPath,
@@ -1693,6 +1740,15 @@ export class WorkflowExecutor {
       runtime: this.promptQueue.getRuntimeStateMachine(),
       attemptTarget: target,
       attemptIndex,
+      onEvaluation: (retryEvaluation, retryAttemptIndex) =>
+        this.trackConditionResult(
+          context,
+          target,
+          `End condition retry ${retryAttemptIndex}`,
+          retryEvaluation,
+          undefined,
+          STATUS_MESSAGE_SEVERITY.ERROR
+        ),
     };
 
     const sendRetryPromptCallback = this.createSendRetryPromptCallback(

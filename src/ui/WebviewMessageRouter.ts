@@ -280,17 +280,23 @@ export class WebviewMessageRouter {
             );
           });
           await orchestrator.setDashboardReady(ctx.postMessage);
-          // setDashboardReady may replay an existing workflow (webview reload).
-          // If it did, sendWorkflowPropertiesToSettings is needed here too since
-          // the callback only fires from triggerAutoLoad (not from the replay).
-          await this.settingsSync.sendWorkflowPropertiesToSettings(
-            ctx.postMessage,
-            ctx.clientId
-          );
-          // Fast-path: if auto-load has already settled (webview reload or
-          // panel reconnect), triggerAutoLoad won't re-run so the hub broadcast
-          // won't fire again. Send STARTUP_COMPLETE directly so the overlay lifts.
+          // Both follow-ups are gated on startup having already settled, and for
+          // the same reason: on a cold start the panel READY arrives long before
+          // initialize() finishes, so anything sent here lands mid-startup. The
+          // replay that makes the properties send necessary only happens inside
+          // setDashboardReady when _autoLoadHasSettled, and WORKFLOW_LOADED
+          // (emitted by sendWorkflowPropertiesToSettings) enables editing UI — it
+          // must not appear until the deferred auto-load has run, or an edit made
+          // against it gets overwritten when the auto-load lands. For the still-
+          // starting case, triggerAutoLoad's finally block fires the same callback
+          // and the hub broadcasts STARTUP_COMPLETE.
           if (orchestrator.isAutoLoadTriggered) {
+            await this.settingsSync.sendWorkflowPropertiesToSettings(
+              ctx.postMessage,
+              ctx.clientId
+            );
+            // triggerAutoLoad won't re-run (webview reload or panel reconnect), so
+            // the hub broadcast won't fire again — send STARTUP_COMPLETE directly.
             this.settingsSync.sendStartupComplete(ctx.postMessage);
           }
         }

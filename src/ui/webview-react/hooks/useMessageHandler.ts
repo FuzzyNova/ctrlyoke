@@ -1525,9 +1525,16 @@ function createMessageHandlers(): MessageHandlerMap {
     settingsStore.setWorkflowLoaded(true);
     editorStore.setHasActiveQueue(true);
     clearPanelReconnectReloadWatchdog();
-    // Belt-and-suspenders: lift the startup overlay if STARTUP_COMPLETE hasn't
-    // arrived yet (e.g. reconnect/reload path where WORKFLOW_LOADED arrives first).
-    useUiStore.getState().setStartupReady(true);
+    // Deliberately does NOT lift the startup overlay. WORKFLOW_LOADED means "a
+    // working file was read and its properties are on screen" — it says nothing
+    // about whether the extension has finished starting. On a cold start the panel
+    // READY path emits it right after handleClientReady hydrates the persisted
+    // view, which on a slow workspace is many seconds before initialize()
+    // completes and the deferred auto-load runs. Lifting here handed the user an
+    // interactive dashboard during that window, and a workflow they created or
+    // switched to in it got overwritten by the arriving auto-load. STARTUP_COMPLETE
+    // is the only signal that startup settled, with StartupOverlay's safety
+    // timeout as the backstop if it never arrives.
   };
 
   // --------------------------------------------------------------------------

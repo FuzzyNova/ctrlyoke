@@ -1,4 +1,4 @@
-import { suite, test } from "mocha";
+import { suite, test, setup, teardown } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -8,6 +8,7 @@ import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -25,6 +26,7 @@ function createOrchestratorHarness() {
   internal.dashboardReady = false;
   internal.orchestratorInitialized = false;
   internal.startupAutoLoadTriggered = false;
+  internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
   internal.viewerRegistry = new Map<string, string | null>();
 
   let autoLoadCalls = 0;
@@ -142,6 +144,288 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 
     assert.strictEqual(getAutoLoadCalls(), 1);
     assert.strictEqual(internal.startupAutoLoadTriggered, true);
+  });
+
+  test("records the panel's hydrated view so a deferred auto-load can detect a move", async () => {
+    const { orchestrator, internal } = createOrchestratorHarness();
+    internal.viewerRegistry.set(PANEL_CLIENT_ID, "startup-hydrated");
+
+    await orchestrator.setDashboardReady();
+
+    assert.strictEqual(internal.startupPanelViewedId, "startup-hydrated");
+  });
+
+  test("re-records the hydrated view on later pre-settle READY messages", async () => {
+    // The panel sends three READYs during boot and the first can land before
+    // handleClientReady finished hydrating the persisted view. A stale null
+    // snapshot would read as "the user moved the view" on a healthy startup.
+    const { orchestrator, internal } = createOrchestratorHarness();
+
+    await orchestrator.setDashboardReady();
+    assert.strictEqual(internal.startupPanelViewedId, null);
+
+    internal.viewerRegistry.set(PANEL_CLIENT_ID, "startup-hydrated");
+    await orchestrator.setDashboardReady();
+
+    assert.strictEqual(internal.startupPanelViewedId, "startup-hydrated");
+  });
+
+  test("freezes the hydrated view once startup has settled", async () => {
+    const { orchestrator, internal } = createOrchestratorHarness();
+    internal.viewerRegistry.set(PANEL_CLIENT_ID, "startup-hydrated");
+    internal._autoLoadHasSettled = true;
+    internal.startupPanelViewedId = "startup-hydrated";
+
+    // A post-startup reconnect while the user views something else must not
+    // rewrite the snapshot — triggerAutoLoad never runs again anyway.
+    internal.viewerRegistry.set(PANEL_CLIENT_ID, "user-selected");
+    await orchestrator.setDashboardReady();
+
+    assert.strictEqual(internal.startupPanelViewedId, "startup-hydrated");
+  });
+});
+
+/**
+ * The startup auto-load is deferred behind `initialize()`, which on a real
+ * workspace can take 15s+ (six harness version probes, model discovery, prompt
+ * file scan). It resolves its target through `getActiveInstance()` — whatever
+ * the panel views *now* — so if anything moved the view during that window the
+ * recent session gets loaded into the user's workflow, replacing its steps and
+ * name and rebinding the view to the recent lineage's older instance.
+ */
+suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
+  const RECENT_WORKING_FILE = path.join(
+    os.tmpdir(),
+    "ctrlyoke-ws",
+    "recent-working-file.json"
+  );
+
+  let originalShouldAutoLoad: () => boolean;
+
+  setup(() => {
+    originalShouldAutoLoad = ConfigurationUtils.shouldAutoLoadRecentSession;
+    ConfigurationUtils.shouldAutoLoadRecentSession = () => true;
+  });
+
+  teardown(() => {
+    ConfigurationUtils.shouldAutoLoadRecentSession = originalShouldAutoLoad;
+  });
+
+  interface AutoLoadHarnessOptions {
+    panelViewedId: string | null;
+    startupPanelViewedId: string | null;
+    workingFilePath?: string;
+    findsRecentSession?: boolean;
+  }
+
+  function createAutoLoadHarness(options: AutoLoadHarnessOptions) {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    const autoLoadedInto: string[] = [];
+    const autoLoadedPaths: string[] = [];
+    let recentSessionScans = 0;
+    let postAutoLoadCallbacks = 0;
+    let startupBroadcasts = 0;
+    let settledWith: string | null | undefined;
+
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.currentWorkspaceFolder = {
+      uri: { fsPath: path.join(os.tmpdir(), "ctrlyoke-ws") },
+    };
+    internal.startupPanelViewedId = options.startupPanelViewedId;
+    internal.viewerRegistry = new Map<string, string | null>([
+      [PANEL_CLIENT_ID, options.panelViewedId],
+    ]);
+    internal.viewAddressRegistry = new Map();
+    internal.retiredInstances = new Map<string, unknown>();
+    internal.instances = new Map<string, unknown>();
+    if (options.panelViewedId) {
+      internal.instances.set(options.panelViewedId, {
+        id: options.panelViewedId,
+        getSummary: () => ({ workingFilePath: options.workingFilePath }),
+        autoLoadFromWorkingFile: async (workingFilePath: string) => {
+          autoLoadedInto.push(options.panelViewedId!);
+          autoLoadedPaths.push(workingFilePath);
+        },
+      });
+    }
+
+    internal.workspaceSessionManager = {
+      autoLoadRecentSession: async (
+        _root: string,
+        onLoad: (workingFilePath: string) => Promise<void>
+      ) => {
+        recentSessionScans += 1;
+        if (options.findsRecentSession !== false) {
+          await onLoad(RECENT_WORKING_FILE);
+        }
+      },
+    };
+    // Leaving storedPanelSend unset skips the replay seam; this suite is about
+    // which instance the auto-load targets, not about message delivery.
+    internal.storedPanelSend = undefined;
+    internal.panelStartupReplayedWorkflowId = null;
+    internal.dashboardReadyAt = Date.now();
+    internal.storedPostAutoLoadCallback = async () => {
+      postAutoLoadCallbacks += 1;
+    };
+    internal.resolveStartupAutoLoad = (id: string | null) => {
+      settledWith = id;
+    };
+    internal.dashboardBroadcastHub = {
+      notifyStartupComplete: () => {
+        startupBroadcasts += 1;
+      },
+    };
+
+    return {
+      orchestrator,
+      internal,
+      autoLoadedInto,
+      autoLoadedPaths,
+      getRecentSessionScans: () => recentSessionScans,
+      getPostAutoLoadCallbacks: () => postAutoLoadCallbacks,
+      getStartupBroadcasts: () => startupBroadcasts,
+      getSettledWith: () => settledWith,
+    };
+  }
+
+  test("skips the recent-session load when the panel view moved during startup", async () => {
+    // A brand-new workflow has no working file until the user types, so the
+    // pre-existing workingFilePath guard falls through in exactly this case.
+    const harness = createAutoLoadHarness({
+      panelViewedId: "user-created",
+      startupPanelViewedId: "startup-hydrated",
+    });
+
+    await (harness.internal as any).triggerAutoLoad();
+
+    assert.strictEqual(
+      harness.getRecentSessionScans(),
+      0,
+      "must not scan for a recent session once the user owns the view"
+    );
+    assert.deepStrictEqual(
+      harness.autoLoadedInto,
+      [],
+      "must not load the recent session into the user's own instance"
+    );
+    assert.strictEqual(
+      harness.getSettledWith(),
+      "user-created",
+      "browser clients must replay the workflow the user actually has open"
+    );
+  });
+
+  test("loads the recent session when the panel view is still the hydrated one", async () => {
+    const harness = createAutoLoadHarness({
+      panelViewedId: "startup-hydrated",
+      startupPanelViewedId: "startup-hydrated",
+    });
+
+    await (harness.internal as any).triggerAutoLoad();
+
+    assert.strictEqual(harness.getRecentSessionScans(), 1);
+    assert.deepStrictEqual(harness.autoLoadedInto, ["startup-hydrated"]);
+    assert.deepStrictEqual(harness.autoLoadedPaths, [RECENT_WORKING_FILE]);
+    assert.strictEqual(harness.getSettledWith(), "startup-hydrated");
+  });
+
+  test("keeps the panel's persisted workflow without scanning for a recent session", async () => {
+    const harness = createAutoLoadHarness({
+      panelViewedId: "startup-hydrated",
+      startupPanelViewedId: "startup-hydrated",
+      workingFilePath: RECENT_WORKING_FILE,
+    });
+
+    await (harness.internal as any).triggerAutoLoad();
+
+    assert.strictEqual(harness.getRecentSessionScans(), 0);
+    assert.deepStrictEqual(harness.autoLoadedInto, []);
+    assert.strictEqual(harness.getSettledWith(), "startup-hydrated");
+  });
+
+  test("always settles startup and runs the follow-up on every exit path", async () => {
+    // WORKFLOW_LOADED (emitted by the follow-up) is what re-enables editing, so
+    // a path that settled without it left the properties panel dead with no
+    // second chance.
+    const cases: Array<{ name: string; options: AutoLoadHarnessOptions }> = [
+      {
+        name: "view moved",
+        options: {
+          panelViewedId: "user-created",
+          startupPanelViewedId: "startup-hydrated",
+        },
+      },
+      {
+        name: "no recent session found",
+        options: {
+          panelViewedId: "startup-hydrated",
+          startupPanelViewedId: "startup-hydrated",
+          findsRecentSession: false,
+        },
+      },
+      {
+        name: "recent session loaded",
+        options: {
+          panelViewedId: "startup-hydrated",
+          startupPanelViewedId: "startup-hydrated",
+        },
+      },
+      {
+        name: "persisted workflow kept",
+        options: {
+          panelViewedId: "startup-hydrated",
+          startupPanelViewedId: "startup-hydrated",
+          workingFilePath: RECENT_WORKING_FILE,
+        },
+      },
+    ];
+
+    for (const { name, options } of cases) {
+      const harness = createAutoLoadHarness(options);
+
+      await (harness.internal as any).triggerAutoLoad();
+
+      assert.strictEqual(
+        harness.getPostAutoLoadCallbacks(),
+        1,
+        `${name}: post-auto-load follow-up must fire exactly once`
+      );
+      assert.strictEqual(
+        harness.internal.storedPostAutoLoadCallback,
+        undefined,
+        `${name}: follow-up must be cleared so it cannot fire twice`
+      );
+      assert.strictEqual(
+        harness.getStartupBroadcasts(),
+        1,
+        `${name}: STARTUP_COMPLETE must be broadcast exactly once`
+      );
+      assert.strictEqual(
+        harness.internal._autoLoadHasSettled,
+        true,
+        `${name}: startup must be marked settled`
+      );
+    }
+  });
+
+  test("still settles startup when the follow-up throws", async () => {
+    const harness = createAutoLoadHarness({
+      panelViewedId: "startup-hydrated",
+      startupPanelViewedId: "startup-hydrated",
+    });
+    harness.internal.storedPostAutoLoadCallback = async () => {
+      throw new Error("properties send failed");
+    };
+
+    await (harness.internal as any).triggerAutoLoad();
+
+    assert.strictEqual(harness.getStartupBroadcasts(), 1);
+    assert.strictEqual(harness.internal._autoLoadHasSettled, true);
   });
 });
 
