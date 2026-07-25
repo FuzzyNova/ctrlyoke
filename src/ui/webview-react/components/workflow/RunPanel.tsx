@@ -134,7 +134,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
 
   const handleSelect = (row: RunPanelRow) => {
     if (isRowViewed(row)) {
-      onBack();
+      (onClose ?? onBack)();
       return;
     }
     setPendingRowKey(runPanelRowKey(workflowKey, row));

@@ -11,6 +11,7 @@ import { MESSAGE_TYPES } from "../types/messages";
 import { useUiStore } from "../store/uiStore";
 import { useWorkflowStore } from "../store/workflowStore";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { WebviewLog } from "@utils/logger";
 import type {
   WorkflowRunNavigationSummary,
   WorkflowViewAddress,
@@ -66,15 +67,25 @@ interface VsCodeLike {
   postMessage: (message: unknown) => void;
 }
 
+function addressLabel(address: WorkflowViewAddress | null): string {
+  if (!address) return "(none)";
+  return address.kind === "draft"
+    ? `${address.workflowKey}/draft`
+    : `${address.workflowKey}/${address.runRef}`;
+}
+
 /**
- * Navigates to `address`. Already-viewing and executing-run addresses are
- * short-circuited:
- * - the address already displayed closes/no-ops without a round trip;
- * - the currently executing run of the currently displayed lineage returns
- *   to live output (today's back-to-live path) instead of fetching a
- *   persisted snapshot of a run still being written to.
+ * Navigates to `address`. Already-viewing addresses are short-circuited.
  *
- * Everything else requests an addressed snapshot the normal way.
+ * Selecting the currently executing run switches output back to live
+ * immediately, but still requests its authoritative addressed snapshot. The
+ * snapshot restores that run's definition, revisions, and view registration;
+ * clearing history alone would leave the client addressed to the historical
+ * run it just left and cause live messages for the executing run to be
+ * filtered out.
+ *
+ * - the address already displayed closes/no-ops without a round trip;
+ * - every actual address change requests an addressed snapshot.
  */
 export function navigateToWorkflowAddress(
   vscode: VsCodeLike,
@@ -83,28 +94,34 @@ export function navigateToWorkflowAddress(
 ): void {
   const ui = useUiStore.getState();
   if (areWorkflowAddressesEqual(address, ui.displayedViewAddress)) {
+    WebviewLog.debug(
+      `[runNavigation] already viewing ${addressLabel(address)} — no load requested`
+    );
     return;
   }
 
+  const previousAddress = ui.displayedViewAddress;
   const isDisplayedLineage =
-    ui.displayedViewAddress?.workflowKey === address.workflowKey;
+    previousAddress?.workflowKey === address.workflowKey;
   const isExecutingRunRow =
     isDisplayedLineage &&
     address.kind === "run" &&
     ui.executionRunRef !== null &&
     address.runRef === ui.executionRunRef;
 
-  if (isExecutingRunRow) {
-    useWorkflowStore.getState().clearHistoryOutputs();
-    ui.clearHistoryView();
-    return;
-  }
-
   const requestId = ui.requestRunViewLoad(
     address,
     isDisplayedLineage ? ui.runSummaries : [],
     isDisplayedLineage ? (ui.executionRunRef ?? undefined) : undefined,
     targetWorkflowName
+  );
+  if (isExecutingRunRow) {
+    useWorkflowStore.getState().clearHistoryOutputs();
+    ui.clearHistoryView();
+  }
+  WebviewLog.debug(
+    `[runNavigation] loading ${addressLabel(address)} from ${addressLabel(previousAddress)} ` +
+      `(requestId=${requestId}, view=${isExecutingRunRow ? "live" : "snapshot"})`
   );
   vscode.postMessage({
     type: MESSAGE_TYPES.LOAD_RUN_VIEW,

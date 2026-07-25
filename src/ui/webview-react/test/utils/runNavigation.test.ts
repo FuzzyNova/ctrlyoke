@@ -196,7 +196,7 @@ describe("navigateToWorkflowAddress", () => {
     );
   });
 
-  it("returns to live output instead of loading a snapshot for the currently executing run", () => {
+  it("returns to live output and loads the authoritative view for the currently executing run", () => {
     const executingAddress = {
       workflowKey: WORKFLOW_KEY,
       kind: "run" as const,
@@ -214,7 +214,16 @@ describe("navigateToWorkflowAddress", () => {
 
     navigateToWorkflowAddress(vscode, executingAddress);
 
-    expect(postMessage).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: executingAddress,
+        requestId: expect.any(String),
+      })
+    );
+    expect(useUiStore.getState().displayedViewAddress).toEqual(
+      executingAddress
+    );
     expect(useUiStore.getState().isViewingHistory).toBe(false);
   });
 });

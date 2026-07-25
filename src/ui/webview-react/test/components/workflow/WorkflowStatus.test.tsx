@@ -1248,6 +1248,67 @@ describe("WorkflowStatus — run navigation panel", () => {
     );
   });
 
+  it("closes the whole dropdown when the viewed run row is selected again", async () => {
+    const user = userEvent.setup();
+    const workflowKey = "wf-current-row" as never;
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+      isViewingHistory: true,
+      runSummaries: [
+        {
+          workflowKey,
+          runRef: "run-2" as never,
+          runId: 2,
+          startedAt: 200,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+        {
+          workflowKey,
+          runRef: "run-1" as never,
+          runId: 1,
+          startedAt: 100,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+    useWorkflowStore.setState({
+      fileName: "/workspace/current-row.ctrlyoke.yaml",
+      workflowName: "Current Row Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 2 — browse runs of Current Row Workflow/i,
+      })
+    );
+    await user.click(
+      screen.getByRole("button", { name: /^Run 2 — completed\b/ })
+    );
+
+    expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
+      "pointer-events-none"
+    );
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
+    expect(postMessageSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.LOAD_RUN_VIEW })
+    );
+  });
+
   it("deletes all runs from the panel footer via DELETE_ALL_RUNS_FOR_LINEAGE", async () => {
     const user = userEvent.setup();
     const workflowKey = "wf-badge" as never;

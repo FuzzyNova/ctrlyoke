@@ -1253,6 +1253,68 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    // A pause is only ever confirmed at a step boundary, so PAUSED leaves
+    // `currentIndex` pointing at the next PENDING step — editing that step is
+    // the whole point of pausing and must be allowed.
+    async function pausedAtStepTwo(q: PromptQueue): Promise<void> {
+      q.loadPrompts(createPromptFile(fiveSteps));
+      await startQueueExecution(q);
+      (q as any).state.currentIndex = 2;
+      await pauseQueueExecution(q);
+      assert.strictEqual(q.getState().status, EXECUTION_STATES.PAUSED);
+    }
+
+    test("paused allows editing the next step to run", async () => {
+      await pausedAtStepTwo(queue);
+      await queue.updatePrompt(2, { prompt: "edited next" });
+      assert.strictEqual(
+        (queue.getState().steps[2] as PromptStep).prompt,
+        "edited next"
+      );
+    });
+
+    test("paused still rejects editing a completed step", async () => {
+      await pausedAtStepTwo(queue);
+      await assert.rejects(
+        () => queue.updatePrompt(1, { prompt: "edited completed" }),
+        /completed step while the workflow is running/i
+      );
+    });
+
+    test("paused allows deleting the next step to run", async () => {
+      await pausedAtStepTwo(queue);
+      await queue.deletePrompt(2);
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        (state.steps as PromptStep[]).map((s) => s.prompt),
+        ["s0", "s1", "s3", "s4"]
+      );
+      assert.strictEqual(state.currentIndex, 2);
+    });
+
+    test("paused insert before the next step runs the inserted step next", async () => {
+      await pausedAtStepTwo(queue);
+      // afterIndex 1 → insertIndex 2, the paused boundary itself.
+      await queue.insertStepAfterIndex(1, { prompt: "inserted" });
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        (state.steps as PromptStep[]).map((s) => s.prompt),
+        ["s0", "s1", "inserted", "s2", "s3", "s4"]
+      );
+      // currentIndex must not shift past the new step, or it would be skipped.
+      assert.strictEqual(state.currentIndex, 2);
+    });
+
+    test("paused allows reordering the next step out of position 0", async () => {
+      await pausedAtStepTwo(queue);
+      // Pending slice is [s2, s3, s4]; move s2 to the end.
+      await queue.reorderPendingPrompts([1, 2, 0]);
+      assert.deepStrictEqual(
+        (queue.getState().steps as PromptStep[]).map((s) => s.prompt),
+        ["s0", "s1", "s3", "s4", "s2"]
+      );
+    });
+
     test("idle editing is unrestricted (completed/current steps remain editable)", async () => {
       queue.loadPrompts(createPromptFile(fiveSteps));
       (queue as any).state.currentIndex = 2;

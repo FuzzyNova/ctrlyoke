@@ -58,7 +58,7 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { ExitButton } from "../shared";
 import {
   getStepAccentClass,
-  isWorkflowActive,
+  isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
 import {
@@ -638,11 +638,14 @@ const WorkflowStepsPanelInner: React.FC<{
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
-  // While execution owns the queue (RUNNING/PAUSING/PAUSED), the step at
+  // While a step is in flight (RUNNING/PAUSING/CANCELLING), the step at
   // `currentStep` is the running step: it stays pinned at pending-slice position
   // 0 and is not draggable, but the pending tail after it can still be reordered.
-  // Idle keeps today's behavior (the whole pending slice is reorderable).
-  const executionOwnsCurrentStep = isWorkflowActive(executionState);
+  // PAUSED is not in flight — a pause is confirmed at a step boundary, so
+  // `currentStep` is the next PENDING step and the whole pending slice is
+  // reorderable, matching `PromptQueue.hasInFlightStep`. Idle keeps today's
+  // behavior (the whole pending slice is reorderable).
+  const executionOwnsCurrentStep = isExecutionBusy(executionState);
   const reorderableStepCount = executionOwnsCurrentStep
     ? steps.length - currentStep - 1
     : steps.length - currentStep;
@@ -882,9 +885,7 @@ const WorkflowStepsPanelInner: React.FC<{
                 const outputText = latestOutput?.response as string | undefined;
                 const isDisabled = step.enabled === false;
                 const isExecutionTargetLocked =
-                  (isWorkflowActive(executionState) ||
-                    executionState === EXECUTION_STATES.CANCELLING) &&
-                  index === currentStep;
+                  isExecutionBusy(executionState) && index === currentStep;
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
@@ -983,9 +984,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     | undefined;
                   const isDisabled = step.enabled === false;
                   const isExecutionTargetLocked =
-                    (isWorkflowActive(executionState) ||
-                      executionState === EXECUTION_STATES.CANCELLING) &&
-                    isCurrentStep;
+                    isExecutionBusy(executionState) && isCurrentStep;
                   return (
                     <SortableWorkflowStepWrapper
                       key={id}

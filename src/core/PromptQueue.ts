@@ -1306,7 +1306,12 @@ export class PromptQueue {
         timestamp: new Date(),
       });
 
-      if (insertIndex <= this.state.currentIndex) {
+      // Only an insert strictly inside the completed prefix shifts the pointer.
+      // An insert *at* `currentIndex` (reachable while paused or during a pending
+      // rewind, where `currentIndex` is a not-yet-started step) must leave the
+      // pointer alone so the inserted step is the next one to run — shifting it
+      // would push the new step into the already-consumed region and skip it.
+      if (insertIndex < this.state.currentIndex) {
         this.state.currentIndex += 1;
       }
 
@@ -1763,17 +1768,16 @@ export class PromptQueue {
    *   the second reorder because state.steps has already been mutated.
    */
   async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
-    const status = this.stateMachine.status;
-    const isActive =
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSING ||
-      status === EXECUTION_STATES.PAUSED ||
-      status === EXECUTION_STATES.CANCELLING;
-    // While executing (and not in a pending rewind, where the whole suffix —
-    // including slice position 0 — is reorderable), the running step is
+    // While a step is in flight (and not in a pending rewind, where the whole
+    // suffix — including slice position 0 — is reorderable), the running step is
     // pending-slice position 0 and must stay first so the executor's currentIndex
-    // keeps pointing at it. Only the tail after it may be reordered.
-    if (isActive && !this.state.pendingRewind && newPendingOrder[0] !== 0) {
+    // keeps pointing at it. Only the tail after it may be reordered. PAUSED has
+    // no in-flight step, so its whole pending slice is reorderable.
+    if (
+      this.hasInFlightStep &&
+      !this.state.pendingRewind &&
+      newPendingOrder[0] !== 0
+    ) {
       throw new Error(
         "Cannot move the currently executing step while the workflow is running"
       );
@@ -1903,13 +1907,46 @@ export class PromptQueue {
   }
 
   /**
+   * True while execution owns the queue, i.e. the completed prefix
+   * `[0, currentIndex)` belongs to a run in progress and must stay frozen.
+   */
+  private get isExecutionActive(): boolean {
+    const status = this.stateMachine.status;
+    return (
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSING ||
+      status === EXECUTION_STATES.PAUSED ||
+      status === EXECUTION_STATES.CANCELLING
+    );
+  }
+
+  /**
+   * True while a step is actually in flight, which is what makes the step at
+   * `currentIndex` untouchable. PAUSED is deliberately excluded: a pause is only
+   * ever confirmed at a step boundary (`WorkflowExecutor.confirmPauseAndStop`,
+   * after `completeCurrentAndMoveNext()`), so a paused run's `currentIndex`
+   * names the next PENDING step — nothing is executing. Treating PAUSED as
+   * in-flight is what made "pause, then edit the next step" fail.
+   */
+  private get hasInFlightStep(): boolean {
+    const status = this.stateMachine.status;
+    return (
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSING ||
+      status === EXECUTION_STATES.CANCELLING
+    );
+  }
+
+  /**
    * While the workflow is actively executing, only steps that have not started
-   * yet may be edited: completed steps `[0, currentIndex)` and the running step
-   * `currentIndex` are locked. Steps after the running step are freely editable
-   * so the pending tail can be reordered/edited/disabled mid-run. When idle,
-   * nothing is executing (currentIndex is the start position) so no restriction
-   * applies. This is defense-in-depth behind the dashboard gating — the queue
-   * must never corrupt an executing run if a stale/rogue message arrives.
+   * yet may be edited: completed steps `[0, currentIndex)` are locked, and so is
+   * `currentIndex` while a step is actually in flight. Steps after it are freely
+   * editable so the pending tail can be reordered/edited/disabled mid-run. Once
+   * PAUSED, `currentIndex` is itself a not-yet-started step and becomes editable
+   * — editing the next step to run is the point of pausing. When idle, nothing
+   * is executing (currentIndex is the start position) so no restriction applies.
+   * This is defense-in-depth behind the dashboard gating — the queue must never
+   * corrupt an executing run if a stale/rogue message arrives.
    */
   private assertEditableDuringExecution(
     index: number,
@@ -1920,19 +1957,13 @@ export class PromptQueue {
     // suffix editability is governed by `assertPendingRewindSuffixIndex`. Defer to
     // it entirely rather than treating the boundary as a locked running step.
     if (this.state.pendingRewind) return;
-    const status = this.stateMachine.status;
-    const isActive =
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSING ||
-      status === EXECUTION_STATES.PAUSED ||
-      status === EXECUTION_STATES.CANCELLING;
-    if (!isActive) return;
+    if (!this.isExecutionActive) return;
     if (index < this.state.currentIndex) {
       throw new Error(
         `Cannot ${operation} a completed step while the workflow is running`
       );
     }
-    if (index === this.state.currentIndex) {
+    if (index === this.state.currentIndex && this.hasInFlightStep) {
       throw new Error(`Cannot ${operation} the currently executing step`);
     }
   }

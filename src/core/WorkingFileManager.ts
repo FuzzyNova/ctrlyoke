@@ -1031,8 +1031,11 @@ export class WorkingFileManager {
         const nextSteps = [...steps];
         nextSteps.splice(insertIndex, 0, step);
         const currentIndex = source._runtime?.currentIndex ?? 0;
+        // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
+        // `currentIndex` becomes the next step to run rather than being shifted
+        // into the already-consumed prefix.
         const nextCurrentIndex =
-          insertIndex <= currentIndex ? currentIndex + 1 : currentIndex;
+          insertIndex < currentIndex ? currentIndex + 1 : currentIndex;
         return {
           workingFile: {
             ...source,

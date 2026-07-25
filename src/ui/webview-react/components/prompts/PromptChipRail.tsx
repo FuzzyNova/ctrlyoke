@@ -36,7 +36,7 @@ import {
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import {
   getStepAccentClass,
-  isWorkflowActive,
+  isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
 import { buildWorkflowStepEnabledState } from "@utils/stepClipboard";
@@ -527,10 +527,10 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   const status = getPromptStatus(prompt, index);
                   const contextPct = getContextPct(index);
                   const slotNumber = currentStep + visualIdx + 1;
+                  // Only an in-flight step is locked; PAUSED stops at a step
+                  // boundary, so the current chip is the next PENDING step.
                   const isExecutionTargetLocked =
-                    (isWorkflowActive(executionState) ||
-                      executionState === EXECUTION_STATES.CANCELLING) &&
-                    isCurrentStep;
+                    isExecutionBusy(executionState) && isCurrentStep;
                   return (
                     <SortableChip
                       key={id}
@@ -540,7 +540,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       slotNumber={slotNumber}
                       status={status}
                       contextPct={contextPct}
-                      canReorder={canReorder && !isCurrentStep}
+                      canReorder={canReorder && !isExecutionTargetLocked}
                       isExecuting={isRunning && isCurrentStep}
                       showPauseBoundaryBefore={
                         isPaused && currentStep > 0 && visualIdx === 0
