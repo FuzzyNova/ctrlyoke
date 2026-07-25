@@ -1911,7 +1911,10 @@ export class PromptQueue {
    * applies. This is defense-in-depth behind the dashboard gating — the queue
    * must never corrupt an executing run if a stale/rogue message arrives.
    */
-  private assertEditableDuringExecution(index: number, operation: string): void {
+  private assertEditableDuringExecution(
+    index: number,
+    operation: string
+  ): void {
     // A pending rewind is a distinct suffix-editing mode: `currentIndex` is the
     // rewind boundary (a PENDING suffix step, not a running one), and prefix vs.
     // suffix editability is governed by `assertPendingRewindSuffixIndex`. Defer to
@@ -1930,9 +1933,7 @@ export class PromptQueue {
       );
     }
     if (index === this.state.currentIndex) {
-      throw new Error(
-        `Cannot ${operation} the currently executing step`
-      );
+      throw new Error(`Cannot ${operation} the currently executing step`);
     }
   }
 

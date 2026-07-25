@@ -47,7 +47,7 @@ extension host (23 tests; full suite green alongside):
   first prompt" bug does not reproduce in any of these instance-level paths.
   Prime remaining suspect (UI half): enabling the Pre-Condition toggle posts
   `{script: "", onFail: "skipPrompt"}` (`WorkflowPropertiesPanel.
-  handlePreConditionToggle`), the script text field commits only on
+handlePreConditionToggle`), the script text field commits only on
   blur/Enter (`ScriptConditionEditor`), and the executor **silently** skips
   gates whose script is empty (`WorkflowExecutor` checks
   `resolvedPreCondition.script?.trim()`). A user who types the script and

@@ -1,4 +1,7 @@
-import { HarnessIntegration, HarnessStatus } from "../../core/HarnessIntegration";
+import {
+  HarnessIntegration,
+  HarnessStatus,
+} from "../../core/HarnessIntegration";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { PromptStep } from "../../types/CtrlYokeTypes";

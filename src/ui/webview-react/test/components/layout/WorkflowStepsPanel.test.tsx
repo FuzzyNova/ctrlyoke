@@ -425,11 +425,7 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
-      steps: [
-        { prompt: "Step 1" },
-        { prompt: "Step 2" },
-        { prompt: "Step 3" },
-      ],
+      steps: [{ prompt: "Step 1" }, { prompt: "Step 2" }, { prompt: "Step 3" }],
       executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
     });

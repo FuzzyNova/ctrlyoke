@@ -10,7 +10,7 @@ replace).
 
 A workflow-level `preCondition` of `npm test` failed with `spawn npm ENOENT`
 (pre-shell-fix), and because the evaluator only reports `passed: boolean`, the
-executor routed the *evaluation error* through the `onFail` branch as if the
+executor routed the _evaluation error_ through the `onFail` branch as if the
 condition had legitimately evaluated false. With `onFail: continue` the prompt
 ran anyway, and nothing surfaced in the UI. Two distinct defects:
 
@@ -25,11 +25,11 @@ ran anyway, and nothing surfaced in the UI. Two distinct defects:
 
 ### Three outcomes per condition script
 
-| Outcome    | Meaning                                             | Governed by                          |
-| ---------- | --------------------------------------------------- | ------------------------------------ |
-| **passed** | Script ran; condition evaluated true                | `onPass` (unchanged)                 |
-| **failed** | Script ran; condition evaluated false               | `onFail` (unchanged)                 |
-| **errored**| Script could not run / evaluation itself broke      | `errorBehavior.onError` (**new**)    |
+| Outcome     | Meaning                                        | Governed by                       |
+| ----------- | ---------------------------------------------- | --------------------------------- |
+| **passed**  | Script ran; condition evaluated true           | `onPass` (unchanged)              |
+| **failed**  | Script ran; condition evaluated false          | `onFail` (unchanged)              |
+| **errored** | Script could not run / evaluation itself broke | `errorBehavior.onError` (**new**) |
 
 "Errored" covers: spawn failure (ENOENT), script timeout, unsupported script
 type, security-rejected path, and evaluator exceptions. For prompts, the
@@ -55,7 +55,7 @@ never re-run on retry.
 > Mechanical note: a pre-condition subprocess cannot literally export
 > environment variables into the extension or harness process — its env dies
 > with it. "Provisioning" means files/workspace/service state. Dynamic values
-> flow *into* scripts via `CTRLYOKE_VAR_*` env injection; never interpolate
+> flow _into_ scripts via `CTRLYOKE_VAR_*` env injection; never interpolate
 > dynamic values into the script command string (see the shell-safety
 > invariant in `core.instructions.md`).
 
@@ -77,13 +77,13 @@ never re-run on retry.
 
 - **`endCondition.onFail: "retry"` keeps its conversational semantics** —
   send `retryPrompt` into the same session (`resumeSessionOnRetry`). That is a
-  *condition outcome* action (the script ran; the AI's answer was wrong), not
+  _condition outcome_ action (the script ran; the AI's answer was wrong), not
   an internal error, and its value is precisely that it does NOT redo the whole
   step. The plan must not merge it into whole-step retry.
 - **`onPass`/`onFail` option sets stay as they are.** No `retry` action is
   added to pre-condition outcomes; a legitimately failing gate that should be
   polled/retried is out of scope (workflow-scheduling territory).
-- Consequence accepted for consistency: an errored *end*-condition under
+- Consequence accepted for consistency: an errored _end_-condition under
   `retry` re-runs the whole step including a fresh AI call, even though the
   response being validated may have been fine. A future refinement could try
   one cheap re-evaluation of the script alone first; deliberately not in v1.
@@ -116,8 +116,8 @@ never re-run on retry.
    policy (their `onPass`/`onFail` — `continue`/`stopWorkflow` — stay outcome
    actions).
 4. **Schema/docs**: `errorBehavior` description updated (workflow-schema.json
-   + `CtrlYokeTypes.ts` JSDoc); no shape change (`onError`, `maxRetries`,
-   `retryDelayMs` as today).
+   - `CtrlYokeTypes.ts` JSDoc); no shape change (`onError`, `maxRetries`,
+     `retryDelayMs` as today).
 5. **UI**: label + help text; no new fields.
 
 ## Testing
@@ -140,5 +140,5 @@ never re-run on retry.
   `resumeSessionOnRetry` answers this for conversational retry; whole-step
   retry needs its own default — leaning fresh-per-attempt, matching today's
   harness retry behavior.)
-- Should `continue` on an errored *end*-condition mark the step visually
+- Should `continue` on an errored _end_-condition mark the step visually
   distinct from a genuinely validated step (e.g. "completed (unvalidated)")?

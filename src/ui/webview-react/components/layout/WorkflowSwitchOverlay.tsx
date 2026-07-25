@@ -23,9 +23,7 @@ const SWITCH_TIMEOUT_MS = 10000;
  */
 export const WorkflowSwitchOverlay: React.FC = () => {
   const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
-  const clearPendingRunViewLoad = useUiStore(
-    (s) => s.clearPendingRunViewLoad
-  );
+  const clearPendingRunViewLoad = useUiStore((s) => s.clearPendingRunViewLoad);
 
   useEffect(() => {
     if (!pendingRunViewSwitch) return;
