@@ -6,7 +6,7 @@ Hand this file to a fresh agent to start closing coverage gaps without needing t
 
 ---
 
-## Extension host — 81.81% statements covered (as of 2026-07-25 16:12 UTC)
+## Extension host — 81.73% statements covered (as of 2026-07-25 20:56 UTC)
 
 Ranked by uncovered statement count (biggest win first). Full report: `coverage/extension/index.html`.
 
@@ -14,7 +14,7 @@ Ranked by uncovered statement count (biggest win first). Full report: `coverage/
 | --- | ---: | ---: |
 | `src/ui/CtrlYokeWebviewProvider.ts` | 0% | 1334 / 1334 |
 | `src/dev/DevCommands.ts` | 0% | 766 / 766 |
-| `src/ui/WebviewMessageRouter.ts` | 51.71% | 717 / 1485 |
+| `src/ui/WebviewMessageRouter.ts` | 51.5% | 723 / 1491 |
 | `src/core/harness/CliLogMonitor.ts` | 22.06% | 618 / 793 |
 | `src/core/WorkingFileManager.ts` | 65.27% | 606 / 1745 |
 | `src/completions/PromptLinkProvider.ts` | 0% | 588 / 588 |
@@ -27,20 +27,20 @@ Ranked by uncovered statement count (biggest win first). Full report: `coverage/
 | `src/ui/DashboardBroadcastHub.ts` | 0% | 368 / 368 |
 | `src/completions/ContextMenuReferenceCommands.ts` | 0% | 320 / 320 |
 | `src/platform/vscode-shim.ts` | 0% | 313 / 313 |
-| `src/core/WorkflowInstance.ts` | 92.08% | 293 / 3703 |
+| `src/core/WorkflowInstance.ts` | 92.7% | 270 / 3703 |
 | `src/core/PromptQueue.ts` | 89.36% | 227 / 2134 |
+| `src/core/WorkflowExecutor.ts` | 92.02% | 217 / 2720 |
 | `src/scripts/ctrlyoke-antigravity-hook.js` | 0% | 213 / 213 |
 | `src/ui/NotificationManager.ts` | 0% | 193 / 193 |
 | `src/core/orchestration/WorkflowLineageRepository.ts` | 64.28% | 190 / 532 |
 | `src/scripts/ctrlyoke-copilot-hook.js` | 0% | 189 / 189 |
+| `src/core/WorkflowOrchestrator.ts` | 96.7% | 174 / 5281 |
 | `src/core/harness/copilot/CopilotNotificationMonitor.ts` | 0% | 169 / 169 |
 | `src/scripts/ctrlyoke-claude-hook.js` | 0% | 161 / 161 |
 | `src/core/orchestration/HistorySearchIndexService.ts` | 83.56% | 157 / 955 |
 | `src/scripts/ctrlyoke-codex-notify.js` | 0% | 146 / 146 |
 | `src/scm/ScmCommitCommand.ts` | 0% | 146 / 146 |
 | `src/scripts/ctrlyoke-qwen-hook.js` | 0% | 142 / 142 |
-| `src/core/WorkflowOrchestrator.ts` | 97.41% | 135 / 5218 |
-| `src/core/WorkflowExecutor.ts` | 94.96% | 134 / 2664 |
 | `src/core/harness/shared/CliExecutionRunner.ts` | 84.47% | 132 / 850 |
 
 _76 more file(s) below 100% not shown — see the HTML report._
