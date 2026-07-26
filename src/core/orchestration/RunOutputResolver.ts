@@ -20,6 +20,7 @@ import {
   type WorkflowRuntimeTransitionPayload,
   type WorkflowDefinitionSnapshot,
 } from "../../types/WorkflowTimelineTypes";
+import type { ExecutionPhase } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { TimelineRecorder } from "./TimelineRecorder";
 import type { PriorContextItem } from "../HarnessIntegration";
@@ -36,6 +37,7 @@ export interface ResolvedRunAttempt {
   target: OutputExecutionTarget;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definition?: ResolvedAttemptDefinition;
 }
 
@@ -164,7 +166,8 @@ export class RunOutputResolver {
             event.runIndex,
             event.attemptIndex,
             event.definitionRevision,
-            activeDefinition
+            activeDefinition,
+            event.phase
           );
           yield {
             kind: "attemptStarted",
@@ -181,7 +184,8 @@ export class RunOutputResolver {
             event.runIndex ?? 0,
             event.attemptIndex,
             event.definitionRevision ?? activeDefinition?.definitionRevision,
-            activeDefinition
+            activeDefinition,
+            event.phase
           );
           yield {
             kind: "output",
@@ -204,7 +208,8 @@ export class RunOutputResolver {
               event.runIndex ?? 0,
               event.attemptIndex,
               activeDefinition?.definitionRevision,
-              activeDefinition
+              activeDefinition,
+              event.phase
             ),
             chunk: event.payload.chunk,
           };
@@ -217,7 +222,8 @@ export class RunOutputResolver {
               event.runIndex ?? 0,
               event.attemptIndex,
               event.definitionRevision ?? activeDefinition?.definitionRevision,
-              activeDefinition
+              activeDefinition,
+              event.phase
             ),
             events: event.payload.events,
           };
@@ -230,7 +236,8 @@ export class RunOutputResolver {
               event.runIndex,
               event.attemptIndex,
               event.definitionRevision,
-              activeDefinition
+              activeDefinition,
+              event.phase
             ),
             scriptOutput: event.payload,
           };
@@ -243,7 +250,8 @@ export class RunOutputResolver {
               event.runIndex,
               event.attemptIndex,
               event.definitionRevision,
-              activeDefinition
+              activeDefinition,
+              event.phase
             ),
             previousAttemptIndex: event.payload.previousAttemptIndex,
             retryPrompt: event.payload.retryPrompt,
@@ -257,7 +265,8 @@ export class RunOutputResolver {
               event.runIndex,
               event.attemptIndex,
               event.definitionRevision,
-              activeDefinition
+              activeDefinition,
+              event.phase
             ),
             responseTextLength: event.payload.responseTextLength,
             eventCount: event.payload.eventCount,
@@ -577,7 +586,8 @@ export class RunOutputResolver {
     runIndex: number,
     attemptIndex: number,
     definitionRevision: number | undefined,
-    activeDefinition: ResolvedAttemptDefinition | undefined
+    activeDefinition: ResolvedAttemptDefinition | undefined,
+    phase?: ExecutionPhase
   ): ResolvedRunAttempt {
     const definition =
       definitionRevision !== undefined &&
@@ -587,7 +597,7 @@ export class RunOutputResolver {
             step: resolveStep(activeDefinition.definition, target),
           }
         : undefined;
-    return { target, runIndex, attemptIndex, definition };
+    return { target, runIndex, attemptIndex, phase, definition };
   }
 }
 

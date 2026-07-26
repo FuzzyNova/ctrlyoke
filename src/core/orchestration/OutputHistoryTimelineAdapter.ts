@@ -1,7 +1,9 @@
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  getExecutionPhaseKeySuffix,
   OUTPUT_HISTORY_KINDS,
+  type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
@@ -60,7 +62,8 @@ export class OutputHistoryTimelineAdapter {
           getCliEntryKey(
             event.attempt.target,
             event.attempt.runIndex,
-            event.attempt.attemptIndex
+            event.attempt.attemptIndex,
+            event.attempt.phase
           ),
           event.attempt.output
         );
@@ -68,7 +71,8 @@ export class OutputHistoryTimelineAdapter {
         const key = getCliEntryKey(
           event.attempt.target,
           event.attempt.runIndex,
-          event.attempt.attemptIndex
+          event.attempt.attemptIndex,
+          event.attempt.phase
         );
         const output = outputs.get(key);
         if (output?.isStreaming) {
@@ -81,7 +85,8 @@ export class OutputHistoryTimelineAdapter {
         const key = getCliEntryKey(
           event.attempt.target,
           event.attempt.runIndex,
-          event.attempt.attemptIndex
+          event.attempt.attemptIndex,
+          event.attempt.phase
         );
         const output = outputs.get(key);
         if (output?.isStreaming) {
@@ -102,7 +107,12 @@ export class OutputHistoryTimelineAdapter {
     for (const entry of history.orderedEntries) {
       if (entry.kind !== OUTPUT_HISTORY_KINDS.CLI) continue;
       const output = outputs.get(
-        getCliEntryKey(entry.target, entry.runIndex ?? 0, entry.attemptIndex)
+        getCliEntryKey(
+          entry.target,
+          entry.runIndex ?? 0,
+          entry.attemptIndex,
+          entry.phase
+        )
       );
       if (output) entry.cliOutput = output;
       if (
@@ -146,7 +156,8 @@ export class OutputHistoryTimelineAdapter {
       const key = getCliEntryKey(
         event.target,
         event.runIndex ?? 0,
-        event.attemptIndex
+        event.attemptIndex,
+        event.phase
       );
       return sealedCliKeys.has(key) ? undefined : cliEntriesByKey.get(key);
     };
@@ -164,12 +175,18 @@ export class OutputHistoryTimelineAdapter {
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
           const runIndex = event.runIndex ?? 0;
           const attemptIndex = event.attemptIndex;
-          const key = getCliEntryKey(event.target, runIndex, attemptIndex);
+          const key = getCliEntryKey(
+            event.target,
+            runIndex,
+            attemptIndex,
+            event.phase
+          );
           cliEntriesByKey.set(key, {
             kind: OUTPUT_HISTORY_KINDS.CLI,
             target: event.target,
             runIndex,
             attemptIndex,
+            phase: event.phase,
             cliOutput: event.payload.cliOutput,
             timestampMs: event.timestampMs,
             sequence: event.sequence,
@@ -281,16 +298,17 @@ function compareTimelineEvents(
   return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
 }
 
-function getCliEntryKey(
+export function getCliEntryKey(
   target: OutputExecutionTarget,
   runIndex: number,
-  attemptIndex: number
+  attemptIndex: number,
+  phase?: ExecutionPhase
 ): string {
   const base =
     target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue:${target.stepIndex}`
       : `final:${target.loopIndex}`;
-  return `${base}:run:${runIndex}:attempt:${attemptIndex}`;
+  return `${base}:run:${runIndex}:attempt:${attemptIndex}${getExecutionPhaseKeySuffix(phase)}`;
 }
 
 function compareOrderedHistoryEntries(

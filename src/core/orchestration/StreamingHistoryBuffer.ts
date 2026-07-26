@@ -3,7 +3,11 @@ import type {
   TextData,
   ThinkingBlock,
 } from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  getExecutionPhaseKeySuffix,
+  type ExecutionPhase,
+} from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 
@@ -27,6 +31,7 @@ export interface StreamingHistoryFlush {
   target: OutputExecutionTarget;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   /** Timestamp of the first delta in the batch, so ordering stays truthful. */
   timestampMs: number;
   chunk?: string;
@@ -38,6 +43,7 @@ interface PendingEntry {
   target: OutputExecutionTarget;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   timestampMs: number;
   chunk: string;
   events: CliEvent[];
@@ -95,20 +101,22 @@ export class StreamingHistoryBuffer {
     target: OutputExecutionTarget,
     runIndex: number,
     attemptIndex: number,
-    chunk: string
+    chunk: string,
+    phase?: ExecutionPhase
   ): Promise<void> {
     const entry = this.ensureEntry(
       historyFilePath,
       target,
       runIndex,
-      attemptIndex
+      attemptIndex,
+      phase
     );
     entry.chunk += chunk;
     entry.bufferedChars += chunk.length;
 
     if (entry.bufferedChars >= this.maxBufferedChars) {
       await this.flushEntry(
-        this.getKey(historyFilePath, target, runIndex, attemptIndex)
+        this.getKey(historyFilePath, target, runIndex, attemptIndex, phase)
       );
     }
   }
@@ -122,18 +130,26 @@ export class StreamingHistoryBuffer {
     target: OutputExecutionTarget,
     runIndex: number,
     attemptIndex: number,
-    events: CliEvent[]
+    events: CliEvent[],
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (events.length === 0) {
       return;
     }
 
-    const key = this.getKey(historyFilePath, target, runIndex, attemptIndex);
+    const key = this.getKey(
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex,
+      phase
+    );
     const entry = this.ensureEntry(
       historyFilePath,
       target,
       runIndex,
-      attemptIndex
+      attemptIndex,
+      phase
     );
     let hasBoundaryEvent = false;
 
@@ -187,9 +203,16 @@ export class StreamingHistoryBuffer {
     historyFilePath: string,
     target: OutputExecutionTarget,
     runIndex: number,
-    attemptIndex: number
+    attemptIndex: number,
+    phase?: ExecutionPhase
   ): PendingEntry {
-    const key = this.getKey(historyFilePath, target, runIndex, attemptIndex);
+    const key = this.getKey(
+      historyFilePath,
+      target,
+      runIndex,
+      attemptIndex,
+      phase
+    );
     const existing = this.pending.get(key);
     if (existing) {
       return existing;
@@ -200,6 +223,7 @@ export class StreamingHistoryBuffer {
       target,
       runIndex,
       attemptIndex,
+      phase,
       timestampMs: Date.now(),
       chunk: "",
       events: [],
@@ -233,6 +257,7 @@ export class StreamingHistoryBuffer {
       target: entry.target,
       runIndex: entry.runIndex,
       attemptIndex: entry.attemptIndex,
+      phase: entry.phase,
       timestampMs: entry.timestampMs,
       chunk: entry.chunk || undefined,
       events: entry.events.length > 0 ? entry.events : undefined,
@@ -243,13 +268,14 @@ export class StreamingHistoryBuffer {
     historyFilePath: string,
     target: OutputExecutionTarget,
     runIndex: number,
-    attemptIndex: number
+    attemptIndex: number,
+    phase?: ExecutionPhase
   ): string {
     const base =
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? `queue:${target.stepIndex}`
         : `final:${target.loopIndex}`;
-    return `${historyFilePath}::${base}:run:${runIndex}:attempt:${attemptIndex}`;
+    return `${historyFilePath}::${base}:run:${runIndex}:attempt:${attemptIndex}${getExecutionPhaseKeySuffix(phase)}`;
   }
 }
 

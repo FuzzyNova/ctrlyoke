@@ -11,7 +11,6 @@ import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   OPERATION_STATUS,
-  STEP_TYPES,
 } from "../types/messages";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 import { sameFilePath } from "./promptUndo";
@@ -94,7 +93,7 @@ function buildOutputDiffStats(
 }
 
 export function isScriptOutput(output: CliOutputType): boolean {
-  return output.source === STEP_TYPES.SCRIPT;
+  return output.source != null;
 }
 
 export function getRawTextOutput(output: CliOutputType): boolean {

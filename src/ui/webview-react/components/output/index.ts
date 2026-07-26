@@ -1,4 +1,3 @@
-export { CliOutput } from "./CliOutput";
 export { OutputFindBar } from "./OutputFindBar";
 export { OutputRow } from "./OutputRow";
 export { MarkdownText } from "./MarkdownText";

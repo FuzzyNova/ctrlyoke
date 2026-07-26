@@ -485,6 +485,29 @@ export interface ScriptRuntimeOutput {
   exitCode?: number;
 }
 
+export type ScriptMatchRule =
+  | "exitCode"
+  | "exact"
+  | "boolean"
+  | "numericGte"
+  | "substring"
+  | "none";
+
+export interface ScriptVerdict {
+  compareSource: CompareSource;
+  expected?: string;
+  actual: string;
+  actualSource: "stdout" | "stderr" | "exitCode";
+  exitCode?: number;
+  outcome: "passed" | "failed" | "errored";
+  matchRule: ScriptMatchRule;
+  action: ConditionAction;
+  actionDetail?: string;
+  durationMs: number;
+  timedOut?: boolean;
+  error?: string;
+}
+
 /**
  * Per-prompt runtime execution metadata.
  * Tracks execution state for individual prompts within a workflow.

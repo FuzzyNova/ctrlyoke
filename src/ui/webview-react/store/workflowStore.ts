@@ -4,6 +4,7 @@ import { temporal } from "zundo";
 import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
+  EXECUTION_PHASES,
   STEP_STATUS,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
@@ -404,7 +405,9 @@ function findMatchingCliEntryIndex(
       entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
       targetsEqual(entry.target, cliEntry.target) &&
       getCliEntryRunIndex(entry) === getCliEntryRunIndex(cliEntry) &&
-      entry.attemptIndex === cliEntry.attemptIndex
+      entry.attemptIndex === cliEntry.attemptIndex &&
+      (entry.phase ?? EXECUTION_PHASES.PROMPT) ===
+        (cliEntry.phase ?? EXECUTION_PHASES.PROMPT)
   );
 }
 

@@ -2,6 +2,7 @@ import {
   ExecutionState,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  type ExecutionPhase,
   type SnapshotBaseSource,
 } from "./DashboardConstants";
 import type {
@@ -26,6 +27,8 @@ export interface OrderedCliHistoryEntry extends OrderedHistoryEntryBase {
   target: OutputExecutionTarget;
   runIndex?: number;
   attemptIndex: number;
+  /** Execution phase; absent is the default prompt phase. */
+  phase?: ExecutionPhase;
   cliOutput: CliOutput;
 }
 

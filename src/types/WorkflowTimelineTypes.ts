@@ -1,4 +1,4 @@
-import type { ExecutionState } from "./DashboardConstants";
+import type { ExecutionPhase, ExecutionState } from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
@@ -62,6 +62,7 @@ export type TimelineAttemptStartReason =
 export const TIMELINE_ATTEMPT_KINDS = {
   AI: "ai",
   SCRIPT: "script",
+  CONDITION: "condition",
 } as const;
 
 export type TimelineAttemptKind =
@@ -241,6 +242,7 @@ export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftB
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
   runIndex?: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   /** The definitionRevision that produced this attempt (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision?: number;
   /** The output role is explicit so a later resolver never infers retry/script semantics from runtime fields. */
@@ -254,6 +256,7 @@ export interface CliOutputChunkAppendedEventDraft extends TargetedTimelineEventD
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED;
   runIndex?: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   payload: {
     chunk: string;
   };
@@ -263,6 +266,7 @@ export interface CliOutputEventsAppendedEventDraft extends TargetedTimelineEvent
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED;
   runIndex?: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision?: number;
   payload: {
     events: CliEvent[];
@@ -274,6 +278,7 @@ export interface AttemptStartedEventDraft extends TargetedTimelineEventDraftBase
   eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: {
     kind: TimelineAttemptKind;
@@ -287,6 +292,7 @@ export interface AttemptTerminatedEventDraft extends TargetedTimelineEventDraftB
   eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: {
     terminalState: TimelineAttemptTerminalState;
@@ -299,6 +305,7 @@ export interface ScriptExecutionRecordedEventDraft extends TargetedTimelineEvent
   eventType: typeof TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: {
     command: string;
@@ -313,6 +320,7 @@ export interface RetryScheduledEventDraft extends TargetedTimelineEventDraftBase
   eventType: typeof TIMELINE_EVENT_TYPES.RETRY_SCHEDULED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: {
     retryPrompt: string;
@@ -325,6 +333,7 @@ export interface FollowUpResponseAppendedEventDraft extends TargetedTimelineEven
   eventType: typeof TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: {
     /** Content remains in the one canonical CLI response event; avoid duplicating large payloads. */
@@ -416,6 +425,7 @@ export interface CliOutputRecordedEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
   runIndex?: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   /** The definitionRevision that produced this attempt (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision?: number;
   responseKind?: TimelineAttemptKind;
@@ -428,6 +438,7 @@ export interface CliOutputChunkAppendedEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED;
   runIndex?: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   payload: {
     chunk: string;
   };
@@ -437,6 +448,7 @@ export interface CliOutputEventsAppendedEvent extends TargetedTimelineEventBase 
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED;
   runIndex?: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision?: number;
   payload: {
     events: CliEvent[];
@@ -447,6 +459,7 @@ export interface AttemptStartedEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: AttemptStartedEventDraft["payload"];
 }
@@ -455,6 +468,7 @@ export interface AttemptTerminatedEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: AttemptTerminatedEventDraft["payload"];
 }
@@ -463,6 +477,7 @@ export interface ScriptExecutionRecordedEvent extends TargetedTimelineEventBase 
   eventType: typeof TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: ScriptExecutionRecordedEventDraft["payload"];
 }
@@ -471,6 +486,7 @@ export interface RetryScheduledEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.RETRY_SCHEDULED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: RetryScheduledEventDraft["payload"];
 }
@@ -479,6 +495,7 @@ export interface FollowUpResponseAppendedEvent extends TargetedTimelineEventBase
   eventType: typeof TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED;
   runIndex: number;
   attemptIndex: number;
+  phase?: ExecutionPhase;
   definitionRevision: number;
   payload: FollowUpResponseAppendedEventDraft["payload"];
 }

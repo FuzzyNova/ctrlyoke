@@ -6,6 +6,7 @@ import {
 } from "../../core/orchestration/StreamingHistoryBuffer";
 import {
   CLI_EVENT_TYPES,
+  EXECUTION_PHASES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
 import type { CliEvent } from "../../types/CliOutputTypes";
@@ -140,6 +141,27 @@ suite("StreamingHistoryBuffer", () => {
     assert.deepStrictEqual(
       writes.map((write) => (write.events?.[0].data as { text: string }).text),
       ["step0", "retry", "step1"]
+    );
+  });
+
+  test("keeps execution phases in separate batches", async () => {
+    const { buffer, writes } = createBuffer();
+
+    await buffer.addEvents(HISTORY_FILE, TARGET, 0, 0, [textEvent("prompt")]);
+    await buffer.addEvents(
+      HISTORY_FILE,
+      TARGET,
+      0,
+      0,
+      [textEvent("condition")],
+      EXECUTION_PHASES.END_CONDITION
+    );
+    await buffer.flush();
+
+    assert.strictEqual(writes.length, 2);
+    assert.deepStrictEqual(
+      writes.map((write) => write.phase),
+      [undefined, EXECUTION_PHASES.END_CONDITION]
     );
   });
 

@@ -1090,6 +1090,24 @@ export const COMPARE_SOURCES = {
 } as const;
 
 // ============================================================================
+// SCRIPT OUTPUT SOURCES - Origin values for unified script execution output
+// ============================================================================
+export const SCRIPT_OUTPUT_SOURCES = {
+  SCRIPT_STEP: "script", // keeps today's value — see migration note
+  PRE_CONDITION: "preCondition",
+  END_CONDITION: "endCondition",
+} as const;
+
+// ============================================================================
+// EXECUTION PHASES - Identity dimension for prompt and condition attempts
+// ============================================================================
+export const EXECUTION_PHASES = {
+  PROMPT: "prompt", // default; omitted in keys for stability
+  PRE_CONDITION: "preCondition",
+  END_CONDITION: "endCondition",
+} as const;
+
+// ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptStep properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================
@@ -1498,6 +1516,16 @@ export type ConditionAction =
   (typeof CONDITION_ACTIONS)[keyof typeof CONDITION_ACTIONS];
 export type CompareSource =
   (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES];
+export type ScriptOutputSource =
+  (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES];
+export type ExecutionPhase =
+  (typeof EXECUTION_PHASES)[keyof typeof EXECUTION_PHASES];
+
+/** Preserve legacy prompt keys while separating condition execution phases. */
+export function getExecutionPhaseKeySuffix(phase?: ExecutionPhase): string {
+  return phase && phase !== EXECUTION_PHASES.PROMPT ? `:phase:${phase}` : "";
+}
+
 export type RetryPromptPlaceholder =
   (typeof RETRY_PROMPT_PLACEHOLDERS)[keyof typeof RETRY_PROMPT_PLACEHOLDERS];
 

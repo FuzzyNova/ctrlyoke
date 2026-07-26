@@ -26,6 +26,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
   STEP_TYPES,
+  type ScriptOutputSource,
   type UndoFileAction,
   type CompletionNotificationSeverity,
   type HookEvent,
@@ -47,6 +48,7 @@ import type {
   RunRef,
   WorkingFile,
   WorkflowRunNavigationSummary,
+  ScriptVerdict,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -190,12 +192,14 @@ export interface CliOutput {
    * (shell command, no AI interaction). The UI renders script output as plain
    * stdout/stderr text with an exit code summary rather than structured events.
    */
-  source?: typeof STEP_TYPES.SCRIPT;
+  source?: ScriptOutputSource;
   /**
    * Exit code from the script step (source: "script" only).
    * 0 = success, non-zero = failure.
    */
   exitCode?: number;
+  /** Structured comparison/action details for script and condition output. */
+  scriptVerdict?: ScriptVerdict;
 }
 
 // ============================================================================

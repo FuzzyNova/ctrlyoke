@@ -16,6 +16,7 @@ import {
   FINAL_STEP_PHASES,
   LOCK_STATUS,
   type ExecutionState,
+  type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -47,6 +48,7 @@ export interface TimelineAttemptStartContext {
   kind: TimelineAttemptKind;
   startReason: TimelineAttemptStartReason;
   prompt: string;
+  phase?: ExecutionPhase;
 }
 import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
@@ -186,7 +188,8 @@ export class OutputHistoryManager {
     historyFilePath: string,
     target: OutputExecutionTarget,
     cliOutputs: CliOutput[],
-    definitionContext?: DefinitionRevisionContext
+    definitionContext?: DefinitionRevisionContext,
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -206,7 +209,8 @@ export class OutputHistoryManager {
         historyFilePath,
         target,
         cliOutputs,
-        definitionContext?.definitionRevision
+        definitionContext?.definitionRevision,
+        phase
       );
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
@@ -248,6 +252,7 @@ export class OutputHistoryManager {
           runIndex: cliOutput.runIndex ?? 0,
           attemptIndex: cliOutput.attemptIndex ?? 0,
           definitionRevision,
+          phase: attemptContext.phase,
           payload: attemptContext,
         },
         {
@@ -258,6 +263,7 @@ export class OutputHistoryManager {
           attemptIndex: cliOutput.attemptIndex ?? 0,
           definitionRevision,
           responseKind: attemptContext.kind,
+          phase: attemptContext.phase,
           payload: { cliOutput },
         },
       ]);
@@ -314,7 +320,8 @@ export class OutputHistoryManager {
     target: OutputExecutionTarget,
     runIndex: number,
     attemptIndex: number,
-    chunk: string
+    chunk: string,
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (!historyFilePath || !chunk) {
       return;
@@ -324,7 +331,8 @@ export class OutputHistoryManager {
       target,
       runIndex,
       attemptIndex,
-      chunk
+      chunk,
+      phase
     );
   }
 
@@ -337,7 +345,8 @@ export class OutputHistoryManager {
     target: OutputExecutionTarget,
     runIndex: number,
     attemptIndex: number,
-    events: CliEvent[]
+    events: CliEvent[],
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (!historyFilePath || events.length === 0) {
       return;
@@ -347,7 +356,8 @@ export class OutputHistoryManager {
       target,
       runIndex,
       attemptIndex,
-      events
+      events,
+      phase
     );
   }
 
@@ -475,6 +485,7 @@ export class OutputHistoryManager {
       target: flush.target,
       runIndex: flush.runIndex,
       attemptIndex: flush.attemptIndex,
+      phase: flush.phase,
     };
 
     if (flush.chunk) {
@@ -1218,7 +1229,8 @@ export class OutputHistoryManager {
     historyFilePath: string,
     target: OutputExecutionTarget,
     cliOutputs: CliOutput[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (cliOutputs.length === 0) {
       return;
@@ -1231,6 +1243,7 @@ export class OutputHistoryManager {
         target,
         runIndex: cliOutput.runIndex ?? 0,
         attemptIndex: cliOutput.attemptIndex ?? 0,
+        phase,
         definitionRevision,
         responseKind:
           cliOutput.source === "script"

@@ -7,27 +7,27 @@ the On Error plan".
 ## Problem
 
 ctrlyoke runs user scripts from four places, all through the same evaluator
-(`EndConditionEvaluator.evaluateCondition`, `EndConditionEvaluator.ts:154`), but
+(`EndConditionEvaluator.evaluateCondition`, `EndConditionEvaluator.ts:124`), but
 their output reaches the dashboard through two completely different pipelines:
 
 | Caller                | Site                         | Streams? | Rendered as                                           | Persisted as                                   |
 | --------------------- | ---------------------------- | -------- | ----------------------------------------------------- | ---------------------------------------------- |
-| Script step           | `WorkflowExecutor.ts:806`    | **yes**  | CLI output group (header/command/response/stats rows) | CLI timeline entry + `scriptExecutionRecorded` |
+| Script step           | `WorkflowExecutor.ts:811`    | **yes**  | CLI output group (header/command/response/stats rows) | CLI timeline entry + `scriptExecutionRecorded` |
 | Pre-condition         | `WorkflowExecutor.ts:487`    | no       | one `StatusMessage` string                            | status timeline entry                          |
-| End-condition         | `WorkflowExecutor.ts:1720`   | no       | one `StatusMessage` string                            | status timeline entry                          |
+| End-condition         | `WorkflowExecutor.ts:1754`   | no       | one `StatusMessage` string                            | status timeline entry                          |
 | End-condition retries | `EndConditionHandler.ts:407` | no       | one `StatusMessage` string                            | status timeline entry                          |
 
 ### Why condition output looks unformatted
 
-`trackConditionResult` (`WorkflowExecutor.ts:1549`) flattens the whole
+`trackConditionResult` (`WorkflowExecutor.ts:1596`) flattens the whole
 `EvaluationResult` into one prose string —
 `` `${label} ${resultStatus}${actionSuffix} - Output:\n${output}` `` — where
-`output` comes from `formatConditionOutput` (`:1528`), which glues stdout and
+`output` comes from `formatConditionOutput` (`:1562`), which glues stdout and
 stderr together with `stdout:` / `stderr:` labels. That string is handed to
-`trackStatusMessage` (`:1483`) and lands as a `status` row.
+`trackStatusMessage` (`:1517`) and lands as a `status` row.
 
 The `status` row renders through `StatusMessage.tsx`, whose container is
-`flex items-center` with no `whitespace-pre-wrap` (`StatusMessage.tsx:47-57`).
+`flex items-center` with no `whitespace-pre-wrap` (`StatusMessage.tsx:49`).
 Embedded newlines therefore collapse into a single wrapped line, and the row's
 `estimateSize` is hardcoded at 36px (`outputRows.ts:1232`), so the virtualizer
 mis-measures long dumps. That is the "removes formatting" symptom exactly.
@@ -35,21 +35,20 @@ mis-measures long dumps. That is the "removes formatting" symptom exactly.
 Three further gaps fall out of the same split:
 
 1. **No streaming.** `evaluateCondition` already accepts an `onOutput` callback
-   (`EndConditionEvaluator.ts:158`) and the script-step path passes it
-   (`WorkflowExecutor.ts:932`). The three condition call sites pass nothing, so
+   (`EndConditionEvaluator.ts:128`) and the script-step path passes it
+   (`WorkflowExecutor.ts:930`). The three condition call sites pass nothing, so
    a two-minute `npm test` gate shows nothing until it finishes.
 2. **No verdict detail anywhere.** `EvaluationResult` carries `passed`, `stdout`,
    `stderr`, `exitCode`, `timeout`, `error`, `duration` — the executor then
    discards the comparison inputs. The user never sees which source was compared
    (`compareSource`), what was expected (`returns`), or what rule matched. Script
-   steps show only an exit code (`outputRows.ts:1464`, `OutputRow.tsx:991`), and
+   steps show only an exit code (`outputRows.ts:1464`, `OutputRow.tsx:992`), and
    they have `compareSource`/`returns`/`onPass`/`onFail` too.
-3. **Two renderers exist for the same data.** `components/output/CliOutput.tsx`
-   still contains a full script-output branch (`CliOutput.tsx:1186-1304`), but
+3. **Two renderers existed for the same data.** The deleted
+   `components/output/CliOutput.tsx` contained a full script-output branch, but
    the output pane has rendered through `buildOutputRows` + `OutputRow` for some
-   time; `CliOutput` is now referenced only by the barrel export
-   (`components/output/index.ts:1`) and its own test. Editing it changes nothing
-   on screen.
+   time; `CliOutput` was referenced only by the barrel export and its own test.
+   Editing it changed nothing on screen.
 
 ## Goals
 
@@ -71,8 +70,8 @@ plan).
 
 ### One script execution, four sources
 
-Add to `DashboardConstants.ts` next to `CONDITION_ACTIONS` (`:1068`) and
-`COMPARE_SOURCES` (`:1078`):
+Add to `DashboardConstants.ts` next to `CONDITION_ACTIONS` (`:1073`) and
+`COMPARE_SOURCES` (`:1085`):
 
 ```ts
 export const SCRIPT_OUTPUT_SOURCES = {
@@ -82,7 +81,7 @@ export const SCRIPT_OUTPUT_SOURCES = {
 } as const;
 ```
 
-`CliOutput.source` (`WebviewMessageTypes.ts:193`) widens from
+`CliOutput.source` (`WebviewMessageTypes.ts:195`) widens from
 `typeof STEP_TYPES.SCRIPT` to `ScriptOutputSource`. Everything that currently
 asks "is this a script?" goes through the existing `isScriptOutput` helper
 (`utils/outputRenderUtils.ts`), which becomes `source != null` — so the plain
@@ -95,7 +94,7 @@ there is no reason to.
 
 ### `ScriptVerdict` — the new payload
 
-New type in `CtrlYokeTypes.ts` beside `ScriptRuntimeOutput` (`:466`), carried on
+New type in `CtrlYokeTypes.ts` beside `ScriptRuntimeOutput` (`:480`), carried on
 `CliOutput` as `scriptVerdict?: ScriptVerdict`:
 
 ```ts
@@ -146,7 +145,7 @@ Add `errored: boolean` derived today from `result.error || result.timeout ||
 ### One emitter for all four call sites
 
 New `src/core/orchestration/ScriptExecutionReporter.ts` owning the whole
-publish sequence that `executeScriptStep` (`WorkflowExecutor.ts:806-1002`)
+publish sequence that `executeScriptStep` (`WorkflowExecutor.ts:811-1043`)
 performs inline today:
 
 1. emit the streaming placeholder `CliOutput` (`dispatchDashboardOutput`) and
@@ -167,19 +166,19 @@ different per site.
 Two details the reporter must preserve, both currently easy to break:
 
 - **Only script _steps_ feed prior context.** `cacheRuntimeOutput` /
-  `storeFinalStepResponseText` (`WorkflowExecutor.ts:1003-1010`) must stay in
+  `storeFinalStepResponseText` (`WorkflowExecutor.ts:1038-1043`) must stay in
   `executeScriptStep`. A gate's stdout is not the step's response and must never
   be injected into a later prompt.
-- **ANSI stripping should stop being a local regex.** `WorkflowExecutor.ts:980`
+- **ANSI stripping should stop being a local regex.** `WorkflowExecutor.ts:964`
   inlines `/\x1B\[[0-9;]*[a-zA-Z]/g`; use `sanitizeTerminalOutput`
   (`src/utils/TerminalOutputSanitizer.ts`), already the webview's sanitizer.
 
 ### Attempt identity needs a phase
 
 CLI entries are keyed by `(target, runIndex, attemptIndex)` in three places —
-`OutputHistoryTimelineAdapter.getCliEntryKey` (`:284`),
-`StreamingHistoryBuffer` (`:252`), and the webview's
-`findMatchingCliEntryIndex` (`workflowStore.ts:398`). A pre-condition and its
+`OutputHistoryTimelineAdapter.getCliEntryKey` (`:301`),
+`StreamingHistoryBuffer` (`:267`), and the webview's
+`findMatchingCliEntryIndex` (`workflowStore.ts:399`). A pre-condition and its
 prompt share all three, so publishing a condition as a CLI output would
 overwrite the prompt's own output.
 
@@ -205,7 +204,7 @@ End-condition retries need no extra dimension: retry _N_ already increments
 ### Streaming chunks must be phase-keyed too
 
 `updateCliStreamingChunk(stepIndex, chunk)` (`IDashboardSink.ts:98`) accumulates
-into `streamingChunks[stepIndex]` (`workflowStore.ts:617`), and
+into `streamingChunks[stepIndex]` (`workflowStore.ts:620`), and
 `buildOutputRows` reads it back per target (`outputRows.ts:1341`). An
 end-condition streaming into the same numeric slot would inherit the AI
 attempt's leftover text.
@@ -230,7 +229,7 @@ Pre-condition passed (exit code 0) → continue
 End condition failed (stdout ≠ "PASS") → retry 1 of 3
 ```
 
-`formatConditionOutput` (`:1528`) is deleted; `trackConditionResult` (`:1549`)
+`formatConditionOutput` (`:1562`) is deleted; `trackConditionResult` (`:1596`)
 becomes a thin `formatVerdictSummary(verdict)` caller. The detail now lives in
 the CLI output group directly above it.
 
@@ -238,7 +237,7 @@ While in here, fix a bug this design surfaced: the retry evaluation at
 `EndConditionHandler.ts:407` calls `evaluateCondition(prompt.endCondition!,
 retryContext.workspaceFolderPath)` with **no `vars`**, so `CTRLYOKE_VAR_*`
 injection silently disappears on every retry evaluation while the initial
-evaluation (`WorkflowExecutor.ts:1720-1724`) has it. Thread `vars` through
+evaluation (`WorkflowExecutor.ts:1754-1758`) has it. Thread `vars` through
 `RetryContext`.
 
 ## UI: the verdict block
@@ -267,7 +266,7 @@ Expanded — a label/value grid:
 | Action     | `continue` / `skipPrompt` / `stopWorkflow` / `retry N of M`    |
 
 `auto` must display as `auto → stdout` (or `→ exit code` for boolean `returns`),
-because `evaluateSuccess`'s AUTO branch (`:648`) picks the axis at runtime and
+because `evaluateSuccess`'s AUTO branch (`:636`) picks the axis at runtime and
 "auto" alone tells the user nothing about what was actually compared.
 
 Reuse `outputTruncation`'s `buildCollapsedOutputPreview` for long `actual`
@@ -295,13 +294,13 @@ The header row for a condition group reuses `cli-header` with a distinct icon
 
 ## Phasing
 
-**Phase 0 — delete the dead renderer.** Remove `components/output/CliOutput.tsx`,
-its barrel export (`components/output/index.ts:1`), and
+**Phase 0 — delete the dead renderer (done 2026-07-25).** Remove `components/output/CliOutput.tsx`,
+its barrel export line, and
 `test/components/output/CliOutput.test.tsx`; port any assertions worth keeping
 onto `OutputRow`/`buildOutputRows` tests. Do this first so nothing new is
 written twice.
 
-**Phase 1 — contracts.** `SCRIPT_OUTPUT_SOURCES`, `EXECUTION_PHASES`,
+**Phase 1 — contracts (done 2026-07-25).** `SCRIPT_OUTPUT_SOURCES`, `EXECUTION_PHASES`,
 `ScriptVerdict`, `ScriptMatchRule`, `CliOutput.source`/`scriptVerdict`,
 `OrderedCliHistoryEntry.phase`, `TIMELINE_ATTEMPT_KINDS.CONDITION`, and the
 three key builders. No behavior yet; typecheck is the gate.
