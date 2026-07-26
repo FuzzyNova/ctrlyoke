@@ -204,18 +204,18 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
 
     const preResult = liveStatuses.find((status) =>
-      status.message.startsWith("Pre-condition Passed")
+      status.message.startsWith("Pre-condition passed")
     );
     assert.ok(preResult);
-    assert.match(preResult.message, /action: continue/);
-    assert.match(preResult.message, /pre-output/);
+    assert.match(preResult.message, /stdout = "pre-output"/);
+    assert.match(preResult.message, /→ continue/);
     assert.strictEqual(preResult.severity, "info");
 
     const endResult = liveStatuses.find((status) =>
-      status.message.startsWith("End condition Passed")
+      status.message.startsWith("End condition passed")
     );
     assert.ok(endResult);
-    assert.match(endResult.message, /end-output/);
+    assert.match(endResult.message, /stdout = "end-output"/);
     assert.strictEqual(endResult.severity, "info");
 
     assert.deepStrictEqual(

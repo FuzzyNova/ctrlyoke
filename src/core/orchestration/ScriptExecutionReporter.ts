@@ -63,13 +63,30 @@ export interface ScriptExecutionReportRequest {
   timestampMs: number;
   onPass: ConditionAction;
   onFail: ConditionAction;
-  actionDetail?: string;
+  actionDetail?: string | ((result: EvaluationResult) => string | undefined);
   statusLabel?: string;
   timeoutMs?: number;
   vars?: Record<string, string>;
-  evaluate?: (
-    onOutput: (chunk: string) => void
-  ) => Promise<EvaluationResult>;
+  /** Conditions let their caller place the verdict summary beside the timeline row. */
+  emitStatus?: boolean;
+  evaluate?: (onOutput: (chunk: string) => void) => Promise<EvaluationResult>;
+}
+
+export function formatVerdictSummary(
+  label: string,
+  verdict: ScriptVerdict
+): string {
+  const comparison = verdict.error
+    ? verdict.error
+    : verdict.timedOut
+      ? "timed out"
+      : verdict.actualSource === "exitCode"
+        ? `exit code ${verdict.actual}`
+        : `${verdict.actualSource} ${
+            verdict.outcome === "passed" ? "=" : "≠"
+          } ${JSON.stringify(verdict.expected ?? "")}`;
+  const action = verdict.actionDetail ?? verdict.action;
+  return `${label} ${verdict.outcome} (${comparison}) → ${action}`;
 }
 
 export interface ScriptExecutionReport {
@@ -113,6 +130,26 @@ export class ScriptExecutionReporter {
       runIndex,
     };
 
+    if (source !== SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP) {
+      // Step 5 will phase-key live streaming slots. Until then, clear the shared
+      // slot so a condition cannot inherit the prompt's prior streaming text.
+      if (
+        context.dashboardProvider &&
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
+        signedStepIndex >= 0
+      ) {
+        context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, "");
+      } else if (
+        context.dashboardProvider &&
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ) {
+        context.dashboardProvider.updateFinalStepStreamingChunk(
+          target.loopIndex,
+          ""
+        );
+      }
+    }
+
     this.dispatchDashboardOutput(context, target, signedStepIndex, initOutput);
     if (context.historyFilePath && history) {
       await history.startStreamingExecutionOutput(
@@ -141,15 +178,18 @@ export class ScriptExecutionReporter {
           phase
         );
       }
-      if (
-        context.dashboardProvider &&
-        target.kind === FINAL_STEP_PHASES.QUEUE &&
-        signedStepIndex >= 0
-      ) {
-        context.dashboardProvider.updateCliStreamingChunk(
-          signedStepIndex,
-          chunk
-        );
+      if (context.dashboardProvider) {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex >= 0) {
+          context.dashboardProvider.updateCliStreamingChunk(
+            signedStepIndex,
+            chunk
+          );
+        } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+          context.dashboardProvider.updateFinalStepStreamingChunk(
+            target.loopIndex,
+            chunk
+          );
+        }
       }
     };
 
@@ -173,8 +213,7 @@ export class ScriptExecutionReporter {
       response: outputText,
       elapsed: evaluationResult.duration / 1000,
       isStreaming: false,
-      exitCode:
-        evaluationResult.exitCode ?? (evaluationResult.passed ? 0 : 1),
+      exitCode: evaluationResult.exitCode ?? (evaluationResult.passed ? 0 : 1),
       scriptVerdict: verdict,
     };
 
@@ -203,7 +242,9 @@ export class ScriptExecutionReporter {
       );
     }
 
-    await this.emitStatus(request, evaluationResult, verdict);
+    if (request.emitStatus !== false) {
+      await this.emitStatus(request, verdict);
+    }
 
     return {
       evaluationResult,
@@ -229,15 +270,14 @@ export class ScriptExecutionReporter {
       actual: result.actual,
       actualSource: result.actualSource,
       exitCode: result.exitCode,
-      outcome: result.errored
-        ? "errored"
-        : result.passed
-          ? "passed"
-          : "failed",
+      outcome: result.errored ? "errored" : result.passed ? "passed" : "failed",
       matchRule: result.matchRule,
       action:
         result.errored || !result.passed ? request.onFail : request.onPass,
-      actionDetail: request.actionDetail,
+      actionDetail:
+        typeof request.actionDetail === "function"
+          ? request.actionDetail(result)
+          : request.actionDetail,
       durationMs: result.duration,
       timedOut: result.timeout,
       error: result.error,
@@ -284,18 +324,12 @@ export class ScriptExecutionReporter {
 
   private async emitStatus(
     request: ScriptExecutionReportRequest,
-    result: EvaluationResult,
     verdict: ScriptVerdict
   ): Promise<void> {
     const { context, target } = request;
     const label = request.statusLabel ?? "Script";
     const outcome = verdict.outcome;
-    const actionSuffix = ` → action: ${verdict.action}`;
-    const timeoutSuffix =
-      result.timeout && request.timeoutMs != null
-        ? ` (timed out after ${request.timeoutMs}ms)`
-        : "";
-    const message = `${label} ${outcome}${actionSuffix}${timeoutSuffix}`;
+    const message = formatVerdictSummary(label, verdict);
     const severity: StatusMessageSeverity =
       outcome === "passed"
         ? STATUS_MESSAGE_SEVERITY.INFO

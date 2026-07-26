@@ -6,8 +6,11 @@ import * as path from "path";
 import {
   ACTION_TYPES,
   CONDITION_ACTIONS,
+  EXECUTION_PHASES,
   EXECUTION_STATES,
+  SCRIPT_OUTPUT_SOURCES,
 } from "../../types/DashboardConstants";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import {
   createExecutionHarness,
   type ExecutionHarness,
@@ -75,6 +78,20 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     } catch {
       return false;
     }
+  }
+
+  async function findFiles(root: string, fileName: string): Promise<string[]> {
+    const matches: string[] = [];
+    const entries = await fs.readdir(root, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(root, entry.name);
+      if (entry.isDirectory()) {
+        matches.push(...(await findFiles(entryPath, fileName)));
+      } else if (entry.name === fileName) {
+        matches.push(entryPath);
+      }
+    }
+    return matches;
   }
 
   test("control: without a preCondition the prompt reaches the harness", async () => {
@@ -172,6 +189,37 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       ["step 1"],
       "default onPass is continue — the prompt must still execute"
     );
+
+    const eventsPath = (
+      await findFiles(
+        path.join(workspace, ".ctrlyoke", ".runs"),
+        "events.jsonl"
+      )
+    )[0];
+    assert.ok(eventsPath, "the run must persist a timeline");
+    const cliEntries = (await fs.readFile(eventsPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter(
+        (event) => event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+      )
+      .map((event) => ({
+        ...event.payload.cliOutput,
+        phase: event.phase,
+      }))
+      .filter((output) => !output.isStreaming);
+    const preOutput = cliEntries.find(
+      (output) => output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+    );
+    const promptOutput = cliEntries.find(
+      (output) => output.prompt === "step 1" && output.source === undefined
+    );
+    assert.ok(preOutput, "the pre-condition must have its own CLI entry");
+    assert.strictEqual(preOutput.phase, EXECUTION_PHASES.PRE_CONDITION);
+    assert.ok(promptOutput, "the prompt must retain its own CLI entry");
+    assert.strictEqual(promptOutput.phase, undefined);
+    assert.notStrictEqual(preOutput, promptOutput);
   });
 
   test("ephemeral flow: new workflow -> set preCondition -> run gates the first prompt", async () => {

@@ -1,6 +1,6 @@
 # Script Output Unification — one rendering pipeline for script steps, pre-conditions, and end-conditions
 
-Status: **In progress (Phases 0–3a complete, 2026-07-25).** Interlocks with
+Status: **In progress (Phases 0–3 complete, 2026-07-25).** Interlocks with
 [`ON_ERROR_REDESIGN_PLAN.md`](./ON_ERROR_REDESIGN_PLAN.md) — see "Relationship to
 the On Error plan".
 
@@ -310,11 +310,11 @@ three key builders. No behavior yet; typecheck is the gate.
 tests (`src/test/endConditionEvaluator.test.ts` already covers the matching
 matrix — extend the assertions to `matchRule`).
 
-**Phase 3 — reporter.** **3a complete 2026-07-25:** extracted
-`ScriptExecutionReporter` and migrated `executeScriptStep` onto it with the
-verdict payload. The pre-condition, end-condition, and retry call sites remain
-pending for 3b. Shrink the status lines and fix the missing `vars` on retry
-evaluation as those sites move.
+**Phase 3 — reporter (complete 2026-07-25).** Extracted
+`ScriptExecutionReporter` and migrated script steps, pre-conditions,
+end-conditions, and end-condition retries onto the same streaming/history
+pipeline. Conditions carry phase-keyed CLI entries, compact verdict summaries,
+and retry evaluations preserve workflow vars.
 
 **Phase 4 — webview.** Phase-keyed streaming chunks, `script-verdict` row +
 component, condition header labels, find/scroll-seek/estimate wiring.

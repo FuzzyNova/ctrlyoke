@@ -9,6 +9,7 @@ import {
   FinalStepRuntimeState,
   EXECUTION_STATES,
   HarnessId,
+  type ScriptVerdict,
   type WorkflowAttemptTarget,
   type PreConditionAction,
 } from "../types/CtrlYokeTypes";
@@ -31,10 +32,7 @@ import {
   SendRetryPromptCallback,
   type RetryContext,
 } from "./EndConditionHandler";
-import {
-  EndConditionEvaluator,
-  type EvaluationResult,
-} from "./EndConditionEvaluator";
+import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
 import {
   PropertyResolver,
@@ -62,7 +60,10 @@ import {
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
-import { ScriptExecutionReporter } from "./orchestration/ScriptExecutionReporter";
+import {
+  formatVerdictSummary,
+  ScriptExecutionReporter,
+} from "./orchestration/ScriptExecutionReporter";
 
 export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
@@ -495,11 +496,30 @@ export class WorkflowExecutor {
         )}`
       );
 
-      const preResult = await this.endConditionEvaluator.evaluateCondition(
-        resolvedPreCondition,
-        context.workspaceFolderPath,
-        workflowFileForPre.vars
-      );
+      const preReport = await this.scriptExecutionReporter.report({
+        context,
+        source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        properties: {
+          script: resolvedPreCondition.script,
+          compareSource:
+            resolvedPreCondition.compareSource ?? COMPARE_SOURCES.AUTO,
+          returns: resolvedPreCondition.returns,
+          timeout: resolvedPreCondition.timeout,
+        },
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        target: this.toOutputExecutionTarget(target),
+        signedStepIndex: this.getSignedStepIndex(target),
+        runIndex: this.getRunIndexForTarget(context, target),
+        attemptIndex: 0,
+        timestampMs: Date.now(),
+        onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
+        onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
+        statusLabel: "Pre-condition",
+        timeoutMs: resolvedPreCondition.timeout,
+        vars: workflowFileForPre.vars,
+        emitStatus: false,
+      });
+      const preResult = preReport.evaluationResult;
       const preAction: PreConditionAction = preResult.passed
         ? (resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
         : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
@@ -512,21 +532,9 @@ export class WorkflowExecutor {
         context,
         target,
         "Pre-condition",
-        preResult,
-        preAction,
+        preReport.verdict,
         STATUS_MESSAGE_SEVERITY.WARNING
       );
-
-      if (preResult.errored) {
-        await this.trackStatusMessage(
-          context,
-          target,
-          `Pre-condition could not run: ${
-            preResult.error ?? "Unknown evaluation error"
-          } → ${preAction}`,
-          STATUS_MESSAGE_SEVERITY.WARNING
-        );
-      }
 
       if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
         return this.handleSkippedStep(step, target, context);
@@ -1479,46 +1487,25 @@ export class WorkflowExecutor {
     return script.split(/[\\/]/).pop() || script;
   }
 
-  private formatConditionOutput(result: EvaluationResult): string {
-    const stdout = result.stdout.trim();
-    const stderr = result.stderr.trim();
-
-    if (stdout && stderr) {
-      return `stdout:\n${stdout}\nstderr:\n${stderr}`;
-    }
-    if (stdout) {
-      return stdout;
-    }
-    if (stderr) {
-      return stderr;
-    }
-    return result.error?.trim() || "(no output)";
-  }
-
   /**
-   * Publishes a condition's completed output through the same ordered status
-   * timeline used by the output pane. `trackStatusMessage` mirrors the entry to
-   * the live dashboard/capture buffer and persists it to events.jsonl.
+   * Publishes the one-line condition verdict beside the CLI output group.
    */
   private async trackConditionResult(
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     label: string,
-    result: EvaluationResult,
-    action?: string,
+    verdict: ScriptVerdict,
     failureSeverity: string = STATUS_MESSAGE_SEVERITY.ERROR
   ): Promise<void> {
-    const resultStatus = result.passed ? "Passed" : "Failed";
-    const severity = result.passed
-      ? STATUS_MESSAGE_SEVERITY.INFO
-      : failureSeverity;
-    const actionSuffix = action ? ` → action: ${action}` : "";
-    const output = this.formatConditionOutput(result);
+    const severity =
+      verdict.outcome === "passed"
+        ? STATUS_MESSAGE_SEVERITY.INFO
+        : failureSeverity;
 
     await this.trackStatusMessage(
       context,
       target,
-      `${label} ${resultStatus}${actionSuffix} - Output:\n${output}`,
+      formatVerdictSummary(label, verdict),
       severity
     );
   }
@@ -1663,26 +1650,45 @@ export class WorkflowExecutor {
       return false;
     }
 
+    const endCondition = prompt.endCondition;
+
     await this.trackStatusMessage(
       context,
       target,
       `Evaluating end condition: Running ${this.getConditionScriptName(
-        prompt.endCondition.script
+        endCondition.script
       )}`
     );
 
-    const evaluationResult = await this.endConditionEvaluator.evaluateCondition(
-      prompt.endCondition,
-      context.workspaceFolderPath,
-      vars
-    );
+    const endReport = await this.scriptExecutionReporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+      properties: {
+        script: endCondition.script,
+        compareSource: endCondition.compareSource ?? COMPARE_SOURCES.AUTO,
+        returns: endCondition.returns,
+        timeout: endCondition.timeout,
+      },
+      phase: EXECUTION_PHASES.END_CONDITION,
+      target: this.toOutputExecutionTarget(target),
+      signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
+      runIndex,
+      attemptIndex,
+      timestampMs: Date.now(),
+      onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
+      onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+      statusLabel: "End condition",
+      timeoutMs: endCondition.timeout,
+      vars,
+      emitStatus: false,
+    });
+    const evaluationResult = endReport.evaluationResult;
 
     await this.trackConditionResult(
       context,
       target,
       "End condition",
-      evaluationResult,
-      undefined,
+      endReport.verdict,
       STATUS_MESSAGE_SEVERITY.ERROR
     );
 
@@ -1694,15 +1700,51 @@ export class WorkflowExecutor {
       runtime: this.promptQueue.getRuntimeStateMachine(),
       attemptTarget: target,
       attemptIndex,
-      onEvaluation: (retryEvaluation, retryAttemptIndex) =>
-        this.trackConditionResult(
+      vars,
+      evaluateCondition: async (condition, retryAttemptIndex) =>
+        this.scriptExecutionReporter.report({
           context,
-          target,
-          `End condition retry ${retryAttemptIndex}`,
-          retryEvaluation,
-          undefined,
-          STATUS_MESSAGE_SEVERITY.ERROR
-        ),
+          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+          properties: {
+            script: condition.script,
+            compareSource: condition.compareSource ?? COMPARE_SOURCES.AUTO,
+            returns: condition.returns,
+            timeout: condition.timeout,
+          },
+          phase: EXECUTION_PHASES.END_CONDITION,
+          target: this.toOutputExecutionTarget(target),
+          signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
+          runIndex,
+          attemptIndex: retryAttemptIndex,
+          timestampMs: Date.now(),
+          onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
+          onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+          statusLabel: "End condition",
+          timeoutMs: condition.timeout,
+          vars,
+          actionDetail: (result) =>
+            result.passed
+              ? undefined
+              : `retry ${this.promptQueue.getCurrentRetryCount()} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`,
+          emitStatus: false,
+        }),
+      onEvaluation: async (
+        _retryEvaluation,
+        _retryAttemptIndex,
+        retryVerdict
+      ) => {
+        // Reporter-backed retry evaluations always provide a verdict. Keep the
+        // callback optional for direct EndConditionHandler tests.
+        if (retryVerdict) {
+          await this.trackConditionResult(
+            context,
+            target,
+            "End condition",
+            retryVerdict,
+            STATUS_MESSAGE_SEVERITY.ERROR
+          );
+        }
+      },
     };
 
     const sendRetryPromptCallback = this.createSendRetryPromptCallback(

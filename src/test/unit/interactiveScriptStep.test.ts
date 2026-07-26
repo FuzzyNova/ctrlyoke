@@ -284,7 +284,7 @@ suite("interactive script steps", () => {
     assert.strictEqual(timeoutCallbackCalled, true);
     assert.ok(
       statusMessages.some((message) =>
-        message.includes("timed out after 10ms")
+        message.includes("Script step errored (timed out)")
       ),
       statusMessages.join("\n")
     );

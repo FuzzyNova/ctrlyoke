@@ -3,6 +3,8 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { SCRIPT_EXTENSIONS } from "../utils/ValidationUtils";
 import {
   PromptStep,
+  type ScriptProperties,
+  type ScriptVerdict,
   type WorkflowAttemptTarget,
   type EndConditionAction,
 } from "../types/CtrlYokeTypes";
@@ -40,10 +42,21 @@ export interface RetryContext {
   runtime: WorkflowStateMachine;
   attemptTarget: WorkflowAttemptTarget;
   attemptIndex: number;
+  /** Workflow variables injected into every retry evaluation. */
+  vars?: Record<string, string>;
+  /** Optional reporter-backed evaluation used to publish retry output. */
+  evaluateCondition?: (
+    condition: ScriptProperties,
+    attemptIndex: number
+  ) => Promise<{
+    evaluationResult: EvaluationResult;
+    verdict?: ScriptVerdict;
+  }>;
   /** Receives each end-condition re-evaluation performed after a retry prompt. */
   onEvaluation?: (
     evaluationResult: EvaluationResult,
-    attemptIndex: number
+    attemptIndex: number,
+    verdict?: ScriptVerdict
   ) => Promise<void>;
 }
 
@@ -402,13 +415,28 @@ export class EndConditionHandler {
         };
       }
 
-      // Re-evaluate end condition after retry
-      const retryEvaluation =
-        await this.endConditionEvaluator.evaluateCondition(
-          prompt.endCondition!,
-          retryContext.workspaceFolderPath
-        );
-      await retryContext.onEvaluation?.(retryEvaluation, nextAttemptIndex);
+      // Re-evaluate end condition after retry. Production callers provide a
+      // reporter-backed evaluator; the fallback retains the direct evaluator
+      // for focused handler use and must carry workflow vars too.
+      const retryReport = retryContext.evaluateCondition
+        ? await retryContext.evaluateCondition(
+            prompt.endCondition!,
+            nextAttemptIndex
+          )
+        : {
+            evaluationResult:
+              await this.endConditionEvaluator.evaluateCondition(
+                prompt.endCondition!,
+                retryContext.workspaceFolderPath,
+                retryContext.vars
+              ),
+          };
+      const retryEvaluation = retryReport.evaluationResult;
+      await retryContext.onEvaluation?.(
+        retryEvaluation,
+        nextAttemptIndex,
+        retryReport.verdict
+      );
 
       // Check if the retry succeeded
       if (retryEvaluation.passed) {

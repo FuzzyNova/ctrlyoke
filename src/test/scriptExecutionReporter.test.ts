@@ -49,7 +49,9 @@ function makeReporter(result: EvaluationResult, events: string[]) {
     workspaceFolderPath: process.cwd(),
     dashboardProvider: {
       updateCliOutput: (_stepIndex: number, output: unknown) => {
-        events.push((output as CliOutput).isStreaming ? "placeholder" : "final");
+        events.push(
+          (output as CliOutput).isStreaming ? "placeholder" : "final"
+        );
       },
       updateCliStreamingChunk: (_stepIndex: number, chunk: string) => {
         events.push(chunk);
@@ -61,77 +63,110 @@ function makeReporter(result: EvaluationResult, events: string[]) {
 }
 
 suite("ScriptExecutionReporter", () => {
-  test("emits placeholder, chunks, and final output in order", async () => {
-    const events: string[] = [];
-    const { reporter, context } = makeReporter(makeResult(), events);
-
-    const report = await reporter.report({
-      context,
-      source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
-      properties: {
-        script: "check.sh",
-        compareSource: "stdout",
-        returns: "ok",
+  test("emits placeholder, chunks, and final output for all four sources", async () => {
+    const cases = [
+      {
+        source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+        phase: EXECUTION_PHASES.PROMPT,
+        attemptIndex: 0,
       },
-      phase: EXECUTION_PHASES.PROMPT,
-      target: { kind: "queue", stepIndex: 0 },
-      signedStepIndex: 0,
-      runIndex: 0,
-      attemptIndex: 0,
-      timestampMs: 100,
-      onPass: "continue",
-      onFail: "stopWorkflow",
-    });
+      {
+        source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        attemptIndex: 0,
+      },
+      {
+        source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+        phase: EXECUTION_PHASES.END_CONDITION,
+        attemptIndex: 0,
+      },
+      {
+        source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+        phase: EXECUTION_PHASES.END_CONDITION,
+        attemptIndex: 1,
+      },
+    ] as const;
 
-    assert.deepStrictEqual(events, ["placeholder", "chunk", "final"]);
-    assert.deepStrictEqual(report.verdict, {
-      compareSource: "stdout",
-      expected: "ok",
-      actual: "ok",
-      actualSource: "stdout",
-      exitCode: 0,
-      outcome: "passed",
-      matchRule: "exact",
-      action: "continue",
-      actionDetail: undefined,
-      durationMs: 12,
-      timedOut: undefined,
-      error: undefined,
-    });
+    for (const execution of cases) {
+      const events: string[] = [];
+      const { reporter, context } = makeReporter(makeResult(), events);
+
+      const report = await reporter.report({
+        context,
+        source: execution.source,
+        properties: {
+          script: "check.sh",
+          compareSource: "stdout",
+          returns: "ok",
+        },
+        phase: execution.phase,
+        target: { kind: "queue", stepIndex: 0 },
+        signedStepIndex: 0,
+        runIndex: 0,
+        attemptIndex: execution.attemptIndex,
+        timestampMs: 100,
+        onPass: "continue",
+        onFail: "stopWorkflow",
+      });
+
+      assert.deepStrictEqual(events, [
+        ...(execution.source === SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP ? [] : [""]),
+        "placeholder",
+        "chunk",
+        "final",
+      ]);
+      assert.strictEqual(report.finalOutput.source, execution.source);
+      assert.deepStrictEqual(report.verdict, {
+        compareSource: "stdout",
+        expected: "ok",
+        actual: "ok",
+        actualSource: "stdout",
+        exitCode: 0,
+        outcome: "passed",
+        matchRule: "exact",
+        action: "continue",
+        actionDetail: undefined,
+        durationMs: 12,
+        timedOut: undefined,
+        error: undefined,
+      });
+    }
   });
 
   test("maps failed and errored evaluations to complete verdicts without caching output", async () => {
     for (const result of [
-        makeResult({
+      makeResult({
+        passed: false,
+        matchRule: "substring",
+        actual: "bad",
+        stdout: "bad",
+        result: "bad",
+        exitCode: 1,
+      }),
+      {
+        ...makeResult({
           passed: false,
-          matchRule: "substring",
-          actual: "bad",
-          stdout: "bad",
-          result: "bad",
-          exitCode: 1,
+          matchRule: "none",
+          actual: "",
+          actualSource: "stderr",
+          stdout: "",
+          stderr: "spawn failed",
+          result: "",
+          errored: true,
+          error: "spawn failed",
+          timeout: true,
+          exitCode: undefined,
         }),
-        {
-          ...makeResult({
-            passed: false,
-            matchRule: "none",
-            actual: "",
-            actualSource: "stderr",
-            stdout: "",
-            stderr: "spawn failed",
-            result: "",
-            errored: true,
-            error: "spawn failed",
-            timeout: true,
-            exitCode: undefined,
-          }),
-        },
-      ]) {
+      },
+    ]) {
       const events: string[] = [];
       const { reporter, context } = makeReporter(result, events);
       let cacheWrites = 0;
-      (context as ScriptExecutionReporterContext & {
-        cacheRuntimeOutput?: () => void;
-      }).cacheRuntimeOutput = () => {
+      (
+        context as ScriptExecutionReporterContext & {
+          cacheRuntimeOutput?: () => void;
+        }
+      ).cacheRuntimeOutput = () => {
         cacheWrites += 1;
       };
 

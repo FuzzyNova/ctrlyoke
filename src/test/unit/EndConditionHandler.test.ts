@@ -12,7 +12,10 @@ import {
   HarnessStatus,
 } from "../../core/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { type PromptStep } from "../../types/CtrlYokeTypes";
+import {
+  type PromptStep,
+  type ScriptProperties,
+} from "../../types/CtrlYokeTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
   FINAL_STEP_PHASES,
@@ -87,6 +90,8 @@ class MockHarnessIntegration extends HarnessIntegration {
 }
 
 class TestEndConditionEvaluator extends EndConditionEvaluator {
+  readonly varsSeen: Array<Record<string, string> | undefined> = [];
+
   constructor(
     platform: PlatformAdapter,
     private readonly retryResults: EvaluationResult[] = []
@@ -94,7 +99,12 @@ class TestEndConditionEvaluator extends EndConditionEvaluator {
     super(platform);
   }
 
-  override async evaluateCondition(): Promise<EvaluationResult> {
+  override async evaluateCondition(
+    _condition: ScriptProperties,
+    _workingDirectory?: string,
+    vars?: Record<string, string>
+  ): Promise<EvaluationResult> {
+    this.varsSeen.push(vars);
     return this.retryResults.shift() ?? successResult();
   }
 
@@ -246,6 +256,7 @@ suite("EndConditionHandler", () => {
         runtime,
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
+        vars: { CHECK: "expected" },
         onEvaluation: async (evaluationResult, attemptIndex) => {
           retryEvaluations.push({ attemptIndex, result: evaluationResult });
         },
@@ -261,6 +272,7 @@ suite("EndConditionHandler", () => {
     assert.strictEqual(retryEvaluations.length, 1);
     assert.strictEqual(retryEvaluations[0].attemptIndex, 1);
     assert.strictEqual(retryEvaluations[0].result.stdout, "ok");
+    assert.deepStrictEqual(evaluator.varsSeen, [{ CHECK: "expected" }]);
     assert.deepStrictEqual(transitions, [
       {
         command: WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY,
