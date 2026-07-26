@@ -184,6 +184,111 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(events[0].line, "legacy compact prompt");
       });
     });
+
+    test("emits catch-up transcript entries before Go completion and resumes after partial appends", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const sessionId = "88888888-8888-8888-8888-888888888888";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          sessionId,
+          ".system_generated",
+          "logs"
+        );
+        const logPath = path.join(logDir, "cli-20260705_120000.log");
+        const transcriptPath = path.join(
+          transcriptDir,
+          "transcript_full.jsonl"
+        );
+        const launch = {
+          source: "MODEL",
+          type: "RUN_COMMAND",
+          status: "RUNNING",
+          content:
+            "Tool is running as a background task with task id: session/task-2.",
+        };
+        const completion = {
+          source: "SYSTEM",
+          type: "SYSTEM_MESSAGE",
+          status: "DONE",
+          content: 'Task id "session/task-2" finished with result: completed',
+        };
+        const initial = {
+          source: "MODEL",
+          type: "PLANNER_RESPONSE",
+          status: "DONE",
+          content: "Initial assistant output",
+        };
+        const resumed = {
+          source: "MODEL",
+          type: "PLANNER_RESPONSE",
+          status: "DONE",
+          content: "Resumed assistant output",
+        };
+
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        fs.writeFileSync(
+          transcriptPath,
+          JSON.stringify(launch) + "\n" + JSON.stringify(initial) + "\n",
+          "utf8"
+        );
+        const initialEvents = await parser.readNewLines(logPath);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+        fs.appendFileSync(
+          transcriptPath,
+          JSON.stringify(completion) + "\n" + JSON.stringify(resumed) + "\n",
+          "utf8"
+        );
+        fs.appendFileSync(logPath, "clearing ResponsePending\n", "utf8");
+        const catchUpEvents = await parser.readNewLines(logPath);
+        assert.deepStrictEqual(
+          catchUpEvents.map((event) => event.type),
+          ["transcript.tool", "transcript.planner", "response.completed"]
+        );
+        assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+
+        const partialLine = JSON.stringify({
+          ...resumed,
+          content: "Partial resumed output",
+        });
+        fs.appendFileSync(transcriptPath, partialLine.slice(0, -3), "utf8");
+        assert.deepStrictEqual(await parser.readNewLines(logPath), []);
+        fs.appendFileSync(transcriptPath, partialLine.slice(-3) + "\n", "utf8");
+        const resumedEvents = await parser.readNewLines(logPath);
+        assert.deepStrictEqual(
+          resumedEvents.map((event) => event.type),
+          ["transcript.planner"]
+        );
+
+        const response = parser.extractResponse([
+          ...initialEvents,
+          ...catchUpEvents,
+          ...resumedEvents,
+        ]);
+        assert.deepStrictEqual(
+          response.events
+            .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
+            .map((event) => (event.data as { text: string }).text),
+          [
+            "Initial assistant output",
+            "Resumed assistant output",
+            "Partial resumed output",
+          ]
+        );
+      });
+    });
   });
 
   suite("AntigravityTranscriptReader", () => {

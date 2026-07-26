@@ -24,7 +24,6 @@ import { getAntigravityContextWindowSize } from "../../../utils/ModelConstants";
 import {
   AntigravityTranscriptEntry,
   AntigravityPlannerToolCall,
-  isAntigravityTranscriptEntry,
 } from "./AntigravityTranscriptTypes";
 import {
   AntigravityTranscriptReader,
@@ -73,6 +72,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
+  private readonly launchedBackgroundTaskIds = new Set<string>();
+  private readonly finishedBackgroundTaskIds = new Set<string>();
+  private backgroundStateSessionId?: string;
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     // The transcript is polled after the Go log so a session discovered on this
@@ -144,7 +146,13 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       }
 
       const transcriptEvents = await this.readNewTranscriptEvents();
-      return [...events, ...transcriptEvents];
+      const completionEvents = events.filter(
+        (event) => event.type === "response.completed"
+      );
+      const nonCompletionEvents = events.filter(
+        (event) => event.type !== "response.completed"
+      );
+      return [...nonCompletionEvents, ...transcriptEvents, ...completionEvents];
     } catch {
       return await this.readNewTranscriptEvents();
     }
@@ -392,6 +400,8 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return [];
     }
 
+    this.trackTranscriptBackgroundState(entry, sessionId);
+
     const timestamp = this.getTranscriptTimestamp(entry);
     const base = {
       sessionId,
@@ -572,6 +582,29 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     return completion?.[1];
   }
 
+  private trackTranscriptBackgroundState(
+    entry: AntigravityTranscriptEntry,
+    sessionId: string
+  ): void {
+    if (this.backgroundStateSessionId !== sessionId) {
+      this.backgroundStateSessionId = sessionId;
+      this.launchedBackgroundTaskIds.clear();
+      this.finishedBackgroundTaskIds.clear();
+    }
+
+    const taskId = this.extractTaskId(entry);
+    if (!taskId) {
+      return;
+    }
+
+    if (entry.source === "MODEL" && entry.type === "RUN_COMMAND") {
+      this.launchedBackgroundTaskIds.add(taskId);
+    }
+    if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
+      this.finishedBackgroundTaskIds.add(taskId);
+    }
+  }
+
   private getTranscriptTimestamp(entry: AntigravityTranscriptEntry): number {
     if (entry.created_at) {
       const timestamp = new Date(entry.created_at).getTime();
@@ -627,8 +660,8 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * Antigravy's background-task markers live in the **transcript**
    * (`getTranscriptPath`), not the tailed cli log that
    * `trackBackgroundWorkState(event)` would otherwise see — so unlike
-   * Claude/Copilot this reads the transcript directly on demand instead of
-   * tracking incremental cli-log state. See
+   * Claude/Copilot this updates provider-local state while the incremental
+   * transcript mapper consumes records. See
    * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Antigravity CLI — CONFIRMED".
    *
    * Rule: pending iff any `RUN_COMMAND` background-task launch (`Tool is
@@ -646,70 +679,12 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     if (!sessionId) {
       return false;
     }
-    const transcriptPath = this.getAuthoritativeTranscriptPath(sessionId);
-    return transcriptPath
-      ? this.hasPendingTaskInTranscript(transcriptPath)
-      : false;
-  }
-
-  private hasPendingTaskInTranscript(transcriptPath: string): boolean {
-    try {
-      if (!fs.existsSync(transcriptPath)) {
-        return false;
+    for (const taskId of this.launchedBackgroundTaskIds) {
+      if (!this.finishedBackgroundTaskIds.has(taskId)) {
+        return true;
       }
-
-      const launchedTaskIds = new Set<string>();
-      const finishedTaskIds = new Set<string>();
-      const content = fs.readFileSync(transcriptPath, "utf8");
-
-      for (const rawLine of content.split(/\r?\n/)) {
-        const line = rawLine.trim();
-        if (!line) {
-          continue;
-        }
-
-        let entry: AntigravityTranscriptEntry;
-        try {
-          const parsed: unknown = JSON.parse(line);
-          if (!isAntigravityTranscriptEntry(parsed)) {
-            continue;
-          }
-          entry = parsed;
-        } catch {
-          continue;
-        }
-        if (typeof entry.content !== "string") {
-          continue;
-        }
-
-        if (entry.source === "MODEL" && entry.type === "RUN_COMMAND") {
-          const match = entry.content.match(
-            /background task with task id:\s*(\S+?)[.\s]*$/m
-          );
-          if (match) {
-            launchedTaskIds.add(match[1]);
-          }
-        }
-
-        if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
-          const match = entry.content.match(
-            /Task id "([^"]+)" finished with result/
-          );
-          if (match) {
-            finishedTaskIds.add(match[1]);
-          }
-        }
-      }
-
-      for (const taskId of launchedTaskIds) {
-        if (!finishedTaskIds.has(taskId)) {
-          return true;
-        }
-      }
-      return false;
-    } catch {
-      return false;
     }
+    return false;
   }
 
   async readSessionIdFromLastConversations(
