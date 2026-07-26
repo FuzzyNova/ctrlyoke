@@ -41,6 +41,7 @@ import {
   type ResolvedProperties,
 } from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
   CliOutputFormatter,
@@ -167,6 +168,10 @@ export interface WorkflowExecutionContext {
     cwd: string;
     /** Called for each output chunk — used to stream text to the CliOutput panel. */
     onOutput: (chunk: string) => void;
+    /** Maximum runtime in milliseconds before the PTY is killed. */
+    timeout: number;
+    /** Called when the PTY is killed because its timeout expired. */
+    onTimeout?: () => void;
   }) => Promise<number>;
   targetRunIndices?: Map<string, number>;
   /**
@@ -871,16 +876,18 @@ export class WorkflowExecutor {
     // Accumulate output chunks so interactive mode has output to save to history.
     const outputChunks: string[] = [];
 
-    // Streaming callback — strips ANSI codes for the CliOutput text panel.
+    // Streaming callback — normalize chunks before they enter history or the
+    // runtime cache. The terminal itself still receives the raw PTY bytes.
     const onStreamChunk = (chunk: string): void => {
-      outputChunks.push(chunk);
+      const sanitizedChunk = sanitizeTerminalOutput(chunk);
+      outputChunks.push(sanitizedChunk);
       if (context.historyFilePath && context.outputHistoryManager) {
         void context.outputHistoryManager.appendStreamingChunk(
           context.historyFilePath,
           this.toOutputExecutionTarget(target),
           runIndex,
           attemptIndex,
-          chunk
+          sanitizedChunk
         );
       }
       if (!context.dashboardProvider) return;
@@ -896,9 +903,22 @@ export class WorkflowExecutor {
     };
 
     // ─── Interactive mode: run inside a PTY so the user can provide input ────
-    const isInteractive =
-      ConfigurationUtils.getCliExecutionMode() === EXECUTION_MODES.INTERACTIVE;
+    const resolvedExecutionMode = PropertyResolver.resolveExecutionMode(
+      step,
+      this.promptQueue.getWorkflowFile()
+    );
+    const requestedInteractive =
+      resolvedExecutionMode === EXECUTION_MODES.INTERACTIVE;
+    const stderrComparison = step.compareSource === COMPARE_SOURCES.STDERR;
+    const isInteractive = requestedInteractive && !stderrComparison;
+    if (requestedInteractive && stderrComparison) {
+      Log.warn(
+        `[script:interactive] compareSource=stderr requires separate stderr; ` +
+          `running headless: ${stepLabel}`
+      );
+    }
     let ptyExitCode: number | undefined;
+    let ptyTimedOut = false;
 
     if (isInteractive && context.spawnScriptPty) {
       Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
@@ -908,6 +928,10 @@ export class WorkflowExecutor {
         script: step.script,
         cwd: context.workspaceFolderPath ?? process.cwd(),
         onOutput: onStreamChunk,
+        timeout,
+        onTimeout: () => {
+          ptyTimedOut = true;
+        },
       });
     }
 
@@ -933,21 +957,32 @@ export class WorkflowExecutor {
       );
     }
 
-    // For interactive mode, synthesise an EvaluationResult from the PTY exit code.
+    // For interactive mode, evaluate the collected PTY output with the same
+    // comparison rules as headless script execution.
     if (evalResult === undefined) {
       const exitCode = ptyExitCode ?? 1;
-      const passed = EndConditionEvaluator.evaluateExitCodeResult(
-        exitCode,
-        step.returns,
-        step.compareSource
+      const stdout = sanitizeTerminalOutput(outputChunks.join(""));
+      const compareSource = step.compareSource ?? COMPARE_SOURCES.EXIT_CODE;
+      const returns = step.returns ?? "0";
+      const passed = this.endConditionEvaluator.evaluateResult(
+        {
+          result: stdout,
+          stdout,
+          stderr: "",
+          success: exitCode === 0,
+          exitCode,
+        },
+        returns,
+        compareSource
       );
       evalResult = {
         passed,
-        stdout: outputChunks.join(""),
+        stdout,
         stderr: "",
         result: "",
         duration: Date.now() - timestampMs,
         exitCode,
+        timeout: ptyTimedOut,
       };
     }
 
@@ -976,8 +1011,7 @@ export class WorkflowExecutor {
       .filter(Boolean)
       .join("\n")
       .trim();
-    // Strip ANSI escape codes for the CliOutput text panel.
-    const outputText = rawOutput.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+    const outputText = sanitizeTerminalOutput(rawOutput);
 
     const finalCliOutput = {
       prompt: step.script,

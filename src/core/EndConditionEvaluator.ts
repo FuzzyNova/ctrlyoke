@@ -245,6 +245,24 @@ export class EndConditionEvaluator {
   }
 
   /**
+   * Apply the same comparison rules used by evaluateCondition to output that
+   * has already been collected by another transport, such as a PTY.
+   */
+  evaluateResult(
+    result: {
+      result: string;
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+      success: boolean;
+    },
+    returns: string | undefined,
+    compareSource: EndConditionCompareSource = "auto"
+  ): boolean {
+    return this.evaluateSuccess(result, returns, compareSource);
+  }
+
+  /**
    * Resolve script path relative to workspace or absolute.
    *
    * Resolution order:

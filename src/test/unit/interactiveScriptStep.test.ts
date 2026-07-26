@@ -1,0 +1,282 @@
+import * as assert from "assert";
+import { setup, suite, teardown, test } from "mocha";
+import {
+  WorkflowExecutor,
+  WorkflowExecutionContext,
+} from "../../core/WorkflowExecutor";
+import { PromptQueue } from "../../core/PromptQueue";
+import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
+import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { EXECUTION_MODES, STEP_STATUS, STEP_TYPES } from "../../types/DashboardConstants";
+import { PropertyResolver } from "../../utils/PropertyResolver";
+import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
+
+type ComparisonCase = {
+  name: string;
+  compareSource?: "auto" | "stdout" | "stderr" | "exitCode";
+  returns?: string;
+  script: string;
+  ptyOutput: string;
+  expected: boolean;
+};
+
+const cases: ComparisonCase[] = [
+  {
+    name: "default exit code",
+    script: `node -e "process.stdout.write('ignored')"`,
+    ptyOutput: "ignored",
+    expected: true,
+  },
+  {
+    name: "explicit exit code",
+    compareSource: "exitCode",
+    returns: "0",
+    script: `node -e "process.stdout.write('ignored')"`,
+    ptyOutput: "ignored",
+    expected: true,
+  },
+  {
+    name: "auto boolean",
+    compareSource: "auto",
+    returns: "true",
+    script: `node -e "process.stdout.write('ignored')"`,
+    ptyOutput: "ignored",
+    expected: true,
+  },
+  {
+    name: "stdout text",
+    compareSource: "stdout",
+    returns: "PASS",
+    script: `node -e "process.stdout.write('PASS')"`,
+    ptyOutput: "\x1b[32mPASS\x1b[0m\r\n",
+    expected: true,
+  },
+  {
+    name: "stderr fallback",
+    compareSource: "stderr",
+    returns: "ERR",
+    script: `node -e "process.stderr.write('ERR')"`,
+    ptyOutput: "this PTY must not be used",
+    expected: true,
+  },
+  {
+    name: "auto numeric stdout",
+    compareSource: "auto",
+    returns: "80",
+    script: `node -e "process.stdout.write('80')"`,
+    ptyOutput: "\x1b[36m80\x1b[0m",
+    expected: true,
+  },
+  {
+    name: "stdout mismatch",
+    compareSource: "stdout",
+    returns: "FAIL",
+    script: `node -e "process.stdout.write('PASS')"`,
+    ptyOutput: "PASS",
+    expected: false,
+  },
+];
+
+function makeContext(
+  ptyOutput?: string,
+  onPtySpawn?: (options: {
+    timeout: number;
+    onOutput: (chunk: string) => void;
+    onTimeout?: () => void;
+  }) => Promise<number>,
+  scriptOutputs?: Array<{ stdout: string; stderr: string }>
+): WorkflowExecutionContext {
+  const integration = new MockHarnessIntegration(undefined, false);
+  const context: WorkflowExecutionContext = {
+    workspaceFolderPath: process.cwd(),
+    currentPromptFilePath: "workflow.ctrlyoke.yaml",
+    shouldShowCliCommand: false,
+    dynamicQueueConfig: {
+      maxQueueSize: 100,
+      maxWorkflowExecutionTime: 3600,
+      unlimitedMode: false,
+      notifyOnExtension: false,
+    },
+    getIntegrationForPrompt: () => integration,
+    historyFilePath: "",
+  };
+
+  if (ptyOutput !== undefined && onPtySpawn === undefined) {
+    context.spawnScriptPty = async (options) => {
+      options.onOutput(ptyOutput);
+      return 0;
+    };
+  } else if (onPtySpawn !== undefined) {
+    context.spawnScriptPty = async (options) =>
+      onPtySpawn({
+        timeout: options.timeout,
+        onOutput: options.onOutput,
+        onTimeout: options.onTimeout,
+      });
+  }
+
+  if (scriptOutputs) {
+    const outputHistoryManager = {
+      recordScriptExecution: async (
+        _historyFilePath: string,
+        _target: unknown,
+        _runIndex: number,
+        _attemptIndex: number,
+        output: { stdout: string; stderr: string }
+      ) => {
+        scriptOutputs.push(output);
+      },
+    };
+    context.historyFilePath = "history.json";
+    context.outputHistoryManager = new Proxy(outputHistoryManager, {
+      get: (target, property) =>
+        Reflect.get(target, property) ?? (async () => undefined),
+    }) as never;
+  }
+
+  return context;
+}
+
+function makeExecutor(queue: PromptQueue): WorkflowExecutor {
+  const platform = new MockPlatform();
+  const evaluator = new EndConditionEvaluator(platform);
+  const handler = new EndConditionHandler(
+    evaluator,
+    queue,
+    () => undefined,
+    platform
+  );
+  return new WorkflowExecutor(queue, handler, evaluator, platform);
+}
+
+async function runCase(
+  comparisonCase: ComparisonCase,
+  executionMode: "headless" | "interactive"
+): Promise<{ passed: boolean; ptyCalls: number; outputs: Array<{ stdout: string; stderr: string }> }> {
+  const queue = new PromptQueue();
+  const executor = makeExecutor(queue);
+  const outputs: Array<{ stdout: string; stderr: string }> = [];
+  let ptyCalls = 0;
+  const context = makeContext(
+    executionMode === "interactive" ? comparisonCase.ptyOutput : undefined,
+    async (options) => {
+      ptyCalls++;
+      options.onOutput(comparisonCase.ptyOutput);
+      return 0;
+    },
+    outputs
+  );
+
+  if (executionMode === "headless") {
+    context.spawnScriptPty = undefined;
+  }
+
+  queue.loadPrompts({
+    steps: [
+      {
+        type: STEP_TYPES.SCRIPT,
+        script: comparisonCase.script,
+        compareSource: comparisonCase.compareSource,
+        returns: comparisonCase.returns,
+        executionMode:
+          executionMode === "interactive"
+            ? EXECUTION_MODES.INTERACTIVE
+            : EXECUTION_MODES.HEADLESS,
+      },
+    ],
+  });
+
+  await executor.execute(new MockHarnessIntegration(undefined, false), context);
+
+  return {
+    passed: queue.getState().results[0]?.status === STEP_STATUS.COMPLETED,
+    ptyCalls,
+    outputs,
+  };
+}
+
+suite("interactive script steps", () => {
+  setup(() => {
+    PropertyResolver.setHostCanProvidePty(true);
+  });
+
+  teardown(() => {
+    PropertyResolver.setHostCanProvidePty(true);
+  });
+
+  test("matches headless verdicts across the comparison matrix", async () => {
+    for (const comparisonCase of cases) {
+      const headless = await runCase(comparisonCase, "headless");
+      const interactive = await runCase(comparisonCase, "interactive");
+
+      assert.strictEqual(
+        headless.passed,
+        comparisonCase.expected,
+        `${comparisonCase.name}: headless verdict`
+      );
+      assert.strictEqual(
+        interactive.passed,
+        headless.passed,
+        `${comparisonCase.name}: interactive/headless parity`
+      );
+      if (comparisonCase.compareSource === "stderr") {
+        assert.strictEqual(
+          interactive.ptyCalls,
+          0,
+          "stderr comparisons must fall back to headless execution"
+        );
+      }
+    }
+  });
+
+  test("persists interactive PTY output without ANSI escapes", async () => {
+    const comparisonCase = cases.find(({ name }) => name === "stdout text")!;
+    const result = await runCase(comparisonCase, "interactive");
+
+    assert.strictEqual(result.outputs.length, 1);
+    assert.strictEqual(result.outputs[0].stdout, "PASS\n");
+    assert.doesNotMatch(result.outputs[0].stdout, /\x1b\[/i);
+  });
+
+  test("passes timeout to the PTY and reports a timeout after it is killed", async () => {
+    const queue = new PromptQueue();
+    const executor = makeExecutor(queue);
+    let receivedTimeout = 0;
+    let timeoutCallbackCalled = false;
+    const statusMessages: string[] = [];
+    const context = makeContext(
+      undefined,
+      async (options) => {
+        receivedTimeout = options.timeout;
+        if (options.onTimeout) {
+          timeoutCallbackCalled = true;
+          options.onTimeout();
+        }
+        return 1;
+      }
+    );
+    context.onStatusMessage = (_stepIndex, message) => {
+      statusMessages.push(message);
+    };
+
+    queue.loadPrompts({
+      steps: [
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: `node -e "setTimeout(() => {}, 1000)"`,
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+          timeout: 0.01,
+        },
+      ],
+    });
+
+    await executor.execute(new MockHarnessIntegration(undefined, false), context);
+
+    assert.strictEqual(receivedTimeout, 10);
+    assert.strictEqual(timeoutCallbackCalled, true);
+    assert.ok(
+      statusMessages.some((message) => message.includes("timed out after 10ms")),
+      statusMessages.join("\n")
+    );
+  });
+});

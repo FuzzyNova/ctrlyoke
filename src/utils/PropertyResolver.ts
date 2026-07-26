@@ -1,6 +1,7 @@
 import {
   PromptFile,
   PromptStep,
+  ExecutionProperties,
   HarnessId,
   EndCondition,
   ErrorBehavior,
@@ -323,9 +324,9 @@ export class PropertyResolver {
    * 2. Workflow-level default
    * 3. VS Code/global setting (defaults.executionMode)
    */
-  private static resolveExecutionMode(
-    prompt: PromptStep,
-    workflow: PromptFile
+  static resolveExecutionMode(
+    prompt: Pick<ExecutionProperties, "executionMode">,
+    workflow: Pick<ExecutionProperties, "executionMode">
   ): ExecutionMode {
     if (!this.hostCanProvidePty) {
       return EXECUTION_MODES.HEADLESS;

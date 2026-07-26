@@ -2916,7 +2916,8 @@ export class WorkflowInstance {
                 : ["-c", options.script];
 
               try {
-                ptyManager.spawnPty({
+                let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+                const session = ptyManager.spawnPty({
                   workflowId,
                   stepName: options.stepName,
                   kind: SESSION_KINDS.AI_CLI,
@@ -2931,12 +2932,14 @@ export class WorkflowInstance {
                       sessionId: ptySession.id,
                       data: chunk,
                     });
-                    // Strip ANSI codes for the CliOutput panel (xterm handles them natively)
-                    options.onOutput(
-                      chunk.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "")
-                    );
+                    // Keep raw bytes for xterm; WorkflowExecutor sanitizes the
+                    // accumulated output before display and persistence.
+                    options.onOutput(chunk);
                   },
                   onExit: (ptySession, exitCode) => {
+                    if (timeoutHandle !== undefined) {
+                      clearTimeout(timeoutHandle);
+                    }
                     ptyPostMessage({
                       type: MESSAGE_TYPES.TERMINAL_ENDED,
                       workflowId: ptySession.workflowId,
@@ -2947,6 +2950,15 @@ export class WorkflowInstance {
                     resolve(exitCode);
                   },
                 });
+                if (options.timeout > 0) {
+                  timeoutHandle = setTimeout(() => {
+                    Log.warn(
+                      `[spawnScriptPty] timed out after ${options.timeout}ms: ${options.stepName}`
+                    );
+                    options.onTimeout?.();
+                    ptyManager.killSession(session.id);
+                  }, options.timeout);
+                }
               } catch (error) {
                 const message = getErrorMessage(error);
                 Log.warn(`[spawnScriptPty] ${message}`);
