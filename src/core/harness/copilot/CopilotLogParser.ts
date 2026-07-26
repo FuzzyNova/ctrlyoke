@@ -579,8 +579,32 @@ export class CopilotLogParser extends BaseLogParser {
    */
   private pendingAsyncShellIds = new Set<string>();
 
+  /** Keep the Stop gated until the turn awakened by a shell notification ends. */
+  private resumedTurnCompletionPending = false;
+
+  /**
+   * Reject one Stop callback that raced notification/resumed-turn catch-up.
+   * CliLogMonitor checks this once before entering its hold loop and once in
+   * the loop condition, so the guard spans both checks as one stale-Stop cycle.
+   */
+  private staleStopGuardChecksRemaining = 0;
+
+  /** Set after a matching notification until the resumed turn starts. */
+  private resumedTurnStarted = false;
+
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as CopilotProviderEvent;
+
+    // Parser instances may be reused across prompts. A new session.start is
+    // the explicit provider lifecycle boundary; resumed sessions do not emit
+    // another one while appending to the same events.jsonl.
+    if (e.type === "session.start") {
+      this.pendingAsyncShellIds.clear();
+      this.resumedTurnCompletionPending = false;
+      this.staleStopGuardChecksRemaining = 0;
+      this.resumedTurnStarted = false;
+      return;
+    }
 
     if (e.type === "tool.execution_complete" && e.data) {
       const executionMode = e.data.toolTelemetry?.properties?.executionMode;
@@ -599,13 +623,44 @@ export class CopilotLogParser extends BaseLogParser {
         (kind.type === "shell_completed" || kind.type === "shell_failed") &&
         kind.shellId !== undefined
       ) {
-        this.pendingAsyncShellIds.delete(String(kind.shellId));
+        const shellId = String(kind.shellId);
+        if (this.pendingAsyncShellIds.delete(shellId)) {
+          this.resumedTurnCompletionPending = true;
+          this.resumedTurnStarted = false;
+        }
       }
+      return;
+    }
+
+    if (e.type === "assistant.turn_start") {
+      if (this.resumedTurnCompletionPending) {
+        this.resumedTurnStarted = true;
+      }
+      return;
+    }
+
+    if (
+      e.type === "assistant.turn_end" &&
+      this.resumedTurnCompletionPending &&
+      this.resumedTurnStarted
+    ) {
+      this.resumedTurnCompletionPending = false;
+      this.resumedTurnStarted = false;
+      this.staleStopGuardChecksRemaining = 2;
     }
   }
 
   override hasPendingBackgroundWork(): boolean {
-    return this.pendingAsyncShellIds.size > 0;
+    if (this.pendingAsyncShellIds.size > 0 || this.resumedTurnCompletionPending) {
+      return true;
+    }
+
+    if (this.staleStopGuardChecksRemaining > 0) {
+      this.staleStopGuardChecksRemaining--;
+      return true;
+    }
+
+    return false;
   }
 
   /**

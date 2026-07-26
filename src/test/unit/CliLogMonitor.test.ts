@@ -9,6 +9,7 @@ import type {
 } from "../../core/harness/shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
+import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliEvent, TextData } from "../../types/CliOutputTypes";
 
@@ -450,6 +451,72 @@ suite("CliLogMonitor", () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(notificationCallCount, 2);
       assert.strictEqual(result.cliResult?.response, "Tests pass.");
+    });
+  });
+
+  test("ignores a stale Copilot Stop when catch-up includes shell completion and resumed turn", async () => {
+    await withZeroDrainDeadline(async () => {
+      const parser = new CopilotLogParser();
+      const batches: BaseCliEvent[][] = [
+        [
+          {
+            type: "tool.execution_complete",
+            data: {
+              toolTelemetry: { properties: { executionMode: "async" } },
+              result: {
+                content: "<command started in background with shellId: 0>",
+              },
+            },
+          },
+        ],
+        [
+          {
+            type: "system.notification",
+            data: { kind: { type: "shell_completed", shellId: 0, exitCode: 0 } },
+          },
+          { type: "assistant.turn_start" },
+          {
+            type: "assistant.message",
+            data: { content: "The background command finished." },
+          },
+          { type: "assistant.turn_end" },
+        ],
+        [],
+      ];
+      let readIndex = 0;
+      parser.readNewLines = async () => batches[readIndex++] ?? [];
+      parser.watchLogFile = () => ({ close() {} }) as fs.FSWatcher;
+
+      let notificationCallCount = 0;
+      const monitor = new CliLogMonitor({
+        logParser: parser,
+        notificationMonitor: createNotificationMonitor({
+          monitorForCompletion: async () => {
+            notificationCallCount++;
+            return { completed: true, kind: "completion", data: {} };
+          },
+        }),
+        runtimeState: {
+          getWorkspaceRoot: () => os.tmpdir(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: () => undefined,
+          onResponseComplete: () => undefined,
+          logResponse: () => undefined,
+        },
+      });
+
+      const result = await monitor.monitor(
+        "events.jsonl",
+        "copilot-session",
+        new Date(0),
+        "gpt-5.4"
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(notificationCallCount, 2);
+      assert.strictEqual(result.cliResult?.response, "The background command finished.");
     });
   });
 });

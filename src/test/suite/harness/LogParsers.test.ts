@@ -1497,6 +1497,77 @@ suite("CopilotLogParser", () => {
     });
   });
 
+  suite("background work tracking", () => {
+    const asyncLaunch = (shellId: string): BaseCliEvent => ({
+      type: "tool.execution_complete",
+      data: {
+        toolTelemetry: { properties: { executionMode: "async" } },
+        result: {
+          content: `<command started in background with shellId: ${shellId}>`,
+        },
+      },
+    });
+
+    const notification = (
+      type: "shell_completed" | "shell_failed",
+      shellId: string
+    ): BaseCliEvent => ({
+      type: "system.notification",
+      data: {
+        kind: { type, shellId, exitCode: type === "shell_failed" ? 1 : 0 },
+      },
+    });
+
+    test("holds one completed shell through its resumed turn and rejects the stale Stop", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState(notification("shell_completed", "shell-1"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // A turn_end from an unrelated turn cannot release the notification latch.
+      parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
+      parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
+
+      // The Stop that caused catch-up is stale even though it saw the whole
+      // resumed turn. The next Stop is the real completion signal.
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("tracks overlapping shells independently and keeps failure notifications equivalent", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      parser.trackBackgroundWorkState(asyncLaunch("shell-2"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState(notification("shell_completed", "shell-1"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // The second shell is still pending, so its failure cannot release the
+      // hold prematurely even after the first notification was consumed.
+      parser.trackBackgroundWorkState(notification("shell_failed", "shell-2"));
+      parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
+      parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("resets tracking at a new session boundary", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("old-shell"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "session.start",
+        data: { sessionId: "new-session" },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+  });
+
   suite("isComplete", () => {
     test("should always return false (uses hooks for completion detection)", () => {
       // CopilotLogParser intentionally returns false for all events
