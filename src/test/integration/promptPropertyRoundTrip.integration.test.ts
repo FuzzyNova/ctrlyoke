@@ -59,6 +59,30 @@ suite("Prompt property round trip (drawer -> working file)", () => {
     assert.strictEqual(steps[0].agent, "reviewer.agent.md");
   });
 
+  test("executionMode override survives save/reload and inherit clears it", async () => {
+    const { h } = await harness();
+    await h.routeUpdatePrompt({
+      index: 1,
+      text: "second",
+      properties: { executionMode: "headless" },
+    });
+    assert.strictEqual(
+      (await h.readRunDefinition()).steps?.[1].executionMode,
+      "headless"
+    );
+
+    await h.routeUpdatePrompt({
+      index: 1,
+      text: "second",
+      properties: {},
+      clearProperties: ["executionMode"],
+    });
+    assert.strictEqual(
+      "executionMode" in ((await h.readRunDefinition()).steps?.[1] ?? {}),
+      false
+    );
+  });
+
   test("clearProperties removes an override (inherit) instead of persisting it", async () => {
     const { h } = await harness();
     await h.routeUpdatePrompt({

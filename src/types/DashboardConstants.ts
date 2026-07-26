@@ -727,6 +727,9 @@ export const EXECUTION_MODE_OPTIONS = [
   { value: EXECUTION_MODES.HEADLESS, label: "Headless" },
 ];
 
+export const EXECUTION_MODE_HELP_TEXT =
+  "Interactive spawns a live terminal you can steer; headless runs in the background with output in the Output panel. Pre- and end-condition scripts always run headless. With inject mode on, inserting a headless step between interactive steps retires and respawns the PTY, so TUI continuity is lost across that boundary.";
+
 // ============================================================================
 // DEFAULT MODELS - Default model per harness
 // ============================================================================

@@ -5,7 +5,10 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
-import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  PERMISSION_MODES,
+} from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
 
@@ -124,5 +127,60 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
     render(<WorkflowPropertiesPanel />);
 
     expect(screen.getByTitle("Validation")).toHaveClass("text-focus-border");
+  });
+});
+
+describe("WorkflowPropertiesPanel execution mode", () => {
+  beforeEach(() => {
+    resetStores();
+    postMessage.mockClear();
+    (
+      window.vscodeApi as unknown as { postMessage: typeof postMessage }
+    ).postMessage = postMessage;
+  });
+
+  afterEach(cleanup);
+
+  it("renders the effective value and posts workflow overrides", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", EXECUTION_MODES.HEADLESS);
+
+    render(<WorkflowPropertiesPanel />);
+
+    const executionMode = screen.getByRole("button", {
+      name: "Execution Mode",
+    });
+    expect(executionMode).toHaveTextContent("Headless");
+    expect(
+      screen.queryByTitle("Set this as the default for new workflows")
+    ).toBeNull();
+
+    fireEvent.click(executionMode);
+    fireEvent.click(screen.getByText("Interactive").closest("button")!);
+
+    expect(useSettingsStore.getState().workflowProperties.executionMode).toBe(
+      EXECUTION_MODES.INTERACTIVE
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "updateWorkflowProperty",
+      property: "executionMode",
+      value: EXECUTION_MODES.INTERACTIVE,
+    });
+  });
+
+  it("shows Set as Default only when the workflow value differs from global", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", EXECUTION_MODES.HEADLESS);
+
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("executionMode", EXECUTION_MODES.INTERACTIVE);
+
+    render(<WorkflowPropertiesPanel />);
+    expect(
+      screen.getByTitle("Set this as the default for new workflows")
+    ).toBeInTheDocument();
   });
 });

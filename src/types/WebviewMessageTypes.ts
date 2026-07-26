@@ -277,6 +277,7 @@ export interface PromptStep {
   prompt: string;
   harness?: string;
   model?: string;
+  executionMode?: ExecutionMode;
   agent?: string | null;
   skills?: string[] | null;
   resumeSession?: boolean;

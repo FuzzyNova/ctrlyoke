@@ -308,6 +308,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("model");
       }
 
+      // Execution mode — undefined inherits from the workflow/global setting.
+      if (properties.executionMode !== undefined) {
+        result.executionMode = properties.executionMode;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("executionMode");
+      }
+
       // Agent
       if (properties.agent === null) {
         result.agent = null;

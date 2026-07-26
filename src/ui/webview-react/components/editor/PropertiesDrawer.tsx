@@ -16,7 +16,12 @@ import {
   type ToolPermissionMode,
   type PriorContext,
 } from "../../types/messages";
-import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import {
+  EXECUTION_MODE_HELP_TEXT,
+  EXECUTION_MODE_OPTIONS,
+  PERMISSION_MODES,
+  type ExecutionMode,
+} from "../../../../types/DashboardConstants";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -101,6 +106,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setProperty("agent", undefined);
     setProperty("skills", undefined);
     setProperty("additionalArgs", undefined);
+    setProperty("executionMode", undefined);
     setProperty("resumeSession", undefined);
     setProperty("sessionId", "");
     setProperty("priorContext", undefined);
@@ -164,6 +170,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const defaultAdditionalArgsLabel = !resolvedAdditionalArgs
     ? "Inherit (None)"
     : `Inherit (${resolvedAdditionalArgs})`;
+
+  const resolvedExecutionMode =
+    workflowProperties.executionMode ?? globalSettings.executionMode;
+  const defaultExecutionModeLabel = `Inherit (${
+    EXECUTION_MODE_OPTIONS.find(
+      (option) => option.value === resolvedExecutionMode
+    )?.label ?? resolvedExecutionMode
+  })`;
 
   const resolvedResumeSession =
     workflowProperties.resumeSession ?? globalSettings.resumeSession;
@@ -661,6 +675,34 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   />
                 </div>
               )}
+            </DrawerRow>
+
+            {/* Execution Mode */}
+            <DrawerRow narrow={isNarrow}>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-execution-mode"
+                  className="text-xs font-semibold uppercase text-description-fg"
+                  title={EXECUTION_MODE_HELP_TEXT}
+                >
+                  Execution Mode
+                </label>
+                <CustomSelect
+                  id="prop-execution-mode"
+                  value={properties.executionMode ?? "default"}
+                  onChange={(v) =>
+                    setProperty(
+                      "executionMode",
+                      v === "default" ? undefined : (v as ExecutionMode)
+                    )
+                  }
+                  options={[
+                    { value: "default", label: defaultExecutionModeLabel },
+                    ...EXECUTION_MODE_OPTIONS,
+                  ]}
+                />
+              </div>
+              <div />
             </DrawerRow>
           </div>
         )}

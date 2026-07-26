@@ -15,7 +15,7 @@ import {
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
 } from "../types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { STEP_TYPES, type ExecutionMode } from "@root/types/DashboardConstants";
 import type {
   PromptEditorInsertRequest,
   ScriptStep,
@@ -57,6 +57,7 @@ export interface EndConditionConfig {
 export interface PropertyValues {
   harness: Inheritable<string>; // undefined = inherit, string = harness ID
   model: Inheritable<string>; // undefined = inherit, string = model ID
+  executionMode: Inheritable<ExecutionMode>; // undefined = inherit, interactive/headless = override
   agent: Disableable<string>; // undefined = inherit, null = none, string = agent filename slug
   skills: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
   resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
@@ -78,6 +79,7 @@ export interface PropertyValues {
 export const PROPERTY_DEFAULTS: PropertyValues = {
   harness: undefined,
   model: undefined,
+  executionMode: undefined,
   agent: undefined,
   skills: undefined,
   resumeSession: undefined,
@@ -534,6 +536,7 @@ export const useEditorStore = create<
       const propertiesFromData: PropertyValues = {
         harness: promptData.harness,
         model: promptData.model,
+        executionMode: promptData.executionMode,
         agent: promptData.agent,
         skills: promptData.skills,
         resumeSession: promptData.resumeSession,
@@ -1128,6 +1131,11 @@ export const useEditorStore = create<
     // Add model if not default
     if (properties.model !== undefined) {
       result.model = properties.model;
+    }
+
+    // Add execution mode if overridden
+    if (properties.executionMode !== undefined) {
+      result.executionMode = properties.executionMode;
     }
 
     // Add agent when explicitly overridden

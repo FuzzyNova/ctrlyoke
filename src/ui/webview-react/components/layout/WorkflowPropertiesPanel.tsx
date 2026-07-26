@@ -48,7 +48,11 @@ import {
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
-import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import {
+  EXECUTION_MODE_HELP_TEXT,
+  EXECUTION_MODE_OPTIONS,
+  PERMISSION_MODES,
+} from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import {
@@ -170,6 +174,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     getModelsForHarness: getModelsForHarness,
     getEffectiveHarness: getEffectiveHarness,
     getEffectiveModel,
+    getEffectiveExecutionMode,
     getEffectiveAgent,
     getEffectiveSkills,
     getEffectiveResumeSession,
@@ -226,6 +231,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // Get current effective values
   const effectiveHarness = getEffectiveHarness();
   const effectiveModel = getEffectiveModel();
+  const effectiveExecutionMode = getEffectiveExecutionMode();
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
@@ -470,6 +476,24 @@ const WorkflowPropertiesPanelInner: React.FC<{
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "model",
         value: model,
+      });
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
+  const handleExecutionModeChange = useCallback(
+    (executionMode: string) => {
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty(
+        "executionMode",
+        executionMode as WorkflowProperties["executionMode"]
+      );
+      syncWorkflowPropertiesForUndo();
+
+      postWorkflowDefinitionMutation(vscode, {
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "executionMode",
+        value: executionMode,
       });
     },
     [syncWorkflowPropertiesForUndo, vscode]
@@ -813,6 +837,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       skills: globalSettings.skills ?? [],
       additionalArgs:
         globalSettings.harnessDefaultAdditionalArgs[globalHarness] ?? "",
+      executionMode: globalSettings.executionMode,
       resumeSession: globalSettings.resumeSession,
       sessionId: "",
       priorContext:
@@ -1107,7 +1132,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 </FormField>
               </DrawerRow>
 
-              {/* Row 3: Additional Args */}
+              {/* Row 3: Additional Args + Execution Mode */}
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Additional Args"
@@ -1141,7 +1166,30 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
                   />
                 </FormField>
-                <div />
+                <FormField
+                  label="Execution Mode"
+                  htmlFor="settings-execution-mode"
+                  description={EXECUTION_MODE_HELP_TEXT}
+                  setAsDefaultButton={
+                    <SetAsDefaultButton
+                      property="executionMode"
+                      show={isDifferentFromGlobal("executionMode")}
+                      onSetDefault={() =>
+                        handleSetAsDefault(
+                          "executionMode",
+                          workflowProperties.executionMode
+                        )
+                      }
+                    />
+                  }
+                >
+                  <CustomSelect
+                    id="settings-execution-mode"
+                    value={effectiveExecutionMode}
+                    onChange={handleExecutionModeChange}
+                    options={EXECUTION_MODE_OPTIONS}
+                  />
+                </FormField>
               </DrawerRow>
             </>
           )}
