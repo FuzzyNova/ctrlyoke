@@ -579,7 +579,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
   /**
    * Track background-task launch/notification markers per the empirically
-   * confirmed rule (see `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
+   * confirmed rule (see `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
    * "Claude Code — CONFIRMED"):
    * - **Launch:** any `assistant` `tool_use` block with
    *   `input.run_in_background === true` (Claude uses both `Bash` and

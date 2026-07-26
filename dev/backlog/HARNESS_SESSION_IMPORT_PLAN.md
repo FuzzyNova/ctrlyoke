@@ -22,7 +22,7 @@ The result opens in the dashboard exactly like a workflow ctrlyoke ran itself �
 
 This is the "import" half of the full-fidelity-history goal. The "live capture" half —
 watching a still-open TUI for prompts the user types directly — is
-`TERMINAL_FOLLOWUP_TRACKING_PLAN.md`. **The two share one new core primitive: turn
+`../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`. **The two share one new core primitive: turn
 segmentation of a session log.** See [Relationship](#relationship-to-terminal-follow-up-tracking).
 
 ---
@@ -89,7 +89,7 @@ interface ILogParser {
   is abstract-ish (base returns `false`; each harness overrides).
 - **Claude**: human prompt = `type:"user"` whose `message.content` has a non-empty
   `text` block (mirror the `isHumanPrompt` guard already sketched in
-  `TERMINAL_FOLLOWUP_TRACKING_PLAN.md` §3; reuse the existing `type:"user"` content
+  `../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md` §3; reuse the existing `type:"user"` content
   inspection at `ClaudeLogParser.ts:241`). Tool-result `user` events are excluded.
 - **Copilot**: human prompt = `user.message` events (per
   `CLI_LOG_FILES_INVESTIGATION.md`), excluding tool-execution traffic.
@@ -302,7 +302,7 @@ core/ext/webview per project conventions), not duplicated in the webview.
 
 ## Relationship to Terminal Follow-up Tracking
 
-`TERMINAL_FOLLOWUP_TRACKING_PLAN.md` watches a **live** session log and needs to detect
+`../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md` watches a **live** session log and needs to detect
 "a new human turn just appeared." This plan parses a **completed** log and needs "split
 all human turns." Both are the same boundary problem:
 

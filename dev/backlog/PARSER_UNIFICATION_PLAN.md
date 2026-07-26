@@ -80,7 +80,7 @@ Verified by comparing the event-type vocabularies each parser branches on. **Sou
 | Harness | Headless stdout | Session log | Log richer? | Source mode |
 | --- | --- | --- | --- | --- |
 | **Codex** | `thread.started`, `turn.completed`, `item.completed` with `item.type` of `agent_message`/`command_execution`/`file_change`/… | `session_meta`, `turn_context`, `event_msg`, `response_item`, `function_call`, `patch_apply_end`, … | **Much** — `file_change` is `{path, kind}` on stdout; the log has `unified_diff` and whole-file `content`, plus per-turn `token_count` | **Log-sourced.** Highest payoff of any harness: diffs render *when the write happens*, not on a final back-fill pass. Deletes `CodexCliProvider.augmentParsedOutput()` outright. |
-| **Antigravity** | Plain text — `AntigravityResponseParser.parse()` wraps all of stdout in one TEXT event (59 LOC total) | `brain/<id>/.system_generated/logs/transcript*.jsonl` — rich (`CODE_ACTION` with real unified diffs, `RUN_COMMAND` with `exit_code`, `VIEW_FILE`, `MCP_TOOL`, …). The tailed `cli-*.log` carries **no** response content. | **Much** — *in the file*. **Not** in the current parser. | **Log-sourced, but blocked.** `AntigravityLogParser` today also yields exactly one TEXT event, so switching source gains nothing until it is rewritten. See `ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. |
+| **Antigravity** | Incremental transcript mapping in `AntigravityLogParser` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` (compact transcript only as fallback) — rich planner/tool/checkpoint/error events; the tailed `cli-*.log` carries session and completion markers. | **Much** — structured events and diffs are available incrementally. | **Implemented.** See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. |
 | **Qwen** | `session_id`-bearing JSON objects | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]` | Unmeasured | **TBD** — measure before choosing. |
 | **Claude** | `stream-json`: `system`/`assistant`/`user`/`result`, snake_case `session_id`, `tool_use_result` | session JSONL: `assistant`/`user`/`attachment`, camelCase `sessionId`, `toolUseResult` | Marginal — log adds `attachment`, background-task markers | **Either.** Start stdout-sourced (field aliasing only); revisit if background-task tracking needs the log. |
 | **Copilot** | `--output-format json`: `assistant.message`, `tool.execution_start`, `tool.execution_complete` | `events.jsonl`: same vocabulary plus `session.*`, `user.message`, `system.notification` | Marginal — the extras are session-lifecycle, not content | **stdout-sourced.** Note context-window data lives in neither stream (it's the OTel export file), so that augmentation survives regardless. |
@@ -141,10 +141,10 @@ Today headless has two sources feeding one output: stdout streams degraded event
 Under the reshaped plan:
 
 - **Time-to-first-event — unchanged in both modes.** Measured, not assumed: the session log exists at t=0 and is written continuously. There is no latency cost to pay.
-- **Antigravity gains nothing until its parser is rewritten** — see `ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. Its log parser currently produces the same single TEXT event as its response parser.
+- **Antigravity now uses its rewritten incremental transcript parser** — see `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. The log parser emits structured planner/tool/checkpoint/error events while retaining the Go log for session and completion markers.
 - **Time-to-*correct*-event — improves sharply where it was worst.** Codex headless today shows a bare `Edited <file>` for the whole run and only gains a diff at the end, when `augmentParsedOutput()` back-fills from the log. Log-sourced, the `patch_apply_end` diff renders **when the write happens** — 0.02s after the edit. This is a strict gain, not a trade.
 - **Streaming fidelity — improves everywhere.** `extractStructuredEventsFromEvent` is the same mapping as the final `extractResponse`, so streamed and final output can no longer disagree. Today's `processStreamingChunk` offers no such guarantee.
-- **Antigravity headless output — unchanged by this plan alone.** It improves only once the transcript parser rewrite lands; that work, not this one, is what turns the TEXT blob into real tool/text events.
+- **Antigravity log-monitored output — already improved by the completed rewrite.** The transcript-backed log parser now turns the rich stream into structured tool/text events. The separate headless response parser still consumes stdout, so broader headless-source consolidation remains future work.
 
 Things that are **not** parsing and must survive the deletion:
 
@@ -173,7 +173,7 @@ No startup coordinator, no notification monitor, no completion detection. Discov
 
 - ~~**Log-write latency**~~ — **resolved, see [Measured: the log is live](#measured-the-log-is-live).** Log-sourcing costs no measurable latency. Do not re-litigate this as a reason to prefer stdout.
 - **Never route OpenCode headless through `export`.** Its "log parser" shells out to `opencode export <sessionId>` on a 1s poll (`OpenCodeLogParser.ts:43`, `:153`, `EXPORT_POLL_INTERVAL_MS`); the "log path" it is handed is the session ID. Sourcing headless from it would add repeated subprocess spawns and a session-ID dependency to obtain data stdout already contains, verbatim. Keep OpenCode stdout-sourced.
-- **Antigravity's log parser is not yet worth switching to.** It tails the shared Go server `cli-*.log` (which carries no response content — only a session UUID and a completion marker) and pulls the response from the transcript exactly once, at completion, keeping only the last `PLANNER_RESPONSE`. Net output: one TEXT event, identical in fidelity to the response parser it would replace. The transcript itself is rich, but realising that requires a rewrite — tracked in `ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`, which is a **hard prerequisite** for this plan's Antigravity phase. Moving the tail onto the per-session transcript also resolves the shared-`cli-*.log` parallel-workflow hazard noted in `harness-cli-providers.instructions.md`.
+- **Antigravity's log parser is now transcript-sourced.** It incrementally tails the per-session authoritative transcript, pairs adjacent planner/result lines, and keeps the shared Go `cli-*.log` only for session and completion markers. The completed rewrite is documented in `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`; the Antigravity phase is no longer blocked on that work.
 - **The CLI binary and MCP server run outside VS Code.** `CliExecutionRunner.executeInTerminal():519` falls back to `executeInteractiveCliProcess` when `isVsCodeContext()` is false — i.e. the standalone binaries have no interactive log-monitoring path today, and their headless path is exactly what this plan changes. Log parsers are fs/`os.homedir()`-based and the `setWorkspaceRoot` wiring at `CliIntegration.ts:191-202` is platform-agnostic, so this should work — but it is untested territory and needs explicit coverage.
 - **Codex log-sourced means trusting the log for text too, not just diffs.** Today `CodexResponseParser` supplies `agent_message`, `reasoning`, `todo_list`, `web_search`, `mcp_tool_call`, and `command_execution` from the curated stdout stream; log-sourced, all of those must come from `response_item`/`event_msg` instead. `CodexLogParser` already handles them for interactive, so the coverage exists — but headless is currently the only consumer of the stdout vocabulary, so any gap is unexercised. Diff a real headless run's two streams event-for-event before deleting `CodexResponseParser`.
 
@@ -202,13 +202,15 @@ Leading with the hardest harness is deliberate. Codex is where log-sourcing pays
 
 **Verify:** file diffs render mid-run, not at completion (the actual goal); `add`/`update`/`delete` still map to FILE_WRITE/FILE_EDIT/FILE_DELETE with working undo; text, reasoning, todo lists, web search, MCP calls, and command executions all still appear (see Risks).
 
-### Phase 2 — Antigravity, log-sourced — **blocked on `ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`**
+### Phase 2 — Antigravity, log-sourced — **implemented**
 
-Do not start until that rewrite lands. Until then the log parser yields one TEXT event and this phase would be a lateral move that deletes 59 LOC and improves nothing.
+The transcript rewrite is complete. `AntigravityLogParser` now supplies
+incremental structured events from the per-session transcript while the Go log
+continues to provide session and completion markers. Any future consolidation
+of headless response plumbing must preserve that split and the append-only,
+adjacent-line pairing rules documented in the implemented parser plan.
 
-Once unblocked: point headless at the transcript-backed parser and delete `AntigravityResponseParser`. The Codex timing measurements do **not** transfer — Antigravity's transcript is a different artifact with a likely rewrite-in-place update model, so confirm its live-write behaviour separately (that plan's open question 1).
-
-**Verify:** parallel workflows in one workspace attribute events to the right run. Moving the tail to the per-session `brain/<sessionId>/` transcript should *improve* this versus today's shared `cli-*.log`.
+**Verify:** parallel workflows in one workspace attribute events to the right run. The implemented per-session `brain/<sessionId>/` transcript tail provides that isolation instead of relying on shared response content in `cli-*.log`.
 
 ### Phase 3 — Copilot, stdout-sourced
 
@@ -251,6 +253,6 @@ Delete `IResponseParser` / `ResponseParserBase`, drop `responseParser` from `ICl
 
 1. ~~Is the Codex log delay startup-only or ongoing?~~ **Answered:** neither — the log is written continuously from t=0 and there is no delay. See [Measured: the log is live](#measured-the-log-is-live).
 2. Is Copilot's plain-text headless mode still reachable, or is `--output-format json` unconditional now?
-3. ~~Is Antigravity's shared `cli-*.log` safe as the sole headless source?~~ **Moot** — it carries no response content and the rewrite moves the tail to the per-session transcript. Tracked in `ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.
+3. ~~Is Antigravity's shared `cli-*.log` safe as the sole headless source?~~ **Moot** — it carries no response content; the implemented parser uses the per-session transcript for response events and the Go log only for session/completion markers. See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.
 4. Is Qwen's log richer than its stdout? The one remaining unmeasured harness.
 5. Should `getFinalEventsOnCompletion` and `augmentParsedOutput` merge into one post-completion enrichment hook once both modes share a path? They overlap heavily after this change, and what remains of `augmentParsedOutput` (Copilot's OTel read) is exactly the "fetch from a third artifact after completion" shape `getFinalEventsOnCompletion` already describes.

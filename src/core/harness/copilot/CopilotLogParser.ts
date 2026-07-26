@@ -576,7 +576,7 @@ export class CopilotLogParser extends BaseLogParser {
    * "shell_completed" | "shell_failed"`. Unlike Claude, "any pending shellId"
    * is safe here — every terminating command emits a completion notification,
    * so there is no superseded/"zombie" case to guard against (see
-   * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Copilot CLI — CONFIRMED").
+   * `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Copilot CLI").
    */
   /** Background follow-up state; Copilot's provider-specific signals feed it below. */
   private readonly backgroundFollowUpState = new BackgroundFollowUpState({

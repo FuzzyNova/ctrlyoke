@@ -722,7 +722,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * `trackBackgroundWorkState(event)` would otherwise see — so unlike
    * Claude/Copilot this updates provider-local state while the incremental
    * transcript mapper consumes records. See
-   * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Antigravity CLI — CONFIRMED".
+   * `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Antigravity CLI".
    *
    * Rule: pending while any `RUN_COMMAND` background-task launch (`Tool is
    * running as a background task with task id: <sessionId>/task-N`) lacks a

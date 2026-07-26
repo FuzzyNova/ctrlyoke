@@ -399,7 +399,7 @@ Leverage VS Code's Language Model API for tighter GitHub Copilot integration bey
 
 #### 3.6 Terminal Follow-up Tracking
 
-**Priority: LOW** | **Effort: unknown** | **Doc: [`TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](TERMINAL_FOLLOWUP_TRACKING_PLAN.md)**
+**Status: IMPLEMENTED** | **Doc: [`../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md)**
 
 Detect and record when users type follow-up commands or additional prompts in the embedded terminal after a workflow step completes, enabling richer context for subsequent steps.
 
@@ -593,10 +593,12 @@ _Dates removed: the prior timeline asserted a May 12, 2026 release that never ha
 | [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                             | NOT_IMPLEMENTED | 3.2          |
 | [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                     | NOT_IMPLEMENTED | 3.4          |
 | [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                     | NOT_IMPLEMENTED | 3.5          |
-| [`TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](TERMINAL_FOLLOWUP_TRACKING_PLAN.md)   | NOT_IMPLEMENTED | 3.6          |
 | [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                   | NOT_IMPLEMENTED | 3.7          |
 | [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)         | NOT_IMPLEMENTED | 3.8          |
 | [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                     | NOT_IMPLEMENTED | 3.9          |
+
+The terminal follow-up tracking plan is implemented and is documented in
+`dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`.
 
 ### Implemented Since April 2026 (moved to `dev/implemented/`)
 
