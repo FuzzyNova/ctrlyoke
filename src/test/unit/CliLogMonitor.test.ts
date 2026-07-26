@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as os from "os";
-import type * as fs from "fs";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
 import type {
@@ -10,6 +11,7 @@ import type {
 import type { INotificationMonitor } from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
+import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliEvent, TextData } from "../../types/CliOutputTypes";
 
@@ -472,7 +474,9 @@ suite("CliLogMonitor", () => {
         [
           {
             type: "system.notification",
-            data: { kind: { type: "shell_completed", shellId: 0, exitCode: 0 } },
+            data: {
+              kind: { type: "shell_completed", shellId: 0, exitCode: 0 },
+            },
           },
           { type: "assistant.turn_start" },
           {
@@ -516,7 +520,182 @@ suite("CliLogMonitor", () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(notificationCallCount, 2);
-      assert.strictEqual(result.cliResult?.response, "The background command finished.");
+      assert.strictEqual(
+        result.cliResult?.response,
+        "The background command finished."
+      );
+    });
+  });
+
+  test("ignores a stale Antigravity Stop when catch-up includes completion and resumed terminal response", async () => {
+    await withZeroDrainDeadline(async () => {
+      const tempHome = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-monitor-home-")
+      );
+      const previousHome = process.env.HOME;
+      const previousUserProfile = process.env.USERPROFILE;
+      process.env.HOME = tempHome;
+      process.env.USERPROFILE = tempHome;
+
+      const sessionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+      const logDir = path.join(tempHome, ".gemini", "antigravity-cli", "log");
+      const transcriptDir = path.join(
+        tempHome,
+        ".gemini",
+        "antigravity-cli",
+        "brain",
+        sessionId,
+        ".system_generated",
+        "logs"
+      );
+      const logPath = path.join(logDir, "cli-20260705_120000.log");
+      const transcriptPath = path.join(transcriptDir, "transcript_full.jsonl");
+
+      try {
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        fs.writeFileSync(
+          transcriptPath,
+          [
+            {
+              source: "MODEL",
+              type: "RUN_COMMAND",
+              status: "RUNNING",
+              content:
+                "Tool is running as a background task with task id: session/task-1.",
+            },
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              content: "I will wait for the task.",
+            },
+          ]
+            .map((entry) => JSON.stringify(entry))
+            .join("\n") + "\n",
+          "utf8"
+        );
+
+        const parser = new AntigravityLogParser();
+        let notificationCallCount = 0;
+        let resolveFirstStop:
+          | ((result: {
+              completed: true;
+              kind: "completion";
+              data: Record<string, never>;
+            }) => void)
+          | undefined;
+        let resolveSecondStop:
+          | ((result: {
+              completed: true;
+              kind: "completion";
+              data: Record<string, never>;
+            }) => void)
+          | undefined;
+
+        const monitor = new CliLogMonitor({
+          logParser: parser,
+          notificationMonitor: createNotificationMonitor({
+            monitorForCompletion: async () => {
+              notificationCallCount++;
+              return await new Promise<{
+                completed: true;
+                kind: "completion";
+                data: Record<string, never>;
+              }>((resolve) => {
+                if (notificationCallCount === 1) {
+                  resolveFirstStop = resolve;
+                } else {
+                  resolveSecondStop = resolve;
+                }
+              });
+            },
+          }),
+          runtimeState: {
+            getWorkspaceRoot: () => tempHome,
+            isCancelling: () => false,
+          },
+          hostCallbacks: {
+            onStreamingEvents: () => undefined,
+            onResponseComplete: () => undefined,
+            logResponse: () => undefined,
+          },
+        });
+
+        const monitorPromise = monitor.monitor(
+          logPath,
+          sessionId,
+          new Date(0),
+          "gemini-3.6-flash-low"
+        );
+
+        for (let attempt = 0; attempt < 100 && !resolveFirstStop; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.ok(
+          resolveFirstStop,
+          "the initial Stop callback was not captured"
+        );
+
+        fs.appendFileSync(
+          transcriptPath,
+          [
+            {
+              source: "SYSTEM",
+              type: "SYSTEM_MESSAGE",
+              status: "DONE",
+              content:
+                'Task id "session/task-1" finished with result: completed',
+            },
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              content: "The background task finished.",
+            },
+          ]
+            .map((entry) => JSON.stringify(entry))
+            .join("\n") + "\n",
+          "utf8"
+        );
+
+        resolveFirstStop!({
+          completed: true,
+          kind: "completion",
+          data: {},
+        });
+
+        for (let attempt = 0; attempt < 100 && !resolveSecondStop; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.ok(
+          resolveSecondStop,
+          "the stale Stop must be held for a later genuine Stop"
+        );
+        assert.strictEqual(notificationCallCount, 2);
+
+        resolveSecondStop!({
+          completed: true,
+          kind: "completion",
+          data: {},
+        });
+        const result = await monitorPromise;
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(
+          result.cliResult?.response,
+          "I will wait for the task.The background task finished."
+        );
+      } finally {
+        process.env.HOME = previousHome;
+        process.env.USERPROFILE = previousUserProfile;
+        fs.rmSync(tempHome, { recursive: true, force: true });
+      }
     });
   });
 });

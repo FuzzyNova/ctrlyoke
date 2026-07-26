@@ -27,6 +27,88 @@ async function withTemporaryHome<T>(
   }
 }
 
+interface AntigravityTranscriptSession {
+  parser: AntigravityLogParser;
+  logPath: string;
+  transcriptPath: string;
+  appendTranscript: (...entries: unknown[]) => void;
+}
+
+async function withAntigravityTranscriptSession<T>(
+  initialEntries: unknown[],
+  run: (session: AntigravityTranscriptSession) => Promise<T> | T
+): Promise<T> {
+  return withTemporaryHome(async (homeDir) => {
+    const parser = new AntigravityLogParser();
+    const sessionId = "99999999-9999-4999-8999-999999999999";
+    const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+    const transcriptDir = path.join(
+      homeDir,
+      ".gemini",
+      "antigravity-cli",
+      "brain",
+      sessionId,
+      ".system_generated",
+      "logs"
+    );
+    const logPath = path.join(logDir, "cli-20260705_120000.log");
+    const transcriptPath = path.join(transcriptDir, "transcript_full.jsonl");
+
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.writeFileSync(
+      logPath,
+      `Starting conversation update stream for ${sessionId}\n`,
+      "utf8"
+    );
+    await parser.readNewLines(logPath);
+    fs.mkdirSync(transcriptDir, { recursive: true });
+
+    const appendTranscript = (...entries: unknown[]) => {
+      fs.appendFileSync(
+        transcriptPath,
+        entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
+        "utf8"
+      );
+    };
+    appendTranscript(...initialEntries);
+    await parser.readNewLines(logPath);
+
+    return run({ parser, logPath, transcriptPath, appendTranscript });
+  });
+}
+
+function backgroundLaunch(taskId: string): Record<string, unknown> {
+  return {
+    source: "MODEL",
+    type: "RUN_COMMAND",
+    status: "RUNNING",
+    content: `Tool is running as a background task with task id: ${taskId}.`,
+  };
+}
+
+function backgroundCompletion(
+  taskId: string,
+  result = "completed"
+): Record<string, unknown> {
+  return {
+    source: "SYSTEM",
+    type: "SYSTEM_MESSAGE",
+    status: "DONE",
+    content: `Task id "${taskId}" finished with result: ${result}`,
+  };
+}
+
+function terminalPlannerResponse(
+  content = "The resumed task is complete."
+): Record<string, unknown> {
+  return {
+    source: "MODEL",
+    type: "PLANNER_RESPONSE",
+    status: "DONE",
+    content,
+  };
+}
+
 suite("AntigravityLogParser", () => {
   suite("readNewLines", () => {
     test("parses session and completion markers from plain text logs", async () => {
@@ -257,6 +339,8 @@ suite("AntigravityLogParser", () => {
           catchUpEvents.map((event) => event.type),
           ["transcript.tool", "transcript.planner", "response.completed"]
         );
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
         assert.strictEqual(parser.hasPendingBackgroundWork(), false);
 
         const partialLine = JSON.stringify({
@@ -287,6 +371,153 @@ suite("AntigravityLogParser", () => {
             "Partial resumed output",
           ]
         );
+      });
+    });
+
+    test("tracks overlapping tasks independently and keeps the resume latch through failures", async () => {
+      await withAntigravityTranscriptSession(
+        [
+          backgroundLaunch("session/task-1"),
+          backgroundLaunch("session/task-2"),
+        ],
+        async ({ parser, appendTranscript }) => {
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+          appendTranscript(backgroundCompletion("session/task-1", "failed"));
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+          appendTranscript(backgroundCompletion("session/task-2", "failed"));
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+          appendTranscript(terminalPlannerResponse());
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+          assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+        }
+      );
+    });
+
+    test("ignores unmatched system notifications and only consumes the matching task", async () => {
+      await withAntigravityTranscriptSession(
+        [
+          backgroundLaunch("session/task-1"),
+          backgroundLaunch("session/task-2"),
+        ],
+        async ({ parser, appendTranscript }) => {
+          appendTranscript(backgroundCompletion("session/unknown"));
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+          appendTranscript(backgroundCompletion("session/task-1"));
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+        }
+      );
+    });
+
+    test("blocks a catch-up Stop until its notification and resumed terminal response are both consumed", async () => {
+      await withAntigravityTranscriptSession(
+        [backgroundLaunch("session/task-1")],
+        async ({ parser, appendTranscript }) => {
+          appendTranscript(
+            backgroundCompletion("session/task-1"),
+            terminalPlannerResponse()
+          );
+          const events = await parser.readNewLines("unused.log");
+          assert.deepStrictEqual(
+            events.map((event) => event.type),
+            ["transcript.tool", "transcript.planner"]
+          );
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+          assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+        }
+      );
+    });
+
+    test("keeps a new launch pending while the resumed turn is still active", async () => {
+      await withAntigravityTranscriptSession(
+        [backgroundLaunch("session/task-1")],
+        async ({ parser, appendTranscript }) => {
+          appendTranscript(
+            backgroundCompletion("session/task-1"),
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              content: "I will start another background task.",
+              tool_calls: [{ name: "run_command", args: {} }],
+            },
+            backgroundLaunch("session/task-2")
+          );
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+          appendTranscript(backgroundCompletion("session/task-2"));
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+          appendTranscript(terminalPlannerResponse());
+          await parser.readNewLines("unused.log");
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+          assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+        }
+      );
+    });
+
+    test("clears provider background state when a new session is discovered", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const firstSessionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const secondSessionId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const firstTranscriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          firstSessionId,
+          ".system_generated",
+          "logs"
+        );
+        const secondTranscriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          secondSessionId,
+          ".system_generated",
+          "logs"
+        );
+        const logPath = path.join(logDir, "cli-20260705_120000.log");
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${firstSessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        fs.mkdirSync(firstTranscriptDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(firstTranscriptDir, "transcript_full.jsonl"),
+          JSON.stringify(backgroundLaunch("session/task-1")) + "\n",
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+        fs.mkdirSync(secondTranscriptDir, { recursive: true });
+        fs.appendFileSync(
+          logPath,
+          `Starting conversation update stream for ${secondSessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), false);
       });
     });
   });

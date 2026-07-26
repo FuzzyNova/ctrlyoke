@@ -72,9 +72,12 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
-  private readonly launchedBackgroundTaskIds = new Set<string>();
-  private readonly finishedBackgroundTaskIds = new Set<string>();
+  private readonly pendingBackgroundTaskIds = new Set<string>();
   private backgroundStateSessionId?: string;
+  /** Keep completion gated until the resumed assistant turn reaches its terminal planner response. */
+  private resumedTurnCompletionPending = false;
+  /** Reject the Stop callback that raced notification/resumed-turn catch-up. */
+  private staleStopGuardChecksRemaining = 0;
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     // The transcript is polled after the Go log so a session discovered on this
@@ -111,7 +114,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         }
         const sessionId = this.extractSessionIdFromLine(line);
         if (sessionId) {
-          this.cachedSessionId = sessionId;
+          this.setCachedSessionId(sessionId);
         }
 
         if (
@@ -371,6 +374,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     if (!sessionId) {
       return [];
     }
+    this.resetProviderStateForSession(sessionId);
     const transcriptPath = this.getAuthoritativeTranscriptPath(sessionId);
     if (!transcriptPath) {
       return [];
@@ -586,23 +590,82 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     entry: AntigravityTranscriptEntry,
     sessionId: string
   ): void {
-    if (this.backgroundStateSessionId !== sessionId) {
-      this.backgroundStateSessionId = sessionId;
-      this.launchedBackgroundTaskIds.clear();
-      this.finishedBackgroundTaskIds.clear();
-    }
+    this.resetProviderStateForSession(sessionId);
 
-    const taskId = this.extractTaskId(entry);
-    if (!taskId) {
+    if (
+      entry.source === "MODEL" &&
+      entry.type === "RUN_COMMAND" &&
+      entry.status === "RUNNING"
+    ) {
+      const taskId = this.extractTaskId(entry);
+      if (taskId) {
+        this.pendingBackgroundTaskIds.add(taskId);
+      }
       return;
     }
 
-    if (entry.source === "MODEL" && entry.type === "RUN_COMMAND") {
-      this.launchedBackgroundTaskIds.add(taskId);
+    if (
+      entry.source === "SYSTEM" &&
+      entry.type === "SYSTEM_MESSAGE" &&
+      entry.status === "DONE"
+    ) {
+      const taskId = this.extractCompletedTaskId(entry);
+      if (taskId && this.pendingBackgroundTaskIds.delete(taskId)) {
+        this.resumedTurnCompletionPending = true;
+      }
+      return;
     }
-    if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
-      this.finishedBackgroundTaskIds.add(taskId);
+
+    if (this.isTerminalPlannerResponse(entry)) {
+      this.resumedTurnCompletionPending = false;
+      this.staleStopGuardChecksRemaining = 2;
     }
+  }
+
+  private isTerminalPlannerResponse(
+    entry: AntigravityTranscriptEntry
+  ): boolean {
+    if (
+      !this.resumedTurnCompletionPending ||
+      entry.source !== "MODEL" ||
+      entry.type !== "PLANNER_RESPONSE" ||
+      entry.status !== "DONE"
+    ) {
+      return false;
+    }
+    if (entry.tool_calls && entry.tool_calls.length > 0) {
+      return false;
+    }
+    return typeof entry.content === "string" && entry.content.trim().length > 0;
+  }
+
+  private extractCompletedTaskId(
+    entry: AntigravityTranscriptEntry
+  ): string | undefined {
+    const content = typeof entry.content === "string" ? entry.content : "";
+    const match = content.match(
+      /Task id\s+"([^"]+)"\s+(?:finished|failed)\s+with result:/i
+    );
+    return match?.[1];
+  }
+
+  private resetProviderStateForSession(sessionId: string): void {
+    if (this.backgroundStateSessionId === sessionId) {
+      return;
+    }
+    this.backgroundStateSessionId = sessionId;
+    this.pendingBackgroundTaskIds.clear();
+    this.pendingPlannerToolCalls.length = 0;
+    this.resumedTurnCompletionPending = false;
+    this.staleStopGuardChecksRemaining = 0;
+  }
+
+  private setCachedSessionId(sessionId: string): void {
+    if (this.cachedSessionId === sessionId) {
+      return;
+    }
+    this.cachedSessionId = sessionId;
+    this.resetProviderStateForSession(sessionId);
   }
 
   private getTranscriptTimestamp(entry: AntigravityTranscriptEntry): number {
@@ -664,25 +727,24 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * transcript mapper consumes records. See
    * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Antigravity CLI — CONFIRMED".
    *
-   * Rule: pending iff any `RUN_COMMAND` background-task launch (`Tool is
+   * Rule: pending while any `RUN_COMMAND` background-task launch (`Tool is
    * running as a background task with task id: <sessionId>/task-N`) lacks a
-   * matching completion `SYSTEM_MESSAGE` (`Task id "<sessionId>/task-N"
-   * finished with result:`). Safe as "any launched, not just most-recent" —
-   * each background task gets its own monotonic task-N id and (for any
-   * terminating command) its own completion message, so there is no
-   * superseded/"zombie" case observed in the investigated sample. If one
-   * ever surfaces, fall back to Claude's most-recent-launch rule instead.
+   * matching completion/failure `SYSTEM_MESSAGE` (`Task id "<sessionId>/task-N"
+   * finished with result:`). Consuming a matching notification also latches
+   * the resumed turn until its terminal planner response, so a Stop that raced
+   * the catch-up read cannot commit the workflow. New launches remain
+   * independent while that resumed turn is active.
    */
   override hasPendingBackgroundWork(): boolean {
-    const sessionId =
-      this.cachedSessionId ?? this.cachedLastConversationsSessionId;
-    if (!sessionId) {
-      return false;
+    if (
+      this.pendingBackgroundTaskIds.size > 0 ||
+      this.resumedTurnCompletionPending
+    ) {
+      return true;
     }
-    for (const taskId of this.launchedBackgroundTaskIds) {
-      if (!this.finishedBackgroundTaskIds.has(taskId)) {
-        return true;
-      }
+    if (this.staleStopGuardChecksRemaining > 0) {
+      this.staleStopGuardChecksRemaining--;
+      return true;
     }
     return false;
   }
@@ -705,6 +767,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       const sessionId = parsed[normalizedRoot];
       if (sessionId) {
         this.cachedLastConversationsSessionId = sessionId;
+        if (this.cachedSessionId && this.cachedSessionId !== sessionId) {
+          this.cachedSessionId = undefined;
+        }
+        this.resetProviderStateForSession(sessionId);
       }
       return sessionId;
     } catch {
