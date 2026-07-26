@@ -233,11 +233,14 @@ function warnAboutClampedInteractiveSteps(
     return;
   }
 
+  // Mirror PropertyResolver's three-tier precedence without its clamp, which is
+  // already active by the time this diagnostic runs and would report nothing.
+  const settingsMode = ConfigurationUtils.getCliExecutionMode();
   const downgradedSteps = (workflow.steps ?? [])
     .map((step, index) => ({ step, index }))
     .filter(
       ({ step }) =>
-        (step.executionMode ?? workflow.executionMode) ===
+        (step.executionMode ?? workflow.executionMode ?? settingsMode) ===
         EXECUTION_MODES.INTERACTIVE
     )
     .map(({ step, index }) => step.name?.trim() || `step ${index + 1}`);

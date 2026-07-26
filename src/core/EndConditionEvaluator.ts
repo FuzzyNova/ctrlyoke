@@ -45,36 +45,6 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Evaluate whether an exit code satisfies a condition's returns/compareSource criteria.
-   * Used when output is unavailable (e.g. interactive PTY execution).
-   * Falls back to exit code 0 = pass for stdout/stderr comparisons where we have no output.
-   */
-  static evaluateExitCodeResult(
-    exitCode: number,
-    returns: string | undefined,
-    compareSource: EndConditionCompareSource = "auto"
-  ): boolean {
-    if (returns === undefined) return exitCode === 0;
-    const expectedLower = returns.trim().toLowerCase();
-
-    if (compareSource === COMPARE_SOURCES.EXIT_CODE) {
-      if (expectedLower === "true") return exitCode === 0;
-      if (expectedLower === "false") return exitCode !== 0;
-      const expected = parseInt(returns.trim(), 10);
-      return !isNaN(expected) && exitCode === expected;
-    }
-
-    // AUTO mode: boolean keywords use exit code
-    if (compareSource === COMPARE_SOURCES.AUTO) {
-      if (expectedLower === "true") return exitCode === 0;
-      if (expectedLower === "false") return exitCode !== 0;
-    }
-
-    // STDOUT / STDERR / AUTO with non-boolean: no output available — default to exit code 0
-    return exitCode === 0;
-  }
-
-  /**
    * Parse script command to separate script path from arguments.
    * Handles both space-separated and quoted arguments.
    * @returns { scriptPath: string, args: string[] }
