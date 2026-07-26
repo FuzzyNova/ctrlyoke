@@ -68,9 +68,9 @@ export function ErrorBehaviorEditor({
         <label
           htmlFor={`${idPrefix}-on-error`}
           className="text-xs font-semibold uppercase text-description-fg"
-          title="What ctrlyoke should do when the harness itself fails."
+          title="What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps."
         >
-          On Harness Error
+          On Error
         </label>
         <CustomSelect
           id={`${idPrefix}-on-error`}

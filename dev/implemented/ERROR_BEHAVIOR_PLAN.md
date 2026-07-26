@@ -864,7 +864,7 @@ For prompt steps:
 
 When custom is selected:
 
-- show `On Harness Error`
+- show `On Error`
 - show `Max Retries` when `retry` is selected
 - show `Retry Delay (ms)` when `retry` is selected
 

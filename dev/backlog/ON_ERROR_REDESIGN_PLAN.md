@@ -1,11 +1,9 @@
 # On Error Redesign — Generalized `errorBehavior`
 
-Status: **Executor implemented (2026-07-26); UI work previously shipped.**
-Design agreed with Nathan; the remaining follow-up is documenting any future
-refinements. Interim mitigations already shipped: the direct-command shell fix
-in `EndConditionEvaluator`, and a warning status message when a gate cannot
-run. Evaluator results carry an explicit `errored` discriminator, and the
-executor routes it through `errorBehavior`.
+Status: **Implemented (2026-07-25).**
+The direct-command shell fix, explicit `errored` evaluator outcome, whole-step
+retry policy, script-step routing, UI labels, and generalized schema/docs are
+all shipped. Any future refinements should be tracked separately.
 
 ## Origin incident
 
@@ -18,9 +16,9 @@ ran anyway, and nothing surfaced in the UI. Two distinct defects:
 1. **"The gate errored" is conflated with "the gate failed".** A script that
    could not run at all is not a condition outcome; treating it as one silently
    applies the wrong policy.
-2. **`errorBehavior` only governs harness failures** and the UI labels it
-   "On Harness Error", so there is no user-controllable policy for internal
-   errors in gates or script steps.
+2. **`errorBehavior` originally only governed harness failures**, and the UI
+   described it as harness-only, so there was no user-controllable policy for
+   internal errors in gates or script steps.
 
 ## Decided model
 
@@ -41,7 +39,7 @@ already routed to `errorBehavior` — that part only gains the label change.
 
 `errorBehavior` becomes the single internal-error policy for **every phase of
 a step**: pre-condition, prompt/harness, end-condition, and script steps. The
-UI label changes from "On Harness Error" to "On Error". The schema needs no
+The UI label is "On Error". The schema needs no
 rename — the field was always `errorBehavior`.
 
 **`retry` always retries the whole step, from the pre-condition.** (Decision:
@@ -97,19 +95,14 @@ never re-run on retry.
   `Pre-condition could not run: spawn npm ENOENT → continue`.
 - `stop` additionally surfaces through the existing failure path (step marked
   failed, workflow `ERROR` state) so it is impossible to miss.
-- `WorkflowPropertiesPanel` / `PropertiesDrawer`: label "On Harness Error" →
-  "On Error"; help text updated to say it covers pre/end-conditions and script
-  steps too.
+- `WorkflowPropertiesPanel` / `PropertiesDrawer`: label "On Error"; help text
+  says it covers pre/end-conditions and script steps too.
 
 ## Implementation sketch
 
 1. **`EndConditionEvaluator` returns an explicit discriminator (complete
-   2026-07-25)** — add
-   `errored: boolean` (or `outcome: "passed" | "failed" | "errored"`) to
-   `EvaluationResult` instead of callers inferring from `error && !stderr`.
-   The interim heuristic in `WorkflowExecutor` (status message added
-   2026-07-22, `!preResult.passed && preResult.error && !preResult.stderr`)
-   must be replaced by this field.
+   2026-07-25)** — `EvaluationResult.errored` now identifies evaluator
+   failures, and callers no longer infer them from `error && !stderr`.
 2. **Executor step pipeline refactor (complete 2026-07-26)**: the retry loop
    encloses the pre-condition gate, prompt/harness, and end-condition. The
    phases share one `attemptIndex`/`maxRetries` budget, and condition errors
@@ -120,7 +113,7 @@ never re-run on retry.
 4. **Schema/docs (complete 2026-07-26)**: `errorBehavior` describes internal
    errors across all step phases and is accepted on script steps; its shape is
    unchanged (`onError`, `maxRetries`, `retryDelayMs`).
-5. **UI**: label + help text; no new fields.
+5. **UI (complete 2026-07-25)**: label + help text; no new fields.
 
 ## Testing
 
@@ -143,7 +136,9 @@ never re-run on retry.
   session. The separate `endCondition.onFail: retry` path continues to honor
   `resumeSessionOnRetry` and resumes the conversational session by default.
 
-## Open questions
+## Deferred refinements
 
-- Should `continue` on an errored _end_-condition mark the step visually
-  distinct from a genuinely validated step (e.g. "completed (unvalidated)")?
+- **Errored end-condition with `continue` (deferred 2026-07-25):** keep the
+  step's normal completed state for now. The warning status and errored verdict
+  already remain visible; a separate "unvalidated" step state would require a
+  new cross-layer status contract and is not small enough for this plan.

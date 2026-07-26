@@ -333,7 +333,7 @@
               "type": "null"
             }
           ],
-          "description": "Harness/session failure policy for this prompt/workflow. Use null to explicitly disable an inherited policy."
+          "description": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Use null to explicitly disable an inherited policy."
         }
       }
     },
@@ -429,7 +429,7 @@
               "type": "null"
             }
           ],
-          "description": "Internal-error policy for this script step. Use null to disable an inherited workflow policy."
+          "description": "Internal-error policy for this script step when it cannot run or evaluation breaks. Use null to explicitly disable an inherited workflow policy."
         },
         "onPass": {
           "type": "string",

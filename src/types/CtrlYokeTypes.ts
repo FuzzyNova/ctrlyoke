@@ -106,6 +106,7 @@ export interface ToolPermissionsOverride {
 
 export type ErrorBehaviorAction = "stop" | "retry" | "continue";
 
+/** Policy for internal errors in any step phase: pre-condition, prompt/harness, end-condition, or script execution. */
 export interface ErrorBehavior {
   onError: ErrorBehaviorAction;
   maxRetries?: number;

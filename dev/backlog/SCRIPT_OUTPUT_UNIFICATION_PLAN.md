@@ -209,14 +209,10 @@ into `streamingChunks[stepIndex]` (`workflowStore.ts:620`), and
 end-condition streaming into the same numeric slot would inherit the AI
 attempt's leftover text.
 
-Re-key the live chunk store by `(target, phase)`. This touches
-`workflowStore.streamingChunks` / `finalStepStreamingChunks`,
-`getStreamingChunk`, `BuildOutputRowsInput`, and the sink signatures.
-
-> Cheaper fallback if that refactor is deferred: reset the slot
-> (`updateCliStreamingChunk(idx, "")`) before each condition stream. It works
-> today only because a condition never overlaps its own step's prompt streaming
-> — an accidental invariant, not a designed one. Prefer the real key.
+The live chunk store is keyed by `(target, phase)` through
+`workflowStore.streamingChunks` / `finalStepStreamingChunks`, `getStreamingChunk`,
+`BuildOutputRowsInput`, and the sink signatures. The old slot-reset workaround is
+not part of the finished implementation.
 
 ### Status messages shrink to one line
 
@@ -363,12 +359,10 @@ Webview (`src/ui/webview-react/test/**`):
 
 `ON_ERROR_REDESIGN_PLAN.md` splits condition outcomes into
 passed / failed / **errored** and gives `errored` its own policy
-(`errorBehavior.onError`). This plan is the display half of the same
-distinction and should land first or alongside: `ScriptVerdict.outcome` already
-has the three-way shape, so the On Error work only has to populate `action` from
-the new policy instead of from `onPass`/`onFail`. Neither plan blocks the other,
-but implementing `errored` display twice would be waste — whoever gets there
-first owns the enum.
+(`errorBehavior.onError`). This plan owns the display shape; the completed
+On Error implementation supplies `ScriptVerdict.action` from that policy for
+errored outcomes rather than from `onPass`/`onFail`. The two plans therefore
+share one verdict contract and do not duplicate errored rendering.
 
 ## Risks
 
@@ -377,10 +371,10 @@ first owns the enum.
   jump. Keep it a fixed-height collapsed line by default.
 - **Status/CLI duplication.** If the one-line status summary is not trimmed at
   the same time the CLI output lands, every condition renders twice.
-- **Key stability.** Omitting `:phase:prompt` from keys is what keeps existing
-  `events.jsonl` and live/persist overlay matching working
-  (`overlayLiveHistoryEntries`, `workflowStore.ts:411`). Do not "normalize" it to
-  always include the phase.
+- **Key stability.** Persisted prompt-phase CLI entries may omit `phase`; the
+  live/persist overlay must match them using the default prompt phase in
+  `findMatchingCliEntryIndex` (`workflowStore.ts`). Do not normalize the
+  serialized key to always include `:phase:prompt`.
 - **Retry volume.** A gate that streams megabytes on every retry now persists
   that per attempt. `StreamingHistoryBuffer` already batches, but a
   `maxCapturedOutput`-style cap for condition scripts may be wanted later.

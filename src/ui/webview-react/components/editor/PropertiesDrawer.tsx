@@ -907,7 +907,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <label
                 htmlFor="prop-error-behavior-mode"
                 className="text-xs font-semibold uppercase text-description-fg"
-                title="Controls what happens when the harness itself fails before the prompt can complete successfully."
+                title="Controls what happens when a pre-condition, prompt/harness, end-condition, or script step encounters an internal error."
               >
                 Error Behavior
               </label>

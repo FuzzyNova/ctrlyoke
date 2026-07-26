@@ -107,6 +107,7 @@ suite("ScriptExecutionReporter", () => {
         timestampMs: 100,
         onPass: "continue",
         onFail: "stopWorkflow",
+        actionForErrored: "stopWorkflow",
       });
 
       assert.deepStrictEqual(events, ["placeholder", "chunk", "final"]);
@@ -181,6 +182,7 @@ suite("ScriptExecutionReporter", () => {
         timestampMs: 100,
         onPass: "continue",
         onFail: "stopWorkflow",
+        actionForErrored: result.errored ? "continue" : "stopWorkflow",
         timeoutMs: 10,
       });
 
@@ -188,7 +190,10 @@ suite("ScriptExecutionReporter", () => {
         report.verdict.outcome,
         result.errored ? "errored" : "failed"
       );
-      assert.strictEqual(report.verdict.action, "stopWorkflow");
+      assert.strictEqual(
+        report.verdict.action,
+        result.errored ? "continue" : "stopWorkflow"
+      );
       assert.strictEqual(report.verdict.actual, result.actual);
       assert.strictEqual(report.verdict.actualSource, result.actualSource);
       assert.strictEqual(report.verdict.matchRule, result.matchRule);

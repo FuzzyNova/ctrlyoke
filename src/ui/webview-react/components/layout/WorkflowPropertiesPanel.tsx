@@ -1434,8 +1434,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   />
                 </div>
                 <p className="text-xs text-description-fg mb-3">
-                  What to do if the harness process crashes, errors, or exits
-                  early: stop, retry, or continue.
+                  What to do if a pre-condition, prompt/harness, end-condition,
+                  or script step encounters an internal error: stop, retry, or
+                  continue.
                 </p>
                 <ErrorBehaviorEditor
                   value={effectiveErrorBehavior}
