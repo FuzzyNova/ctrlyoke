@@ -575,9 +575,7 @@ export function buildPromptStepProperties(
     v: unknown,
     isValid?: (value: unknown) => boolean
   ): T | undefined =>
-    v === null || (isValid !== undefined && !isValid(v))
-      ? undefined
-      : (v as T);
+    v === null || (isValid !== undefined && !isValid(v)) ? undefined : (v as T);
   const executionMode = coerce<ExecutionMode>(
     props?.executionMode,
     (value) =>

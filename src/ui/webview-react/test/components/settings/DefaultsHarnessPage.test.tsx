@@ -38,10 +38,7 @@ describe("DefaultsHarnessPage execution defaults", () => {
     await user.click(screen.getByRole("button", { name: "Execution mode" }));
     await user.click(screen.getByRole("button", { name: "Headless" }));
 
-    expect(onUpdate).toHaveBeenCalledWith(
-      "defaults.executionMode",
-      "headless"
-    );
+    expect(onUpdate).toHaveBeenCalledWith("defaults.executionMode", "headless");
   });
 
   it("shows the active-scope reset affordance", async () => {

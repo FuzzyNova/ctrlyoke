@@ -1284,7 +1284,8 @@ export class WorkflowInstance {
 
       const currentQueueState = this.promptQueue.getState();
       const totalSteps = currentQueueState.steps.length;
-      const currentStep = currentQueueState.steps[currentQueueState.currentIndex];
+      const currentStep =
+        currentQueueState.steps[currentQueueState.currentIndex];
       const executionMode: ExecutionMode | undefined = currentStep
         ? PropertyResolver.resolveExecutionMode(
             currentStep,

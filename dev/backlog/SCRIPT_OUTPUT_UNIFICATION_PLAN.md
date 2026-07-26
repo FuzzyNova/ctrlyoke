@@ -10,12 +10,12 @@ ctrlyoke runs user scripts from four places, all through the same evaluator
 (`EndConditionEvaluator.evaluateCondition`, `EndConditionEvaluator.ts:154`), but
 their output reaches the dashboard through two completely different pipelines:
 
-| Caller                | Site                       | Streams? | Rendered as                       | Persisted as              |
-| --------------------- | -------------------------- | -------- | --------------------------------- | ------------------------- |
-| Script step           | `WorkflowExecutor.ts:806`  | **yes**  | CLI output group (header/command/response/stats rows) | CLI timeline entry + `scriptExecutionRecorded` |
-| Pre-condition         | `WorkflowExecutor.ts:487`  | no       | one `StatusMessage` string        | status timeline entry     |
-| End-condition         | `WorkflowExecutor.ts:1720` | no       | one `StatusMessage` string        | status timeline entry     |
-| End-condition retries | `EndConditionHandler.ts:407` | no     | one `StatusMessage` string        | status timeline entry     |
+| Caller                | Site                         | Streams? | Rendered as                                           | Persisted as                                   |
+| --------------------- | ---------------------------- | -------- | ----------------------------------------------------- | ---------------------------------------------- |
+| Script step           | `WorkflowExecutor.ts:806`    | **yes**  | CLI output group (header/command/response/stats rows) | CLI timeline entry + `scriptExecutionRecorded` |
+| Pre-condition         | `WorkflowExecutor.ts:487`    | no       | one `StatusMessage` string                            | status timeline entry                          |
+| End-condition         | `WorkflowExecutor.ts:1720`   | no       | one `StatusMessage` string                            | status timeline entry                          |
+| End-condition retries | `EndConditionHandler.ts:407` | no       | one `StatusMessage` string                            | status timeline entry                          |
 
 ### Why condition output looks unformatted
 
@@ -63,7 +63,7 @@ Three further gaps fall out of the same split:
 - **No second renderer.** Delete the orphaned `CliOutput.tsx` path rather than
   teaching it the new rows.
 
-Non-goals: changing condition *semantics* (`onPass`/`onFail` routing), running
+Non-goals: changing condition _semantics_ (`onPass`/`onFail` routing), running
 conditions in a PTY, or the errored-vs-failed policy split (that is the On Error
 plan).
 
@@ -76,7 +76,7 @@ Add to `DashboardConstants.ts` next to `CONDITION_ACTIONS` (`:1068`) and
 
 ```ts
 export const SCRIPT_OUTPUT_SOURCES = {
-  SCRIPT_STEP: "script",        // keeps today's value — see migration note
+  SCRIPT_STEP: "script", // keeps today's value — see migration note
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
 } as const;
@@ -90,7 +90,7 @@ stdout rendering, `rawTextOutput: true`, and the exit-code stat all light up for
 conditions with no per-call-site branching.
 
 Keeping `SCRIPT_STEP` as the literal `"script"` means already-written
-`events.jsonl` files keep rendering. Pre-release means we *may* rename it, but
+`events.jsonl` files keep rendering. Pre-release means we _may_ rename it, but
 there is no reason to.
 
 ### `ScriptVerdict` — the new payload
@@ -100,27 +100,27 @@ New type in `CtrlYokeTypes.ts` beside `ScriptRuntimeOutput` (`:466`), carried on
 
 ```ts
 export interface ScriptVerdict {
-  compareSource: CompareSource;        // resolved, never undefined
-  expected?: string;                   // condition.returns; absent = "exit code 0"
-  actual: string;                      // the compared text (stdout/stderr/exit code)
+  compareSource: CompareSource; // resolved, never undefined
+  expected?: string; // condition.returns; absent = "exit code 0"
+  actual: string; // the compared text (stdout/stderr/exit code)
   actualSource: "stdout" | "stderr" | "exitCode";
   exitCode?: number;
   outcome: "passed" | "failed" | "errored";
-  matchRule: ScriptMatchRule;          // why it passed/failed
-  action: ConditionAction;             // continue | stopWorkflow | retry | skipPrompt
-  actionDetail?: string;               // "retry 2 of 3", "skipped prompt"
+  matchRule: ScriptMatchRule; // why it passed/failed
+  action: ConditionAction; // continue | stopWorkflow | retry | skipPrompt
+  actionDetail?: string; // "retry 2 of 3", "skipped prompt"
   durationMs: number;
   timedOut?: boolean;
-  error?: string;                      // evaluator/spawn error text
+  error?: string; // evaluator/spawn error text
 }
 
 export type ScriptMatchRule =
-  | "exitCode"      // compareSource exitCode, or returns absent
-  | "exact"         // actual === expected
-  | "boolean"       // true/false/yes/pass synonyms (incl. exit-code fallback)
-  | "numericGte"    // parseFloat(actual) >= parseFloat(expected)
-  | "substring"     // actual.includes(expected)
-  | "none";         // nothing matched, or the script never ran
+  | "exitCode" // compareSource exitCode, or returns absent
+  | "exact" // actual === expected
+  | "boolean" // true/false/yes/pass synonyms (incl. exit-code fallback)
+  | "numericGte" // parseFloat(actual) >= parseFloat(expected)
+  | "substring" // actual.includes(expected)
+  | "none"; // nothing matched, or the script never ran
 ```
 
 `matchRule` is the piece that makes the block trustworthy. `checkResult`
@@ -138,7 +138,7 @@ gets the same treatment. No behavior change — the branches already exist, they
 just stop being collapsed to a bit.
 
 Add `errored: boolean` derived today from `result.error || result.timeout ||
-!ranAtAll`. This plan only *displays* it; the On Error plan later routes it.
+!ranAtAll`. This plan only _displays_ it; the On Error plan later routes it.
 
 ### One emitter for all four call sites
 
@@ -163,7 +163,7 @@ different per site.
 
 Two details the reporter must preserve, both currently easy to break:
 
-- **Only script *steps* feed prior context.** `cacheRuntimeOutput` /
+- **Only script _steps_ feed prior context.** `cacheRuntimeOutput` /
   `storeFinalStepResponseText` (`WorkflowExecutor.ts:1003-1010`) must stay in
   `executeScriptStep`. A gate's stdout is not the step's response and must never
   be injected into a later prompt.
@@ -184,7 +184,7 @@ Add a fourth component, `phase`:
 
 ```ts
 export const EXECUTION_PHASES = {
-  PROMPT: "prompt",              // default; omitted in keys for stability
+  PROMPT: "prompt", // default; omitted in keys for stability
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
 } as const;
@@ -196,7 +196,7 @@ export const EXECUTION_PHASES = {
 - `TIMELINE_ATTEMPT_KINDS` (`WorkflowTimelineTypes.ts:62`) gains `CONDITION`,
   so a condition attempt is distinguishable from an AI or script-step attempt.
 
-End-condition retries need no extra dimension: retry *N* already increments
+End-condition retries need no extra dimension: retry _N_ already increments
 `attemptIndex`, and `(target, run, attempt N, endCondition)` is unique.
 
 ### Streaming chunks must be phase-keyed too
@@ -254,14 +254,14 @@ Collapsed (default) — one line, colour-coded by outcome:
 
 Expanded — a label/value grid:
 
-| Row           | Value                                                        |
-| ------------- | ------------------------------------------------------------ |
-| Compare       | `exitCode` \| `stdout` \| `stderr` \| `auto → stdout`         |
-| Expected      | `returns`, or _“exit code 0 (no `returns` set)”_               |
-| Actual        | compared text, truncated via `buildCollapsedOutputPreview`     |
-| Matched by    | exact / boolean / numeric ≥ / substring / exit code / no match |
-| Result        | Passed / Failed / Errored (+ timeout note)                     |
-| Action        | `continue` / `skipPrompt` / `stopWorkflow` / `retry N of M`     |
+| Row        | Value                                                          |
+| ---------- | -------------------------------------------------------------- |
+| Compare    | `exitCode` \| `stdout` \| `stderr` \| `auto → stdout`          |
+| Expected   | `returns`, or _“exit code 0 (no `returns` set)”_               |
+| Actual     | compared text, truncated via `buildCollapsedOutputPreview`     |
+| Matched by | exact / boolean / numeric ≥ / substring / exit code / no match |
+| Result     | Passed / Failed / Errored (+ timeout note)                     |
+| Action     | `continue` / `skipPrompt` / `stopWorkflow` / `retry N of M`    |
 
 `auto` must display as `auto → stdout` (or `→ exit code` for boolean `returns`),
 because `evaluateSuccess`'s AUTO branch (`:648`) picks the axis at runtime and
@@ -273,14 +273,14 @@ rows model, not in the component).
 
 ### Webview touchpoints for a new row kind
 
-| File                                | Change                                                       |
-| ----------------------------------- | ------------------------------------------------------------ |
-| `utils/outputRows.ts`               | `ScriptVerdictRow` type, builder push, `estimateSize` case (`:1072`) |
-| `components/output/OutputRow.tsx`   | new `case "script-verdict"` in the switch (`:1209`)           |
-| `components/output/ScriptVerdict.tsx` | new component                                               |
-| `utils/outputFind.ts`               | search segments (`:137`) — expected/actual/action are searchable |
+| File                                             | Change                                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `utils/outputRows.ts`                            | `ScriptVerdictRow` type, builder push, `estimateSize` case (`:1072`)                |
+| `components/output/OutputRow.tsx`                | new `case "script-verdict"` in the switch (`:1209`)                                 |
+| `components/output/ScriptVerdict.tsx`            | new component                                                                       |
+| `utils/outputFind.ts`                            | search segments (`:137`) — expected/actual/action are searchable                    |
 | `output-section/OutputScrollSeekPlaceholder.tsx` | label (`:20`); leave `shouldRenderScrollSeekPlaceholder` false — the block is small |
-| `hooks/useOutputRowsModel.ts`       | verdict expansion state, if expandable                        |
+| `hooks/useOutputRowsModel.ts`                    | verdict expansion state, if expandable                                              |
 
 `OutputPane.tsx` itself needs **no change**: it renders whatever rows the model
 produces.

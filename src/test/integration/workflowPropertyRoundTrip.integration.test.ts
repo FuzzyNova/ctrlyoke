@@ -48,10 +48,21 @@ suite("Workflow property round trip (panel -> working file)", () => {
   test("executionMode survives the workflow property round trip", async () => {
     const { h } = await harness();
     await h.routeWorkflowPropertyUpdate("executionMode", "headless");
-    assert.strictEqual(
-      (await h.readRunDefinition()).executionMode,
-      "headless"
-    );
+    assert.strictEqual((await h.readRunDefinition()).executionMode, "headless");
+  });
+
+  test("step and workflow executionMode survive a fresh definition reload", async () => {
+    const { h } = await harness([{ prompt: "step 1" }, { prompt: "step 2" }]);
+    await h.routeWorkflowPropertyUpdate("executionMode", "interactive");
+    await h.routeUpdatePrompt({
+      index: 1,
+      text: "step 2",
+      properties: { executionMode: "headless" },
+    });
+
+    const reloaded = await h.readRunDefinition();
+    assert.strictEqual(reloaded.executionMode, "interactive");
+    assert.strictEqual(reloaded.steps?.[1].executionMode, "headless");
   });
 
   test("each definition write bumps definitionRevision", async () => {

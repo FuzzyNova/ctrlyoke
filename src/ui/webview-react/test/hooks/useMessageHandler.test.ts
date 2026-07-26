@@ -2414,9 +2414,7 @@ describe("EXECUTION_STARTED", () => {
       });
 
     dispatchStepStart("headless");
-    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
-      "output"
-    );
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
 
     dispatchStepStart("interactive");
     expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
@@ -2424,9 +2422,7 @@ describe("EXECUTION_STARTED", () => {
     );
 
     dispatchStepStart("headless");
-    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
-      "output"
-    );
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
   });
 
   it("preserves ai-cli sessions during append continuations until TERMINAL_STARTED reconciles them", () => {

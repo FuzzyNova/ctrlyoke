@@ -483,7 +483,10 @@ describe("requestRunViewLoad", () => {
       summary.runRef
     );
 
-    const targetAddress = { workflowKey: "wf-2" as never, kind: "draft" as const };
+    const targetAddress = {
+      workflowKey: "wf-2" as never,
+      kind: "draft" as const,
+    };
     const switchRequestId = store().requestRunViewLoad(
       targetAddress,
       [],

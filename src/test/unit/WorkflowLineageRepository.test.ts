@@ -71,7 +71,10 @@ suite("WorkflowLineageRepository", () => {
         "Name",
         "source.ctrlyoke.yaml"
       );
-      assert.strictEqual(lineage.descriptor.originalFile, "source.ctrlyoke.yaml");
+      assert.strictEqual(
+        lineage.descriptor.originalFile,
+        "source.ctrlyoke.yaml"
+      );
     });
 
     test("readDescriptor rejects for a missing lineage", async () => {
@@ -131,7 +134,10 @@ suite("WorkflowLineageRepository", () => {
       const allocation = await publishRun(ws, lineage.workflowKey);
 
       await fs.access(allocation.runFilePath);
-      const descriptor = await repository.readDescriptor(ws, lineage.workflowKey);
+      const descriptor = await repository.readDescriptor(
+        ws,
+        lineage.workflowKey
+      );
       assert.strictEqual(descriptor.latestRunRef, allocation.runRef);
     });
 
@@ -142,7 +148,10 @@ suite("WorkflowLineageRepository", () => {
       await fs.writeFile(allocation.stagingRunFilePath, "{}");
       // manifest.json is a directory instead of the expected file.
       await fs.mkdir(path.join(allocation.stagingRunDir, "manifest.json"));
-      await fs.writeFile(path.join(allocation.stagingRunDir, "events.jsonl"), "");
+      await fs.writeFile(
+        path.join(allocation.stagingRunDir, "events.jsonl"),
+        ""
+      );
 
       await assert.rejects(
         repository.finalizeAllocatedRun(ws, lineage.workflowKey, allocation),
@@ -159,7 +168,10 @@ suite("WorkflowLineageRepository", () => {
         path.join(allocation.stagingRunDir, "manifest.json"),
         "{}"
       );
-      await fs.writeFile(path.join(allocation.stagingRunDir, "events.jsonl"), "");
+      await fs.writeFile(
+        path.join(allocation.stagingRunDir, "events.jsonl"),
+        ""
+      );
 
       // Simulate a concurrent mutation bumping the descriptor's revision first.
       await repository.updateDescriptor(ws, lineage.workflowKey, (d) => ({
@@ -182,7 +194,10 @@ suite("WorkflowLineageRepository", () => {
         path.join(allocation.stagingRunDir, "manifest.json"),
         "{}"
       );
-      await fs.writeFile(path.join(allocation.stagingRunDir, "events.jsonl"), "");
+      await fs.writeFile(
+        path.join(allocation.stagingRunDir, "events.jsonl"),
+        ""
+      );
 
       // Pre-create the public run directory so the publish rename cannot land.
       await fs.mkdir(allocation.runDir, { recursive: true });
@@ -208,7 +223,10 @@ suite("WorkflowLineageRepository", () => {
 
       assert.deepStrictEqual(result.remainingRunRefs, [run1.runRef]);
       await assert.rejects(fs.access(run2.runDir));
-      const descriptor = await repository.readDescriptor(ws, lineage.workflowKey);
+      const descriptor = await repository.readDescriptor(
+        ws,
+        lineage.workflowKey
+      );
       assert.strictEqual(descriptor.latestRunRef, run1.runRef);
       assert.strictEqual(descriptor.revision, result.descriptorRevision);
     });
@@ -218,10 +236,17 @@ suite("WorkflowLineageRepository", () => {
       const lineage = await repository.createLineage(ws, "wf", "Wf");
       const run = await publishRun(ws, lineage.workflowKey);
 
-      const result = await repository.deleteRun(ws, lineage.workflowKey, run.runRef);
+      const result = await repository.deleteRun(
+        ws,
+        lineage.workflowKey,
+        run.runRef
+      );
 
       assert.deepStrictEqual(result.remainingRunRefs, []);
-      const descriptor = await repository.readDescriptor(ws, lineage.workflowKey);
+      const descriptor = await repository.readDescriptor(
+        ws,
+        lineage.workflowKey
+      );
       assert.strictEqual(descriptor.latestRunRef, undefined);
     });
 
@@ -321,7 +346,10 @@ suite("WorkflowLineageRepository", () => {
       assert.strictEqual(updated.revision, lineage.descriptor.revision + 1);
       assert.ok(updated.lastModifiedAt >= lineage.descriptor.lastModifiedAt);
 
-      const persisted = await repository.readDescriptor(ws, lineage.workflowKey);
+      const persisted = await repository.readDescriptor(
+        ws,
+        lineage.workflowKey
+      );
       assert.strictEqual(persisted.isFavorite, true);
     });
   });

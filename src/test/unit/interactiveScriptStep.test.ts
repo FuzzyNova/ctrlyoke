@@ -7,7 +7,11 @@ import {
 import { PromptQueue } from "../../core/PromptQueue";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
-import { EXECUTION_MODES, STEP_STATUS, STEP_TYPES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  STEP_STATUS,
+  STEP_TYPES,
+} from "../../types/DashboardConstants";
 import { PropertyResolver } from "../../utils/PropertyResolver";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
@@ -152,7 +156,11 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
 async function runCase(
   comparisonCase: ComparisonCase,
   executionMode: "headless" | "interactive"
-): Promise<{ passed: boolean; ptyCalls: number; outputs: Array<{ stdout: string; stderr: string }> }> {
+): Promise<{
+  passed: boolean;
+  ptyCalls: number;
+  outputs: Array<{ stdout: string; stderr: string }>;
+}> {
   const queue = new PromptQueue();
   const executor = makeExecutor(queue);
   const outputs: Array<{ stdout: string; stderr: string }> = [];
@@ -244,17 +252,14 @@ suite("interactive script steps", () => {
     let receivedTimeout = 0;
     let timeoutCallbackCalled = false;
     const statusMessages: string[] = [];
-    const context = makeContext(
-      undefined,
-      async (options) => {
-        receivedTimeout = options.timeout;
-        if (options.onTimeout) {
-          timeoutCallbackCalled = true;
-          options.onTimeout();
-        }
-        return 1;
+    const context = makeContext(undefined, async (options) => {
+      receivedTimeout = options.timeout;
+      if (options.onTimeout) {
+        timeoutCallbackCalled = true;
+        options.onTimeout();
       }
-    );
+      return 1;
+    });
     context.onStatusMessage = (_stepIndex, message) => {
       statusMessages.push(message);
     };
@@ -270,12 +275,17 @@ suite("interactive script steps", () => {
       ],
     });
 
-    await executor.execute(new MockHarnessIntegration(undefined, false), context);
+    await executor.execute(
+      new MockHarnessIntegration(undefined, false),
+      context
+    );
 
     assert.strictEqual(receivedTimeout, 10);
     assert.strictEqual(timeoutCallbackCalled, true);
     assert.ok(
-      statusMessages.some((message) => message.includes("timed out after 10ms")),
+      statusMessages.some((message) =>
+        message.includes("timed out after 10ms")
+      ),
       statusMessages.join("\n")
     );
   });

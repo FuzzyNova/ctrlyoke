@@ -163,10 +163,7 @@ suite("CtrlYokeConfigService", () => {
     service.setWorkspaceBackend(
       makeBackend({ defaults: { executionMode: "headless" } })
     );
-    assert.strictEqual(
-      service.getNested("defaults.executionMode"),
-      "headless"
-    );
+    assert.strictEqual(service.getNested("defaults.executionMode"), "headless");
   });
 
   test("getNested returns default for unset nested key", () => {

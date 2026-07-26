@@ -156,7 +156,9 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
 
     render(<WorkflowStepsPanel />);
 
-    expect(screen.queryByTitle("executionMode: undefined")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle("executionMode: undefined")
+    ).not.toBeInTheDocument();
 
     const interactiveBadge = screen.getByTitle("executionMode: interactive");
     expect(

@@ -133,6 +133,8 @@ describe("WorkflowSwitchOverlay", () => {
       vi.advanceTimersByTime(30000);
     });
 
-    expect(screen.getByLabelText("Still loading workflow…")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Still loading workflow…")
+    ).toBeInTheDocument();
   });
 });

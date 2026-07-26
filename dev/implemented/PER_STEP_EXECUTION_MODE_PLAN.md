@@ -1,7 +1,7 @@
 # Per-Step Execution Mode — move headless/interactive from settings into the workflow
 
-Status: **Proposed (2026-07-25).** Not implemented. Interlocks with
-[`SCRIPT_OUTPUT_UNIFICATION_PLAN.md`](./SCRIPT_OUTPUT_UNIFICATION_PLAN.md) — see
+Status: **Implemented (2026-07-25).** Phases 1a–4 complete. Interlocks with
+[`SCRIPT_OUTPUT_UNIFICATION_PLAN.md`](../backlog/SCRIPT_OUTPUT_UNIFICATION_PLAN.md) — see
 "Relationship to the Script Output Unification plan".
 
 ## Problem
@@ -10,16 +10,16 @@ Execution mode is a single global switch. `settings-schema.json` declares
 `execution.mode: "interactive" | "headless"`, and every runtime consumer reads it
 from that one place:
 
-| Consumer                                    | Site                              | Reads                                        |
-| ------------------------------------------- | --------------------------------- | -------------------------------------------- |
-| CLI harness dispatch (interactive vs exec)   | `CliIntegration.ts:846`           | `this.getExecutionMode()`                    |
-| Inject-mode gate                             | `CliIntegration.ts:1643`          | `this.getExecutionMode()`                    |
-| Session-activity watcher resume              | `CliIntegration.ts:564`           | `this.getExecutionMode()`                    |
-| Headless permission warning                  | `CliIntegration.ts:1334`          | `this.getExecutionMode()`                    |
-| Script step PTY vs child process             | `WorkflowExecutor.ts:899`         | `ConfigurationUtils.getCliExecutionMode()`   |
-| Output/Terminal auto-focus                   | `useMessageHandler.ts:825`        | `globalSettings.executionMode`               |
-| Output header toggle                         | `OutputSectionHeader.tsx:309-320` | `globalSettings.executionMode`               |
-| CLI binary                                   | `cli.ts:312`                      | `--headless` / `--interactive` / TTY sniff   |
+| Consumer                                   | Site                              | Reads                                      |
+| ------------------------------------------ | --------------------------------- | ------------------------------------------ |
+| CLI harness dispatch (interactive vs exec) | `CliIntegration.ts:846`           | `this.getExecutionMode()`                  |
+| Inject-mode gate                           | `CliIntegration.ts:1643`          | `this.getExecutionMode()`                  |
+| Session-activity watcher resume            | `CliIntegration.ts:564`           | `this.getExecutionMode()`                  |
+| Headless permission warning                | `CliIntegration.ts:1334`          | `this.getExecutionMode()`                  |
+| Script step PTY vs child process           | `WorkflowExecutor.ts:899`         | `ConfigurationUtils.getCliExecutionMode()` |
+| Output/Terminal auto-focus                 | `useMessageHandler.ts:825`        | `globalSettings.executionMode`             |
+| Output header toggle                       | `OutputSectionHeader.tsx:309-320` | `globalSettings.executionMode`             |
+| CLI binary                                 | `cli.ts:312`                      | `--headless` / `--interactive` / TTY sniff |
 
 So a workflow cannot say "plan headlessly, implement interactively, then lint and
 commit headlessly." The user flips one toggle for the whole run, and the setting
@@ -117,7 +117,7 @@ second thing to migrate.
 ### Where the resolved value is consumed
 
 The core change is that `CliIntegration.getExecutionMode()` stops being the
-authority. It becomes the *fallback* used when there is no session:
+authority. It becomes the _fallback_ used when there is no session:
 
 ```ts
 private sessionExecutionMode(session: CliExecutionSession): CliExecutionMode {
@@ -204,14 +204,14 @@ boolean `auto` correctly, then ends with an unconditional
 path, which routes the same step through `evaluateCondition` with
 `compareSource: step.compareSource ?? "exitCode"` and `returns: step.returns ?? "0"`:
 
-| Step config                                  | Headless verdict          | Interactive verdict | Same? |
-| -------------------------------------------- | ------------------------- | ------------------- | ----- |
-| no `returns` / `compareSource`                | exit 0                    | exit 0              | ✅    |
-| `compareSource: exitCode`, `returns: "2"`     | exit code == 2            | exit code == 2      | ✅    |
-| `auto` + `returns: "true"`/`"false"`          | exit code                 | exit code           | ✅    |
-| `compareSource: stdout`, `returns: "PASS"`    | stdout match              | **exit 0**          | ❌    |
-| `compareSource: stderr`, `returns: "…"`       | stderr match              | **exit 0**          | ❌    |
-| `auto` + non-boolean `returns` (e.g. `"80"`)  | stdout numeric ≥/substring | **exit 0**         | ❌    |
+| Step config                                  | Headless verdict           | Interactive verdict | Same? |
+| -------------------------------------------- | -------------------------- | ------------------- | ----- |
+| no `returns` / `compareSource`               | exit 0                     | exit 0              | ✅    |
+| `compareSource: exitCode`, `returns: "2"`    | exit code == 2             | exit code == 2      | ✅    |
+| `auto` + `returns: "true"`/`"false"`         | exit code                  | exit code           | ✅    |
+| `compareSource: stdout`, `returns: "PASS"`   | stdout match               | **exit 0**          | ❌    |
+| `compareSource: stderr`, `returns: "…"`      | stderr match               | **exit 0**          | ❌    |
+| `auto` + non-boolean `returns` (e.g. `"80"`) | stdout numeric ≥/substring | **exit 0**          | ❌    |
 
 Three further interactive-only losses, all in the same block:
 
@@ -266,9 +266,9 @@ Rationale:
    steps panel, with `onPass`/`onFail` and a real terminal. The only thing it
    lacks versus a pre-condition is `skipPrompt`, and `stopWorkflow` covers the
    realistic interactive-gate case ("confirm before I continue").
-4. **It keeps the mental model one sentence long.** *"executionMode controls
+4. **It keeps the mental model one sentence long.** _"executionMode controls
    where the step itself runs; conditions always run headless and stream into the
-   Output panel."* The alternative needs a paragraph and a caveat about
+   Output panel."_ The alternative needs a paragraph and a caveat about
    `compareSource`.
 
 The dropdown's help text and the schema description both state this explicitly so
@@ -352,7 +352,7 @@ Headless
 
 - `resolvedExecutionMode = workflowProperties.executionMode ?? globalSettings.executionMode`
   and `defaultExecutionModeLabel = \`Inherit (${…})\``, alongside the other
-  resolved labels at `PropertiesDrawer.tsx:121-190`.
+resolved labels at `PropertiesDrawer.tsx:121-190`.
 - `onChange`: `"default"` → `setProperty("executionMode", undefined)`, otherwise
   the literal mode. No `null` state — see the contract note.
 - `handleResetAllToInherit` (`:98`) gains
@@ -396,26 +396,26 @@ places. Missing any one silently drops the value on save/load.
 
 **Workflow property (Phase 1):**
 
-| File | Change |
-| ---- | ------ |
-| `types/CtrlYokeTypes.ts:123` | `executionMode?: ExecutionMode` on `ExecutionProperties` |
-| `utils/PropertyResolver.ts:24,106` | `ResolvedProperties.executionMode` + `resolveExecutionMode()` + CLI clamp |
-| `schemas/workflow-schema.json` | `definitions/executionProperties` **and** `definitions/scriptStep` (the latter is `additionalProperties: false` and does not `$ref` executionProperties, so it needs its own copy) |
-| `core/orchestration/PromptFileLoader.ts:345` | seed `defaults.executionMode` in `populateSettingsDefaults` |
-| `core/WorkflowStepSanitizer.ts:365,564` | `sanitize…` allowlist + `buildPromptStepProperties` (plain enum — use `coerce`) |
-| `ui/WorkflowStepHandlers.ts:300` | add to the `raw` workflow-properties map |
-| `ui/webview-react/store/settingsStore.ts:123` | `WorkflowProperties.executionMode` + `getEffectiveExecutionMode()` |
+| File                                          | Change                                                                                                                                                                             |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types/CtrlYokeTypes.ts:123`                  | `executionMode?: ExecutionMode` on `ExecutionProperties`                                                                                                                           |
+| `utils/PropertyResolver.ts:24,106`            | `ResolvedProperties.executionMode` + `resolveExecutionMode()` + CLI clamp                                                                                                          |
+| `schemas/workflow-schema.json`                | `definitions/executionProperties` **and** `definitions/scriptStep` (the latter is `additionalProperties: false` and does not `$ref` executionProperties, so it needs its own copy) |
+| `core/orchestration/PromptFileLoader.ts:345`  | seed `defaults.executionMode` in `populateSettingsDefaults`                                                                                                                        |
+| `core/WorkflowStepSanitizer.ts:365,564`       | `sanitize…` allowlist + `buildPromptStepProperties` (plain enum — use `coerce`)                                                                                                    |
+| `ui/WorkflowStepHandlers.ts:300`              | add to the `raw` workflow-properties map                                                                                                                                           |
+| `ui/webview-react/store/settingsStore.ts:123` | `WorkflowProperties.executionMode` + `getEffectiveExecutionMode()`                                                                                                                 |
 
 **Settings move (Phase 1):**
 
-| File | Change |
-| ---- | ------ |
-| `schemas/settings-schema.json` | add `defaults.executionMode`; delete `execution.mode` |
-| `types/CtrlYokeSettings.ts:36,75,293` | move the field in the interface and in `CTRLYOKE_SETTINGS_DEFAULTS` |
-| `utils/ConfigurationUtils.ts:69,535,898` | `EXECUTION_MODE` key → `"defaults.executionMode"`; `getCliExecutionMode` reads `CONFIG_KEYS.DEFAULTS` |
-| `C:\Users\natha\.ctrlyoke\settings.json` | hand-move `execution.mode` → `defaults.executionMode` (only file with the key; no migration code) |
-| `ui/webview-react/components/settings/ExecutionSection.tsx:38-50` | remove the row + local `MODE_OPTIONS` |
-| `ui/webview-react/components/settings/defaults/DefaultsHarnessPage.tsx:43` | add the "Execution Defaults" section |
+| File                                                                       | Change                                                                                                |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `schemas/settings-schema.json`                                             | add `defaults.executionMode`; delete `execution.mode`                                                 |
+| `types/CtrlYokeSettings.ts:36,75,293`                                      | move the field in the interface and in `CTRLYOKE_SETTINGS_DEFAULTS`                                   |
+| `utils/ConfigurationUtils.ts:69,535,898`                                   | `EXECUTION_MODE` key → `"defaults.executionMode"`; `getCliExecutionMode` reads `CONFIG_KEYS.DEFAULTS` |
+| `C:\Users\natha\.ctrlyoke\settings.json`                                   | hand-move `execution.mode` → `defaults.executionMode` (only file with the key; no migration code)     |
+| `ui/webview-react/components/settings/ExecutionSection.tsx:38-50`          | remove the row + local `MODE_OPTIONS`                                                                 |
+| `ui/webview-react/components/settings/defaults/DefaultsHarnessPage.tsx:43` | add the "Execution Defaults" section                                                                  |
 
 `WebviewSettingsSync.buildGlobalSettings` already emits `executionMode` (`:757`)
 via `ConfigurationUtils.getCliExecutionMode()`, so it needs no change once that
@@ -490,7 +490,7 @@ They touch one common function: `executeScriptStep`. This plan changes where its
 mode comes from and fixes its interactive comparison; the other plan moves the
 whole body into `ScriptExecutionReporter`.
 
-**Land this plan's Phases 1–2 first.** They are a surgical diff to a function the
+**This plan's Phases 1–2 are complete.** They were a surgical diff to a function the
 other plan is about to rewrite, and doing it in this order means
 `ScriptExecutionReporter` is extracted with the correct mode source and a correct
 interactive path already in place. The reverse order bakes

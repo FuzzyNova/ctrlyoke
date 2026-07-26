@@ -44,7 +44,9 @@ function createNotificationMonitor(
 
 /** Runs `body` with CliLogMonitor's drain deadline zeroed so drains resolve instantly. */
 async function withZeroDrainDeadline(body: () => Promise<void>): Promise<void> {
-  const monitorClass = CliLogMonitor as unknown as { DRAIN_DEADLINE_MS: number };
+  const monitorClass = CliLogMonitor as unknown as {
+    DRAIN_DEADLINE_MS: number;
+  };
   const original = monitorClass.DRAIN_DEADLINE_MS;
   monitorClass.DRAIN_DEADLINE_MS = 0;
   try {
