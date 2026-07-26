@@ -1,10 +1,11 @@
 # On Error Redesign — Generalized `errorBehavior`
 
-Status: **Proposed (2026-07-22).** Design agreed with Nathan; not yet
-implemented. Interim mitigations already shipped: the direct-command shell fix
-in `EndConditionEvaluator`, and a warning status message when a gate cannot
-run (`WorkflowExecutor` — see "Implementation" for the heuristic it must
-replace).
+Status: **Proposed (2026-07-22).** Design agreed with Nathan; implementation
+is in progress. Interim mitigations already shipped: the direct-command shell
+fix in `EndConditionEvaluator`, and a warning status message when a gate cannot
+run. Implementation-sketch item 1 is complete: evaluator results now carry an
+explicit `errored` discriminator, and the executor reads it instead of using a
+heuristic.
 
 ## Origin incident
 
@@ -102,7 +103,8 @@ never re-run on retry.
 
 ## Implementation sketch
 
-1. **`EndConditionEvaluator` returns an explicit discriminator** — add
+1. **`EndConditionEvaluator` returns an explicit discriminator (complete
+   2026-07-25)** — add
    `errored: boolean` (or `outcome: "passed" | "failed" | "errored"`) to
    `EvaluationResult` instead of callers inferring from `error && !stderr`.
    The interim heuristic in `WorkflowExecutor` (status message added

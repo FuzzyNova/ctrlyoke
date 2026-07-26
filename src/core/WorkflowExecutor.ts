@@ -511,6 +511,17 @@ export class WorkflowExecutor {
         STATUS_MESSAGE_SEVERITY.WARNING
       );
 
+      if (preResult.errored) {
+        await this.trackStatusMessage(
+          context,
+          target,
+          `Pre-condition could not run: ${
+            preResult.error ?? "Unknown evaluation error"
+          } → ${preAction}`,
+          STATUS_MESSAGE_SEVERITY.WARNING
+        );
+      }
+
       if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
         return this.handleSkippedStep(step, target, context);
       }
@@ -964,7 +975,7 @@ export class WorkflowExecutor {
       const stdout = sanitizeTerminalOutput(outputChunks.join(""));
       const compareSource = step.compareSource ?? COMPARE_SOURCES.EXIT_CODE;
       const returns = step.returns ?? "0";
-      const passed = this.endConditionEvaluator.evaluateResult(
+      const comparison = this.endConditionEvaluator.evaluateResult(
         {
           result: stdout,
           stdout,
@@ -976,7 +987,9 @@ export class WorkflowExecutor {
         compareSource
       );
       evalResult = {
-        passed,
+        ...comparison,
+        errored: ptyTimedOut,
+        matchRule: ptyTimedOut ? "none" : comparison.matchRule,
         stdout,
         stderr: "",
         result: "",

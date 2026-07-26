@@ -1,6 +1,6 @@
 # Script Output Unification — one rendering pipeline for script steps, pre-conditions, and end-conditions
 
-Status: **Proposed (2026-07-25).** Not implemented. Interlocks with
+Status: **In progress (Phases 0–2 complete, 2026-07-25).** Interlocks with
 [`ON_ERROR_REDESIGN_PLAN.md`](./ON_ERROR_REDESIGN_PLAN.md) — see "Relationship to
 the On Error plan".
 
@@ -305,7 +305,7 @@ written twice.
 `OrderedCliHistoryEntry.phase`, `TIMELINE_ATTEMPT_KINDS.CONDITION`, and the
 three key builders. No behavior yet; typecheck is the gate.
 
-**Phase 2 — evaluator.** Structured `evaluateSuccess`/`checkResult`,
+**Phase 2 — evaluator (done 2026-07-25).** Structured `evaluateSuccess`/`checkResult`,
 `EvaluationResult` extension, `errored`. Pure unit
 tests (`src/test/endConditionEvaluator.test.ts` already covers the matching
 matrix — extend the assertions to `matchRule`).

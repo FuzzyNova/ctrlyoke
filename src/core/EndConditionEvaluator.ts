@@ -7,6 +7,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   type ScriptProperties,
   type EndConditionCompareSource,
+  type ScriptMatchRule,
 } from "../types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
@@ -23,6 +24,14 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 export interface EvaluationResult {
   /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
   passed: boolean;
+  /** The comparison rule that produced the verdict, or none when nothing matched. */
+  matchRule: ScriptMatchRule;
+  /** The value from the source that was compared against returns. */
+  actual: string;
+  /** The output axis used for the comparison, including the resolved auto axis. */
+  actualSource: "stdout" | "stderr" | "exitCode";
+  /** Whether the script could not run or evaluation itself failed. */
+  errored: boolean;
   stdout: string; // Separate stdout from script
   stderr: string; // Separate stderr from script
   result: string; // Same as stdout; used in retry prompt interpolation ({actual})
@@ -30,6 +39,13 @@ export interface EvaluationResult {
   timeout?: boolean;
   duration: number;
   exitCode?: number; // Capture exit code for better error handling
+}
+
+export interface EvaluationComparison {
+  passed: boolean;
+  matchRule: ScriptMatchRule;
+  actual: string;
+  actualSource: "stdout" | "stderr" | "exitCode";
 }
 
 export class EndConditionEvaluator {
@@ -142,6 +158,11 @@ export class EndConditionEvaluator {
         workingDirectory
       );
 
+      const actualSource = this.resolveActualSource(
+        condition.returns,
+        condition.compareSource
+      );
+
       let command: { executable: string; args: string[]; viaShell?: boolean };
 
       if (resolvedScriptPath) {
@@ -150,6 +171,10 @@ export class EndConditionEvaluator {
         if (!fileCommand) {
           return {
             passed: false,
+            matchRule: "none",
+            actual: "",
+            actualSource,
+            errored: true,
             stdout: "",
             stderr: "",
             result: "",
@@ -186,14 +211,32 @@ export class EndConditionEvaluator {
         command.viaShell ?? false
       );
 
-      const passed = this.evaluateSuccess(
+      if (result.errored) {
+        return {
+          passed: false,
+          matchRule: "none",
+          actual: "",
+          actualSource,
+          errored: true,
+          stdout: result.stdout || "",
+          stderr: result.stderr || "",
+          result: result.result,
+          error: result.error,
+          timeout: result.timeout,
+          duration: Date.now() - startTime,
+          exitCode: result.exitCode,
+        };
+      }
+
+      const comparison = this.evaluateSuccess(
         result,
         condition.returns,
         condition.compareSource
       );
 
       return {
-        passed,
+        ...comparison,
+        errored: result.errored ?? false,
         stdout: result.stdout || "",
         stderr: result.stderr || "",
         result: result.result,
@@ -205,6 +248,13 @@ export class EndConditionEvaluator {
     } catch (error) {
       return {
         passed: false,
+        matchRule: "none",
+        actual: "",
+        actualSource: this.resolveActualSource(
+          condition.returns,
+          condition.compareSource
+        ),
+        errored: true,
         stdout: "",
         stderr: "",
         result: "",
@@ -228,7 +278,7 @@ export class EndConditionEvaluator {
     },
     returns: string | undefined,
     compareSource: EndConditionCompareSource = "auto"
-  ): boolean {
+  ): EvaluationComparison {
     return this.evaluateSuccess(result, returns, compareSource);
   }
 
@@ -264,10 +314,15 @@ export class EndConditionEvaluator {
           Log.error(
             `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
           );
-          return null;
+          throw new Error(
+            `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
+          );
         }
         return canonical;
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Security:")) {
+          throw error;
+        }
         return null;
       }
     }
@@ -285,10 +340,15 @@ export class EndConditionEvaluator {
           Log.error(
             `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
           );
-          return null;
+          throw new Error(
+            `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
+          );
         }
         return canonical;
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Security:")) {
+          throw error;
+        }
         // Continue to workspace resolution
       }
     }
@@ -308,10 +368,15 @@ export class EndConditionEvaluator {
           Log.error(
             `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
           );
-          return null;
+          throw new Error(
+            `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
+          );
         }
         return canonical;
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Security:")) {
+          throw error;
+        }
         // Continue to .ctrlyoke directory
       }
 
@@ -333,10 +398,15 @@ export class EndConditionEvaluator {
           Log.error(
             `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
           );
-          return null;
+          throw new Error(
+            `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
+          );
         }
         return canonical;
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Security:")) {
+          throw error;
+        }
         // Continue to home scripts directory
       }
     }
@@ -358,10 +428,15 @@ export class EndConditionEvaluator {
         Log.error(
           `Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
         );
-        return null;
+        throw new Error(
+          `Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
+        );
       }
       return canonical;
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Security:")) {
+        throw error;
+      }
       // Script not found
     }
 
@@ -496,6 +571,7 @@ export class EndConditionEvaluator {
     stdout?: string;
     stderr?: string;
     exitCode?: number;
+    errored?: boolean;
   }> {
     // Log what we're about to execute
     Log.debug(
@@ -544,6 +620,7 @@ export class EndConditionEvaluator {
         stderr: result.stderr.trim(),
         error: result.stderr.trim() || undefined,
         exitCode: result.exitCode,
+        errored: false,
       };
     } catch (error) {
       const isTimeout =
@@ -555,6 +632,7 @@ export class EndConditionEvaluator {
         stderr: "",
         error: getErrorMessage(error),
         timeout: isTimeout,
+        errored: true,
       };
     }
   }
@@ -608,44 +686,104 @@ export class EndConditionEvaluator {
     },
     returns: string | undefined,
     compareSource: EndConditionCompareSource = "auto"
-  ): boolean {
+  ): EvaluationComparison {
+    const actualSource = this.resolveActualSource(returns, compareSource);
+
     // When returns is absent, exit code 0 = pass
     if (returns === undefined) {
-      return result.exitCode === 0;
+      return {
+        passed: result.exitCode === 0,
+        matchRule: "exitCode",
+        actual: String(result.exitCode ?? ""),
+        actualSource,
+      };
     }
     const expectedLower = returns.trim().toLowerCase();
 
     switch (compareSource) {
       case COMPARE_SOURCES.EXIT_CODE: {
         // Directly compare exit code — boolean keywords or exact integer string
-        if (expectedLower === "true") return result.exitCode === 0;
-        if (expectedLower === "false")
-          return result.exitCode !== undefined && result.exitCode !== 0;
+        if (expectedLower === "true") {
+          return {
+            passed: result.exitCode === 0,
+            matchRule: result.exitCode === 0 ? "exitCode" : "none",
+            actual: String(result.exitCode ?? ""),
+            actualSource,
+          };
+        }
+        if (expectedLower === "false") {
+          const passed =
+            result.exitCode !== undefined && result.exitCode !== 0;
+          return {
+            passed,
+            matchRule: passed ? "exitCode" : "none",
+            actual: String(result.exitCode ?? ""),
+            actualSource,
+          };
+        }
         const expectedCode = parseInt(returns.trim(), 10);
-        return !isNaN(expectedCode) && result.exitCode === expectedCode;
+        const passed = !isNaN(expectedCode) && result.exitCode === expectedCode;
+        return {
+          passed,
+          matchRule: passed ? "exitCode" : "none",
+          actual: String(result.exitCode ?? ""),
+          actualSource,
+        };
       }
 
       case COMPARE_SOURCES.STDERR:
         // Compare stderr, no exit code requirement
-        return this.checkResult(result.stderr ?? "", returns);
+        return this.checkResult(result.stderr ?? "", returns, undefined, actualSource);
 
       case COMPARE_SOURCES.STDOUT:
         // Compare stdout, require clean exit
-        return this.checkResult(result.result, returns) && result.success;
+        {
+          const comparison = this.checkResult(
+            result.result,
+            returns,
+            undefined,
+            actualSource
+          );
+          return { ...comparison, passed: comparison.passed && result.success };
+        }
 
       case COMPARE_SOURCES.AUTO:
       default: {
         // "true"/"false" use exit code; everything else compares stdout + requires clean exit
-        const checkSuccess = this.checkResult(
+        const comparison = this.checkResult(
           result.result,
           returns,
-          result.exitCode
+          result.exitCode,
+          actualSource
         );
         const isBooleanReturn =
           expectedLower === "true" || expectedLower === "false";
-        return isBooleanReturn ? checkSuccess : checkSuccess && result.success;
+        return {
+          ...comparison,
+          passed: isBooleanReturn
+            ? comparison.passed
+            : comparison.passed && result.success,
+          actual: isBooleanReturn
+            ? String(result.exitCode ?? "")
+            : comparison.actual,
+        };
       }
     }
+  }
+
+  private resolveActualSource(
+    returns: string | undefined,
+    compareSource: EndConditionCompareSource = "auto"
+  ): "stdout" | "stderr" | "exitCode" {
+    if (compareSource === COMPARE_SOURCES.STDERR) return "stderr";
+    if (compareSource === COMPARE_SOURCES.STDOUT) return "stdout";
+    if (compareSource === COMPARE_SOURCES.EXIT_CODE) return "exitCode";
+    if (returns === undefined) return "exitCode";
+
+    const expectedLower = returns.trim().toLowerCase();
+    return expectedLower === "true" || expectedLower === "false"
+      ? "exitCode"
+      : "stdout";
   }
 
   /**
@@ -660,14 +798,23 @@ export class EndConditionEvaluator {
   private checkResult(
     actualResult: string,
     expectedResult: string,
-    exitCode?: number
-  ): boolean {
+    exitCode?: number,
+    actualSource: "stdout" | "stderr" | "exitCode" = "stdout"
+  ): EvaluationComparison {
     const actual = actualResult.trim().toLowerCase();
     const expected = expectedResult.trim().toLowerCase();
+    const comparisonActual = actualResult.trim();
+
+    const matched = (passed: boolean, matchRule: ScriptMatchRule) => ({
+      passed,
+      matchRule: passed ? matchRule : ("none" as const),
+      actual: comparisonActual,
+      actualSource,
+    });
 
     // Exact match (handles explicit "true"/"false" stdout output)
     if (actual === expected) {
-      return true;
+      return matched(true, "exact");
     }
 
     // Boolean interpretation — explicit stdout output takes priority; exit code is the fallback.
@@ -687,34 +834,34 @@ export class EndConditionEvaluator {
       actual === "failed";
 
     if (expected === "true") {
-      if (isExplicitFalse) return false; // Explicit "false" stdout overrides exit code
-      if (isExplicitTrue) return true; // Explicit "true" stdout (already caught by exact match above, kept for clarity)
+      if (isExplicitFalse) return matched(false, "boolean"); // Explicit "false" stdout overrides exit code
+      if (isExplicitTrue) return matched(true, "boolean"); // Explicit "true" stdout (already caught by exact match above, kept for clarity)
       // No explicit boolean output — fall back to exit code
       if (exitCode !== undefined) {
-        return exitCode === 0;
+        return matched(exitCode === 0, "boolean");
       }
-      return false;
+      return matched(false, "boolean");
     }
 
     if (expected === "false") {
-      if (isExplicitTrue) return false; // Explicit "true" stdout overrides exit code
-      if (isExplicitFalse) return true; // Explicit "false" stdout
+      if (isExplicitTrue) return matched(false, "boolean"); // Explicit "true" stdout overrides exit code
+      if (isExplicitFalse) return matched(true, "boolean"); // Explicit "false" stdout
       // No explicit boolean output — fall back to exit code
       if (exitCode !== undefined) {
-        return exitCode !== 0;
+        return matched(exitCode !== 0, "boolean");
       }
-      return false;
+      return matched(false, "boolean");
     }
 
     // Numeric comparison
     const actualNum = parseFloat(actual);
     const expectedNum = parseFloat(expected);
     if (!isNaN(actualNum) && !isNaN(expectedNum)) {
-      return actualNum >= expectedNum; // For coverage percentages, etc.
+      return matched(actualNum >= expectedNum, "numericGte"); // For coverage percentages, etc.
     }
 
     // String contains (for complex outputs)
-    return actual.includes(expected);
+    return matched(actual.includes(expected), "substring");
   }
 
   /**

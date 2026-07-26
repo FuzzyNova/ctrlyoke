@@ -110,6 +110,10 @@ class TestEndConditionEvaluator extends EndConditionEvaluator {
 function successResult(stdout: string = "ok"): EvaluationResult {
   return {
     passed: true,
+    matchRule: "exact",
+    actual: stdout,
+    actualSource: "stdout",
+    errored: false,
     result: stdout,
     stdout,
     stderr: "",
@@ -121,6 +125,10 @@ function successResult(stdout: string = "ok"): EvaluationResult {
 function validationFailure(result: string = "bad"): EvaluationResult {
   return {
     passed: false,
+    matchRule: "none",
+    actual: result,
+    actualSource: "stdout",
+    errored: false,
     result,
     stdout: result,
     stderr: "",

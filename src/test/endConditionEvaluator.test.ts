@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as vscode from "vscode";
@@ -10,12 +11,14 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 suite("EndConditionEvaluator Tests", () => {
   let evaluator: EndConditionEvaluator;
+  let workspaceRoot: string;
 
   setup(() => {
     // Create a minimal mock PlatformAdapter for testing
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-evaluator-"));
     const mockPlatform: PlatformAdapter = {
-      getWorkspaceRoot: () => "",
-      getWorkspaceRoots: () => [],
+      getWorkspaceRoot: () => workspaceRoot,
+      getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
       getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => "",
       log: () => {},
@@ -30,6 +33,7 @@ suite("EndConditionEvaluator Tests", () => {
 
   teardown(() => {
     evaluator.dispose();
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
   });
 
   suite("parseScriptCommand - Tokenization", () => {
@@ -102,6 +106,10 @@ suite("EndConditionEvaluator Tests", () => {
   suite("buildRetryPrompt - Template Substitution", () => {
     const mockResult: EvaluationResult = {
       passed: false,
+      matchRule: "none",
+      actual: "Test stdout output",
+      actualSource: "stdout",
+      errored: false,
       stdout: "Test stdout output",
       stderr: "Test stderr error",
       result: "Test stdout output",
@@ -273,6 +281,10 @@ suite("EndConditionEvaluator Tests", () => {
 
       // Should execute successfully (echo is a valid command)
       assert.ok(result.duration > 0);
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.errored, false);
+      assert.strictEqual(result.matchRule, "exact");
+      assert.strictEqual(result.actualSource, "stdout");
     });
 
     test("should return timeout result when script takes too long", async function () {
@@ -298,6 +310,7 @@ suite("EndConditionEvaluator Tests", () => {
 
       assert.strictEqual(result.timeout, true);
       assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.errored, true);
     }).timeout(10000);
 
     test("should report correct duration", async () => {
@@ -373,6 +386,9 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "exact");
+      assert.strictEqual(result.actual, "hello");
+      assert.strictEqual(result.actualSource, "stdout");
     });
 
     test("should match boolean interpretation (1 for true)", async () => {
@@ -393,6 +409,9 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "boolean");
+      assert.strictEqual(result.actual, "1");
+      assert.strictEqual(result.actualSource, "stdout");
     });
 
     test("should match substring in output", async () => {
@@ -416,6 +435,203 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "substring");
+      assert.strictEqual(result.actualSource, "stdout");
+    });
+  });
+
+  suite("Structured comparison results", () => {
+    async function evaluate(
+      condition: Parameters<EndConditionEvaluator["evaluateCondition"]>[0]
+    ): Promise<EvaluationResult> {
+      return evaluator.evaluateCondition(condition, workspaceRoot);
+    }
+
+    test("reports exitCode matching and actual source", async () => {
+      const result = await evaluate({
+        script: 'node -e "process.exit(3)"',
+        returns: "3",
+        compareSource: "exitCode",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "exitCode");
+      assert.strictEqual(result.actual, "3");
+      assert.strictEqual(result.actualSource, "exitCode");
+      assert.strictEqual(result.errored, false);
+    });
+
+    test("reports exact stdout matching", async () => {
+      const result = await evaluate({
+        script: "echo exact-output",
+        returns: "exact-output",
+        compareSource: "stdout",
+      });
+
+      assert.strictEqual(result.matchRule, "exact");
+      assert.strictEqual(result.actual, "exact-output");
+      assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("reports boolean stdout matching", async () => {
+      const result = await evaluate({
+        script: "echo 1",
+        returns: "true",
+        compareSource: "stdout",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "boolean");
+      assert.strictEqual(result.actual, "1");
+      assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("reports numericGte stdout matching", async () => {
+      const result = await evaluate({
+        script: "echo 92",
+        returns: "80",
+        compareSource: "stdout",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "numericGte");
+      assert.strictEqual(result.actual, "92");
+      assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("reports substring stdout matching", async () => {
+      const result = await evaluate({
+        script: "echo all-ok-here",
+        returns: "ok",
+        compareSource: "stdout",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "substring");
+      assert.strictEqual(result.actual, "all-ok-here");
+      assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("reports no match when no comparison rule matches", async () => {
+      const result = await evaluate({
+        script: "echo actual-value",
+        returns: "expected-value",
+        compareSource: "stdout",
+      });
+
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.matchRule, "none");
+      assert.strictEqual(result.actual, "actual-value");
+      assert.strictEqual(result.actualSource, "stdout");
+      assert.strictEqual(result.errored, false);
+    });
+
+    test("reports stderr as the compared source", async () => {
+      const result = await evaluate({
+        script: 'node -e "console.error(\'stderr-value\')"',
+        returns: "stderr-value",
+        compareSource: "stderr",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "exact");
+      assert.strictEqual(result.actual, "stderr-value");
+      assert.strictEqual(result.actualSource, "stderr");
+    });
+
+    test("resolves auto boolean comparisons to exitCode", async () => {
+      const result = await evaluate({
+        script: 'node -e "process.exit(0)"',
+        returns: "true",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "boolean");
+      assert.strictEqual(result.actual, "0");
+      assert.strictEqual(result.actualSource, "exitCode");
+    });
+
+    test("resolves auto non-boolean comparisons to stdout", async () => {
+      const result = await evaluate({
+        script: "echo auto-output",
+        returns: "auto-output",
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "exact");
+      assert.strictEqual(result.actual, "auto-output");
+      assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("uses exitCode as the default rule when returns is absent", async () => {
+      const result = await evaluate({ script: 'node -e "process.exit(0)"' });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.matchRule, "exitCode");
+      assert.strictEqual(result.actual, "0");
+      assert.strictEqual(result.actualSource, "exitCode");
+    });
+
+    test("does not mark a clean non-zero exit as errored", async () => {
+      const result = await evaluate({
+        script: 'node -e "process.exit(7)"',
+      });
+
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.errored, false);
+      assert.strictEqual(result.matchRule, "exitCode");
+      assert.strictEqual(result.actual, "7");
+    });
+
+    test("marks spawn failures as errored", async () => {
+      const scriptPath = path.join(workspaceRoot, "spawn-failure-script");
+      fs.writeFileSync(scriptPath, "not executable");
+      try {
+        const result = await evaluate({ script: scriptPath });
+        assert.strictEqual(result.passed, false);
+        assert.strictEqual(result.errored, true);
+        assert.strictEqual(result.matchRule, "none");
+      } finally {
+        fs.rmSync(scriptPath, { force: true });
+      }
+    });
+
+    test("marks unsupported script types as errored", async function () {
+      if (process.platform === "win32") {
+        return;
+      }
+
+      const scriptPath = path.join(
+        workspaceRoot,
+        ".ctrlyoke",
+        "unsupported-condition.ps1"
+      );
+      fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+      fs.writeFileSync(scriptPath, "Write-Output unsupported");
+      try {
+        const result = await evaluate({ script: scriptPath });
+        assert.strictEqual(result.passed, false);
+        assert.strictEqual(result.errored, true);
+        assert.strictEqual(result.matchRule, "none");
+        assert.match(result.error ?? "", /Unsupported script type/);
+      } finally {
+        fs.rmSync(scriptPath, { force: true });
+      }
+    });
+
+    test("marks security-rejected paths as errored", async () => {
+      const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-outside-"));
+      const scriptPath = path.join(outsideDir, "outside.js");
+      fs.writeFileSync(scriptPath, "console.log('outside')");
+      try {
+        const result = await evaluate({ script: scriptPath });
+        assert.strictEqual(result.passed, false);
+        assert.strictEqual(result.errored, true);
+        assert.strictEqual(result.matchRule, "none");
+        assert.match(result.error ?? "", /Security:/);
+      } finally {
+        fs.rmSync(outsideDir, { recursive: true, force: true });
+      }
     });
   });
 
