@@ -531,8 +531,8 @@ suite("AntigravityLogParser", () => {
     });
   });
 
-  suite("getFinalEventsOnCompletion", () => {
-    test("reads the latest model response from the Antigravity transcript", async () => {
+  suite("rich transcript tool mapping", () => {
+    test("maps adjacent calls/results in file order and preserves identities", async () => {
       await withTemporaryHome(async (homeDir) => {
         const parser = new AntigravityLogParser();
         const sessionId = "44444444-4444-4444-4444-444444444444";
@@ -551,6 +551,10 @@ suite("AntigravityLogParser", () => {
           transcriptDir,
           "transcript_full.jsonl"
         );
+        const fixturePath = path.resolve(
+          __dirname,
+          "../../../src/test/fixtures/antigravity/transcript-rich.jsonl"
+        );
 
         fs.mkdirSync(logDir, { recursive: true });
         fs.writeFileSync(
@@ -559,40 +563,130 @@ suite("AntigravityLogParser", () => {
           "utf8"
         );
         await parser.readNewLines(logPath);
-
         fs.mkdirSync(transcriptDir, { recursive: true });
-        fs.writeFileSync(
-          transcriptPath,
-          [
-            JSON.stringify({
-              source: "USER_EXPLICIT",
-              type: "USER_INPUT",
-              status: "DONE",
-              content: "question",
-            }),
-            JSON.stringify({
-              source: "MODEL",
-              type: "PLANNER_RESPONSE",
-              status: "DONE",
-              content: "first answer",
-            }),
-            JSON.stringify({
-              source: "MODEL",
-              type: "PLANNER_RESPONSE",
-              status: "DONE",
-              created_at: "2026-07-05T12:00:01Z",
-              content: "final answer",
-            }),
-          ].join("\n"),
-          "utf8"
+        fs.copyFileSync(fixturePath, transcriptPath);
+
+        const rawEvents = await parser.readNewLines(logPath);
+        const output = parser.extractResponse(rawEvents);
+        const types = output.events.map((event) => event.type);
+
+        assert.ok(types.includes(CLI_EVENT_TYPES.THINKING));
+        assert.ok(types.includes(CLI_EVENT_TYPES.BASH_COMMAND));
+        assert.ok(types.includes(CLI_EVENT_TYPES.FILE_READ));
+        assert.ok(types.includes(CLI_EVENT_TYPES.FILE_WRITE));
+        assert.ok(types.includes(CLI_EVENT_TYPES.FILE_EDIT));
+        assert.ok(types.includes(CLI_EVENT_TYPES.MCP_TOOL_CALL));
+        assert.ok(types.includes(CLI_EVENT_TYPES.WEB_SEARCH));
+        assert.ok(types.includes(CLI_EVENT_TYPES.COMPACTION));
+        assert.ok(
+          types.filter((type) => type === CLI_EVENT_TYPES.TOOL_CALL).length >= 3
         );
 
-        const events = await parser.getFinalEventsOnCompletion(logPath);
+        const command = output.events.find(
+          (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+        );
+        assert.strictEqual(
+          (command?.data as { command: string }).command,
+          "npm test -- --runInBand"
+        );
+        assert.strictEqual(
+          (command?.data as { exitCode?: number }).exitCode,
+          1
+        );
+        assert.strictEqual(
+          (command?.data as { status?: string }).status,
+          "failed"
+        );
 
-        assert.strictEqual(events.length, 1);
-        assert.strictEqual(events[0].type, "response.text");
-        assert.strictEqual(events[0].line, "final answer");
-        assert.strictEqual(events[0].sessionId, sessionId);
+        const read = output.events.find(
+          (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+        );
+        assert.strictEqual(
+          (read?.data as { path: string }).path,
+          "C:/workspace/src/index.ts"
+        );
+        assert.ok(
+          (read?.data as { content?: string }).content?.includes("first line")
+        );
+
+        const write = output.events.find(
+          (event) => event.type === CLI_EVENT_TYPES.FILE_WRITE
+        );
+        assert.strictEqual(
+          (write?.data as { content: string }).content,
+          "created content\n"
+        );
+
+        const edit = output.events.find(
+          (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
+        );
+        assert.strictEqual(
+          (edit?.data as { structuredPatch?: unknown[] }).structuredPatch
+            ?.length,
+          1
+        );
+
+        const mcp = output.events.find(
+          (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+        );
+        assert.deepStrictEqual(
+          {
+            server: (mcp?.data as { server: string }).server,
+            tool: (mcp?.data as { tool: string }).tool,
+          },
+          { server: "ctrlyoke", tool: "queue_status" }
+        );
+        const search = output.events.find(
+          (event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH
+        );
+        assert.strictEqual(
+          (search?.data as { query: string }).query,
+          "Antigravity transcript parser"
+        );
+        assert.strictEqual(
+          (search?.data as { summary?: string }).summary,
+          "Summary text"
+        );
+
+        const launch = output.events.find(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+            (event.data as { name?: string }).name === "run_command"
+        );
+        assert.strictEqual(
+          (launch?.data as { id?: string }).id,
+          "session/task-1"
+        );
+        const completion = output.events.find(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+            (event.data as { name?: string }).name === "background_task"
+        );
+        assert.strictEqual(
+          (completion?.data as { id?: string }).id,
+          "session/task-1"
+        );
+        assert.strictEqual(
+          (completion?.data as { result?: { output?: string } }).result?.output,
+          'Task id "session/task-1" finished with result: failed (exit code 1)'
+        );
+        assert.strictEqual(
+          (completion?.data as { result?: { success?: boolean } }).result
+            ?.success,
+          false
+        );
+        const unmatched = output.events.find(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+            (event.data as { name?: string }).name === "unknown_tool"
+        );
+        assert.deepStrictEqual(
+          (unmatched?.data as { parameters?: Record<string, unknown> })
+            .parameters,
+          { value: 42 }
+        );
+
+        assert.deepStrictEqual(await parser.readNewLines(logPath), []);
       });
     });
   });

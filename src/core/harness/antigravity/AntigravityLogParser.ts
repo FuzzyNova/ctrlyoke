@@ -23,12 +23,14 @@ import {
 import { getAntigravityContextWindowSize } from "../../../utils/ModelConstants";
 import {
   AntigravityTranscriptEntry,
+  AntigravityPlannerToolCall,
   isAntigravityTranscriptEntry,
 } from "./AntigravityTranscriptTypes";
 import {
   AntigravityTranscriptReader,
   AntigravityTranscriptRecord,
 } from "./AntigravityTranscriptReader";
+import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -38,6 +40,7 @@ interface AntigravityLogEvent extends BaseCliEvent {
     | "response.text"
     | "user_input"
     | "transcript.planner"
+    | "transcript.tool"
     | "transcript.checkpoint"
     | "transcript.error";
   line: string;
@@ -47,6 +50,9 @@ interface AntigravityLogEvent extends BaseCliEvent {
   transcriptEntry?: AntigravityTranscriptEntry;
   thinking?: string;
   plannerToolCalls?: AntigravityTranscriptEntry["tool_calls"];
+  toolCall?: AntigravityPlannerToolCall;
+  resultEntry?: AntigravityTranscriptEntry;
+  taskId?: string;
   model?: string;
   contextWindowUsedTokens?: number;
   contextWindowSize?: number;
@@ -55,13 +61,18 @@ interface AntigravityLogEvent extends BaseCliEvent {
 
 const SESSION_ID_REGEX =
   /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
-const TRANSCRIPT_READ_ATTEMPTS = 8;
-const TRANSCRIPT_READ_DELAY_MS = 150;
+
+interface PendingPlannerToolCall {
+  call: AntigravityPlannerToolCall;
+  plannerEventId: string;
+  timestamp: number;
+}
 
 export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedSessionId?: string;
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
+  private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     // The transcript is polled after the Go log so a session discovered on this
@@ -140,25 +151,29 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
-    const text = events
-      .map((event) =>
-        event.type === "response.text"
-          ? String((event as AntigravityLogEvent).line ?? "")
-          : ""
+    const outputEvents = events.flatMap((event) =>
+      this.extractStructuredEventsFromEvent(event)
+    );
+    const unmatchedEvents = this.pendingPlannerToolCalls.map((pending) =>
+      AntigravityToolEventBuilder.buildUnmatchedCall(
+        pending.call,
+        pending.timestamp,
+        pending.plannerEventId
       )
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-
-    const outputEvents: CliEvent[] = text
-      ? [
-          {
-            type: CLI_EVENT_TYPES.TEXT,
-            timestamp: Date.now(),
-            data: { text } as TextData,
-          },
-        ]
-      : [];
+    );
+    for (const unmatched of unmatchedEvents) {
+      const insertAt = outputEvents.findIndex(
+        (event) =>
+          event.timestamp !== undefined &&
+          unmatched.timestamp !== undefined &&
+          event.timestamp > unmatched.timestamp
+      );
+      if (insertAt < 0) {
+        outputEvents.push(unmatched);
+      } else {
+        outputEvents.splice(insertAt, 0, unmatched);
+      }
+    }
 
     const usage = this.extractTokenUsage(events);
 
@@ -279,6 +294,19 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return structuredEvents;
     }
 
+    if (
+      antigravityEvent.type === "transcript.tool" &&
+      antigravityEvent.resultEntry
+    ) {
+      return AntigravityToolEventBuilder.build({
+        call: antigravityEvent.toolCall,
+        result: antigravityEvent.resultEntry,
+        timestamp,
+        eventId: antigravityEvent.eventId,
+        taskId: antigravityEvent.taskId,
+      });
+    }
+
     if (antigravityEvent.type === "transcript.checkpoint") {
       return [
         {
@@ -312,37 +340,6 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     };
   }
 
-  override async getFinalEventsOnCompletion(
-    _logPath: string
-  ): Promise<BaseCliEvent[]> {
-    const sessionId =
-      this.cachedSessionId ?? this.cachedLastConversationsSessionId;
-    if (!sessionId) {
-      return [];
-    }
-
-    const transcriptPath = this.getAuthoritativeTranscriptPath(sessionId);
-    if (!transcriptPath) {
-      return [];
-    }
-
-    for (let attempt = 0; attempt < TRANSCRIPT_READ_ATTEMPTS; attempt += 1) {
-      const event = this.readLatestResponseFromTranscript(
-        transcriptPath,
-        sessionId
-      );
-      if (event) {
-        return [event];
-      }
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, TRANSCRIPT_READ_DELAY_MS)
-      );
-    }
-
-    return [];
-  }
-
   formatStatistics(metadata: BaseCliEvent): string {
     const parts = this.buildCommonStatisticsParts(metadata, 8, "...");
     return parts.join(" | ");
@@ -371,9 +368,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return [];
     }
     const records = await this.transcriptReader.readRecords(transcriptPath);
-    return records.flatMap((record) =>
-      this.mapTranscriptRecord(record, sessionId)
-    );
+    const events: AntigravityLogEvent[] = [];
+    for (const record of records) {
+      events.push(...this.mapTranscriptRecord(record, sessionId));
+    }
+    return events;
   }
 
   private mapTranscriptRecord(
@@ -381,7 +380,15 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     sessionId: string
   ): AntigravityLogEvent[] {
     const { entry, eventId } = record;
-    if (entry.status !== "DONE") {
+    const isBackgroundLaunch =
+      entry.source === "MODEL" &&
+      entry.type === "RUN_COMMAND" &&
+      entry.status === "RUNNING";
+    const isGenericRunning =
+      entry.source === "MODEL" &&
+      entry.type === "GENERIC" &&
+      entry.status === "RUNNING";
+    if (entry.status !== "DONE" && !isBackgroundLaunch && !isGenericRunning) {
       return [];
     }
 
@@ -405,6 +412,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       const text =
         typeof entry.content === "string" ? entry.content.trim() : "";
       const thinking = entry.thinking?.trim() ?? "";
+      const plannerToolCalls = entry.tool_calls ?? [];
+      for (const call of plannerToolCalls) {
+        this.pendingPlannerToolCalls.push({
+          call,
+          plannerEventId: eventId,
+          timestamp,
+        });
+      }
       if (!text && !thinking && !entry.tool_calls?.length) {
         return [];
       }
@@ -413,7 +428,33 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           type: "transcript.planner",
           line: text,
           thinking: thinking || undefined,
-          plannerToolCalls: entry.tool_calls,
+          plannerToolCalls,
+          ...base,
+        },
+      ];
+    }
+
+    if (entry.source === "MODEL" && this.isToolResultEntry(entry)) {
+      const call = this.takePlannerCallForResult(entry);
+      return [
+        {
+          type: "transcript.tool",
+          line: typeof entry.content === "string" ? entry.content : "",
+          toolCall: call?.call,
+          resultEntry: entry,
+          taskId: this.extractTaskId(entry),
+          ...base,
+        },
+      ];
+    }
+
+    if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
+      return [
+        {
+          type: "transcript.tool",
+          line: typeof entry.content === "string" ? entry.content : "",
+          resultEntry: entry,
+          taskId: this.extractTaskId(entry),
           ...base,
         },
       ];
@@ -448,6 +489,89 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     return [];
   }
 
+  private isToolResultEntry(entry: AntigravityTranscriptEntry): boolean {
+    return [
+      "RUN_COMMAND",
+      "VIEW_FILE",
+      "CODE_ACTION",
+      "GENERIC",
+      "LIST_DIRECTORY",
+      "GREP_SEARCH",
+      "MCP_TOOL",
+      "LIST_RESOURCES",
+      "READ_RESOURCE",
+      "SEARCH_WEB",
+    ].includes(entry.type);
+  }
+
+  private takePlannerCallForResult(
+    result: AntigravityTranscriptEntry
+  ): PendingPlannerToolCall | undefined {
+    const index = this.pendingPlannerToolCalls.findIndex((pending) =>
+      this.toolCallMatchesResult(pending.call, result)
+    );
+    if (index < 0) {
+      return undefined;
+    }
+    return this.pendingPlannerToolCalls.splice(index, 1)[0];
+  }
+
+  private toolCallMatchesResult(
+    call: AntigravityPlannerToolCall,
+    result: AntigravityTranscriptEntry
+  ): boolean {
+    const name = call.name.toLowerCase();
+    switch (result.type) {
+      case "RUN_COMMAND":
+        return name === "run_command";
+      case "VIEW_FILE":
+        return name === "view_file";
+      case "CODE_ACTION":
+        return [
+          "write_to_file",
+          "replace_file_content",
+          "multi_replace_file_content",
+        ].includes(name);
+      case "MCP_TOOL":
+        return name === "call_mcp_tool";
+      case "LIST_RESOURCES":
+        return name === "list_resources";
+      case "READ_RESOURCE":
+        return name === "read_resource";
+      case "SEARCH_WEB":
+        return name === "search_web";
+      case "LIST_DIRECTORY":
+        return name === "list_dir";
+      case "GREP_SEARCH":
+        return name === "grep_search";
+      case "GENERIC":
+        return ![
+          "run_command",
+          "view_file",
+          "write_to_file",
+          "replace_file_content",
+          "multi_replace_file_content",
+          "list_resources",
+          "read_resource",
+          "search_web",
+          "list_dir",
+          "grep_search",
+        ].includes(name);
+      default:
+        return false;
+    }
+  }
+
+  private extractTaskId(entry: AntigravityTranscriptEntry): string | undefined {
+    const content = typeof entry.content === "string" ? entry.content : "";
+    const launch = content.match(/background task with task id:\s*([^\s.]+)/i);
+    if (launch) {
+      return launch[1];
+    }
+    const completion = content.match(/Task id\s+"([^"]+)"/i);
+    return completion?.[1];
+  }
+
   private getTranscriptTimestamp(entry: AntigravityTranscriptEntry): number {
     if (entry.created_at) {
       const timestamp = new Date(entry.created_at).getTime();
@@ -459,7 +583,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
-   * Classify a synthetic `user_input` event (see `readNewUserSteerEvents`).
+   * Classify a synthetic `user_input` event from the incremental transcript.
    * The transcript's completion/resume marker is a `SYSTEM`/`SYSTEM_MESSAGE`
    * entry (see `hasPendingBackgroundWork`), never `USER_EXPLICIT`/`USER_INPUT`,
    * so the only distinction needed here is against ctrlyoke's own injected prompt.
@@ -657,56 +781,6 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private extractSessionIdFromLine(line: string): string | undefined {
     const match = line.match(SESSION_ID_REGEX);
     return match?.[1];
-  }
-
-  private readLatestResponseFromTranscript(
-    transcriptPath: string,
-    sessionId: string
-  ): AntigravityLogEvent | undefined {
-    try {
-      if (!fs.existsSync(transcriptPath)) {
-        return undefined;
-      }
-
-      const content = fs.readFileSync(transcriptPath, "utf8");
-      let latest: AntigravityLogEvent | undefined;
-
-      for (const rawLine of content.split(/\r?\n/)) {
-        const line = rawLine.trim();
-        if (!line) {
-          continue;
-        }
-
-        const parsed: unknown = JSON.parse(line);
-        if (!isAntigravityTranscriptEntry(parsed)) {
-          continue;
-        }
-        const entry = parsed;
-        if (
-          entry.source !== "MODEL" ||
-          entry.type !== "PLANNER_RESPONSE" ||
-          entry.status !== "DONE" ||
-          typeof entry.content !== "string" ||
-          entry.content.trim().length === 0
-        ) {
-          continue;
-        }
-
-        latest = {
-          type: "response.text",
-          line: entry.content.trim(),
-          sessionId,
-          timestamp: entry.created_at
-            ? new Date(entry.created_at).getTime()
-            : Date.now(),
-          model: this.resolvedModel || undefined,
-        };
-      }
-
-      return latest;
-    } catch {
-      return undefined;
-    }
   }
 
   private extractTokenUsage(events: BaseCliEvent[]): TokenUsage | undefined {
