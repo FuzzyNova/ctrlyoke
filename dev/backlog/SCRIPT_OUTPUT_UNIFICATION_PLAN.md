@@ -130,12 +130,15 @@ without the rule, a reader assumes a bug.
 
 ### Evaluator returns structure, not a boolean
 
-`evaluateSuccess` (`:613`) and `checkResult` (`:672`) currently return `boolean`.
+`evaluateSuccess` (`:601`) and `checkResult` (`:660`) currently return `boolean`.
 They return `{ passed: boolean; matchRule: ScriptMatchRule; actual: string;
-actualSource }` instead, and `EvaluationResult` (`:23`) gains those fields. The
-static `evaluateExitCodeResult` (`:52`, used for interactive PTY script steps)
-gets the same treatment. No behavior change — the branches already exist, they
-just stop being collapsed to a bit.
+actualSource }` instead, and `EvaluationResult` (`:23`) gains those fields. No
+behavior change — the branches already exist, they just stop being collapsed to
+a bit.
+
+> The static `evaluateExitCodeResult` this plan originally also named was
+> deleted as dead code in `5dc5674e`; interactive PTY script steps now evaluate
+> through the same path. Nothing to port.
 
 Add `errored: boolean` derived today from `result.error || result.timeout ||
 !ranAtAll`. This plan only _displays_ it; the On Error plan later routes it.
@@ -303,8 +306,8 @@ written twice.
 `OrderedCliHistoryEntry.phase`, `TIMELINE_ATTEMPT_KINDS.CONDITION`, and the
 three key builders. No behavior yet; typecheck is the gate.
 
-**Phase 2 — evaluator.** Structured `evaluateSuccess`/`checkResult`/
-`evaluateExitCodeResult`, `EvaluationResult` extension, `errored`. Pure unit
+**Phase 2 — evaluator.** Structured `evaluateSuccess`/`checkResult`,
+`EvaluationResult` extension, `errored`. Pure unit
 tests (`src/test/endConditionEvaluator.test.ts` already covers the matching
 matrix — extend the assertions to `matchRule`).
 
