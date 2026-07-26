@@ -10,7 +10,14 @@ interface TranscriptReadState {
   pendingText: string;
   decoder: StringDecoder;
   prefix: string;
+  nextLineNumber: number;
   identity?: string;
+}
+
+export interface AntigravityTranscriptRecord {
+  entry: AntigravityTranscriptEntry;
+  eventId: string;
+  lineNumber: number;
 }
 
 /**
@@ -24,6 +31,13 @@ export class AntigravityTranscriptReader {
   async readEntries(
     transcriptPath: string
   ): Promise<AntigravityTranscriptEntry[]> {
+    const records = await this.readRecords(transcriptPath);
+    return records.map((record) => record.entry);
+  }
+
+  async readRecords(
+    transcriptPath: string
+  ): Promise<AntigravityTranscriptRecord[]> {
     let stats: fs.Stats;
     try {
       stats = await fs.promises.stat(transcriptPath);
@@ -82,10 +96,16 @@ export class AntigravityTranscriptReader {
 
     const lines = state.pendingText.split(/\r?\n/);
     const hasTrailingNewline = /\r?\n$/.test(state.pendingText);
-    state.pendingText = hasTrailingNewline ? "" : (lines.pop() ?? "");
+    if (hasTrailingNewline) {
+      lines.pop();
+      state.pendingText = "";
+    } else {
+      state.pendingText = lines.pop() ?? "";
+    }
 
-    const entries: AntigravityTranscriptEntry[] = [];
+    const records: AntigravityTranscriptRecord[] = [];
     for (const rawLine of lines) {
+      const lineNumber = state.nextLineNumber++;
       const line = rawLine.trim();
       if (!line) {
         continue;
@@ -93,13 +113,17 @@ export class AntigravityTranscriptReader {
       try {
         const parsed: unknown = JSON.parse(line);
         if (isAntigravityTranscriptEntry(parsed)) {
-          entries.push(parsed);
+          records.push({
+            entry: parsed,
+            eventId: `${transcriptPath}:${state.identity ?? "unknown"}:${lineNumber}`,
+            lineNumber,
+          });
         }
       } catch {
         // Ignore malformed complete lines; a partial final line is retained.
       }
     }
-    return entries;
+    return records;
   }
 
   reset(transcriptPath?: string): void {
@@ -116,6 +140,7 @@ export class AntigravityTranscriptReader {
       pendingText: "",
       decoder: new StringDecoder("utf8"),
       prefix: "",
+      nextLineNumber: 0,
     };
   }
 

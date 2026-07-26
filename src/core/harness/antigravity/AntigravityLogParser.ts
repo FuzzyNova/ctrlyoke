@@ -9,10 +9,13 @@ import {
 } from "../shared/interfaces/ILogParser";
 import {
   CLI_EVENT_TYPES,
+  COMPACTION_TRIGGERS,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import {
   CliEvent,
+  CompactionData,
+  ThinkingBlock,
   TextData,
   TokenUsage,
   UniversalCliOutput,
@@ -22,7 +25,10 @@ import {
   AntigravityTranscriptEntry,
   isAntigravityTranscriptEntry,
 } from "./AntigravityTranscriptTypes";
-import { AntigravityTranscriptReader } from "./AntigravityTranscriptReader";
+import {
+  AntigravityTranscriptReader,
+  AntigravityTranscriptRecord,
+} from "./AntigravityTranscriptReader";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -30,10 +36,17 @@ interface AntigravityLogEvent extends BaseCliEvent {
     | "response.completed"
     | "log.line"
     | "response.text"
-    | "user_input";
+    | "user_input"
+    | "transcript.planner"
+    | "transcript.checkpoint"
+    | "transcript.error";
   line: string;
   sessionId?: string;
   timestamp?: number;
+  eventId?: string;
+  transcriptEntry?: AntigravityTranscriptEntry;
+  thinking?: string;
+  plannerToolCalls?: AntigravityTranscriptEntry["tool_calls"];
   model?: string;
   contextWindowUsedTokens?: number;
   contextWindowSize?: number;
@@ -51,14 +64,12 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private readonly transcriptReader = new AntigravityTranscriptReader();
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
-    // Independent of the Go server log below (may have nothing new to report
-    // this poll even when the user just typed a follow-up) — read first so
-    // every path (including the early-return / catch below) still surfaces it.
-    const userSteerEvents = await this.readNewUserSteerEvents();
-
+    // The transcript is polled after the Go log so a session discovered on this
+    // read can seed the authoritative transcript path; early-return and catch
+    // paths below still poll it when the Go log has nothing new to report.
     try {
       if (!fs.existsSync(filePath)) {
-        return userSteerEvents;
+        return await this.readNewTranscriptEvents();
       }
 
       const stats = fs.statSync(filePath);
@@ -67,7 +78,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         this.lastReadPosition = 0;
       }
       if (currentSize === this.lastReadPosition) {
-        return userSteerEvents;
+        return await this.readNewTranscriptEvents();
       }
 
       const buffer = Buffer.alloc(currentSize - this.lastReadPosition);
@@ -121,9 +132,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         });
       }
 
-      return [...events, ...userSteerEvents];
+      const transcriptEvents = await this.readNewTranscriptEvents();
+      return [...events, ...transcriptEvents];
     } catch {
-      return userSteerEvents;
+      return await this.readNewTranscriptEvents();
     }
   }
 
@@ -235,10 +247,52 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
-    if (event.type === "response.text") {
+    if (event.type === "response.text" || event.type === "transcript.error") {
       return String((event as AntigravityLogEvent).line ?? "");
     }
     return undefined;
+  }
+
+  override extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const antigravityEvent = event as AntigravityLogEvent;
+    const timestamp = antigravityEvent.timestamp ?? Date.now();
+
+    if (antigravityEvent.type === "transcript.planner") {
+      const structuredEvents: CliEvent[] = [];
+      if (antigravityEvent.line) {
+        structuredEvents.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text: antigravityEvent.line } as TextData,
+        });
+      }
+      if (antigravityEvent.thinking) {
+        structuredEvents.push({
+          type: CLI_EVENT_TYPES.THINKING,
+          timestamp,
+          data: {
+            text: antigravityEvent.thinking,
+            timestamp,
+          } as ThinkingBlock,
+        });
+      }
+      return structuredEvents;
+    }
+
+    if (antigravityEvent.type === "transcript.checkpoint") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.COMPACTION,
+          timestamp,
+          data: {
+            trigger: COMPACTION_TRIGGERS.AUTO,
+            summary: antigravityEvent.line || undefined,
+          } as CompactionData,
+        },
+      ];
+    }
+
+    return super.extractStructuredEventsFromEvent(event);
   }
 
   override extractLiveContextWindow(
@@ -295,11 +349,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
-   * Genuine human follow-ups typed into the live TUI also land in the
-   * **transcript** (never the tailed cli log — see `hasPendingBackgroundWork`
-   * above), as `source: "USER_EXPLICIT"`, `type: "USER_INPUT"` entries. Read
-   * incrementally by byte offset so repeated polls emit each append-only entry
-   * exactly once, including entries split across partial writes.
+   * Transcript entries are read in append/file order and mapped once to
+   * provider-local events. The raw entry and stable event ID remain attached
+   * for the later tool-result pairing phase.
    *
    * Only reached when `readNewLines` runs, which is itself only triggered by
    * `fs.watch` activity on the tailed cli log (see class doc — this parser
@@ -308,7 +360,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * instantly; a dedicated transcript poll would close that gap but hasn't
    * been needed for the confirmed background-task-hold scenario.
    */
-  private async readNewUserSteerEvents(): Promise<AntigravityLogEvent[]> {
+  private async readNewTranscriptEvents(): Promise<AntigravityLogEvent[]> {
     const sessionId =
       this.cachedSessionId ?? this.cachedLastConversationsSessionId;
     if (!sessionId) {
@@ -318,30 +370,92 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     if (!transcriptPath) {
       return [];
     }
-    const entries = await this.transcriptReader.readEntries(transcriptPath);
-    return entries.flatMap((entry) => {
-      if (
-        entry.source !== "USER_EXPLICIT" ||
-        entry.type !== "USER_INPUT" ||
-        typeof entry.content !== "string"
-      ) {
+    const records = await this.transcriptReader.readRecords(transcriptPath);
+    return records.flatMap((record) =>
+      this.mapTranscriptRecord(record, sessionId)
+    );
+  }
+
+  private mapTranscriptRecord(
+    record: AntigravityTranscriptRecord,
+    sessionId: string
+  ): AntigravityLogEvent[] {
+    const { entry, eventId } = record;
+    if (entry.status !== "DONE") {
+      return [];
+    }
+
+    const timestamp = this.getTranscriptTimestamp(entry);
+    const base = {
+      sessionId,
+      timestamp,
+      eventId,
+      transcriptEntry: entry,
+    };
+
+    if (entry.source === "USER_EXPLICIT" && entry.type === "USER_INPUT") {
+      if (typeof entry.content !== "string") {
         return [];
       }
       const text = this.unwrapUserRequest(entry.content);
-      if (!text) {
+      return text ? [{ type: "user_input", line: text, ...base }] : [];
+    }
+
+    if (entry.source === "MODEL" && entry.type === "PLANNER_RESPONSE") {
+      const text =
+        typeof entry.content === "string" ? entry.content.trim() : "";
+      const thinking = entry.thinking?.trim() ?? "";
+      if (!text && !thinking && !entry.tool_calls?.length) {
         return [];
       }
       return [
         {
-          type: "user_input" as const,
+          type: "transcript.planner",
           line: text,
-          sessionId,
-          timestamp: entry.created_at
-            ? new Date(entry.created_at).getTime()
-            : Date.now(),
+          thinking: thinking || undefined,
+          plannerToolCalls: entry.tool_calls,
+          ...base,
         },
       ];
-    });
+    }
+
+    if (entry.source === "SYSTEM" && entry.type === "CHECKPOINT") {
+      return [
+        {
+          type: "transcript.checkpoint",
+          line: typeof entry.content === "string" ? entry.content : "",
+          ...base,
+        },
+      ];
+    }
+
+    if (
+      entry.source === "SYSTEM" &&
+      (entry.type === "ERROR_MESSAGE" || entry.type.includes("CANCEL"))
+    ) {
+      if (typeof entry.content !== "string" || !entry.content.trim()) {
+        return [];
+      }
+      return [
+        {
+          type: "transcript.error",
+          line: entry.content.trim(),
+          ...base,
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  private getTranscriptTimestamp(entry: AntigravityTranscriptEntry): number {
+    if (entry.created_at) {
+      const timestamp = new Date(entry.created_at).getTime();
+      if (Number.isFinite(timestamp)) {
+        return timestamp;
+      }
+    }
+    return Date.now();
   }
 
   /**

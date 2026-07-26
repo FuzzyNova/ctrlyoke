@@ -6,6 +6,7 @@ import { suite, test } from "mocha";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { AntigravityTranscriptReader } from "../../core/harness/antigravity/AntigravityTranscriptReader";
 import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
+import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 
 async function withTemporaryHome<T>(
   run: (homeDir: string) => Promise<T> | T
@@ -301,6 +302,162 @@ suite("AntigravityLogParser", () => {
       } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
+    });
+  });
+
+  suite("transcript mapping", () => {
+    test("maps text, thinking, user messages, and checkpoints in arrival order", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const sessionId = "77777777-7777-7777-7777-777777777777";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          sessionId,
+          ".system_generated",
+          "logs"
+        );
+        const logPath = path.join(logDir, "cli-20260705_120000.log");
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        const transcriptPath = path.join(
+          transcriptDir,
+          "transcript_full.jsonl"
+        );
+        fs.writeFileSync(
+          transcriptPath,
+          [
+            {
+              source: "USER_EXPLICIT",
+              type: "USER_INPUT",
+              status: "DONE",
+              content:
+                "<USER_REQUEST>\nFollow instructions in request.prompt.md\n</USER_REQUEST>",
+            },
+            {
+              source: "USER_EXPLICIT",
+              type: "USER_INPUT",
+              status: "DONE",
+              content: "please also inspect the output",
+            },
+            {
+              step_index: 8,
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              content: "I will inspect the output.",
+              thinking: "First I need to inspect the output carefully.",
+              tool_calls: [
+                {
+                  name: "view_file",
+                  args: { AbsolutePath: "C:/workspace/output.txt" },
+                },
+              ],
+            },
+            {
+              step_index: 2,
+              source: "SYSTEM",
+              type: "CHECKPOINT",
+              status: "DONE",
+              content: "{{ CHECKPOINT 0 }}",
+            },
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "RUNNING",
+              content: "must be ignored",
+            },
+            {
+              source: "MODEL",
+              type: "UNRECOGNIZED_VARIANT",
+              status: "DONE",
+              content: "must also be ignored",
+            },
+          ]
+            .map((entry) => JSON.stringify(entry))
+            .join("\n") + "\n",
+          "utf8"
+        );
+
+        const events = await parser.readNewLines(logPath);
+        assert.deepStrictEqual(
+          events.map((event) => event.type),
+          [
+            "user_input",
+            "user_input",
+            "transcript.planner",
+            "transcript.checkpoint",
+          ]
+        );
+        assert.strictEqual(
+          parser.classifyUserEvent(events[0], {
+            dispatchedPromptText: "Follow instructions in request.prompt.md",
+          }),
+          "injected-prompt"
+        );
+        assert.strictEqual(
+          parser.classifyUserEvent(events[1], {
+            dispatchedPromptText: "Follow instructions in request.prompt.md",
+          }),
+          "human-steer"
+        );
+
+        const planner = events[2] as BaseCliEvent & {
+          eventId: string;
+          plannerToolCalls: Array<{ name: string }>;
+        };
+        assert.ok(planner.eventId.includes("transcript_full.jsonl"));
+        assert.strictEqual(planner.plannerToolCalls[0].name, "view_file");
+
+        const mappedPlanner = parser.extractStructuredEventsFromEvent(
+          events[2]
+        );
+        assert.deepStrictEqual(
+          mappedPlanner.map((event) => event.type),
+          [CLI_EVENT_TYPES.TEXT, CLI_EVENT_TYPES.THINKING]
+        );
+        assert.strictEqual(
+          (mappedPlanner[0].data as { text: string }).text,
+          "I will inspect the output."
+        );
+        assert.strictEqual(
+          (mappedPlanner[1].data as { text: string }).text,
+          "First I need to inspect the output carefully."
+        );
+        const checkpoint = parser.extractStructuredEventsFromEvent(events[3]);
+        assert.strictEqual(checkpoint[0].type, CLI_EVENT_TYPES.COMPACTION);
+        assert.strictEqual(
+          (checkpoint[0].data as { summary?: string }).summary,
+          "{{ CHECKPOINT 0 }}"
+        );
+
+        assert.deepStrictEqual(await parser.readNewLines(logPath), []);
+        fs.appendFileSync(
+          transcriptPath,
+          JSON.stringify({
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            content: "A later response",
+          }) + "\n",
+          "utf8"
+        );
+        const appended = await parser.readNewLines(logPath);
+        assert.strictEqual(appended.length, 1);
+        assert.notStrictEqual(
+          (appended[0] as BaseCliEvent & { eventId: string }).eventId,
+          planner.eventId
+        );
+      });
     });
   });
 
