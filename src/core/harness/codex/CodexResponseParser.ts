@@ -3,11 +3,18 @@ import {
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
-import { UniversalCliOutput, CliEvent } from "../../../types/CliOutputTypes";
+import {
+  UniversalCliOutput,
+  CliEvent,
+  FileDeleteData,
+  FileEditData,
+  FileWriteData,
+} from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   HARNESS_IDS,
+  type FileOperationStatus,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
@@ -253,19 +260,61 @@ export class CodexResponseParser
       );
     }
 
-    // File change started → FILE_EDIT with INITIATED status (one event per file)
+    // File change started → INITIATED file event (one per file, typed by kind)
     if (item.type === "file_change" && item.changes) {
-      for (const change of item.changes) {
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: change.path,
-            status: OPERATION_STATUS.INITIATED,
-          },
-        });
-      }
+      events.push(
+        ...this.buildFileChangeEvents(item.changes, OPERATION_STATUS.INITIATED)
+      );
     }
+  }
+
+  /**
+   * Map `file_change` entries to the file event type their `kind` describes.
+   *
+   * Codex reports adds, updates, and deletes through the same `file_change`
+   * item, so classifying every one as FILE_EDIT mislabels them in the timeline
+   * *and* breaks undo: FILE_EDIT undo reverse-patches a `structuredPatch` that a
+   * create or delete never has, while FILE_WRITE undo deletes the created file
+   * and FILE_DELETE undo restores from the workspace snapshot.
+   *
+   * `FileWriteData.content` is left empty because the JSONL stream carries only
+   * `{path, kind}`; `CodexCliProvider.augmentParsedOutput()` fills it in from the
+   * session log afterwards.
+   */
+  private buildFileChangeEvents(
+    changes: FileUpdateChange[],
+    status: FileOperationStatus,
+    success?: boolean
+  ): CliEvent[] {
+    return changes.map((change) => {
+      const base = {
+        path: change.path,
+        status,
+        ...(success !== undefined && { success }),
+      };
+      switch (change.kind) {
+        case "add":
+          return {
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            timestamp: Date.now(),
+            data: { ...base, content: "" } as FileWriteData,
+          };
+        case "delete":
+          return {
+            type: CLI_EVENT_TYPES.FILE_DELETE,
+            timestamp: Date.now(),
+            data: base as FileDeleteData,
+          };
+        default:
+          // Note: Codex CLI doesn't provide the patch body in JSONL events —
+          // augmentParsedOutput() attaches it from the session log.
+          return {
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp: Date.now(),
+            data: base as FileEditData,
+          };
+      }
+    });
   }
 
   /**
@@ -335,23 +384,16 @@ export class CodexResponseParser
       });
     }
 
-    // File change → FILE_EDIT event (one event per file)
+    // File change → terminal file event (one per file, typed by kind)
     if (item.type === "file_change" && item.changes) {
-      for (const change of item.changes) {
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: change.path,
-            // Note: Codex CLI doesn't provide oldContent/newContent in events
-            status:
-              item.status === "completed"
-                ? OPERATION_STATUS.COMPLETED
-                : OPERATION_STATUS.FAILED,
-            success: item.status === "completed",
-          },
-        });
-      }
+      const succeeded = item.status === "completed";
+      events.push(
+        ...this.buildFileChangeEvents(
+          item.changes,
+          succeeded ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+          succeeded
+        )
+      );
     }
 
     // MCP tool call → MCP_TOOL_CALL event

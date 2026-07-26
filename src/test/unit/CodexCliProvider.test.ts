@@ -4,6 +4,13 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
+import type {
+  CliEvent,
+  FileEditData,
+  FileWriteData,
+  UniversalCliOutput,
+} from "../../types/CliOutputTypes";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -313,6 +320,291 @@ suite("CodexCliProvider", () => {
         );
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
+    });
+  });
+
+  suite("augmentParsedOutput file edit diffs", () => {
+    const SESSION_ID = "019f9e95-e555-7581-8607-548358026bb6";
+    const EDITED_PATH = "src/temp.txt";
+
+    /** A `patch_apply_end` log line for one file, in Codex's session-log shape. */
+    function patchApplyEnd(change: Record<string, unknown>): string {
+      return JSON.stringify({
+        timestamp: "2026-07-26T13:21:04.938Z",
+        type: "event_msg",
+        payload: {
+          type: "patch_apply_end",
+          call_id: "call_abc",
+          success: true,
+          status: "completed",
+          changes: { [EDITED_PATH]: change },
+        },
+      });
+    }
+
+    /** A headless file event as `CodexResponseParser` emits it: path only, no body. */
+    function fileEvent(type: string, status: string): CliEvent {
+      return {
+        type,
+        timestamp: 1,
+        data: {
+          path: EDITED_PATH,
+          status,
+          ...(type === CLI_EVENT_TYPES.FILE_WRITE && { content: "" }),
+        },
+      } as CliEvent;
+    }
+
+    const fileEditEvent = (status: string) =>
+      fileEvent(CLI_EVENT_TYPES.FILE_EDIT, status);
+
+    function outputWith(events: CliEvent[]): UniversalCliOutput {
+      return {
+        events,
+        metadata: {
+          sessionId: SESSION_ID,
+          harness: HARNESS_IDS.CODEX_CLI,
+        },
+      } as UniversalCliOutput;
+    }
+
+    /**
+     * Write a Codex session log at the location `findLogFileBySessionId`
+     * searches, under a throwaway home directory.
+     */
+    async function withSessionLog<T>(
+      lines: string[],
+      run: () => Promise<T>
+    ): Promise<T> {
+      const tempHome = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-codex-home-")
+      );
+      const previousHome = process.env.HOME;
+      const previousUserProfile = process.env.USERPROFILE;
+      process.env.HOME = tempHome;
+      process.env.USERPROFILE = tempHome;
+
+      const sessionDir = path.join(
+        tempHome,
+        ".codex",
+        "sessions",
+        "2026",
+        "07",
+        "26"
+      );
+      await fs.mkdir(sessionDir, { recursive: true });
+      await fs.writeFile(
+        path.join(
+          sessionDir,
+          `rollout-2026-07-26T08-20-51-${SESSION_ID}.jsonl`
+        ),
+        lines.join("\n") + "\n",
+        "utf8"
+      );
+
+      try {
+        return await run();
+      } finally {
+        process.env.HOME = previousHome;
+        process.env.USERPROFILE = previousUserProfile;
+        await fs.rm(tempHome, { recursive: true, force: true });
+      }
+    }
+
+    function patchOf(output: UniversalCliOutput, index: number) {
+      return (output.events[index].data as FileEditData).structuredPatch;
+    }
+
+    test("restores update hunks from the session log's unified_diff", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [
+          patchApplyEnd({
+            type: "update",
+            unified_diff:
+              "@@ -482,2 +482,3 @@\n context\n-old line\n+new line\n+added line\n",
+          }),
+        ],
+        async () => {
+          const result = await provider.augmentParsedOutput(
+            outputWith([fileEditEvent("completed")])
+          );
+
+          assert.deepStrictEqual(patchOf(result, 0), [
+            {
+              oldStart: 482,
+              oldLines: 2,
+              newStart: 482,
+              newLines: 3,
+              lines: [" context", "-old line", "+new line", "+added line"],
+            },
+          ]);
+        }
+      );
+    });
+
+    test("restores written content on a FILE_WRITE add", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [patchApplyEnd({ type: "add", content: "one\ntwo\n" })],
+        async () => {
+          const result = await provider.augmentParsedOutput(
+            outputWith([fileEvent(CLI_EVENT_TYPES.FILE_WRITE, "completed")])
+          );
+
+          assert.strictEqual(
+            (result.events[0].data as FileWriteData).content,
+            "one\ntwo\n"
+          );
+        }
+      );
+    });
+
+    test("a delete consumes its slot so later changes stay aligned", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [
+          patchApplyEnd({ type: "delete", content: "gone\n" }),
+          patchApplyEnd({
+            type: "update",
+            unified_diff: "@@ -1,1 +1,1 @@\n-back\n+again\n",
+          }),
+        ],
+        async () => {
+          // FILE_DELETE carries no body, but must still advance the path's
+          // cursor or the following update would receive the delete's entry.
+          const result = await provider.augmentParsedOutput(
+            outputWith([
+              fileEvent(CLI_EVENT_TYPES.FILE_DELETE, "completed"),
+              fileEditEvent("completed"),
+            ])
+          );
+
+          assert.strictEqual(patchOf(result, 0), undefined);
+          assert.deepStrictEqual(patchOf(result, 1)?.[0].lines, [
+            "-back",
+            "+again",
+          ]);
+        }
+      );
+    });
+
+    test("pairs repeated changes to one path positionally", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [
+          patchApplyEnd({
+            type: "update",
+            unified_diff: "@@ -1,1 +1,1 @@\n-first\n+second\n",
+          }),
+          patchApplyEnd({
+            type: "update",
+            unified_diff: "@@ -5,1 +5,1 @@\n-third\n+fourth\n",
+          }),
+        ],
+        async () => {
+          // An INITIATED event describes the same change as the COMPLETED event
+          // that follows it, so it must not consume a queue slot of its own.
+          const result = await provider.augmentParsedOutput(
+            outputWith([
+              fileEditEvent("initiated"),
+              fileEditEvent("completed"),
+              fileEditEvent("initiated"),
+              fileEditEvent("completed"),
+            ])
+          );
+
+          assert.deepStrictEqual(patchOf(result, 0), patchOf(result, 1));
+          assert.deepStrictEqual(patchOf(result, 2), patchOf(result, 3));
+          assert.strictEqual(patchOf(result, 0)?.[0].lines[0], "-first");
+          assert.strictEqual(patchOf(result, 2)?.[0].lines[0], "-third");
+        }
+      );
+    });
+
+    test("matches an absolute event path against a relative logged path", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [
+          patchApplyEnd({
+            type: "update",
+            unified_diff: "@@ -1,1 +1,1 @@\n-only\n+only2\n",
+          }),
+        ],
+        async () => {
+          const absoluteEvent = {
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp: 1,
+            data: {
+              path: path.join(os.tmpdir(), "repo", EDITED_PATH),
+              status: "completed",
+            } as FileEditData,
+          } as CliEvent;
+
+          const result = await provider.augmentParsedOutput(
+            outputWith([absoluteEvent])
+          );
+
+          assert.strictEqual(patchOf(result, 0)?.[0].lines[0], "-only");
+        }
+      );
+    });
+
+    test("leaves an event that already carries hunks untouched", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [
+          patchApplyEnd({
+            type: "update",
+            unified_diff: "@@ -1,1 +1,1 @@\n-log\n+log2\n",
+          }),
+        ],
+        async () => {
+          const existing = [
+            {
+              oldStart: 9,
+              oldLines: 1,
+              newStart: 9,
+              newLines: 1,
+              lines: ["-kept", "+kept2"],
+            },
+          ];
+          const event = {
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp: 1,
+            data: {
+              path: EDITED_PATH,
+              status: "completed",
+              structuredPatch: existing,
+            } as FileEditData,
+          } as CliEvent;
+
+          const result = await provider.augmentParsedOutput(
+            outputWith([event])
+          );
+
+          assert.deepStrictEqual(patchOf(result, 0), existing);
+        }
+      );
+    });
+
+    test("returns the output unchanged when the log records no patches", async () => {
+      const provider = new CodexCliProvider();
+      await withSessionLog(
+        [
+          JSON.stringify({
+            type: "event_msg",
+            payload: { type: "task_start" },
+          }),
+        ],
+        async () => {
+          const output = outputWith([fileEditEvent("completed")]);
+          const result = await provider.augmentParsedOutput(output);
+
+          assert.strictEqual(result.events, output.events);
+          assert.strictEqual(patchOf(result, 0), undefined);
+        }
+      );
     });
   });
 });

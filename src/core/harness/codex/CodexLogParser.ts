@@ -50,6 +50,26 @@ export interface CodexLogTokenUsage {
 }
 
 /**
+ * One `apply_patch` result read back from a Codex session log, in the order
+ * `event_msg:patch_apply_end` reported it.
+ *
+ * Consumed by `CodexCliProvider.augmentParsedOutput()` to restore edit bodies on
+ * headless file events: Codex's `--json` stdout summarises every `file_change`
+ * item as `{path, kind}` only, so the headless response parser has no hunks or
+ * content to attach. The session log keeps them, so headless output can be
+ * brought up to parity with the interactive (log-parsed) path.
+ */
+export interface CodexLoggedFileChange {
+  /** Path exactly as Codex reported it (absolute on Windows, repo-relative elsewhere). */
+  path: string;
+  /** Codex's change kind; `update` is the only one carrying a real diff. */
+  kind: "add" | "update" | "delete";
+  hunks: UnifiedDiffHunk[];
+  /** Whole-file content — present for `add`/`delete`, absent for `update`. */
+  content?: string;
+}
+
+/**
  * Session metadata (session_meta event)
  */
 interface CodexSessionMetaPayload {
@@ -1288,80 +1308,62 @@ export class CodexLogParser extends BaseLogParser {
     logPath: string
   ): CodexLogTokenUsage | undefined {
     try {
-      if (!fs.existsSync(logPath)) {
-        return undefined;
-      }
-
-      const content = fs.readFileSync(logPath, "utf-8");
-      const lines = content.split("\n");
-
       let result: CodexLogTokenUsage | undefined;
       let model: string | undefined;
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          continue;
+      for (const event of CodexLogParser.readLogEvents(logPath)) {
+        if (event.type === "session_meta" && event.payload?.model) {
+          model = event.payload.model as string;
         }
 
-        try {
-          const event = JSON.parse(trimmed) as CodexProviderEvent;
+        if (event.type === "turn_context" && event.payload?.model && !model) {
+          model = event.payload.model as string;
+        }
 
-          if (event.type === "session_meta" && event.payload?.model) {
-            model = event.payload.model as string;
+        if (
+          event.type === "event_msg" &&
+          event.payload?.type === "token_count"
+        ) {
+          const info = event.payload.info;
+          if (!info) {
+            continue;
           }
 
-          if (event.type === "turn_context" && event.payload?.model && !model) {
-            model = event.payload.model as string;
+          let inputTokens = 0;
+          let outputTokens = 0;
+          let cachedInputTokens = 0;
+          let reasoningOutputTokens = 0;
+          let contextWindowUsedTokens: number | undefined;
+
+          if (info.total_token_usage) {
+            const total = info.total_token_usage;
+            inputTokens = total.input_tokens || 0;
+            outputTokens = total.output_tokens || 0;
+            cachedInputTokens = total.cached_input_tokens || 0;
+            reasoningOutputTokens = total.reasoning_output_tokens || 0;
           }
 
-          if (
-            event.type === "event_msg" &&
-            event.payload?.type === "token_count"
-          ) {
-            const info = event.payload.info;
-            if (!info) {
-              continue;
-            }
-
-            let inputTokens = 0;
-            let outputTokens = 0;
-            let cachedInputTokens = 0;
-            let reasoningOutputTokens = 0;
-            let contextWindowUsedTokens: number | undefined;
-
-            if (info.total_token_usage) {
-              const total = info.total_token_usage;
-              inputTokens = total.input_tokens || 0;
-              outputTokens = total.output_tokens || 0;
-              cachedInputTokens = total.cached_input_tokens || 0;
-              reasoningOutputTokens = total.reasoning_output_tokens || 0;
-            }
-
-            if (info.last_token_usage) {
-              // Codex reports cached tokens as a subset of input, so use
-              // total_tokens rather than adding cached input again.
-              const last = info.last_token_usage;
-              contextWindowUsedTokens =
-                typeof last.total_tokens === "number"
-                  ? last.total_tokens
-                  : (last.input_tokens || 0) + (last.output_tokens || 0);
-            }
-
-            // Keep processing — later events overwrite with cumulative totals
-            result = {
-              inputTokens,
-              outputTokens,
-              totalTokens: inputTokens + outputTokens,
-              cachedInputTokens,
-              reasoningOutputTokens,
-              contextWindowUsedTokens,
-              contextWindowSize:
-                info.model_context_window ?? getCodexContextWindowSize(model),
-            };
+          if (info.last_token_usage) {
+            // Codex reports cached tokens as a subset of input, so use
+            // total_tokens rather than adding cached input again.
+            const last = info.last_token_usage;
+            contextWindowUsedTokens =
+              typeof last.total_tokens === "number"
+                ? last.total_tokens
+                : (last.input_tokens || 0) + (last.output_tokens || 0);
           }
-        } catch {
-          // Skip invalid JSON lines
+
+          // Keep processing — later events overwrite with cumulative totals
+          result = {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            cachedInputTokens,
+            reasoningOutputTokens,
+            contextWindowUsedTokens,
+            contextWindowSize:
+              info.model_context_window ?? getCodexContextWindowSize(model),
+          };
         }
       }
 
@@ -1372,6 +1374,128 @@ export class CodexLogParser extends BaseLogParser {
       );
       return undefined;
     }
+  }
+
+  /**
+   * Extract every applied `apply_patch` change from a Codex session log, in the
+   * order Codex applied them.
+   *
+   * Headless Codex (`codex exec --json`) reports a `file_change` item as
+   * `{path, kind}` with no body, so {@link CodexResponseParser} cannot attach
+   * hunks or content. The same run's session log records
+   * `event_msg:patch_apply_end` with the real change per file — a `unified_diff`
+   * for updates, full `content` for adds and deletes — which is what the
+   * interactive path already renders.
+   *
+   * The result is a flat chronological list rather than a path-keyed map because
+   * one path can be changed several times in a turn (add → update → delete); the
+   * caller pairs the Nth entry for a path with that path's Nth file event.
+   *
+   * @param logPath - Absolute path to the Codex session log file
+   * @returns Applied changes in log order; empty when the log has none
+   */
+  static extractLoggedFileChanges(logPath: string): CodexLoggedFileChange[] {
+    const changesApplied: CodexLoggedFileChange[] = [];
+    try {
+      for (const event of CodexLogParser.readLogEvents(logPath)) {
+        if (
+          event.type !== "event_msg" ||
+          event.payload?.type !== "patch_apply_end"
+        ) {
+          continue;
+        }
+        const changes = event.payload.changes as
+          | Record<string, Record<string, any>>
+          | undefined;
+        if (!changes) {
+          continue;
+        }
+        for (const [changePath, change] of Object.entries(changes)) {
+          const hunks = CodexLogParser.patchApplyChangeToHunks(change);
+          if (!hunks || hunks.length === 0) {
+            continue;
+          }
+          changesApplied.push({
+            path: changePath,
+            kind:
+              change.type === "add" || change.type === "delete"
+                ? change.type
+                : "update",
+            hunks,
+            ...(typeof change.content === "string" && {
+              content: change.content,
+            }),
+          });
+        }
+      }
+    } catch (error) {
+      Log.debug(
+        `[CodexLogParser] Failed to extract applied patches from log: ${error}`
+      );
+    }
+    return changesApplied;
+  }
+
+  /**
+   * Convert one `patch_apply_end` change entry into diff hunks.
+   *
+   * Codex uses two shapes: `update` carries a `unified_diff` with real offsets,
+   * while `add`/`delete` carry the whole file `content` and no diff. The
+   * whole-file cases are synthesized into a single all-added / all-removed hunk
+   * matching the shape the interactive path already produces for apply_patch.
+   */
+  private static patchApplyChangeToHunks(
+    change: Record<string, any> | undefined
+  ): UnifiedDiffHunk[] | undefined {
+    if (!change) {
+      return undefined;
+    }
+    if (typeof change.unified_diff === "string") {
+      return CliResponseParser.parseUnifiedDiff(change.unified_diff);
+    }
+    if (typeof change.content !== "string") {
+      return undefined;
+    }
+
+    const lines = change.content.split("\n");
+    // A trailing newline yields a final empty element that is not a real line.
+    if (lines.length > 0 && lines[lines.length - 1] === "") {
+      lines.pop();
+    }
+    if (lines.length === 0) {
+      return undefined;
+    }
+
+    const isDelete = change.type === "delete";
+    return [
+      {
+        oldStart: 1,
+        oldLines: isDelete ? lines.length : 0,
+        newStart: 1,
+        newLines: isDelete ? 0 : lines.length,
+        lines: lines.map((line: string) => (isDelete ? "-" : "+") + line),
+      },
+    ];
+  }
+
+  /** Read a Codex session log into parsed events, skipping unparseable lines. */
+  private static readLogEvents(logPath: string): CodexProviderEvent[] {
+    if (!fs.existsSync(logPath)) {
+      return [];
+    }
+    const events: CodexProviderEvent[] = [];
+    for (const line of fs.readFileSync(logPath, "utf-8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      try {
+        events.push(JSON.parse(trimmed) as CodexProviderEvent);
+      } catch {
+        // Skip invalid JSON lines
+      }
+    }
+    return events;
   }
 
   /**
