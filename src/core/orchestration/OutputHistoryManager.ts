@@ -399,7 +399,8 @@ export class OutputHistoryManager {
       stderr: string;
       exitCode?: number;
     },
-    definitionContext?: DefinitionRevisionContext
+    definitionContext?: DefinitionRevisionContext,
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -411,6 +412,7 @@ export class OutputHistoryManager {
         target,
         runIndex,
         attemptIndex,
+        phase,
         definitionRevision: definitionContext?.definitionRevision ?? 1,
         payload: scriptOutput,
       },

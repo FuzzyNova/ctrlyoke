@@ -3,7 +3,6 @@ import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptStep,
   ScriptStep,
-  ScriptRuntimeOutput,
   WorkflowStep,
   isScriptStep,
   DynamicQueueConfig,
@@ -19,9 +18,10 @@ import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
-  STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  EXECUTION_PHASES,
+  SCRIPT_OUTPUT_SOURCES,
   FAILURE_KINDS,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
@@ -62,6 +62,7 @@ import {
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import { ScriptExecutionReporter } from "./orchestration/ScriptExecutionReporter";
 
 export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
@@ -216,13 +217,18 @@ type PromptFailureDisposition =
  */
 export class WorkflowExecutor {
   private isWaitingForResponse: boolean = false;
+  private readonly scriptExecutionReporter: ScriptExecutionReporter;
 
   constructor(
     private readonly promptQueue: PromptQueue,
     private readonly endConditionHandler: EndConditionHandler,
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly platform: PlatformAdapter
-  ) {}
+  ) {
+    this.scriptExecutionReporter = new ScriptExecutionReporter(
+      endConditionEvaluator
+    );
+  }
 
   private getRuntime() {
     return this.promptQueue.getRuntimeStateMachine();
@@ -855,64 +861,6 @@ export class WorkflowExecutor {
     const signedStepIndex = this.getSignedStepIndex(target);
     const timestampMs = Date.now();
 
-    // Emit an initial streaming placeholder so the CliOutput panel appears immediately.
-    const initCliOutput = {
-      prompt: step.script,
-      response: "",
-      elapsed: 0,
-      isStreaming: true,
-      source: STEP_TYPES.SCRIPT,
-      timestampMs,
-      cliCommand: step.script,
-      workingDirectory: context.workspaceFolderPath,
-      attemptIndex,
-      runIndex,
-    };
-    this.dispatchDashboardOutput(
-      context,
-      target,
-      signedStepIndex,
-      initCliOutput
-    );
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager.startStreamingExecutionOutput(
-        context.historyFilePath,
-        this.toOutputExecutionTarget(target),
-        initCliOutput,
-        context.getDefinitionRevisionContext?.(),
-        { kind: "script", startReason: "initial", prompt: step.script }
-      );
-    }
-
-    // Accumulate output chunks so interactive mode has output to save to history.
-    const outputChunks: string[] = [];
-
-    // Streaming callback — normalize chunks before they enter history or the
-    // runtime cache. The terminal itself still receives the raw PTY bytes.
-    const onStreamChunk = (chunk: string): void => {
-      const sanitizedChunk = sanitizeTerminalOutput(chunk);
-      outputChunks.push(sanitizedChunk);
-      if (context.historyFilePath && context.outputHistoryManager) {
-        void context.outputHistoryManager.appendStreamingChunk(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          runIndex,
-          attemptIndex,
-          sanitizedChunk
-        );
-      }
-      if (!context.dashboardProvider) return;
-      if (signedStepIndex >= 0) {
-        context.dashboardProvider.updateCliStreamingChunk(
-          signedStepIndex,
-          chunk
-        );
-      }
-      // Note: finalStep streaming chunks reuse the same slot; updateFinalStepStreamingChunk
-      // is not exposed on IDashboardSink but finalStep script steps are uncommon, so we
-      // only stream to the queue slot for now.
-    };
-
     // ─── Interactive mode: run inside a PTY so the user can provide input ────
     const resolvedExecutionMode = PropertyResolver.resolveExecutionMode(
       step,
@@ -928,53 +876,46 @@ export class WorkflowExecutor {
           `running headless: ${stepLabel}`
       );
     }
+    const resolvedProperties = {
+      script: step.script,
+      compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
+      returns: step.returns ?? "0",
+      timeout,
+    };
+    const outputChunks: string[] = [];
     let ptyExitCode: number | undefined;
     let ptyTimedOut = false;
 
-    if (isInteractive && context.spawnScriptPty) {
-      Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
-      ptyExitCode = await context.spawnScriptPty({
-        stepName: stepLabel,
-        stepIndex: signedStepIndex,
-        script: step.script,
-        cwd: context.workspaceFolderPath ?? process.cwd(),
-        onOutput: onStreamChunk,
-        timeout,
-        onTimeout: () => {
-          ptyTimedOut = true;
-        },
-      });
-    }
-
-    // ─── Headless mode (or PTY unavailable): run as child process ────────────
-    // Always run evaluateCondition so we get the structured result (stdout/stderr,
-    // passed flag, duration) needed for the final CliOutput and history entry.
-    // In interactive mode we skip this since the PTY already ran the script.
-    let evalResult:
-      | Awaited<ReturnType<typeof this.endConditionEvaluator.evaluateCondition>>
-      | undefined;
-
-    if (!isInteractive || ptyExitCode === undefined) {
-      evalResult = await this.endConditionEvaluator.evaluateCondition(
-        {
+    const evaluation = async (onOutput: (chunk: string) => void) => {
+      if (isInteractive && context.spawnScriptPty) {
+        Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
+        ptyExitCode = await context.spawnScriptPty({
+          stepName: stepLabel,
+          stepIndex: signedStepIndex,
           script: step.script,
-          compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
-          returns: step.returns ?? "0",
-          timeout: timeout,
-        },
-        context.workspaceFolderPath,
-        this.promptQueue.getWorkflowFile().vars,
-        onStreamChunk
-      );
-    }
+          cwd: context.workspaceFolderPath ?? process.cwd(),
+          onOutput: (chunk) => {
+            outputChunks.push(sanitizeTerminalOutput(chunk));
+            onOutput(chunk);
+          },
+          timeout,
+          onTimeout: () => {
+            ptyTimedOut = true;
+          },
+        });
+      }
 
-    // For interactive mode, evaluate the collected PTY output with the same
-    // comparison rules as headless script execution.
-    if (evalResult === undefined) {
+      if (!isInteractive || ptyExitCode === undefined) {
+        return this.endConditionEvaluator.evaluateCondition(
+          resolvedProperties,
+          context.workspaceFolderPath,
+          this.promptQueue.getWorkflowFile().vars,
+          onOutput
+        );
+      }
+
       const exitCode = ptyExitCode ?? 1;
       const stdout = sanitizeTerminalOutput(outputChunks.join(""));
-      const compareSource = step.compareSource ?? COMPARE_SOURCES.EXIT_CODE;
-      const returns = step.returns ?? "0";
       const comparison = this.endConditionEvaluator.evaluateResult(
         {
           result: stdout,
@@ -983,10 +924,10 @@ export class WorkflowExecutor {
           success: exitCode === 0,
           exitCode,
         },
-        returns,
-        compareSource
+        resolvedProperties.returns,
+        resolvedProperties.compareSource
       );
-      evalResult = {
+      return {
         ...comparison,
         errored: ptyTimedOut,
         matchRule: ptyTimedOut ? "none" : comparison.matchRule,
@@ -997,56 +938,31 @@ export class WorkflowExecutor {
         exitCode,
         timeout: ptyTimedOut,
       };
-    }
-
-    const succeeded = evalResult.passed;
-
-    // Persist lossless script data to the timeline before any dependent prompt can use it.
-    const scriptRuntimeOutput: ScriptRuntimeOutput = {
-      command: step.script,
-      stdout: evalResult.stdout,
-      stderr: evalResult.stderr,
-      exitCode: evalResult.exitCode,
-    };
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager.recordScriptExecution(
-        context.historyFilePath,
-        this.toOutputExecutionTarget(target),
-        runIndex,
-        attemptIndex,
-        scriptRuntimeOutput,
-        context.getDefinitionRevisionContext?.()
-      );
-    }
-
-    // Build final output text (headless: from evalResult; interactive: empty since xterm shows it)
-    const rawOutput = [evalResult.stdout, evalResult.stderr]
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-    const outputText = sanitizeTerminalOutput(rawOutput);
-
-    const finalCliOutput = {
-      prompt: step.script,
-      response: outputText,
-      elapsed: evalResult.duration / 1000,
-      isStreaming: false,
-      source: STEP_TYPES.SCRIPT,
-      exitCode: evalResult.exitCode ?? (succeeded ? 0 : 1),
-      timestampMs,
-      cliCommand: step.script,
-      workingDirectory: context.workspaceFolderPath,
-      attemptIndex,
-      runIndex,
     };
 
-    await this.finalizeAndPersistOutput(
+    const report = await this.scriptExecutionReporter.report({
       context,
+      source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+      properties: resolvedProperties,
+      phase: EXECUTION_PHASES.PROMPT,
       target,
       signedStepIndex,
-      finalCliOutput,
-      "script step output"
-    );
+      runIndex,
+      attemptIndex,
+      timestampMs,
+      onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
+      onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+      statusLabel: "Script step",
+      timeoutMs: timeout,
+      vars: this.promptQueue.getWorkflowFile().vars,
+      evaluate: evaluation,
+    });
+
+    const evalResult = report.evaluationResult;
+    const scriptRuntimeOutput = report.scriptRuntimeOutput;
+    const outputText = report.outputText;
+    const succeeded = evalResult.passed;
+
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
         responseText: outputText,
@@ -1054,15 +970,6 @@ export class WorkflowExecutor {
       });
     } else {
       this.promptQueue.storeFinalStepResponseText(target.loopIndex, outputText);
-    }
-
-    if (evalResult.timeout) {
-      await this.trackStatusMessage(
-        context,
-        target,
-        `Script step timed out after ${timeout}ms`,
-        STATUS_MESSAGE_SEVERITY.ERROR
-      );
     }
 
     const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
