@@ -210,7 +210,8 @@ export interface ExecutionProperties {
   toolPermissions?: ToolPermissionsOverride | null;
 
   /**
-   * Harness/session failure policy.
+   * Internal-error policy for every phase of the step: pre-condition,
+   * harness/prompt, end-condition, and script execution.
    * - object: override the workflow/settings policy
    * - null: explicitly disable inherited errorBehavior
    * - undefined: inherit from workflow/settings
@@ -458,6 +459,8 @@ export interface ScriptStep extends ScriptProperties {
   executionMode?: ExecutionMode;
   /** When false, the step remains in the workflow but never executes. */
   enabled?: boolean;
+  /** Internal-error policy; undefined inherits the workflow policy. */
+  errorBehavior?: ErrorBehavior | null;
   /** What to do when the script passes. Default: "continue". */
   onPass?: ScriptStepAction;
   /** What to do when the script fails. Default: "stopWorkflow". */

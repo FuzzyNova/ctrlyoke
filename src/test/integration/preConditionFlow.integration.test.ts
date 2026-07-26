@@ -33,7 +33,11 @@ import {
 const MARKER_FILE = "pre-ran.txt";
 const PASSING_SCRIPT = "pre-pass.js";
 const FAILING_SCRIPT = "pre-fail.js";
+const ERROR_SCRIPT = "pre-error.txt";
+const RETRY_GATE_SCRIPT = "pre-retry.js";
+const SHARED_BUDGET_GATE_SCRIPT = "pre-shared-budget.js";
 const WRITE_MARKER = `require('fs').writeFileSync(require('path').join(__dirname, '${MARKER_FILE}'), 'ran');`;
+const APPEND_MARKER = `const fs = require('fs'); const p = require('path').join(__dirname, '${MARKER_FILE}'); const before = fs.existsSync(p) ? fs.readFileSync(p, 'utf8').length : 0; fs.appendFileSync(p, 'x');`;
 
 suite("Workflow-level preCondition full flow (load -> run)", function () {
   // Each test executes a full workflow incl. a node subprocess for the gate.
@@ -52,12 +56,26 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       path.join(workspace, FAILING_SCRIPT),
       `${WRITE_MARKER}\nprocess.exit(1);\n`
     );
+    await fs.writeFile(path.join(workspace, ERROR_SCRIPT), "not executable\n");
+    await fs.writeFile(
+      path.join(workspace, RETRY_GATE_SCRIPT),
+      `${APPEND_MARKER}\nif (before === 0) setTimeout(() => {}, 250);\n`
+    );
+    await fs.writeFile(
+      path.join(workspace, SHARED_BUDGET_GATE_SCRIPT),
+      `${APPEND_MARKER}\nif (before === 1) setTimeout(() => {}, 2000);\n`
+    );
   });
 
   teardown(async () => {
     await harness?.dispose();
     harness = undefined;
-    await fs.rm(workspace, { recursive: true, force: true });
+    await fs.rm(workspace, {
+      recursive: true,
+      force: true,
+      maxRetries: 30,
+      retryDelay: 100,
+    });
   });
 
   async function writeWorkflow(
@@ -77,6 +95,15 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async function markerLength(): Promise<number> {
+    try {
+      return (await fs.readFile(path.join(workspace, MARKER_FILE), "utf8"))
+        .length;
+    } catch {
+      return 0;
     }
   }
 
@@ -220,6 +247,100 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.ok(promptOutput, "the prompt must retain its own CLI entry");
     assert.strictEqual(promptOutput.phase, undefined);
     assert.notStrictEqual(preOutput, promptOutput);
+  });
+
+  test("errored preCondition with onError stop halts before the prompt", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: ERROR_SCRIPT,
+        },
+        errorBehavior: { onError: "stop" },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.deepStrictEqual(harness.integration.sentPrompts, []);
+    assert.strictEqual(
+      harness.instance.promptQueue.getState().status,
+      EXECUTION_STATES.ERROR
+    );
+  });
+
+  test("errored preCondition with onError retry re-runs the gate before the prompt", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: RETRY_GATE_SCRIPT,
+          timeout: 50,
+        },
+        errorBehavior: { onError: "retry", maxRetries: 1 },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(await markerLength(), 2);
+    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+  });
+
+  test("errored preCondition with onError continue runs the prompt and warns", async () => {
+    harness = createExecutionHarness(workspace);
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: { script: ERROR_SCRIPT },
+        errorBehavior: { onError: "continue" },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+    const eventsPath = (
+      await findFiles(
+        path.join(workspace, ".ctrlyoke", ".runs"),
+        "events.jsonl"
+      )
+    )[0];
+    const warning = (await fs.readFile(eventsPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .find(
+        (event) =>
+          event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED &&
+          event.payload.statusMessage.message.includes(
+            "Pre-condition could not run"
+          )
+      );
+    assert.ok(warning);
+    assert.strictEqual(warning.payload.statusMessage.severity, "warning");
+  });
+
+  test("gate errors and harness failures share one retry budget", async () => {
+    harness = createExecutionHarness(workspace);
+    harness.integration.harnessErrorFailure = true;
+    harness.integration.onSend = async () => {
+      (harness!.integration as any).lastFailureReason = "mock harness failure";
+      return { success: false };
+    };
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        preCondition: {
+          script: SHARED_BUDGET_GATE_SCRIPT,
+          timeout: 500,
+        },
+        errorBehavior: { onError: "retry", maxRetries: 1 },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.strictEqual(await markerLength(), 2);
+    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+    assert.strictEqual(
+      harness.instance.promptQueue.getState().status,
+      EXECUTION_STATES.ERROR
+    );
   });
 
   test("ephemeral flow: new workflow -> set preCondition -> run gates the first prompt", async () => {

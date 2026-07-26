@@ -63,6 +63,8 @@ export interface ScriptExecutionReportRequest {
   timestampMs: number;
   onPass: ConditionAction;
   onFail: ConditionAction;
+  /** Action to display/use when the evaluator itself could not run. */
+  actionForErrored?: ConditionAction;
   actionDetail?: string | ((result: EvaluationResult) => string | undefined);
   statusLabel?: string;
   timeoutMs?: number;
@@ -254,8 +256,11 @@ export class ScriptExecutionReporter {
       exitCode: result.exitCode,
       outcome: result.errored ? "errored" : result.passed ? "passed" : "failed",
       matchRule: result.matchRule,
-      action:
-        result.errored || !result.passed ? request.onFail : request.onPass,
+      action: result.errored
+        ? (request.actionForErrored ?? request.onFail)
+        : !result.passed
+          ? request.onFail
+          : request.onPass,
       actionDetail:
         typeof request.actionDetail === "function"
           ? request.actionDetail(result)

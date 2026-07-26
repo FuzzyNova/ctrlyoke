@@ -10,6 +10,7 @@ import {
   EXECUTION_STATES,
   HarnessId,
   type ScriptVerdict,
+  type ErrorBehavior,
   type WorkflowAttemptTarget,
   type PreConditionAction,
 } from "../types/CtrlYokeTypes";
@@ -24,6 +25,7 @@ import {
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
   FAILURE_KINDS,
+  type ConditionAction,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -32,7 +34,10 @@ import {
   SendRetryPromptCallback,
   type RetryContext,
 } from "./EndConditionHandler";
-import { EndConditionEvaluator } from "./EndConditionEvaluator";
+import {
+  EndConditionEvaluator,
+  type EvaluationResult,
+} from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
 import {
   PropertyResolver,
@@ -202,6 +207,22 @@ type PromptFailureDisposition =
   | { outcome: "retry" }
   | { outcome: "continue" }
   | { outcome: "stop" };
+
+type PhaseDisposition = {
+  outcome: "retry" | "continue" | "stop";
+  nextAttemptIndex?: number;
+};
+
+function canRetryErrorBehavior(
+  errorBehavior: ErrorBehavior,
+  attemptIndex: number
+): boolean {
+  return (
+    errorBehavior.onError === "retry" &&
+    (errorBehavior.maxRetries === -1 ||
+      attemptIndex < (errorBehavior.maxRetries ?? 0))
+  );
+}
 
 /**
  * Drives the sequential execution loop for a ctrlyoke workflow.
@@ -476,131 +497,177 @@ export class WorkflowExecutor {
 
     let prompt: PromptStep = step as PromptStep;
 
-    // Evaluate pre-condition gate before running the AI prompt
-    const workflowFileForPre = this.promptQueue.getWorkflowFile();
-    const resolvedPreCondition =
-      prompt.preCondition !== undefined
-        ? prompt.preCondition
-        : (workflowFileForPre.preCondition ?? null);
-
-    if (
-      resolvedPreCondition !== null &&
-      resolvedPreCondition !== undefined &&
-      resolvedPreCondition.script?.trim()
-    ) {
-      await this.trackStatusMessage(
-        context,
-        target,
-        `Evaluating pre-condition: Running ${this.getConditionScriptName(
-          resolvedPreCondition.script
-        )}`
-      );
-
-      const preReport = await this.scriptExecutionReporter.report({
-        context,
-        source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-        properties: {
-          script: resolvedPreCondition.script,
-          compareSource:
-            resolvedPreCondition.compareSource ?? COMPARE_SOURCES.AUTO,
-          returns: resolvedPreCondition.returns,
-          timeout: resolvedPreCondition.timeout,
-        },
-        phase: EXECUTION_PHASES.PRE_CONDITION,
-        target: this.toOutputExecutionTarget(target),
-        signedStepIndex: this.getSignedStepIndex(target),
-        runIndex: this.getRunIndexForTarget(context, target),
-        attemptIndex: 0,
-        timestampMs: Date.now(),
-        onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
-        onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
-        statusLabel: "Pre-condition",
-        timeoutMs: resolvedPreCondition.timeout,
-        vars: workflowFileForPre.vars,
-        emitStatus: false,
-      });
-      const preResult = preReport.evaluationResult;
-      const preAction: PreConditionAction = preResult.passed
-        ? (resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
-        : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
-
-      Log.debug(
-        `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
-      );
-
-      await this.trackConditionResult(
-        context,
-        target,
-        "Pre-condition",
-        preReport.verdict,
-        STATUS_MESSAGE_SEVERITY.WARNING
-      );
-
-      if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
-        return this.handleSkippedStep(step, target, context);
-      }
-      if (preAction === CONDITION_ACTIONS.STOP_WORKFLOW) {
-        Log.info("Pre-condition stopWorkflow triggered");
-        this.getRuntime().fail();
-        await this.promptQueue.commitRuntimeTransition();
-        return false;
-      }
-      // CONTINUE — fall through and run the step
-    }
-    const workflowFile = this.promptQueue.getWorkflowFile();
-    let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
-
-    // Apply {{var}} substitution when the workflow has vars defined.
-    const vars = workflowFile.vars;
-    if (vars && Object.keys(vars).length > 0) {
-      resolvedProperties = VarSubstitutor.applyToResolvedProperties(
-        resolvedProperties,
-        vars
-      );
-      if (prompt.prompt) {
-        // Substitute on a local copy so the working file is not mutated.
-        prompt = {
-          ...prompt,
-          prompt: VarSubstitutor.applyToPromptText(prompt.prompt, vars),
-        };
-      }
-    }
-
-    const integration = context.getIntegrationForPrompt(
-      prompt,
-      resolvedProperties.harness
-    );
-
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
-        harness: resolvedProperties.harness,
-        model: resolvedProperties.model,
-        agent: resolvedProperties.agent,
-        skills: resolvedProperties.skills,
-      });
-      this.updateDashboardForPromptStart(
-        context,
-        prompt,
-        target.stepIndex,
-        resolvedProperties
-      );
-      integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
-      Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
-    } else {
-      Log.info(`Executing finalStep loop ${target.loopIndex + 1}`);
-    }
-
-    const signedStepIndex = this.getSignedStepIndex(target);
-    const runIndex = this.getRunIndexForTarget(context, target);
-    const sendPromptIndex =
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? target.stepIndex
-        : state.steps.length;
-
-    let result: { responseText: string; duration: number } | null = null;
+    // The attempt loop intentionally encloses the entire step contract:
+    // pre-condition -> prompt -> end-condition. A whole-step retry therefore
+    // re-runs the gate before spending another harness call.
     let attemptIndex = 0;
-
     while (true) {
+      runtime.beginAttempt(target, attemptIndex, Date.now());
+
+      // Evaluate pre-condition gate before running the AI prompt.
+      const workflowFileForPre = this.promptQueue.getWorkflowFile();
+      const resolvedPreCondition =
+        prompt.preCondition !== undefined
+          ? prompt.preCondition
+          : (workflowFileForPre.preCondition ?? null);
+      const preErrorBehavior = PropertyResolver.resolve(
+        prompt,
+        workflowFileForPre
+      ).errorBehavior;
+
+      if (
+        resolvedPreCondition !== null &&
+        resolvedPreCondition !== undefined &&
+        resolvedPreCondition.script?.trim()
+      ) {
+        await this.trackStatusMessage(
+          context,
+          target,
+          `Evaluating pre-condition: Running ${this.getConditionScriptName(
+            resolvedPreCondition.script
+          )}`
+        );
+
+        const preReport = await this.scriptExecutionReporter.report({
+          context,
+          source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+          properties: {
+            script: resolvedPreCondition.script,
+            compareSource:
+              resolvedPreCondition.compareSource ?? COMPARE_SOURCES.AUTO,
+            returns: resolvedPreCondition.returns,
+            timeout: resolvedPreCondition.timeout,
+          },
+          phase: EXECUTION_PHASES.PRE_CONDITION,
+          target: this.toOutputExecutionTarget(target),
+          signedStepIndex: this.getSignedStepIndex(target),
+          runIndex: this.getRunIndexForTarget(context, target),
+          attemptIndex,
+          timestampMs: Date.now(),
+          onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
+          onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
+          statusLabel: "Pre-condition",
+          timeoutMs: resolvedPreCondition.timeout,
+          vars: workflowFileForPre.vars,
+          emitStatus: false,
+          actionForErrored: this.getErrorConditionAction(preErrorBehavior),
+        });
+        const preResult = preReport.evaluationResult;
+
+        if (preResult.errored) {
+          const preDisposition = await this.handleEvaluationError(
+            context,
+            target,
+            this.getSignedStepIndex(target),
+            "Pre-condition",
+            preResult,
+            preErrorBehavior,
+            attemptIndex
+          );
+          if (preDisposition.outcome === "retry") {
+            attemptIndex = preDisposition.nextAttemptIndex ?? attemptIndex + 1;
+            continue;
+          }
+          if (preDisposition.outcome === "stop") {
+            return false;
+          }
+        } else {
+          const preAction: PreConditionAction = preResult.passed
+            ? (resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
+            : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
+
+          Log.debug(
+            `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
+          );
+
+          await this.trackConditionResult(
+            context,
+            target,
+            "Pre-condition",
+            preReport.verdict,
+            STATUS_MESSAGE_SEVERITY.WARNING
+          );
+
+          if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
+            runtime.completeAttempt(target, attemptIndex);
+            return this.handleSkippedStep(step, target, context);
+          }
+          if (preAction === CONDITION_ACTIONS.STOP_WORKFLOW) {
+            Log.info("Pre-condition stopWorkflow triggered");
+            await this.failStepForInternalError(
+              context,
+              target,
+              this.getSignedStepIndex(target),
+              attemptIndex,
+              "Pre-condition requested stopWorkflow"
+            );
+            return false;
+          }
+          // CONTINUE — fall through and run the step.
+        }
+      }
+
+      const workflowFile = this.promptQueue.getWorkflowFile();
+      let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+
+      // Apply {{var}} substitution when the workflow has vars defined.
+      const vars = workflowFile.vars;
+      if (vars && Object.keys(vars).length > 0) {
+        resolvedProperties = VarSubstitutor.applyToResolvedProperties(
+          resolvedProperties,
+          vars
+        );
+        if (prompt.prompt) {
+          // Substitute on a local copy so the working file is not mutated.
+          prompt = {
+            ...prompt,
+            prompt: VarSubstitutor.applyToPromptText(prompt.prompt, vars),
+          };
+        }
+      }
+
+      const integration = context.getIntegrationForPrompt(
+        prompt,
+        resolvedProperties.harness
+      );
+
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
+          harness: resolvedProperties.harness,
+          model: resolvedProperties.model,
+          agent: resolvedProperties.agent,
+          skills: resolvedProperties.skills,
+        });
+        this.updateDashboardForPromptStart(
+          context,
+          prompt,
+          target.stepIndex,
+          resolvedProperties
+        );
+        integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
+        Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
+      } else {
+        Log.info(`Executing finalStep loop ${target.loopIndex + 1}`);
+      }
+
+      const signedStepIndex = this.getSignedStepIndex(target);
+      const runIndex = this.getRunIndexForTarget(context, target);
+      const sendPromptIndex =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : state.steps.length;
+
+      let result: { responseText: string; duration: number } | null = null;
+      const attemptProperties =
+        attemptIndex === 0
+          ? resolvedProperties
+          : {
+              ...resolvedProperties,
+              // Whole-step retries deliberately start a fresh harness session.
+              resumeSession: false,
+              sessionId: undefined,
+            };
+
       result = await this.executeWithStreaming(
         prompt,
         integration,
@@ -616,7 +683,7 @@ export class WorkflowExecutor {
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
-          resolvedProperties,
+          resolvedProperties: attemptProperties,
           workflowFile,
           workingFilePersistence: this.promptQueue,
           resolvePriorContextItems: context.resolvePriorContextItems,
@@ -628,134 +695,141 @@ export class WorkflowExecutor {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
             await this.promptQueue.markCurrentAsSent();
           }
+        },
+        "initial",
+        false
+      );
+
+      if (!result) {
+        const failureDisposition = await this.handlePromptSendFailure(
+          integration,
+          context,
+          target,
+          prompt,
+          signedStepIndex,
+          runIndex,
+          attemptIndex,
+          resolvedProperties
+        );
+
+        if (failureDisposition.outcome === "retry") {
+          attemptIndex++;
+          continue;
         }
-      );
 
-      if (result) {
-        break;
+        return failureDisposition.outcome === "continue";
       }
 
-      const failureDisposition = await this.handlePromptSendFailure(
-        integration,
+      const { responseText, duration } = result;
+
+      await this.updateDashboardWithResponse(
         context,
-        target,
-        prompt,
-        signedStepIndex,
-        runIndex,
-        attemptIndex,
-        resolvedProperties
-      );
-
-      if (failureDisposition.outcome === "retry") {
-        attemptIndex++;
-        continue;
-      }
-
-      return failureDisposition.outcome === "continue";
-    }
-
-    const { responseText, duration } = result;
-
-    await this.updateDashboardWithResponse(
-      context,
-      integration,
-      target,
-      target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-      prompt,
-      responseText,
-      duration,
-      runIndex
-    );
-    // The completed response is durable in events.jsonl before it becomes
-    // visible to any active-only cache or subsequent prompt construction.
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      this.promptQueue.cacheRuntimeOutput(target.stepIndex, { responseText });
-    } else {
-      this.promptQueue.storeFinalStepResponseText(
-        target.loopIndex,
-        responseText
-      );
-    }
-
-    // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
-    // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
-    const resolvedEndCondition = resolvedProperties.endCondition;
-    const promptForEval =
-      resolvedEndCondition && resolvedEndCondition !== prompt.endCondition
-        ? { ...prompt, endCondition: resolvedEndCondition }
-        : prompt;
-
-    if (resolvedEndCondition) {
-      const shouldContinue = await this.evaluateEndCondition(
-        promptForEval,
         integration,
-        context,
         target,
         target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-        runIndex,
-        attemptIndex,
+        prompt,
+        responseText,
         duration,
-        vars && Object.keys(vars).length > 0 ? vars : undefined
+        runIndex,
+        attemptIndex
       );
+      // The completed response is durable in events.jsonl before it becomes
+      // visible to any active-only cache or subsequent prompt construction.
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        this.promptQueue.cacheRuntimeOutput(target.stepIndex, { responseText });
+      } else {
+        this.promptQueue.storeFinalStepResponseText(
+          target.loopIndex,
+          responseText
+        );
+      }
 
-      if (!shouldContinue) {
-        Log.info("Workflow stopped due to end condition failure");
-        if (
-          runtime.status === EXECUTION_STATES.RUNNING ||
-          runtime.status === EXECUTION_STATES.PAUSING ||
-          runtime.status === EXECUTION_STATES.PAUSED
-        ) {
-          this.promptQueue.finalizeFailedInFlightPrompt();
-          runtime.fail();
-          await this.promptQueue.commitRuntimeTransition();
+      // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
+      // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
+      const resolvedEndCondition = resolvedProperties.endCondition;
+      const promptForEval =
+        resolvedEndCondition && resolvedEndCondition !== prompt.endCondition
+          ? { ...prompt, endCondition: resolvedEndCondition }
+          : prompt;
+
+      if (resolvedEndCondition) {
+        const endDisposition = await this.evaluateEndCondition(
+          promptForEval,
+          integration,
+          context,
+          target,
+          target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+          runIndex,
+          attemptIndex,
+          duration,
+          vars && Object.keys(vars).length > 0 ? vars : undefined,
+          resolvedProperties.errorBehavior
+        );
+
+        if (endDisposition.outcome === "retry") {
+          attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
+          continue;
         }
-        return false;
-      }
 
-      if (
-        target.kind === FINAL_STEP_PHASES.QUEUE &&
-        context.dashboardProvider
-      ) {
-        context.dashboardProvider.updateStepStatus(
-          signedStepIndex,
-          { state: STEP_STATUS.COMPLETED, duration },
-          {
-            harness: prompt._runtime?.harness,
-            model: prompt._runtime?.model,
+        if (endDisposition.outcome === "stop") {
+          Log.info("Workflow stopped due to end condition failure");
+          if (
+            runtime.status === EXECUTION_STATES.RUNNING ||
+            runtime.status === EXECUTION_STATES.PAUSING ||
+            runtime.status === EXECUTION_STATES.PAUSED
+          ) {
+            this.promptQueue.finalizeFailedInFlightPrompt();
+            runtime.fail();
+            await this.promptQueue.commitRuntimeTransition();
           }
-        );
+          return false;
+        }
+
+        if (
+          target.kind === FINAL_STEP_PHASES.QUEUE &&
+          context.dashboardProvider
+        ) {
+          context.dashboardProvider.updateStepStatus(
+            signedStepIndex,
+            { state: STEP_STATUS.COMPLETED, duration },
+            {
+              harness: prompt._runtime?.harness,
+              model: prompt._runtime?.model,
+            }
+          );
+        }
+      } else {
+        runtime.completeAttempt(target, attemptIndex);
+        if (
+          target.kind === FINAL_STEP_PHASES.QUEUE &&
+          context.dashboardProvider
+        ) {
+          context.dashboardProvider.updateStepStatus(
+            signedStepIndex,
+            { state: STEP_STATUS.COMPLETED, duration },
+            {
+              harness: prompt._runtime?.harness,
+              model: prompt._runtime?.model,
+            }
+          );
+        }
       }
-    } else {
-      runtime.completeAttempt(target, attemptIndex);
-      if (
-        target.kind === FINAL_STEP_PHASES.QUEUE &&
-        context.dashboardProvider
-      ) {
-        context.dashboardProvider.updateStepStatus(
-          signedStepIndex,
-          { state: STEP_STATUS.COMPLETED, duration },
-          {
-            harness: prompt._runtime?.harness,
-            model: prompt._runtime?.model,
-          }
-        );
+
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.completeCurrentAndMoveNext();
+
+        if (context.dashboardProvider) {
+          const live = this.promptQueue.getProgress();
+          context.dashboardProvider.updateProgress(live.current, live.total);
+        }
+
+        if (await this.confirmPauseAndStop("Workflow paused")) {
+          return false;
+        }
       }
+
+      return true;
     }
-
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      await this.promptQueue.completeCurrentAndMoveNext();
-
-      if (context.dashboardProvider) {
-        const live = this.promptQueue.getProgress();
-        context.dashboardProvider.updateProgress(live.current, live.total);
-      }
-
-      if (await this.confirmPauseAndStop("Workflow paused")) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   /**
@@ -857,205 +931,257 @@ export class WorkflowExecutor {
       { startedAt: Date.now() }
     );
 
-    // Begin attempt in the state machine
-    const attemptIndex = 0;
-    runtime.beginAttempt(target, attemptIndex, Date.now());
+    // Begin each whole-step attempt before the script executes. An evaluator
+    // retry therefore re-runs the complete script step with the same budget.
+    let attemptIndex = 0;
+    while (true) {
+      runtime.beginAttempt(target, attemptIndex, Date.now());
 
-    const timeout =
-      step.timeout != null
-        ? step.timeout * 1000
-        : ConfigurationUtils.getScriptTimeoutMs();
+      const timeout =
+        step.timeout != null
+          ? step.timeout * 1000
+          : ConfigurationUtils.getScriptTimeoutMs();
 
-    const signedStepIndex = this.getSignedStepIndex(target);
-    const timestampMs = Date.now();
+      const signedStepIndex = this.getSignedStepIndex(target);
+      const timestampMs = Date.now();
 
-    // ─── Interactive mode: run inside a PTY so the user can provide input ────
-    const resolvedExecutionMode = PropertyResolver.resolveExecutionMode(
-      step,
-      this.promptQueue.getWorkflowFile()
-    );
-    const requestedInteractive =
-      resolvedExecutionMode === EXECUTION_MODES.INTERACTIVE;
-    const stderrComparison = step.compareSource === COMPARE_SOURCES.STDERR;
-    const isInteractive = requestedInteractive && !stderrComparison;
-    if (requestedInteractive && stderrComparison) {
-      Log.warn(
-        `[script:interactive] compareSource=stderr requires separate stderr; ` +
-          `running headless: ${stepLabel}`
+      // ─── Interactive mode: run inside a PTY so the user can provide input ────
+      const resolvedExecutionMode = PropertyResolver.resolveExecutionMode(
+        step,
+        this.promptQueue.getWorkflowFile()
       );
-    }
-    const resolvedProperties = {
-      script: step.script,
-      compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
-      returns: step.returns ?? "0",
-      timeout,
-    };
-    const outputChunks: string[] = [];
-    let ptyExitCode: number | undefined;
-    let ptyTimedOut = false;
+      const requestedInteractive =
+        resolvedExecutionMode === EXECUTION_MODES.INTERACTIVE;
+      const stderrComparison = step.compareSource === COMPARE_SOURCES.STDERR;
+      const isInteractive = requestedInteractive && !stderrComparison;
+      if (requestedInteractive && stderrComparison) {
+        Log.warn(
+          `[script:interactive] compareSource=stderr requires separate stderr; ` +
+            `running headless: ${stepLabel}`
+        );
+      }
+      const resolvedProperties = {
+        script: step.script,
+        compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
+        returns: step.returns ?? "0",
+        timeout,
+      };
+      const outputChunks: string[] = [];
+      let ptyExitCode: number | undefined;
+      let ptyTimedOut = false;
 
-    const evaluation = async (onOutput: (chunk: string) => void) => {
-      if (isInteractive && context.spawnScriptPty) {
-        Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
-        ptyExitCode = await context.spawnScriptPty({
-          stepName: stepLabel,
-          stepIndex: signedStepIndex,
-          script: step.script,
-          cwd: context.workspaceFolderPath ?? process.cwd(),
-          onOutput: (chunk) => {
-            outputChunks.push(sanitizeTerminalOutput(chunk));
-            onOutput(chunk);
+      const evaluation = async (onOutput: (chunk: string) => void) => {
+        if (isInteractive && context.spawnScriptPty) {
+          Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
+          ptyExitCode = await context.spawnScriptPty({
+            stepName: stepLabel,
+            stepIndex: signedStepIndex,
+            script: step.script,
+            cwd: context.workspaceFolderPath ?? process.cwd(),
+            onOutput: (chunk) => {
+              outputChunks.push(sanitizeTerminalOutput(chunk));
+              onOutput(chunk);
+            },
+            timeout,
+            onTimeout: () => {
+              ptyTimedOut = true;
+            },
+          });
+        }
+
+        if (!isInteractive || ptyExitCode === undefined) {
+          return this.endConditionEvaluator.evaluateCondition(
+            resolvedProperties,
+            context.workspaceFolderPath,
+            this.promptQueue.getWorkflowFile().vars,
+            onOutput
+          );
+        }
+
+        const exitCode = ptyExitCode ?? 1;
+        const stdout = sanitizeTerminalOutput(outputChunks.join(""));
+        const comparison = this.endConditionEvaluator.evaluateResult(
+          {
+            result: stdout,
+            stdout,
+            stderr: "",
+            success: exitCode === 0,
+            exitCode,
           },
-          timeout,
-          onTimeout: () => {
-            ptyTimedOut = true;
-          },
+          resolvedProperties.returns,
+          resolvedProperties.compareSource
+        );
+        return {
+          ...comparison,
+          errored: ptyTimedOut,
+          matchRule: ptyTimedOut ? "none" : comparison.matchRule,
+          stdout,
+          stderr: "",
+          result: "",
+          duration: Date.now() - timestampMs,
+          exitCode,
+          timeout: ptyTimedOut,
+        };
+      };
+
+      const report = await this.scriptExecutionReporter.report({
+        context,
+        source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+        properties: resolvedProperties,
+        phase: EXECUTION_PHASES.PROMPT,
+        target,
+        signedStepIndex,
+        runIndex,
+        attemptIndex,
+        timestampMs,
+        onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
+        onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        statusLabel: "Script step",
+        timeoutMs: timeout,
+        vars: this.promptQueue.getWorkflowFile().vars,
+        evaluate: evaluation,
+        emitStatus: false,
+        actionForErrored: this.getErrorConditionAction(
+          step.errorBehavior === null
+            ? undefined
+            : (step.errorBehavior ??
+                this.promptQueue.getWorkflowFile().errorBehavior ??
+                undefined)
+        ),
+      });
+
+      const evalResult = report.evaluationResult;
+      const scriptRuntimeOutput = report.scriptRuntimeOutput;
+      const outputText = report.outputText;
+      const errorBehavior =
+        step.errorBehavior === null
+          ? undefined
+          : (step.errorBehavior ??
+            this.promptQueue.getWorkflowFile().errorBehavior);
+
+      if (evalResult.errored) {
+        const errorDisposition = await this.handleEvaluationError(
+          context,
+          target,
+          signedStepIndex,
+          "Script step",
+          evalResult,
+          errorBehavior,
+          attemptIndex,
+          false
+        );
+        if (errorDisposition.outcome === "retry") {
+          attemptIndex = errorDisposition.nextAttemptIndex ?? attemptIndex + 1;
+          continue;
+        }
+        if (errorDisposition.outcome === "stop") {
+          return false;
+        }
+      } else {
+        await this.trackConditionResult(
+          context,
+          target,
+          "Script step",
+          report.verdict,
+          STATUS_MESSAGE_SEVERITY.ERROR
+        );
+      }
+
+      const succeeded = evalResult.errored ? true : evalResult.passed;
+
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
+          responseText: outputText,
+          scriptOutput: scriptRuntimeOutput,
+        });
+      } else {
+        this.promptQueue.storeFinalStepResponseText(
+          target.loopIndex,
+          outputText
+        );
+      }
+
+      const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
+      const onFail = step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+      const shouldContinue = evalResult.errored
+        ? true
+        : succeeded
+          ? onPass !== CONDITION_ACTIONS.STOP_WORKFLOW
+          : onFail !== CONDITION_ACTIONS.STOP_WORKFLOW;
+      const terminalStatus = shouldContinue
+        ? STEP_STATUS.COMPLETED
+        : STEP_STATUS.FAILED;
+
+      if (!succeeded && onFail === CONDITION_ACTIONS.STOP_WORKFLOW) {
+        Log.error(
+          `Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
+        );
+      } else if (succeeded && onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
+        Log.info(
+          `Script step passed but onPass=stopWorkflow, stopping: ${stepLabel}`
+        );
+      } else if (!succeeded) {
+        Log.warn(
+          `Script step failed but onFail=continue, continuing: ${stepLabel}`
+        );
+      }
+
+      // Complete or fail the attempt in the state machine
+      if (shouldContinue) {
+        runtime.completeAttempt(target, attemptIndex);
+      } else {
+        runtime.failAttempt(
+          target,
+          attemptIndex,
+          `Script exited with code ${evalResult.exitCode}`
+        );
+      }
+      if (context.historyFilePath && context.outputHistoryManager) {
+        await context.outputHistoryManager.recordAttemptTerminal(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          runIndex,
+          attemptIndex,
+          shouldContinue ? "completed" : "failed",
+          context.getDefinitionRevisionContext?.(),
+          shouldContinue
+            ? undefined
+            : `Script exited with code ${evalResult.exitCode}`
+        );
+      }
+
+      // Update dashboard step status
+      if (context.dashboardProvider && stepIndex >= 0) {
+        context.dashboardProvider.updateStepStatus(stepIndex, {
+          state: terminalStatus,
+          duration: evalResult.duration / 1000,
         });
       }
 
-      if (!isInteractive || ptyExitCode === undefined) {
-        return this.endConditionEvaluator.evaluateCondition(
-          resolvedProperties,
-          context.workspaceFolderPath,
-          this.promptQueue.getWorkflowFile().vars,
-          onOutput
-        );
-      }
-
-      const exitCode = ptyExitCode ?? 1;
-      const stdout = sanitizeTerminalOutput(outputChunks.join(""));
-      const comparison = this.endConditionEvaluator.evaluateResult(
-        {
-          result: stdout,
-          stdout,
-          stderr: "",
-          success: exitCode === 0,
-          exitCode,
-        },
-        resolvedProperties.returns,
-        resolvedProperties.compareSource
-      );
-      return {
-        ...comparison,
-        errored: ptyTimedOut,
-        matchRule: ptyTimedOut ? "none" : comparison.matchRule,
-        stdout,
-        stderr: "",
-        result: "",
-        duration: Date.now() - timestampMs,
-        exitCode,
-        timeout: ptyTimedOut,
-      };
-    };
-
-    const report = await this.scriptExecutionReporter.report({
-      context,
-      source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
-      properties: resolvedProperties,
-      phase: EXECUTION_PHASES.PROMPT,
-      target,
-      signedStepIndex,
-      runIndex,
-      attemptIndex,
-      timestampMs,
-      onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
-      onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-      statusLabel: "Script step",
-      timeoutMs: timeout,
-      vars: this.promptQueue.getWorkflowFile().vars,
-      evaluate: evaluation,
-    });
-
-    const evalResult = report.evaluationResult;
-    const scriptRuntimeOutput = report.scriptRuntimeOutput;
-    const outputText = report.outputText;
-    const succeeded = evalResult.passed;
-
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
-        responseText: outputText,
-        scriptOutput: scriptRuntimeOutput,
-      });
-    } else {
-      this.promptQueue.storeFinalStepResponseText(target.loopIndex, outputText);
-    }
-
-    const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
-    const onFail = step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
-    const shouldContinue = succeeded
-      ? onPass !== CONDITION_ACTIONS.STOP_WORKFLOW
-      : onFail !== CONDITION_ACTIONS.STOP_WORKFLOW;
-    const terminalStatus = shouldContinue
-      ? STEP_STATUS.COMPLETED
-      : STEP_STATUS.FAILED;
-
-    if (!succeeded && onFail === CONDITION_ACTIONS.STOP_WORKFLOW) {
-      Log.error(
-        `Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
-      );
-    } else if (succeeded && onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
-      Log.info(
-        `Script step passed but onPass=stopWorkflow, stopping: ${stepLabel}`
-      );
-    } else if (!succeeded) {
-      Log.warn(
-        `Script step failed but onFail=continue, continuing: ${stepLabel}`
-      );
-    }
-
-    // Complete or fail the attempt in the state machine
-    if (shouldContinue) {
-      runtime.completeAttempt(target, attemptIndex);
-    } else {
-      runtime.failAttempt(
-        target,
-        attemptIndex,
-        `Script exited with code ${evalResult.exitCode}`
-      );
-    }
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager.recordAttemptTerminal(
-        context.historyFilePath,
-        this.toOutputExecutionTarget(target),
-        runIndex,
-        attemptIndex,
-        shouldContinue ? "completed" : "failed",
-        context.getDefinitionRevisionContext?.(),
-        shouldContinue
-          ? undefined
-          : `Script exited with code ${evalResult.exitCode}`
-      );
-    }
-
-    // Update dashboard step status
-    if (context.dashboardProvider && stepIndex >= 0) {
-      context.dashboardProvider.updateStepStatus(stepIndex, {
-        state: terminalStatus,
-        duration: evalResult.duration / 1000,
-      });
-    }
-
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      if (shouldContinue) {
-        await this.promptQueue.completeCurrentAndMoveNext();
-        if (context.dashboardProvider) {
-          const live = this.promptQueue.getProgress();
-          context.dashboardProvider.updateProgress(live.current, live.total);
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        if (shouldContinue) {
+          await this.promptQueue.completeCurrentAndMoveNext();
+          if (context.dashboardProvider) {
+            const live = this.promptQueue.getProgress();
+            context.dashboardProvider.updateProgress(live.current, live.total);
+          }
+        } else {
+          this.promptQueue.finalizeFailedInFlightPrompt(
+            `Script exited with code ${evalResult.exitCode}`
+          );
+          runtime.fail();
+          await this.promptQueue.commitRuntimeTransition();
         }
-      } else {
-        this.promptQueue.finalizeFailedInFlightPrompt(
-          `Script exited with code ${evalResult.exitCode}`
-        );
-        runtime.fail();
-        await this.promptQueue.commitRuntimeTransition();
+
+        if (
+          await this.confirmPauseAndStop("Workflow paused after script step")
+        ) {
+          return false;
+        }
       }
 
-      if (await this.confirmPauseAndStop("Workflow paused after script step")) {
-        return false;
-      }
+      return shouldContinue;
     }
-
-    return shouldContinue;
   }
 
   private getAttemptStartedAt(target: ExecutionTarget): number | undefined {
@@ -1510,6 +1636,124 @@ export class WorkflowExecutor {
     );
   }
 
+  private getErrorConditionAction(
+    errorBehavior?: ErrorBehavior
+  ): ConditionAction {
+    switch (errorBehavior?.onError) {
+      case "retry":
+        return CONDITION_ACTIONS.RETRY;
+      case "continue":
+        return CONDITION_ACTIONS.CONTINUE;
+      default:
+        return CONDITION_ACTIONS.STOP_WORKFLOW;
+    }
+  }
+
+  private getEvaluationErrorMessage(result: EvaluationResult): string {
+    if (result.timeout) {
+      return `timed out after ${result.duration}ms`;
+    }
+    return result.error ?? "evaluation failed";
+  }
+
+  /** Route an evaluator error through the one policy shared by all step phases. */
+  private async handleEvaluationError(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number,
+    phase: string,
+    result: EvaluationResult,
+    errorBehavior: ErrorBehavior | null | undefined,
+    attemptIndex: number,
+    completeAttemptOnContinue: boolean = false
+  ): Promise<PhaseDisposition> {
+    const policy = errorBehavior ?? { onError: "stop" as const };
+    const maxRetries = policy.maxRetries ?? 0;
+    const canRetry = canRetryErrorBehavior(policy, attemptIndex);
+    const actionText = canRetry
+      ? `retry ${attemptIndex + 1} of ${maxRetries === -1 ? "unlimited" : maxRetries}`
+      : policy.onError === "continue"
+        ? "continue"
+        : "stop";
+    const severity =
+      canRetry || policy.onError === "continue"
+        ? STATUS_MESSAGE_SEVERITY.WARNING
+        : STATUS_MESSAGE_SEVERITY.ERROR;
+    const reason = this.getEvaluationErrorMessage(result);
+
+    await this.trackStatusMessage(
+      context,
+      target,
+      `${phase} could not run: ${reason} → ${actionText}`,
+      severity
+    );
+
+    if (canRetry) {
+      const nextAttemptIndex = attemptIndex + 1;
+      const runtime = this.getRuntime();
+      runtime.failAttempt(target, attemptIndex, reason);
+      runtime.scheduleRetry(
+        target,
+        nextAttemptIndex,
+        nextAttemptIndex,
+        maxRetries
+      );
+      if ((policy.retryDelayMs ?? 0) > 0) {
+        await this.delay(policy.retryDelayMs!);
+      }
+      return { outcome: "retry", nextAttemptIndex };
+    }
+
+    if (policy.onError === "continue") {
+      if (completeAttemptOnContinue) {
+        this.getRuntime().completeAttempt(target, attemptIndex);
+      }
+      return { outcome: "continue" };
+    }
+
+    await this.failStepForInternalError(
+      context,
+      target,
+      signedStepIndex,
+      attemptIndex,
+      `${phase}: ${reason}`
+    );
+    return { outcome: "stop" };
+  }
+
+  private async failStepForInternalError(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number,
+    attemptIndex: number,
+    reason: string
+  ): Promise<void> {
+    const runtime = this.getRuntime();
+    runtime.failAttempt(target, attemptIndex, reason);
+
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      if (context.dashboardProvider && signedStepIndex >= 0) {
+        context.dashboardProvider.updateStepStatus(signedStepIndex, {
+          state: STEP_STATUS.FAILED,
+          message: reason,
+        });
+      }
+      this.promptQueue.finalizeFailedInFlightPrompt(reason);
+    } else {
+      await this.setFinalStepRuntime(context, {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: target.loopIndex,
+        status: STEP_STATUS.FAILED,
+        startedAt:
+          this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
+        completedAt: Date.now(),
+      });
+    }
+
+    runtime.fail();
+    await this.promptQueue.commitRuntimeTransition();
+  }
+
   private getBufferedCliOutput(
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
@@ -1614,8 +1858,9 @@ export class WorkflowExecutor {
     runIndex: number,
     attemptIndex: number,
     duration: number,
-    vars?: Record<string, string>
-  ): Promise<boolean> {
+    vars?: Record<string, string>,
+    errorBehavior?: ErrorBehavior
+  ): Promise<PhaseDisposition> {
     Log.debug(
       `Evaluating end condition for ${this.describeExecutionTarget(target)}...`
     );
@@ -1624,30 +1869,28 @@ export class WorkflowExecutor {
       Log.error(
         `End condition for ${this.describeExecutionTarget(target)} is missing required 'script' property`
       );
-      await this.trackStatusMessage(
+      const missingScriptResult = {
+        passed: false,
+        matchRule: "none" as const,
+        actual: "",
+        actualSource: "exitCode" as const,
+        errored: true,
+        stdout: "",
+        stderr: "",
+        result: "",
+        error: "End condition missing required 'script' property",
+        duration,
+      };
+      return this.handleEvaluationError(
         context,
         target,
-        "End condition failed: Missing script property",
-        STATUS_MESSAGE_SEVERITY.ERROR
+        signedStepIndex ?? this.getSignedStepIndex(target),
+        "End condition",
+        missingScriptResult,
+        errorBehavior,
+        attemptIndex,
+        true
       );
-
-      this.promptQueue
-        .getRuntimeStateMachine()
-        .failAttempt(
-          target,
-          attemptIndex,
-          "End condition missing required 'script' property"
-        );
-
-      if (context.dashboardProvider && signedStepIndex !== undefined) {
-        context.dashboardProvider.updateStepStatus(signedStepIndex, {
-          state: STEP_STATUS.FAILED,
-          message: "End condition missing required 'script' property",
-          duration,
-        });
-      }
-
-      return false;
     }
 
     const endCondition = prompt.endCondition;
@@ -1677,12 +1920,26 @@ export class WorkflowExecutor {
       timestampMs: Date.now(),
       onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
       onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+      actionForErrored: this.getErrorConditionAction(errorBehavior),
       statusLabel: "End condition",
       timeoutMs: endCondition.timeout,
       vars,
       emitStatus: false,
     });
     const evaluationResult = endReport.evaluationResult;
+
+    if (evaluationResult.errored) {
+      return this.handleEvaluationError(
+        context,
+        target,
+        signedStepIndex ?? this.getSignedStepIndex(target),
+        "End condition",
+        evaluationResult,
+        errorBehavior,
+        attemptIndex,
+        true
+      );
+    }
 
     await this.trackConditionResult(
       context,
@@ -1719,6 +1976,7 @@ export class WorkflowExecutor {
           timestampMs: Date.now(),
           onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+          actionForErrored: this.getErrorConditionAction(errorBehavior),
           statusLabel: "End condition",
           timeoutMs: condition.timeout,
           vars,
@@ -1735,7 +1993,7 @@ export class WorkflowExecutor {
       ) => {
         // Reporter-backed retry evaluations always provide a verdict. Keep the
         // callback optional for direct EndConditionHandler tests.
-        if (retryVerdict) {
+        if (retryVerdict && retryVerdict.outcome !== "errored") {
           await this.trackConditionResult(
             context,
             target,
@@ -1762,6 +2020,19 @@ export class WorkflowExecutor {
       sendRetryPromptCallback
     );
 
+    if (result.errorResult) {
+      return this.handleEvaluationError(
+        context,
+        target,
+        signedStepIndex ?? this.getSignedStepIndex(target),
+        "End condition",
+        result.errorResult,
+        errorBehavior,
+        result.errorAttemptIndex ?? attemptIndex,
+        true
+      );
+    }
+
     if (!result.shouldContinue) {
       if (context.dashboardProvider && signedStepIndex !== undefined) {
         context.dashboardProvider.updateStepStatus(signedStepIndex, {
@@ -1773,7 +2044,7 @@ export class WorkflowExecutor {
       }
     }
 
-    return result.shouldContinue;
+    return { outcome: result.shouldContinue ? "continue" : "stop" };
   }
 
   /**
@@ -1833,10 +2104,14 @@ export class WorkflowExecutor {
     attemptIndex: number,
     sendOptions: WorkflowContext,
     onPromptSent?: () => Promise<void>,
-    attemptStartReason: "initial" | "retry" | "resumed" = "initial"
+    attemptStartReason: "initial" | "retry" | "resumed" = "initial",
+    beginAttempt: boolean = true
   ): Promise<{ responseText: string; duration: number } | null> {
     const runtime = this.promptQueue.getRuntimeStateMachine();
-    const attempt = runtime.beginAttempt(target, attemptIndex, Date.now());
+    const attempt = beginAttempt
+      ? runtime.beginAttempt(target, attemptIndex, Date.now())
+      : (runtime.getAttempt(target) ??
+        runtime.beginAttempt(target, attemptIndex, Date.now()));
     const startTime = Date.now();
 
     const initTimestampMs = attempt.startedAt;
@@ -2467,13 +2742,11 @@ export class WorkflowExecutor {
           ? "Harness execution timed out"
           : "Harness reported an error";
 
-    if (
-      errorBehavior.onError === "retry" &&
-      attemptIndex < (errorBehavior.maxRetries ?? 0)
-    ) {
+    if (canRetryErrorBehavior(errorBehavior, attemptIndex)) {
       const nextAttemptIndex = attemptIndex + 1;
       const retryCount = nextAttemptIndex;
       const maxRetries = errorBehavior.maxRetries ?? 0;
+      const retryLimit = maxRetries === -1 ? "unlimited" : maxRetries;
 
       runtime.failAttempt(target, attemptIndex, failureReason);
       runtime.scheduleRetry(target, nextAttemptIndex, retryCount, maxRetries);
@@ -2481,7 +2754,7 @@ export class WorkflowExecutor {
       await this.trackStatusMessage(
         context,
         target,
-        `${failureLabel}. Retrying attempt ${retryCount}/${maxRetries}. ${failureReason}`,
+        `${failureLabel}. Retrying attempt ${retryCount}/${retryLimit}. ${failureReason}`,
         STATUS_MESSAGE_SEVERITY.WARNING,
         statusTimestampMs
       );
@@ -2576,7 +2849,7 @@ export class WorkflowExecutor {
       context,
       target,
       `${failureLabel}. Stopping workflow. ${failureReason}`,
-      STATUS_MESSAGE_SEVERITY.WARNING,
+      STATUS_MESSAGE_SEVERITY.ERROR,
       statusTimestampMs
     );
 

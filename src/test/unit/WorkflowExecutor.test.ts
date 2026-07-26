@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   WorkflowExecutor,
@@ -799,7 +802,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     assert.strictEqual(statusCalls.length, 1);
     assert.strictEqual(statusCalls[0].stepIndex, 0);
-    assert.strictEqual(statusCalls[0].severity, "warning");
+    assert.strictEqual(statusCalls[0].severity, "error");
     assert.match(statusCalls[0].message, /Stopping workflow/);
 
     assert.strictEqual(captureCalls.length, 1);
@@ -819,7 +822,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
     assert.strictEqual(
       appendedStatusMessages[0].statusMessage.severity,
-      "warning"
+      "error"
     );
     assert.match(
       appendedStatusMessages[0].statusMessage.message,
@@ -875,6 +878,33 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("routes errored script steps through errorBehavior", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: `node -e "setTimeout(() => {}, 1000)"`,
+          timeout: 0.01,
+          errorBehavior: { onError: "continue" },
+        },
+        { prompt: "after-script-error" },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, ["after-script-error"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
   test("retries the same step when errorBehavior.onError is retry", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -895,17 +925,34 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       return { success: true, responseText: `ok:${prompt.prompt}` };
     };
 
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-exec-"));
+    const marker = path.join(tempDir, "gate-marker.txt");
+    const markerCommand = marker.replace(/\\/g, "/");
+
     queue.loadPrompts({
       steps: [
         {
           prompt: "retry-step",
+          preCondition: {
+            script: `node -e "require('fs').appendFileSync('${markerCommand}', 'x')"`,
+          },
           errorBehavior: { onError: "retry", maxRetries: 1, retryDelayMs: 0 },
         },
         { prompt: "after-retry" },
       ],
     });
 
-    await executor.execute(integration, makeContext(integration));
+    try {
+      await executor.execute(integration, makeContext(integration));
+    } finally {
+      const markerText = await fs.readFile(marker, "utf8");
+      assert.strictEqual(
+        markerText,
+        "xx",
+        "a whole-step retry must re-run the pre-condition"
+      );
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
 
     assert.deepStrictEqual(integration.sentPrompts, [
       "retry-step",

@@ -81,6 +81,10 @@ export interface EndConditionHandlerResult {
   failureReason?: string;
   /** Internal: user requested one more retry attempt despite max retries being exhausted */
   retryOnceMore?: boolean;
+  /** An internal evaluator failure that must be routed by the executor. */
+  errorResult?: EvaluationResult;
+  /** Attempt index at which errorResult occurred. */
+  errorAttemptIndex?: number;
 }
 
 /**
@@ -120,6 +124,17 @@ export class EndConditionHandler {
       prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
     const onFail: EndConditionAction =
       prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+
+    // Evaluation errors are internal failures, not condition outcomes. The
+    // executor owns their policy because retry must re-enter the whole step.
+    if (evaluationResult.errored) {
+      return {
+        shouldContinue: false,
+        failureReason: evaluationResult.error ?? "End condition could not run",
+        errorResult: evaluationResult,
+        errorAttemptIndex: retryContext.attemptIndex,
+      };
+    }
 
     // Apply maxRetries default of 1 when either field is "retry" and maxRetries is unset
     if (
@@ -186,30 +201,14 @@ export class EndConditionHandler {
       return { shouldContinue: true };
     }
 
-    // Determine if this is an execution error or validation failure
-    const isExecutionError =
-      evaluationResult.timeout ||
-      (evaluationResult.error && evaluationResult.exitCode === undefined) ||
-      (evaluationResult.exitCode !== undefined &&
-        evaluationResult.exitCode !== 0);
-
-    if (isExecutionError) {
-      // Error path - script failed to execute properly
-      return await this.handleExecutionError(
-        prompt,
-        evaluationResult,
-        retryContext
-      );
-    } else {
-      // Validation failure path - script ran but output doesn't match
-      // Use iterative retry loop instead of recursion to avoid stack overflow
-      return await this.handleValidationFailureIterative(
-        prompt,
-        evaluationResult,
-        retryContext,
-        sendRetryPrompt
-      );
-    }
+    // The script ran but its output did not match. Keep conversational retry
+    // semantics for onFail: retry; only evaluator errors use errorBehavior.
+    return await this.handleValidationFailureIterative(
+      prompt,
+      evaluationResult,
+      retryContext,
+      sendRetryPrompt
+    );
   }
 
   /**
@@ -438,6 +437,15 @@ export class EndConditionHandler {
         retryReport.verdict
       );
 
+      if (retryEvaluation.errored) {
+        return {
+          shouldContinue: false,
+          failureReason: retryEvaluation.error ?? "End condition could not run",
+          errorResult: retryEvaluation,
+          errorAttemptIndex: nextAttemptIndex,
+        };
+      }
+
       // Check if the retry succeeded
       if (retryEvaluation.passed) {
         Log.info("✅ End condition passed after retry");
@@ -456,20 +464,6 @@ export class EndConditionHandler {
         );
 
         return { shouldContinue: true };
-      }
-
-      // Check if this is an execution error (not a validation failure)
-      const isExecutionError =
-        retryEvaluation.timeout ||
-        (retryEvaluation.error && retryEvaluation.exitCode === undefined) ||
-        (retryEvaluation.exitCode !== undefined &&
-          retryEvaluation.exitCode !== 0);
-
-      if (isExecutionError) {
-        return await this.handleExecutionError(prompt, retryEvaluation, {
-          ...retryContext,
-          attemptIndex: nextAttemptIndex,
-        });
       }
 
       // Validation failure — continue the loop for another retry attempt

@@ -70,7 +70,7 @@ export interface ResolvedProperties {
   /** Tool permission config - null means none (no permission flags injected) */
   toolPermissions: ToolPermissionConfig | null;
 
-  /** Harness failure policy - undefined means use the executor default stop behavior */
+  /** Internal-error policy - undefined means use the executor default stop behavior */
   errorBehavior?: ErrorBehavior;
 }
 

@@ -420,6 +420,17 @@
           "type": "number",
           "description": "Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting."
         },
+        "errorBehavior": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/errorBehavior"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Internal-error policy for this script step. Use null to disable an inherited workflow policy."
+        },
         "onPass": {
           "type": "string",
           "enum": ["continue", "stopWorkflow"],
@@ -539,12 +550,12 @@
     },
     "errorBehavior": {
       "type": "object",
-      "description": "Policy for harness/session failures such as process exit, timeout, or harness-reported session errors.",
+      "description": "Policy for internal errors in any step phase, including pre-conditions, prompts/harnesses, end-conditions, and script steps.",
       "properties": {
         "onError": {
           "type": "string",
           "enum": ["stop", "retry", "continue"],
-          "description": "What to do when the harness/session fails."
+          "description": "What to do when a step phase cannot run or otherwise encounters an internal error."
         },
         "maxRetries": {
           "type": "integer",

@@ -1,11 +1,11 @@
 # On Error Redesign — Generalized `errorBehavior`
 
-Status: **Proposed (2026-07-22).** Design agreed with Nathan; implementation
-is in progress. Interim mitigations already shipped: the direct-command shell
-fix in `EndConditionEvaluator`, and a warning status message when a gate cannot
-run. Implementation-sketch item 1 is complete: evaluator results now carry an
-explicit `errored` discriminator, and the executor reads it instead of using a
-heuristic.
+Status: **Executor implemented (2026-07-26); UI work previously shipped.**
+Design agreed with Nathan; the remaining follow-up is documenting any future
+refinements. Interim mitigations already shipped: the direct-command shell fix
+in `EndConditionEvaluator`, and a warning status message when a gate cannot
+run. Evaluator results carry an explicit `errored` discriminator, and the
+executor routes it through `errorBehavior`.
 
 ## Origin incident
 
@@ -110,16 +110,16 @@ never re-run on retry.
    The interim heuristic in `WorkflowExecutor` (status message added
    2026-07-22, `!preResult.passed && preResult.error && !preResult.stderr`)
    must be replaced by this field.
-2. **Executor step pipeline refactor**: hoist the retry loop so it encloses
-   the pre-condition gate, not just `executeWithStreaming`. The
-   gate/prompt/end-condition sequence becomes one retryable unit sharing
-   `attemptIndex`.
-3. **Script steps**: route `errored` script-step evaluations through the same
-   policy (their `onPass`/`onFail` — `continue`/`stopWorkflow` — stay outcome
-   actions).
-4. **Schema/docs**: `errorBehavior` description updated (workflow-schema.json
-   - `CtrlYokeTypes.ts` JSDoc); no shape change (`onError`, `maxRetries`,
-     `retryDelayMs` as today).
+2. **Executor step pipeline refactor (complete 2026-07-26)**: the retry loop
+   encloses the pre-condition gate, prompt/harness, and end-condition. The
+   phases share one `attemptIndex`/`maxRetries` budget, and condition errors
+   emit policy-specific status messages before retry/continue/stop routing.
+3. **Script steps (complete 2026-07-26)**: `errored` script-step evaluations
+   use the same policy; their `onPass`/`onFail` — `continue`/`stopWorkflow` —
+   remain condition-outcome actions.
+4. **Schema/docs (complete 2026-07-26)**: `errorBehavior` describes internal
+   errors across all step phases and is accepted on script steps; its shape is
+   unchanged (`onError`, `maxRetries`, `retryDelayMs`).
 5. **UI**: label + help text; no new fields.
 
 ## Testing
@@ -135,12 +135,15 @@ never re-run on retry.
 - `WorkflowExecutor` unit tests for the hoisted retry loop (existing
   `MockHarnessIntegration` covers the harness side).
 
+## Resolved decisions
+
+- **Whole-step retry session semantics (resolved 2026-07-26):** start a fresh
+  harness session for each whole-step retry. This matches the existing harness
+  failure retry behavior and keeps a retry from inheriting a partially failed
+  session. The separate `endCondition.onFail: retry` path continues to honor
+  `resumeSessionOnRetry` and resumes the conversational session by default.
+
 ## Open questions
 
-- **Session semantics on whole-step retry**: should the retried prompt resume
-  the prior attempt's session or start fresh? (endCondition's
-  `resumeSessionOnRetry` answers this for conversational retry; whole-step
-  retry needs its own default — leaning fresh-per-attempt, matching today's
-  harness retry behavior.)
 - Should `continue` on an errored _end_-condition mark the step visually
   distinct from a genuinely validated step (e.g. "completed (unvalidated)")?

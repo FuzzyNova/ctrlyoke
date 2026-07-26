@@ -332,6 +332,8 @@ export class PromptFileParser {
     if (source.compareSource !== undefined)
       step.compareSource = source.compareSource;
     if (source.returns !== undefined) step.returns = source.returns;
+    if (source.errorBehavior !== undefined)
+      step.errorBehavior = source.errorBehavior;
     if (source.onPass !== undefined) step.onPass = source.onPass;
     if (source.onFail !== undefined) step.onFail = source.onFail;
     return step;

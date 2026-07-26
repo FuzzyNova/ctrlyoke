@@ -437,6 +437,9 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
         compareSource: step.compareSource as ScriptStep["compareSource"],
       }),
       ...(typeof step.returns === "string" && { returns: step.returns }),
+      ...((step.errorBehavior !== undefined || step.errorBehavior === null) && {
+        errorBehavior: cloneErrorBehavior(step.errorBehavior),
+      }),
       ...(typeof step.onPass === "string" && {
         onPass: step.onPass as ScriptStep["onPass"],
       }),
@@ -539,6 +542,9 @@ export function buildScriptStepFromProperties(
       }),
     ...(props.returns !== undefined &&
       props.returns !== null && { returns: props.returns as string }),
+    ...((props.errorBehavior !== undefined || props.errorBehavior === null) && {
+      errorBehavior: cloneErrorBehavior(props.errorBehavior),
+    }),
   };
 }
 
