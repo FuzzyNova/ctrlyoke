@@ -18,6 +18,11 @@ import {
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
 import { getAntigravityContextWindowSize } from "../../../utils/ModelConstants";
+import {
+  AntigravityTranscriptEntry,
+  isAntigravityTranscriptEntry,
+} from "./AntigravityTranscriptTypes";
+import { AntigravityTranscriptReader } from "./AntigravityTranscriptReader";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -40,23 +45,16 @@ const SESSION_ID_REGEX =
 const TRANSCRIPT_READ_ATTEMPTS = 8;
 const TRANSCRIPT_READ_DELAY_MS = 150;
 
-interface AntigravityTranscriptEntry {
-  source?: string;
-  type?: string;
-  status?: string;
-  created_at?: string;
-  content?: unknown;
-}
-
 export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedSessionId?: string;
   private cachedLastConversationsSessionId?: string;
+  private readonly transcriptReader = new AntigravityTranscriptReader();
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     // Independent of the Go server log below (may have nothing new to report
     // this poll even when the user just typed a follow-up) — read first so
     // every path (including the early-return / catch below) still surfaces it.
-    const userSteerEvents = this.readNewUserSteerEvents();
+    const userSteerEvents = await this.readNewUserSteerEvents();
 
     try {
       if (!fs.existsSync(filePath)) {
@@ -269,13 +267,16 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return [];
     }
 
-    const transcriptPath = this.getTranscriptPath(sessionId, true);
-    const compactTranscriptPath = this.getTranscriptPath(sessionId, false);
+    const transcriptPath = this.getAuthoritativeTranscriptPath(sessionId);
+    if (!transcriptPath) {
+      return [];
+    }
 
     for (let attempt = 0; attempt < TRANSCRIPT_READ_ATTEMPTS; attempt += 1) {
-      const event =
-        this.readLatestResponseFromTranscript(transcriptPath, sessionId) ??
-        this.readLatestResponseFromTranscript(compactTranscriptPath, sessionId);
+      const event = this.readLatestResponseFromTranscript(
+        transcriptPath,
+        sessionId
+      );
       if (event) {
         return [event];
       }
@@ -293,17 +294,12 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     return parts.join(" | ");
   }
 
-  /** Transcript file mtime (ms) last scanned for user-steer entries — skips a re-read when unchanged. */
-  private lastUserSteerScanMtimeMs = new Map<string, number>();
-  /** Transcript line indices already emitted as `user_input` events, per transcript path. */
-  private seenUserInputLineIndices = new Map<string, Set<number>>();
-
   /**
    * Genuine human follow-ups typed into the live TUI also land in the
    * **transcript** (never the tailed cli log — see `hasPendingBackgroundWork`
-   * above), as `source: "USER_EXPLICIT"`, `type: "USER_INPUT"` entries. Scanned
-   * incrementally (by line index, mtime-gated) so repeated polls of the same
-   * unchanged transcript don't re-read or re-emit already-seen entries.
+   * above), as `source: "USER_EXPLICIT"`, `type: "USER_INPUT"` entries. Read
+   * incrementally by byte offset so repeated polls emit each append-only entry
+   * exactly once, including entries split across partial writes.
    *
    * Only reached when `readNewLines` runs, which is itself only triggered by
    * `fs.watch` activity on the tailed cli log (see class doc — this parser
@@ -312,89 +308,44 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * instantly; a dedicated transcript poll would close that gap but hasn't
    * been needed for the confirmed background-task-hold scenario.
    */
-  private readNewUserSteerEvents(): AntigravityLogEvent[] {
+  private async readNewUserSteerEvents(): Promise<AntigravityLogEvent[]> {
     const sessionId =
       this.cachedSessionId ?? this.cachedLastConversationsSessionId;
     if (!sessionId) {
       return [];
     }
-    return [
-      ...this.readNewUserSteerEventsFromTranscript(
-        this.getTranscriptPath(sessionId, true),
-        sessionId
-      ),
-      ...this.readNewUserSteerEventsFromTranscript(
-        this.getTranscriptPath(sessionId, false),
-        sessionId
-      ),
-    ];
-  }
-
-  private readNewUserSteerEventsFromTranscript(
-    transcriptPath: string,
-    sessionId: string
-  ): AntigravityLogEvent[] {
-    try {
-      if (!fs.existsSync(transcriptPath)) {
+    const transcriptPath = this.getAuthoritativeTranscriptPath(sessionId);
+    if (!transcriptPath) {
+      return [];
+    }
+    const entries = await this.transcriptReader.readEntries(transcriptPath);
+    return entries.flatMap((entry) => {
+      if (
+        entry.source !== "USER_EXPLICIT" ||
+        entry.type !== "USER_INPUT" ||
+        typeof entry.content !== "string"
+      ) {
         return [];
       }
-      const mtimeMs = fs.statSync(transcriptPath).mtimeMs;
-      if (this.lastUserSteerScanMtimeMs.get(transcriptPath) === mtimeMs) {
+      const text = this.unwrapUserRequest(entry.content);
+      if (!text) {
         return [];
       }
-      this.lastUserSteerScanMtimeMs.set(transcriptPath, mtimeMs);
-
-      const seen =
-        this.seenUserInputLineIndices.get(transcriptPath) ?? new Set<number>();
-      const lines = fs.readFileSync(transcriptPath, "utf8").split(/\r?\n/);
-      const events: AntigravityLogEvent[] = [];
-
-      lines.forEach((rawLine, index) => {
-        if (seen.has(index)) {
-          return;
-        }
-        const line = rawLine.trim();
-        if (!line) {
-          return;
-        }
-        seen.add(index);
-
-        let entry: AntigravityTranscriptEntry;
-        try {
-          entry = JSON.parse(line) as AntigravityTranscriptEntry;
-        } catch {
-          return;
-        }
-        if (
-          entry.source !== "USER_EXPLICIT" ||
-          entry.type !== "USER_INPUT" ||
-          typeof entry.content !== "string"
-        ) {
-          return;
-        }
-        const text = entry.content.trim();
-        if (!text) {
-          return;
-        }
-        events.push({
-          type: "user_input",
+      return [
+        {
+          type: "user_input" as const,
           line: text,
           sessionId,
           timestamp: entry.created_at
             ? new Date(entry.created_at).getTime()
             : Date.now(),
-        });
-      });
-
-      this.seenUserInputLineIndices.set(transcriptPath, seen);
-      return events;
-    } catch {
-      return [];
-    }
+        },
+      ];
+    });
   }
 
   /**
-   * Classify a synthetic `user_input` event (see `readNewUserSteerEventsFromTranscript`).
+   * Classify a synthetic `user_input` event (see `readNewUserSteerEvents`).
    * The transcript's completion/resume marker is a `SYSTEM`/`SYSTEM_MESSAGE`
    * entry (see `hasPendingBackgroundWork`), never `USER_EXPLICIT`/`USER_INPUT`,
    * so the only distinction needed here is against ctrlyoke's own injected prompt.
@@ -414,11 +365,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
     if (ctx.dispatchedPromptText) {
       const normalizedDispatched = this.normalizePromptForMatching(
-        ctx.dispatchedPromptText.substring(0, 100)
+        ctx.dispatchedPromptText
       );
-      const normalizedLogged = this.normalizePromptForMatching(
-        text.substring(0, 100)
-      );
+      const normalizedLogged = this.normalizePromptForMatching(text);
       if (normalizedLogged.includes(normalizedDispatched)) {
         return "injected-prompt";
       }
@@ -459,12 +408,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     if (!sessionId) {
       return false;
     }
-    return (
-      this.hasPendingTaskInTranscript(
-        this.getTranscriptPath(sessionId, true)
-      ) ||
-      this.hasPendingTaskInTranscript(this.getTranscriptPath(sessionId, false))
-    );
+    const transcriptPath = this.getAuthoritativeTranscriptPath(sessionId);
+    return transcriptPath
+      ? this.hasPendingTaskInTranscript(transcriptPath)
+      : false;
   }
 
   private hasPendingTaskInTranscript(transcriptPath: string): boolean {
@@ -485,7 +432,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
         let entry: AntigravityTranscriptEntry;
         try {
-          entry = JSON.parse(line) as AntigravityTranscriptEntry;
+          const parsed: unknown = JSON.parse(line);
+          if (!isAntigravityTranscriptEntry(parsed)) {
+            continue;
+          }
+          entry = parsed;
         } catch {
           continue;
         }
@@ -571,6 +522,24 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     );
   }
 
+  private getAuthoritativeTranscriptPath(
+    sessionId: string
+  ): string | undefined {
+    const fullPath = this.getTranscriptPath(sessionId, true);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
+    const compactPath = this.getTranscriptPath(sessionId, false);
+    return fs.existsSync(compactPath) ? compactPath : undefined;
+  }
+
+  private unwrapUserRequest(content: string): string {
+    const match = content.match(
+      /<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/i
+    );
+    return (match?.[1] ?? content).trim();
+  }
+
   private extractSessionIdFromLine(line: string): string | undefined {
     const match = line.match(SESSION_ID_REGEX);
     return match?.[1];
@@ -594,7 +563,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           continue;
         }
 
-        const entry = JSON.parse(line) as AntigravityTranscriptEntry;
+        const parsed: unknown = JSON.parse(line);
+        if (!isAntigravityTranscriptEntry(parsed)) {
+          continue;
+        }
+        const entry = parsed;
         if (
           entry.source !== "MODEL" ||
           entry.type !== "PLANNER_RESPONSE" ||

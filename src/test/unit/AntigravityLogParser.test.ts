@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
+import { AntigravityTranscriptReader } from "../../core/harness/antigravity/AntigravityTranscriptReader";
 import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
 
 async function withTemporaryHome<T>(
@@ -54,6 +55,249 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(events[2].type, "response.completed");
         assert.strictEqual(parser.extractSessionId(events), sessionId);
         assert.strictEqual(parser.isComplete(events[2]), true);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("uses transcript_full as the sole authoritative user-input source", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const sessionId = "55555555-5555-5555-5555-555555555555";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          sessionId,
+          ".system_generated",
+          "logs"
+        );
+        const logPath = path.join(logDir, "cli-20260705_120000.log");
+        const fullPath = path.join(transcriptDir, "transcript_full.jsonl");
+        const compactPath = path.join(transcriptDir, "transcript.jsonl");
+        const injected =
+          "<USER_REQUEST>\nFollow instructions in c:/workspace/request.prompt.md\n</USER_REQUEST>\n" +
+          "<ADDITIONAL_METADATA>ignored wrapper</ADDITIONAL_METADATA>";
+
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        fs.writeFileSync(
+          fullPath,
+          [
+            JSON.stringify({
+              source: "USER_EXPLICIT",
+              type: "USER_INPUT",
+              status: "DONE",
+              content: injected,
+            }),
+            JSON.stringify({
+              source: "USER_EXPLICIT",
+              type: "USER_INPUT",
+              status: "DONE",
+              content: "please inspect the generated file",
+            }),
+          ].join("\n") + "\n",
+          "utf8"
+        );
+        fs.writeFileSync(
+          compactPath,
+          JSON.stringify({
+            source: "USER_EXPLICIT",
+            type: "USER_INPUT",
+            status: "DONE",
+            content: "this compact-only duplicate must not appear",
+          }) + "\n",
+          "utf8"
+        );
+
+        const events = await parser.readNewLines(logPath);
+        assert.deepStrictEqual(
+          events.map((event) => event.line),
+          [
+            "Follow instructions in c:/workspace/request.prompt.md",
+            "please inspect the generated file",
+          ]
+        );
+        assert.strictEqual(
+          parser.classifyUserEvent(events[0], {
+            dispatchedPromptText:
+              "Follow instructions in c:/workspace/request.prompt.md",
+          }),
+          "injected-prompt"
+        );
+        assert.strictEqual(
+          parser.classifyUserEvent(events[1], {
+            dispatchedPromptText:
+              "Follow instructions in c:/workspace/request.prompt.md",
+          }),
+          "human-steer"
+        );
+      });
+    });
+
+    test("falls back to transcript.jsonl only when transcript_full.jsonl is absent", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const sessionId = "66666666-6666-6666-6666-666666666666";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          sessionId,
+          ".system_generated",
+          "logs"
+        );
+        const logPath = path.join(logDir, "cli-20260705_120000.log");
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(transcriptDir, "transcript.jsonl"),
+          JSON.stringify({
+            source: "USER_EXPLICIT",
+            type: "USER_INPUT",
+            status: "DONE",
+            content: "legacy compact prompt",
+          }) + "\n",
+          "utf8"
+        );
+
+        const events = await parser.readNewLines(logPath);
+        assert.strictEqual(events.length, 1);
+        assert.strictEqual(events[0].line, "legacy compact prompt");
+      });
+    });
+  });
+
+  suite("AntigravityTranscriptReader", () => {
+    function entry(content: string, step_index: number) {
+      return {
+        source: "MODEL",
+        type: "PLANNER_RESPONSE",
+        status: "DONE",
+        step_index,
+        content,
+      };
+    }
+
+    test("emits appended entries once and preserves file order", async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
+      );
+      const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
+      const reader = new AntigravityTranscriptReader();
+      try {
+        fs.writeFileSync(
+          transcriptPath,
+          JSON.stringify(entry("first", 3)) + "\n",
+          "utf8"
+        );
+        assert.deepStrictEqual(
+          (await reader.readEntries(transcriptPath)).map(
+            (item) => item.content
+          ),
+          ["first"]
+        );
+        fs.appendFileSync(
+          transcriptPath,
+          JSON.stringify(entry("second", 2)) + "\n",
+          "utf8"
+        );
+        assert.deepStrictEqual(
+          (await reader.readEntries(transcriptPath)).map(
+            (item) => item.content
+          ),
+          ["second"]
+        );
+        assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("holds a partial trailing line until the next append", async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
+      );
+      const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
+      const reader = new AntigravityTranscriptReader();
+      const serialized = JSON.stringify(entry("partial", 1));
+      try {
+        fs.writeFileSync(transcriptPath, serialized.slice(0, -4), "utf8");
+        assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
+        fs.appendFileSync(transcriptPath, serialized.slice(-4) + "\n", "utf8");
+        const entries = await reader.readEntries(transcriptPath);
+        assert.strictEqual(entries.length, 1);
+        assert.strictEqual(entries[0].content, "partial");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("restarts from the beginning when a transcript is replaced or truncated", async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
+      );
+      const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
+      const reader = new AntigravityTranscriptReader();
+      try {
+        fs.writeFileSync(
+          transcriptPath,
+          JSON.stringify(entry("original", 1)) + "\n",
+          "utf8"
+        );
+        assert.strictEqual(
+          (await reader.readEntries(transcriptPath)).length,
+          1
+        );
+        fs.writeFileSync(
+          transcriptPath,
+          JSON.stringify(entry("replacement", 1)) + "\n",
+          "utf8"
+        );
+        const replacement = await reader.readEntries(transcriptPath);
+        assert.strictEqual(replacement.length, 1);
+        assert.strictEqual(replacement[0].content, "replacement");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("skips malformed and unknown transcript variants safely", async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
+      );
+      const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
+      const reader = new AntigravityTranscriptReader();
+      try {
+        fs.writeFileSync(
+          transcriptPath,
+          [
+            "not json",
+            JSON.stringify({ source: "MODEL", type: "UNKNOWN" }),
+            JSON.stringify(entry("valid", 4)),
+          ].join("\n") + "\n",
+          "utf8"
+        );
+        const entries = await reader.readEntries(transcriptPath);
+        assert.strictEqual(entries.length, 1);
+        assert.strictEqual(entries[0].content, "valid");
       } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
