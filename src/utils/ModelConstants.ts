@@ -373,21 +373,52 @@ export function getQwenContextWindowSize(_modelId: string): number {
 // ============================================================================
 // ANTIGRAVITY CLI MODELS
 // ============================================================================
+/**
+ * Antigravity CLI model IDs, exactly as printed by `agy models`.
+ *
+ * `agy --model` accepts either these IDs or the display labels below, but we
+ * store IDs to match every other harness in this file (id -> label). The
+ * effort tier is baked into the ID suffix (`-low` / `-medium` / `-high`)
+ * rather than passed via agy's separate `--effort` flag.
+ *
+ * An unrecognized value is rejected by agy with exit 1 and a list of valid
+ * models — it never silently falls back to the default.
+ *
+ * Last verified against `agy models` + `agy --model <id>` validation: 2026-07-26.
+ */
 export const ANTIGRAVITY_CLI_MODELS = [
-  "Gemini 3.5 Flash (Medium)",
-  "Gemini 3.5 Flash (High)",
-  "Gemini 3.5 Flash (Low)",
-  "Gemini 3.1 Pro (Low)",
-  "Gemini 3.1 Pro (High)",
-  "Claude Sonnet 4.6 (Thinking)",
-  "Claude Opus 4.6 (Thinking)",
-  "GPT-OSS 120B (Medium)",
+  "gemini-3.6-flash-high",
+  "gemini-3.6-flash-medium",
+  "gemini-3.6-flash-low",
+  "gemini-3.5-flash-high",
+  "gemini-3.5-flash-medium",
+  "gemini-3.5-flash-low",
+  "gemini-3.1-pro-high",
+  "gemini-3.1-pro-low",
+  "claude-sonnet-4-6",
+  "claude-opus-4-6-thinking",
+  "gpt-oss-120b-medium",
 ] as const;
 
-export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> =
-  Object.fromEntries(
-    ANTIGRAVITY_CLI_MODELS.map((model) => [model, model])
-  ) as Record<string, string>;
+/**
+ * Display labels, verbatim from agy's own "Available models" output.
+ *
+ * Note `claude-sonnet-4-6` carries a "(Thinking)" label despite having no
+ * `-thinking` ID suffix — that asymmetry is agy's, not ours.
+ */
+export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
+  "gemini-3.6-flash-high": "Gemini 3.6 Flash (High)",
+  "gemini-3.6-flash-medium": "Gemini 3.6 Flash (Medium)",
+  "gemini-3.6-flash-low": "Gemini 3.6 Flash (Low)",
+  "gemini-3.5-flash-high": "Gemini 3.5 Flash (High)",
+  "gemini-3.5-flash-medium": "Gemini 3.5 Flash (Medium)",
+  "gemini-3.5-flash-low": "Gemini 3.5 Flash (Low)",
+  "gemini-3.1-pro-high": "Gemini 3.1 Pro (High)",
+  "gemini-3.1-pro-low": "Gemini 3.1 Pro (Low)",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6 (Thinking)",
+  "claude-opus-4-6-thinking": "Claude Opus 4.6 (Thinking)",
+  "gpt-oss-120b-medium": "GPT-OSS 120B (Medium)",
+};
 
 export function getAntigravityModelName(model: string): string | undefined {
   if (ANTIGRAVITY_CLI_MODELS.includes(model as any)) {
@@ -399,9 +430,10 @@ export function getAntigravityModelName(model: string): string | undefined {
 /**
  * Get the context window size for an Antigravity CLI model.
  *
- * Antigravity exposes display labels rather than API model IDs, so this maps
- * by provider family and falls back to the Gemini-sized window used by the
- * default Antigravity models.
+ * Matches on provider family substrings, which hold for both the model IDs
+ * above (`claude-…`, `gpt-oss-…`) and agy's display labels, so a value from
+ * either vocabulary resolves correctly. Falls back to the Gemini-sized window
+ * used by the default Antigravity models.
  */
 export function getAntigravityContextWindowSize(
   modelId: string | undefined

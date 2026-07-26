@@ -312,14 +312,14 @@ All settings use the `ctrlyoke.` prefix.
 
 ### Models
 
-| Setting               | Default                        | Harness         |
-| --------------------- | ------------------------------ | --------------- |
-| `copilotCliModel`     | `claude-sonnet-4.5`            | Copilot CLI     |
-| `claudeCliModel`      | `sonnet`                       | Claude CLI      |
-| `codexCliModel`       | `gpt-5.1-codex`                | Codex CLI       |
-| `openCodeCliModel`    | `anthropic/claude-sonnet-4-6`  | OpenCode CLI    |
-| `qwenCliModel`        | `coder-model`                  | Qwen CLI        |
-| `antigravityCliModel` | `Claude Sonnet 4.6 (Thinking)` | Antigravity CLI |
+| Setting               | Default                       | Harness         |
+| --------------------- | ----------------------------- | --------------- |
+| `copilotCliModel`     | `claude-sonnet-4.5`           | Copilot CLI     |
+| `claudeCliModel`      | `sonnet`                      | Claude CLI      |
+| `codexCliModel`       | `gpt-5.1-codex`               | Codex CLI       |
+| `openCodeCliModel`    | `anthropic/claude-sonnet-4-6` | OpenCode CLI    |
+| `qwenCliModel`        | `coder-model`                 | Qwen CLI        |
+| `antigravityCliModel` | `gemini-3.6-flash-medium`     | Antigravity CLI |
 
 ### Tool permissions
 

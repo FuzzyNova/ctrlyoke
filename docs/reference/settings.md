@@ -48,7 +48,7 @@ These settings apply to both the extension and the standalone CLI where relevant
   "models": {
     "copilot-cli": "claude-sonnet-4.5",
     "claude-cli": "sonnet",
-    "antigravity-cli": "Claude Sonnet 4.6 (Thinking)"
+    "antigravity-cli": "gemini-3.6-flash-medium"
   }
 }
 ```

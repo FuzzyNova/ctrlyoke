@@ -738,7 +738,10 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.4",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
   [HARNESS_IDS.QWEN_CLI]: "qwen3.5-plus",
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: "Claude Sonnet 4.6 (Thinking)",
+  // Gemini Flash, not agy's own Claude Sonnet default: the Sonnet tier has a
+  // small individual quota that a single run can exhaust for ~28h, which would
+  // block unrelated work for anyone who never picks a model explicitly.
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3.6-flash-medium",
 } as const;
 
 // ============================================================================

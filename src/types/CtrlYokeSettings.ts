@@ -240,7 +240,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
       "codex-cli": "gpt-5.5",
       "opencode-cli": "opencode/big-pickle",
       "qwen-cli": "qwen3.5-plus",
-      "antigravity-cli": "Claude Sonnet 4.6 (Thinking)",
+      "antigravity-cli": "gemini-3.6-flash-medium",
     },
     additionalArgs: {},
     agent: "",

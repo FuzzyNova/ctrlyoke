@@ -207,7 +207,7 @@ suite("AntigravityLogParser", () => {
           contextWindowUsedTokens: 17_000,
           contextWindowSize: 1_000_000,
         },
-        "Gemini 3.5 Flash (Low)"
+        "gemini-3.5-flash-low"
       );
 
       assert.deepStrictEqual(result, {
@@ -221,7 +221,7 @@ suite("AntigravityLogParser", () => {
 
       const result = parser.extractLiveContextWindow(
         { type: "log.line", line: "heartbeat" },
-        "Gemini 3.5 Flash (Low)"
+        "gemini-3.5-flash-low"
       );
 
       assert.strictEqual(result, null);

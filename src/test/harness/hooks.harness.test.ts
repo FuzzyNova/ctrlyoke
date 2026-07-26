@@ -67,7 +67,7 @@ const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "codex-cli": "gpt-5.4",
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
-  "antigravity-cli": "Gemini 3.5 Flash (Low)",
+  "antigravity-cli": "gemini-3.6-flash-low",
 };
 
 /**

@@ -10,7 +10,7 @@ Use it when:
 
 ```yaml
 harness: antigravity-cli
-model: Gemini 3.5 Flash (Low)
+model: gemini-3.6-flash-low
 steps:
   - prompt: Update the implementation and run the focused tests.
 ```
@@ -19,5 +19,6 @@ Notes:
 
 - Install and authenticate `agy` before selecting this harness.
 - ctrlyoke requires `agy` 1.0.15 or newer.
-- For manual test runs, prefer `Gemini 3.5 Flash (Low)` to avoid exhausting the default Claude quota.
+- Models are the IDs `agy models` prints (`gemini-3.6-flash-low`, `claude-sonnet-4-6`, …). The dashboard shows agy's friendlier labels ("Gemini 3.6 Flash (Low)"), and `agy` itself accepts either spelling, but workflow files and settings use the ID.
+- For manual test runs, prefer a Gemini Flash tier to avoid exhausting the much smaller Claude quota.
 - Antigravity stores some user-level config under `~/.gemini/`; those paths are expected and are not Gemini CLI support.

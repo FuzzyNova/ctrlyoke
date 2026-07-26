@@ -14,6 +14,7 @@ import {
   CLAUDE_CLI_MODELS,
   QWEN_CLI_MODELS,
   ANTIGRAVITY_CLI_MODELS,
+  ANTIGRAVITY_CLI_MODEL_LABELS,
   MODEL_NONE,
 } from "../../utils/ModelConstants";
 
@@ -199,8 +200,8 @@ suite("ModelConstants", () => {
   suite("getAntigravityModelName", () => {
     test("returns model name for known Antigravity model", () => {
       assert.strictEqual(
-        getAntigravityModelName("Claude Sonnet 4.6 (Thinking)"),
-        "Claude Sonnet 4.6 (Thinking)"
+        getAntigravityModelName("claude-sonnet-4-6"),
+        "claude-sonnet-4-6"
       );
     });
 
@@ -219,22 +220,39 @@ suite("ModelConstants", () => {
   suite("getAntigravityContextWindowSize", () => {
     test("returns 1M for Gemini Antigravity models", () => {
       assert.strictEqual(
-        getAntigravityContextWindowSize("Gemini 3.5 Flash (Low)"),
+        getAntigravityContextWindowSize("gemini-3.6-flash-low"),
         1_000_000
       );
     });
 
     test("returns 200k for Claude Antigravity models", () => {
       assert.strictEqual(
-        getAntigravityContextWindowSize("Claude Sonnet 4.6 (Thinking)"),
+        getAntigravityContextWindowSize("claude-sonnet-4-6"),
         200_000
       );
     });
 
     test("returns 128k for GPT-OSS Antigravity models", () => {
       assert.strictEqual(
+        getAntigravityContextWindowSize("gpt-oss-120b-medium"),
+        128_000
+      );
+    });
+
+    // agy accepts its display labels as well as the IDs we store, so a value
+    // carried over from the pre-ID-migration format must still size correctly.
+    test("still resolves agy display labels", () => {
+      assert.strictEqual(
+        getAntigravityContextWindowSize("Claude Sonnet 4.6 (Thinking)"),
+        200_000
+      );
+      assert.strictEqual(
         getAntigravityContextWindowSize("GPT-OSS 120B (Medium)"),
         128_000
+      );
+      assert.strictEqual(
+        getAntigravityContextWindowSize("Gemini 3.5 Flash (Low)"),
+        1_000_000
       );
     });
   });
@@ -256,9 +274,22 @@ suite("ModelConstants", () => {
       assert.ok(QWEN_CLI_MODELS.includes("qwen3.5-plus"));
     });
 
-    test("ANTIGRAVITY_CLI_MODELS includes Claude Sonnet 4.6 (Thinking)", () => {
+    test("ANTIGRAVITY_CLI_MODELS uses agy model IDs, not display labels", () => {
+      assert.ok(ANTIGRAVITY_CLI_MODELS.includes("claude-sonnet-4-6"));
+      assert.ok(ANTIGRAVITY_CLI_MODELS.includes("gemini-3.6-flash-medium"));
       assert.ok(
-        ANTIGRAVITY_CLI_MODELS.includes("Claude Sonnet 4.6 (Thinking)")
+        ANTIGRAVITY_CLI_MODELS.every((m) => !m.includes(" ")),
+        "IDs must not contain spaces"
+      );
+    });
+
+    test("every ANTIGRAVITY_CLI_MODELS id has a display label", () => {
+      for (const id of ANTIGRAVITY_CLI_MODELS) {
+        assert.ok(ANTIGRAVITY_CLI_MODEL_LABELS[id], `missing label for ${id}`);
+      }
+      assert.strictEqual(
+        Object.keys(ANTIGRAVITY_CLI_MODEL_LABELS).length,
+        ANTIGRAVITY_CLI_MODELS.length
       );
     });
 
