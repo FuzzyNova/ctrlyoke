@@ -100,22 +100,23 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /** Maps tool_use id → tool name for associating streaming tool results with their calls. */
   private pendingStreamingToolUses = new Map<string, string>();
 
-  /**
-   * The `tool_use` id of the most recent background Bash or confirmed async
-   * Agent launch that has not yet been notified, or undefined when no
-   * background task is pending. "Most recent" (not "any outstanding") is
-   * deliberate: a newer launch always displaces an older, superseded one that
-   * will never be notified — see `hasPendingBackgroundWork` for the empirical
-   * rationale.
-   */
-  private mostRecentBackgroundLaunchId?: string;
+  /** Background tool calls whose completion notification has not been delivered. */
+  private pendingBackgroundLaunchIds = new Set<string>();
 
   /**
-   * Agent tool calls that may launch asynchronously. Unlike Bash, an Agent
-   * call with no `run_in_background` field is not positive evidence by itself;
-   * Claude confirms the launch in the correlated tool result.
+   * Tool calls whose asynchronous launch must be confirmed by their result.
+   * Explicit `run_in_background: true` is sufficient on its own, but Agent
+   * calls without that field and Monitor calls report their async status only
+   * in the correlated tool result.
    */
-  private unconfirmedAsyncAgentLaunchIds = new Set<string>();
+  private unconfirmedAsyncLaunches = new Map<string, "Agent" | "Monitor">();
+
+  /**
+   * A delivered task notification makes Claude auto-resume. Keep the current
+   * Stop gated until that resumed turn reaches its own terminal assistant
+   * event, even when every notified task ID has already left the pending set.
+   */
+  private resumedTurnCompletionPending = false;
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -549,32 +550,35 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     return "";
   }
 
-  /**
-   * Promote a candidate Agent tool call to pending background work only after
-   * Claude confirms that it launched asynchronously. Failed and synchronous
-   * Agent calls must not hold workflow completion.
-   */
-  private trackAsyncAgentLaunchResult(e: ClaudeProviderEvent): void {
+  /** Update pending launch state from correlated tool results. */
+  private trackAsyncLaunchResult(e: ClaudeProviderEvent): void {
     if (e.type !== "user" || !Array.isArray(e.message?.content)) {
       return;
     }
 
     for (const block of e.message.content as Array<Record<string, any>>) {
       const toolUseId = block.tool_use_id;
-      if (
-        block.type !== "tool_result" ||
-        typeof toolUseId !== "string" ||
-        !this.unconfirmedAsyncAgentLaunchIds.delete(toolUseId)
-      ) {
+      if (block.type !== "tool_result" || typeof toolUseId !== "string") {
         continue;
       }
 
+      if (block.is_error === true) {
+        this.pendingBackgroundLaunchIds.delete(toolUseId);
+      }
+
+      const candidateType = this.unconfirmedAsyncLaunches.get(toolUseId);
+      if (!candidateType) {
+        continue;
+      }
+      this.unconfirmedAsyncLaunches.delete(toolUseId);
+
       const resultText = ClaudeToolBuilder.extractToolResultText(block.content);
-      if (
-        block.is_error !== true &&
-        resultText.includes("Async agent launched successfully")
-      ) {
-        this.mostRecentBackgroundLaunchId = toolUseId;
+      const launchConfirmed =
+        candidateType === "Agent"
+          ? resultText.includes("Async agent launched successfully")
+          : resultText.includes("Monitor started");
+      if (block.is_error !== true && launchConfirmed) {
+        this.pendingBackgroundLaunchIds.add(toolUseId);
       }
     }
   }
@@ -583,56 +587,70 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * Track background-task launch/notification markers per the empirically
    * confirmed rule (see `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
    * "Claude Code — CONFIRMED"):
-   * - **Launch:** an `assistant` `tool_use` block, `name: "Bash"`,
-   *   `input.run_in_background === true`, or a candidate `Agent` tool call
-   *   whose correlated result confirms `Async agent launched successfully`.
-   *   Its id becomes the new "most recent" launch, superseding any prior one
-   *   (a superseded launch is a "zombie" that will never be notified — see
-   *   class doc).
+   * - **Launch:** any `assistant` `tool_use` block with
+   *   `input.run_in_background === true` (Claude uses both `Bash` and
+   *   `PowerShell` command tools), or an Agent/Monitor result that confirms
+   *   asynchronous execution. Every outstanding id is retained because Claude
+   *   can run and notify several background tools concurrently.
    * - **Notification delivery:** a `user` or `attachment` event whose payload contains
-   *   `<task-notification>…<tool-use-id>{id}</tool-use-id>…`. Clears the
-   *   tracked id only when it matches the most-recent launch. Queue operations
-   *   deliberately do not clear it because they can precede the Stop that must
-   *   remain gated while Claude has not yet consumed the notification.
+   *   `<task-notification>`. It clears a matching launch id and latches
+   *   resumed-turn completion: the Stop preceding delivery is intermediate,
+   *   so completion remains gated until the auto-resumed turn reaches a later
+   *   terminal assistant event. Queue operations deliberately do not affect
+   *   either state because they are bookkeeping, not notification consumption.
    */
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as ClaudeProviderEvent;
 
-    if (e.type === "assistant" && Array.isArray(e.message?.content)) {
-      for (const block of e.message.content as Array<Record<string, any>>) {
-        if (
-          block.type === "tool_use" &&
-          block.name === "Bash" &&
-          block.input?.run_in_background === true &&
-          typeof block.id === "string"
-        ) {
-          this.mostRecentBackgroundLaunchId = block.id;
+    if (e.type === "assistant") {
+      if (Array.isArray(e.message?.content)) {
+        for (const block of e.message.content as Array<Record<string, any>>) {
+          if (block.type !== "tool_use" || typeof block.id !== "string") {
+            continue;
+          }
+
+          if (block.input?.run_in_background === true) {
+            this.pendingBackgroundLaunchIds.add(block.id);
+          } else if (
+            block.name === "Agent" &&
+            block.input?.run_in_background !== false
+          ) {
+            this.unconfirmedAsyncLaunches.set(block.id, "Agent");
+          } else if (block.name === "Monitor") {
+            this.unconfirmedAsyncLaunches.set(block.id, "Monitor");
+          }
         }
-        if (
-          block.type === "tool_use" &&
-          block.name === "Agent" &&
-          block.input?.run_in_background !== false &&
-          typeof block.id === "string"
-        ) {
-          this.unconfirmedAsyncAgentLaunchIds.add(block.id);
-        }
+      }
+
+      const stopReason = e.message?.stop_reason;
+      if (
+        this.resumedTurnCompletionPending &&
+        stopReason !== null &&
+        stopReason !== undefined &&
+        stopReason !== "tool_use"
+      ) {
+        this.resumedTurnCompletionPending = false;
       }
       return;
     }
 
-    this.trackAsyncAgentLaunchResult(e);
+    this.trackAsyncLaunchResult(e);
 
-    if (this.mostRecentBackgroundLaunchId) {
-      const text = this.extractTaskNotificationText(e);
+    const text = this.extractTaskNotificationText(e);
+    if (text.includes("<task-notification>")) {
+      this.resumedTurnCompletionPending = true;
       const match = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
-      if (match && match[1] === this.mostRecentBackgroundLaunchId) {
-        this.mostRecentBackgroundLaunchId = undefined;
+      if (match) {
+        this.pendingBackgroundLaunchIds.delete(match[1]);
       }
     }
   }
 
   override hasPendingBackgroundWork(): boolean {
-    return this.mostRecentBackgroundLaunchId !== undefined;
+    return (
+      this.pendingBackgroundLaunchIds.size > 0 ||
+      this.resumedTurnCompletionPending
+    );
   }
 
   /**

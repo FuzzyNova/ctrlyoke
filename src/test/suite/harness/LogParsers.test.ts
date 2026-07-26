@@ -615,6 +615,11 @@ suite("ClaudeLogParser", () => {
         },
       });
 
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
@@ -719,6 +724,11 @@ suite("ClaudeLogParser", () => {
         },
       });
 
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
@@ -763,6 +773,11 @@ suite("ClaudeLogParser", () => {
           content: notification,
         },
       });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
@@ -789,6 +804,105 @@ suite("ClaudeLogParser", () => {
         },
       });
 
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("should track concurrent PowerShell, Bash, and Monitor work through the resumed turn", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_powershell",
+              name: "PowerShell",
+              input: { run_in_background: true },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_monitor",
+              name: "Monitor",
+              input: { persistent: false },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_monitor",
+              content:
+                "Monitor started (task monitor-1, timeout 900000ms). You will be notified on each event.",
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_bash",
+              name: "Bash",
+              input: { run_in_background: true },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+
+      for (const toolUseId of [
+        "toolu_powershell",
+        "toolu_bash",
+        "toolu_monitor",
+      ]) {
+        parser.trackBackgroundWorkState({
+          type: "user",
+          message: {
+            content:
+              `<task-notification><tool-use-id>${toolUseId}</tool-use-id>` +
+              "</task-notification>",
+          },
+        });
+      }
+
+      // Delivery clears all task IDs, but it also schedules an auto-resumed
+      // turn, so the Stop preceding these notifications is still not final.
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "tool_use" },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [{ type: "text", text: "Tests pass." }],
+          stop_reason: "end_turn",
+        },
+      });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 

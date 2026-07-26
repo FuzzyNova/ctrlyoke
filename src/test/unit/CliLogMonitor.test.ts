@@ -8,6 +8,7 @@ import type {
   ILogParser,
 } from "../../core/harness/shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "../../core/harness/shared/interfaces/INotificationMonitor";
+import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliEvent, TextData } from "../../types/CliOutputTypes";
 
@@ -357,6 +358,98 @@ suite("CliLogMonitor", () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(pendingCheckCount, 3);
+    });
+  });
+
+  test("ignores an intermediate Claude Stop until the task-notification resumed turn finishes", async () => {
+    await withZeroDrainDeadline(async () => {
+      const parser = new ClaudeLogParser();
+      const notification =
+        "<task-notification><tool-use-id>toolu_background</tool-use-id></task-notification>";
+      const batches: BaseCliEvent[][] = [
+        [
+          {
+            type: "assistant",
+            timestamp: 1,
+            message: {
+              content: [
+                {
+                  type: "tool_use",
+                  id: "toolu_background",
+                  name: "PowerShell",
+                  input: { run_in_background: true },
+                },
+              ],
+              stop_reason: "tool_use",
+            },
+          },
+        ],
+        [
+          {
+            type: "assistant",
+            timestamp: 2,
+            message: { content: [], stop_reason: "end_turn" },
+          },
+          {
+            type: "user",
+            timestamp: 3,
+            message: { content: notification },
+          },
+        ],
+        [
+          {
+            type: "assistant",
+            timestamp: 4,
+            message: { content: [], stop_reason: "tool_use" },
+          },
+          {
+            type: "assistant",
+            timestamp: 5,
+            message: {
+              content: [{ type: "text", text: "Tests pass." }],
+              stop_reason: "end_turn",
+            },
+          },
+        ],
+      ];
+      let readIndex = 0;
+      parser.readNewLines = async () => batches[readIndex++] ?? [];
+      parser.watchLogFile = () => ({ close() {} }) as fs.FSWatcher;
+
+      let notificationCallCount = 0;
+      const monitor = new CliLogMonitor({
+        logParser: parser,
+        notificationMonitor: createNotificationMonitor({
+          monitorForCompletion: async () => {
+            notificationCallCount++;
+            return {
+              completed: true,
+              kind: "completion",
+              data: {},
+            };
+          },
+        }),
+        runtimeState: {
+          getWorkspaceRoot: () => os.tmpdir(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: () => undefined,
+          onResponseComplete: () => undefined,
+          logResponse: () => undefined,
+        },
+      });
+
+      const result = await monitor.monitor(
+        "session.jsonl",
+        "sess-1",
+        new Date(0),
+        "claude-opus-5"
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(notificationCallCount, 2);
+      assert.strictEqual(result.cliResult?.response, "Tests pass.");
     });
   });
 });
