@@ -825,7 +825,7 @@ const CliHeaderRowView: React.FC<{
           : undefined;
     const headerLabel = isConditionOutput
       ? conditionLabel
-      : stepLabelContent ?? row.stepLabel;
+      : (stepLabelContent ?? row.stepLabel);
     const headerIcon =
       output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
         ? "codicon-shield"

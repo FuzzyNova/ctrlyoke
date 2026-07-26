@@ -284,7 +284,9 @@ function getStreamingChunk(
 ): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
     ? input.streamingChunks[getStreamingChunkKey(target.index, phase)] || ""
-    : input.finalStepStreamingChunks[getStreamingChunkKey(target.index, phase)] || "";
+    : input.finalStepStreamingChunks[
+        getStreamingChunkKey(target.index, phase)
+      ] || "";
 }
 
 const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;

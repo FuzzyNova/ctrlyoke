@@ -712,8 +712,7 @@ export class EndConditionEvaluator {
           };
         }
         if (expectedLower === "false") {
-          const passed =
-            result.exitCode !== undefined && result.exitCode !== 0;
+          const passed = result.exitCode !== undefined && result.exitCode !== 0;
           return {
             passed,
             matchRule: passed ? "exitCode" : "none",
@@ -733,19 +732,23 @@ export class EndConditionEvaluator {
 
       case COMPARE_SOURCES.STDERR:
         // Compare stderr, no exit code requirement
-        return this.checkResult(result.stderr ?? "", returns, undefined, actualSource);
+        return this.checkResult(
+          result.stderr ?? "",
+          returns,
+          undefined,
+          actualSource
+        );
 
-      case COMPARE_SOURCES.STDOUT:
+      case COMPARE_SOURCES.STDOUT: {
         // Compare stdout, require clean exit
-        {
-          const comparison = this.checkResult(
-            result.result,
-            returns,
-            undefined,
-            actualSource
-          );
-          return { ...comparison, passed: comparison.passed && result.success };
-        }
+        const comparison = this.checkResult(
+          result.result,
+          returns,
+          undefined,
+          actualSource
+        );
+        return { ...comparison, passed: comparison.passed && result.success };
+      }
 
       case COMPARE_SOURCES.AUTO:
       default: {

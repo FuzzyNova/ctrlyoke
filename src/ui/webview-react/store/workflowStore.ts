@@ -634,8 +634,9 @@ export const useWorkflowStore = create<
             streamingChunks: {
               ...state.streamingChunks,
               [getStreamingChunkKey(stepIndex, phase)]:
-                (state.streamingChunks[getStreamingChunkKey(stepIndex, phase)] ||
-                  "") + chunk,
+                (state.streamingChunks[
+                  getStreamingChunkKey(stepIndex, phase)
+                ] || "") + chunk,
             },
           }))
         ),

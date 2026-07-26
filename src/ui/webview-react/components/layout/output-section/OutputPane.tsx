@@ -54,10 +54,7 @@ interface OutputPaneProps {
     section: BashOutputExpansionSection,
     expanded: boolean
   ) => void;
-  onScriptVerdictExpansionChange: (
-    rowKey: string,
-    expanded: boolean
-  ) => void;
+  onScriptVerdictExpansionChange: (rowKey: string, expanded: boolean) => void;
   onContextMenuOpen: (
     x: number,
     y: number,

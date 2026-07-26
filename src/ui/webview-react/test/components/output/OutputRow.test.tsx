@@ -108,9 +108,10 @@ describe("OutputRow auto-expand on hidden active match", () => {
   });
 
   it("truncates long actual values while collapsed and reveals them when expanded", () => {
-    const actual = Array.from({ length: 20 }, (_, index) => `line ${index}`).join(
-      "\n"
-    );
+    const actual = Array.from(
+      { length: 20 },
+      (_, index) => `line ${index}`
+    ).join("\n");
     const row: OutputRenderRow = {
       key: "verdict-truncated",
       target: TARGET,

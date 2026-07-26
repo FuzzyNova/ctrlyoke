@@ -242,12 +242,8 @@ describe("appendStreamingChunk", () => {
     store().appendStreamingChunk(0, "pre", EXECUTION_PHASES.PRE_CONDITION);
     store().appendStreamingChunk(0, "end", EXECUTION_PHASES.END_CONDITION);
 
-    expect(
-      store().streamingChunks["0:preCondition"]
-    ).toBe("pre");
-    expect(
-      store().streamingChunks["0:endCondition"]
-    ).toBe("end");
+    expect(store().streamingChunks["0:preCondition"]).toBe("pre");
+    expect(store().streamingChunks["0:endCondition"]).toBe("end");
   });
 });
 

@@ -15,7 +15,9 @@ suite("EndConditionEvaluator Tests", () => {
 
   setup(() => {
     // Create a minimal mock PlatformAdapter for testing
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-evaluator-"));
+    workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-evaluator-")
+    );
     const mockPlatform: PlatformAdapter = {
       getWorkspaceRoot: () => workspaceRoot,
       getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
@@ -528,7 +530,7 @@ suite("EndConditionEvaluator Tests", () => {
 
     test("reports stderr as the compared source", async () => {
       const result = await evaluate({
-        script: 'node -e "console.error(\'stderr-value\')"',
+        script: "node -e \"console.error('stderr-value')\"",
         returns: "stderr-value",
         compareSource: "stderr",
       });
@@ -620,7 +622,9 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("marks security-rejected paths as errored", async () => {
-      const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-outside-"));
+      const outsideDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-outside-")
+      );
       const scriptPath = path.join(outsideDir, "outside.js");
       fs.writeFileSync(scriptPath, "console.log('outside')");
       try {

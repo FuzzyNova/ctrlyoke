@@ -150,8 +150,7 @@ export function getOutputRowSearchSegments(
       return createSegments([
         {
           field: "expected",
-          text:
-            row.verdict.expected ?? "exit code 0 (no `returns` set)",
+          text: row.verdict.expected ?? "exit code 0 (no `returns` set)",
         },
         { field: "actual", text: row.verdict.actual },
         {
