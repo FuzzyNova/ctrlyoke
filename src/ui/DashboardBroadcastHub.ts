@@ -1,6 +1,7 @@
 import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
+  ExecutionPhase,
   HarnessId,
   ExecutionMode,
   StatusMessageSeverity,
@@ -227,10 +228,11 @@ export class DashboardBroadcastHub
   updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateCliStreamingChunk?.(stepIndex, chunk, workflowId);
+      client.updateCliStreamingChunk?.(stepIndex, chunk, phase, workflowId);
     }
   }
 
@@ -330,10 +332,16 @@ export class DashboardBroadcastHub
   updateFinalStepStreamingChunk(
     loopIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateFinalStepStreamingChunk?.(loopIndex, chunk, workflowId);
+      client.updateFinalStepStreamingChunk?.(
+        loopIndex,
+        chunk,
+        phase,
+        workflowId
+      );
     }
   }
 

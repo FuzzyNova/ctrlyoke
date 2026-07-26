@@ -1,5 +1,10 @@
 import type { WorkflowStep } from "@store/workflowStore";
-import { CLI_EVENT_TYPES, FINAL_STEP_PHASES } from "../types/messages";
+import {
+  CLI_EVENT_TYPES,
+  FINAL_STEP_PHASES,
+  getStreamingChunkKey,
+  type ExecutionPhase,
+} from "../types/messages";
 import type {
   CliOutput as CliOutputType,
   CliEvent,
@@ -195,8 +200,8 @@ export interface BuildOutputRowsInput {
   allMessages: readonly OutputMessage[];
   steps: readonly WorkflowStep[];
   finalStep: WorkflowStep | null | undefined;
-  streamingChunks: Record<number, string>;
-  finalStepStreamingChunks: Record<number, string>;
+  streamingChunks: Record<string, string>;
+  finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
   allowUndoActions: boolean;
   isViewingHistory: boolean;
@@ -264,11 +269,12 @@ function getStepOutputArtifacts(
 
 function getStreamingChunk(
   input: BuildOutputRowsInput,
-  target: OutputMessageTarget
+  target: OutputMessageTarget,
+  phase?: ExecutionPhase
 ): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? input.streamingChunks[target.index] || ""
-    : input.finalStepStreamingChunks[target.index] || "";
+    ? input.streamingChunks[getStreamingChunkKey(target.index, phase)] || ""
+    : input.finalStepStreamingChunks[getStreamingChunkKey(target.index, phase)] || "";
 }
 
 const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
@@ -1338,7 +1344,7 @@ export function buildOutputRows(
         ? input.outputContentWidth -
           toolCallGutterWidth(input.outputFontSize ?? 13)
         : undefined;
-    const streamingChunk = getStreamingChunk(input, target);
+    const streamingChunk = getStreamingChunk(input, target, message.phase);
     const visibleEvents = getVisibleStructuredEvents(output.structured?.events);
     const hasStructuredEvents = visibleEvents.length > 0;
 

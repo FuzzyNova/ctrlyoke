@@ -28,6 +28,7 @@ import {
   SESSION_KINDS,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  getExecutionPhaseForScriptOutputSource,
   WORKFLOW_PROPERTY_KEYS,
   type WorkflowPropertyKey,
   type ExecutionState,
@@ -1037,6 +1038,10 @@ function createMessageHandlers(): MessageHandlerMap {
       }
     }
     const store = useWorkflowStore.getState();
+    const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
+    if (!message.output.isStreaming) {
+      store.clearFinalStepStreamingChunk(message.loopIndex, phase);
+    }
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: {
@@ -1045,6 +1050,7 @@ function createMessageHandlers(): MessageHandlerMap {
       },
       runIndex: message.output.runIndex ?? 0,
       attemptIndex: message.output.attemptIndex ?? 0,
+      phase,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
       sequence: store.liveSequence,
@@ -1064,7 +1070,11 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     useWorkflowStore
       .getState()
-      .appendFinalStepStreamingChunk(message.loopIndex, message.chunk || "");
+      .appendFinalStepStreamingChunk(
+        message.loopIndex,
+        message.chunk || "",
+        message.phase
+      );
   };
 
   // --------------------------------------------------------------------------
@@ -1098,11 +1108,16 @@ function createMessageHandlers(): MessageHandlerMap {
       }
     }
     const store = useWorkflowStore.getState();
+    const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
+    if (!message.output.isStreaming) {
+      store.clearStreamingChunk(message.stepIndex, phase);
+    }
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.stepIndex },
       runIndex: message.output.runIndex ?? 0,
       attemptIndex: message.output.attemptIndex ?? 0,
+      phase,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
       sequence: store.liveSequence,
@@ -1145,7 +1160,11 @@ function createMessageHandlers(): MessageHandlerMap {
       }
     }
     const workflowStore = useWorkflowStore.getState();
-    workflowStore.appendStreamingChunk(message.stepIndex, message.chunk || "");
+    workflowStore.appendStreamingChunk(
+      message.stepIndex,
+      message.chunk || "",
+      message.phase
+    );
   };
 
   // --------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
 import type { WorkflowStep } from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
+  ExecutionPhase,
   ExecutionMode,
   StepStatus,
   StatusMessageSeverity,
@@ -100,6 +101,7 @@ export interface IDashboardSink {
   updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void;
 
@@ -156,6 +158,7 @@ export interface IDashboardSink {
   updateFinalStepStreamingChunk(
     loopIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void;
 

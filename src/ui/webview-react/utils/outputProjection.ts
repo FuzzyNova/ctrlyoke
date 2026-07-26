@@ -4,6 +4,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import type { CliOutput, OutputStatusMessage } from "../types/messages";
 import { FINAL_STEP_PHASES, type FinalStepPhase } from "../types/messages";
+import type { ExecutionPhase } from "@root/types/DashboardConstants";
 import { formatTime } from "./outputUtils";
 
 export interface OutputMessageTarget {
@@ -19,6 +20,7 @@ export interface OutputMessage {
   data: OutputStatusMessage | CliOutput;
   attemptIndex?: number;
   runIndex?: number;
+  phase?: ExecutionPhase;
 }
 
 function sortOutputMessages(
@@ -63,6 +65,7 @@ export function mapOrderedHistoryEntriesToMessages(
           data: entry.cliOutput,
           attemptIndex: entry.attemptIndex,
           runIndex: entry.runIndex ?? entry.cliOutput.runIndex ?? 0,
+          phase: entry.phase,
         });
         break;
       case "runtime":

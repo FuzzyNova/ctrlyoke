@@ -4,7 +4,7 @@ import { OutputRow } from "@components/output/OutputRow";
 import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
 import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
-import { FINAL_STEP_PHASES } from "@/types/messages";
+import { FINAL_STEP_PHASES, SCRIPT_OUTPUT_SOURCES } from "@/types/messages";
 
 const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 
@@ -78,6 +78,38 @@ const TWENTY_LINES = Array.from({ length: 20 }, (_, i) => `line ${i}`).join(
 );
 
 describe("OutputRow auto-expand on hidden active match", () => {
+  it.each([
+    [SCRIPT_OUTPUT_SOURCES.PRE_CONDITION, 0, "Pre-condition"],
+    [SCRIPT_OUTPUT_SOURCES.END_CONDITION, 0, "End condition"],
+    [SCRIPT_OUTPUT_SOURCES.END_CONDITION, 1, "End condition retry 2"],
+  ])("labels %s output as %s", (source, attemptIndex, label) => {
+    const row: OutputRenderRow = {
+      key: `header-${source}-${attemptIndex}`,
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: "cli-header",
+      output: {
+        prompt: "",
+        response: "",
+        cliCommand: "npm test",
+        elapsed: 0,
+        isStreaming: true,
+        source,
+      },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      attemptIndex,
+      runIndex: 0,
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={true} />
+    );
+
+    expect(container).toHaveTextContent(label);
+  });
+
   it("expands a truncated bash command when the active match is hidden", () => {
     const command = `node -e "${"x".repeat(220)} target"`;
     const row = buildBashRow(command, undefined, undefined);

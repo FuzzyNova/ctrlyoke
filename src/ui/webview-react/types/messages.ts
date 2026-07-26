@@ -42,6 +42,8 @@ export {
   COMPARE_SOURCES,
   SCRIPT_OUTPUT_SOURCES,
   EXECUTION_PHASES,
+  getExecutionPhaseForScriptOutputSource,
+  getStreamingChunkKey,
   SETTING_SCOPES,
   DISCOVERY_SOURCES,
   HARNESS_FILE_TYPES,

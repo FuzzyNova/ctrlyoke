@@ -2,6 +2,7 @@ import {
   MESSAGE_TYPES,
   type StepStatus,
   type FinalStepPhase,
+  type ExecutionPhase,
   type StatusMessageSeverity,
   type ExecutionMode,
   STATUS_MESSAGE_SEVERITY,
@@ -184,12 +185,14 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
       stepIndex,
       chunk,
+      ...(phase !== undefined ? { phase } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -308,12 +311,14 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateFinalStepStreamingChunk(
     loopIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
       loopIndex,
       chunk,
+      ...(phase !== undefined ? { phase } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

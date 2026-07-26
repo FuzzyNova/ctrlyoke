@@ -7,6 +7,7 @@ import type {
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
+  ExecutionPhase,
   ExecutionMode,
   StepStatus,
   StatusMessageSeverity,
@@ -179,8 +180,17 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateCliOutput(stepIndex, output, this.workflowId);
   }
 
-  updateCliStreamingChunk(stepIndex: number, chunk: string): void {
-    this.inner.updateCliStreamingChunk(stepIndex, chunk, this.workflowId);
+  updateCliStreamingChunk(
+    stepIndex: number,
+    chunk: string,
+    phase?: ExecutionPhase
+  ): void {
+    this.inner.updateCliStreamingChunk(
+      stepIndex,
+      chunk,
+      phase,
+      this.workflowId
+    );
   }
 
   updateCliStreamingEvents(
@@ -252,8 +262,17 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateFinalStepOutput(loopIndex, output, this.workflowId);
   }
 
-  updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void {
-    this.inner.updateFinalStepStreamingChunk(loopIndex, chunk, this.workflowId);
+  updateFinalStepStreamingChunk(
+    loopIndex: number,
+    chunk: string,
+    phase?: ExecutionPhase
+  ): void {
+    this.inner.updateFinalStepStreamingChunk(
+      loopIndex,
+      chunk,
+      phase,
+      this.workflowId
+    );
   }
 
   updateFinalStepStreamingEvents(

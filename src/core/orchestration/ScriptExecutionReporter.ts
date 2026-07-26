@@ -130,26 +130,6 @@ export class ScriptExecutionReporter {
       runIndex,
     };
 
-    if (source !== SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP) {
-      // Step 5 will phase-key live streaming slots. Until then, clear the shared
-      // slot so a condition cannot inherit the prompt's prior streaming text.
-      if (
-        context.dashboardProvider &&
-        target.kind === FINAL_STEP_PHASES.QUEUE &&
-        signedStepIndex >= 0
-      ) {
-        context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, "");
-      } else if (
-        context.dashboardProvider &&
-        target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        context.dashboardProvider.updateFinalStepStreamingChunk(
-          target.loopIndex,
-          ""
-        );
-      }
-    }
-
     this.dispatchDashboardOutput(context, target, signedStepIndex, initOutput);
     if (context.historyFilePath && history) {
       await history.startStreamingExecutionOutput(
@@ -182,12 +162,14 @@ export class ScriptExecutionReporter {
         if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex >= 0) {
           context.dashboardProvider.updateCliStreamingChunk(
             signedStepIndex,
-            chunk
+            chunk,
+            phase
           );
         } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
           context.dashboardProvider.updateFinalStepStreamingChunk(
             target.loopIndex,
-            chunk
+            chunk,
+            phase
           );
         }
       }

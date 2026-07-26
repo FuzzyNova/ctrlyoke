@@ -9,6 +9,7 @@ import {
   type StatusMessageSeverity,
   type StepStatus,
   type FinalStepPhase,
+  type ExecutionPhase,
   type HarnessId,
   type ExecutionMode,
   PANEL_CLIENT_ID,
@@ -596,9 +597,10 @@ export class CtrlYokeWebviewProvider
   public updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
-    this.sink.updateCliStreamingChunk(stepIndex, chunk, workflowId);
+    this.sink.updateCliStreamingChunk(stepIndex, chunk, phase, workflowId);
   }
   public updateCliStreamingEvents(
     stepIndex: number,
@@ -733,9 +735,15 @@ export class CtrlYokeWebviewProvider
   public updateFinalStepStreamingChunk(
     loopIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
-    this.sink.updateFinalStepStreamingChunk(loopIndex, chunk, workflowId);
+    this.sink.updateFinalStepStreamingChunk(
+      loopIndex,
+      chunk,
+      phase,
+      workflowId
+    );
   }
   public updateFinalStepStreamingEvents(
     loopIndex: number,

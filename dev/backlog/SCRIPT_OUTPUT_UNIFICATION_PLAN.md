@@ -1,6 +1,6 @@
 # Script Output Unification — one rendering pipeline for script steps, pre-conditions, and end-conditions
 
-Status: **In progress (Phases 0–3 complete, 2026-07-25).** Interlocks with
+Status: **In progress (Phases 0–4a complete, 2026-07-25; verdict row pending).** Interlocks with
 [`ON_ERROR_REDESIGN_PLAN.md`](./ON_ERROR_REDESIGN_PLAN.md) — see "Relationship to
 the On Error plan".
 
@@ -316,8 +316,10 @@ end-conditions, and end-condition retries onto the same streaming/history
 pipeline. Conditions carry phase-keyed CLI entries, compact verdict summaries,
 and retry evaluations preserve workflow vars.
 
-**Phase 4 — webview.** Phase-keyed streaming chunks, `script-verdict` row +
-component, condition header labels, find/scroll-seek/estimate wiring.
+**Phase 4a — webview streaming and headers (complete 2026-07-25).** Live
+streaming chunks are keyed by target and execution phase, and condition CLI
+headers use source-specific labels/icons. The `script-verdict` row and its
+find/scroll-seek/estimate wiring remain pending for Phase 4b.
 
 **Phase 5 — tests.** See below.
 

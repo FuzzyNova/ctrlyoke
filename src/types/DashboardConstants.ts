@@ -1521,6 +1521,28 @@ export type ScriptOutputSource =
 export type ExecutionPhase =
   (typeof EXECUTION_PHASES)[keyof typeof EXECUTION_PHASES];
 
+/** Resolve the timeline phase represented by a script output source. */
+export function getExecutionPhaseForScriptOutputSource(
+  source?: ScriptOutputSource
+): ExecutionPhase {
+  switch (source) {
+    case SCRIPT_OUTPUT_SOURCES.PRE_CONDITION:
+      return EXECUTION_PHASES.PRE_CONDITION;
+    case SCRIPT_OUTPUT_SOURCES.END_CONDITION:
+      return EXECUTION_PHASES.END_CONDITION;
+    default:
+      return EXECUTION_PHASES.PROMPT;
+  }
+}
+
+/** Stable key for a live streaming buffer scoped to one target and phase. */
+export function getStreamingChunkKey(
+  targetIndex: number,
+  phase: ExecutionPhase = EXECUTION_PHASES.PROMPT
+): string {
+  return `${targetIndex}:${phase}`;
+}
+
 /** Preserve legacy prompt keys while separating condition execution phases. */
 export function getExecutionPhaseKeySuffix(phase?: ExecutionPhase): string {
   return phase && phase !== EXECUTION_PHASES.PROMPT ? `:phase:${phase}` : "";

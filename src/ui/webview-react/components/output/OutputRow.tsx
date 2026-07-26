@@ -36,7 +36,11 @@ import type {
   UserSteerData,
   WebSearchData,
 } from "../../types/cliEvents";
-import { CLI_EVENT_TYPES, HARNESS_INFO } from "../../types/messages";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_INFO,
+  SCRIPT_OUTPUT_SOURCES,
+} from "../../types/messages";
 import {
   formatExecutionBadge,
   formatTime,
@@ -809,15 +813,32 @@ const CliHeaderRowView: React.FC<{
     ) : null;
 
   if (isScriptOutput(output)) {
+    const isConditionOutput =
+      output.source !== SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP;
+    const conditionLabel =
+      output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+        ? "Pre-condition"
+        : output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION
+          ? `End condition${row.attemptIndex > 0 ? ` retry ${row.attemptIndex + 1}` : ""}`
+          : undefined;
+    const headerLabel = isConditionOutput
+      ? conditionLabel
+      : stepLabelContent ?? row.stepLabel;
+    const headerIcon =
+      output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+        ? "codicon-shield"
+        : "codicon-checklist";
     return (
       <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
         <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-[2px]">
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
             <span>[</span>
-            <i className="codicon codicon-terminal-powershell text-xs" />
+            <i
+              className={`codicon ${isConditionOutput ? headerIcon : "codicon-terminal-powershell"} text-xs`}
+            />
             <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-              {stepLabelContent ?? row.stepLabel}]
+              {headerLabel}]
             </span>
           </span>
           {(() => {

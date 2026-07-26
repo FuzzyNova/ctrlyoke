@@ -109,12 +109,7 @@ suite("ScriptExecutionReporter", () => {
         onFail: "stopWorkflow",
       });
 
-      assert.deepStrictEqual(events, [
-        ...(execution.source === SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP ? [] : [""]),
-        "placeholder",
-        "chunk",
-        "final",
-      ]);
+      assert.deepStrictEqual(events, ["placeholder", "chunk", "final"]);
       assert.strictEqual(report.finalOutput.source, execution.source);
       assert.deepStrictEqual(report.verdict, {
         compareSource: "stdout",

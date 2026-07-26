@@ -14,6 +14,8 @@ import {
   type PromptStep,
   type CliOutput,
   type RetryState,
+  type ExecutionPhase,
+  getStreamingChunkKey,
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -175,8 +177,8 @@ interface WorkflowState {
   retryStates: Record<number, RetryState>;
 
   // Streaming state (for incremental output)
-  streamingChunks: Record<number, string>;
-  finalStepStreamingChunks: Record<number, string>;
+  streamingChunks: Record<string, string>;
+  finalStepStreamingChunks: Record<string, string>;
 
   // Self-contained history snapshot for the currently-viewed historical run.
   // When isViewingHistory=true (in uiStore), OutputSection renders from historyOutputs
@@ -227,15 +229,27 @@ interface WorkflowActions {
   // Live entry management
   appendLiveEntry: (entry: OrderedHistoryEntry) => void;
   clearLiveEntries: () => void;
-  appendStreamingChunk: (stepIndex: number, chunk: string) => void;
-  clearStreamingChunk: (stepIndex: number) => void;
+  appendStreamingChunk: (
+    stepIndex: number,
+    chunk: string,
+    phase?: ExecutionPhase
+  ) => void;
+  clearStreamingChunk: (stepIndex: number, phase?: ExecutionPhase) => void;
   appendStreamingEvents: (
     stepIndex: number,
     events: any[],
     attemptIndex?: number,
     runIndex?: number
   ) => void;
-  appendFinalStepStreamingChunk: (loopIndex: number, chunk: string) => void;
+  appendFinalStepStreamingChunk: (
+    loopIndex: number,
+    chunk: string,
+    phase?: ExecutionPhase
+  ) => void;
+  clearFinalStepStreamingChunk: (
+    loopIndex: number,
+    phase?: ExecutionPhase
+  ) => void;
   appendFinalStepStreamingEvents: (
     loopIndex: number,
     events: any[],
@@ -614,22 +628,24 @@ export const useWorkflowStore = create<
       clearLiveEntries: () =>
         withUndoPause(() => set({ liveOrderedEntries: [], liveSequence: 0 })),
 
-      appendStreamingChunk: (stepIndex, chunk) =>
+      appendStreamingChunk: (stepIndex, chunk, phase) =>
         withUndoPause(() =>
           set((state) => ({
             streamingChunks: {
               ...state.streamingChunks,
-              [stepIndex]: (state.streamingChunks[stepIndex] || "") + chunk,
+              [getStreamingChunkKey(stepIndex, phase)]:
+                (state.streamingChunks[getStreamingChunkKey(stepIndex, phase)] ||
+                  "") + chunk,
             },
           }))
         ),
 
-      clearStreamingChunk: (stepIndex) =>
+      clearStreamingChunk: (stepIndex, phase) =>
         withUndoPause(() =>
           set((state) => ({
             streamingChunks: {
               ...state.streamingChunks,
-              [stepIndex]: "",
+              [getStreamingChunkKey(stepIndex, phase)]: "",
             },
           }))
         ),
@@ -705,13 +721,25 @@ export const useWorkflowStore = create<
           })
         ),
 
-      appendFinalStepStreamingChunk: (loopIndex, chunk) =>
+      appendFinalStepStreamingChunk: (loopIndex, chunk, phase) =>
         withUndoPause(() =>
           set((state) => ({
             finalStepStreamingChunks: {
               ...state.finalStepStreamingChunks,
-              [loopIndex]:
-                (state.finalStepStreamingChunks[loopIndex] || "") + chunk,
+              [getStreamingChunkKey(loopIndex, phase)]:
+                (state.finalStepStreamingChunks[
+                  getStreamingChunkKey(loopIndex, phase)
+                ] || "") + chunk,
+            },
+          }))
+        ),
+
+      clearFinalStepStreamingChunk: (loopIndex, phase) =>
+        withUndoPause(() =>
+          set((state) => ({
+            finalStepStreamingChunks: {
+              ...state.finalStepStreamingChunks,
+              [getStreamingChunkKey(loopIndex, phase)]: "",
             },
           }))
         ),
@@ -1001,8 +1029,8 @@ export const useWorkflowStore = create<
               }
             });
             Object.keys(newStreamingChunks).forEach((key) => {
-              if (Number(key) >= startStep) {
-                delete newStreamingChunks[Number(key)];
+              if (Number(key.split(":", 1)[0]) >= startStep) {
+                delete newStreamingChunks[key];
               }
             });
             Object.keys(newLiveContextWindow).forEach((key) => {

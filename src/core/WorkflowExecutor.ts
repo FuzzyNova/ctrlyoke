@@ -1842,12 +1842,6 @@ export class WorkflowExecutor {
     const initTimestampMs = attempt.startedAt;
     const rawTextOutput = integration.rawTextOutput || undefined;
 
-    if (
-      target.kind === FINAL_STEP_PHASES.QUEUE &&
-      signedStepIndex !== undefined
-    ) {
-      context.dashboardProvider?.updateCliStreamingChunk(signedStepIndex, "");
-    }
     const placeholder = this.emitStreamingPlaceholder(
       context,
       target,

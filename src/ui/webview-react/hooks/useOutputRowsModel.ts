@@ -37,8 +37,8 @@ interface UseOutputRowsModelInput {
   liveOrderedEntries: OrderedHistoryEntry[];
   steps: WorkflowStep[];
   finalStep: WorkflowStep | null;
-  streamingChunks: Record<number, string>;
-  finalStepStreamingChunks: Record<number, string>;
+  streamingChunks: Record<string, string>;
+  finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;

@@ -3,10 +3,76 @@ import type { WorkflowStep } from "@store/workflowStore";
 import { buildOutputRows, estimateOutputRowHeight } from "@utils/outputRows";
 import type { OutputMessage } from "@utils/outputProjection";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
-import { FINAL_STEP_PHASES } from "@/types/messages";
+import {
+  EXECUTION_PHASES,
+  FINAL_STEP_PHASES,
+  SCRIPT_OUTPUT_SOURCES,
+  getStreamingChunkKey,
+} from "@/types/messages";
 
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
+
+  it("keeps streaming chunks isolated by execution phase", () => {
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        data: {
+          prompt: "pre",
+          cliCommand: "npm run pre",
+          response: "",
+          elapsed: 0,
+          isStreaming: true,
+          source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        },
+      },
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1001,
+        phase: EXECUTION_PHASES.END_CONDITION,
+        data: {
+          prompt: "end",
+          cliCommand: "npm run end",
+          response: "",
+          elapsed: 0,
+          isStreaming: true,
+          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+        },
+      },
+    ];
+
+    const result = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {
+        [getStreamingChunkKey(0, EXECUTION_PHASES.PRE_CONDITION)]: "pre output",
+        [getStreamingChunkKey(0, EXECUTION_PHASES.END_CONDITION)]: "end output",
+      },
+      finalStepStreamingChunks: {},
+      isExecutionActive: true,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    expect(
+      result.rows
+        .filter((row) => row.rowKind === "plain-response")
+        .map((row) => row.text)
+    ).toEqual(["pre output", "end output"]);
+  });
 
   it("projects queue output into flat rows in render order", () => {
     const allMessages: OutputMessage[] = [

@@ -11,6 +11,7 @@ import {
   FINAL_STEP_PHASES,
   OPERATION_STATUS,
   OUTPUT_HISTORY_KINDS,
+  EXECUTION_PHASES,
 } from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
 import type {
@@ -227,14 +228,26 @@ describe("appendStreamingChunk", () => {
   it("concatenates chunks for a step", () => {
     store().appendStreamingChunk(0, "Hello");
     store().appendStreamingChunk(0, " World");
-    expect(store().streamingChunks[0]).toBe("Hello World");
+    expect(store().streamingChunks["0:prompt"]).toBe("Hello World");
   });
 
   it("does not affect other steps", () => {
     store().appendStreamingChunk(0, "step0");
     store().appendStreamingChunk(1, "step1");
-    expect(store().streamingChunks[0]).toBe("step0");
-    expect(store().streamingChunks[1]).toBe("step1");
+    expect(store().streamingChunks["0:prompt"]).toBe("step0");
+    expect(store().streamingChunks["1:prompt"]).toBe("step1");
+  });
+
+  it("keeps condition phases isolated for the same step", () => {
+    store().appendStreamingChunk(0, "pre", EXECUTION_PHASES.PRE_CONDITION);
+    store().appendStreamingChunk(0, "end", EXECUTION_PHASES.END_CONDITION);
+
+    expect(
+      store().streamingChunks["0:preCondition"]
+    ).toBe("pre");
+    expect(
+      store().streamingChunks["0:endCondition"]
+    ).toBe("end");
   });
 });
 
@@ -242,7 +255,7 @@ describe("clearStreamingChunk", () => {
   it("resets the chunk to empty string", () => {
     store().appendStreamingChunk(0, "text");
     store().clearStreamingChunk(0);
-    expect(store().streamingChunks[0]).toBe("");
+    expect(store().streamingChunks["0:prompt"]).toBe("");
   });
 });
 

@@ -24,6 +24,7 @@ import {
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
   type FinalStepPhase,
+  type ExecutionPhase,
   type HarnessId,
   type ExecutionMode,
   type StepStatus,
@@ -415,9 +416,10 @@ export class CtrlYokeHostedServer
   updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
-    this.sink.updateCliStreamingChunk(stepIndex, chunk, workflowId);
+    this.sink.updateCliStreamingChunk(stepIndex, chunk, phase, workflowId);
   }
   updateCliStreamingEvents(
     stepIndex: number,
@@ -486,9 +488,15 @@ export class CtrlYokeHostedServer
   updateFinalStepStreamingChunk(
     loopIndex: number,
     chunk: string,
+    phase?: ExecutionPhase,
     workflowId?: string
   ): void {
-    this.sink.updateFinalStepStreamingChunk(loopIndex, chunk, workflowId);
+    this.sink.updateFinalStepStreamingChunk(
+      loopIndex,
+      chunk,
+      phase,
+      workflowId
+    );
   }
   updateFinalStepStreamingEvents(
     loopIndex: number,

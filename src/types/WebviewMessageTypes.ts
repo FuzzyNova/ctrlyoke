@@ -27,6 +27,7 @@ import {
   EXECUTION_MODES,
   STEP_TYPES,
   type ScriptOutputSource,
+  type ExecutionPhase,
   type UndoFileAction,
   type CompletionNotificationSeverity,
   type HookEvent,
@@ -605,6 +606,7 @@ export interface CliStreamingChunkMessage {
   type: typeof MESSAGE_TYPES.CLI_STREAMING_CHUNK;
   stepIndex: number;
   chunk: string;
+  phase?: ExecutionPhase;
 }
 
 /**
@@ -692,6 +694,7 @@ export interface FinalStepStreamingChunkMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK;
   loopIndex: number;
   chunk: string;
+  phase?: ExecutionPhase;
 }
 
 /**
