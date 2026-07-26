@@ -62,6 +62,17 @@ interface AntigravityLogEvent extends BaseCliEvent {
 const SESSION_ID_REGEX =
   /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
 
+/**
+ * `{{ CHECKPOINT 0 }}` is agy's baseline context scaffold, not a compaction.
+ * It is written a few entries into *every* conversation — confirmed in a
+ * 14-entry session where nothing could have been truncated — yet it carries
+ * the same "earlier parts of this conversation have been truncated" boilerplate
+ * as a real compaction, so the text is not a usable discriminator. Genuine
+ * auto-compaction bumps the index (`{{ CHECKPOINT 1 }}` and up) and appears
+ * mid-conversation with a "Previous Session Summary" section.
+ */
+const BASELINE_CHECKPOINT_REGEX = /\{\{\s*CHECKPOINT\s+0\s*\}\}/i;
+
 interface PendingPlannerToolCall {
   call: AntigravityPlannerToolCall;
   plannerEventId: string;
@@ -475,10 +486,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     if (entry.source === "SYSTEM" && entry.type === "CHECKPOINT") {
+      const line = typeof entry.content === "string" ? entry.content : "";
+      if (BASELINE_CHECKPOINT_REGEX.test(line)) {
+        return [];
+      }
       return [
         {
           type: "transcript.checkpoint",
-          line: typeof entry.content === "string" ? entry.content : "",
+          line,
           ...base,
         },
       ];

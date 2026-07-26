@@ -568,6 +568,93 @@ suite("AntigravityLogParser", () => {
       }
     });
 
+    test("emits each entry once when reads overlap", async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-race-")
+      );
+      const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
+      const reader = new AntigravityTranscriptReader();
+      try {
+        fs.writeFileSync(
+          transcriptPath,
+          [entry("first", 1), entry("second", 2)]
+            .map((item) => JSON.stringify(item))
+            .join("\n") + "\n",
+          "utf8"
+        );
+
+        // CliLogMonitor drives readNewLines from the fs.watch callback, the
+        // initial/catch-up reads and the drain loop without awaiting between
+        // them; overlapping reads must not replay the same byte range.
+        const batches = await Promise.all([
+          reader.readRecords(transcriptPath),
+          reader.readRecords(transcriptPath),
+          reader.readRecords(transcriptPath),
+        ]);
+
+        const contents = batches.flatMap((batch) =>
+          batch.map((record) => record.entry.content)
+        );
+        assert.deepStrictEqual(contents, ["first", "second"]);
+
+        const lineNumbers = batches.flatMap((batch) =>
+          batch.map((record) => record.lineNumber)
+        );
+        assert.deepStrictEqual(lineNumbers, [0, 1]);
+
+        fs.appendFileSync(
+          transcriptPath,
+          JSON.stringify(entry("third", 3)) + "\n",
+          "utf8"
+        );
+        const appended = await Promise.all([
+          reader.readEntries(transcriptPath),
+          reader.readEntries(transcriptPath),
+        ]);
+        assert.deepStrictEqual(
+          appended.flat().map((item) => item.content),
+          ["third"]
+        );
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("preserves incremental read offset when the retained prefix splits a multi-byte character", async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-agy-utf8-")
+      );
+      const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
+      const reader = new AntigravityTranscriptReader();
+      try {
+        // Long enough that the 128-byte prefix window lands mid-character:
+        // '•' and '↩' are 3 bytes each, '🚀' is 4.
+        const utf8Content = "• UTF-8 ↩ 🚀 ".repeat(12);
+        fs.writeFileSync(
+          transcriptPath,
+          JSON.stringify(entry(utf8Content, 1)) + "\n",
+          "utf8"
+        );
+        const firstBatch = await reader.readEntries(transcriptPath);
+        assert.strictEqual(firstBatch.length, 1);
+        assert.strictEqual(firstBatch[0].content, utf8Content);
+
+        // Appending must not look like a rewrite to the prefix check.
+        fs.appendFileSync(
+          transcriptPath,
+          JSON.stringify(entry("second entry", 2)) + "\n",
+          "utf8"
+        );
+        const secondBatch = await reader.readEntries(transcriptPath);
+        assert.strictEqual(secondBatch.length, 1);
+        assert.strictEqual(secondBatch[0].content, "second entry");
+
+        assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("holds a partial trailing line until the next append", async () => {
       const tempDir = fs.mkdtempSync(
         path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
@@ -700,11 +787,19 @@ suite("AntigravityLogParser", () => {
               ],
             },
             {
+              // Baseline scaffold every conversation gets — never a compaction.
               step_index: 2,
               source: "SYSTEM",
               type: "CHECKPOINT",
               status: "DONE",
               content: "{{ CHECKPOINT 0 }}",
+            },
+            {
+              step_index: 10,
+              source: "SYSTEM",
+              type: "CHECKPOINT",
+              status: "DONE",
+              content: "{{ CHECKPOINT 1 }}",
             },
             {
               source: "MODEL",
@@ -773,7 +868,7 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(checkpoint[0].type, CLI_EVENT_TYPES.COMPACTION);
         assert.strictEqual(
           (checkpoint[0].data as { summary?: string }).summary,
-          "{{ CHECKPOINT 0 }}"
+          "{{ CHECKPOINT 1 }}"
         );
 
         assert.deepStrictEqual(await parser.readNewLines(logPath), []);
