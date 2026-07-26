@@ -50,6 +50,10 @@ class MockVsCodePlatform implements PlatformAdapter {
 }
 
 class TestCliIntegration extends CliIntegration {
+  public configuredExecutionMode(): string {
+    return this.getExecutionMode();
+  }
+
   public formatRefs(
     agentRefs: string[],
     skillRefs: string[],
@@ -254,6 +258,98 @@ suite("CliIntegration", () => {
       "session-from-output"
     );
     assert.strictEqual(integration.getLastCliCommand(), "test --prompt say hi");
+  });
+
+  test("should use the session execution mode for dispatch over the global setting", async () => {
+    const integration = createTestIntegration();
+    let interactiveCalled = false;
+    let headlessCalled = false;
+
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: { executionMode: EXECUTION_MODES.INTERACTIVE },
+      resolvedSessionId: undefined,
+    });
+    (integration as any).executionRunner.executeInteractive = async () => {
+      interactiveCalled = true;
+      return true;
+    };
+    (integration as any).executionRunner.executeHeadless = async () => {
+      headlessCalled = true;
+      return true;
+    };
+
+    const success = await integration.sendPrompt({ prompt: "interactive" });
+
+    assert.strictEqual(success, true);
+    assert.strictEqual(interactiveCalled, true);
+    assert.strictEqual(headlessCalled, false);
+  });
+
+  test("should dispatch a headless session when the global setting is interactive", async () => {
+    configService.setCliOverlay({
+      defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
+    });
+    const integration = createTestIntegration();
+    let headlessCalled = false;
+
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: { executionMode: EXECUTION_MODES.HEADLESS },
+      resolvedSessionId: undefined,
+    });
+    (integration as any).executionRunner.executeHeadless = async () => {
+      headlessCalled = true;
+      return true;
+    };
+
+    const success = await integration.sendPrompt({ prompt: "headless" });
+
+    assert.strictEqual(success, true);
+    assert.strictEqual(headlessCalled, true);
+  });
+
+  test("should skip inject mode for a headless session", async () => {
+    configService.setCliOverlay({
+      defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
+    });
+    const integration = createTestIntegration();
+    let shouldUseInjectModeCalled = false;
+    let headlessCalled = false;
+
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: { executionMode: EXECUTION_MODES.HEADLESS },
+      resolvedSessionId: undefined,
+    });
+    (integration as any).shouldUseInjectMode = () => {
+      shouldUseInjectModeCalled = true;
+      return true;
+    };
+    (integration as any).executionRunner.executeHeadless = async () => {
+      headlessCalled = true;
+      return true;
+    };
+
+    const success = await integration.sendPrompt({ prompt: "headless" });
+
+    assert.strictEqual(success, true);
+    assert.strictEqual(headlessCalled, true);
+    assert.strictEqual(shouldUseInjectModeCalled, false);
+  });
+
+  test("should use the global execution mode when no session properties exist", () => {
+    const integration = createTestIntegration();
+
+    assert.strictEqual(
+      integration.configuredExecutionMode(),
+      EXECUTION_MODES.HEADLESS
+    );
+
+    configService.setCliOverlay({
+      defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
+    });
+    assert.strictEqual(
+      integration.configuredExecutionMode(),
+      EXECUTION_MODES.INTERACTIVE
+    );
   });
 
   test("passes every workspace root to CLI providers", async () => {

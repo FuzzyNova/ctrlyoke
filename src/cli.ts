@@ -17,13 +17,10 @@ import {
   PERMISSION_MODES,
   RUNNER_IDS,
 } from "./types/DashboardConstants";
-import type {
-  ExecutionMode,
-  HarnessId,
-  PermissionMode,
-} from "./types/DashboardConstants";
+import type { HarnessId, PermissionMode } from "./types/DashboardConstants";
 import {
   isScriptStep,
+  type PromptFile,
   type RunRef,
   type WorkflowKey,
   type WorkflowStep,
@@ -40,6 +37,7 @@ import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
+import { PropertyResolver } from "./utils/PropertyResolver";
 import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
@@ -60,6 +58,7 @@ import {
   type ContinueOptions,
   type RerunOptions,
 } from "./cli/CliRunCommandDefinitions";
+import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -222,22 +221,34 @@ function collectVar(
 }
 
 /**
- * Determine execution mode from CLI flags and TTY detection.
- *
- * Precedence:
- *   1. --headless flag  → always headless
- *   2. --interactive flag → always interactive
- *   3. TTY detection: both stdout AND stdin are a TTY → interactive (default for terminal users)
- *   4. Otherwise → headless (CI/CD, pipes, redirects)
+ * Report workflow steps whose interactive request will be clamped because the
+ * CLI host cannot provide a PTY. PropertyResolver performs the actual clamp;
+ * this is only the user-facing aggregate diagnostic.
  */
-function getExecutionMode(
-  options: Pick<CliExecutionOptions, "headless" | "interactive">
-): ExecutionMode {
-  if (options.headless) return EXECUTION_MODES.HEADLESS;
-  if (options.interactive) return EXECUTION_MODES.INTERACTIVE;
-  return process.stdout.isTTY && process.stdin.isTTY
-    ? EXECUTION_MODES.INTERACTIVE
-    : EXECUTION_MODES.HEADLESS;
+function warnAboutClampedInteractiveSteps(
+  workflow: PromptFile,
+  hostCanProvidePty: boolean
+): void {
+  if (hostCanProvidePty) {
+    return;
+  }
+
+  const downgradedSteps = (workflow.steps ?? [])
+    .map((step, index) => ({ step, index }))
+    .filter(
+      ({ step }) =>
+        (step.executionMode ?? workflow.executionMode) ===
+        EXECUTION_MODES.INTERACTIVE
+    )
+    .map(({ step, index }) => step.name?.trim() || `step ${index + 1}`);
+
+  if (downgradedSteps.length === 0) {
+    return;
+  }
+
+  Log.warn(
+    `CLI cannot provide an interactive PTY; downgraded step(s) to headless: ${downgradedSteps.join(", ")}`
+  );
 }
 
 // ---- Commands ----
@@ -309,7 +320,11 @@ async function runCommand(
   Log.initializeCli(workingDir, options.verbose);
 
   // Detect execution mode: explicit flags override TTY auto-detection
-  const executionMode = getExecutionMode(options);
+  const { executionMode, hostCanProvidePty } = resolveCliExecutionMode(
+    options,
+    !!process.stdout.isTTY,
+    !!process.stdin.isTTY
+  );
 
   // In headless mode, auto-apply dangerouslyAllowAll unless the user specified
   // custom allow/deny lists (which imply deliberate control).
@@ -366,15 +381,24 @@ async function runCommand(
     };
   }
   if (options.headless) {
-    overlay.defaults = { executionMode: "headless" };
+    overlay.defaults = {
+      ...overlay.defaults,
+      executionMode: EXECUTION_MODES.HEADLESS,
+    };
   } else if (options.interactive) {
-    overlay.defaults = { executionMode: "interactive" };
+    overlay.defaults = {
+      ...overlay.defaults,
+      executionMode: EXECUTION_MODES.INTERACTIVE,
+    };
   } else {
     // Write TTY-detected execution mode to the overlay so that
     // ConfigurationUtils.getCliExecutionMode() always returns the effective value
     // regardless of what the user's config file says.
-    overlay.defaults = { executionMode };
+    overlay.defaults = { ...overlay.defaults, executionMode };
   }
+  // PropertyResolver owns the workflow-level clamp. The CLI only reports
+  // whether this process can actually host an interactive PTY.
+  PropertyResolver.setHostCanProvidePty(hostCanProvidePty);
   if (options.permissionMode) {
     overlay.defaults = {
       ...overlay.defaults,
@@ -551,6 +575,11 @@ async function runCommand(
         await instance.loadPromptFile(resolvedFile!);
       }
 
+      warnAboutClampedInteractiveSteps(
+        instance.promptQueue.getWorkflowFile(),
+        hostCanProvidePty
+      );
+
       // Merge CLI --var flags into the workflow's vars (CLI vars take highest precedence).
       // This must happen after loading so the workflow's own vars: defaults are already set.
       if (Object.keys(config.vars).length > 0) {
@@ -590,7 +619,8 @@ async function runCommand(
         options,
         workingDir,
         platform,
-        instance
+        instance,
+        hostCanProvidePty
       );
     }
 
@@ -648,12 +678,19 @@ async function executeAddressedCliOperation(
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   workspaceRoot: string,
   platform: CliAdapter,
-  instance: WorkflowInstance
+  instance: WorkflowInstance,
+  hostCanProvidePty: boolean
 ): Promise<void> {
   const workflowKey = operation.workflow;
   WorkflowPaths.assertValidWorkflowKey(workflowKey);
   const history = new OutputHistoryManager(workspaceRoot);
   const lineageRepository = new WorkflowLineageRepository();
+  const warnIfNeeded = async (): Promise<void> => {
+    warnAboutClampedInteractiveSteps(
+      instance.promptQueue.getWorkflowFile(),
+      hostCanProvidePty
+    );
+  };
 
   if (operation.kind === "rerun") {
     const sourceRunRef = await resolveCliRunRefAtLineage(
@@ -690,7 +727,8 @@ async function executeAddressedCliOperation(
     await instance.executeSeededRun(
       seeded,
       workflowKey,
-      options.harness as HarnessId | undefined
+      options.harness as HarnessId | undefined,
+      warnIfNeeded
     );
     return;
   }
@@ -728,7 +766,8 @@ async function executeAddressedCliOperation(
     await instance.executeContinuationAtRun(
       workflowKey,
       runRef,
-      appended.definitionRevision
+      appended.definitionRevision,
+      warnIfNeeded
     );
     return;
   }
@@ -736,7 +775,8 @@ async function executeAddressedCliOperation(
   await instance.executeContinuationAtRun(
     workflowKey,
     runRef,
-    target.definitionRevision
+    target.definitionRevision,
+    warnIfNeeded
   );
 }
 

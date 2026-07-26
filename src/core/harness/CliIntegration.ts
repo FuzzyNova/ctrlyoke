@@ -239,6 +239,16 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Get the execution mode resolved for one session.
+   *
+   * The integration-level setting remains the fallback for callers that do not
+   * have a workflow session, such as commit-message generation.
+   */
+  private sessionExecutionMode(session: CliExecutionSession): CliExecutionMode {
+    return session.resolvedProperties?.executionMode ?? this.getExecutionMode();
+  }
+
+  /**
    * Override base class getWorkspaceRoot() to use the platform adapter.
    * The platform adapter knows the true workspace root in both VS Code and CLI contexts.
    */
@@ -560,8 +570,11 @@ export class CliIntegration extends HarnessIntegration {
    * instance the prompt's `CliLogMonitor` just used, so no read-offset hand-off
    * is needed — see `SessionActivityWatcher` for the one-reader rationale.
    */
-  private resumeSessionActivityWatcher(model: string): void {
-    if (this.getExecutionMode() !== CLI_EXECUTION_MODE.INTERACTIVE) {
+  private resumeSessionActivityWatcher(
+    model: string,
+    mode: CliExecutionMode
+  ): void {
+    if (mode !== CLI_EXECUTION_MODE.INTERACTIVE) {
       return;
     }
     if (!this.transportCoordinator.hasLivePtySession()) {
@@ -843,7 +856,7 @@ export class CliIntegration extends HarnessIntegration {
   private async runExecutionSession(
     session: CliExecutionSession
   ): Promise<boolean> {
-    const mode = this.getExecutionMode();
+    const mode = this.sessionExecutionMode(session);
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
 
     // Inject mode: write directly into the running TUI instead of killing and
@@ -983,7 +996,7 @@ export class CliIntegration extends HarnessIntegration {
     const success = isInteractive
       ? await this.executionRunner.executeInteractive(session, baseArgs)
       : await (() => {
-          this.warnIfHeadlessWithoutPermissions(effectiveToolPermissions);
+          this.warnIfHeadlessWithoutPermissions(effectiveToolPermissions, mode);
           return this.executionRunner.executeHeadless(session, baseArgs);
         })();
 
@@ -1329,9 +1342,9 @@ export class CliIntegration extends HarnessIntegration {
    * @param toolPermissions Resolved permissions from workflow context (passed through to hasFullPermissions)
    */
   protected warnIfHeadlessWithoutPermissions(
-    toolPermissions?: ToolPermissionConfig | null
+    toolPermissions?: ToolPermissionConfig | null,
+    mode: CliExecutionMode = this.getExecutionMode()
   ): void {
-    const mode = this.getExecutionMode();
     if (
       mode !== CLI_EXECUTION_MODE.HEADLESS ||
       this.hasFullPermissions(toolPermissions) ||
@@ -1641,7 +1654,8 @@ export class CliIntegration extends HarnessIntegration {
       this.activeSession = executionSession;
 
       const isInteractive =
-        this.getExecutionMode() === CLI_EXECUTION_MODE.INTERACTIVE;
+        this.sessionExecutionMode(executionSession) ===
+        CLI_EXECUTION_MODE.INTERACTIVE;
       const injectMode =
         isInteractive && this.shouldUseInjectMode(executionSession);
       await this.initializeExecutionSession(executionSession, injectMode);
@@ -1667,7 +1681,8 @@ export class CliIntegration extends HarnessIntegration {
       if (executionSession) {
         this.applyExecutionSession(executionSession);
         this.resumeSessionActivityWatcher(
-          executionSession.resolvedProperties?.model ?? ""
+          executionSession.resolvedProperties?.model ?? "",
+          this.sessionExecutionMode(executionSession)
         );
       }
       this.activeSession = undefined;
