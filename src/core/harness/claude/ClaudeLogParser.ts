@@ -24,6 +24,7 @@ import {
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
+import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 
 /**
  * Claude CLI Log Parser
@@ -100,8 +101,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /** Maps tool_use id → tool name for associating streaming tool results with their calls. */
   private pendingStreamingToolUses = new Map<string, string>();
 
-  /** Background tool calls whose completion notification has not been delivered. */
-  private pendingBackgroundLaunchIds = new Set<string>();
+  /** Background follow-up state; Claude's provider-specific signals feed it below. */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState();
 
   /**
    * Tool calls whose asynchronous launch must be confirmed by their result.
@@ -110,13 +111,6 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * in the correlated tool result.
    */
   private unconfirmedAsyncLaunches = new Map<string, "Agent" | "Monitor">();
-
-  /**
-   * A delivered task notification makes Claude auto-resume. Keep the current
-   * Stop gated until that resumed turn reaches its own terminal assistant
-   * event, even when every notified task ID has already left the pending set.
-   */
-  private resumedTurnCompletionPending = false;
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -563,7 +557,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
 
       if (block.is_error === true) {
-        this.pendingBackgroundLaunchIds.delete(toolUseId);
+        this.backgroundFollowUpState.remove(toolUseId);
       }
 
       const candidateType = this.unconfirmedAsyncLaunches.get(toolUseId);
@@ -578,7 +572,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           ? resultText.includes("Async agent launched successfully")
           : resultText.includes("Monitor started");
       if (block.is_error !== true && launchConfirmed) {
-        this.pendingBackgroundLaunchIds.add(toolUseId);
+        this.backgroundFollowUpState.launch(toolUseId);
       }
     }
   }
@@ -610,7 +604,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
 
           if (block.input?.run_in_background === true) {
-            this.pendingBackgroundLaunchIds.add(block.id);
+            this.backgroundFollowUpState.launch(block.id);
           } else if (
             block.name === "Agent" &&
             block.input?.run_in_background !== false
@@ -624,12 +618,12 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
       const stopReason = e.message?.stop_reason;
       if (
-        this.resumedTurnCompletionPending &&
+        this.backgroundFollowUpState.isResumedTurnPending() &&
         stopReason !== null &&
         stopReason !== undefined &&
         stopReason !== "tool_use"
       ) {
-        this.resumedTurnCompletionPending = false;
+        this.backgroundFollowUpState.resumedTurnClosed();
       }
       return;
     }
@@ -638,19 +632,15 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     const text = this.extractTaskNotificationText(e);
     if (text.includes("<task-notification>")) {
-      this.resumedTurnCompletionPending = true;
       const match = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
       if (match) {
-        this.pendingBackgroundLaunchIds.delete(match[1]);
+        this.backgroundFollowUpState.consumeNotification(match[1]);
       }
     }
   }
 
   override hasPendingBackgroundWork(): boolean {
-    return (
-      this.pendingBackgroundLaunchIds.size > 0 ||
-      this.resumedTurnCompletionPending
-    );
+    return this.backgroundFollowUpState.isCompletionBlocked();
   }
 
   /**

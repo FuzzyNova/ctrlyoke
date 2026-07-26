@@ -30,6 +30,7 @@ import {
   AntigravityTranscriptRecord,
 } from "./AntigravityTranscriptReader";
 import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
+import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -72,12 +73,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
-  private readonly pendingBackgroundTaskIds = new Set<string>();
+  /** Background follow-up state; transcript recognition remains provider-specific. */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState({
+    staleStopGuardChecks: 2,
+  });
   private backgroundStateSessionId?: string;
-  /** Keep completion gated until the resumed assistant turn reaches its terminal planner response. */
-  private resumedTurnCompletionPending = false;
-  /** Reject the Stop callback that raced notification/resumed-turn catch-up. */
-  private staleStopGuardChecksRemaining = 0;
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     // The transcript is polled after the Go log so a session discovered on this
@@ -599,7 +599,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     ) {
       const taskId = this.extractTaskId(entry);
       if (taskId) {
-        this.pendingBackgroundTaskIds.add(taskId);
+        this.backgroundFollowUpState.launch(taskId);
       }
       return;
     }
@@ -610,15 +610,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       entry.status === "DONE"
     ) {
       const taskId = this.extractCompletedTaskId(entry);
-      if (taskId && this.pendingBackgroundTaskIds.delete(taskId)) {
-        this.resumedTurnCompletionPending = true;
+      if (taskId) {
+        this.backgroundFollowUpState.consumeNotification(taskId);
       }
       return;
     }
 
     if (this.isTerminalPlannerResponse(entry)) {
-      this.resumedTurnCompletionPending = false;
-      this.staleStopGuardChecksRemaining = 2;
+      this.backgroundFollowUpState.resumedTurnClosed();
     }
   }
 
@@ -626,7 +625,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     entry: AntigravityTranscriptEntry
   ): boolean {
     if (
-      !this.resumedTurnCompletionPending ||
+      !this.backgroundFollowUpState.isResumedTurnPending() ||
       entry.source !== "MODEL" ||
       entry.type !== "PLANNER_RESPONSE" ||
       entry.status !== "DONE"
@@ -654,10 +653,8 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return;
     }
     this.backgroundStateSessionId = sessionId;
-    this.pendingBackgroundTaskIds.clear();
+    this.backgroundFollowUpState.reset();
     this.pendingPlannerToolCalls.length = 0;
-    this.resumedTurnCompletionPending = false;
-    this.staleStopGuardChecksRemaining = 0;
   }
 
   private setCachedSessionId(sessionId: string): void {
@@ -736,17 +733,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * independent while that resumed turn is active.
    */
   override hasPendingBackgroundWork(): boolean {
-    if (
-      this.pendingBackgroundTaskIds.size > 0 ||
-      this.resumedTurnCompletionPending
-    ) {
-      return true;
-    }
-    if (this.staleStopGuardChecksRemaining > 0) {
-      this.staleStopGuardChecksRemaining--;
-      return true;
-    }
-    return false;
+    return this.backgroundFollowUpState.isCompletionBlocked();
   }
 
   async readSessionIdFromLastConversations(

@@ -21,6 +21,7 @@ import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
+import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -577,17 +578,10 @@ export class CopilotLogParser extends BaseLogParser {
    * so there is no superseded/"zombie" case to guard against (see
    * `dev/backlog/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Copilot CLI — CONFIRMED").
    */
-  private pendingAsyncShellIds = new Set<string>();
-
-  /** Keep the Stop gated until the turn awakened by a shell notification ends. */
-  private resumedTurnCompletionPending = false;
-
-  /**
-   * Reject one Stop callback that raced notification/resumed-turn catch-up.
-   * CliLogMonitor checks this once before entering its hold loop and once in
-   * the loop condition, so the guard spans both checks as one stale-Stop cycle.
-   */
-  private staleStopGuardChecksRemaining = 0;
+  /** Background follow-up state; Copilot's provider-specific signals feed it below. */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState({
+    staleStopGuardChecks: 2,
+  });
 
   /** Set after a matching notification until the resumed turn starts. */
   private resumedTurnStarted = false;
@@ -599,9 +593,7 @@ export class CopilotLogParser extends BaseLogParser {
     // the explicit provider lifecycle boundary; resumed sessions do not emit
     // another one while appending to the same events.jsonl.
     if (e.type === "session.start") {
-      this.pendingAsyncShellIds.clear();
-      this.resumedTurnCompletionPending = false;
-      this.staleStopGuardChecksRemaining = 0;
+      this.backgroundFollowUpState.reset();
       this.resumedTurnStarted = false;
       return;
     }
@@ -611,7 +603,7 @@ export class CopilotLogParser extends BaseLogParser {
       if (executionMode === "async") {
         const shellId = this.extractShellId(e.data.result?.content);
         if (shellId) {
-          this.pendingAsyncShellIds.add(shellId);
+          this.backgroundFollowUpState.launch(shellId);
         }
       }
       return;
@@ -624,8 +616,7 @@ export class CopilotLogParser extends BaseLogParser {
         kind.shellId !== undefined
       ) {
         const shellId = String(kind.shellId);
-        if (this.pendingAsyncShellIds.delete(shellId)) {
-          this.resumedTurnCompletionPending = true;
+        if (this.backgroundFollowUpState.consumeNotification(shellId)) {
           this.resumedTurnStarted = false;
         }
       }
@@ -633,7 +624,7 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     if (e.type === "assistant.turn_start") {
-      if (this.resumedTurnCompletionPending) {
+      if (this.backgroundFollowUpState.isResumedTurnPending()) {
         this.resumedTurnStarted = true;
       }
       return;
@@ -641,26 +632,16 @@ export class CopilotLogParser extends BaseLogParser {
 
     if (
       e.type === "assistant.turn_end" &&
-      this.resumedTurnCompletionPending &&
+      this.backgroundFollowUpState.isResumedTurnPending() &&
       this.resumedTurnStarted
     ) {
-      this.resumedTurnCompletionPending = false;
+      this.backgroundFollowUpState.resumedTurnClosed();
       this.resumedTurnStarted = false;
-      this.staleStopGuardChecksRemaining = 2;
     }
   }
 
   override hasPendingBackgroundWork(): boolean {
-    if (this.pendingAsyncShellIds.size > 0 || this.resumedTurnCompletionPending) {
-      return true;
-    }
-
-    if (this.staleStopGuardChecksRemaining > 0) {
-      this.staleStopGuardChecksRemaining--;
-      return true;
-    }
-
-    return false;
+    return this.backgroundFollowUpState.isCompletionBlocked();
   }
 
   /**
