@@ -3,6 +3,7 @@ import {
   type StepStatus,
   type FinalStepPhase,
   type StatusMessageSeverity,
+  type ExecutionMode,
   STATUS_MESSAGE_SEVERITY,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -94,7 +95,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean
+    isInjectMode?: boolean,
+    executionMode?: ExecutionMode
   ): void {
     this.send({
       type: MESSAGE_TYPES.EXECUTION_STARTED,
@@ -103,6 +105,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       totalSteps,
       ...(isContinuation ? { isContinuation: true, preserveStepCount } : {}),
       ...(isInjectMode ? { isInjectMode: true } : {}),
+      ...(executionMode !== undefined ? { executionMode } : {}),
     });
   }
 

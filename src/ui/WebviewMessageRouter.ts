@@ -1016,10 +1016,6 @@ export class WebviewMessageRouter {
       this.settingsSync.handleAgentChange(message.agent);
     });
 
-    table.set(MESSAGE_TYPES.CHANGE_EXECUTION_MODE, (message) => {
-      this.settingsSync.handleExecutionModeChange(message.executionMode);
-    });
-
     table.set(MESSAGE_TYPES.CHANGE_RESUME_SESSION, (message) => {
       this.settingsSync.handleResumeSessionChange(message.enabled);
     });

@@ -12,6 +12,7 @@ import type { StepDetails } from "./WorkflowStep";
 export interface PromptOverride {
   label: string;
   title?: string;
+  icon?: string;
 }
 
 interface PromptStepDetailsProps {
@@ -207,6 +208,9 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
               className="inline-flex items-center px-1 rounded bg-badge-bg text-badge-fg opacity-90"
               title={override.title ?? override.label}
             >
+              {override.icon && (
+                <i className={`codicon codicon-${override.icon} mr-0.5`} />
+              )}
               {override.label}
             </span>
           ))}

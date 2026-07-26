@@ -2,6 +2,7 @@ import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
 import type { WorkflowStep } from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
+  ExecutionMode,
   StepStatus,
   StatusMessageSeverity,
 } from "./DashboardConstants";
@@ -61,7 +62,8 @@ export interface IDashboardSink {
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean
+    isInjectMode?: boolean,
+    executionMode?: ExecutionMode
   ): void;
 
   updateProgress(current: number, total: number, workflowId?: string): void;

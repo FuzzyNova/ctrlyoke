@@ -8,7 +8,6 @@ import {
   HARNESS_STATUS_STRINGS,
   HARNESS_INFO,
   EXECUTION_STATES,
-  EXECUTION_MODES,
   DEFAULT_MODELS,
   PERMISSION_MODES,
   MODEL_OPTION_VALUES,
@@ -133,11 +132,6 @@ export class WebviewSettingsSync {
     HARNESS_IDS.OPENCODE_CLI,
     HARNESS_IDS.QWEN_CLI,
     HARNESS_IDS.ANTIGRAVITY_CLI,
-  ] as const;
-
-  private static readonly VALID_EXECUTION_MODES = [
-    EXECUTION_MODES.INTERACTIVE,
-    EXECUTION_MODES.HEADLESS,
   ] as const;
 
   constructor(
@@ -452,15 +446,6 @@ export class WebviewSettingsSync {
 
   async handleAgentChange(agent: string): Promise<void> {
     await ConfigurationUtils.setDefaultAgent(agent);
-  }
-
-  async handleExecutionModeChange(mode: string): Promise<void> {
-    if (!WebviewSettingsSync.VALID_EXECUTION_MODES.includes(mode as any)) {
-      Log.error(`Invalid execution mode: ${mode}`);
-      return;
-    }
-
-    await ConfigurationUtils.setCliExecutionMode(mode);
   }
 
   async handleResumeSessionChange(enabled: boolean): Promise<void> {

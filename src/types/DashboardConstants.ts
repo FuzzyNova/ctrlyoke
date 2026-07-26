@@ -84,7 +84,6 @@ export const MESSAGE_TYPES = {
   // Settings view messages
   CHANGE_MODEL: "changeModel",
   CHANGE_AGENT: "changeAgent",
-  CHANGE_EXECUTION_MODE: "changeExecutionMode",
   CHANGE_MCP_SERVERS: "changeMcpServers",
   CHANGE_RESUME_SESSION: "changeResumeSession",
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for ctrlyoke

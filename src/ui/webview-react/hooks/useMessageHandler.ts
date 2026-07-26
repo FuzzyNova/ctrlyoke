@@ -821,12 +821,9 @@ function createMessageHandlers(): MessageHandlerMap {
     // Handle ai-cli terminal sessions for the new run.
     const wfId = message.workflowId;
     if (wfId) {
-      if (
-        useSettingsStore.getState().globalSettings.executionMode ===
-        EXECUTION_MODES.HEADLESS
-      ) {
+      if (message.executionMode === EXECUTION_MODES.HEADLESS) {
         autoFocusOutputOnExecution(wfId, "output");
-      } else if (message.isInjectMode) {
+      } else if (message.executionMode === EXECUTION_MODES.INTERACTIVE) {
         autoFocusOutputOnExecution(wfId, "terminal");
       }
 

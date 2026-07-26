@@ -7,6 +7,7 @@ import type {
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
+  ExecutionMode,
   StepStatus,
   StatusMessageSeverity,
 } from "../types/DashboardConstants";
@@ -101,12 +102,22 @@ export class WorkflowTaggedSink implements IDashboardSink {
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean
+    isInjectMode?: boolean,
+    executionMode?: ExecutionMode
   ): void {
     // workflowId is already the first param here — pass through as-is.
-    // Only pass isInjectMode when truthy to avoid adding a trailing undefined arg
-    // that breaks deepStrictEqual assertions in tests.
-    if (isInjectMode) {
+    // Preserve the legacy argument shape when the optional fields are absent.
+    if (executionMode !== undefined) {
+      this.inner.updateExecutionStarted(
+        workflowId,
+        fileName,
+        totalSteps,
+        isContinuation,
+        preserveStepCount,
+        isInjectMode,
+        executionMode
+      );
+    } else if (isInjectMode) {
       this.inner.updateExecutionStarted(
         workflowId,
         fileName,

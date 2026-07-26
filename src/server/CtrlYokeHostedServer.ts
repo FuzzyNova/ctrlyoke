@@ -25,6 +25,7 @@ import {
   BROWSER_CLIENT_PREFIX,
   type FinalStepPhase,
   type HarnessId,
+  type ExecutionMode,
   type StepStatus,
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
@@ -330,7 +331,8 @@ export class CtrlYokeHostedServer
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean
+    isInjectMode?: boolean,
+    executionMode?: ExecutionMode
   ): void {
     this.sink.updateExecutionStarted(
       workflowId,
@@ -338,7 +340,8 @@ export class CtrlYokeHostedServer
       totalSteps,
       isContinuation,
       preserveStepCount,
-      isInjectMode
+      isInjectMode,
+      executionMode
     );
   }
   updateProgress(current: number, total: number, workflowId?: string): void {

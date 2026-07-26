@@ -32,6 +32,7 @@ import {
   MESSAGE_TYPES,
   STEP_STATUS,
   EXECUTION_STATES,
+  EXECUTION_MODES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
@@ -286,6 +287,21 @@ const WorkflowStepsPanelInner: React.FC<{
   // already disabled — are suppressed so overrides reflect actual differences.
   const getStepOverrides = (step: (typeof steps)[0]): PromptOverride[] => {
     const result: PromptOverride[] = [];
+
+    if (step.executionMode !== undefined) {
+      result.push({
+        label:
+          step.executionMode === EXECUTION_MODES.INTERACTIVE
+            ? "Interactive"
+            : "Headless",
+        title: `executionMode: ${step.executionMode}`,
+        icon:
+          step.executionMode === EXECUTION_MODES.INTERACTIVE
+            ? "debug-console"
+            : "terminal",
+      });
+    }
+
     if (isScriptStep(step)) return result;
 
     // agent — show basename only, or explicit none when disabled

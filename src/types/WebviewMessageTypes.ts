@@ -544,6 +544,8 @@ export interface ExecutionStartedMessage {
    * unfreeze and resume it instead so the same xterm instance shows the new output.
    */
   isInjectMode?: boolean;
+  /** Resolved execution mode for the step that started this execution. */
+  executionMode?: ExecutionMode;
 }
 
 /**

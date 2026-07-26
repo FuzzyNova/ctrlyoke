@@ -2,6 +2,7 @@ import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
   HarnessId,
+  ExecutionMode,
   StatusMessageSeverity,
   StepStatus,
 } from "../types/DashboardConstants";
@@ -128,17 +129,38 @@ export class DashboardBroadcastHub
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean
+    isInjectMode?: boolean,
+    executionMode?: ExecutionMode
   ): void {
     for (const client of this.clients) {
-      client.updateExecutionStarted?.(
-        workflowId,
-        fileName,
-        totalSteps,
-        isContinuation,
-        preserveStepCount,
-        isInjectMode
-      );
+      if (executionMode !== undefined) {
+        client.updateExecutionStarted?.(
+          workflowId,
+          fileName,
+          totalSteps,
+          isContinuation,
+          preserveStepCount,
+          isInjectMode,
+          executionMode
+        );
+      } else if (isInjectMode !== undefined) {
+        client.updateExecutionStarted?.(
+          workflowId,
+          fileName,
+          totalSteps,
+          isContinuation,
+          preserveStepCount,
+          isInjectMode
+        );
+      } else {
+        client.updateExecutionStarted?.(
+          workflowId,
+          fileName,
+          totalSteps,
+          isContinuation,
+          preserveStepCount
+        );
+      }
     }
   }
 

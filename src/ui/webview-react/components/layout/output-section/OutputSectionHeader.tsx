@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  ExpandCollapseAllDiffsButton,
-  IconToggleButton,
-} from "@components/shared";
+import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
 import type { TerminalSession } from "@store/terminalStore";
@@ -13,7 +10,6 @@ export interface OutputSectionHeaderProps {
   activeOutputTab: OutputTab;
   activeTerminalSession: TerminalSession | null;
   anyDiffCollapsed: boolean;
-  executionModeInteractive: boolean;
   hasOutput: boolean;
   isExecutionActive: boolean;
   isHeaderNarrow: boolean;
@@ -30,7 +26,6 @@ export interface OutputSectionHeaderProps {
   workflowRedoEntries: WorkflowStepEntry[];
   workflowUndoEntries: WorkflowStepEntry[];
   onCollapseAllDiffs: () => void;
-  onExecutionModeToggle: (active: boolean) => void;
   onExpandAllDiffs: () => void;
   onExport: () => void;
   onNewTerminal: () => void;
@@ -49,7 +44,6 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   activeOutputTab,
   activeTerminalSession,
   anyDiffCollapsed,
-  executionModeInteractive,
   hasOutput,
   isExecutionActive,
   isHeaderNarrow,
@@ -65,7 +59,6 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   workflowRedoEntries,
   workflowUndoEntries,
   onCollapseAllDiffs,
-  onExecutionModeToggle,
   onExpandAllDiffs,
   onExport,
   onNewTerminal,
@@ -306,18 +299,6 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             </button>
           </>
         )}
-        <IconToggleButton
-          active={executionModeInteractive}
-          onToggle={onExecutionModeToggle}
-          activeIcon="debug-console"
-          inactiveIcon="terminal"
-          activeTooltip="Interactive mode: terminal visible, steer execution and interact with harness"
-          inactiveTooltip="Headless mode: runs in background, output shown in Output panel"
-          activeLabel="Interactive"
-          inactiveLabel="Headless"
-          narrow={isHeaderNarrow}
-          labelPosition="left"
-        />
       </div>
     </div>
   );

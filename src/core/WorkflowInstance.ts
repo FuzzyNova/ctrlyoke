@@ -49,6 +49,7 @@ import {
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   type ActionType,
+  type ExecutionMode,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -1283,6 +1284,13 @@ export class WorkflowInstance {
 
       const currentQueueState = this.promptQueue.getState();
       const totalSteps = currentQueueState.steps.length;
+      const currentStep = currentQueueState.steps[currentQueueState.currentIndex];
+      const executionMode: ExecutionMode | undefined = currentStep
+        ? PropertyResolver.resolveExecutionMode(
+            currentStep,
+            this.promptQueue.getWorkflowFile()
+          )
+        : undefined;
 
       let workingFilePath = currentQueueState.workingFilePath ?? "";
       const workflowKey = currentQueueState.workflowKey;
@@ -1441,7 +1449,8 @@ export class WorkflowInstance {
               totalSteps,
               true,
               currentIndex,
-              true
+              true,
+              executionMode
             );
           } else {
             this.dashboardSink.updateExecutionStarted(
@@ -1449,7 +1458,9 @@ export class WorkflowInstance {
               fileName,
               totalSteps,
               true,
-              currentIndex
+              currentIndex,
+              undefined,
+              executionMode
             );
           }
         } else if (isAppendContinuation) {
@@ -1464,7 +1475,8 @@ export class WorkflowInstance {
               totalSteps,
               true,
               prevCompletedCount,
-              true
+              true,
+              executionMode
             );
           } else {
             this.dashboardSink.updateExecutionStarted(
@@ -1472,7 +1484,9 @@ export class WorkflowInstance {
               fileName,
               totalSteps,
               true,
-              prevCompletedCount
+              prevCompletedCount,
+              undefined,
+              executionMode
             );
           }
         } else {
@@ -1483,7 +1497,11 @@ export class WorkflowInstance {
           this.dashboardSink.updateExecutionStarted(
             this.id,
             fileName,
-            totalSteps
+            totalSteps,
+            undefined,
+            undefined,
+            undefined,
+            executionMode
           );
         }
       }

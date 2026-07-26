@@ -1580,6 +1580,8 @@ suite("WorkflowInstance append-and-continue", () => {
       2,
       true,
       1,
+      undefined,
+      "interactive",
     ]);
   });
 

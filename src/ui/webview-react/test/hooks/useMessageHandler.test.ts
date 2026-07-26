@@ -2322,9 +2322,6 @@ describe("EXECUTION_STARTED", () => {
     useUiStore.getState().setActiveOutputTab("workflow-1", "terminal");
     useSettingsStore
       .getState()
-      .updateGlobalSetting("executionMode", "headless");
-    useSettingsStore
-      .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", true);
 
     act(() => {
@@ -2332,6 +2329,7 @@ describe("EXECUTION_STARTED", () => {
         workflowId: "workflow-1",
         fileName: "wf.yaml",
         totalSteps: 2,
+        executionMode: "headless",
       });
     });
 
@@ -2347,9 +2345,6 @@ describe("EXECUTION_STARTED", () => {
     useUiStore.getState().setActiveOutputTab("workflow-1", "terminal");
     useSettingsStore
       .getState()
-      .updateGlobalSetting("executionMode", "headless");
-    useSettingsStore
-      .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", false);
 
     act(() => {
@@ -2357,6 +2352,7 @@ describe("EXECUTION_STARTED", () => {
         workflowId: "workflow-1",
         fileName: "wf.yaml",
         totalSteps: 2,
+        executionMode: "headless",
       });
     });
 
@@ -2371,9 +2367,6 @@ describe("EXECUTION_STARTED", () => {
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
-    useSettingsStore
-      .getState()
-      .updateGlobalSetting("executionMode", "interactive");
     useSettingsStore
       .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", true);
@@ -2392,12 +2385,47 @@ describe("EXECUTION_STARTED", () => {
         fileName: "wf.yaml",
         totalSteps: 2,
         isInjectMode: true,
+        executionMode: "interactive",
       });
     });
 
     expect(useUiStore.getState().outputCollapsed).toBe(false);
     expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
       "terminal"
+    );
+  });
+
+  it("focuses the tab for each step's resolved execution mode", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", true);
+
+    const dispatchStepStart = (executionMode: "headless" | "interactive") =>
+      act(() => {
+        dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+          workflowId: "workflow-1",
+          fileName: "wf.yaml",
+          totalSteps: 3,
+          executionMode,
+        });
+      });
+
+    dispatchStepStart("headless");
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "output"
+    );
+
+    dispatchStepStart("interactive");
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "terminal"
+    );
+
+    dispatchStepStart("headless");
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "output"
     );
   });
 

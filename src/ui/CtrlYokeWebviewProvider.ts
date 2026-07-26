@@ -10,6 +10,7 @@ import {
   type StepStatus,
   type FinalStepPhase,
   type HarnessId,
+  type ExecutionMode,
   PANEL_CLIENT_ID,
 } from "../types/DashboardConstants";
 import {
@@ -536,7 +537,8 @@ export class CtrlYokeWebviewProvider
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean
+    isInjectMode?: boolean,
+    executionMode?: ExecutionMode
   ): void {
     this.sink.updateExecutionStarted(
       workflowId,
@@ -544,7 +546,8 @@ export class CtrlYokeWebviewProvider
       totalSteps,
       isContinuation,
       preserveStepCount,
-      isInjectMode
+      isInjectMode,
+      executionMode
     );
   }
   public updateProgress(

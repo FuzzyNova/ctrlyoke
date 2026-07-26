@@ -19,7 +19,6 @@ import { useOutputFind } from "@hooks/useOutputFind";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
   MESSAGE_TYPES,
-  EXECUTION_MODES,
   EXECUTION_STATES,
   SESSION_KINDS,
   SETTING_SCOPES,
@@ -170,27 +169,6 @@ const OutputSectionInner: React.FC = () => {
       });
     },
     [setTerminalFontSize, terminalFontSizeScope]
-  );
-
-  // Execution mode toggle
-  const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
-  const executionModeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["defaults.executionMode"] ===
-    SETTING_SCOPES.WORKSPACE
-      ? SETTING_SCOPES.WORKSPACE
-      : SETTING_SCOPES.USER
-  );
-  const handleExecutionModeChange = useCallback(
-    (active: boolean) => {
-      const vscode = getVsCodeApi();
-      vscode?.postMessage({
-        type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-        path: "defaults.executionMode",
-        value: active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS,
-        scope: executionModeScope,
-      });
-    },
-    [executionModeScope]
   );
 
   // Terminal tab state
@@ -1113,9 +1091,6 @@ const OutputSectionInner: React.FC = () => {
           activeOutputTab={activeOutputTab}
           activeTerminalSession={activeTerminalSession}
           anyDiffCollapsed={anyDiffCollapsed}
-          executionModeInteractive={
-            executionMode === EXECUTION_MODES.INTERACTIVE
-          }
           hasOutput={hasOutput}
           isExecutionActive={isExecutionActive}
           isHeaderNarrow={isHeaderNarrow}
@@ -1131,7 +1106,6 @@ const OutputSectionInner: React.FC = () => {
           workflowRedoEntries={workflowUndoRedoData.redoEntries}
           workflowUndoEntries={workflowUndoRedoData.undoEntries}
           onCollapseAllDiffs={collapseAllDiffs}
-          onExecutionModeToggle={handleExecutionModeChange}
           onExpandAllDiffs={expandAllDiffs}
           onExport={outputExport.openModal}
           onNewTerminal={handleSpawnTerminal}

@@ -143,6 +143,30 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     );
   });
 
+  it("shows execution mode badges only for explicit step overrides", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Inherited mode" },
+        { prompt: "Interactive mode", executionMode: "interactive" },
+        { prompt: "Headless mode", executionMode: "headless" },
+      ],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(screen.queryByTitle("executionMode: undefined")).not.toBeInTheDocument();
+
+    const interactiveBadge = screen.getByTitle("executionMode: interactive");
+    expect(
+      interactiveBadge.querySelector(".codicon-debug-console")
+    ).not.toBeNull();
+
+    const headlessBadge = screen.getByTitle("executionMode: headless");
+    expect(headlessBadge.querySelector(".codicon-terminal")).not.toBeNull();
+  });
+
   it("disables the final step without deleting it", async () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({
