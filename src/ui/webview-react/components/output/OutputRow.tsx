@@ -19,6 +19,7 @@ import {
   type BashOutputExpansionSection,
   type BashOutputExpansionState,
 } from "./BashOutput";
+import { ScriptVerdict } from "./ScriptVerdict";
 import type {
   BashCommandData,
   CliEvent,
@@ -169,6 +170,7 @@ interface OutputRowProps {
     section: BashOutputExpansionSection,
     expanded: boolean
   ) => void;
+  onScriptVerdictExpansionChange?: (rowKey: string, expanded: boolean) => void;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -1215,6 +1217,7 @@ function OutputRowComponent({
   onToolCallExpansionChange,
   bashExpansion,
   onBashExpansionChange,
+  onScriptVerdictExpansionChange,
 }: OutputRowProps) {
   const rowSearchSegments = getOutputRowSearchSegments(row);
   const getFieldMatches = (field: string, occurrence = 0) => {
@@ -1357,6 +1360,20 @@ function OutputRowComponent({
         );
       }
       break;
+    case "script-verdict":
+      content = (
+        <ScriptVerdict
+          verdict={row.verdict}
+          expanded={row.expanded}
+          expectedFindMatches={getFieldMatches("expected")}
+          actualFindMatches={getFieldMatches("actual")}
+          actionFindMatches={getFieldMatches("action")}
+          onExpansionChange={(expanded) =>
+            onScriptVerdictExpansionChange?.(row.key, expanded)
+          }
+        />
+      );
+      break;
     case "stats":
       content = <StatsRowView row={row} />;
       break;
@@ -1369,6 +1386,7 @@ function OutputRowComponent({
     row.rowKind === "error" ||
     row.rowKind === "plain-response" ||
     row.rowKind === "structured-event" ||
+    row.rowKind === "script-verdict" ||
     row.rowKind === "stats";
 
   if (!isCliGroupRow) {

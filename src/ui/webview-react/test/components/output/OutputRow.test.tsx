@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
 import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
 import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
@@ -78,6 +78,70 @@ const TWENTY_LINES = Array.from({ length: 20 }, (_, i) => `line ${i}`).join(
 );
 
 describe("OutputRow auto-expand on hidden active match", () => {
+  it.each([
+    ["passed", "✔ Passed"],
+    ["failed", "✖ Failed"],
+    ["errored", "⚠ Errored"],
+  ] as const)("renders the %s verdict outcome", (outcome, label) => {
+    const row: OutputRenderRow = {
+      key: `verdict-${outcome}`,
+      target: TARGET,
+      estimateSize: 36,
+      rowKind: "script-verdict",
+      expanded: false,
+      verdict: {
+        compareSource: "auto",
+        expected: "ok",
+        actual: outcome === "errored" ? "spawn npm ENOENT" : "ok",
+        actualSource: "stdout",
+        outcome,
+        matchRule: outcome === "passed" ? "exact" : "none",
+        action: outcome === "failed" ? "retry" : "continue",
+        durationMs: 1200,
+      },
+    };
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+
+    expect(screen.getByRole("button")).toHaveTextContent(label);
+    expect(screen.getByRole("button")).toHaveTextContent("auto → stdout");
+  });
+
+  it("truncates long actual values while collapsed and reveals them when expanded", () => {
+    const actual = Array.from({ length: 20 }, (_, index) => `line ${index}`).join(
+      "\n"
+    );
+    const row: OutputRenderRow = {
+      key: "verdict-truncated",
+      target: TARGET,
+      estimateSize: 36,
+      rowKind: "script-verdict",
+      expanded: false,
+      verdict: {
+        compareSource: "stdout",
+        expected: "PASS",
+        actual,
+        actualSource: "stdout",
+        outcome: "failed",
+        matchRule: "substring",
+        action: "stopWorkflow",
+        durationMs: 100,
+      },
+    };
+
+    const { container, rerender } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+    expect(screen.getByRole("button")).toHaveTextContent("line 0");
+    expect(screen.getByRole("button")).not.toHaveTextContent("line 19");
+
+    fireEvent.click(screen.getByRole("button"));
+    rerender(
+      <OutputRow row={{ ...row, expanded: true }} isExecutionActive={false} />
+    );
+    expect(container).toHaveTextContent("line 19");
+  });
+
   it.each([
     [SCRIPT_OUTPUT_SOURCES.PRE_CONDITION, 0, "Pre-condition"],
     [SCRIPT_OUTPUT_SOURCES.END_CONDITION, 0, "End condition"],

@@ -12,5 +12,6 @@ export {
 } from "./ToolCallOutput";
 export { BashOutput } from "./BashOutput";
 export { StatusMessage } from "./StatusMessage";
+export { ScriptVerdict } from "./ScriptVerdict";
 export { TerminalInstance } from "./TerminalInstance";
 export { TerminalView } from "./TerminalView";

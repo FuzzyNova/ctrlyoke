@@ -320,6 +320,7 @@ const OutputSectionInner: React.FC = () => {
     handleDiffGapExpand,
     handleToolCallExpansionChange,
     handleBashExpansionChange,
+    handleScriptVerdictExpansionChange,
   } = useOutputRowsModel({
     isViewingHistory,
     historyOutputs,
@@ -1164,6 +1165,7 @@ const OutputSectionInner: React.FC = () => {
           measureStaticRowElement={measureStaticRowElement}
           onBackToLive={handleBackToLive}
           onBashExpansionChange={handleBashExpansionChange}
+          onScriptVerdictExpansionChange={handleScriptVerdictExpansionChange}
           onContextMenuOpen={openContextMenu}
           onDiffCollapsedChange={handleDiffCollapsedChange}
           onDiffGapExpand={handleDiffGapExpand}

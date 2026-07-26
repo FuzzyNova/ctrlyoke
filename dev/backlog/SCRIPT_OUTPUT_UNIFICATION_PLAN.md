@@ -1,6 +1,6 @@
 # Script Output Unification — one rendering pipeline for script steps, pre-conditions, and end-conditions
 
-Status: **In progress (Phases 0–4a complete, 2026-07-25; verdict row pending).** Interlocks with
+Status: **Implemented (Phases 0–5 complete, 2026-07-25).** Interlocks with
 [`ON_ERROR_REDESIGN_PLAN.md`](./ON_ERROR_REDESIGN_PLAN.md) — see "Relationship to
 the On Error plan".
 
@@ -316,12 +316,20 @@ end-conditions, and end-condition retries onto the same streaming/history
 pipeline. Conditions carry phase-keyed CLI entries, compact verdict summaries,
 and retry evaluations preserve workflow vars.
 
-**Phase 4a — webview streaming and headers (complete 2026-07-25).** Live
-streaming chunks are keyed by target and execution phase, and condition CLI
-headers use source-specific labels/icons. The `script-verdict` row and its
-find/scroll-seek/estimate wiring remain pending for Phase 4b.
+**Phase 4 — webview streaming, headers, and verdict block (complete 2026-07-25).**
+Live streaming chunks are keyed by target and execution phase, condition CLI
+headers use source-specific labels/icons, and every script-ish output group
+renders a model-owned `script-verdict` row between response and stats. Verdict
+details are expandable, searchable, and use a fixed collapsed estimate for
+virtualization stability.
 
-**Phase 5 — tests.** See below.
+**Phase 5 — tests (complete 2026-07-25).** The evaluator, reporter, row builder,
+verdict renderer, and output-find paths are covered by the extension-host and
+webview test suites described below.
+
+Deliberately deferred: scroll-seek placeholders remain disabled for the small
+verdict block, and condition-output capture caps remain a follow-up if retrying
+gates that emit megabytes becomes a practical concern.
 
 Phases 1–3 are shippable without 4: conditions immediately stream and render as
 proper script output groups; the verdict simply isn't drawn yet.

@@ -11,6 +11,7 @@ import type {
   OutputStatusMessage,
   ToolCall,
 } from "../types/cliEvents";
+import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
 import type {
   StepOutput,
   UndoRecord,
@@ -183,6 +184,13 @@ export interface StatsRow extends OutputRowBase {
   outputText?: string;
 }
 
+export interface ScriptVerdictRow extends OutputRowBase {
+  rowKind: "script-verdict";
+  target: OutputMessageTarget;
+  verdict: ScriptVerdict;
+  expanded: boolean;
+}
+
 export type OutputRenderRow =
   | HistoryBannerRow
   | StepAnchorRow
@@ -194,6 +202,7 @@ export type OutputRenderRow =
   | ErrorRow
   | StructuredEventRow
   | PlainResponseRow
+  | ScriptVerdictRow
   | StatsRow;
 
 export interface BuildOutputRowsInput {
@@ -218,6 +227,7 @@ export interface BuildOutputRowsInput {
   diffExpansionState: ReadonlyMap<string, DiffGapExpansionState>;
   toolCallExpansionState: ReadonlyMap<string, ToolCallExpansionState>;
   bashExpansionState?: ReadonlyMap<string, OutputRowBashExpansionState>;
+  scriptVerdictExpansionState?: ReadonlyMap<string, boolean>;
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
@@ -1146,6 +1156,8 @@ export function estimateOutputRowHeight(
             outputContentWidth,
             outputFontSize
           );
+    case "script-verdict":
+      return row.expanded ? 220 : 36;
     case "stats":
       return estimateStatsRowHeight(row, outputContentWidth, outputFontSize);
     case "structured-event":
@@ -1465,6 +1477,18 @@ export function buildOutputRows(
           estimateSize: 120,
         });
       }
+    }
+
+    if (output.scriptVerdict) {
+      const verdictKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}:verdict`;
+      rows.push({
+        key: verdictKey,
+        rowKind: "script-verdict",
+        target,
+        verdict: output.scriptVerdict,
+        expanded: input.scriptVerdictExpansionState?.get(verdictKey) ?? false,
+        estimateSize: 36,
+      });
     }
 
     const hasStatsRow = isScriptOutput(output)

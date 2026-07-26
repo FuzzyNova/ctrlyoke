@@ -100,6 +100,26 @@ function makeStatsRow(key = "stats-1"): OutputRenderRow {
   };
 }
 
+function makeVerdictRow(): OutputRenderRow {
+  return {
+    key: "verdict-1",
+    rowKind: "script-verdict",
+    target,
+    estimateSize: 36,
+    expanded: false,
+    verdict: {
+      compareSource: "stdout",
+      expected: "PASS",
+      actual: "all tests PASS",
+      actualSource: "stdout",
+      outcome: "passed",
+      matchRule: "substring",
+      action: "continue",
+      durationMs: 1000,
+    },
+  };
+}
+
 describe("outputFind", () => {
   describe("findOutputMatches", () => {
     it("returns empty for an empty query", () => {
@@ -145,6 +165,24 @@ describe("outputFind", () => {
       expect(
         findOutputMatches([makePromptRow("hello")], "missing", false)
       ).toEqual([]);
+    });
+
+    it("finds expected, actual, and action text in script verdict rows", () => {
+      const matches = findOutputMatches([makeVerdictRow()], "PASS", false);
+
+      expect(matches).toHaveLength(2);
+      expect(matches.map((match) => match.field)).toEqual([
+        "expected",
+        "actual",
+      ]);
+
+      const actionMatches = findOutputMatches(
+        [makeVerdictRow()],
+        "continue",
+        false
+      );
+      expect(actionMatches).toHaveLength(1);
+      expect(actionMatches[0]).toMatchObject({ field: "action" });
     });
 
     it("finds matches in structured bash command rows", () => {

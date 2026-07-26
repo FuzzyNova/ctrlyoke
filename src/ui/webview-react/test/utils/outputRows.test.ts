@@ -13,6 +13,69 @@ import {
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
 
+  it("adds a verdict between the response and stats rows", () => {
+    const result = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            prompt: "Run the condition",
+            cliCommand: "npm test",
+            response: "PASS",
+            elapsed: 1.2,
+            isStreaming: false,
+            source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+            scriptVerdict: {
+              compareSource: "stdout",
+              expected: "PASS",
+              actual: "PASS",
+              actualSource: "stdout",
+              exitCode: 0,
+              outcome: "passed",
+              matchRule: "exact",
+              action: "continue",
+              durationMs: 1200,
+            },
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    expect(result.rows.map((row) => row.rowKind)).toEqual([
+      "step-anchor",
+      "cli-header",
+      "prompt",
+      "cli-command",
+      "plain-response",
+      "script-verdict",
+      "stats",
+    ]);
+    const verdictRow = result.rows.find(
+      (row) => row.rowKind === "script-verdict"
+    );
+    expect(verdictRow?.estimateSize).toBeGreaterThan(0);
+    expect(verdictRow).toMatchObject({ expanded: false });
+  });
+
   it("keeps streaming chunks isolated by execution phase", () => {
     const allMessages: OutputMessage[] = [
       {

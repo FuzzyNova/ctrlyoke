@@ -98,6 +98,8 @@ export function useOutputRowsModel({
   const [bashExpansionState, setBashExpansionState] = useState<
     Map<string, BashOutputExpansionState>
   >(new Map());
+  const [scriptVerdictExpansionState, setScriptVerdictExpansionState] =
+    useState<Map<string, boolean>>(new Map());
 
   // Build chronologically sorted list of all messages from the single ordered entries array.
   const allMessages = useMemo((): OutputMessage[] => {
@@ -142,6 +144,7 @@ export function useOutputRowsModel({
             diffExpansionState,
             toolCallExpansionState,
             bashExpansionState,
+            scriptVerdictExpansionState,
             defaultDiffCollapsed: diffsCollapsed,
             diffViewType: outputDiffViewType,
             outputFontSize,
@@ -164,6 +167,7 @@ export function useOutputRowsModel({
       diffExpansionState,
       toolCallExpansionState,
       bashExpansionState,
+      scriptVerdictExpansionState,
       diffsCollapsed,
       outputDiffViewType,
       outputFontSize,
@@ -209,6 +213,9 @@ export function useOutputRowsModel({
           ? [row.key]
           : []
       )
+    );
+    const scriptVerdictRowKeys = new Set(
+      rows.flatMap((row) => (row.rowKind === "script-verdict" ? [row.key] : []))
     );
 
     setDiffCollapseState((previous) => {
@@ -263,6 +270,19 @@ export function useOutputRowsModel({
 
       for (const key of [...next.keys()]) {
         if (!bashRowKeys.has(key)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+
+      return changed ? next : previous;
+    });
+    setScriptVerdictExpansionState((previous) => {
+      let changed = false;
+      const next = new Map(previous);
+
+      for (const key of [...next.keys()]) {
+        if (!scriptVerdictRowKeys.has(key)) {
           next.delete(key);
           changed = true;
         }
@@ -427,6 +447,25 @@ export function useOutputRowsModel({
     [invalidateMeasuredRowForUserResize]
   );
 
+  const handleScriptVerdictExpansionChange = useCallback(
+    (rowKey: string, expanded: boolean) => {
+      invalidateMeasuredRowForUserResize(rowKey);
+      setScriptVerdictExpansionState((previous) => {
+        if (!expanded) {
+          if (!previous.has(rowKey)) return previous;
+          const next = new Map(previous);
+          next.delete(rowKey);
+          return next;
+        }
+        if (previous.get(rowKey) === true) return previous;
+        const next = new Map(previous);
+        next.set(rowKey, true);
+        return next;
+      });
+    },
+    [invalidateMeasuredRowForUserResize]
+  );
+
   return {
     allMessages,
     rows,
@@ -436,6 +475,7 @@ export function useOutputRowsModel({
     firstRowIndexByTarget,
     anyDiffCollapsed,
     bashExpansionState,
+    handleScriptVerdictExpansionChange,
     handleDiffCollapsedChange,
     handleDiffGapExpand,
     handleToolCallExpansionChange,

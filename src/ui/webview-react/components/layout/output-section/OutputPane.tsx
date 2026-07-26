@@ -54,6 +54,10 @@ interface OutputPaneProps {
     section: BashOutputExpansionSection,
     expanded: boolean
   ) => void;
+  onScriptVerdictExpansionChange: (
+    rowKey: string,
+    expanded: boolean
+  ) => void;
   onContextMenuOpen: (
     x: number,
     y: number,
@@ -103,6 +107,7 @@ function renderOutputRow(
     | "isExecutionActive"
     | "onBackToLive"
     | "onBashExpansionChange"
+    | "onScriptVerdictExpansionChange"
     | "onDiffCollapsedChange"
     | "onDiffGapExpand"
     | "onFileUndo"
@@ -134,6 +139,7 @@ function renderOutputRow(
         DEFAULT_BASH_OUTPUT_EXPANSION_STATE
       }
       onBashExpansionChange={props.onBashExpansionChange}
+      onScriptVerdictExpansionChange={props.onScriptVerdictExpansionChange}
     />
   );
 }

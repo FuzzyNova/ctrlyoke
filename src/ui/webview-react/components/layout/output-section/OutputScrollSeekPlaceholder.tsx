@@ -41,6 +41,8 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Status";
     case "stats":
       return "Stats";
+    case "script-verdict":
+      return "Script verdict";
     case "error":
       return "Error";
     case "history-banner":

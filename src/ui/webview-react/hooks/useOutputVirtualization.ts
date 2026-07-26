@@ -136,6 +136,7 @@ function getRowHeightBucket(row: OutputRenderRow): string {
     case "cli-command":
     case "error":
     case "plain-response":
+    case "script-verdict":
     case "stats":
       return row.rowKind;
     case "structured-event":

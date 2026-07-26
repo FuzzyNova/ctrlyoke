@@ -28,6 +28,9 @@ export type OutputFindField =
   | "error"
   | "response"
   | "status"
+  | "expected"
+  | "actual"
+  | "action"
   | "filePath"
   | "toolLabel"
   | "toolContent"
@@ -143,6 +146,19 @@ export function getOutputRowSearchSegments(
     case "step-anchor":
     case "final-step-label":
       return [];
+    case "script-verdict":
+      return createSegments([
+        {
+          field: "expected",
+          text:
+            row.verdict.expected ?? "exit code 0 (no `returns` set)",
+        },
+        { field: "actual", text: row.verdict.actual },
+        {
+          field: "action",
+          text: row.verdict.actionDetail ?? row.verdict.action,
+        },
+      ]);
     case "cli-header":
       return createSegments([
         { field: "header", text: row.stepLabel },
