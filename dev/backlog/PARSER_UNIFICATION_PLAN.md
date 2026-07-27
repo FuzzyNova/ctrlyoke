@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phases 0 through 6 complete; Phase 7 remains in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phases 0 through 7 complete. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -168,7 +168,7 @@ Under the reshaped plan:
 - **Antigravity now uses its rewritten incremental transcript parser** — see `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. The log parser emits structured planner/tool/checkpoint/error events while retaining the Go log for session and completion markers.
 - **Time-to-_correct_-event — improves sharply where it was worst.** Codex headless today shows a bare `Edited <file>` for the whole run and only gains a diff at the end, when `augmentParsedOutput()` back-fills from the log. Log-sourced, the `patch_apply_end` diff renders **when the write happens** — 0.02s after the edit. This is a strict gain, not a trade.
 - **Streaming fidelity — improves everywhere.** `extractStructuredEventsFromEvent` is the same mapping as the final `extractResponse`, so streamed and final output can no longer disagree. Today's `processStreamingChunk` offers no such guarantee.
-- **Antigravity log-monitored output — already improved by the completed rewrite.** The transcript-backed log parser now turns the rich stream into structured tool/text events. The separate headless response parser still consumes stdout, so broader headless-source consolidation remains future work.
+- **Antigravity log-monitored output — already improved by the completed rewrite.** The transcript-backed log parser now turns the rich stream into structured tool/text events, including headless output.
 
 Things that are **not** parsing and must survive the deletion:
 
@@ -177,7 +177,7 @@ Things that are **not** parsing and must survive the deletion:
 | Session ID from stdout          | `*ResponseParser.extractSessionId()`; read at `CliResponseCollector.ts:74`                                                 | **Must survive.** Only Copilot and Antigravity implement `ICliProvider.extractSessionIdFromLogs`; Claude, Codex, OpenCode and Qwen headless get their session ID from stdout metadata. Losing it forces every harness through `discoverSessionLog()` prompt-text matching. |
 | Recoverable-session retry       | `ClaudeResponseParser.isRecoverableSessionError()` and the existing Qwen equivalent; called at `CliExecutionRunner.ts:394` | Move the implementations to `ICliProvider`. They classify spawn errors, not output.                                                                                                                                                                                        |
 | Headless failure classification | `CliResponseCollector.getHeadlessFailure()` (exit code, stderr, CLI-invocation-error patterns)                             | Unaffected — transport-level, stays.                                                                                                                                                                                                                                       |
-| `parseTokenCounts`              | `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                                       | Keep the small legacy statistics helper on `CopilotCliProvider`; headless token usage comes from the shared log-parser mapping.                                                                                                                                              |
+| `parseTokenCounts`              | Formerly `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                            | **Dropped.** `WorkflowExecutor` now uses structured usage metadata from the log-parser output; reparsing its already-formatted statistics string duplicated that source of truth. |
 | Copilot plain-text fallback     | Formerly `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true`                                             | **Dead code, removed.** `CopilotCliProvider.buildHeadlessArgs()` unconditionally adds `--output-format json`; interactive mode uses `-i` and does not flow through the headless response parser.                                       |
 
 ### Chicken-and-egg on session log discovery
@@ -316,7 +316,17 @@ tests are deleted, and a captured golden pair covers the mapping.
 
 ### Phase 7 — Retire the layer
 
-Delete `IResponseParser` / `ResponseParserBase`, drop `responseParser` from `ICliProvider`, remove `processStreamingChunk` plumbing from `CliTransportCoordinator`, delete the per-harness response-parser tests.
+**Complete 2026-07-26.** Deleted `IResponseParser` / `ResponseParserBase`, removed
+`responseParser` from `ICliProvider` and all test fakes, and removed the
+`processStreamingChunk` transport branch. `CliResponseCollector` now has only
+the stdout-sourced and log-sourced event paths; `getHeadlessFailure()` remains
+transport-level and `CliParseUtils` remains a shared log-parser utility.
+
+The legacy `parseTokenCounts` path was dropped. `WorkflowExecutor` reads token
+usage from the structured metadata produced by the log parsers, so no provider
+needs to parse the display-only statistics string again. Per-harness response
+parser tests and their fakes were removed or updated, while Copilot's OTel
+enrichment coverage remains.
 
 ---
 
@@ -337,4 +347,4 @@ Delete `IResponseParser` / `ResponseParserBase`, drop `responseParser` from `ICl
 2. ~~Is Copilot's plain-text headless mode still reachable, or is `--output-format json` unconditional now?~~ **Answered in Phase 3:** `buildHeadlessArgs()` always adds `--output-format json`, so headless plain-text output is unreachable. `parsePlainText()` and its `rawTextOutput` path were dead code and were deleted with `CopilotResponseParser`.
 3. ~~Is Antigravity's shared `cli-*.log` safe as the sole headless source?~~ **Moot** — it carries no response content; the implemented parser uses the per-session transcript for response events and the Go log only for session/completion markers. See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.
 4. ~~Is Qwen's log richer than its stdout?~~ **Answered in Phase 6:** yes. Two real Qwen Code 0.20.1 runs showed equivalent core response content in both streams, while the session log additionally preserved the user/tool turns, `message.parts[]` function calls/results, per-turn reasoning and cache counts, cumulative usage, and context-window size. Qwen is log-sourced; stdout remains the session-ID carrier and activity clock. See [Measured: Qwen's session log is richer](#measured-qwens-session-log-is-richer).
-5. Should `getFinalEventsOnCompletion` and `augmentParsedOutput` merge into one post-completion enrichment hook once both modes share a path? They overlap heavily after this change, and what remains of `augmentParsedOutput` (Copilot's OTel read) is exactly the "fetch from a third artifact after completion" shape `getFinalEventsOnCompletion` already describes.
+5. ~~Should `getFinalEventsOnCompletion` and `augmentParsedOutput` merge into one post-completion enrichment hook?~~ **Answered in Phase 7: keep them separate.** `getFinalEventsOnCompletion` belongs to `ILogParser` and returns late events from the harness session source; `augmentParsedOutput` belongs to `ICliProvider` and reads Copilot's separate OTel artifact for metadata. They share timing but not ownership or data shape, and merging them would couple the log-parser contract to provider-specific third-artifact enrichment.

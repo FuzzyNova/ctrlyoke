@@ -40,10 +40,6 @@ function createProvider(): ICliProvider {
       installHint: "",
       shouldStreamHeadlessOutput: false,
     },
-    responseParser: {
-      parse: () => ({ events: [], metadata: {} }),
-      parseTokenCounts: () => undefined,
-    },
     notificationMonitor: {
       supportsSessionIdInFilename: false,
       supportsSessionStart: false,

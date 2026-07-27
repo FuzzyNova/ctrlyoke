@@ -343,7 +343,6 @@ export class CliTransportCoordinator {
 
       const shouldStream =
         this.deps.provider.config.shouldStreamHeadlessOutput || !!source;
-      const streamState = new Map<string, any>();
       const stdoutEventPump =
         source?.mode === "stdout"
           ? new CliLogEventPump({
@@ -374,21 +373,6 @@ export class CliTransportCoordinator {
                 const events = source.parseStdout?.(chunk) ?? [];
                 for (const event of events) {
                   stdoutEventPump.processEvent(event);
-                }
-              } else if (
-                this.deps.provider.responseParser?.processStreamingChunk
-              ) {
-                const processedChunk =
-                  this.deps.provider.responseParser.processStreamingChunk(
-                    chunk,
-                    streamState
-                  );
-                if (processedChunk !== undefined) {
-                  if (Array.isArray(processedChunk)) {
-                    this.deps.hostCallbacks.onStreamingEvents(processedChunk);
-                  } else {
-                    this.deps.hostCallbacks.onStreamingChunk(processedChunk);
-                  }
                 }
               } else {
                 this.deps.hostCallbacks.onStreamingChunk(chunk);

@@ -95,20 +95,6 @@ export class QwenCliProvider implements ICliProvider {
     return sessionEvent?.session_id as string | undefined;
   }
 
-  /** Preserve the legacy workflow token-statistics fallback after parser removal. */
-  parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    const match = statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/);
-    if (!match) {
-      return undefined;
-    }
-    return {
-      prompt: parseInt(match[1], 10),
-      completion: parseInt(match[2], 10),
-    };
-  }
-
   /**
    * Build complete CLI arguments array for Qwen Code CLI execution
    *

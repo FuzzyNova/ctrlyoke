@@ -91,27 +91,6 @@ export class OpenCodeCliProvider implements ICliProvider {
     return event?.sessionID as string | undefined;
   }
 
-  /** Parse legacy statistics strings used by workflow token reporting. */
-  parseTokenCounts(
-    output: string
-  ): { prompt: number; completion: number } | undefined {
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let found = false;
-
-    for (const event of CliParseUtils.parseJsonLines(output)) {
-      if (event.type === "step_finish" && event.part?.tokens) {
-        inputTokens += event.part.tokens.input ?? 0;
-        outputTokens += event.part.tokens.output ?? 0;
-        found = true;
-      }
-    }
-
-    return found
-      ? { prompt: inputTokens, completion: outputTokens }
-      : undefined;
-  }
-
   /**
    * Build complete CLI arguments array for OpenCode CLI execution
    *

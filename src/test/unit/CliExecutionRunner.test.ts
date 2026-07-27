@@ -26,10 +26,6 @@ function createProvider(options?: {
       installHint: "",
       shouldStreamHeadlessOutput: false,
     },
-    responseParser: {
-      parse: () => ({ events: [], metadata: {} }),
-      parseTokenCounts: () => undefined,
-    },
     notificationMonitor: {
       supportsSessionIdInFilename: true,
       supportsSessionStart: options?.supportsSessionStart ?? true,

@@ -1,4 +1,3 @@
-import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type {
   IToolPermissionMapper,
@@ -72,7 +71,6 @@ export interface HarnessConfig {
  * ```typescript
  * class CopilotCliProvider implements ICliProvider {
  *   readonly config: HarnessConfig = { ... };
- *   readonly responseParser = new CopilotResponseParser();
  *   readonly notificationMonitor = new CopilotNotificationMonitor();
  *   readonly toolPermissionMapper = new CopilotToolPermissionMapper();
  *
@@ -90,9 +88,6 @@ export interface ICliProvider {
   /** Static harness configuration */
   readonly config: HarnessConfig;
 
-  /** Response parser component for providers not yet migrated to log sourcing. */
-  readonly responseParser?: IResponseParser;
-
   /** Notification monitor component */
   readonly notificationMonitor: INotificationMonitor;
 
@@ -103,15 +98,9 @@ export interface ICliProvider {
   readonly logParser?: ILogParser;
 
   /**
-   * Select the event source for the headless migration seam. Providers that
-   * have not migrated leave this unset and continue using responseParser.
+   * Select the event source for headless execution.
    */
   readonly headlessSource?: "stdout" | "log";
-
-  /** Parse formatted statistics when the provider has no response parser. */
-  parseTokenCounts?(statistics: string):
-    | { prompt: number; completion: number }
-    | undefined;
 
   /**
    * Convert headless stdout into the event vocabulary understood by this
@@ -388,15 +377,14 @@ export interface ICliProvider {
   ): Promise<string | undefined>;
 
   /**
-   * Augment parsed output after the response parser runs (optional).
+   * Augment headless output after event mapping (optional).
    *
-   * Called by CliIntegration immediately after responseParser.parse() in headless mode.
-   * Use for post-parse data enrichment that requires async work the synchronous parser
-   * cannot do (e.g., reading session log files to retrieve token usage data).
+   * Use for post-parse data enrichment that requires async work the event mapper
+   * cannot do (e.g., reading Copilot's OTel export for context-window data).
    *
    * Return the same or a modified UniversalCliOutput. Must not throw.
    *
-   * @param output - Output from responseParser.parse()
+   * @param output - Output from the provider's log parser
    * @returns Enriched output (or same object if no changes needed)
    */
   augmentParsedOutput?(output: UniversalCliOutput): Promise<UniversalCliOutput>;

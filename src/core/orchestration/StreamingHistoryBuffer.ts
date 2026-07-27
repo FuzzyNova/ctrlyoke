@@ -61,10 +61,10 @@ export interface StreamingHistoryBufferOptions {
  *
  * Headless CLI execution and log tailing deliver output at wildly different
  * cadences. `CliLogEventPump` emits one batch per log line — a whole text block
- * or a single tool call. The headless path runs stdout through
- * `IResponseParser.processStreamingChunk`, and every harness parser turns a
- * provider's token-level delta (Claude `text_delta`, Copilot
- * `assistant.message_delta`) into its own TEXT event. Persisting those
+ * or a single tool call. The headless path runs provider events through the
+ * harness log parser, and every harness maps its token-level delta (Claude
+ * `text_delta`, Copilot `assistant.message_delta`) into its own TEXT event.
+ * Persisting those
  * one-for-one meant a file lock, manifest read, event append and manifest
  * rewrite *per token*.
  *

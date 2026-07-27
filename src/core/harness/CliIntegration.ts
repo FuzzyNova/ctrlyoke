@@ -328,19 +328,6 @@ export class CliIntegration extends HarnessIntegration {
     return this.provider.toolPermissionMapper.hasFullPermissions(config);
   }
 
-  /**
-   * Parse token counts from statistics string
-   * Delegates to provider's response parser
-   */
-  parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    return (
-      this.provider.parseTokenCounts?.(statistics) ??
-      this.provider.responseParser?.parseTokenCounts(statistics)
-    );
-  }
-
   // ============================================================
   // PROMPT PREPARATION
   // ============================================================

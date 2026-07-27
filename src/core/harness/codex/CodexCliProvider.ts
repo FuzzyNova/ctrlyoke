@@ -150,17 +150,6 @@ export class CodexCliProvider implements ICliProvider {
     return undefined;
   }
 
-  parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    const match =
-      statistics.match(/Tokens:\s*(\d+)\s+in\s*\/\s*(\d+)\s+out/i) ??
-      statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/i);
-    return match
-      ? { prompt: Number.parseInt(match[1], 10), completion: Number.parseInt(match[2], 10) }
-      : undefined;
-  }
-
   /**
    * Build complete CLI arguments array for Codex CLI execution
    *

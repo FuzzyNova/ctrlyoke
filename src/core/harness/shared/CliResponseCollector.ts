@@ -15,7 +15,6 @@ import type { BaseCliEvent } from "./interfaces/ILogParser";
 export interface CliResponseCollectorDeps {
   provider: Pick<
     ICliProvider,
-    | "responseParser"
     | "augmentParsedOutput"
     | "extractSessionIdFromLogs"
     | "extractSessionIdFromStdout"
@@ -52,7 +51,6 @@ export class CliResponseCollector {
     workspaceRoot?: string;
     headlessLogTail?: HeadlessLogTail;
   }): Promise<CollectedHeadlessResponse> {
-    this.deps.provider.responseParser?.setCurrentModel?.(params.model ?? "");
     this.deps.provider.logParser?.setCurrentModel?.(params.model ?? "");
     let parsedOutput = this.parseHeadlessOutput(params);
 
@@ -160,13 +158,7 @@ export class CliResponseCollector {
       return logParser.extractResponse(params.headlessLogTail.getEvents());
     }
 
-    return (
-      this.deps.provider.responseParser?.parse(
-        params.stdout,
-        params.stderr,
-        params.exitCode
-      ) ?? { events: [], metadata: {} }
-    );
+    return { events: [], metadata: {} };
   }
 
   private getHeadlessFailure(

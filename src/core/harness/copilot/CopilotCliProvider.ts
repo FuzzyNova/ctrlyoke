@@ -94,29 +94,6 @@ export class CopilotCliProvider implements ICliProvider {
     return result?.sessionId as string | undefined;
   }
 
-  /** Parse legacy statistics strings used by workflow token reporting. */
-  parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number; cached?: number } | undefined {
-    const match = statistics.match(
-      /([\d.]+)(k)?\s+in(?:put)?,\s+([\d.]+)(k)?\s+out(?:put)?(?:,\s+([\d.]+)(k)?\s+(?:cached?|cache\s+read))?/i
-    );
-    if (!match) {
-      return undefined;
-    }
-
-    const parseValue = (value: string, hasK: string | undefined): number =>
-      hasK
-        ? Math.round(Number.parseFloat(value) * 1000)
-        : Number.parseFloat(value);
-
-    return {
-      prompt: parseValue(match[1], match[2]),
-      completion: parseValue(match[3], match[4]),
-      cached: match[5] ? parseValue(match[5], match[6]) : undefined,
-    };
-  }
-
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
   private hookFilePaths: string[] = [];
   /** Path to temporary .gitignore written in .github/hooks/ to hide ctrlyoke files from git. */

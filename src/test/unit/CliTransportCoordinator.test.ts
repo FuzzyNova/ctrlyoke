@@ -33,11 +33,6 @@ suite("CliTransportCoordinator", () => {
           installHint: "",
           shouldStreamHeadlessOutput: true,
         },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
-          processStreamingChunk: (chunk: string) => `processed:${chunk}`,
-        },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
           supportsSessionStart: false,
@@ -112,7 +107,7 @@ suite("CliTransportCoordinator", () => {
       promptArgument: "line one\nline two",
       cliCommand: "test-cli line one\nline two",
     });
-    assert.deepStrictEqual(streamedChunks, ["processed:chunk"]);
+    assert.deepStrictEqual(streamedChunks, ["chunk"]);
     assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
   });
 
@@ -139,10 +134,6 @@ suite("CliTransportCoordinator", () => {
           terminalName: "Test",
           installHint: "",
           shouldStreamHeadlessOutput: false,
-        },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
@@ -223,10 +214,6 @@ suite("CliTransportCoordinator", () => {
           terminalName: "Test",
           installHint: "",
           shouldStreamHeadlessOutput: false,
-        },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
@@ -316,11 +303,6 @@ suite("CliTransportCoordinator", () => {
             installHint: "",
             shouldStreamHeadlessOutput: true,
           },
-          responseParser: {
-            parse: () => ({ events: [], metadata: {} }),
-            parseTokenCounts: () => undefined,
-            processStreamingChunk: (chunk: string) => chunk,
-          },
           notificationMonitor: {
             supportsSessionIdInFilename: true,
             supportsSessionStart: false,
@@ -404,10 +386,6 @@ suite("CliTransportCoordinator", () => {
           installHint: "",
           shouldStreamHeadlessOutput: false,
         },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
-        },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
           supportsSessionStart: false,
@@ -485,10 +463,6 @@ suite("CliTransportCoordinator", () => {
           terminalName: "Test",
           installHint: "",
           shouldStreamHeadlessOutput: false,
-        },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
@@ -584,10 +558,6 @@ suite("CliTransportCoordinator", () => {
           installHint: "",
           shouldStreamHeadlessOutput: false,
           harnessId: "copilot-cli",
-        },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
@@ -687,10 +657,6 @@ suite("CliTransportCoordinator", () => {
           shouldStreamHeadlessOutput: false,
           harnessId: "copilot-cli",
         },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
-        },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
           supportsSessionStart: false,
@@ -773,10 +739,6 @@ suite("CliTransportCoordinator", () => {
           installHint: "",
           shouldStreamHeadlessOutput: false,
           harnessId: "copilot-cli",
-        },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
@@ -877,10 +839,6 @@ suite("CliTransportCoordinator", () => {
           installHint: "",
           shouldStreamHeadlessOutput: false,
           usesInteractiveNotificationMonitor: true,
-        },
-        responseParser: {
-          parse: () => ({ events: [], metadata: {} }),
-          parseTokenCounts: () => undefined,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,

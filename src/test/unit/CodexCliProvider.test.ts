@@ -333,11 +333,5 @@ suite("CodexCliProvider", () => {
       );
     });
 
-    test("preserves token-count parsing without a response parser", () => {
-      assert.deepStrictEqual(
-        provider.parseTokenCounts?.("Session: thread | Tokens: 12 in / 7 out"),
-        { prompt: 12, completion: 7 }
-      );
-    });
   });
 });

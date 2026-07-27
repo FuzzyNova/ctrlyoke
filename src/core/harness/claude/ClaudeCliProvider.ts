@@ -108,21 +108,6 @@ export class ClaudeCliProvider implements ICliProvider {
     return initEvent?.session_id as string | undefined;
   }
 
-  /** Parse legacy statistics strings used by workflow token reporting. */
-  parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    const match = statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/);
-    if (!match) {
-      return undefined;
-    }
-
-    return {
-      prompt: Number.parseInt(match[1], 10),
-      completion: Number.parseInt(match[2], 10),
-    };
-  }
-
   /**
    * Build complete CLI arguments array for Claude CLI execution
    *

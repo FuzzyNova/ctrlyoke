@@ -9,7 +9,7 @@ Shared CLI-harness infrastructure: provider contracts, prompt assembly, response
 <providerContracts>
 - `ICliProvider` is the boundary between shared orchestration and harness-specific behavior. Keep shared code provider-neutral; if behavior depends on one CLI’s payload/flags, expose it through the interface instead of hard-coding it in shared helpers.
 - `buildCliArgs()` prepares provider base args; prompt placement belongs in `buildHeadlessArgs()` / `buildInteractiveArgs()`. Many CLIs have ordering constraints, so do not collapse those methods back together.
-- Optional provider hooks matter: `augmentParsedOutput()` is for repairing parsed metadata from logs, `extractSessionIdFromLogs()` is fallback recovery, `buildNotificationHookArgs()` / `buildHeadlessUserHookArgs()` own hook wiring, and cleanup methods own provider-written artifacts.
+- Optional provider hooks matter: `augmentParsedOutput()` enriches mapped headless metadata from provider-owned artifacts such as Copilot's OTel export, `extractSessionIdFromLogs()` is fallback recovery, `buildNotificationHookArgs()` / `buildHeadlessUserHookArgs()` own hook wiring, and cleanup methods own provider-written artifacts.
 </providerContracts>
 
 <promptAndResponseFlow>

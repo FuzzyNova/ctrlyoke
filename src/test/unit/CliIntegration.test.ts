@@ -82,8 +82,9 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       installHint: "",
       shouldStreamHeadlessOutput: false,
     },
-    responseParser: {
-      parse: () => ({
+    parseHeadlessStdout: () => [],
+    logParser: {
+      extractResponse: () => ({
         events: [
           {
             type: "text",
@@ -92,7 +93,6 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
         ],
         metadata: { sessionId: "session-from-output" },
       }),
-      parseTokenCounts: () => undefined,
     },
     notificationMonitor: {
       supportsSessionIdInFilename: true,
@@ -124,10 +124,6 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
     config: {
       ...provider.config,
       ...(overrides?.config ?? {}),
-    },
-    responseParser: {
-      ...provider.responseParser,
-      ...(overrides?.responseParser ?? {}),
     },
     notificationMonitor: {
       ...provider.notificationMonitor,

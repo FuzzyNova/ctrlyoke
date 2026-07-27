@@ -933,16 +933,6 @@ export abstract class HarnessIntegration {
     return undefined;
   }
 
-  /**
-   * Parse token counts from statistics string
-   * Returns undefined for non-CLI integrations or unparseable stats
-   */
-  parseTokenCounts(
-    _statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    return undefined;
-  }
-
   // ============================================================
   // DIAGNOSTIC METHODS (Chat provides full implementations, CLI provides defaults)
   // ============================================================

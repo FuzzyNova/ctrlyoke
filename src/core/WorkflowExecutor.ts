@@ -1510,10 +1510,9 @@ export class WorkflowExecutor {
     return placeholder;
   }
 
-  /** Resolves token usage stats from parsed output metadata, falling back to last-result statistics. */
+  /** Resolves token usage stats from parsed output metadata. */
   private resolveTokenCounts(
-    parsedOutput: ReturnType<HarnessIntegration["getLastParsedOutput"]>,
-    integration: HarnessIntegration
+    parsedOutput: ReturnType<HarnessIntegration["getLastParsedOutput"]>
   ): CliOutput["tokens"] {
     if (parsedOutput?.metadata.usage) {
       const u = parsedOutput.metadata.usage;
@@ -1525,10 +1524,6 @@ export class WorkflowExecutor {
         contextWindowUsed: u.contextWindowUsedTokens,
         contextWindowSize: u.contextWindowSize,
       };
-    }
-    const lastResult = integration.getLastResult();
-    if (lastResult?.statistics) {
-      return integration.parseTokenCounts(lastResult.statistics);
     }
     return undefined;
   }
@@ -1817,7 +1812,7 @@ export class WorkflowExecutor {
       structured = bufferedStructured;
     }
 
-    const tokens = this.resolveTokenCounts(parsedOutput, integration);
+    const tokens = this.resolveTokenCounts(parsedOutput);
 
     return {
       prompt: prompt.prompt,
@@ -2895,7 +2890,7 @@ export class WorkflowExecutor {
       structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
     }
 
-    const tokens = this.resolveTokenCounts(parsedOutput, integration);
+    const tokens = this.resolveTokenCounts(parsedOutput);
 
     const cliCommand = context.shouldShowCliCommand
       ? integration.getLastCliCommand()
