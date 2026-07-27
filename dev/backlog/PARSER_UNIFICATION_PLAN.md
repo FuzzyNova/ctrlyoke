@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phases 0, 1, 2, and 3 complete; Phases 4 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phases 0, 1, 2, 3, and 4 complete; Phases 5 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -263,9 +263,14 @@ in place because its OTel read is a third-artifact enrichment path.
 
 **Verify:** headless output matches today's for tool calls, file edits, thinking blocks, token usage, and context-window values — the OTel tiers in `augmentParsedOutput` must keep working (see the "wire it into both" gotcha in `harness-cli-providers.instructions.md`).
 
-### Phase 4 — OpenCode, stdout-sourced
+### Phase 4 — OpenCode, stdout-sourced — **complete 2026-07-26**
 
 `parseHeadlessStdout` is a JSONL split; both parsers already share `OpenCodeEventMapper`, so this is close to mechanical. Delete `OpenCodeResponseParser` (261 LOC). OpenCode's log parser stays as-is for interactive; headless never calls `export`.
+
+The provider now feeds headless JSONL directly through `OpenCodeLogParser`,
+extracts the session ID from stdout, and retains legacy token-stat parsing.
+Golden-output coverage compares headless stdout with the equivalent interactive
+export event shape and asserts that the headless path makes no `export` calls.
 
 ### Phase 5 — Claude, stdout-sourced
 

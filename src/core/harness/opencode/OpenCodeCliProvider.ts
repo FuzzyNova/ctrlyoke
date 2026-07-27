@@ -2,9 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
-import { OpenCodeResponseParser } from "./OpenCodeResponseParser";
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
@@ -14,6 +12,8 @@ import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { CliParseUtils } from "../shared/CliParseUtils";
+import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -32,11 +32,10 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * - Config-file-driven tool permissions (opencode.json)
  * - Multi-provider model support (provider/model format)
  *
- * This provider aggregates four specialized components:
- * - OpenCodeResponseParser: Parses JSONL output and tool calls
+ * This provider aggregates three specialized components:
  * - OpenCodeNotificationMonitor: Manages plugin-based completion detection
  * - OpenCodeToolPermissionMapper: Returns [] (permissions are config-file driven)
- * - OpenCodeLogParser: Stub implementation (log parsing not yet implemented)
+ * - OpenCodeLogParser: Maps OpenCode events for both headless and interactive modes
  *
  * Headless execution:
  *   opencode run "prompt" --format json -m provider/model [-s sessionId]
@@ -71,15 +70,47 @@ export class OpenCodeCliProvider implements ICliProvider {
   /** The fully-qualified model ID used for the most-recently started execution (e.g. "anthropic/claude-sonnet-4-6"). */
   private resolvedCurrentModel: string = "anthropic/claude-sonnet-4-6";
 
-  readonly responseParser: IResponseParser = new OpenCodeResponseParser(() =>
-    getOpenCodeContextWindowSize(this.resolvedCurrentModel)
-  );
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new OpenCodeToolPermissionMapper();
+  readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
+
+  /** Convert OpenCode's JSONL stdout into the event vocabulary of OpenCodeLogParser. */
+  parseHeadlessStdout(stdout: string): BaseCliEvent[] {
+    return CliParseUtils.parseJsonLines(stdout) as BaseCliEvent[];
+  }
+
+  /** Extract the session ID carried by any OpenCode stdout event. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    const event = CliParseUtils.parseJsonLines(chunk).find(
+      (candidate) => typeof candidate.sessionID === "string"
+    );
+    return event?.sessionID as string | undefined;
+  }
+
+  /** Parse legacy statistics strings used by workflow token reporting. */
+  parseTokenCounts(
+    output: string
+  ): { prompt: number; completion: number } | undefined {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let found = false;
+
+    for (const event of CliParseUtils.parseJsonLines(output)) {
+      if (event.type === "step_finish" && event.part?.tokens) {
+        inputTokens += event.part.tokens.input ?? 0;
+        outputTokens += event.part.tokens.output ?? 0;
+        found = true;
+      }
+    }
+
+    return found
+      ? { prompt: inputTokens, completion: outputTokens }
+      : undefined;
+  }
 
   /**
    * Build complete CLI arguments array for OpenCode CLI execution

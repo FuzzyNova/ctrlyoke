@@ -1,9 +1,9 @@
 /**
  * Shared event-mapping utilities for OpenCode harness parsers.
  *
- * Both OpenCodeResponseParser (headless/streaming) and OpenCodeLogParser (interactive/polling)
- * parse the same OpenCode JSON event format and produce the same CliEvent types.
- * This module is the single source of truth for that mapping logic.
+ * OpenCodeLogParser maps the same OpenCode JSON event format for both headless
+ * stdout and interactive polling and produces the shared CliEvent types.
+ * This module is the single source of truth for tool and token mapping.
  */
 import * as Diff from "diff";
 import {
