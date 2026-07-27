@@ -15,6 +15,7 @@ import {
   createExecutionHarness,
   type ExecutionHarness,
 } from "./helpers/executionHarness";
+import { configService } from "../../config/CtrlYokeConfigService";
 
 /**
  * Full user-flow coverage for workflow-level `preCondition`: load a workflow
@@ -31,7 +32,9 @@ import {
  */
 
 const MARKER_FILE = "pre-ran.txt";
+const END_MARKER_FILE = "end-ran.txt";
 const PASSING_SCRIPT = "pre-pass.js";
+const PASSING_END_SCRIPT = "end-pass.js";
 const FAILING_SCRIPT = "pre-fail.js";
 const ERROR_SCRIPT = "pre-error.txt";
 const RETRY_GATE_SCRIPT = "pre-retry.js";
@@ -53,6 +56,10 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       `${WRITE_MARKER}\n`
     );
     await fs.writeFile(
+      path.join(workspace, PASSING_END_SCRIPT),
+      `require('fs').writeFileSync(require('path').join(__dirname, '${END_MARKER_FILE}'), 'ran');\n`
+    );
+    await fs.writeFile(
       path.join(workspace, FAILING_SCRIPT),
       `${WRITE_MARKER}\nprocess.exit(1);\n`
     );
@@ -71,6 +78,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
   });
 
   teardown(async () => {
+    configService.setCliOverlay({});
     await harness?.dispose();
     harness = undefined;
     await fs.rm(workspace, {
@@ -375,6 +383,52 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       harness.integration.sentPrompts,
       [],
       "onPass: skipPrompt must skip the prompt (it must never reach the harness)"
+    );
+  });
+
+  test("new blank workflows materialize and execute default pre- and end-conditions", async () => {
+    configService.setCliOverlay({
+      defaults: {
+        preCondition: {
+          script: PASSING_SCRIPT,
+          returns: "true",
+        },
+        endCondition: {
+          script: PASSING_END_SCRIPT,
+          returns: "true",
+        },
+      },
+    });
+    harness = createExecutionHarness(workspace);
+
+    await harness.instance.executeEphemeralPrompt(
+      "step 1",
+      undefined,
+      ACTION_TYPES.RUN
+    );
+
+    const workflow = harness.instance.promptQueue.getWorkflowFile();
+    assert.deepStrictEqual(workflow.preCondition, {
+      script: PASSING_SCRIPT,
+      returns: "true",
+    });
+    assert.deepStrictEqual(workflow.endCondition, {
+      script: PASSING_END_SCRIPT,
+      returns: "true",
+    });
+    assert.strictEqual(workflow.agent, null);
+    assert.strictEqual(await markerExists(), true);
+    assert.strictEqual(
+      await fs
+        .access(path.join(workspace, END_MARKER_FILE))
+        .then(() => true)
+        .catch(() => false),
+      true
+    );
+    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+    assert.strictEqual(
+      harness.instance.promptQueue.getState().status,
+      EXECUTION_STATES.COMPLETED
     );
   });
 

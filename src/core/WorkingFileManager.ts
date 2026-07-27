@@ -21,6 +21,7 @@ import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   buildDefinitionSnapshot,
+  normalizeAgentSelection,
   stripStepRuntime,
   stripTimelineDuplicatedWorkingFileOutput,
   stripViewOnlyWorkflowStepFields,
@@ -28,6 +29,12 @@ import {
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
+
+function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
+  return key === "agent" && (typeof value === "string" || value === null)
+    ? normalizeAgentSelection(value)
+    : value;
+}
 
 /**
  * Read a working file straight off disk. Free function (rather than an instance method)
@@ -956,8 +963,9 @@ export class WorkingFileManager {
             }
             continue;
           }
-          if ((workingFile as any)[key] !== value) {
-            (workingFile as any)[key] = value;
+          const persistedValue = normalizeWorkflowPropertyValue(key, value);
+          if ((workingFile as any)[key] !== persistedValue) {
+            (workingFile as any)[key] = persistedValue;
             appliedKeys.push(key);
           }
         }
@@ -1653,6 +1661,8 @@ export class WorkingFileManager {
             continue;
           }
 
+          const persistedValue = normalizeWorkflowPropertyValue(key, value);
+
           if (
             options.onlyIfUndefined &&
             (workingFile as any)[key] !== undefined
@@ -1660,8 +1670,8 @@ export class WorkingFileManager {
             continue;
           }
 
-          if ((workingFile as any)[key] !== value) {
-            (workingFile as any)[key] = value;
+          if ((workingFile as any)[key] !== persistedValue) {
+            (workingFile as any)[key] = persistedValue;
             modified = true;
             appliedKeys.push(key);
           }

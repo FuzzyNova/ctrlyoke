@@ -73,7 +73,7 @@ suite("Workflow property round trip (panel -> working file)", () => {
     assert.strictEqual(after, before + 1);
   });
 
-  test("agent explicit-None ('') persists as an explicit clear, not dropped", async () => {
+  test("agent explicit-None ('') persists as schema-valid null", async () => {
     const { h } = await harness();
     await h.routeWorkflowPropertyUpdate("agent", "reviewer.agent.md");
     assert.strictEqual(
@@ -83,7 +83,7 @@ suite("Workflow property round trip (panel -> working file)", () => {
     await h.routeWorkflowPropertyUpdate("agent", "");
     const def = await h.readRunDefinition();
     assert.ok("agent" in def, "agent key must remain to encode explicit None");
-    assert.strictEqual(def.agent, "");
+    assert.strictEqual(def.agent, null);
   });
 
   test("skills explicit-None ([]) survives as an empty array", async () => {

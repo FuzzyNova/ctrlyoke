@@ -70,6 +70,11 @@ export class CliProcessManager {
         shell: options.shell ?? false,
         stdio: ["ignore", "pipe", "pipe"],
         env: options.env || { ...process.env },
+        // The extension host is a GUI process, so Windows creates a visible
+        // console for cmd.exe/PowerShell launchers unless it is explicitly
+        // hidden. This method is the headless transport; interactive launches
+        // use spawnInteractive() below and retain their terminal behavior.
+        windowsHide: true,
       });
 
       this.currentProcess = child;

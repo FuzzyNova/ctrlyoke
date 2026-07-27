@@ -6,10 +6,18 @@ import {
   sanitizeClipboardWorkflowStep,
   serializeWorkflowStepForClipboard,
   buildPromptStepProperties,
+  normalizeAgentSelection,
   stripTimelineDuplicatedWorkingFileOutput,
 } from "../../core/WorkflowStepSanitizer";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
+  test("normalizes the empty agent sentinel to schema-valid null", () => {
+    assert.strictEqual(normalizeAgentSelection(""), null);
+    assert.strictEqual(normalizeAgentSelection("reviewer"), "reviewer");
+    assert.strictEqual(normalizeAgentSelection(null), null);
+    assert.strictEqual(buildPromptStepProperties({ agent: "" }).agent, null);
+  });
+
   test("sanitizeClipboardWorkflowStep strips transient fields and preserves persistable prompt properties", () => {
     const sanitized = sanitizeClipboardWorkflowStep({
       type: STEP_TYPES.PROMPT,

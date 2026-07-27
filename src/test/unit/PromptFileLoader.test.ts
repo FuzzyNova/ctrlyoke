@@ -9,11 +9,13 @@ import { PromptQueue } from "../../core/PromptQueue";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { configService } from "../../config/CtrlYokeConfigService";
 
 suite("PromptFileLoader Tests", () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
+    configService.setCliOverlay({});
     for (const tempDir of tempDirs.splice(0)) {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
@@ -39,6 +41,67 @@ suite("PromptFileLoader Tests", () => {
       });
 
       assert.strictEqual(defaults.executionMode, undefined);
+    });
+
+    test("should materialize an empty default agent as null", () => {
+      configService.setCliOverlay({
+        defaults: { agent: "" },
+      });
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+
+      assert.strictEqual(defaults.agent, null);
+    });
+
+    test("should seed default pre- and end-conditions from settings", () => {
+      const preCondition = {
+        script: "node pre-check.js",
+        returns: "true",
+      };
+      const endCondition = {
+        script: "node post-check.js",
+        returns: "passed",
+      };
+      configService.setCliOverlay({
+        defaults: { preCondition, endCondition },
+      });
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+
+      assert.deepStrictEqual(defaults.preCondition, preCondition);
+      assert.deepStrictEqual(defaults.endCondition, endCondition);
+    });
+
+    test("should materialize disabled condition defaults as null", () => {
+      configService.setCliOverlay({
+        defaults: { preCondition: null, endCondition: null },
+      });
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+
+      assert.strictEqual(defaults.preCondition, null);
+      assert.strictEqual(defaults.endCondition, null);
+    });
+
+    test("should preserve explicit pre- and end-condition values", () => {
+      configService.setCliOverlay({
+        defaults: {
+          preCondition: { script: "default-pre.js" },
+          endCondition: {
+            script: "default-end.js",
+            returns: "true",
+          },
+        },
+      });
+      const explicitPreCondition = { script: "workflow-pre.js" };
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({
+        preCondition: explicitPreCondition,
+        endCondition: null,
+      });
+
+      assert.strictEqual(defaults.preCondition, undefined);
+      assert.strictEqual(defaults.endCondition, undefined);
     });
 
     test("should seed toolPermissions from VS Code settings when not explicitly set", () => {

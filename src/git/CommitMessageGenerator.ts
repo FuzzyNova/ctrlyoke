@@ -18,7 +18,11 @@ import {
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
-import { isScriptStep, type McpServerConfig } from "../types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type McpServerConfig,
+  type PromptFile,
+} from "../types/CtrlYokeTypes";
 
 const execFileAsync = promisify(execFile);
 // ~200k tokens at ~4 bytes/token; leaves room for system prompt and instructions.
@@ -38,6 +42,24 @@ export interface CommitResult {
   message: string;
   staged: boolean;
   truncated: boolean;
+}
+
+export function buildCommitWorkflowOverrides(
+  harness: HarnessId,
+  model: string | undefined,
+  mcpServerConfig: McpServerConfig | undefined
+): Partial<PromptFile> {
+  return {
+    harness,
+    model,
+    executionMode: EXECUTION_MODES.HEADLESS,
+    resumeSession: false,
+    mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
+    agent: null,
+    skills: null,
+    additionalArgs: null,
+    hooks: null,
+  };
 }
 
 export class CommitMessageGenerator {
@@ -239,19 +261,14 @@ export class CommitMessageGenerator {
       cwd
     );
 
-    // Suppress all VS Code global settings that could bleed into this one-shot call:
-    // mcpServers, agent, skills, additionalArgs, and hooks all have VS Code tier-3
-    // fallbacks in PropertyResolver — null/empty sentinels stop resolution at tier-2.
-    instance.loadPromptString(fullPrompt, {
-      harness,
-      model,
-      resumeSession: false,
-      mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
-      agent: null,
-      skills: null,
-      additionalArgs: null,
-      hooks: null,
-    });
+    // Force headless execution at the workflow tier and suppress VS Code globals
+    // that could bleed into this one-shot call. PropertyResolver materializes
+    // settings into resolved step properties, which take precedence over the
+    // CliAdapter fallback used by CliIntegration.
+    instance.loadPromptString(
+      fullPrompt,
+      buildCommitWorkflowOverrides(harness, model, mcpServerConfig)
+    );
 
     let abortListener: (() => void) | undefined;
     if (token) {

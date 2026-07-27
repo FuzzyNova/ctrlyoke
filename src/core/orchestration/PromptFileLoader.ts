@@ -6,6 +6,7 @@ import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 
 const WORKFLOW_PROPERTY_KEYS = [
   "harness",
@@ -366,7 +367,9 @@ export class PromptFileLoader {
       defaults.executionMode = ConfigurationUtils.getCliExecutionMode();
     }
     if (explicitValues.agent === undefined) {
-      defaults.agent = ConfigurationUtils.getDefaultAgent();
+      defaults.agent = normalizeAgentSelection(
+        ConfigurationUtils.getDefaultAgent()
+      );
     }
     if (explicitValues.skills === undefined) {
       defaults.skills = ConfigurationUtils.getDefaultSkills();
@@ -379,6 +382,14 @@ export class PromptFileLoader {
     }
     if (explicitValues.hooks === undefined) {
       defaults.hooks = ConfigurationUtils.getDefaultHooks();
+    }
+    if (explicitValues.endCondition === undefined) {
+      defaults.endCondition =
+        ConfigurationUtils.getDefaultEndCondition() ?? null;
+    }
+    if (explicitValues.preCondition === undefined) {
+      defaults.preCondition =
+        ConfigurationUtils.getDefaultPreCondition() ?? null;
     }
     if (explicitValues.priorContext === undefined) {
       defaults.priorContext = ConfigurationUtils.getPriorContext();

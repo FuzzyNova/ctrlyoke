@@ -22,6 +22,14 @@ import type {
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
 
 /**
+ * Empty-string agent selections are used by settings/UI controls to represent
+ * "None", but persisted workflow definitions require an explicit null.
+ */
+export function normalizeAgentSelection(agent: string | null): string | null {
+  return agent === "" ? null : agent;
+}
+
+/**
  * Removes per-step `_runtime` (session/response/attempt metadata) from every step.
  * Used wherever a definition must be recorded or seeded independent of what has
  * already executed: timeline snapshots, and seeding a new run from an existing one.
@@ -373,7 +381,7 @@ function buildClipboardExecutionProperties(
       executionMode: step.executionMode,
     }),
     ...((typeof step.agent === "string" || step.agent === null) && {
-      agent: step.agent as PromptStep["agent"],
+      agent: normalizeAgentSelection(step.agent),
     }),
     ...((skills !== undefined || step.skills === null) && {
       skills: skills ?? null,
@@ -596,7 +604,7 @@ export function buildPromptStepProperties(
     ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
     ...(executionMode !== undefined && { executionMode }),
     ...(props?.agent !== undefined && {
-      agent: props.agent as string | null,
+      agent: normalizeAgentSelection(props.agent as string | null),
     }),
     ...(props?.enabled !== undefined && {
       enabled: props.enabled as boolean,
