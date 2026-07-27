@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
+import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { MESSAGE_TYPES, SESSION_KINDS } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -113,6 +114,99 @@ suite("CliTransportCoordinator", () => {
     });
     assert.deepStrictEqual(streamedChunks, ["processed:chunk"]);
     assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
+  });
+
+  test("should stream migrated stdout events through the log parser mapping", async () => {
+    const streamedEvents: string[] = [];
+    const parser = {
+      extractStructuredEventsFromEvent: (event: { type: string }) => [
+        { type: "text", data: { text: event.type } },
+      ],
+      trackBackgroundWorkState: () => {},
+      extractLiveContextWindow: () => null,
+    } as any;
+    const source: HeadlessStreamingSource = {
+      parser,
+      mode: "stdout",
+      parseStdout: () => [{ type: "log-event" }],
+    };
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          promptText,
+          ...baseArgs,
+        ],
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options?: { onStdout?: (chunk: string) => void }
+        ) => {
+          options?.onStdout?.("stdout chunk");
+          return { stdout: "stdout", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {
+          throw new Error("legacy streaming path should not run");
+        },
+        onStreamingEvents: (events) => {
+          streamedEvents.push(
+            ...events.map((event) => (event.data as { text: string }).text)
+          );
+        },
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async () => {},
+      },
+    });
+
+    const success = await coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true,
+      undefined,
+      source
+    );
+
+    assert.strictEqual(success, true);
+    assert.deepStrictEqual(streamedEvents, ["log-event"]);
   });
 
   test("should parse partial headless output when cancellation is requested", async () => {

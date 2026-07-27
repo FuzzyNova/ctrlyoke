@@ -8,12 +8,18 @@ import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
 import { extractTextFromEvents } from "./CliResponseTextExtractor";
+import type { HeadlessLogTail } from "./HeadlessLogTail";
 import type { ICliProvider } from "./interfaces/ICliProvider";
+import type { BaseCliEvent } from "./interfaces/ILogParser";
 
 export interface CliResponseCollectorDeps {
   provider: Pick<
     ICliProvider,
-    "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+    | "responseParser"
+    | "augmentParsedOutput"
+    | "extractSessionIdFromLogs"
+    | "parseHeadlessStdout"
+    | "logParser"
   >;
   hostCallbacks: {
     logResponse: (response: string, statistics?: string) => void;
@@ -43,13 +49,24 @@ export class CliResponseCollector {
     label?: string;
     model?: string;
     workspaceRoot?: string;
+    headlessLogTail?: HeadlessLogTail;
   }): Promise<CollectedHeadlessResponse> {
     this.deps.provider.responseParser.setCurrentModel?.(params.model ?? "");
-    let parsedOutput = this.deps.provider.responseParser.parse(
-      params.stdout,
-      params.stderr,
-      params.exitCode
-    );
+    let parsedOutput = this.parseHeadlessOutput(params);
+
+    if (
+      params.headlessLogTail &&
+      this.deps.provider.logParser &&
+      parsedOutput.metadata.sessionId === undefined
+    ) {
+      const sessionId = params.headlessLogTail.getSessionId();
+      if (sessionId) {
+        parsedOutput = {
+          ...parsedOutput,
+          metadata: { ...parsedOutput.metadata, sessionId },
+        };
+      }
+    }
 
     if (this.deps.provider.augmentParsedOutput) {
       parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
@@ -105,6 +122,32 @@ export class CliResponseCollector {
       failureKind: failure?.kind,
       failureMessage: failure?.message,
     };
+  }
+
+  private parseHeadlessOutput(params: {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    headlessLogTail?: HeadlessLogTail;
+  }): UniversalCliOutput {
+    const logParser = this.deps.provider.logParser;
+
+    if (this.deps.provider.parseHeadlessStdout && logParser) {
+      const events: BaseCliEvent[] = this.deps.provider.parseHeadlessStdout(
+        params.stdout
+      );
+      return logParser.extractResponse(events);
+    }
+
+    if (params.headlessLogTail && logParser) {
+      return logParser.extractResponse(params.headlessLogTail.getEvents());
+    }
+
+    return this.deps.provider.responseParser.parse(
+      params.stdout,
+      params.stderr,
+      params.exitCode
+    );
   }
 
   private getHeadlessFailure(

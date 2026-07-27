@@ -16,6 +16,11 @@ import {
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import { getPtyProcessManager, ptyPostMessage } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
+import { CliLogEventPump } from "./CliLogEventPump";
+import {
+  HeadlessLogTail,
+  type HeadlessStreamingSource,
+} from "./HeadlessLogTail";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -311,8 +316,10 @@ export class CliTransportCoordinator {
       stdout: string;
       stderr: string;
       exitCode: number;
+      headlessLogTail?: HeadlessLogTail;
     }) => Promise<boolean>,
-    env?: Record<string, string>
+    env?: Record<string, string>,
+    source?: HeadlessStreamingSource
   ): Promise<boolean> {
     try {
       if (tempFilePaths.length > 0) {
@@ -334,8 +341,22 @@ export class CliTransportCoordinator {
         cliCommand: command.displayCommand,
       });
 
-      const shouldStream = this.deps.provider.config.shouldStreamHeadlessOutput;
+      const shouldStream =
+        this.deps.provider.config.shouldStreamHeadlessOutput || !!source;
       const streamState = new Map<string, any>();
+      const stdoutEventPump =
+        source?.mode === "stdout"
+          ? new CliLogEventPump({
+              parser: source.parser,
+              model: source.model ?? "",
+              onStreamingEvents: this.deps.hostCallbacks.onStreamingEvents,
+            })
+          : undefined;
+
+      if (source?.logTail) {
+        await source.logTail.start();
+      }
+
       const result = await this.spawnProcess(command.command, command.args, {
         timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
         env,
@@ -347,7 +368,16 @@ export class CliTransportCoordinator {
                 );
               }
 
-              if (this.deps.provider.responseParser.processStreamingChunk) {
+              if (source?.mode === "log" && source.logTail) {
+                source.logTail.onStdoutChunk(chunk);
+              } else if (source?.mode === "stdout" && stdoutEventPump) {
+                const events = source.parseStdout?.(chunk) ?? [];
+                for (const event of events) {
+                  stdoutEventPump.processEvent(event);
+                }
+              } else if (
+                this.deps.provider.responseParser.processStreamingChunk
+              ) {
                 const processedChunk =
                   this.deps.provider.responseParser.processStreamingChunk(
                     chunk,
@@ -367,14 +397,29 @@ export class CliTransportCoordinator {
           : undefined,
       });
 
+      if (source?.logTail) {
+        await source.logTail.finish();
+      }
+
       if (this.deps.runtimeState.isCancelling()) {
         Log.info("⏹️ Prompt execution cancelled by user");
-        await executeCallback(result);
+        await executeCallback(
+          source?.logTail
+            ? { ...result, headlessLogTail: source.logTail }
+            : result
+        );
         return false;
       }
 
-      return await executeCallback(result);
+      return await executeCallback(
+        source?.logTail
+          ? { ...result, headlessLogTail: source.logTail }
+          : result
+      );
     } catch (error) {
+      if (source?.logTail) {
+        await source.logTail.finish();
+      }
       Log.error("❌ Headless execution error", error);
       return false;
     } finally {

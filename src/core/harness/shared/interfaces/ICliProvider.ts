@@ -103,6 +103,12 @@ export interface ICliProvider {
   readonly logParser?: ILogParser;
 
   /**
+   * Select the event source for the headless migration seam. Providers that
+   * have not migrated leave this unset and continue using responseParser.
+   */
+  readonly headlessSource?: "stdout" | "log";
+
+  /**
    * Convert headless stdout into the event vocabulary understood by this
    * provider's log parser.
    *

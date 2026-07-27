@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phase 0a complete; Phase 0b and later phases remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phase 0 complete; Phases 1 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -15,10 +15,9 @@ The **stated mechanism is wrong in two places**, and correcting them makes the c
 
 1. **`src/core/harness/shared/CliParseUtils.ts` must not be deleted.** Despite its predecessor's name it is not part of the response-parser layer — it's a static utility class, and its `parseUnifiedDiff()` has log-side consumers today: `CodexLogParser.ts:1454`, `CodexLogParser.ts:1615`, `CopilotToolBuilder.ts:198`, and `AntigravityToolEventBuilder.ts:244`. The thing to remove is the `IResponseParser` layer (the six `*ResponseParser.ts` classes, 2,466 LOC). `CliParseUtils` survives the eventual deletion.
 
-2. **"Unify on log parsers" does not have to mean "wait for the session log."** Those are separable. The invariant that matters is *one mapping implementation per harness, and it is the log parser's*. Where those events come from is a second, independent choice, made per harness on **fidelity** grounds:
-
+2. **"Unify on log parsers" does not have to mean "wait for the session log."** Those are separable. The invariant that matters is _one mapping implementation per harness, and it is the log parser's_. Where those events come from is a second, independent choice, made per harness on **fidelity** grounds:
    - **stdout-sourced** — the harness's stdout already speaks the log parser's event vocabulary and carries everything the log does, so stdout events feed `extractResponse()` / `extractStructuredEventsFromEvent()` directly and no log is ever read. Zero latency. The provider-side adapter is a JSONL split (~10 lines), not a parser.
-   - **log-sourced** — the session log is *richer* than stdout, so the log is the content source and stdout is demoted to a clock and a session-ID carrier (see [The stdout contract](#the-stdout-contract)).
+   - **log-sourced** — the session log is _richer_ than stdout, so the log is the content source and stdout is demoted to a clock and a session-ID carrier (see [The stdout contract](#the-stdout-contract)).
 
    The `IResponseParser` layer dies in both cases. That is the point: source mode is a per-harness switch, not a reason to keep a second parser stack alive.
 
@@ -28,14 +27,14 @@ The **stated mechanism is wrong in two places**, and correcting them makes the c
 
 Each harness today carries **three or four** independent mappings from raw CLI output to `CliEvent[]`:
 
-| Mapping | Owner | Used by |
-| --- | --- | --- |
-| `parse(stdout, stderr, exitCode)` | `*ResponseParser` | headless final output |
-| `processStreamingChunk(chunk, state)` | `*ResponseParser` | headless live streaming |
-| `extractResponse(events)` | `*LogParser` | interactive final output |
-| `extractStructuredEventsFromEvent(event)` | `*LogParser` | interactive live streaming |
+| Mapping                                   | Owner             | Used by                    |
+| ----------------------------------------- | ----------------- | -------------------------- |
+| `parse(stdout, stderr, exitCode)`         | `*ResponseParser` | headless final output      |
+| `processStreamingChunk(chunk, state)`     | `*ResponseParser` | headless live streaming    |
+| `extractResponse(events)`                 | `*LogParser`      | interactive final output   |
+| `extractStructuredEventsFromEvent(event)` | `*LogParser`      | interactive live streaming |
 
-`processStreamingChunk` is a separate implementation from `parse()` in every harness that has one (`ClaudeResponseParser.ts:396`, `CodexResponseParser.ts:465`, `CopilotResponseParser.ts:319`, `QwenResponseParser.ts:264`, `OpenCodeResponseParser.ts:123`) — the streaming path and the batch path can and do drift from each other *within* the response parser, not just against the log parser. Unification collapses four mappings to two.
+`processStreamingChunk` is a separate implementation from `parse()` in every harness that has one (`ClaudeResponseParser.ts:396`, `CodexResponseParser.ts:465`, `CopilotResponseParser.ts:319`, `QwenResponseParser.ts:264`, `OpenCodeResponseParser.ts:123`) — the streaming path and the batch path can and do drift from each other _within_ the response parser, not just against the log parser. Unification collapses four mappings to two.
 
 ### Churn supports the direction
 
@@ -47,15 +46,15 @@ Last 12 months, `src/core/harness/*/*LogParser.ts` took 20 commits; `src/core/ha
 
 The design originally assumed log-sourcing traded ~10–15s of startup latency for fidelity. **It does not.** Measured against two real headless runs (`originator: "codex_exec"`, `source: "exec"`, Codex 0.145.0, `~/.codex/sessions/2026/07/26/`):
 
-| Δ from session start | Event |
-| --- | --- |
-| **0.00s** | `session_meta` — the log file already exists |
-| 0.00s | `event_msg:task_started` |
-| 0.79s / 0.92s | first `response_item:message` |
-| 5.03s / 5.11s | first `agent_message` (first actual AI text) |
-| 12.93s → **12.96s** | `custom_tool_call` → `patch_apply_end` |
-| 16.80s → **16.81s** | `custom_tool_call` → `patch_apply_end` |
-| 18.48s → **18.49s** | `custom_tool_call` → `patch_apply_end` |
+| Δ from session start | Event                                        |
+| -------------------- | -------------------------------------------- |
+| **0.00s**            | `session_meta` — the log file already exists |
+| 0.00s                | `event_msg:task_started`                     |
+| 0.79s / 0.92s        | first `response_item:message`                |
+| 5.03s / 5.11s        | first `agent_message` (first actual AI text) |
+| 12.93s → **12.96s**  | `custom_tool_call` → `patch_apply_end`       |
+| 16.80s → **16.81s**  | `custom_tool_call` → `patch_apply_end`       |
+| 18.48s → **18.49s**  | `custom_tool_call` → `patch_apply_end`       |
 
 Three conclusions:
 
@@ -65,7 +64,7 @@ Three conclusions:
 
 **Therefore latency is not a decision axis.** Source mode is chosen purely on fidelity, and secondarily on log-layout fragility (below). Do not reintroduce latency as an argument for stdout-sourcing.
 
-**Caveats, for whoever revisits this:** two runs, one model, one Codex version, Windows. The measurement is of the log's own internal clock, so it establishes that nothing is buffered *after* session init but not the wall-clock gap between process spawn and session init — that gap is CLI startup, which delays stdout's `thread.started` identically. Neither caveat is load-bearing for the conclusions above, but re-measure if Codex changes its rollout-log format (the instructions file already warns to diff the log against parser assumptions on version bumps).
+**Caveats, for whoever revisits this:** two runs, one model, one Codex version, Windows. The measurement is of the log's own internal clock, so it establishes that nothing is buffered _after_ session init but not the wall-clock gap between process spawn and session init — that gap is CLI startup, which delays stdout's `thread.started` identically. Neither caveat is load-bearing for the conclusions above, but re-measure if Codex changes its rollout-log format (the instructions file already warns to diff the log against parser assumptions on version bumps).
 
 ### The residual argument for stdout-sourcing
 
@@ -77,14 +76,14 @@ With latency gone, exactly one non-fidelity argument survives: **stdout is a mai
 
 Verified by comparing the event-type vocabularies each parser branches on. **Source mode is chosen by which stream carries more information, not by which arrives sooner.**
 
-| Harness | Headless stdout | Session log | Log richer? | Source mode |
-| --- | --- | --- | --- | --- |
-| **Codex** | `thread.started`, `turn.completed`, `item.completed` with `item.type` of `agent_message`/`command_execution`/`file_change`/… | `session_meta`, `turn_context`, `event_msg`, `response_item`, `function_call`, `patch_apply_end`, … | **Much** — `file_change` is `{path, kind}` on stdout; the log has `unified_diff` and whole-file `content`, plus per-turn `token_count` | **Log-sourced.** Highest payoff of any harness: diffs render *when the write happens*, not on a final back-fill pass. Deletes `CodexCliProvider.augmentParsedOutput()` outright. |
-| **Antigravity** | Incremental transcript mapping in `AntigravityLogParser` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` (compact transcript only as fallback) — rich planner/tool/checkpoint/error events; the tailed `cli-*.log` carries session and completion markers. | **Much** — structured events and diffs are available incrementally. | **Implemented.** See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. |
-| **Qwen** | `session_id`-bearing JSON objects | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]` | Unmeasured | **TBD** — measure before choosing. |
-| **Claude** | `stream-json`: `system`/`assistant`/`user`/`result`, snake_case `session_id`, `tool_use_result` | session JSONL: `assistant`/`user`/`attachment`, camelCase `sessionId`, `toolUseResult` | Marginal — log adds `attachment`, background-task markers | **Either.** Start stdout-sourced (field aliasing only); revisit if background-task tracking needs the log. |
-| **Copilot** | `--output-format json`: `assistant.message`, `tool.execution_start`, `tool.execution_complete` | `events.jsonl`: same vocabulary plus `session.*`, `user.message`, `system.notification` | Marginal — the extras are session-lifecycle, not content | **stdout-sourced.** Note context-window data lives in neither stream (it's the OTel export file), so that augmentation survives regardless. |
-| **OpenCode** | `run --format json` | `opencode export <id>` — parser doc states it produces "the same event shape produced by `opencode run --format json`" (`OpenCodeLogParser.ts:113`) | **No** — 1:1, and the "log" is a subprocess call, not a file | **stdout-sourced.** See below: this costs ~10 lines, not a layer. |
+| Harness         | Headless stdout                                                                                                              | Session log                                                                                                                                                                                                 | Log richer?                                                                                                                            | Source mode                                                                                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Codex**       | `thread.started`, `turn.completed`, `item.completed` with `item.type` of `agent_message`/`command_execution`/`file_change`/… | `session_meta`, `turn_context`, `event_msg`, `response_item`, `function_call`, `patch_apply_end`, …                                                                                                         | **Much** — `file_change` is `{path, kind}` on stdout; the log has `unified_diff` and whole-file `content`, plus per-turn `token_count` | **Log-sourced.** Highest payoff of any harness: diffs render _when the write happens_, not on a final back-fill pass. Deletes `CodexCliProvider.augmentParsedOutput()` outright. |
+| **Antigravity** | Incremental transcript mapping in `AntigravityLogParser`                                                                     | `brain/<id>/.system_generated/logs/transcript_full.jsonl` (compact transcript only as fallback) — rich planner/tool/checkpoint/error events; the tailed `cli-*.log` carries session and completion markers. | **Much** — structured events and diffs are available incrementally.                                                                    | **Implemented.** See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.                                                                                                     |
+| **Qwen**        | `session_id`-bearing JSON objects                                                                                            | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]`                                                                                                                                                       | Unmeasured                                                                                                                             | **TBD** — measure before choosing.                                                                                                                                               |
+| **Claude**      | `stream-json`: `system`/`assistant`/`user`/`result`, snake_case `session_id`, `tool_use_result`                              | session JSONL: `assistant`/`user`/`attachment`, camelCase `sessionId`, `toolUseResult`                                                                                                                      | Marginal — log adds `attachment`, background-task markers                                                                              | **Either.** Start stdout-sourced (field aliasing only); revisit if background-task tracking needs the log.                                                                       |
+| **Copilot**     | `--output-format json`: `assistant.message`, `tool.execution_start`, `tool.execution_complete`                               | `events.jsonl`: same vocabulary plus `session.*`, `user.message`, `system.notification`                                                                                                                     | Marginal — the extras are session-lifecycle, not content                                                                               | **stdout-sourced.** Note context-window data lives in neither stream (it's the OTel export file), so that augmentation survives regardless.                                      |
+| **OpenCode**    | `run --format json`                                                                                                          | `opencode export <id>` — parser doc states it produces "the same event shape produced by `opencode run --format json`" (`OpenCodeLogParser.ts:113`)                                                         | **No** — 1:1, and the "log" is a subprocess call, not a file                                                                           | **stdout-sourced.** See below: this costs ~10 lines, not a layer.                                                                                                                |
 
 ### OpenCode does not require keeping the layer
 
@@ -103,7 +102,7 @@ For OpenCode that is a JSONL split — the same `lines.split("\n").map(JSON.pars
 
 ## The stdout contract
 
-**stdout is not thrown away.** What gets thrown away is the *event mapping* of stdout — the `parse()` and `processStreamingChunk()` bodies. The stream itself keeps three jobs, none of which are parsing:
+**stdout is not thrown away.** What gets thrown away is the _event mapping_ of stdout — the `parse()` and `processStreamingChunk()` bodies. The stream itself keeps three jobs, none of which are parsing:
 
 ### 1. Session ID carrier
 
@@ -132,7 +131,7 @@ Exit code and stderr continue to flow through `CliResponseCollector.getHeadlessF
 
 Today headless has two sources feeding one output: stdout streams degraded events live, then `augmentParsedOutput()` reconciles them against the log at the end — which is where the positional per-path cursor matching in `353ad5f0` comes from. Under a single source there is nothing to reconcile: no interleaving, no dedup, no cursor alignment. `CodexCliProvider.applyLoggedChangesToFileEvents()` and its ~90 lines of pairing logic delete along with it.
 
-`augmentParsedOutput()` does **not** disappear entirely — Copilot's reads the OTel export file, a third artifact that is neither stdout nor the session log. It survives for that. But its use as a *stdout-repair* mechanism ends.
+`augmentParsedOutput()` does **not** disappear entirely — Copilot's reads the OTel export file, a third artifact that is neither stdout nor the session log. It survives for that. But its use as a _stdout-repair_ mechanism ends.
 
 ---
 
@@ -142,23 +141,23 @@ Under the reshaped plan:
 
 - **Time-to-first-event — unchanged in both modes.** Measured, not assumed: the session log exists at t=0 and is written continuously. There is no latency cost to pay.
 - **Antigravity now uses its rewritten incremental transcript parser** — see `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`. The log parser emits structured planner/tool/checkpoint/error events while retaining the Go log for session and completion markers.
-- **Time-to-*correct*-event — improves sharply where it was worst.** Codex headless today shows a bare `Edited <file>` for the whole run and only gains a diff at the end, when `augmentParsedOutput()` back-fills from the log. Log-sourced, the `patch_apply_end` diff renders **when the write happens** — 0.02s after the edit. This is a strict gain, not a trade.
+- **Time-to-_correct_-event — improves sharply where it was worst.** Codex headless today shows a bare `Edited <file>` for the whole run and only gains a diff at the end, when `augmentParsedOutput()` back-fills from the log. Log-sourced, the `patch_apply_end` diff renders **when the write happens** — 0.02s after the edit. This is a strict gain, not a trade.
 - **Streaming fidelity — improves everywhere.** `extractStructuredEventsFromEvent` is the same mapping as the final `extractResponse`, so streamed and final output can no longer disagree. Today's `processStreamingChunk` offers no such guarantee.
 - **Antigravity log-monitored output — already improved by the completed rewrite.** The transcript-backed log parser now turns the rich stream into structured tool/text events. The separate headless response parser still consumes stdout, so broader headless-source consolidation remains future work.
 
 Things that are **not** parsing and must survive the deletion:
 
-| Capability | Current location | Disposition |
-| --- | --- | --- |
-| Session ID from stdout | `*ResponseParser.extractSessionId()`; read at `CliResponseCollector.ts:74` | **Must survive.** Only Copilot and Antigravity implement `ICliProvider.extractSessionIdFromLogs`; Claude, Codex, OpenCode and Qwen headless get their session ID from stdout metadata. Losing it forces every harness through `discoverSessionLog()` prompt-text matching. |
-| Recoverable-session retry | `ClaudeResponseParser.isRecoverableSessionError()` and the existing Qwen equivalent; called at `CliExecutionRunner.ts:394` | Move the implementations to `ICliProvider`. They classify spawn errors, not output. |
-| Headless failure classification | `CliResponseCollector.getHeadlessFailure()` (exit code, stderr, CLI-invocation-error patterns) | Unaffected — transport-level, stays. |
-| `parseTokenCounts` | `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531` | Re-point at log-parser metadata or drop; it parses an already-formatted statistics string. |
-| Copilot plain-text fallback | `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true` | Decide explicitly. If `--output-format json` is now unconditional (`CopilotCliProvider.ts:670`), this is dead code and should be deleted with the rest; if it's a real fallback, it needs a home outside `IResponseParser`. |
+| Capability                      | Current location                                                                                                           | Disposition                                                                                                                                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session ID from stdout          | `*ResponseParser.extractSessionId()`; read at `CliResponseCollector.ts:74`                                                 | **Must survive.** Only Copilot and Antigravity implement `ICliProvider.extractSessionIdFromLogs`; Claude, Codex, OpenCode and Qwen headless get their session ID from stdout metadata. Losing it forces every harness through `discoverSessionLog()` prompt-text matching. |
+| Recoverable-session retry       | `ClaudeResponseParser.isRecoverableSessionError()` and the existing Qwen equivalent; called at `CliExecutionRunner.ts:394` | Move the implementations to `ICliProvider`. They classify spawn errors, not output.                                                                                                                                                                                        |
+| Headless failure classification | `CliResponseCollector.getHeadlessFailure()` (exit code, stderr, CLI-invocation-error patterns)                             | Unaffected — transport-level, stays.                                                                                                                                                                                                                                       |
+| `parseTokenCounts`              | `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                                       | Re-point at log-parser metadata or drop; it parses an already-formatted statistics string.                                                                                                                                                                                 |
+| Copilot plain-text fallback     | `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true`                                                       | Decide explicitly. If `--output-format json` is now unconditional (`CopilotCliProvider.ts:670`), this is dead code and should be deleted with the rest; if it's a real fallback, it needs a home outside `IResponseParser`.                                                |
 
 ### Chicken-and-egg on session log discovery
 
-Log-sourced harnesses must *find* the log while the run is still in flight — a post-exit one-shot read would forfeit the live-diff payoff that makes them log-sourced in the first place. Interactive solves discovery with `CliInteractiveStartupCoordinator` (451 LOC: SessionStart hook, 60s soft / 5min hard timeout, prompt-text-matching fallback). Headless should **not** adopt that machinery, and the measured timing says it doesn't need to — `session_meta` is on disk at t=0, so discovery is a direct path construction that succeeds on the first attempt:
+Log-sourced harnesses must _find_ the log while the run is still in flight — a post-exit one-shot read would forfeit the live-diff payoff that makes them log-sourced in the first place. Interactive solves discovery with `CliInteractiveStartupCoordinator` (451 LOC: SessionStart hook, 60s soft / 5min hard timeout, prompt-text-matching fallback). Headless should **not** adopt that machinery, and the measured timing says it doesn't need to — `session_meta` is on disk at t=0, so discovery is a direct path construction that succeeds on the first attempt:
 
 1. Read the session ID off the first identifying stdout event (Codex `thread.started`).
 2. `discoverSessionLog(sessionId)` — direct path construction. Retry on each stdout tick purely as a cheap guard; expect it to resolve immediately.
@@ -193,11 +192,43 @@ Each phase is independently shippable and independently revertible. `ICliProvide
 
 **Discovery recorded for later phases:** `AntigravityToolEventBuilder` is also a current log-parser consumer of the shared diff utility. Qwen had its own recoverable-session classifier in addition to Claude; both implementations now live on their providers so the runner's retry behavior remains unchanged.
 
-### Phase 0b — Build the log-sourced runtime (queued)
+### Phase 0b — Build the log-sourced runtime (complete 2026-07-26)
 
 1. Build `HeadlessLogTail` — the log-sourced runtime. Owns: session-ID capture, retried `discoverSessionLog()`, `readNewLines()` on each stdout tick, the idle-poll backstop, and the post-exit bounded drain. **Session-ID discovery must be pluggable, not stdout-only:** Codex yields it from `thread.started` on stdout, but Antigravity has no stdout session marker and resolves it through the provider's existing `extractSessionIdFromLogs()`. Accept either source (stdout extractor first, provider log lookup as the alternative) or Phase 2 is blocked. It reuses `CliLogEventPump` for per-event streaming and deliberately does **not** reuse `CliLogMonitor` (no completion detection, no notification monitor, no background-work hold — process exit settles it).
 2. Teach `CliResponseCollector.collectHeadlessResponse` to select: `parseHeadlessStdout()` → `logParser.extractResponse()`; else `HeadlessLogTail`'s accumulated events → `extractResponse()`; else today's `responseParser.parse()`. All three land in the same `UniversalCliOutput`, so `getHeadlessFailure`, statistics, and session-ID plumbing below it are untouched.
 3. Route headless live streaming through `logParser.extractStructuredEventsFromEvent()` for both new modes (`CliTransportCoordinator.ts:337-367` currently calls `responseParser.processStreamingChunk`).
+
+#### Phase 0b API record
+
+`HeadlessLogTail` lives in `src/core/harness/shared/HeadlessLogTail.ts` and is
+constructed with `HeadlessLogTailOptions`:
+
+- `parser`, `promptText`, `startTime`, and optional `resolvedSessionId`,
+  `workspaceRoot`, and `model` identify the run and its log parser.
+- `extractSessionIdFromStdout(chunk)` is the preferred session-ID source;
+  `extractSessionIdFromLogs(prompt, start, workspaceRoot)` is the pluggable
+  alternative for harnesses such as Antigravity.
+- `onStreamingEvents(events)` and optional `onContextWindowUpdate(used, size)`
+  receive the `CliLogEventPump` output.
+- `start()` begins the 750ms idle backstop and performs the initial read;
+  `onStdoutChunk(chunk)` queues an idempotent `readNewLines()` tick;
+  `finish()` stops polling, retries discovery once after exit, performs the
+  bounded 2-second/150ms drain, and resolves to `HeadlessLogTailResult`.
+  `handleStdout()` is an alias for stream adapters. `getEvents()`,
+  `getSessionId()`, and `getLogPath()` expose the accumulated state to the
+  collector.
+
+The 2-second drain deadline and 150ms poll interval are exported from
+`CliLogMonitor.ts` and shared by both runtimes. A failed discovery/read is
+logged and treated as an empty source; it never fails the headless step.
+
+`ICliProvider.headlessSource` is an explicit override: `"stdout"` requires
+`parseHeadlessStdout()` and feeds each parsed event through
+`logParser.extractStructuredEventsFromEvent()`; `"log"` constructs a
+`HeadlessLogTail`. When unset, `parseHeadlessStdout()` selects stdout mode and
+`extractSessionIdFromStdout()` selects log mode. Providers with neither hook
+continue using the existing `responseParser` path, which is the Phase 0
+behavior guarantee.
 
 ### Phase 1 — Codex, log-sourced (highest payoff; proves the hard mode first)
 

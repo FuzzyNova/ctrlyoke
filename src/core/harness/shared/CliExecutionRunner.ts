@@ -12,6 +12,10 @@ import { CliLogMonitor } from "../CliLogMonitor";
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
+import {
+  HeadlessLogTail,
+  type HeadlessStreamingSource,
+} from "./HeadlessLogTail";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import { HookEventMonitor } from "./HookEventMonitor";
@@ -39,8 +43,10 @@ interface CliExecutionTransportCoordinator {
       stdout: string;
       stderr: string;
       exitCode: number;
+      headlessLogTail?: HeadlessLogTail;
     }) => Promise<boolean>,
-    env?: Record<string, string>
+    env?: Record<string, string>,
+    source?: HeadlessStreamingSource
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -73,6 +79,7 @@ interface CliResponseCollectorLike {
     label?: string;
     model?: string;
     workspaceRoot?: string;
+    headlessLogTail?: HeadlessLogTail;
   }): Promise<CollectedHeadlessResponse>;
 }
 
@@ -346,7 +353,12 @@ export class CliExecutionRunner {
     session: CliExecutionSession,
     baseArgs: string[]
   ): Promise<boolean> {
-    const responseCallback = this.buildHeadlessResponseCallback(session);
+    const source = this.createHeadlessStreamingSource(session);
+    const responseCallback = this.buildHeadlessResponseCallback(
+      session,
+      "",
+      source?.logTail
+    );
     const hookEnv = this.buildHookEnvVars(session);
 
     const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
@@ -380,14 +392,24 @@ export class CliExecutionRunner {
         : null;
     hookMonitor?.start();
 
-    const executeWithRecovery = async (args: string[]): Promise<boolean> => {
+    const executeWithRecovery = async (
+      args: string[],
+      activeSource: HeadlessStreamingSource | undefined,
+      activeCallback: (result: {
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        headlessLogTail?: HeadlessLogTail;
+      }) => Promise<boolean>
+    ): Promise<boolean> => {
       try {
         return await this.deps.transportCoordinator.executeHeadless(
           args,
           session.promptArgument,
           session.tempFilePaths,
-          responseCallback,
-          headlessEnv
+          activeCallback,
+          headlessEnv,
+          activeSource
         );
       } catch (error) {
         if (this.deps.provider.isRecoverableSessionError?.(error) ?? false) {
@@ -413,15 +435,19 @@ export class CliExecutionRunner {
 
             const retryCallback = this.buildHeadlessResponseCallback(
               session,
-              " (retry)"
+              " (retry)",
+              undefined
             );
+
+            const retrySource = this.createHeadlessStreamingSource(session);
 
             return await this.deps.transportCoordinator.executeHeadless(
               argsWithoutResume,
               session.promptArgument,
               session.tempFilePaths,
               retryCallback,
-              headlessEnv
+              headlessEnv,
+              retrySource
             );
           }
         }
@@ -431,7 +457,11 @@ export class CliExecutionRunner {
     };
 
     try {
-      const success = await executeWithRecovery(baseArgs);
+      const success = await executeWithRecovery(
+        baseArgs,
+        source,
+        responseCallback
+      );
       hookMonitor?.stop();
       if (!success && this.deps.runtimeState.isCancelling()) {
         this.deps.runtimeState.setFailureReason("Stopped by user");
@@ -708,11 +738,13 @@ export class CliExecutionRunner {
 
   private buildHeadlessResponseCallback(
     session: CliExecutionSession,
-    label: string = ""
+    label: string = "",
+    headlessLogTail?: HeadlessLogTail
   ): (result: {
     stdout: string;
     stderr: string;
     exitCode: number;
+    headlessLogTail?: HeadlessLogTail;
   }) => Promise<boolean> {
     const responseCollector = this.deps.factories.createResponseCollector();
 
@@ -738,6 +770,7 @@ export class CliExecutionRunner {
         label,
         model: session.resolvedProperties?.model ?? "",
         workspaceRoot: this.deps.runtimeState.getWorkspaceRoot(),
+        headlessLogTail: result.headlessLogTail ?? headlessLogTail,
       });
 
       session.recordHeadlessResponse(collected);
@@ -801,6 +834,62 @@ export class CliExecutionRunner {
       }
       return collected.success;
     };
+  }
+
+  private createHeadlessStreamingSource(
+    session: CliExecutionSession
+  ): HeadlessStreamingSource | undefined {
+    const parser = this.deps.provider.logParser;
+    const mode =
+      this.deps.provider.headlessSource ??
+      (this.deps.provider.parseHeadlessStdout
+        ? "stdout"
+        : this.deps.provider.extractSessionIdFromStdout
+          ? "log"
+          : undefined);
+    if (!parser || !mode) {
+      return undefined;
+    }
+
+    const model = session.resolvedProperties?.model ?? "";
+    if (mode === "stdout" && this.deps.provider.parseHeadlessStdout) {
+      return {
+        parser,
+        mode,
+        parseStdout: this.deps.provider.parseHeadlessStdout.bind(
+          this.deps.provider
+        ),
+        model,
+      };
+    }
+
+    if (mode === "log") {
+      return {
+        parser,
+        mode,
+        model,
+        logTail: new HeadlessLogTail({
+          parser,
+          promptText: session.promptForSessionLog,
+          startTime: session.executionStartTime,
+          resolvedSessionId: session.resolvedSessionId,
+          workspaceRoot: this.deps.runtimeState.getWorkspaceRoot(),
+          model,
+          extractSessionIdFromStdout:
+            this.deps.provider.extractSessionIdFromStdout?.bind(
+              this.deps.provider
+            ),
+          extractSessionIdFromLogs:
+            this.deps.provider.extractSessionIdFromLogs?.bind(
+              this.deps.provider
+            ),
+          onStreamingEvents: this.deps.hostCallbacks.onStreamingEvents,
+          onContextWindowUpdate: this.deps.hostCallbacks.onContextWindowUpdate,
+        }),
+      };
+    }
+
+    return undefined;
   }
 
   private chunkInjectPrompt(prompt: string, chunkSize: number): string[] {

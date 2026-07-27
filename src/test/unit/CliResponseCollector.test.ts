@@ -4,6 +4,7 @@ import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { Log } from "../../utils/Log";
 
 function createParsedOutput(
@@ -301,5 +302,91 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.failureKind, FAILURE_KINDS.PROCESS_EXIT);
     assert.strictEqual(result.failureMessage, "process crashed");
     assert.strictEqual(result.cliResult.error, "process crashed");
+  });
+
+  test("should route parsed stdout through the log parser mapping", async () => {
+    const parsedEvents = [{ type: "stdout-event" }];
+    const mappedOutput = createParsedOutput({
+      metadata: { sessionId: "stdout-session" } as any,
+    });
+    let responseParserCalled = false;
+    let extractedEvents: unknown;
+    const collector = new CliResponseCollector({
+      provider: {
+        responseParser: {
+          parse: () => {
+            responseParserCalled = true;
+            return createParsedOutput();
+          },
+          parseTokenCounts: () => undefined,
+        },
+        parseHeadlessStdout: () => parsedEvents,
+        logParser: {
+          extractResponse: (events: BaseCliEvent[]) => {
+            extractedEvents = events;
+            return mappedOutput;
+          },
+        },
+      } as any,
+      hostCallbacks: {
+        logResponse: () => {},
+        onResponseComplete: () => {},
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "stdout",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "prompt",
+      executionStartTime: new Date(),
+    });
+
+    assert.deepStrictEqual(extractedEvents, parsedEvents);
+    assert.strictEqual(responseParserCalled, false);
+    assert.strictEqual(result.extractedSessionId, "stdout-session");
+  });
+
+  test("should route accumulated tail events through the log parser mapping", async () => {
+    const tailEvents = [{ type: "log-event" }];
+    const mappedOutput = createParsedOutput({
+      metadata: { sessionId: "log-session" } as any,
+    });
+    let extractedEvents: unknown;
+    const collector = new CliResponseCollector({
+      provider: {
+        responseParser: {
+          parse: () => {
+            throw new Error("legacy parser should not run");
+          },
+          parseTokenCounts: () => undefined,
+        },
+        logParser: {
+          extractResponse: (events: BaseCliEvent[]) => {
+            extractedEvents = events;
+            return mappedOutput;
+          },
+        },
+      } as any,
+      hostCallbacks: {
+        logResponse: () => {},
+        onResponseComplete: () => {},
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "ignored",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "prompt",
+      executionStartTime: new Date(),
+      headlessLogTail: {
+        getEvents: () => tailEvents,
+        getSessionId: () => undefined,
+      } as any,
+    });
+
+    assert.deepStrictEqual(extractedEvents, tailEvents);
+    assert.strictEqual(result.extractedSessionId, "log-session");
   });
 });

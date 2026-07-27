@@ -13,6 +13,11 @@ import { CliLogEventPump } from "./shared/CliLogEventPump";
 import type { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "./shared/interfaces/INotificationMonitor";
 
+/** Maximum time (ms) spent draining log entries after completion. */
+export const DRAIN_DEADLINE_MS = 2000;
+/** Polling interval (ms) between bounded-drain reads. */
+export const DRAIN_POLL_INTERVAL_MS = 150;
+
 /**
  * Preserve synthetic user-steer events in parser-produced final output.
  *
@@ -125,10 +130,9 @@ export interface LogMonitorDependencies {
  * The cancellation callback allows external abort.
  */
 export class CliLogMonitor {
-  /** Maximum time (ms) to spend draining remaining log entries after completion signal */
-  private static readonly DRAIN_DEADLINE_MS = 2000;
-  /** Polling interval (ms) between drain read attempts */
-  private static readonly DRAIN_POLL_INTERVAL_MS = 150;
+  /** Kept as class properties for existing test seams; values are single-sourced above. */
+  private static readonly DRAIN_DEADLINE_MS = DRAIN_DEADLINE_MS;
+  private static readonly DRAIN_POLL_INTERVAL_MS = DRAIN_POLL_INTERVAL_MS;
   /** Interval (ms) for checking user cancellation during monitoring */
   private static readonly CANCELLATION_CHECK_INTERVAL_MS = 100;
 
