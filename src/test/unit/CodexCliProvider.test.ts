@@ -332,6 +332,5 @@ suite("CodexCliProvider", () => {
         undefined
       );
     });
-
   });
 });

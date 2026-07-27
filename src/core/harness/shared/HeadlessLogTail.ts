@@ -2,6 +2,7 @@ import type { CliEvent } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
 import { DRAIN_DEADLINE_MS, DRAIN_POLL_INTERVAL_MS } from "../CliLogMonitor";
 import { CliLogEventPump } from "./CliLogEventPump";
+import type { ICliProvider } from "./interfaces/ICliProvider";
 import type { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 
 /** Default idle poll interval for log growth while stdout is quiet. */
@@ -43,6 +44,32 @@ export interface HeadlessStreamingSource {
   parseStdout?: (chunk: string) => BaseCliEvent[];
   logTail?: HeadlessLogTail;
   model?: string;
+}
+
+/** Provider members that determine which stream feeds headless events. */
+export type HeadlessSourceModeProvider = Pick<
+  ICliProvider,
+  "headlessSource" | "parseHeadlessStdout" | "extractSessionIdFromStdout"
+>;
+
+/**
+ * Resolve a provider's headless event source.
+ *
+ * Single source of truth for the mode decision: the live streaming path and the
+ * final-output path must agree, or a harness would stream one mapping and
+ * report another. An explicit `headlessSource` always wins so a provider that
+ * implements both hooks can still pin itself to the log.
+ */
+export function resolveHeadlessSourceMode(
+  provider: HeadlessSourceModeProvider
+): "stdout" | "log" | undefined {
+  if (provider.headlessSource) {
+    return provider.headlessSource;
+  }
+  if (provider.parseHeadlessStdout) {
+    return "stdout";
+  }
+  return provider.extractSessionIdFromStdout ? "log" : undefined;
 }
 
 /**
@@ -94,15 +121,16 @@ export class HeadlessLogTail {
       void this.enqueueTick("idle poll");
     }, this.idlePollIntervalMs);
 
-    // A stdout-carried session ID is not available until the process starts.
-    // Do not run prompt-based discovery before spawn: Codex's discovery helper
-    // retries for several seconds when no session exists yet, which would delay
-    // the process launch and put the clock behind the very stream it tails.
-    if (
-      this.sessionId ||
-      this.options.extractSessionIdFromLogs ||
-      !this.options.extractSessionIdFromStdout
-    ) {
+    // Never resolve a session ID before the process spawns. Two distinct
+    // failure modes make pre-spawn resolution wrong, so the rule is uniform:
+    // Codex's stdout ID does not exist yet and its discovery helper retries for
+    // several seconds, delaying the launch of the very stream this tails; and a
+    // provider log lookup can only see the *previous* run in this workspace
+    // (Antigravity's `last_conversations.json` cache is keyed by workspace root
+    // with no timestamp), which would latch a stale session for the whole run.
+    // Ticks are driven post-spawn by stdout and the idle poll, so the only safe
+    // initial read is one where the caller already supplied the session ID.
+    if (this.sessionId) {
       await this.enqueueTick("initial read");
     }
   }

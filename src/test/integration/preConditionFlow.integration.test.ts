@@ -59,7 +59,10 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     await fs.writeFile(path.join(workspace, ERROR_SCRIPT), "not executable\n");
     await fs.writeFile(
       path.join(workspace, RETRY_GATE_SCRIPT),
-      `${APPEND_MARKER}\nif (before === 0) setTimeout(() => {}, 250);\n`
+      // The hang must outlast the gate timeout by a wide margin: the retry
+      // attempt has to spawn a real `node` process and exit inside that same
+      // timeout, and process startup alone can cost >100ms on a loaded machine.
+      `${APPEND_MARKER}\nif (before === 0) setTimeout(() => {}, 3000);\n`
     );
     await fs.writeFile(
       path.join(workspace, SHARED_BUDGET_GATE_SCRIPT),
@@ -274,7 +277,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       await writeWorkflow({
         preCondition: {
           script: RETRY_GATE_SCRIPT,
-          timeout: 50,
+          timeout: 500,
         },
         errorBehavior: { onError: "retry", maxRetries: 1 },
       })

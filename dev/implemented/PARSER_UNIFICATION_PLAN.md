@@ -78,9 +78,9 @@ was a no-tool response; the second read `QWEN.md` and made no workspace changes.
 The matching artifacts were captured from stdout and
 `~/.qwen/projects/c--dev-ctrlyoke/chats/<session-id>.jsonl`.
 
-| Run | Headless stdout | Matching session log |
-| --- | --- | --- |
-| No-tool response | `system/init`, two `assistant` objects (thinking and text), and `result` | `user`, attribution snapshot, API telemetry, and `assistant` with `message.parts[]` plus `usageMetadata`/`contextWindowSize` |
+| Run                 | Headless stdout                                                                                            | Matching session log                                                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No-tool response    | `system/init`, two `assistant` objects (thinking and text), and `result`                                   | `user`, attribution snapshot, API telemetry, and `assistant` with `message.parts[]` plus `usageMetadata`/`contextWindowSize`                     |
 | Read-only `QWEN.md` | `system/init`, assistant thinking, `tool_use`, `user` `tool_result`, assistant thinking/text, and `result` | `user`, API/tool telemetry, assistant `functionCall`, `tool_result` `functionResponse` + `toolCallResult`, and final assistant `message.parts[]` |
 
 The response text, thinking blocks, tool-call identity, tool-result identity,
@@ -104,8 +104,8 @@ Verified by comparing the event-type vocabularies each parser branches on. **Sou
 | Harness         | Headless stdout                                                                                                              | Session log                                                                                                                                                                                                 | Log richer?                                                                                                                            | Source mode                                                                                                                                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Codex**       | `thread.started`, `turn.completed`, `item.completed` with `item.type` of `agent_message`/`command_execution`/`file_change`/… | `session_meta`, `turn_context`, `event_msg`, `response_item`, `function_call`, `patch_apply_end`, …                                                                                                         | **Much** — `file_change` is `{path, kind}` on stdout; the log has `unified_diff` and whole-file `content`, plus per-turn `token_count` | **Log-sourced.** Highest payoff of any harness: diffs render _when the write happens_, not on a final back-fill pass. Deletes `CodexCliProvider.augmentParsedOutput()` outright. |
-| **Antigravity** | Incremental transcript mapping in `AntigravityLogParser`                                                                     | `brain/<id>/.system_generated/logs/transcript_full.jsonl` (compact transcript only as fallback) — rich planner/tool/checkpoint/error events; the tailed `cli-*.log` carries session and completion markers. | **Much** — structured events and diffs are available incrementally.                                                                    | **Implemented.** See `./ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.                                                                                                     |
-| **Qwen**        | `session_id`-bearing JSON objects                                                                                            | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]`                                                                                                                                                       | **Yes** — user/tool turns, tool results, reasoning counts, cache counts, cumulative usage, and context-window size | **Log-sourced.** Measured on Qwen 0.20.1; stdout remains the session-ID carrier and clock. |
+| **Antigravity** | Incremental transcript mapping in `AntigravityLogParser`                                                                     | `brain/<id>/.system_generated/logs/transcript_full.jsonl` (compact transcript only as fallback) — rich planner/tool/checkpoint/error events; the tailed `cli-*.log` carries session and completion markers. | **Much** — structured events and diffs are available incrementally.                                                                    | **Implemented.** See `./ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.                                                                                                                  |
+| **Qwen**        | `session_id`-bearing JSON objects                                                                                            | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]`                                                                                                                                                       | **Yes** — user/tool turns, tool results, reasoning counts, cache counts, cumulative usage, and context-window size                     | **Log-sourced.** Measured on Qwen 0.20.1; stdout remains the session-ID carrier and clock.                                                                                       |
 | **Claude**      | `stream-json`: `system`/`assistant`/`user`/`result`, snake_case `session_id`, `tool_use_result`                              | session JSONL: `assistant`/`user`/`attachment`, camelCase `sessionId`, `toolUseResult`                                                                                                                      | Marginal — log adds `attachment`, background-task markers                                                                              | **Either.** Start stdout-sourced (field aliasing only); revisit if background-task tracking needs the log.                                                                       |
 | **Copilot**     | `--output-format json`: `assistant.message`, `tool.execution_start`, `tool.execution_complete`                               | `events.jsonl`: same vocabulary plus `session.*`, `user.message`, `system.notification`                                                                                                                     | Marginal — the extras are session-lifecycle, not content                                                                               | **stdout-sourced.** Note context-window data lives in neither stream (it's the OTel export file), so that augmentation survives regardless.                                      |
 | **OpenCode**    | `run --format json`                                                                                                          | `opencode export <id>` — parser doc states it produces "the same event shape produced by `opencode run --format json`" (`OpenCodeLogParser.ts:113`)                                                         | **No** — 1:1, and the "log" is a subprocess call, not a file                                                                           | **stdout-sourced.** See below: this costs ~10 lines, not a layer.                                                                                                                |
@@ -177,8 +177,8 @@ Things that are **not** parsing and must survive the deletion:
 | Session ID from stdout          | `*ResponseParser.extractSessionId()`; read at `CliResponseCollector.ts:74`                                                 | **Must survive.** Only Copilot and Antigravity implement `ICliProvider.extractSessionIdFromLogs`; Claude, Codex, OpenCode and Qwen headless get their session ID from stdout metadata. Losing it forces every harness through `discoverSessionLog()` prompt-text matching. |
 | Recoverable-session retry       | `ClaudeResponseParser.isRecoverableSessionError()` and the existing Qwen equivalent; called at `CliExecutionRunner.ts:394` | Move the implementations to `ICliProvider`. They classify spawn errors, not output.                                                                                                                                                                                        |
 | Headless failure classification | `CliResponseCollector.getHeadlessFailure()` (exit code, stderr, CLI-invocation-error patterns)                             | Unaffected — transport-level, stays.                                                                                                                                                                                                                                       |
-| `parseTokenCounts`              | Formerly `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                            | **Dropped.** `WorkflowExecutor` now uses structured usage metadata from the log-parser output; reparsing its already-formatted statistics string duplicated that source of truth. |
-| Copilot plain-text fallback     | Formerly `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true`                                             | **Dead code, removed.** `CopilotCliProvider.buildHeadlessArgs()` unconditionally adds `--output-format json`; interactive mode uses `-i` and does not flow through the headless response parser.                                       |
+| `parseTokenCounts`              | Formerly `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                              | **Dropped.** `WorkflowExecutor` now uses structured usage metadata from the log-parser output; reparsing its already-formatted statistics string duplicated that source of truth.                                                                                          |
+| Copilot plain-text fallback     | Formerly `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true`                                              | **Dead code, removed.** `CopilotCliProvider.buildHeadlessArgs()` unconditionally adds `--output-format json`; interactive mode uses `-i` and does not flow through the headless response parser.                                                                           |
 
 ### Chicken-and-egg on session log discovery
 
@@ -235,8 +235,15 @@ constructed with `HeadlessLogTailOptions`:
   alternative for harnesses such as Antigravity.
 - `onStreamingEvents(events)` and optional `onContextWindowUpdate(used, size)`
   receive the `CliLogEventPump` output.
-- `start()` begins the 750ms idle backstop and performs the initial read;
-  `onStdoutChunk(chunk)` queues an idempotent `readNewLines()` tick;
+- `start()` begins the 750ms idle backstop and performs an initial read **only
+  when the session ID is already known** (a resume). It never resolves a session
+  ID before the process spawns: Codex's stdout ID does not exist yet and its
+  discovery helper retries for seconds, while a provider log lookup can only see
+  the _previous_ run in the workspace — Antigravity's `last_conversations.json`
+  is keyed by workspace root with no timestamp, so a pre-spawn lookup would latch
+  a stale session for the whole run. Post-spawn stdout ticks and the idle poll
+  drive discovery instead. `onStdoutChunk(chunk)` queues an idempotent
+  `readNewLines()` tick;
   `finish()` stops polling, retries discovery once after exit, performs the
   bounded 2-second/150ms drain, and resolves to `HeadlessLogTailResult`.
   `handleStdout()` is an alias for stream adapters. `getEvents()`,
@@ -251,9 +258,16 @@ logged and treated as an empty source; it never fails the headless step.
 `parseHeadlessStdout()` and feeds each parsed event through
 `logParser.extractStructuredEventsFromEvent()`; `"log"` constructs a
 `HeadlessLogTail`. When unset, `parseHeadlessStdout()` selects stdout mode and
-`extractSessionIdFromStdout()` selects log mode. Providers with neither hook
-continue using the existing `responseParser` path, which is the Phase 0
-behavior guarantee.
+`extractSessionIdFromStdout()` selects log mode.
+
+`resolveHeadlessSourceMode()` in `HeadlessLogTail.ts` is the single source of
+truth for that decision, and both the live streaming path
+(`CliExecutionRunner.createHeadlessStreamingSource`) and the final-output path
+(`CliResponseCollector.parseHeadlessOutput`) must go through it. They resolved
+the mode independently at first, so a provider that implemented
+`parseHeadlessStdout()` while pinning `headlessSource: "log"` would have streamed
+log events and then reported stdout-mapped output — the exact
+streamed-vs-final divergence this plan exists to eliminate.
 
 ### Phase 1 — Codex, log-sourced (complete 2026-07-26)
 

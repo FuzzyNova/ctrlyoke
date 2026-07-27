@@ -278,7 +278,11 @@ export class AntigravityToolEventBuilder {
         this.stringContent(entry)
       );
     }
-    if (/^\s*(error|failed|failure|cancelled|canceled)\b/i.test(this.stringContent(entry))) {
+    if (
+      /^\s*(error|failed|failure|cancelled|canceled)\b/i.test(
+        this.stringContent(entry)
+      )
+    ) {
       return false;
     }
     return entry.source !== "SYSTEM" || entry.type === "SYSTEM_MESSAGE";
@@ -447,9 +451,7 @@ export class AntigravityToolEventBuilder {
         sources.push({ title: linked[1], url: linked[2] });
         continue;
       }
-      const plain = line.match(
-        /^\s*(?:\d+[.)]|\[\d+\])\s+(https?:\/\/\S+)/
-      );
+      const plain = line.match(/^\s*(?:\d+[.)]|\[\d+\])\s+(https?:\/\/\S+)/);
       if (plain) {
         const url = plain[1].replace(/[),.;]+$/, "");
         sources.push({ title: url, url });

@@ -88,8 +88,7 @@ export class CopilotCliProvider implements ICliProvider {
   /** Extract the session ID carried by Copilot's final result event. */
   extractSessionIdFromStdout(chunk: string): string | undefined {
     const result = CliParseUtils.parseJsonLines(chunk).find(
-      (event) =>
-        event.type === "result" && typeof event.sessionId === "string"
+      (event) => event.type === "result" && typeof event.sessionId === "string"
     );
     return result?.sessionId as string | undefined;
   }

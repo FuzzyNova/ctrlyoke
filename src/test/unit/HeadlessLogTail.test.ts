@@ -120,7 +120,7 @@ suite("HeadlessLogTail", () => {
       assert.strictEqual(provider.headlessSource, "log");
 
       const fake = createParser({
-        reads: [[], [{ type: "file_change" }]],
+        reads: [[{ type: "file_change" }]],
       });
       let runCompleted = false;
       let streamedBeforeCompletion = false;
@@ -143,14 +143,19 @@ suite("HeadlessLogTail", () => {
 
       await tail.start();
       tail.onStdoutChunk("stdout clock tick");
-      await tail.finish();
-      runCompleted = true;
+      await waitFor(5);
 
+      // Asserted before finish() so a regression that defers diffs to the
+      // post-exit drain fails here. Streaming the diff mid-run is the entire
+      // payoff of log-sourcing.
       assert.strictEqual(
         streamedBeforeCompletion,
         true,
         `${provider.config.displayName} should stream its file diff before completion`
       );
+
+      await tail.finish();
+      runCompleted = true;
     }
   });
 
@@ -191,6 +196,9 @@ suite("HeadlessLogTail", () => {
     });
 
     await tail.start();
+    // The in-flight tick misses (the log does not exist yet); the post-exit
+    // retry is what recovers the events.
+    tail.onStdoutChunk("stdout tick");
     const result = await tail.finish();
 
     assert.deepStrictEqual(result.events, [event]);
@@ -220,6 +228,7 @@ suite("HeadlessLogTail", () => {
     });
 
     await tail.start();
+    tail.onStdoutChunk("activity\n");
     const result = await tail.finish();
 
     assert.strictEqual(providerCalls, 1);
@@ -228,6 +237,63 @@ suite("HeadlessLogTail", () => {
       fake.discoveryArguments[0].sessionId,
       "provider-session"
     );
+  });
+
+  test("does not resolve a provider session ID before the process spawns", async () => {
+    // Antigravity resolves its ID from a workspace-keyed cache with no
+    // timestamp, so a pre-spawn lookup can only ever see the *previous* run and
+    // would latch that stale session for this run's entire duration.
+    const fake = createParser({ discoveries: ["session.log"] });
+    let providerCalls = 0;
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      workspaceRoot: "workspace",
+      extractSessionIdFromLogs: async () => {
+        providerCalls += 1;
+        return providerCalls === 1 ? "fresh-session" : "unexpected";
+      },
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+
+    assert.strictEqual(
+      providerCalls,
+      0,
+      "start() must not perform a session lookup before spawn"
+    );
+    assert.strictEqual(fake.discoveryArguments.length, 0);
+
+    tail.onStdoutChunk("first activity\n");
+    const result = await tail.finish();
+
+    assert.strictEqual(providerCalls, 1);
+    assert.strictEqual(result.sessionId, "fresh-session");
+  });
+
+  test("still performs an initial read when the session ID is already known", async () => {
+    const fake = createParser({ discoveries: ["session.log"] });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      resolvedSessionId: "resumed-session",
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+
+    assert.strictEqual(fake.discoveryArguments.length, 1);
+    assert.strictEqual(fake.discoveryArguments[0].sessionId, "resumed-session");
+    await tail.finish();
   });
 
   test("does not block process startup while waiting for a stdout session ID", async () => {

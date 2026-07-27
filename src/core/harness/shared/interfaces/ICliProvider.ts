@@ -99,6 +99,10 @@ export interface ICliProvider {
 
   /**
    * Select the event source for headless execution.
+   *
+   * An explicit value wins over inference from the hooks below, so a provider
+   * that can parse its own stdout may still pin itself to the richer session
+   * log. Resolved in one place by `resolveHeadlessSourceMode()`.
    */
   readonly headlessSource?: "stdout" | "log";
 
@@ -109,8 +113,6 @@ export interface ICliProvider {
    * A provider implementing this method is stdout-sourced: the returned
    * events are passed through the log parser's response mapping. This method
    * must not return CliEvent[] directly or introduce a second event mapping.
-   * A provider that does not implement this method is log-sourced (unless it
-   * is still using the temporary response-parser fallback during migration).
    */
   parseHeadlessStdout?(stdout: string): BaseCliEvent[];
 

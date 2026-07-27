@@ -14,6 +14,7 @@ import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import {
   HeadlessLogTail,
+  resolveHeadlessSourceMode,
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
@@ -840,13 +841,7 @@ export class CliExecutionRunner {
     session: CliExecutionSession
   ): HeadlessStreamingSource | undefined {
     const parser = this.deps.provider.logParser;
-    const mode =
-      this.deps.provider.headlessSource ??
-      (this.deps.provider.parseHeadlessStdout
-        ? "stdout"
-        : this.deps.provider.extractSessionIdFromStdout
-          ? "log"
-          : undefined);
+    const mode = resolveHeadlessSourceMode(this.deps.provider);
     if (!parser || !mode) {
       return undefined;
     }

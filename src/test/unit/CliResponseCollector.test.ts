@@ -32,7 +32,8 @@ function createCollector(provider: any) {
 
 suite("CliResponseCollector", () => {
   test("should build cli result and prefer session ID from parsed output", async () => {
-    const loggedResponses: Array<{ response: string; statistics?: string }> = [];
+    const loggedResponses: Array<{ response: string; statistics?: string }> =
+      [];
     const completedResponses: string[] = [];
     const debugMessages: string[] = [];
     const originalDebug = Log.debug;
@@ -84,7 +85,8 @@ suite("CliResponseCollector", () => {
         debugMessages.some((message) => message.includes("session-from-output"))
       );
     } finally {
-      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+      (Log as unknown as { debug(message: string): void }).debug =
+        originalDebug;
     }
   });
 
@@ -157,7 +159,8 @@ suite("CliResponseCollector", () => {
       },
     };
 
-    const loggedResponses: Array<{ response: string; statistics?: string }> = [];
+    const loggedResponses: Array<{ response: string; statistics?: string }> =
+      [];
     const completedResponses: string[] = [];
     const result = await new CliResponseCollector({
       provider,
@@ -276,5 +279,40 @@ suite("CliResponseCollector", () => {
 
     assert.deepStrictEqual(extractedEvents, tailEvents);
     assert.strictEqual(result.extractedSessionId, "log-session");
+  });
+
+  test("an explicit log source wins over a provider's stdout parser", async () => {
+    // The streaming path resolves mode from headlessSource, so the final-output
+    // path must agree — otherwise a harness streams one mapping and reports
+    // another.
+    const tailEvents = [{ type: "log-event" }];
+    let extractedEvents: unknown;
+    let stdoutParseCalls = 0;
+    await createCollector({
+      headlessSource: "log",
+      parseHeadlessStdout: () => {
+        stdoutParseCalls += 1;
+        return [{ type: "stdout-event" }];
+      },
+      logParser: {
+        extractResponse: (events: BaseCliEvent[]) => {
+          extractedEvents = events;
+          return createParsedOutput();
+        },
+      },
+    }).collectHeadlessResponse({
+      stdout: "ignored",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "prompt",
+      executionStartTime: new Date(),
+      headlessLogTail: {
+        getEvents: () => tailEvents,
+        getSessionId: () => undefined,
+      } as any,
+    });
+
+    assert.strictEqual(stdoutParseCalls, 0);
+    assert.deepStrictEqual(extractedEvents, tailEvents);
   });
 });

@@ -206,10 +206,7 @@ suite("CliParseUtils", () => {
         output_tokens: 200,
         total_tokens: 300,
       };
-      const result = CliParseUtils.formatStatistics(
-        usage,
-        "claude-sonnet-4.5"
-      );
+      const result = CliParseUtils.formatStatistics(usage, "claude-sonnet-4.5");
       assert.strictEqual(
         result,
         "Usage: 100 input + 200 output = 300 tokens | Model: claude-sonnet-4.5"

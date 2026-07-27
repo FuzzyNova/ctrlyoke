@@ -195,9 +195,7 @@ export class CopilotToolBuilder {
 
     if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT) {
       const structuredPatch = completionData?.result?.detailedContent
-        ? CliParseUtils.parseUnifiedDiff(
-            completionData.result.detailedContent
-          )
+        ? CliParseUtils.parseUnifiedDiff(completionData.result.detailedContent)
         : undefined;
       return [
         {

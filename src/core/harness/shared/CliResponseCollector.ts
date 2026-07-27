@@ -8,7 +8,10 @@ import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
 import { extractTextFromEvents } from "./CliResponseTextExtractor";
-import type { HeadlessLogTail } from "./HeadlessLogTail";
+import {
+  resolveHeadlessSourceMode,
+  type HeadlessLogTail,
+} from "./HeadlessLogTail";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import type { BaseCliEvent } from "./interfaces/ILogParser";
 
@@ -18,6 +21,7 @@ export interface CliResponseCollectorDeps {
     | "augmentParsedOutput"
     | "extractSessionIdFromLogs"
     | "extractSessionIdFromStdout"
+    | "headlessSource"
     | "parseHeadlessStdout"
     | "logParser"
   >;
@@ -146,16 +150,29 @@ export class CliResponseCollector {
     headlessLogTail?: HeadlessLogTail;
   }): UniversalCliOutput {
     const logParser = this.deps.provider.logParser;
+    if (!logParser) {
+      return { events: [], metadata: {} };
+    }
 
-    if (this.deps.provider.parseHeadlessStdout && logParser) {
+    // A tail is only ever constructed for a log-sourced run, so its presence is
+    // the runner's already-made decision; otherwise fall back to the provider's
+    // declared mode. Never infer stdout mode from parseHeadlessStdout alone —
+    // a provider may implement it while pinning headlessSource to "log".
+    const mode = params.headlessLogTail
+      ? "log"
+      : resolveHeadlessSourceMode(this.deps.provider);
+
+    if (mode === "log") {
+      return logParser.extractResponse(
+        params.headlessLogTail?.getEvents() ?? []
+      );
+    }
+
+    if (mode === "stdout" && this.deps.provider.parseHeadlessStdout) {
       const events: BaseCliEvent[] = this.deps.provider.parseHeadlessStdout(
         params.stdout
       );
       return logParser.extractResponse(events);
-    }
-
-    if (params.headlessLogTail && logParser) {
-      return logParser.extractResponse(params.headlessLogTail.getEvents());
     }
 
     return { events: [], metadata: {} };
