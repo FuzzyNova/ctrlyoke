@@ -3147,6 +3147,8 @@ export class WorkflowOrchestrator {
           definitionRevision: expectedDefinitionRevision,
           descriptorRevision: expectedDescriptorRevision,
         }
+        // No execution follows: this seed is a start-position move, and the run
+        // stays IDLE until the user presses Run on it.
       );
       const seededAddress: Extract<WorkflowViewAddress, { kind: "run" }> = {
         workflowKey: address.workflowKey,
@@ -3259,7 +3261,9 @@ export class WorkflowOrchestrator {
       {
         definitionRevision: expectedDefinitionRevision,
         descriptorRevision: expectedDescriptorRevision,
-      }
+      },
+      // Executed below, so the manifest opens RUNNING.
+      EXECUTION_STATES.RUNNING
     );
     await this.closeLineageTerminalsForFreshRun(address.workflowKey);
     const instance = this.buildWorkflowInstance();

@@ -1076,10 +1076,17 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         EXECUTION_STATES.COMPLETED,
         1
       );
+      // Seeded for immediate execution, so its manifest opens RUNNING — the
+      // seed-then-execute window where the manifest is the only record naming
+      // the run as live. The executing run must survive the bulk delete.
       const second = await WorkingFileManager.seedNewRun(
         workspace,
         workflowKey,
-        first.runRef
+        first.runRef,
+        {},
+        undefined,
+        undefined,
+        EXECUTION_STATES.RUNNING
       );
       await history.initializeRunAt(
         workflowKey,
@@ -1088,7 +1095,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         second.runId,
         second.startedAt
       );
-      // second run stays "running" — the executing run must survive the bulk delete.
 
       const orchestrator = Object.create(
         WorkflowOrchestrator.prototype

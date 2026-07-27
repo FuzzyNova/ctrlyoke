@@ -507,6 +507,14 @@ export class WorkingFileManager {
    *
    * Static because it has no per-queue state to coordinate with — the destination run
    * is brand new and nothing is currently writing to it.
+   *
+   * `initialTimelineState` is the execution state written into the seeded run's
+   * manifest. Seeding and executing are separate operations — `Set start position`
+   * on the first step seeds a run the user has not started — and the manifest is
+   * what the dashboard's run list badges. It also has to be right the first time:
+   * `TimelineRecorder.initializeRunAt` is a no-op once manifest+events exist, so the
+   * executing callers' own `initializeRunAt` never corrects this value. Callers that
+   * execute the seeded run immediately pass `RUNNING`.
    */
   public static async seedNewRun(
     workspaceFolderPath: string,
@@ -517,7 +525,8 @@ export class WorkingFileManager {
     expected?: {
       definitionRevision?: number;
       descriptorRevision?: number;
-    }
+    },
+    initialTimelineState: ExecutionState = EXECUTION_STATES.IDLE
   ): Promise<{
     workingFilePath: string;
     sourceRunRef: RunRef;
@@ -601,7 +610,7 @@ export class WorkingFileManager {
       workflowKey,
       allocation.runId,
       startedAt,
-      EXECUTION_STATES.RUNNING,
+      initialTimelineState,
       workingFile.definitionRevision ?? 1,
       buildDefinitionSnapshot(
         workingFile.workflowName ?? descriptor.workflowName,

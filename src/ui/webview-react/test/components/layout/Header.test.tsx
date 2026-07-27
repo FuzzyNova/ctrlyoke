@@ -300,6 +300,75 @@ describe("Header execution controls", () => {
     }
   });
 
+  // `Set start position` on the first step seeds a run without executing it, so
+  // a run can sit here having run nothing. Re-run would fork yet another empty
+  // run; Run executes the one on screen via the same continuation path.
+  it("offers Run for a seeded run that has never executed a step", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.json",
+      workflowName: "Seeded run",
+      steps: [{ prompt: "first" }, { prompt: "second" }],
+      executionState: EXECUTION_STATES.IDLE,
+      currentStep: 0,
+    });
+
+    render(<Header />);
+
+    expect(
+      screen.queryByRole("button", { name: "Re-run" })
+    ).not.toBeInTheDocument();
+    const runButton = screen.getByRole("button", { name: "Run" });
+    expect(runButton).toBeEnabled();
+
+    fireEvent.click(runButton);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CONTINUE_RUN,
+      address: { workflowKey: "workflow-a", kind: "run", runRef },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 7,
+    });
+  });
+
+  it("keeps Re-run for an idle run whose steps already have runtime", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "run",
+        runRef,
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.json",
+      workflowName: "Partially executed run",
+      steps: [
+        { prompt: "first", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "second" },
+      ],
+      executionState: EXECUTION_STATES.IDLE,
+      currentStep: 0,
+    });
+
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: "Re-run" })).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "Run" })
+    ).not.toBeInTheDocument();
+  });
+
   it("shows only Re-run below xs for a stopped run", () => {
     useUiStore.setState({
       displayedViewAddress: {

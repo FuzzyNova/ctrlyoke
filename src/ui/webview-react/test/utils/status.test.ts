@@ -219,6 +219,7 @@ describe("getWorkflowExecutionControls", () => {
       pendingRewind?: boolean;
       executionRunState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
       executionRunLabel?: string;
+      viewedRunUnstarted?: boolean;
     } = {}
   ) =>
     getWorkflowExecutionControls({
@@ -229,6 +230,7 @@ describe("getWorkflowExecutionControls", () => {
       pendingRewind: overrides.pendingRewind ?? false,
       executionRunState: overrides.executionRunState,
       executionRunLabel: overrides.executionRunLabel,
+      viewedRunUnstarted: overrides.viewedRunUnstarted,
     });
 
   it("uses slot 1 Run for a draft", () => {
@@ -299,6 +301,42 @@ describe("getWorkflowExecutionControls", () => {
         enabled: true,
       });
     }
+  });
+
+  it("uses slot 1 Run for a seeded run that has never executed", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      viewedRunUnstarted: true,
+    });
+    expect(controls.slot1).toMatchObject({
+      action: "start-run",
+      label: "Run",
+      icon: "codicon-debug-start",
+      enabled: true,
+    });
+    expect(controls.slot2.enabled).toBe(false);
+    expect(controls.slot3.enabled).toBe(false);
+  });
+
+  // An addressed run whose definition has not arrived yet reads as "no steps".
+  // Run would be a lie there — the client has nothing to run — so the unstarted
+  // affordance must not fire until the definition is on screen.
+  it("keeps Re-run for an unstarted run whose definition is still loading", () => {
+    expect(
+      getControls(EXECUTION_STATES.IDLE, {
+        viewedRunUnstarted: true,
+        hasSteps: false,
+        hasFile: false,
+      }).slot1
+    ).toMatchObject({ action: "rerun", label: "Re-run" });
+  });
+
+  it("labels the disabled slot 1 Run for an unstarted run while another run executes", () => {
+    const controls = getControls(EXECUTION_STATES.IDLE, {
+      viewedRunUnstarted: true,
+      executionRunState: EXECUTION_STATES.RUNNING,
+    });
+    expect(controls.slot1).toMatchObject({ label: "Run", enabled: false });
+    expect(controls.slot2.action).toBe("pause");
   });
 
   it("uses slot 2 Resume only for resumable promoted work", () => {

@@ -1052,9 +1052,13 @@ export class OutputHistoryManager {
     // display which prefers the working file's. The two answer different
     // questions: "what state is this run in" has one right answer, but "could
     // this run still be owned by an executor" must stay conservative — keeping a
-    // finished run costs nothing, deleting a live one is unrecoverable. A run
-    // seeded but not yet started is the case that splits them (manifest already
-    // RUNNING, working file still idle), and it must survive a bulk delete.
+    // finished run costs nothing, deleting a live one is unrecoverable. The case
+    // that splits them is a run seeded for immediate execution but not yet
+    // started (manifest already RUNNING, working file still idle): during that
+    // window no instance or lock names it, so the manifest is its only
+    // protection and it must survive a bulk delete. A run seeded *without*
+    // execution (Set start position on the first step) records IDLE in both and
+    // is deliberately deletable — nothing owns it.
     for (const {
       summary,
       manifestExecutionState,

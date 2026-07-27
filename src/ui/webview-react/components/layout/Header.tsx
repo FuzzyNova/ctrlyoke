@@ -92,6 +92,17 @@ export const Header: React.FC<{
   const { fileName, executionState } = useWorkflowStore();
   const hasSteps = useWorkflowStore((s) => s.steps.length > 0);
   const hasFinalStep = useWorkflowStore((s) => s.finalStep !== null);
+  // Selectors must return primitives here: a fresh array/object identity per
+  // call re-renders on every unrelated store write. `_runtime` is the persisted
+  // per-step record — present from the moment a step starts, and stripped
+  // entirely when a run is seeded — so it answers "has anything executed in
+  // this run" without depending on the view-only `status` field.
+  const currentStep = useWorkflowStore((s) => s.currentStep);
+  const hasStepProgress = useWorkflowStore(
+    (s) =>
+      s.finalStepStatus !== null ||
+      s.steps.some((step) => step._runtime !== undefined)
+  );
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -179,6 +190,15 @@ export const Header: React.FC<{
         : executionRunRef
           ? "the executing run"
           : null,
+      // Seeding a run and executing it are separate operations — `Set start
+      // position` on the first step seeds a run and leaves it idle — so a run
+      // can legitimately sit here having executed nothing at all. Offer Run for
+      // it rather than Re-run, which would fork yet another empty run.
+      viewedRunUnstarted:
+        displayedViewAddress?.kind === "run" &&
+        executionState === EXECUTION_STATES.IDLE &&
+        currentStep === 0 &&
+        !hasStepProgress,
     });
 
   const handleStopCliRun = useCallback(() => {
@@ -246,7 +266,10 @@ export const Header: React.FC<{
         }
       } else if (action === "rerun") {
         postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
-      } else if (action === "continue") {
+      } else if (action === "continue" || action === "start-run") {
+        // Starting a never-executed run *is* a continuation from its own step 0:
+        // the run directory, working file, and timeline already exist, so the
+        // backend only has to bind and execute what is on disk.
         postViewedRunAction(MESSAGE_TYPES.CONTINUE_RUN);
       } else if (action === "restart") {
         postViewedRunAction(MESSAGE_TYPES.START_NEW_RUN_INSTEAD);

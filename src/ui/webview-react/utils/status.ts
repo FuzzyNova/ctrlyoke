@@ -265,6 +265,7 @@ export function canStopExecution(state: ExecutionState): boolean {
 
 export type WorkflowExecutionControlAction =
   | "run-draft"
+  | "start-run"
   | "rerun"
   | "restart"
   | "continue"
@@ -307,6 +308,16 @@ export interface WorkflowExecutionControlsInput {
    */
   executionRunState?: ExecutionState | null;
   executionRunLabel?: string | null;
+  /**
+   * The viewed run exists but has never executed anything: persisted IDLE,
+   * still on step 0, no step or final-step status. Seeding a run and executing
+   * it are separate operations (`Set start position` to the first step seeds
+   * without running), so this state is reachable and its natural action is
+   * Run, not Re-run — re-running would fork yet another empty run and leave
+   * this one stranded. Only honored alongside `hasSteps`, so a run whose
+   * definition has not arrived yet keeps the safe Re-run affordance.
+   */
+  viewedRunUnstarted?: boolean;
 }
 
 /**
@@ -323,6 +334,7 @@ export function getWorkflowExecutionControls({
   pendingRewind,
   executionRunState,
   executionRunLabel,
+  viewedRunUnstarted,
 }: WorkflowExecutionControlsInput): WorkflowExecutionControlsState {
   // The executing run's state only wins while it is genuinely active. Callers
   // can only supply it from summaries, and the addressed `runSummaries`
@@ -339,6 +351,7 @@ export function getWorkflowExecutionControls({
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
   const executionActive = isRunning || isPausing || isPaused || isCancelling;
+  const startableRun = Boolean(viewedRunUnstarted) && hasSteps;
   const targetSuffix = executionRunLabel ? ` for ${executionRunLabel}` : "";
   const disabled = (label: string, icon: string, title: string) => ({
     action: "none" as const,
@@ -362,11 +375,17 @@ export function getWorkflowExecutionControls({
               "codicon-debug-continue",
               `Execution is active${targetSuffix}`
             )
-          : disabled(
-              "Re-run",
-              "codicon-refresh",
-              `Execution is active${targetSuffix}`
-            );
+          : startableRun
+            ? disabled(
+                "Run",
+                "codicon-debug-start",
+                `Execution is active${targetSuffix}`
+              )
+            : disabled(
+                "Re-run",
+                "codicon-refresh",
+                `Execution is active${targetSuffix}`
+              );
     const slot2 = isPaused
       ? {
           action: "resume" as const,
@@ -449,14 +468,23 @@ export function getWorkflowExecutionControls({
             title:
               "Start a new run from the beginning, discarding this continuation",
           }
-        : {
-            action: "rerun" as const,
-            label: "Re-run",
-            icon: "codicon-refresh",
-            enabled: true,
-            title: "Seed and run a new run from this definition",
-            emphasized: true,
-          };
+        : startableRun
+          ? {
+              action: "start-run" as const,
+              label: "Run",
+              icon: "codicon-debug-start",
+              enabled: true,
+              title: "Run this workflow from the beginning",
+              emphasized: true,
+            }
+          : {
+              action: "rerun" as const,
+              label: "Re-run",
+              icon: "codicon-refresh",
+              enabled: true,
+              title: "Seed and run a new run from this definition",
+              emphasized: true,
+            };
   // Resume only applies outside a pending rewind: while a rewind is pending,
   // slot 2 is dedicated to Continue instead (see below).
   const resumable =

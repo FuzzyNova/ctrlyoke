@@ -654,6 +654,60 @@ suite("WorkingFileManager", () => {
 
       assert.strictEqual(content.definitionRevision, 1);
     });
+
+    // The manifest is what the dashboard's run list badges, and
+    // `TimelineRecorder.initializeRunAt` is a no-op once manifest+events exist,
+    // so an executing caller never gets a second chance to correct this. A seed
+    // that is not executed (Set start position on the first step) must not
+    // advertise a live run.
+    test("records the seeded run's manifest state from the caller", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        [{ prompt: "step" }] as WorkingFile["steps"],
+        EXECUTION_STATES.COMPLETED
+      );
+      const readManifestState = async (seededRunRef: string) =>
+        (
+          JSON.parse(
+            await fs.readFile(
+              path.join(
+                tmpWorkspace,
+                ".ctrlyoke",
+                ".runs",
+                workflowKey,
+                seededRunRef,
+                "manifest.json"
+              ),
+              "utf-8"
+            )
+          ) as { executionState: string }
+        ).executionState;
+
+      const idle = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      assert.strictEqual(
+        await readManifestState(idle.runRef),
+        EXECUTION_STATES.IDLE
+      );
+
+      const running = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any,
+        {},
+        undefined,
+        undefined,
+        EXECUTION_STATES.RUNNING
+      );
+      assert.strictEqual(
+        await readManifestState(running.runRef),
+        EXECUTION_STATES.RUNNING
+      );
+    });
   });
 
   suite("beginPendingRewind", () => {

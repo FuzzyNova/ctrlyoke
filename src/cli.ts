@@ -725,7 +725,9 @@ async function executeAddressedCliOperation(
       {
         definitionRevision: source.definitionRevision ?? 1,
         descriptorRevision: descriptor.revision,
-      }
+      },
+      // This seed is executed on the next line, so the manifest opens RUNNING.
+      EXECUTION_STATES.RUNNING
     );
     await instance.executeSeededRun(
       seeded,
