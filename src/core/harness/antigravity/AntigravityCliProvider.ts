@@ -4,7 +4,6 @@ import * as fs from "fs/promises";
 import { createHash } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import {
   IToolPermissionMapper,
   ToolPermissionConfig,
@@ -24,7 +23,6 @@ import { Log } from "../../../utils/Log";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
-import { AntigravityResponseParser } from "./AntigravityResponseParser";
 import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor";
 import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
@@ -63,12 +61,12 @@ export class AntigravityCliProvider implements ICliProvider {
     usesInteractiveNotificationMonitor: true,
   };
 
-  readonly responseParser: IResponseParser = new AntigravityResponseParser();
   readonly notificationMonitor: INotificationMonitor =
     new AntigravityNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new AntigravityToolPermissionMapper();
   readonly logParser = new AntigravityLogParser();
+  readonly headlessSource = "log" as const;
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
     // Injected turns do not rebuild CLI arguments or hook registration, and

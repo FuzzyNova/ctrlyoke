@@ -8,4 +8,12 @@ suite("AntigravityCliProvider", () => {
 
     assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);
   });
+
+  test("routes headless output through the transcript log parser", () => {
+    const provider = new AntigravityCliProvider();
+
+    assert.strictEqual(provider.headlessSource, "log");
+    assert.ok(provider.logParser);
+    assert.ok(provider.extractSessionIdFromLogs);
+  });
 });

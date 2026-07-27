@@ -4,8 +4,8 @@
 
 The Antigravity log parser now consumes the rich per-session transcript
 incrementally and exposes the same `CliEvent` vocabulary used by the other CLI
-providers. The separate headless response parser remains stdout-based; this
-plan covers the log-monitored integration.
+providers. Both interactive and headless execution use this log parser; the
+headless path tails it through `HeadlessLogTail`.
 
 ## Sources and authority
 

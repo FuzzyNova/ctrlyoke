@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phases 0 and 1 complete; Phases 2 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phases 0, 1, and 2 complete; Phases 3 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -240,15 +240,15 @@ Leading with the hardest harness is deliberate. Codex is where log-sourcing pays
 
 **Completion notes:** A real Codex 0.145.0 headless run supplied the golden stdout/log pair. The surprising runtime detail was that `HeadlessLogTail.start()` cannot wait for its first log discovery when the provider obtains its session ID from stdout: doing so waits for a prompt-matching discovery before the CLI has spawned and prevents `thread.started` from ever arriving. Codex's session log then proved to be the authoritative stream: current exec-wrapped tool calls and command results are recorded there, while shell edits do not necessarily produce a native stdout `file_change` body. The tail now starts immediately, captures `thread.started`, and begins log discovery on the first stdout tick.
 
-### Phase 2 — Antigravity, log-sourced — **transcript parser done; headless migration outstanding**
+### Phase 2 — Antigravity, log-sourced — **complete 2026-07-26**
 
-The transcript rewrite is complete. `AntigravityLogParser` now supplies
-incremental structured events from the per-session transcript while the Go log
-continues to provide session and completion markers. Any consolidation
-of headless response plumbing must preserve that split and the append-only,
-adjacent-line pairing rules documented in the implemented parser plan.
-
-**Still to do in this phase:** headless Antigravity does not yet use that parser. `AntigravityResponseParser` (59 LOC) is a stdout passthrough that wraps all output in a single TEXT event — headless gets none of the structured planner/tool/checkpoint events the transcript carries, making it the largest fidelity gap after Codex. Wire Antigravity headless to `HeadlessLogTail` and delete `AntigravityResponseParser`. Session-ID discovery here goes through the provider's `extractSessionIdFromLogs()` (there is no stdout session marker), which is why Phase 0's tail must support a pluggable ID source.
+The transcript rewrite and headless migration are complete. `AntigravityLogParser`
+now supplies incremental structured events from the per-session transcript while
+the Go log continues to provide session and completion markers. Headless mode
+routes through `HeadlessLogTail`, using the provider's
+`extractSessionIdFromLogs()` because there is no stdout session marker.
+The append-only, adjacent-line pairing rules documented in the implemented
+parser plan remain the source of truth.
 
 **Verify:** parallel workflows in one workspace attribute events to the right run. The implemented per-session `brain/<sessionId>/` transcript tail provides that isolation instead of relying on shared response content in `cli-*.log`.
 
