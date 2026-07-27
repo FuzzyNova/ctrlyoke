@@ -31,8 +31,8 @@ type CopilotToolArgs = Record<string, unknown> | string;
  *   structuredPatch with accurate line numbers which the UI prefers over
  *   the client-side diff generated from INITIATED old/new content.
  *
- * Both CopilotLogParser and CopilotResponseParser use these methods so the
- * event-shaping logic is never duplicated.
+ * CopilotLogParser uses these methods for both interactive log events and
+ * headless stdout events, so the event-shaping logic is never duplicated.
  */
 export class CopilotToolBuilder {
   /**

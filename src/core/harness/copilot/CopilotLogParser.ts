@@ -316,6 +316,17 @@ export class CopilotLogParser extends BaseLogParser {
         model = event.data.selectedModel;
       }
 
+      // Headless stdout carries the session identity in its final result event
+      // instead of the session.start event used by events.jsonl.
+      if (event.type === "result") {
+        if (typeof event.sessionId === "string") {
+          sessionId = event.sessionId;
+        }
+        if (typeof event.model === "string") {
+          model = event.model;
+        }
+      }
+
       // Handle session.info events (log for debugging, not emitted as output)
       if (event.type === "session.info" && event.data) {
         if (event.data.infoType === "authentication") {
@@ -490,7 +501,7 @@ export class CopilotLogParser extends BaseLogParser {
       events: outputEvents,
       metadata: {
         sessionId,
-        model,
+        model: (model ?? this.resolvedModel) || undefined,
         harness: HARNESS_IDS.COPILOT_CLI,
         usage:
           effectiveInputTokens > 0 || outputTokens > 0

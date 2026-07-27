@@ -2,14 +2,12 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
-import { CopilotResponseParser } from "./CopilotResponseParser";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
 import { CopilotLogParser } from "./CopilotLogParser";
@@ -26,6 +24,8 @@ import {
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { CliParseUtils } from "../shared/CliParseUtils";
+import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -41,13 +41,12 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  *
  * Implements all Copilot-specific logic using composition pattern:
  * - Log file monitoring and sessionEnd hook for completion detection
- * - JSONL output parsing in headless mode (--output-format json), plain text fallback
+ * - JSONL output adaptation in headless mode (--output-format json)
  * - Tool permission conversion with read-only tool filtering
  * - MCP server configuration with "local" type and tools field
  * - Session ID from result.sessionId in JSON output; log file discovery as fallback
  *
  * This provider aggregates four specialized components:
- * - CopilotResponseParser: Parses plain text output and statistics
  * - CopilotNotificationMonitor: Monitors sessionEnd hook notifications
  * - CopilotToolPermissionMapper: Converts permissions to CLI arguments
  * - CliMcpConfigGenerator: Generates MCP configuration files (shared)
@@ -71,16 +70,52 @@ export class CopilotCliProvider implements ICliProvider {
     usesInteractiveNotificationMonitor: true,
 
     // Headless mode uses --output-format json, so output is structured events (not raw text).
-    // The parser sets rawTextOutput:true in metadata for interactive/plain-text fallback.
     rawTextOutput: false,
   };
 
-  readonly responseParser: IResponseParser = new CopilotResponseParser();
   readonly notificationMonitor: INotificationMonitor =
     new CopilotNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
   readonly logParser = new CopilotLogParser();
+  readonly headlessSource = "stdout" as const;
+
+  /** Convert Copilot's JSONL stdout into the event vocabulary of CopilotLogParser. */
+  parseHeadlessStdout(stdout: string): BaseCliEvent[] {
+    return CliParseUtils.parseJsonLines(stdout) as BaseCliEvent[];
+  }
+
+  /** Extract the session ID carried by Copilot's final result event. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    const result = CliParseUtils.parseJsonLines(chunk).find(
+      (event) =>
+        event.type === "result" && typeof event.sessionId === "string"
+    );
+    return result?.sessionId as string | undefined;
+  }
+
+  /** Parse legacy statistics strings used by workflow token reporting. */
+  parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number; cached?: number } | undefined {
+    const match = statistics.match(
+      /([\d.]+)(k)?\s+in(?:put)?,\s+([\d.]+)(k)?\s+out(?:put)?(?:,\s+([\d.]+)(k)?\s+(?:cached?|cache\s+read))?/i
+    );
+    if (!match) {
+      return undefined;
+    }
+
+    const parseValue = (value: string, hasK: string | undefined): number =>
+      hasK
+        ? Math.round(Number.parseFloat(value) * 1000)
+        : Number.parseFloat(value);
+
+    return {
+      prompt: parseValue(match[1], match[2]),
+      completion: parseValue(match[3], match[4]),
+      cached: match[5] ? parseValue(match[5], match[6]) : undefined,
+    };
+  }
 
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
   private hookFilePaths: string[] = [];
@@ -844,17 +879,12 @@ export class CopilotCliProvider implements ICliProvider {
    *    Legacy per-turn utilization line; observed to no longer fire reliably on
    *    current Copilot CLI versions, kept as a last-resort fallback.
    *
-   * This is the permanent architecture — session ID is not available until the final
-   * `result` event, so real-time log tailing during execution is not feasible.
+   * This is the permanent architecture — OTel is a third artifact, separate from both
+   * stdout and the session log, and remains the source for context-window data.
    */
   async augmentParsedOutput(
     output: UniversalCliOutput
   ): Promise<UniversalCliOutput> {
-    // Plain-text mode: token data comes from stderr stats in parseTokenCounts(), not needed here.
-    if (output.metadata.rawTextOutput) {
-      return output;
-    }
-
     // Already have input token data — Copilot may add this to JSON output in a future version.
     if (output.metadata.usage && output.metadata.usage.inputTokens > 0) {
       return output;

@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phases 0, 1, and 2 complete; Phases 3 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phases 0, 1, 2, and 3 complete; Phases 4 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -152,8 +152,8 @@ Things that are **not** parsing and must survive the deletion:
 | Session ID from stdout          | `*ResponseParser.extractSessionId()`; read at `CliResponseCollector.ts:74`                                                 | **Must survive.** Only Copilot and Antigravity implement `ICliProvider.extractSessionIdFromLogs`; Claude, Codex, OpenCode and Qwen headless get their session ID from stdout metadata. Losing it forces every harness through `discoverSessionLog()` prompt-text matching. |
 | Recoverable-session retry       | `ClaudeResponseParser.isRecoverableSessionError()` and the existing Qwen equivalent; called at `CliExecutionRunner.ts:394` | Move the implementations to `ICliProvider`. They classify spawn errors, not output.                                                                                                                                                                                        |
 | Headless failure classification | `CliResponseCollector.getHeadlessFailure()` (exit code, stderr, CLI-invocation-error patterns)                             | Unaffected — transport-level, stays.                                                                                                                                                                                                                                       |
-| `parseTokenCounts`              | `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                                       | Re-point at log-parser metadata or drop; it parses an already-formatted statistics string.                                                                                                                                                                                 |
-| Copilot plain-text fallback     | `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true`                                                       | Decide explicitly. If `--output-format json` is now unconditional (`CopilotCliProvider.ts:670`), this is dead code and should be deleted with the rest; if it's a real fallback, it needs a home outside `IResponseParser`.                                                |
+| `parseTokenCounts`              | `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531`                                                                       | Keep the small legacy statistics helper on `CopilotCliProvider`; headless token usage comes from the shared log-parser mapping.                                                                                                                                              |
+| Copilot plain-text fallback     | Formerly `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true`                                             | **Dead code, removed.** `CopilotCliProvider.buildHeadlessArgs()` unconditionally adds `--output-format json`; interactive mode uses `-i` and does not flow through the headless response parser.                                       |
 
 ### Chicken-and-egg on session log discovery
 
@@ -252,9 +252,14 @@ parser plan remain the source of truth.
 
 **Verify:** parallel workflows in one workspace attribute events to the right run. The implemented per-session `brain/<sessionId>/` transcript tail provides that isolation instead of relying on shared response content in `cli-*.log`.
 
-### Phase 3 — Copilot, stdout-sourced
+### Phase 3 — Copilot, stdout-sourced — **complete 2026-07-26**
 
-Same event vocabulary, so `parseHeadlessStdout` is a JSONL split. Delete `CopilotResponseParser` (490 LOC). Resolve the plain-text-fallback question here.
+Same event vocabulary, so `parseHeadlessStdout` is a JSONL split using
+`CliParseUtils`. `CopilotResponseParser` (490 LOC) was deleted, and the
+provider now owns only the small legacy statistics helper needed by workflow
+token reporting. The stdout `result.sessionId` is the primary session-ID path;
+`extractSessionIdFromLogs` remains the fallback. `augmentParsedOutput()` remains
+in place because its OTel read is a third-artifact enrichment path.
 
 **Verify:** headless output matches today's for tool calls, file edits, thinking blocks, token usage, and context-window values — the OTel tiers in `augmentParsedOutput` must keep working (see the "wire it into both" gotcha in `harness-cli-providers.instructions.md`).
 
@@ -292,7 +297,7 @@ Delete `IResponseParser` / `ResponseParserBase`, drop `responseParser` from `ICl
 ## Open questions
 
 1. ~~Is the Codex log delay startup-only or ongoing?~~ **Answered:** neither — the log is written continuously from t=0 and there is no delay. See [Measured: the log is live](#measured-the-log-is-live).
-2. Is Copilot's plain-text headless mode still reachable, or is `--output-format json` unconditional now?
+2. ~~Is Copilot's plain-text headless mode still reachable, or is `--output-format json` unconditional now?~~ **Answered in Phase 3:** `buildHeadlessArgs()` always adds `--output-format json`, so headless plain-text output is unreachable. `parsePlainText()` and its `rawTextOutput` path were dead code and were deleted with `CopilotResponseParser`.
 3. ~~Is Antigravity's shared `cli-*.log` safe as the sole headless source?~~ **Moot** — it carries no response content; the implemented parser uses the per-session transcript for response events and the Go log only for session/completion markers. See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.
 4. Is Qwen's log richer than its stdout? The one remaining unmeasured harness.
 5. Should `getFinalEventsOnCompletion` and `augmentParsedOutput` merge into one post-completion enrichment hook once both modes share a path? They overlap heavily after this change, and what remains of `augmentParsedOutput` (Copilot's OTel read) is exactly the "fetch from a third artifact after completion" shape `getFinalEventsOnCompletion` already describes.

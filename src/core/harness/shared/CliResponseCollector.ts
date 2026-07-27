@@ -18,6 +18,7 @@ export interface CliResponseCollectorDeps {
     | "responseParser"
     | "augmentParsedOutput"
     | "extractSessionIdFromLogs"
+    | "extractSessionIdFromStdout"
     | "parseHeadlessStdout"
     | "logParser"
   >;
@@ -52,7 +53,23 @@ export class CliResponseCollector {
     headlessLogTail?: HeadlessLogTail;
   }): Promise<CollectedHeadlessResponse> {
     this.deps.provider.responseParser?.setCurrentModel?.(params.model ?? "");
+    this.deps.provider.logParser?.setCurrentModel?.(params.model ?? "");
     let parsedOutput = this.parseHeadlessOutput(params);
+
+    if (
+      parsedOutput.metadata.sessionId === undefined &&
+      this.deps.provider.extractSessionIdFromStdout
+    ) {
+      const sessionId = this.deps.provider.extractSessionIdFromStdout(
+        params.stdout
+      );
+      if (sessionId) {
+        parsedOutput = {
+          ...parsedOutput,
+          metadata: { ...parsedOutput.metadata, sessionId },
+        };
+      }
+    }
 
     if (
       params.headlessLogTail &&

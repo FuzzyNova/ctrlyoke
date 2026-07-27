@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import { ClaudeLogParser } from "../../../core/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
+import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import {
@@ -1063,6 +1064,65 @@ suite("CopilotLogParser", () => {
 
   setup(() => {
     parser = new CopilotLogParser();
+  });
+
+  suite("headless golden output", () => {
+    test("maps Copilot stdout and session-log events to equivalent universal output", () => {
+      const fixtureRoot = path.resolve(
+        __dirname,
+        "../../../../src/test/fixtures/copilot"
+      );
+      const provider = new CopilotCliProvider();
+      provider.logParser.setCurrentModel("gpt-5.4");
+      const stdout = fs.readFileSync(
+        path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
+        "utf8"
+      );
+      const sessionLog = fs
+        .readFileSync(
+          path.join(fixtureRoot, "headless-golden.session.jsonl"),
+          "utf8"
+        )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+
+      const stdoutOutput = provider.logParser.extractResponse(
+        provider.parseHeadlessStdout(stdout)
+      );
+      const logOutput = parser.extractResponse(sessionLog);
+      const normalize = (output: UniversalCliOutput) =>
+        JSON.parse(
+          JSON.stringify(output, (key, value) =>
+            key === "timestamp" ? undefined : value
+          )
+        );
+
+      assert.deepStrictEqual(normalize(stdoutOutput), normalize(logOutput));
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout(stdout),
+        "copilot-session-golden"
+      );
+      assert.ok(
+        stdoutOutput.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.THINKING
+        ),
+        "stdout path should preserve thinking blocks"
+      );
+      assert.ok(
+        stdoutOutput.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.FILE_WRITE
+        ),
+        "stdout path should preserve file writes"
+      );
+      assert.ok(
+        stdoutOutput.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
+        ),
+        "stdout path should preserve file edits"
+      );
+      assert.strictEqual(stdoutOutput.metadata.usage?.outputTokens, 20);
+    });
   });
 
   suite("extractResponse", () => {
