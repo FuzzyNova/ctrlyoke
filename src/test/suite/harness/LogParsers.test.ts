@@ -9,6 +9,8 @@ import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProv
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
+import { QwenLogParser } from "../../../core/harness/qwen/QwenLogParser";
+import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
 import {
   UniversalCliOutput,
   ToolCall,
@@ -17,7 +19,10 @@ import {
   FileWriteData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
-import { BaseCliEvent } from "../../../core/harness/shared/interfaces/ILogParser";
+import {
+  BaseCliEvent,
+  ILogParser,
+} from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
 
 /**
@@ -176,10 +181,7 @@ suite("ClaudeLogParser", () => {
       );
       assert.strictEqual(stdoutOutput.metadata.usage?.inputTokens, 240);
       assert.strictEqual(stdoutOutput.metadata.usage?.outputTokens, 30);
-      assert.strictEqual(
-        stdoutOutput.metadata.usage?.cachedInputTokens,
-        40
-      );
+      assert.strictEqual(stdoutOutput.metadata.usage?.cachedInputTokens, 40);
       assert.strictEqual(
         stdoutOutput.metadata.usage?.contextWindowUsedTokens,
         155
@@ -216,7 +218,7 @@ suite("ClaudeLogParser", () => {
           },
         ]
           .map((event) => JSON.stringify(event))
-          .join(""),
+          .join("")
       );
 
       for (const event of events) {
@@ -1690,7 +1692,9 @@ suite("CopilotLogParser", () => {
       parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
-      parser.trackBackgroundWorkState(notification("shell_completed", "shell-1"));
+      parser.trackBackgroundWorkState(
+        notification("shell_completed", "shell-1")
+      );
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
       // A turn_end from an unrelated turn cannot release the notification latch.
@@ -1712,7 +1716,9 @@ suite("CopilotLogParser", () => {
       parser.trackBackgroundWorkState(asyncLaunch("shell-2"));
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
-      parser.trackBackgroundWorkState(notification("shell_completed", "shell-1"));
+      parser.trackBackgroundWorkState(
+        notification("shell_completed", "shell-1")
+      );
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
       // The second shell is still pending, so its failure cannot release the
@@ -2006,9 +2012,19 @@ suite("CodexLogParser", () => {
             (event.data as TextData).text.includes("Todo List:")
         )
       );
-      assert.ok(output.events.some((event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH));
-      assert.ok(output.events.some((event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL));
-      assert.ok(output.events.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND));
+      assert.ok(
+        output.events.some((event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH)
+      );
+      assert.ok(
+        output.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+        )
+      );
+      assert.ok(
+        output.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+        )
+      );
     });
   });
 
@@ -2540,10 +2556,9 @@ suite("CodexLogParser", () => {
         events as unknown as BaseCliEvent[]
       );
       const fileEvents = output.events.filter((event) =>
-        [
-          CLI_EVENT_TYPES.FILE_WRITE,
-          CLI_EVENT_TYPES.FILE_DELETE,
-        ].includes(event.type as any)
+        [CLI_EVENT_TYPES.FILE_WRITE, CLI_EVENT_TYPES.FILE_DELETE].includes(
+          event.type as any
+        )
       );
 
       assert.deepStrictEqual(
@@ -3572,64 +3587,36 @@ suite("QwenLogParser", () => {
 
 suite("Cross-Parser Compatibility", () => {
   test("all parsers should implement extractResponse", () => {
-    const claudeParser = new ClaudeLogParser();
-    const copilotParser = new CopilotLogParser();
-    const codexParser = new CodexLogParser();
-
-    assert.ok(typeof claudeParser.extractResponse === "function");
-    assert.ok(typeof copilotParser.extractResponse === "function");
-    assert.ok(typeof codexParser.extractResponse === "function");
+    for (const parser of createAllHarnessParsers()) {
+      assert.ok(typeof parser.extractResponse === "function");
+    }
   });
 
   test("all parsers should implement isComplete", () => {
-    const claudeParser = new ClaudeLogParser();
-    const copilotParser = new CopilotLogParser();
-    const codexParser = new CodexLogParser();
-
-    assert.ok(typeof claudeParser.isComplete === "function");
-    assert.ok(typeof copilotParser.isComplete === "function");
-    assert.ok(typeof codexParser.isComplete === "function");
+    for (const parser of createAllHarnessParsers()) {
+      assert.ok(typeof parser.isComplete === "function");
+    }
   });
 
   test("all parsers should implement extractSessionId", () => {
-    const claudeParser = new ClaudeLogParser();
-    const copilotParser = new CopilotLogParser();
-    const codexParser = new CodexLogParser();
-
-    assert.ok(typeof claudeParser.extractSessionId === "function");
-    assert.ok(typeof copilotParser.extractSessionId === "function");
-    assert.ok(typeof codexParser.extractSessionId === "function");
+    for (const parser of createAllHarnessParsers()) {
+      assert.ok(typeof parser.extractSessionId === "function");
+    }
   });
 
   test("all parsers should implement readNewLines", () => {
-    const claudeParser = new ClaudeLogParser();
-    const copilotParser = new CopilotLogParser();
-    const codexParser = new CodexLogParser();
-
-    assert.ok(typeof claudeParser.readNewLines === "function");
-    assert.ok(typeof copilotParser.readNewLines === "function");
-    assert.ok(typeof codexParser.readNewLines === "function");
+    for (const parser of createAllHarnessParsers()) {
+      assert.ok(typeof parser.readNewLines === "function");
+    }
   });
 
   test("all parsers should handle empty events array", () => {
-    const claudeParser = new ClaudeLogParser();
-    const copilotParser = new CopilotLogParser();
-    const codexParser = new CodexLogParser();
-
-    const claudeResponse = claudeParser.extractResponse([]);
-    const copilotResponse = copilotParser.extractResponse([]);
-    const codexResponse = codexParser.extractResponse([]);
-
-    assert.strictEqual(extractText(claudeResponse), "");
-    assert.strictEqual(extractText(copilotResponse), "");
-    assert.strictEqual(extractText(codexResponse), "");
+    for (const parser of createAllHarnessParsers()) {
+      assert.strictEqual(extractText(parser.extractResponse([])), "");
+    }
   });
 
   test("all parsers should handle malformed events gracefully", () => {
-    const claudeParser = new ClaudeLogParser();
-    const copilotParser = new CopilotLogParser();
-    const codexParser = new CodexLogParser();
-
     const malformedEvents = [
       {}, // Empty object
       { type: null },
@@ -3637,8 +3624,19 @@ suite("Cross-Parser Compatibility", () => {
     ] as BaseCliEvent[];
 
     // Should not throw
-    assert.doesNotThrow(() => claudeParser.extractResponse(malformedEvents));
-    assert.doesNotThrow(() => copilotParser.extractResponse(malformedEvents));
-    assert.doesNotThrow(() => codexParser.extractResponse(malformedEvents));
+    for (const parser of createAllHarnessParsers()) {
+      assert.doesNotThrow(() => parser.extractResponse(malformedEvents));
+    }
   });
 });
+
+function createAllHarnessParsers(): ILogParser[] {
+  return [
+    new ClaudeLogParser(),
+    new CopilotLogParser(),
+    new CodexLogParser(),
+    new AntigravityLogParser(),
+    new OpenCodeLogParser(() => 200_000),
+    new QwenLogParser(),
+  ];
+}

@@ -6,8 +6,14 @@ import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { EXECUTION_MODES } from "../../types/DashboardConstants";
+import { HARNESS_IDS, PERMISSION_MODES } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type {
+  BaseCliEvent,
+  ILogParser,
+} from "../../core/harness/shared/interfaces/ILogParser";
+import { CliAdapter } from "../../platform/CliAdapter";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -254,6 +260,106 @@ suite("CliIntegration", () => {
       "session-from-output"
     );
     assert.strictEqual(integration.getLastCliCommand(), "test --prompt say hi");
+  });
+
+  test("streams a log-sourced headless response in standalone CLI context", async function () {
+    this.timeout(15_000);
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-standalone-")
+    );
+    const rawLogEvents: BaseCliEvent[][] = [
+      [],
+      [{ type: "text", text: "standalone log response" }],
+    ];
+    const parser = {
+      discoverSessionLog: async () => "standalone-session.log",
+      readNewLines: async () => rawLogEvents.shift() ?? [],
+      extractTimestamp: () => null,
+      extractSessionId: () => "standalone-session",
+      extractStructuredEventsFromEvent: (event: BaseCliEvent) =>
+        event.type === "text"
+          ? [{ type: "text", data: { text: String(event.text) } }]
+          : [],
+      extractResponse: (events: BaseCliEvent[]) => ({
+        events: events
+          .filter((event) => event.type === "text")
+          .map((event) => ({
+            type: "text",
+            data: { text: String(event.text) },
+          })),
+        metadata: { sessionId: "standalone-session" },
+      }),
+      isComplete: () => false,
+      extractContentFromEvent: () => undefined,
+      formatStatistics: () => "",
+      watchLogFile: () => ({ close() {} }) as never,
+    } as unknown as ILogParser;
+    const provider = createProvider({
+      config: {
+        ...createProvider().config,
+        harnessId: HARNESS_IDS.COPILOT_CLI,
+      },
+      headlessSource: "log",
+      parseHeadlessStdout: undefined,
+      logParser: parser,
+    });
+    const platform = new CliAdapter({
+      harness: HARNESS_IDS.COPILOT_CLI,
+      cwd: workspaceRoot,
+      timeout: 10_000,
+      scriptTimeout: 10_000,
+      permissionMode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      allowedTools: [],
+      deniedTools: [],
+      additionalDirs: [],
+      verbose: false,
+      quiet: true,
+      json: false,
+      color: false,
+      cliExecutionMode: EXECUTION_MODES.HEADLESS,
+      vars: {},
+    });
+    const integration = new CliIntegration(provider, platform, false);
+    const streamed: string[] = [];
+    const completed: string[] = [];
+    const streamingDisposable = integration.onStreamingEvents((events) => {
+      streamed.push(
+        ...events.map((event) => (event.data as { text: string }).text)
+      );
+    });
+    const completeDisposable = integration.onResponseComplete((response) => {
+      completed.push(response);
+    });
+
+    try {
+      const processManager = (integration as any).processManager as {
+        spawn: (
+          command: string,
+          args: string[],
+          options: { onStdout?: (chunk: string) => void }
+        ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+      };
+      processManager.spawn = async (_command, _args, options) => {
+        options.onStdout?.("standalone stdout clock\n");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      };
+
+      const success = await integration.sendPrompt({ prompt: "say hi" });
+
+      assert.strictEqual(success, true);
+      assert.deepStrictEqual(streamed, ["standalone log response"]);
+      assert.deepStrictEqual(completed, ["standalone log response"]);
+      assert.strictEqual(
+        (integration as any).provider.logParser,
+        parser,
+        "the standalone path must use the provider's configured log parser"
+      );
+    } finally {
+      streamingDisposable.dispose();
+      completeDisposable.dispose();
+      integration.dispose();
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 
   test("should use the session execution mode for dispatch over the global setting", async () => {

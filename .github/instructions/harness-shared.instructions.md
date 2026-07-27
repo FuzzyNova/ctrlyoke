@@ -26,7 +26,8 @@ Shared CLI-harness infrastructure: provider contracts, prompt assembly, response
 </parallelSafety>
 
 <eventMapping>
-- `CliEventMapper` + `BaseToolBuilder` are the single source of truth for semantic tool-event classification. Reuse them from both response parsers and log parsers instead of duplicating tool-name switch statements.
+- Each harness maps raw CLI events exactly once through its `ILogParser`; `CliEventMapper` + `BaseToolBuilder` remain the single source of truth for semantic tool-event classification.
+- `ICliProvider.headlessSource` chooses the transport source by fidelity: use stdout when its machine events preserve the session-log semantics, and use the log when the session log is richer or authoritative (Codex, Antigravity, and Qwen). Log-sourced headless runs still stream through `HeadlessLogTail` before process completion; source selection is not a latency preference.
 - `ApplyPatchParser` exists to turn patch payloads into accurate line ranges; prefer it over parser-specific regex heuristics.
 - `CliProviderUtils.buildMcpConfigBlock()` centralizes “should MCP be attached at all?” logic. Providers should only supply format-specific config generation.
 </eventMapping>

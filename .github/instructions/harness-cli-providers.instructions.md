@@ -21,7 +21,8 @@ Harness-specific adapters for CLI execution. Provider directories should contain
 </statefulProviders>
 
 <parsingAndRecovery>
-- Headless and interactive paths should converge on the same `UniversalCliOutput` semantics. Share mapping logic between response parsers and log parsers whenever the CLI exposes both streams.
+- Headless and interactive paths must converge on the same `UniversalCliOutput` semantics through one mapping in the provider's `ILogParser`; `headlessSource` is a fidelity choice between stdout and session logs, not a latency choice.
+- OpenCode headless output is stdout-sourced JSONL. Never route it through `export`: export is a final snapshot and loses the live event stream.
 - Use `augmentParsedOutput()` to patch missing token/session/context-window metadata from logs after the initial parse instead of teaching the UI or `CliIntegration` about provider quirks.
 - `extractSessionIdFromLogs()` is a fallback recovery path, not the primary contract.
 </parsingAndRecovery>

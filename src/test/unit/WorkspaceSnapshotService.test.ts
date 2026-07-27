@@ -174,6 +174,61 @@ suite("WorkspaceSnapshotService", () => {
     assert.strictEqual(changes[0]?.changeType, "deleted");
     assert.strictEqual(changes[0]?.contentToRestore, "base\n");
   });
+
+  test("undo preserves FILE_WRITE, FILE_EDIT, and FILE_DELETE semantics", async () => {
+    await writeWorkspaceFile("created.txt", "new file\n");
+    await writeWorkspaceFile("tracked.txt", "edited\n");
+    await fs.rm(path.join(workspaceRoot, "deleted.txt"), { force: true });
+
+    const result = await snapshotService.undoFiles(
+      [
+        {
+          // FILE_WRITE: undo removes the file created by the harness.
+          path: "created.txt",
+          action: UNDO_FILE_ACTIONS.DELETE,
+        },
+        {
+          // FILE_EDIT: undo applies the reverse of the forward diff.
+          path: "tracked.txt",
+          action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+          structuredPatch: [
+            {
+              oldStart: 1,
+              oldLines: 1,
+              newStart: 1,
+              newLines: 1,
+              lines: ["-base", "+edited"],
+            },
+          ],
+        },
+        {
+          // FILE_DELETE: undo restores the workspace snapshot content.
+          path: "deleted.txt",
+          action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+          contentToRestore: "deleted before\n",
+        },
+      ],
+      workspaceRoot
+    );
+
+    assert.deepStrictEqual(result.restoredFiles, [
+      "created.txt",
+      "tracked.txt",
+      "deleted.txt",
+    ]);
+    assert.deepStrictEqual(result.failedFiles, []);
+    await assert.rejects(() =>
+      fs.access(path.join(workspaceRoot, "created.txt"))
+    );
+    assert.strictEqual(
+      await fs.readFile(path.join(workspaceRoot, "tracked.txt"), "utf8"),
+      "base\n"
+    );
+    assert.strictEqual(
+      await fs.readFile(path.join(workspaceRoot, "deleted.txt"), "utf8"),
+      "deleted before\n"
+    );
+  });
 });
 
 // ── Multi-root (multiple repos) ─────────────────────────────────────────────

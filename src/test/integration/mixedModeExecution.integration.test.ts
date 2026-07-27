@@ -14,6 +14,7 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   type ExecutionMode,
+  CLI_EVENT_TYPES,
 } from "../../types/DashboardConstants";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
@@ -59,7 +60,8 @@ function createProvider(): ICliProvider {
 }
 
 function createExecutionContext(
-  integration: CliIntegration
+  integration: CliIntegration,
+  captureEvents?: (stepIndex: number, events: any[]) => void
 ): WorkflowExecutionContext {
   return {
     workspaceFolderPath: process.cwd(),
@@ -74,6 +76,7 @@ function createExecutionContext(
     getIntegrationForPrompt: () => integration,
     historyFilePath: "",
     instanceId: "mixed-mode-test",
+    captureEvents,
   };
 }
 
@@ -97,6 +100,31 @@ suite("mixed-mode workflow execution", () => {
     );
     const dispatches: Dispatch[] = [];
     const events: string[] = [];
+    const capturedTimelineEvents: Array<{
+      stepIndex: number;
+      types: string[];
+    }> = [];
+    const mappedEvents = [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "mapped response" },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        data: {
+          path: "src/mixed-mode.ts",
+          structuredPatch: [
+            {
+              oldStart: 1,
+              oldLines: 1,
+              newStart: 1,
+              newLines: 1,
+              lines: ["-before", "+after"],
+            },
+          ],
+        },
+      },
+    ] as any[];
     let lastInteractiveContext:
       | { sessionId: string; spawnedWithSessionId: string }
       | undefined;
@@ -135,10 +163,11 @@ suite("mixed-mode workflow execution", () => {
         cliCommand: "test --interactive",
       });
       session.updateParsedOutput({
-        events: [],
+        events: mappedEvents,
         metadata: { sessionId: SESSION_IDS.SECOND },
       });
       session.setExtractedSessionId(SESSION_IDS.SECOND);
+      (integration as any).streamingEventsEmitter.fire(mappedEvents);
       lastInteractiveContext = {
         sessionId: SESSION_IDS.SECOND,
         spawnedWithSessionId: SESSION_IDS.SECOND,
@@ -158,9 +187,10 @@ suite("mixed-mode workflow execution", () => {
         events.push("step-3-headless-dispatch");
       }
       const parsedOutput: UniversalCliOutput = {
-        events: [],
+        events: mappedEvents,
         metadata: { sessionId },
       };
+      (integration as any).streamingEventsEmitter.fire(mappedEvents);
       session.recordHeadlessResponse({
         success: true,
         parsedOutput,
@@ -205,7 +235,15 @@ suite("mixed-mode workflow execution", () => {
     );
     const executor = new WorkflowExecutor(queue, handler, evaluator, platform);
 
-    await executor.execute(integration, createExecutionContext(integration));
+    await executor.execute(
+      integration,
+      createExecutionContext(integration, (stepIndex, stepEvents) => {
+        capturedTimelineEvents.push({
+          stepIndex,
+          types: stepEvents.map((event) => event.type),
+        });
+      })
+    );
 
     assert.deepStrictEqual(
       dispatches.map(({ mode }) => mode),
@@ -228,6 +266,24 @@ suite("mixed-mode workflow execution", () => {
     assert.match(
       events.find((event) => event.startsWith("retire:")) ?? "",
       /headless resume of AI session 22222222-2222-4222-8222-222222222222/u
+    );
+    assert.deepStrictEqual(
+      capturedTimelineEvents,
+      [
+        {
+          stepIndex: 0,
+          types: [CLI_EVENT_TYPES.TEXT, CLI_EVENT_TYPES.FILE_EDIT],
+        },
+        {
+          stepIndex: 1,
+          types: [CLI_EVENT_TYPES.TEXT, CLI_EVENT_TYPES.FILE_EDIT],
+        },
+        {
+          stepIndex: 2,
+          types: [CLI_EVENT_TYPES.TEXT, CLI_EVENT_TYPES.FILE_EDIT],
+        },
+      ],
+      "mixed headless/interactive attempts must render the same mapped event shape"
     );
   });
 });

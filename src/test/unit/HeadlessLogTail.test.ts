@@ -1,7 +1,11 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import type { CliEvent, UniversalCliOutput } from "../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { HeadlessLogTail } from "../../core/harness/shared/HeadlessLogTail";
+import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
+import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import type {
   BaseCliEvent,
   ILogParser,
@@ -43,7 +47,25 @@ function createParser(options?: {
               data: { text: String(event.text) },
             },
           ] as CliEvent[])
-        : [],
+        : event.type === "file_change"
+          ? ([
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/live.ts",
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 1,
+                      newStart: 1,
+                      newLines: 1,
+                      lines: ["-before", "+after"],
+                    },
+                  ],
+                },
+              },
+            ] as CliEvent[])
+          : [],
     extractResponse: (events: BaseCliEvent[]) =>
       ({
         events: [],
@@ -85,6 +107,51 @@ suite("HeadlessLogTail", () => {
       { type: "text", data: { text: "from log" } },
     ]);
     assert.strictEqual(fake.getReadCount() >= 2, true);
+  });
+
+  test("delivers log-sourced file diffs before headless completion", async () => {
+    const logSourcedProviders = [
+      new CodexCliProvider(),
+      new AntigravityCliProvider(),
+      new QwenCliProvider(),
+    ];
+
+    for (const provider of logSourcedProviders) {
+      assert.strictEqual(provider.headlessSource, "log");
+
+      const fake = createParser({
+        reads: [[], [{ type: "file_change" }]],
+      });
+      let runCompleted = false;
+      let streamedBeforeCompletion = false;
+      const tail = new HeadlessLogTail({
+        parser: fake.parser,
+        promptText: "prompt",
+        startTime: new Date(),
+        onStreamingEvents: (events) => {
+          assert.strictEqual(runCompleted, false);
+          assert.deepStrictEqual(
+            events.map((event) => event.type),
+            [CLI_EVENT_TYPES.FILE_EDIT]
+          );
+          streamedBeforeCompletion = true;
+        },
+        idlePollIntervalMs: 1000,
+        drainDeadlineMs: 2,
+        drainPollIntervalMs: 1,
+      });
+
+      await tail.start();
+      tail.onStdoutChunk("stdout clock tick");
+      await tail.finish();
+      runCompleted = true;
+
+      assert.strictEqual(
+        streamedBeforeCompletion,
+        true,
+        `${provider.config.displayName} should stream its file diff before completion`
+      );
+    }
   });
 
   test("uses the idle backstop when stdout goes quiet", async () => {
@@ -183,6 +250,9 @@ suite("HeadlessLogTail", () => {
       '{"type":"thread.started","thread_id":"thread-from-stdout"}\n'
     );
     await tail.finish();
-    assert.strictEqual(fake.discoveryArguments[0].sessionId, "thread-from-stdout");
+    assert.strictEqual(
+      fake.discoveryArguments[0].sessionId,
+      "thread-from-stdout"
+    );
   });
 });
