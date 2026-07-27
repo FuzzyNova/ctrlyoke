@@ -29,7 +29,7 @@
     {
       "id": "spec-driven-loop",
       "label": "Spec-Driven Loop",
-      "description": "Architect → Implement → Orchestrate loop driven by a spec/design document",
+      "description": "Orchestrator plans, queues, and reviews the work until a spec/design document is fully implemented",
       "file": "spec-driven-loop.ctrlyoke.yaml",
       "tags": ["advanced", "loop", "spec"],
       "icon": "$(sync)"

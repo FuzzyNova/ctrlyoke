@@ -1,6 +1,6 @@
 _templateMeta:
   name: Spec-Driven Loop
-  description: "Architect → Implement → Orchestrate loop. Give it a spec/design doc and it runs until every requirement is satisfied."
+  description: "Orchestrator loop. Give it a spec/design doc — it breaks the work into steps, queues them, then reviews and keeps looping until every requirement is satisfied."
   variables:
     specFile:
       type: file
@@ -11,47 +11,43 @@ _templateMeta:
         - "**/*.json"
       autoFillFilename: true
 
-# prompts
-steps:
-  - name: architect
-    prompt: |
-      Review the following specification document:
-      @{file:specFile}
-
-      Your tasks:
-      1. Fully understand all requirements and scope in the spec
-      2. Analyze the existing codebase architecture, patterns, and conventions
-      3. Identify any gaps, ambiguities, or conflicts between the spec and the current architecture
-      4. Update the specification document with a clear, refined implementation plan aligned with existing patterns
-
-  - name: implement
-    prompt: |
-      Implement the specification:
-      @{file:specFile}
-
-      Requirements:
-      - Follow all existing codebase patterns and conventions
-      - Complete the full implementation — no TODOs, stubs, or placeholders
-      - Handle edge cases and error conditions throughout
+# No prompts up front — deliberately. Most specs need more than one session of
+# work, and a fixed "implement it all" step just fails and leaves the loop to
+# clean up. Instead the queue starts empty and the orchestrator decides how to
+# split the work, then appends the steps itself via ctrlyoke_append_queue.
+# Everything it queues runs before the final step comes back around to review.
+steps: []
 
 finalStep:
   name: orchestrate
   agent: spec-orchestrator
   mcpServers:
     - ctrlyoke
-  priorContext: all
+  # The orchestrator resumes its own session on every loop, so it remembers the
+  # plan it staged and does not re-derive it. Prior context stays off: it reads
+  # the repo (and ctrlyoke_read_output when it needs a step's report) instead of
+  # inlining every step's output into the prompt.
+  resumeSession: true
+  sessionId: finalStep
+  priorContext: none
   prompt: |
-    Compare all work completed so far against the original specification:
+    Be my ctrlyoke orchestrator for this specification:
     @{file:specFile}
 
-    Evaluate:
-    1. Is every requirement in the spec fully implemented and correct?
-    2. Are there any bugs, type errors, broken tests, or incomplete features?
-    3. Does the implementation follow existing codebase architecture and patterns?
+    Your first job is to review the spec and the codebase it touches, then use the
+    ctrlyoke_append_queue tool to add one step for each chunk of work that can
+    reasonably be completed in a single session, in the correct staging order.
+    Update the spec first if you find a clear problem with it; if the plan needs more
+    thought than you can give it here, make finalizing the plan the first queued step.
+    Use your judgment on how to split the work — that judgment is the point of this
+    workflow. Every queued step must be self-contained, must keep the planning docs
+    current, and must commit its own work before finishing.
 
-    If the implementation is complete and meets all requirements, output exactly:
-    DONE: <brief one-line summary of what was completed>
+    The next time you see this prompt, all your queued steps will have run. Verify the
+    work is actually complete, inspect it, fix any errors you find, and commit your
+    cleanup. If a large chunk is still missing or wrong, append more steps and let the
+    loop continue. Once everything is done, give me a real summary of what was built
+    and end your turn.
 
-    If more work is needed, first use the ctrlyoke_append_queue tool to add specific,
-    actionable follow-up prompts addressing only the remaining gaps. Then output:
-    CONTINUING: <brief summary of what still needs to be done>
+    You don't need to work out whether this is the first time you've seen this prompt —
+    you're resuming your own session, so read the state and act accordingly.
