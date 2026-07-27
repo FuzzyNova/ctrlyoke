@@ -764,6 +764,102 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     );
   });
 
+  // Re-run's outgoing instance is retired (it had reached a terminal state), but
+  // running a never-executed run from a client that is *browsing* the lineage
+  // leaves the outgoing instance live and idle. Residency alone then hands the
+  // client straight back to it, and every message from the run it just started
+  // is dropped as belonging to a non-active workflow.
+  test("keeps the client on the prepared instance when the outgoing one is live and idle", async () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+    const browsedRun = "run-2026-07-27T03-06-48-798Z" as never;
+    const startedRun = "run-2026-07-27T03-06-41-976Z" as never;
+
+    internal.instances.delete("instance-bound");
+    internal.instances.set("instance-browsing", {
+      id: "instance-browsing",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        runRef: browsedRun,
+        status: EXECUTION_STATES.IDLE,
+      }),
+    });
+    internal.viewerRegistry.set("client-a", "instance-browsing");
+    const prepared = {
+      id: "instance-starting",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        runRef: startedRun,
+        status: EXECUTION_STATES.IDLE,
+      }),
+    };
+
+    await internal.switchClientToPreparedExecution(prepared, "client-a");
+    // The nested bind that `replayWorkflowStateTo` performs via its own
+    // `loadRunViewForClient` — the step that used to revert the binding.
+    await internal.bindClientToAddressedLineage(
+      { workflowKey: boundKey, kind: "run", runRef: startedRun },
+      () => undefined,
+      "client-a"
+    );
+
+    assert.strictEqual(
+      internal.viewerRegistry.get("client-a"),
+      "instance-starting",
+      "a live idle instance of the same lineage must not outrank the one prepared to execute it"
+    );
+  });
+
+  test("prefers the executing instance over an earlier-registered live one", () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+
+    internal.instances.delete("instance-bound");
+    // Insertion order matters: the idle instance is registered first, so a
+    // plain "first live match" resolves to it even after the run starts.
+    internal.instances.set("instance-idle", {
+      id: "instance-idle",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        status: EXECUTION_STATES.IDLE,
+      }),
+    });
+    const executing = {
+      id: "instance-executing",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        status: EXECUTION_STATES.RUNNING,
+      }),
+    };
+    internal.instances.set("instance-executing", executing);
+
+    assert.strictEqual(internal.findInstanceForLineage(boundKey), executing);
+  });
+
+  // Nothing deletes `lineageExecutionOwners` entries, so the rank they confer
+  // has to expire on its own once the execution they describe is over.
+  test("ignores a prepared-execution claim whose run already finished", () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+
+    internal.instances.delete("instance-bound");
+    const live = {
+      id: "instance-live",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        status: EXECUTION_STATES.IDLE,
+      }),
+    };
+    internal.instances.set("instance-live", live);
+    internal.retiredInstances.set("instance-finished", {
+      id: "instance-finished",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        status: EXECUTION_STATES.COMPLETED,
+      }),
+    });
+    internal.lineageExecutionOwners.set(boundKey, "instance-finished");
+
+    assert.strictEqual(internal.findInstanceForLineage(boundKey), live);
+  });
+
   test("materializes an addressed instance only when the lineage has none resident", async () => {
     const { internal, freshLoads, freshLoadOptions } =
       createLineageBindingHarness();

@@ -141,6 +141,20 @@ function isExecutionOwnerState(status: QueueState["status"]): boolean {
   );
 }
 
+/**
+ * Whether an instance has finished the execution it was prepared for. Used to
+ * expire a `lineageExecutionOwners` entry on read: nothing deletes those
+ * entries, so a spent one must not keep outranking the lineage's other
+ * residents. A status-less instance (lightweight test double) is not finished.
+ */
+function isSpentExecutionOwnerState(status: QueueState["status"]): boolean {
+  return (
+    status === EXECUTION_STATES.COMPLETED ||
+    status === EXECUTION_STATES.ERROR ||
+    status === EXECUTION_STATES.STOPPED
+  );
+}
+
 interface DefinitionRollbackInvalidation {
   fromRevision: number;
   restoredRevision: number;
@@ -2056,41 +2070,74 @@ export class WorkflowOrchestrator {
 
   /**
    * Instances are lineage-scoped: viewing *any* run of a lineage binds to its
-   * single runtime owner. Live wins over retired. If retired duplicates exist,
-   * the instance most recently prepared to execute this lineage wins, then the
-   * one that owns the lineage's running PTY, so every run view renders the same
-   * TerminalView; the addressed RunRef only controls the definition/history
-   * snapshot and its live-run indicator.
+   * single runtime owner, so every run view renders the same TerminalView; the
+   * addressed RunRef only controls the definition/history snapshot and its
+   * live-run indicator.
    *
-   * The prepared-execution check must come first because a re-run parks its
-   * incoming instance in `retiredInstances` until the RUNNING transition
-   * promotes it (see {@link switchClientToPreparedExecution}). During that
-   * window the outgoing run's instance still owns the PTY being torn down, so
-   * the terminal heuristic alone would hand the re-running client straight back
-   * to the run it just left — with the new run's terminal and output then
-   * filtered out as belonging to a non-active workflow.
+   * Ranked, because one lineage can hold several residents at once:
+   *   1. an instance actually executing this lineage;
+   *   2. the instance prepared to execute it (see
+   *      {@link switchClientToPreparedExecution}), until that execution ends;
+   *   3. any live instance;
+   *   4. among retired, the one owning the lineage's running PTY, else the first.
+   *
+   * Both execution rules must outrank plain residency, and this is the whole
+   * reason `lineageExecutionOwners` exists. A run action parks its incoming
+   * instance in `retiredInstances` until the RUNNING transition promotes it, and
+   * whatever the client was already bound to is a resident of the same lineage:
+   * a *retired* one still owning the PTY being torn down (Re-run after a
+   * completed run), or — when the client is merely browsing an older run of a
+   * lineage nothing has executed this session — a *live* idle one. Both outrank
+   * the incoming instance on residency alone. The failure is silent and reads as
+   * a UI bug rather than a binding one: `replayWorkflowStateTo` binds the client
+   * to the incoming instance and its own `loadRunViewForClient` immediately
+   * rebinds it back (two `[setViewedWorkflowId]` lines back-to-back in the
+   * session log, the second reverting), after which the executing run's
+   * TERMINAL_STARTED and every output message carry a `workflowId` the client no
+   * longer considers active and are dropped — the run executes to completion on
+   * disk while the dashboard sits on the previously viewed run's history.
    */
   private findInstanceForLineage(
     workflowKey: WorkflowKey
   ): WorkflowInstance | undefined {
     const matches = (instance: WorkflowInstance) =>
       instance.getQueueState().workflowKey === workflowKey;
-    const live = [...this.instances.values()].find(matches);
-    if (live) {
-      return live;
+    // Live first so it wins every "first match" below. The maps are normally
+    // disjoint, but a promotion that races a read can briefly leave an instance
+    // in both, and a duplicate would corrupt the single-resident fast path.
+    const live = [...this.instances.values()].filter(matches);
+    const liveIds = new Set(live.map((instance) => instance.id));
+    const retired = [...this.retiredInstances.values()].filter(
+      (instance) => matches(instance) && !liveIds.has(instance.id)
+    );
+    const residents = [...live, ...retired];
+    if (residents.length <= 1) {
+      return residents[0];
     }
 
-    const retired = [...this.retiredInstances.values()].filter(matches);
-    if (retired.length <= 1) {
-      return retired[0];
+    const executing = residents.find((instance) =>
+      isExecutionOwnerState(instance.getQueueState().status)
+    );
+    if (executing) {
+      return executing;
     }
 
+    // Only until the execution it describes finishes: nothing deletes these
+    // entries, so a spent one would otherwise outrank a live instance forever.
+    // The window this covers is real and unavoidable — a prepared instance has
+    // not transitioned to RUNNING yet, so rule 1 cannot see it.
     const preparedId = this.getLineageExecutionOwners().get(workflowKey);
-    const prepared = preparedId
-      ? retired.find((instance) => instance.id === preparedId)
-      : undefined;
+    const prepared = residents.find(
+      (instance) =>
+        instance.id === preparedId &&
+        !isSpentExecutionOwnerState(instance.getQueueState().status)
+    );
     if (prepared) {
       return prepared;
+    }
+
+    if (live.length > 0) {
+      return live[0];
     }
 
     const activeTerminalOwnerIds = new Set(

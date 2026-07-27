@@ -487,6 +487,49 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(container).toHaveTextContent("@src/ignored.ts");
   });
 
+  // A run seeded but never executed is reachable (Set start position on the
+  // first step), and it has no output because it never ran — not because it was
+  // cut off. "(incomplete)" claims the latter.
+  it("distinguishes a never-started run from an interrupted one in the history banner", () => {
+    const buildBanner = (
+      executionState: string,
+      completedAt?: number
+    ): OutputRenderRow =>
+      ({
+        key: "history",
+        rowKind: "history-banner",
+        estimateSize: 44,
+        showBackToLive: false,
+        historyOutputs: {
+          orderedEntries: [],
+          promptOutputs: {},
+          runMetadata: { runId: 10, startedAt: 1, executionState, completedAt },
+        },
+      }) as never;
+
+    const notStarted = render(
+      <OutputRow row={buildBanner("idle")} isExecutionActive={false} />
+    );
+    expect(notStarted.container).toHaveTextContent("(not started)");
+    expect(notStarted.container).not.toHaveTextContent("(incomplete)");
+    notStarted.unmount();
+
+    const interrupted = render(
+      <OutputRow row={buildBanner("running")} isExecutionActive={false} />
+    );
+    expect(interrupted.container).toHaveTextContent("(incomplete)");
+    interrupted.unmount();
+
+    const finished = render(
+      <OutputRow
+        row={buildBanner("completed", 1234)}
+        isExecutionActive={false}
+      />
+    );
+    expect(finished.container).toHaveTextContent("✓");
+    expect(finished.container).not.toHaveTextContent("(incomplete)");
+  });
+
   it("renders legacy user-stop error rows as warnings", () => {
     const row: OutputRenderRow = {
       key: "row-error",

@@ -39,6 +39,7 @@ import type {
 } from "../../types/cliEvents";
 import {
   CLI_EVENT_TYPES,
+  EXECUTION_STATES,
   HARNESS_INFO,
   SCRIPT_OUTPUT_SOURCES,
 } from "../../types/messages";
@@ -1066,6 +1067,23 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   );
 };
 
+/**
+ * Trailing marker on the history banner. A run that was seeded but never
+ * executed is a real, reachable state — `Set start position` on the first step
+ * forks a run and leaves it idle — and it has no output because it never ran,
+ * not because it was cut off. Calling that "(incomplete)" reads as an
+ * interrupted run, so it gets its own wording; the manifest of such a run never
+ * leaves IDLE (see `WorkingFileManager.seedNewRun`).
+ */
+function historyRunStatusMarker(
+  runMetadata: HistoryBannerRow["historyOutputs"]["runMetadata"]
+): string {
+  if (runMetadata.completedAt) return " ✓";
+  return runMetadata.executionState === EXECUTION_STATES.IDLE
+    ? " (not started)"
+    : " (incomplete)";
+}
+
 function HistoryBannerRowView({
   row,
   onBackToLive,
@@ -1078,7 +1096,7 @@ function HistoryBannerRowView({
       <span>
         Run {row.historyOutputs.runMetadata.runId} &middot;{" "}
         {new Date(row.historyOutputs.runMetadata.startedAt).toLocaleString()}
-        {row.historyOutputs.runMetadata.completedAt ? " ✓" : " (incomplete)"}
+        {historyRunStatusMarker(row.historyOutputs.runMetadata)}
       </span>
       {row.showBackToLive && onBackToLive && (
         <button
