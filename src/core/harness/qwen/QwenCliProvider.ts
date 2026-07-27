@@ -3,13 +3,11 @@ import * as os from "os";
 import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
-import { QwenResponseParser } from "./QwenResponseParser";
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
@@ -21,6 +19,7 @@ import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import type {
   HookEvent,
   PromptStep,
@@ -35,12 +34,11 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  *
  * Implements all Qwen Code-specific logic using composition pattern:
  * - Process exit detection (headless) + log file monitoring (interactive) for completion
- * - Stream-json output parsing with real-time content extraction
+ * - Stream-json stdout used as a session-ID carrier and activity clock
  * - Mode-based tool permission conversion (plan, default, auto-edit, yolo)
  * - Session discovery via log file analysis
  *
  * This provider aggregates four specialized components:
- * - QwenResponseParser: Parses stream-json output and tool calls
  * - QwenNotificationMonitor: Monitors process exit and log files
  * - QwenToolPermissionMapper: Converts permissions to CLI arguments
  * - QwenLogParser: Parses log files for sessions and completion
@@ -80,12 +78,36 @@ export class QwenCliProvider implements ICliProvider {
     usesInteractiveNotificationMonitor: true,
   };
 
-  readonly responseParser: IResponseParser = new QwenResponseParser();
+  /** Qwen's session log is richer than its Claude-shaped headless stdout. */
+  readonly headlessSource = "log" as const;
   readonly notificationMonitor: INotificationMonitor =
     new QwenNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new QwenToolPermissionMapper();
   readonly logParser = new QwenLogParser();
+
+  /** Extract Qwen's session ID from any complete JSON object in stdout. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(chunk);
+    const sessionEvent = objects.find(
+      (event) => typeof event.session_id === "string"
+    );
+    return sessionEvent?.session_id as string | undefined;
+  }
+
+  /** Preserve the legacy workflow token-statistics fallback after parser removal. */
+  parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number } | undefined {
+    const match = statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/);
+    if (!match) {
+      return undefined;
+    }
+    return {
+      prompt: parseInt(match[1], 10),
+      completion: parseInt(match[2], 10),
+    };
+  }
 
   /**
    * Build complete CLI arguments array for Qwen Code CLI execution

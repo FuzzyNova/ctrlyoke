@@ -8,6 +8,7 @@ import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser
 import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
+import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
 import {
   UniversalCliOutput,
   ToolCall,
@@ -3458,6 +3459,109 @@ suite("OpenCodeLogParser", () => {
         "I need to analyze the file."
       );
       assert.strictEqual(textEvents.length, 1);
+    });
+  });
+});
+
+// ============================================================================
+// QwenLogParser Tests
+// ============================================================================
+
+suite("QwenLogParser", () => {
+  suite("headless golden output", () => {
+    test("maps the real stdout/log pair and preserves richer log semantics", () => {
+      const fixtureRoot = path.resolve(
+        __dirname,
+        "../../../../src/test/fixtures/qwen"
+      );
+      const provider = new QwenCliProvider();
+      provider.logParser.setCurrentModel("qwen3.5-plus");
+      const stdout = CliParseUtils.parseJsonLines(
+        fs.readFileSync(
+          path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
+          "utf8"
+        )
+      ) as Array<Record<string, any>>;
+      const sessionLog = fs
+        .readFileSync(
+          path.join(fixtureRoot, "headless-golden.session.jsonl"),
+          "utf8"
+        )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+      const output = provider.logParser.extractResponse(sessionLog);
+      const stdoutAssistantParts = stdout
+        .filter((event) => event.type === "assistant")
+        .flatMap((event) => event.message?.content ?? []);
+      const stdoutSemantics = {
+        sessionId: stdout.find((event) => event.session_id)?.session_id,
+        thinkingCount: stdoutAssistantParts.filter(
+          (part) => part.type === "thinking"
+        ).length,
+        text: stdoutAssistantParts
+          .filter((part) => part.type === "text")
+          .map((part) => part.text),
+        toolCallNames: stdoutAssistantParts
+          .filter((part) => part.type === "tool_use")
+          .map((part) => part.name),
+        toolResultCount: stdout.filter(
+          (event) => event.type === "user" && event.message?.content
+        ).length,
+        usage: stdout.find((event) => event.type === "result")?.usage,
+      };
+      const logSemantics = {
+        sessionId: output.metadata.sessionId,
+        thinkingCount: output.events.filter(
+          (event) => event.type === CLI_EVENT_TYPES.THINKING
+        ).length,
+        text: output.events
+          .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
+          .map((event) => (event.data as TextData).text),
+        toolCallNames: output.events
+          .filter((event) => event.type === CLI_EVENT_TYPES.FILE_READ)
+          .map(() => "read_file"),
+        toolResultCount: output.events.filter(
+          (event) => event.type === CLI_EVENT_TYPES.TOOL_RESULT
+        ).length,
+        usage: {
+          input_tokens: output.metadata.usage?.inputTokens,
+          output_tokens: output.metadata.usage?.outputTokens,
+          cached_input_tokens: output.metadata.usage?.cachedInputTokens,
+        },
+      };
+
+      assert.deepStrictEqual(logSemantics, {
+        sessionId: stdoutSemantics.sessionId,
+        thinkingCount: stdoutSemantics.thinkingCount,
+        text: stdoutSemantics.text,
+        toolCallNames: stdoutSemantics.toolCallNames,
+        toolResultCount: stdoutSemantics.toolResultCount,
+        usage: {
+          input_tokens: 28147,
+          output_tokens: 426,
+          cached_input_tokens: 24641,
+        },
+      });
+      assert.deepStrictEqual(stdoutSemantics.usage, {
+        input_tokens: 28147,
+        output_tokens: 285,
+        cache_read_input_tokens: 24641,
+        total_tokens: 28432,
+      });
+      assert.strictEqual(provider.headlessSource, "log");
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout(
+          fs.readFileSync(
+            path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
+            "utf8"
+          )
+        ),
+        stdoutSemantics.sessionId
+      );
+      assert.strictEqual(output.metadata.model, "qwen3.5-plus");
+      assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 14167);
+      assert.strictEqual(output.metadata.usage?.contextWindowSize, 1_000_000);
     });
   });
 });

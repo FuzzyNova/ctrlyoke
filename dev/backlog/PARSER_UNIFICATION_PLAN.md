@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phases 0 through 5 complete; Phases 6 and 7 remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phases 0 through 6 complete; Phase 7 remains in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -68,7 +68,32 @@ Three conclusions:
 
 ### The residual argument for stdout-sourcing
 
-With latency gone, exactly one non-fidelity argument survives: **stdout is a maintained public contract; the session log is an internal artifact whose layout vendors change without notice.** `harness-cli-providers.instructions.md` documents Copilot dropping `session.truncation` outright in the 0.0.x→1.0.x jump, plus nested-vs-flat session-state path variants. That is a real fragility cost, and it is why Copilot, Claude, and Qwen stay stdout-sourced below — not because stdout is faster, but because their logs are not richer enough to be worth binding to a private file layout.
+With latency gone, exactly one non-fidelity argument survives: **stdout is a maintained public contract; the session log is an internal artifact whose layout vendors change without notice.** `harness-cli-providers.instructions.md` documents Copilot dropping `session.truncation` outright in the 0.0.x→1.0.x jump, plus nested-vs-flat session-state path variants. That is a real fragility cost, and it is why Copilot and Claude stay stdout-sourced below — not because stdout is faster, but because their logs are not richer enough to be worth binding to a private file layout. Qwen's measured fidelity advantage outweighs that fragility cost.
+
+### Measured: Qwen's session log is richer
+
+Measured on two real headless runs with Qwen Code 0.20.1 in `C:\dev\ctrlyoke`,
+using `--safe-mode --prompt ... --output-format stream-json`. The first prompt
+was a no-tool response; the second read `QWEN.md` and made no workspace changes.
+The matching artifacts were captured from stdout and
+`~/.qwen/projects/c--dev-ctrlyoke/chats/<session-id>.jsonl`.
+
+| Run | Headless stdout | Matching session log |
+| --- | --- | --- |
+| No-tool response | `system/init`, two `assistant` objects (thinking and text), and `result` | `user`, attribution snapshot, API telemetry, and `assistant` with `message.parts[]` plus `usageMetadata`/`contextWindowSize` |
+| Read-only `QWEN.md` | `system/init`, assistant thinking, `tool_use`, `user` `tool_result`, assistant thinking/text, and `result` | `user`, API/tool telemetry, assistant `functionCall`, `tool_result` `functionResponse` + `toolCallResult`, and final assistant `message.parts[]` |
+
+The response text, thinking blocks, tool-call identity, tool-result identity,
+session ID, and model are recoverable from both streams. The log is materially
+richer: it has the original user turn, native `message.parts[]` tool arguments
+and results, per-turn `thoughtsTokenCount`, cache counts, cumulative usage, and
+`contextWindowSize`; stdout's `result` has only the aggregate input/output
+usage. The log therefore wins on fidelity despite being an internal artifact.
+There was no latency decision to make: the log file was created and appended
+during each run, and stdout remained the clock/session-ID carrier.
+
+**Decision: Qwen is log-sourced.** `HeadlessLogTail` consumes the session log;
+Qwen stdout only supplies `extractSessionIdFromStdout()` and activity ticks.
 
 ---
 
@@ -80,7 +105,7 @@ Verified by comparing the event-type vocabularies each parser branches on. **Sou
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Codex**       | `thread.started`, `turn.completed`, `item.completed` with `item.type` of `agent_message`/`command_execution`/`file_change`/… | `session_meta`, `turn_context`, `event_msg`, `response_item`, `function_call`, `patch_apply_end`, …                                                                                                         | **Much** — `file_change` is `{path, kind}` on stdout; the log has `unified_diff` and whole-file `content`, plus per-turn `token_count` | **Log-sourced.** Highest payoff of any harness: diffs render _when the write happens_, not on a final back-fill pass. Deletes `CodexCliProvider.augmentParsedOutput()` outright. |
 | **Antigravity** | Incremental transcript mapping in `AntigravityLogParser`                                                                     | `brain/<id>/.system_generated/logs/transcript_full.jsonl` (compact transcript only as fallback) — rich planner/tool/checkpoint/error events; the tailed `cli-*.log` carries session and completion markers. | **Much** — structured events and diffs are available incrementally.                                                                    | **Implemented.** See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.                                                                                                     |
-| **Qwen**        | `session_id`-bearing JSON objects                                                                                            | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]`                                                                                                                                                       | Unmeasured                                                                                                                             | **TBD** — measure before choosing.                                                                                                                                               |
+| **Qwen**        | `session_id`-bearing JSON objects                                                                                            | `~/.qwen/projects/*/chats/*.jsonl`, `message.parts[]`                                                                                                                                                       | **Yes** — user/tool turns, tool results, reasoning counts, cache counts, cumulative usage, and context-window size | **Log-sourced.** Measured on Qwen 0.20.1; stdout remains the session-ID carrier and clock. |
 | **Claude**      | `stream-json`: `system`/`assistant`/`user`/`result`, snake_case `session_id`, `tool_use_result`                              | session JSONL: `assistant`/`user`/`attachment`, camelCase `sessionId`, `toolUseResult`                                                                                                                      | Marginal — log adds `attachment`, background-task markers                                                                              | **Either.** Start stdout-sourced (field aliasing only); revisit if background-task tracking needs the log.                                                                       |
 | **Copilot**     | `--output-format json`: `assistant.message`, `tool.execution_start`, `tool.execution_complete`                               | `events.jsonl`: same vocabulary plus `session.*`, `user.message`, `system.notification`                                                                                                                     | Marginal — the extras are session-lifecycle, not content                                                                               | **stdout-sourced.** Note context-window data lives in neither stream (it's the OTel export file), so that augmentation survives regardless.                                      |
 | **OpenCode**    | `run --format json`                                                                                                          | `opencode export <id>` — parser doc states it produces "the same event shape produced by `opencode run --format json`" (`OpenCodeLogParser.ts:113`)                                                         | **No** — 1:1, and the "log" is a subprocess call, not a file                                                                           | **stdout-sourced.** See below: this costs ~10 lines, not a layer.                                                                                                                |
@@ -280,9 +305,14 @@ export event shape and asserts that the headless path makes no `export` calls.
 
 **Verify:** cache-token and context-window math, tool/file/thinking mappings, recoverable-session retry, and a golden stdout/session-log comparison are covered in `LogParsers.test.ts` and the Claude fixtures.
 
-### Phase 6 — Qwen
+### Phase 6 — Qwen — **complete 2026-07-26**
 
-Measure log-vs-stdout richness (the one harness where this is still unknown), then pick a mode. Delete `QwenResponseParser` (384 LOC).
+Measured two real Qwen 0.20.1 headless stdout/session-log pairs, including a
+read-only tool call. The session log is materially richer (`message.parts[]`,
+tool results, per-turn reasoning/cache usage, cumulative usage, and context
+window size), so Qwen is log-sourced. `HeadlessLogTail` now consumes the log,
+stdout supplies the session ID and activity ticks, `QwenResponseParser` and its
+tests are deleted, and a captured golden pair covers the mapping.
 
 ### Phase 7 — Retire the layer
 
@@ -306,5 +336,5 @@ Delete `IResponseParser` / `ResponseParserBase`, drop `responseParser` from `ICl
 1. ~~Is the Codex log delay startup-only or ongoing?~~ **Answered:** neither — the log is written continuously from t=0 and there is no delay. See [Measured: the log is live](#measured-the-log-is-live).
 2. ~~Is Copilot's plain-text headless mode still reachable, or is `--output-format json` unconditional now?~~ **Answered in Phase 3:** `buildHeadlessArgs()` always adds `--output-format json`, so headless plain-text output is unreachable. `parsePlainText()` and its `rawTextOutput` path were dead code and were deleted with `CopilotResponseParser`.
 3. ~~Is Antigravity's shared `cli-*.log` safe as the sole headless source?~~ **Moot** — it carries no response content; the implemented parser uses the per-session transcript for response events and the Go log only for session/completion markers. See `../implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`.
-4. Is Qwen's log richer than its stdout? The one remaining unmeasured harness.
+4. ~~Is Qwen's log richer than its stdout?~~ **Answered in Phase 6:** yes. Two real Qwen Code 0.20.1 runs showed equivalent core response content in both streams, while the session log additionally preserved the user/tool turns, `message.parts[]` function calls/results, per-turn reasoning and cache counts, cumulative usage, and context-window size. Qwen is log-sourced; stdout remains the session-ID carrier and activity clock. See [Measured: Qwen's session log is richer](#measured-qwens-session-log-is-richer).
 5. Should `getFinalEventsOnCompletion` and `augmentParsedOutput` merge into one post-completion enrichment hook once both modes share a path? They overlap heavily after this change, and what remains of `augmentParsedOutput` (Copilot's OTel read) is exactly the "fetch from a third artifact after completion" shape `getFinalEventsOnCompletion` already describes.
