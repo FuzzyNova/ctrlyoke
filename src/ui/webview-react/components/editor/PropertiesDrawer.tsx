@@ -26,6 +26,7 @@ import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
   getResumeSessionOptions,
+  resumeSessionSelection,
 } from "../../types/dropdownNamespaces";
 import { SESSION_ID_SENTINELS } from "../../types/messages";
 import {
@@ -733,24 +734,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           : "no"
                   }
                   onChange={(v) => {
-                    if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
-                      setProperty("resumeSession", true);
-                      setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_STEP);
-                    } else if (v === "default") {
-                      setProperty("resumeSession", undefined);
-                      if (
-                        properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
-                      ) {
-                        setProperty("sessionId", "");
-                      }
-                    } else {
-                      if (
-                        properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
-                      ) {
-                        setProperty("sessionId", "");
-                      }
-                      setProperty("resumeSession", v === "yes");
-                    }
+                    const next = resumeSessionSelection(
+                      v,
+                      properties.sessionId
+                    );
+                    setProperty("resumeSession", next.resumeSession);
+                    setProperty("sessionId", next.sessionId);
                   }}
                   options={[
                     ...getResumeSessionOptions(defaultResumeSessionLabel),

@@ -3148,11 +3148,27 @@ export class WorkflowOrchestrator {
           descriptorRevision: expectedDescriptorRevision,
         }
       );
+      const seededAddress: Extract<WorkflowViewAddress, { kind: "run" }> = {
+        workflowKey: address.workflowKey,
+        kind: "run",
+        runRef: seeded.runRef,
+      };
+      if (options.invalidateViews !== false) {
+        // Seeding forks a new run, so — unlike the rewind branch — the client's
+        // address itself moves. Publishing is not optional here: the seed
+        // advanced the descriptor revision, and a client left on the source
+        // address keeps echoing the superseded pair, so its very next mutation
+        // (including a second Set Start Position) is rejected as a conflict.
+        await this.switchClientToSeededRun(seededAddress, clientId);
+        // Whoever stayed on the source run still holds that stale descriptor
+        // revision and a run list missing the fork.
+        await this.invalidateRunViews(address.workflowKey, address.runRef);
+      }
       return {
         kind: "seeded",
         runRef: seeded.runRef,
         definitionRevision: 1,
-        descriptorRevision: expectedDescriptorRevision + 1,
+        descriptorRevision: seeded.allocation.reservationDescriptorRevision,
       };
     }
 
@@ -3271,6 +3287,36 @@ export class WorkflowOrchestrator {
     // to the seeded run. Execution itself continues in the background.
     await preparedPromise;
     return { runRef: seeded.runRef };
+  }
+
+  /**
+   * Moves the initiating client onto a run that was just seeded but is not
+   * executing. `seedAndExecuteAtRun` has `switchClientToPreparedExecution` for
+   * the executing case; this is the idle counterpart, and it exists for the
+   * same reason — the fork is only complete once the client is visibly bound to
+   * it and holding the new run's revision pair.
+   */
+  private async switchClientToSeededRun(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    clientId: string
+  ): Promise<void> {
+    const send =
+      this.getViewMessageSinks().get(clientId) ??
+      (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
+    if (!send) {
+      // No sink to publish through, but the address must still follow the fork
+      // or the client's next addressed mutation targets the source run.
+      this.getViewAddressRegistry().set(clientId, address);
+      return;
+    }
+    try {
+      await this.loadRunViewForClient(address, send, clientId);
+    } catch (error) {
+      Log.warn(
+        `[WorkflowOrchestrator] Failed to switch ${clientId} to seeded run ${address.runRef}: ${getErrorMessage(error)}`
+      );
+      this.getViewAddressRegistry().set(clientId, address);
+    }
   }
 
   /** A different RunRef is a fresh terminal/session boundary for the lineage. */

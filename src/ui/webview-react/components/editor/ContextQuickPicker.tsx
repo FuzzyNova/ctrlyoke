@@ -4,7 +4,10 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { SESSION_ID_SENTINELS } from "../../types/messages";
 import { FOOTER_PICKERS } from "../../types/messages";
-import { getResumeSessionOptions } from "../../types/dropdownNamespaces";
+import {
+  getResumeSessionOptions,
+  resumeSessionSelection,
+} from "../../types/dropdownNamespaces";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 
@@ -67,20 +70,9 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
           : "no";
 
   const handleResumeSessionChange = (v: string) => {
-    if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
-      setProperty("resumeSession", true);
-      setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_STEP);
-    } else if (v === "default") {
-      setProperty("resumeSession", undefined);
-      if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
-        setProperty("sessionId", "");
-      }
-    } else {
-      if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
-        setProperty("sessionId", "");
-      }
-      setProperty("resumeSession", v === "yes");
-    }
+    const next = resumeSessionSelection(v, properties.sessionId);
+    setProperty("resumeSession", next.resumeSession);
+    setProperty("sessionId", next.sessionId);
 
     setFooterOpenPicker(v === "yes" ? "context" : null);
   };

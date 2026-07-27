@@ -1990,6 +1990,106 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
 });
 
 suite("WorkflowOrchestrator addressed start position", () => {
+  test("seeding at index 0 moves the initiating client onto the fork and reports the descriptor's real revision", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-addressed-seed-")
+    );
+    try {
+      const sourceAccess = {
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "prefix" }, { prompt: "suffix" }],
+        getCurrentIndex: () => 2,
+        getStatus: () => EXECUTION_STATES.ERROR,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Seeded",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      };
+      const sourceManager = new WorkingFileManager(sourceAccess);
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "seeded",
+        sourceAccess.getSteps(),
+        workspace,
+        "Seeded"
+      );
+      const source = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const lineageRepository = new WorkflowLineageRepository();
+      const before = await lineageRepository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef: source.runRef }],
+      ]);
+      internal.viewMessageSinks = new Map([[PANEL_CLIENT_ID, () => undefined]]);
+      internal.lineageRepository = lineageRepository;
+      const loaded: Array<{ address: any; clientId: string }> = [];
+      internal.loadRunViewForClient = async (
+        address: any,
+        _send: unknown,
+        clientId: string
+      ) => {
+        loaded.push({ address, clientId });
+        internal.viewAddressRegistry.set(clientId, address);
+      };
+      const invalidated: Array<[string, string]> = [];
+      internal.invalidateRunViews = async (key: string, runRef: string) => {
+        invalidated.push([key, runRef]);
+      };
+
+      const result = await orchestrator.setStartPositionAtRun(
+        { workflowKey, runRef: source.runRef },
+        0,
+        1,
+        before.revision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(result.kind, "seeded");
+      if (result.kind !== "seeded") return;
+
+      // The regression: the seed advances the descriptor revision, and the
+      // client was left echoing the pre-seed pair — so a second Set Start
+      // Position failed with "Descriptor revision conflict".
+      const after = await lineageRepository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+      assert.strictEqual(result.descriptorRevision, after.revision);
+      assert.strictEqual(result.definitionRevision, 1);
+      assert.notStrictEqual(result.runRef, source.runRef);
+
+      assert.deepStrictEqual(loaded, [
+        {
+          address: { workflowKey, kind: "run", runRef: result.runRef },
+          clientId: PANEL_CLIENT_ID,
+        },
+      ]);
+      assert.deepStrictEqual(
+        internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
+        { workflowKey, kind: "run", runRef: result.runRef }
+      );
+      // Clients left on the source run hold the same superseded revision.
+      assert.deepStrictEqual(invalidated, [[workflowKey, source.runRef]]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("rewinds an explicit historical run without touching the descriptor's latest run", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-addressed-rewind-")

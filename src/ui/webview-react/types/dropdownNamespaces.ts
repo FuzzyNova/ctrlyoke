@@ -45,3 +45,49 @@ export function getResumeSessionOptions(defaultLabel?: string) {
     ? [{ value: "default", label: defaultLabel }, ...base]
     : base;
 }
+
+/** Property writes a Resume Session dropdown selection implies. */
+export interface ResumeSessionSelection {
+  /** undefined = inherit, true/false = explicit prompt-level override. */
+  resumeSession: boolean | undefined;
+  /** Always written — "" clears the paired Session ID. */
+  sessionId: string;
+}
+
+/**
+ * Single source for what a Resume Session dropdown change does to the paired
+ * Session ID, shared by every surface that renders the two together
+ * (`PropertiesDrawer`, `ContextQuickPicker`).
+ *
+ * The Session ID is only *reachable* while the selection is "yes" — every other
+ * selection greys the input out and shows either the inherited value or nothing.
+ * So any selection that leaves "yes" must also clear it: a value the user can
+ * neither see nor edit is still resolved at execution time, and a session ID
+ * outlasting the dropdown that set it is exactly how a step resumed a GUID the
+ * user had already switched away from.
+ */
+export function resumeSessionSelection(
+  selection: string,
+  currentSessionId: string | undefined
+): ResumeSessionSelection {
+  if (selection === SESSION_ID_SENTINELS.FINAL_STEP) {
+    return {
+      resumeSession: true,
+      sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
+    };
+  }
+  if (selection === "yes") {
+    // Keep a real session ID the user typed; only the sentinel is stale here.
+    return {
+      resumeSession: true,
+      sessionId:
+        currentSessionId === SESSION_ID_SENTINELS.FINAL_STEP
+          ? ""
+          : (currentSessionId ?? ""),
+    };
+  }
+  return {
+    resumeSession: selection === "default" ? undefined : false,
+    sessionId: "",
+  };
+}

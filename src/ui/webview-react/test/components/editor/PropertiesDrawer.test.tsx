@@ -122,3 +122,67 @@ describe("PropertiesDrawer execution mode", () => {
     );
   });
 });
+
+describe("PropertiesDrawer resume session", () => {
+  const GUID = "63017930-45b0-4ec4-8094-8a57751e905b";
+
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(cleanup);
+
+  function renderContextDrawer() {
+    return render(
+      <PropertiesDrawer
+        isOpen
+        onClose={() => undefined}
+        activePage={DRAWER_PAGES.CONTEXT}
+      />
+    );
+  }
+
+  function chooseResumeSession(label: string): void {
+    const current = screen.getByRole("button", { name: "Resume Session" });
+    fireEvent.click(current);
+    const option = screen
+      .getAllByText(label)
+      .map((element) => element.closest("button"))
+      .find((button) => button && button !== current);
+    if (!option) throw new Error(`Resume Session option not found: ${label}`);
+    fireEvent.click(option);
+  }
+
+  it("clears the session ID when the override falls back to inherit", () => {
+    // Leaving it set kept an invisible GUID on the step (the Session ID input
+    // is greyed out and shows the inherited value at this selection), and the
+    // step then executed with `-r <guid>` the user had already removed.
+    useSettingsStore.getState().updateGlobalSetting("resumeSession", true);
+    renderContextDrawer();
+
+    chooseResumeSession("Yes - Resume previous");
+    act(() => {
+      useEditorStore.getState().setProperty("sessionId", GUID);
+    });
+    expect(useEditorStore.getState().properties.sessionId).toBe(GUID);
+
+    chooseResumeSession("Inherit (Yes)");
+
+    expect(useEditorStore.getState().properties.resumeSession).toBeUndefined();
+    expect(useEditorStore.getState().properties.sessionId).toBe("");
+  });
+
+  it("clears the session ID when resume is turned off", () => {
+    renderContextDrawer();
+
+    chooseResumeSession("Yes - Resume previous");
+    act(() => {
+      useEditorStore.getState().setProperty("sessionId", GUID);
+    });
+
+    chooseResumeSession("No - Create New");
+
+    expect(useEditorStore.getState().properties.resumeSession).toBe(false);
+    expect(useEditorStore.getState().properties.sessionId).toBe("");
+  });
+});
