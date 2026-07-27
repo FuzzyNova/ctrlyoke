@@ -90,8 +90,8 @@ export interface ICliProvider {
   /** Static harness configuration */
   readonly config: HarnessConfig;
 
-  /** Response parser component */
-  readonly responseParser: IResponseParser;
+  /** Response parser component for providers not yet migrated to log sourcing. */
+  readonly responseParser?: IResponseParser;
 
   /** Notification monitor component */
   readonly notificationMonitor: INotificationMonitor;
@@ -107,6 +107,11 @@ export interface ICliProvider {
    * have not migrated leave this unset and continue using responseParser.
    */
   readonly headlessSource?: "stdout" | "log";
+
+  /** Parse formatted statistics when the provider has no response parser. */
+  parseTokenCounts?(statistics: string):
+    | { prompt: number; completion: number }
+    | undefined;
 
   /**
    * Convert headless stdout into the event vocabulary understood by this

@@ -335,7 +335,10 @@ export class CliIntegration extends HarnessIntegration {
   parseTokenCounts(
     statistics: string
   ): { prompt: number; completion: number } | undefined {
-    return this.provider.responseParser.parseTokenCounts(statistics);
+    return (
+      this.provider.parseTokenCounts?.(statistics) ??
+      this.provider.responseParser?.parseTokenCounts(statistics)
+    );
   }
 
   // ============================================================

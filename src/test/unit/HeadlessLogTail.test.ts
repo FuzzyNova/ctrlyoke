@@ -162,4 +162,27 @@ suite("HeadlessLogTail", () => {
       "provider-session"
     );
   });
+
+  test("does not block process startup while waiting for a stdout session ID", async () => {
+    const fake = createParser({ discoveries: ["session.log"] });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: () => "thread-from-stdout",
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+
+    assert.strictEqual(fake.discoveryArguments.length, 0);
+    tail.onStdoutChunk(
+      '{"type":"thread.started","thread_id":"thread-from-stdout"}\n'
+    );
+    await tail.finish();
+    assert.strictEqual(fake.discoveryArguments[0].sessionId, "thread-from-stdout");
+  });
 });

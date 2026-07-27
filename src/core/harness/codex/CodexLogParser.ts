@@ -17,6 +17,7 @@ import {
   ToolResultData,
   CompactionData,
   FileEditData,
+  FileWriteData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
@@ -30,44 +31,6 @@ import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 // ============================================================================
 // Codex Log Event Payload Types
 // ============================================================================
-
-/**
- * Token usage data extracted from a Codex session log file.
- * Returned by CodexLogParser.extractTokenUsageFromLogFile() and consumed
- * by CodexCliProvider.augmentParsedOutput() to supply accurate per-session
- * context window data (headless mode only shows cumulative totals via stdout).
- */
-export interface CodexLogTokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  cachedInputTokens: number;
-  reasoningOutputTokens: number;
-  /** Tokens used in the last turn's context window (undefined if not reported) */
-  contextWindowUsedTokens?: number;
-  /** Model context window size */
-  contextWindowSize?: number;
-}
-
-/**
- * One `apply_patch` result read back from a Codex session log, in the order
- * `event_msg:patch_apply_end` reported it.
- *
- * Consumed by `CodexCliProvider.augmentParsedOutput()` to restore edit bodies on
- * headless file events: Codex's `--json` stdout summarises every `file_change`
- * item as `{path, kind}` only, so the headless response parser has no hunks or
- * content to attach. The session log keeps them, so headless output can be
- * brought up to parity with the interactive (log-parsed) path.
- */
-export interface CodexLoggedFileChange {
-  /** Path exactly as Codex reported it (absolute on Windows, repo-relative elsewhere). */
-  path: string;
-  /** Codex's change kind; `update` is the only one carrying a real diff. */
-  kind: "add" | "update" | "delete";
-  hunks: UnifiedDiffHunk[];
-  /** Whole-file content — present for `add`/`delete`, absent for `update`. */
-  content?: string;
-}
 
 /**
  * Session metadata (session_meta event)
@@ -366,6 +329,16 @@ export class CodexLogParser extends BaseLogParser {
             }
           }
         }
+      }
+
+      // response_item:todo_list - Codex's structured plan item
+      if (
+        event.type === "response_item" &&
+        event.payload?.type === "todo_list"
+      ) {
+        outputEvents.push(
+          ...this.buildTodoListEvents(event.payload.items, timestamp)
+        );
       }
 
       // response_item:reasoning - AI reasoning process (may be encrypted)
@@ -1096,6 +1069,12 @@ export class CodexLogParser extends BaseLogParser {
       return results;
     }
 
+    // response_item:todo_list - Codex's structured plan item
+    if (e.type === "response_item" && e.payload?.type === "todo_list") {
+      results.push(...this.buildTodoListEvents(e.payload.items, timestamp));
+      return results;
+    }
+
     // response_item:reasoning → THINKING
     if (e.type === "response_item" && e.payload?.type === "reasoning") {
       const reasoningText =
@@ -1276,229 +1255,6 @@ export class CodexLogParser extends BaseLogParser {
   }
 
   /**
-   * Find the Codex session log file for the given session ID.
-   *
-   * Public entry point for external callers (e.g. CodexCliProvider.augmentParsedOutput)
-   * that need to locate the log without a start-time constraint. Delegates to the
-   * recursive search which scans the full `~/.codex/sessions/` tree.
-   *
-   * @param sessionId - Session ID (used as filename suffix: `rollout-*-<sessionId>.jsonl`)
-   * @returns Absolute path to log file, or null if not found
-   */
-  findLogFileBySessionId(sessionId: string): string | null {
-    const basePath = path.join(os.homedir(), ".codex", "sessions");
-    return this.findSessionFileRecursive(basePath, sessionId);
-  }
-
-  /**
-   * Extract token usage from a Codex session log file.
-   *
-   * Reads the complete log file and returns token stats from the most recent
-   * `event_msg:token_count` event. Intended for use in
-   * `CodexCliProvider.augmentParsedOutput()` to supply accurate per-session
-   * context window data when running in headless mode — the JSONL stdout only
-   * reports cumulative usage totals (see openai/codex#5276), whereas the log
-   * file contains per-turn `last_token_usage` which reflects the actual context
-   * window consumed by the current session.
-   *
-   * @param logPath - Absolute path to the Codex session log file
-   * @returns Structured token usage, or undefined if no token event found
-   */
-  static extractTokenUsageFromLogFile(
-    logPath: string
-  ): CodexLogTokenUsage | undefined {
-    try {
-      let result: CodexLogTokenUsage | undefined;
-      let model: string | undefined;
-
-      for (const event of CodexLogParser.readLogEvents(logPath)) {
-        if (event.type === "session_meta" && event.payload?.model) {
-          model = event.payload.model as string;
-        }
-
-        if (event.type === "turn_context" && event.payload?.model && !model) {
-          model = event.payload.model as string;
-        }
-
-        if (
-          event.type === "event_msg" &&
-          event.payload?.type === "token_count"
-        ) {
-          const info = event.payload.info;
-          if (!info) {
-            continue;
-          }
-
-          let inputTokens = 0;
-          let outputTokens = 0;
-          let cachedInputTokens = 0;
-          let reasoningOutputTokens = 0;
-          let contextWindowUsedTokens: number | undefined;
-
-          if (info.total_token_usage) {
-            const total = info.total_token_usage;
-            inputTokens = total.input_tokens || 0;
-            outputTokens = total.output_tokens || 0;
-            cachedInputTokens = total.cached_input_tokens || 0;
-            reasoningOutputTokens = total.reasoning_output_tokens || 0;
-          }
-
-          if (info.last_token_usage) {
-            // Codex reports cached tokens as a subset of input, so use
-            // total_tokens rather than adding cached input again.
-            const last = info.last_token_usage;
-            contextWindowUsedTokens =
-              typeof last.total_tokens === "number"
-                ? last.total_tokens
-                : (last.input_tokens || 0) + (last.output_tokens || 0);
-          }
-
-          // Keep processing — later events overwrite with cumulative totals
-          result = {
-            inputTokens,
-            outputTokens,
-            totalTokens: inputTokens + outputTokens,
-            cachedInputTokens,
-            reasoningOutputTokens,
-            contextWindowUsedTokens,
-            contextWindowSize:
-              info.model_context_window ?? getCodexContextWindowSize(model),
-          };
-        }
-      }
-
-      return result;
-    } catch (error) {
-      Log.debug(
-        `[CodexLogParser] Failed to extract token usage from log: ${error}`
-      );
-      return undefined;
-    }
-  }
-
-  /**
-   * Extract every applied `apply_patch` change from a Codex session log, in the
-   * order Codex applied them.
-   *
-   * Headless Codex (`codex exec --json`) reports a `file_change` item as
-   * `{path, kind}` with no body, so {@link CodexResponseParser} cannot attach
-   * hunks or content. The same run's session log records
-   * `event_msg:patch_apply_end` with the real change per file — a `unified_diff`
-   * for updates, full `content` for adds and deletes — which is what the
-   * interactive path already renders.
-   *
-   * The result is a flat chronological list rather than a path-keyed map because
-   * one path can be changed several times in a turn (add → update → delete); the
-   * caller pairs the Nth entry for a path with that path's Nth file event.
-   *
-   * @param logPath - Absolute path to the Codex session log file
-   * @returns Applied changes in log order; empty when the log has none
-   */
-  static extractLoggedFileChanges(logPath: string): CodexLoggedFileChange[] {
-    const changesApplied: CodexLoggedFileChange[] = [];
-    try {
-      for (const event of CodexLogParser.readLogEvents(logPath)) {
-        if (
-          event.type !== "event_msg" ||
-          event.payload?.type !== "patch_apply_end"
-        ) {
-          continue;
-        }
-        const changes = event.payload.changes as
-          | Record<string, Record<string, any>>
-          | undefined;
-        if (!changes) {
-          continue;
-        }
-        for (const [changePath, change] of Object.entries(changes)) {
-          const hunks = CodexLogParser.patchApplyChangeToHunks(change);
-          if (!hunks || hunks.length === 0) {
-            continue;
-          }
-          changesApplied.push({
-            path: changePath,
-            kind:
-              change.type === "add" || change.type === "delete"
-                ? change.type
-                : "update",
-            hunks,
-            ...(typeof change.content === "string" && {
-              content: change.content,
-            }),
-          });
-        }
-      }
-    } catch (error) {
-      Log.debug(
-        `[CodexLogParser] Failed to extract applied patches from log: ${error}`
-      );
-    }
-    return changesApplied;
-  }
-
-  /**
-   * Convert one `patch_apply_end` change entry into diff hunks.
-   *
-   * Codex uses two shapes: `update` carries a `unified_diff` with real offsets,
-   * while `add`/`delete` carry the whole file `content` and no diff. The
-   * whole-file cases are synthesized into a single all-added / all-removed hunk
-   * matching the shape the interactive path already produces for apply_patch.
-   */
-  private static patchApplyChangeToHunks(
-    change: Record<string, any> | undefined
-  ): UnifiedDiffHunk[] | undefined {
-    if (!change) {
-      return undefined;
-    }
-    if (typeof change.unified_diff === "string") {
-      return CliParseUtils.parseUnifiedDiff(change.unified_diff);
-    }
-    if (typeof change.content !== "string") {
-      return undefined;
-    }
-
-    const lines = change.content.split("\n");
-    // A trailing newline yields a final empty element that is not a real line.
-    if (lines.length > 0 && lines[lines.length - 1] === "") {
-      lines.pop();
-    }
-    if (lines.length === 0) {
-      return undefined;
-    }
-
-    const isDelete = change.type === "delete";
-    return [
-      {
-        oldStart: 1,
-        oldLines: isDelete ? lines.length : 0,
-        newStart: 1,
-        newLines: isDelete ? 0 : lines.length,
-        lines: lines.map((line: string) => (isDelete ? "-" : "+") + line),
-      },
-    ];
-  }
-
-  /** Read a Codex session log into parsed events, skipping unparseable lines. */
-  private static readLogEvents(logPath: string): CodexProviderEvent[] {
-    if (!fs.existsSync(logPath)) {
-      return [];
-    }
-    const events: CodexProviderEvent[] = [];
-    for (const line of fs.readFileSync(logPath, "utf-8").split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-      try {
-        events.push(JSON.parse(trimmed) as CodexProviderEvent);
-      } catch {
-        // Skip invalid JSON lines
-      }
-    }
-    return events;
-  }
-
-  /**
    * Build INITIATED events for a Codex `custom_tool_call`, handling both the
    * legacy discrete-tool format and the newer `exec` wrapper (gpt-5.x), where
    * `input` is a JavaScript snippet. Shared by the full-response and streaming
@@ -1510,6 +1266,11 @@ export class CodexLogParser extends BaseLogParser {
     callId: string | undefined,
     timestamp: number
   ): CliEvent[] {
+    if (toolName === "todo_list" || toolName === "update_plan") {
+      const parsed = this.parseTodoListInput(input);
+      return this.buildTodoListEvents(parsed, timestamp);
+    }
+
     // Newer Codex models wrap every action in an `exec` tool whose input is a
     // JavaScript snippet driving sandbox helpers (shell_command / apply_patch).
     if (toolName === "exec" && typeof input === "string") {
@@ -1539,6 +1300,44 @@ export class CodexLogParser extends BaseLogParser {
       callId,
       timestamp
     );
+  }
+
+  /** Normalize the structured plan shapes used by Codex log versions. */
+  private parseTodoListInput(input: unknown): unknown {
+    if (typeof input !== "string") {
+      return input;
+    }
+    try {
+      return JSON.parse(input);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Build the same compact todo-list text used by the former stdout parser. */
+  private buildTodoListEvents(items: unknown, timestamp: number): CliEvent[] {
+    const list = Array.isArray(items)
+      ? items
+      : items && typeof items === "object"
+        ? (items as { items?: unknown[] }).items
+        : undefined;
+    if (!Array.isArray(list)) {
+      return [];
+    }
+
+    const todoText = list
+      .map((item, index) => {
+        const todo = item as { text?: unknown; completed?: unknown };
+        return `${index + 1}. [${todo.completed ? "x" : " "}] ${String(todo.text ?? "")}`;
+      })
+      .join("\n");
+    return [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp,
+        data: { text: `Todo List:\n${todoText}` } as TextData,
+      },
+    ];
   }
 
   /**
@@ -1599,21 +1398,30 @@ export class CodexLogParser extends BaseLogParser {
     trackingMap: Map<string, CodexTrackedToolCall>
   ): void {
     const changes = payload.changes as
-      | Record<string, { unified_diff?: string }>
+      | Record<string, { unified_diff?: string; content?: string }>
       | undefined;
     if (!changes) {
       return;
     }
 
-    // Index corrected hunks by normalized (lowercased) path so file-path case
+    // Index corrected bodies by normalized path so file-path case and separator
     // differences between the patch header and patch_apply_end don't break matching.
-    const correctedByPath = new Map<string, UnifiedDiffHunk[] | undefined>();
+    const correctedByPath = new Map<
+      string,
+      { hunks?: UnifiedDiffHunk[]; content?: string }
+    >();
     for (const [changePath, change] of Object.entries(changes)) {
-      if (change?.unified_diff) {
-        correctedByPath.set(
-          changePath.toLowerCase(),
-          CliParseUtils.parseUnifiedDiff(change.unified_diff)
-        );
+      const hunks =
+        typeof change?.unified_diff === "string"
+          ? CliParseUtils.parseUnifiedDiff(change.unified_diff)
+          : undefined;
+      const content =
+        typeof change?.content === "string" ? change.content : undefined;
+      if (hunks?.length || content !== undefined) {
+        correctedByPath.set(CodexLogParser.normalizePath(changePath), {
+          hunks,
+          content,
+        });
       }
     }
     if (correctedByPath.size === 0) {
@@ -1628,25 +1436,48 @@ export class CodexLogParser extends BaseLogParser {
     const callId = payload.call_id as string | undefined;
     const direct = callId ? trackingMap.get(callId) : undefined;
     const targets =
-      direct?.type === CLI_EVENT_TYPES.FILE_EDIT && direct.initiatedEvents
+      direct &&
+      CodexToolBuilder.needsCompletionTracking(direct.type) &&
+      direct.initiatedEvents
         ? [direct]
         : [...trackingMap.values()].filter(
             (info) =>
-              info.type === CLI_EVENT_TYPES.FILE_EDIT && info.initiatedEvents
+              CodexToolBuilder.needsCompletionTracking(info.type) &&
+              info.initiatedEvents
           );
 
     for (const toolInfo of targets) {
       for (const initiatedEvent of toolInfo.initiatedEvents!) {
-        const data = initiatedEvent.data as FileEditData | undefined;
+        const data = initiatedEvent.data as
+          | FileEditData
+          | FileWriteData
+          | undefined;
         if (!data?.path) {
           continue;
         }
-        const corrected = correctedByPath.get(data.path.toLowerCase());
-        if (corrected && corrected.length > 0) {
-          data.structuredPatch = corrected;
+        const corrected = correctedByPath.get(
+          CodexLogParser.normalizePath(data.path)
+        );
+        if (!corrected) {
+          continue;
+        }
+        if (initiatedEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
+          if (corrected.hunks?.length) {
+            (data as FileEditData).structuredPatch = corrected.hunks;
+          }
+        } else if (
+          initiatedEvent.type === CLI_EVENT_TYPES.FILE_WRITE &&
+          corrected.content !== undefined
+        ) {
+          (data as FileWriteData).content = corrected.content;
         }
       }
     }
+  }
+
+  /** Normalize log paths for matching patch bodies to initiated file events. */
+  private static normalizePath(filePath: string): string {
+    return filePath.replace(/\\/g, "/").toLowerCase();
   }
 
   /**

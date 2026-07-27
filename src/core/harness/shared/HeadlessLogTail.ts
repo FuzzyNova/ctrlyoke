@@ -93,7 +93,18 @@ export class HeadlessLogTail {
     this.pollHandle = setInterval(() => {
       void this.enqueueTick("idle poll");
     }, this.idlePollIntervalMs);
-    await this.enqueueTick("initial read");
+
+    // A stdout-carried session ID is not available until the process starts.
+    // Do not run prompt-based discovery before spawn: Codex's discovery helper
+    // retries for several seconds when no session exists yet, which would delay
+    // the process launch and put the clock behind the very stream it tails.
+    if (
+      this.sessionId ||
+      this.options.extractSessionIdFromLogs ||
+      !this.options.extractSessionIdFromStdout
+    ) {
+      await this.enqueueTick("initial read");
+    }
   }
 
   /** Queue a stdout clock tick. Safe to call from a synchronous stream callback. */

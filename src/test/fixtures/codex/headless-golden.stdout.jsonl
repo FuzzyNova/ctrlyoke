@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"019fa103-318c-7a23-89aa-afc14c0b03ee"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll update that single word and verify the resulting file."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"Get-Content -Raw -LiteralPath 'golden.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"Get-Content -Raw -LiteralPath 'golden.txt'","aggregated_output":"before\r\n","exit_code":0,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"[System.IO.File]::WriteAllText('golden.txt', 'after')","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"[System.IO.File]::WriteAllText('golden.txt', 'after')","aggregated_output":"after\r\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"Updated `golden.txt`: replaced `before` with `after`."}}
+{"type":"turn.completed","usage":{"input_tokens":54917,"cached_input_tokens":48128,"output_tokens":518}}

@@ -6,7 +6,6 @@ import {
   FileEditData,
   FileDeleteData,
   ToolResultData,
-  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -36,7 +35,7 @@ const TYPES_WITH_COMPLETION = new Set<string>([
 /**
  * Builds CliEvents from Codex CLI tool call payloads.
  *
- * Covers the full Codex tool lifecycle across two execution paths:
+ * Covers the full Codex tool lifecycle from Codex session-log events:
  *
  * **Log format** (CodexLogParser — reading session log files):
  * - `buildLogToolInitiatedEvent` — handles `tool_use`, `function_call`, and
@@ -46,16 +45,8 @@ const TYPES_WITH_COMPLETION = new Set<string>([
  * - `buildFunctionCallOutputCompletedEvent` — for `function_call_output` results
  *   (bash-specific output parsing included).
  *
- * **Item format** (CodexResponseParser — streaming/headless CLI output):
- * - `buildCommandExecutionInitiatedEvent` — for `item.started` command_execution.
- *   Eliminates duplication between parseItemStartedToEvents and processStreamingChunk.
- *
- * **Shared utility:**
- * - `parseApplyPatch` — converts Codex `apply_patch` patch text to UnifiedDiffHunk[].
- *   Previously a private method of CodexLogParser.
- *
- * Both CodexLogParser and CodexResponseParser use these methods so the
- * event-shaping logic is never duplicated.
+ * The session log is the sole event-mapping source for both interactive and
+ * headless Codex runs.
  */
 export class CodexToolBuilder {
   // ── LOG FORMAT: INITIATED ─────────────────────────────────────────────────
@@ -71,8 +62,8 @@ export class CodexToolBuilder {
    * `CodexToolBuilder.needsCompletionTracking(event.type)` to decide whether
    * to register the returned event's call_id.
    *
-   * For FILE_EDIT with `apply_patch` tool name, extracts the file path from the
-   * patch header and computes `structuredPatch` via `parseApplyPatch`.
+   * For `apply_patch`, extracts one event per file from the patch header and
+   * preserves add/update/delete semantics for undo and diff rendering.
    *
    * @param toolName - Tool name (already lowercased by caller)
    * @param params   - Parsed tool input/arguments (Record<string, unknown>)
@@ -97,13 +88,19 @@ export class CodexToolBuilder {
           `[CodexToolBuilder] apply_patch initiated - files=${fileEdits.length}`
         );
         return fileEdits.map((fileEdit) => ({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
+          type:
+            fileEdit.kind === "add"
+              ? CLI_EVENT_TYPES.FILE_WRITE
+              : fileEdit.kind === "delete"
+                ? CLI_EVENT_TYPES.FILE_DELETE
+                : CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
             path: fileEdit.path,
             structuredPatch: fileEdit.structuredPatch,
+            ...(fileEdit.kind === "add" && { content: "" }),
             status: OPERATION_STATUS.INITIATED,
-          } as FileEditData,
+          } as FileEditData | FileWriteData | FileDeleteData,
         }));
       }
 
@@ -390,20 +387,60 @@ export class CodexToolBuilder {
       : OPERATION_STATUS.FAILED;
     const primaryInitiatedData = initiatedEvents?.[0]?.data;
 
-    if (toolInfo.type === CLI_EVENT_TYPES.FILE_EDIT && initiatedEvents) {
+    if (
+      initiatedEvents &&
+      initiatedEvents.length > 0 &&
+      initiatedEvents.every((event) =>
+        [
+          CLI_EVENT_TYPES.FILE_EDIT,
+          CLI_EVENT_TYPES.FILE_WRITE,
+          CLI_EVENT_TYPES.FILE_DELETE,
+        ].some((type) => type === event.type)
+      )
+    ) {
       return initiatedEvents.map((initiatedEvent) => {
-        const initiatedData = initiatedEvent.data as FileEditData | undefined;
+        const initiatedData = initiatedEvent.data as
+          | FileEditData
+          | FileWriteData
+          | FileDeleteData
+          | undefined;
+        if (initiatedEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
+          const data = initiatedData as FileEditData | undefined;
+          return {
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp,
+            data: {
+              path: data?.path ?? "",
+              oldContent: data?.oldContent,
+              newContent: data?.newContent,
+              structuredPatch: data?.structuredPatch,
+              status,
+              success,
+            } as FileEditData,
+          };
+        }
+        if (initiatedEvent.type === CLI_EVENT_TYPES.FILE_WRITE) {
+          const data = initiatedData as FileWriteData | undefined;
+          return {
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            timestamp,
+            data: {
+              path: data?.path ?? "",
+              content: data?.content ?? "",
+              status,
+              success,
+            } as FileWriteData,
+          };
+        }
+        const data = initiatedData as FileDeleteData | undefined;
         return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
+          type: CLI_EVENT_TYPES.FILE_DELETE,
           timestamp,
           data: {
-            path: initiatedData?.path ?? "",
-            oldContent: initiatedData?.oldContent,
-            newContent: initiatedData?.newContent,
-            structuredPatch: initiatedData?.structuredPatch,
+            path: data?.path ?? "",
             status,
             success,
-          } as FileEditData,
+          } as FileDeleteData,
         };
       });
     }
@@ -546,26 +583,12 @@ export class CodexToolBuilder {
   /**
    * Build a BASH_COMMAND INITIATED event for a `command_execution` item.
    *
-   * Used by both `parseItemStartedToEvents` and `processStreamingChunk` in
-   * CodexResponseParser — previously an identical inline push in both places.
+   * Used by both the batch and streaming log paths so command events keep one
+   * mapping implementation.
    *
    * @param command   - Shell command string from item.command
    * @param timestamp - Event timestamp in milliseconds
    */
-  static buildCommandExecutionInitiatedEvent(
-    command: string,
-    timestamp: number
-  ): CliEvent {
-    return {
-      type: CLI_EVENT_TYPES.BASH_COMMAND,
-      timestamp,
-      data: {
-        command,
-        status: OPERATION_STATUS.INITIATED,
-      } as BashCommandData,
-    };
-  }
-
   // ── SHARED UTILITIES ──────────────────────────────────────────────────────
 
   /**
@@ -588,13 +611,4 @@ export class CodexToolBuilder {
    * @param patchInput - The patch input string from apply_patch tool arguments
    * @returns Array of UnifiedDiffHunk objects, or undefined if parsing fails
    */
-  static parseApplyPatch(patchInput: string): UnifiedDiffHunk[] | undefined {
-    return ApplyPatchParser.parse(patchInput);
-  }
-
-  static parseApplyPatchFileEdits(
-    patchInput: string
-  ): Array<{ path: string; structuredPatch?: UnifiedDiffHunk[] }> {
-    return ApplyPatchParser.parseFileEdits(patchInput);
-  }
 }

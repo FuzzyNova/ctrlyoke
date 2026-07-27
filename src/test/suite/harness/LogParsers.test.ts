@@ -15,6 +15,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { BaseCliEvent } from "../../../core/harness/shared/interfaces/ILogParser";
+import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -1718,6 +1719,132 @@ suite("CodexLogParser", () => {
     parser = new CodexLogParser();
   });
 
+  suite("headless golden output", () => {
+    test("maps the real stdout/log pair to equivalent universal semantics", () => {
+      const fixtureRoot = path.resolve(
+        __dirname,
+        "../../../../src/test/fixtures/codex"
+      );
+      const stdout = CliParseUtils.parseJsonLines(
+        fs.readFileSync(
+          path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
+          "utf8"
+        )
+      ) as Array<Record<string, any>>;
+      const sessionLog = fs
+        .readFileSync(
+          path.join(fixtureRoot, "headless-golden.session.jsonl"),
+          "utf8"
+        )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+      const output = parser.extractResponse(sessionLog);
+
+      const stdoutSemantics = {
+        sessionId: stdout.find((event) => event.type === "thread.started")
+          ?.thread_id,
+        text: stdout
+          .filter(
+            (event) =>
+              event.type === "item.completed" &&
+              event.item?.type === "agent_message"
+          )
+          .map((event) => event.item.text),
+        commandCount: stdout.filter(
+          (event) =>
+            event.type === "item.completed" &&
+            event.item?.type === "command_execution"
+        ).length,
+        usage: stdout.find((event) => event.type === "turn.completed")?.usage,
+      };
+      const logSemantics = {
+        sessionId: output.metadata.sessionId,
+        text: output.events
+          .filter(
+            (event) =>
+              event.type === CLI_EVENT_TYPES.TEXT &&
+              typeof (event.data as TextData)?.text === "string"
+          )
+          .map((event) => (event.data as TextData).text),
+        commandCount: output.events.filter(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.BASH_COMMAND &&
+            (event.data as { status?: string })?.status === "initiated"
+        ).length,
+        usage: {
+          input_tokens: output.metadata.usage?.inputTokens,
+          cached_input_tokens: output.metadata.usage?.cachedInputTokens,
+          output_tokens: output.metadata.usage?.outputTokens,
+        },
+      };
+
+      assert.deepStrictEqual(logSemantics, {
+        sessionId: stdoutSemantics.sessionId,
+        text: stdoutSemantics.text,
+        commandCount: stdoutSemantics.commandCount,
+        usage: stdoutSemantics.usage,
+      });
+      assert.ok(
+        output.events.some((event) => event.type === CLI_EVENT_TYPES.THINKING),
+        "the matching session log must retain reasoning events"
+      );
+    });
+
+    test("retains log coverage for todo lists, web search, MCP, and commands", () => {
+      const output = parser.extractResponse([
+        {
+          type: "response_item",
+          payload: {
+            type: "todo_list",
+            items: [
+              { text: "Inspect parser", completed: true },
+              { text: "Remove duplicate mapping", completed: false },
+            ],
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "web_search",
+            arguments: JSON.stringify({ query: "Codex logs" }),
+            call_id: "web-1",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "docs__lookup",
+            arguments: JSON.stringify({ query: "parser" }),
+            call_id: "mcp-1",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "shell_command",
+            arguments: JSON.stringify({ command: "Get-Content README.md" }),
+            call_id: "cmd-1",
+          },
+        },
+      ]);
+
+      assert.ok(
+        output.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text.includes("Todo List:")
+        )
+      );
+      assert.ok(output.events.some((event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH));
+      assert.ok(output.events.some((event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL));
+      assert.ok(output.events.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND));
+    });
+  });
+
   suite("classifyUserEvent", () => {
     test("should ignore user-role response items containing injected project context", () => {
       const event = {
@@ -2202,6 +2329,75 @@ suite("CodexLogParser", () => {
       }
     });
 
+    test("should preserve add and delete kinds from patch_apply_end", () => {
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "apply_patch",
+            call_id: "call-add-delete",
+            input:
+              "*** Begin Patch\n" +
+              "*** Add File: src/new.txt\n" +
+              "@@\n" +
+              "+created\n" +
+              "*** Delete File: src/old.txt\n" +
+              "@@\n" +
+              "-removed\n" +
+              "*** End Patch",
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "patch_apply_end",
+            call_id: "call-add-delete",
+            changes: {
+              "src/new.txt": { type: "add", content: "created\n" },
+              "src/old.txt": { type: "delete", content: "removed\n" },
+            },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call-add-delete",
+            output: "Success",
+          },
+        },
+      ];
+
+      const output = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const fileEvents = output.events.filter((event) =>
+        [
+          CLI_EVENT_TYPES.FILE_WRITE,
+          CLI_EVENT_TYPES.FILE_DELETE,
+        ].includes(event.type as any)
+      );
+
+      assert.deepStrictEqual(
+        fileEvents.map((event) => event.type),
+        [
+          CLI_EVENT_TYPES.FILE_WRITE,
+          CLI_EVENT_TYPES.FILE_DELETE,
+          CLI_EVENT_TYPES.FILE_WRITE,
+          CLI_EVENT_TYPES.FILE_DELETE,
+        ]
+      );
+      assert.strictEqual(
+        (fileEvents[2].data as FileWriteData).content,
+        "created\n"
+      );
+      assert.strictEqual(
+        (fileEvents[2].data as FileWriteData).path,
+        "src/new.txt"
+      );
+    });
+
     test("should handle thread_xxx session ID format", () => {
       const events = [
         {
@@ -2538,6 +2734,22 @@ suite("CodexLogParser", () => {
         },
         timestamp: "2026-04-29T23:28:40.994Z",
       } as unknown as BaseCliEvent);
+      parser.extractStructuredEventsFromEvent({
+        type: "event_msg",
+        payload: {
+          type: "patch_apply_end",
+          call_id: "call-stream-multi-edit",
+          changes: {
+            "src/one.ts": {
+              unified_diff: "@@ -14,1 +14,1 @@\n-old one\n+new one\n",
+            },
+            "src/two.ts": {
+              unified_diff: "@@ -28,1 +28,1 @@\n-old two\n+new two\n",
+            },
+          },
+        },
+        timestamp: "2026-04-29T23:28:41.100Z",
+      } as unknown as BaseCliEvent);
       const completedEvents = parser.extractStructuredEventsFromEvent({
         type: "response_item",
         payload: {
@@ -2555,6 +2767,12 @@ suite("CodexLogParser", () => {
       assert.deepStrictEqual(
         initiatedEvents.map((event) => (event.data as any).path),
         ["src/one.ts", "src/two.ts"]
+      );
+      assert.deepStrictEqual(
+        initiatedEvents.map(
+          (event) => (event.data as any).structuredPatch[0].newStart
+        ),
+        [14, 28]
       );
       assert.deepStrictEqual(
         completedEvents.map((event) => (event.data as any).path),
@@ -2629,48 +2847,30 @@ suite("CodexLogParser", () => {
   });
 
   test("should derive Codex log token context window size from a 5.6 session model", () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-codex-log-")
-    );
-    const logPath = path.join(tempDir, "rollout-test.jsonl");
-
-    try {
-      const lines = [
-        JSON.stringify({
-          type: "session_meta",
-          payload: {
-            id: "thread_5_6",
-            model: "gpt-5.6-sol",
-          },
-        }),
-        JSON.stringify({
-          type: "event_msg",
-          payload: {
-            type: "token_count",
-            info: {
-              total_token_usage: {
-                input_tokens: 1200,
-                cached_input_tokens: 200,
-                output_tokens: 80,
-                reasoning_output_tokens: 10,
-              },
-              last_token_usage: {
-                total_tokens: 900,
-              },
+    const response = new CodexLogParser().extractResponse([
+      {
+        type: "session_meta",
+        payload: { id: "thread_5_6", model: "gpt-5.6-sol" },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: {
+              input_tokens: 1200,
+              cached_input_tokens: 200,
+              output_tokens: 80,
+              reasoning_output_tokens: 10,
             },
+            last_token_usage: { total_tokens: 900 },
           },
-        }),
-      ].join("\n");
+        },
+      },
+    ]);
 
-      fs.writeFileSync(logPath, lines, "utf8");
-
-      const usage = CodexLogParser.extractTokenUsageFromLogFile(logPath);
-
-      assert.strictEqual(usage?.contextWindowSize, 1_050_000);
-      assert.strictEqual(usage?.contextWindowUsedTokens, 900);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    assert.strictEqual(response.metadata.usage?.contextWindowSize, 1_050_000);
+    assert.strictEqual(response.metadata.usage?.contextWindowUsedTokens, 900);
   });
 
   suite("extractSessionId", () => {

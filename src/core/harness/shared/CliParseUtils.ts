@@ -266,5 +266,5 @@ export class CliParseUtils {
   // Harness-specific parsing methods moved to:
   // - CopilotResponseParser.parseCopilotText()
   // - ClaudeResponseParser.parseClaudeStreamJson()
-  // - CodexResponseParser.parseCodexJsonLines()
+  // - CodexLogParser.extractResponse()
 }

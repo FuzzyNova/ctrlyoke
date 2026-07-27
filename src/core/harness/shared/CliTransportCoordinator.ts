@@ -376,7 +376,7 @@ export class CliTransportCoordinator {
                   stdoutEventPump.processEvent(event);
                 }
               } else if (
-                this.deps.provider.responseParser.processStreamingChunk
+                this.deps.provider.responseParser?.processStreamingChunk
               ) {
                 const processedChunk =
                   this.deps.provider.responseParser.processStreamingChunk(

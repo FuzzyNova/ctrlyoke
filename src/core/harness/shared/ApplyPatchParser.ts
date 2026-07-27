@@ -3,6 +3,7 @@ import { Log } from "../../../utils/Log";
 
 export interface ApplyPatchFileEdit {
   path: string;
+  kind: "add" | "update" | "delete";
   structuredPatch?: UnifiedDiffHunk[];
 }
 
@@ -102,6 +103,7 @@ export class ApplyPatchParser {
       let currentFile:
         | {
             path: string;
+            kind: ApplyPatchFileEdit["kind"];
             hunks: UnifiedDiffHunk[];
           }
         | undefined;
@@ -124,6 +126,7 @@ export class ApplyPatchParser {
         }
         fileEdits.push({
           path: currentFile.path,
+          kind: currentFile.kind,
           structuredPatch:
             currentFile.hunks.length > 0 ? currentFile.hunks : undefined,
         });
@@ -164,8 +167,14 @@ export class ApplyPatchParser {
         const fileMatch = line.match(/\*\*\* (?:Add|Update|Delete) File: (.+)/);
         if (fileMatch) {
           flushFile();
+          const kind = line.startsWith("*** Add File:")
+            ? "add"
+            : line.startsWith("*** Delete File:")
+              ? "delete"
+              : "update";
           currentFile = {
             path: fileMatch[1].trim(),
+            kind,
             hunks: [],
           };
           oldLineNum = 1;

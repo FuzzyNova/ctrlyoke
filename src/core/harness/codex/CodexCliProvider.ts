@@ -1,22 +1,13 @@
 import * as path from "path";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
-import { CodexResponseParser } from "./CodexResponseParser";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
-import { CodexLogParser, type CodexLoggedFileChange } from "./CodexLogParser";
-import type {
-  CliEvent,
-  FileDeleteData,
-  FileEditData,
-  FileWriteData,
-  UniversalCliOutput,
-} from "../../../types/CliOutputTypes";
+import { CodexLogParser } from "./CodexLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
@@ -25,11 +16,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import {
-  CLI_EVENT_TYPES,
-  HARNESS_IDS,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -48,12 +35,11 @@ const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
  *
  * Implements all Codex-specific logic using composition pattern:
  * - hooks.json monitoring and hooks system for completion detection
- * - JSONL output parsing with event-based streaming
+ * - Session-log event parsing with event-based streaming
  * - Mode-based permissions (no granular tool patterns)
  * - MCP server configuration with inline TOML format
  *
- * This provider aggregates four specialized components:
- * - CodexResponseParser: Parses JSONL output and statistics
+ * This provider aggregates three specialized components:
  * - CodexNotificationMonitor: Monitors hook notifications
  * - CodexToolPermissionMapper: Converts permissions to CLI arguments
  * - CliMcpConfigGenerator: Generates MCP configuration (shared)
@@ -136,12 +122,44 @@ export class CodexCliProvider implements ICliProvider {
     usesInteractiveNotificationMonitor: true,
   };
 
-  readonly responseParser: IResponseParser = new CodexResponseParser();
   readonly notificationMonitor: INotificationMonitor =
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
   readonly logParser = new CodexLogParser();
+  readonly headlessSource = "log" as const;
+
+  /** Extract Codex's session ID from the headless JSONL clock stream. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    for (const line of chunk.split("\n")) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const event = JSON.parse(line) as {
+          type?: string;
+          thread_id?: string;
+        };
+        if (event.type === "thread.started" && event.thread_id) {
+          return event.thread_id;
+        }
+      } catch {
+        // Chunks may contain an incomplete JSONL line; the next chunk retries it.
+      }
+    }
+    return undefined;
+  }
+
+  parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number } | undefined {
+    const match =
+      statistics.match(/Tokens:\s*(\d+)\s+in\s*\/\s*(\d+)\s+out/i) ??
+      statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/i);
+    return match
+      ? { prompt: Number.parseInt(match[1], 10), completion: Number.parseInt(match[2], 10) }
+      : undefined;
+  }
 
   /**
    * Build complete CLI arguments array for Codex CLI execution
@@ -484,178 +502,6 @@ export class CodexCliProvider implements ICliProvider {
     });
 
     return trustArgs;
-  }
-
-  /**
-   * Augment headless parsed output with data the JSONL stdout stream omits but
-   * the session log records: accurate token usage, and `apply_patch` diffs.
-   *
-   * **Token usage.** The Codex JSONL stdout (`turn.completed` usage) only reports
-   * cumulative totals across all sessions — it does not reflect context window
-   * usage for the current session alone (see openai/codex#5276). The session log
-   * (`event_msg:token_count`) contains per-turn `last_token_usage` that accurately
-   * represents what the model consumed in this session's context window.
-   *
-   * **File edit bodies.** Headless `file_change` items carry only `{path, kind}`,
-   * so {@link CodexResponseParser} emits file events with no diff or content and
-   * the dashboard renders a bare "Edited <path>". The log's
-   * `event_msg:patch_apply_end` has the real change, which is the same source the
-   * interactive path already renders from.
-   *
-   * Both augmentations are independent — a log missing one still supplies the other.
-   */
-  async augmentParsedOutput(
-    output: UniversalCliOutput
-  ): Promise<UniversalCliOutput> {
-    const sessionId = output.metadata?.sessionId as string | undefined;
-    if (!sessionId) {
-      return output;
-    }
-
-    const logPath = this.logParser.findLogFileBySessionId(sessionId);
-    if (!logPath) {
-      Log.debug(
-        `[CodexCliProvider] No session log found for augmentation (session: ${sessionId})`
-      );
-      return output;
-    }
-
-    let augmented = output;
-
-    const tokenUsage = CodexLogParser.extractTokenUsageFromLogFile(logPath);
-    if (tokenUsage) {
-      Log.debug(
-        `[CodexCliProvider] Token usage from log: ` +
-          `${tokenUsage.inputTokens} in / ${tokenUsage.outputTokens} out, ` +
-          `context window used: ${tokenUsage.contextWindowUsedTokens ?? "unknown"}`
-      );
-      augmented = {
-        ...augmented,
-        metadata: {
-          ...augmented.metadata,
-          usage: {
-            inputTokens: tokenUsage.inputTokens,
-            outputTokens: tokenUsage.outputTokens,
-            totalTokens: tokenUsage.totalTokens,
-            cachedInputTokens: tokenUsage.cachedInputTokens,
-            reasoningOutputTokens: tokenUsage.reasoningOutputTokens,
-            contextWindowUsedTokens: tokenUsage.contextWindowUsedTokens,
-            contextWindowSize: tokenUsage.contextWindowSize,
-          },
-        },
-      };
-    }
-
-    const events = CodexCliProvider.applyLoggedChangesToFileEvents(
-      augmented.events,
-      CodexLogParser.extractLoggedFileChanges(logPath)
-    );
-    if (events !== augmented.events) {
-      augmented = { ...augmented, events };
-    }
-
-    return augmented;
-  }
-
-  /** File event types Codex emits for one `file_change` item, keyed by kind. */
-  private static readonly FILE_CHANGE_EVENT_TYPES: readonly string[] = [
-    CLI_EVENT_TYPES.FILE_EDIT,
-    CLI_EVENT_TYPES.FILE_WRITE,
-    CLI_EVENT_TYPES.FILE_DELETE,
-  ];
-
-  /**
-   * Fill in the edit bodies the headless JSONL stream omits: `structuredPatch`
-   * on FILE_EDIT (update) and `content` on FILE_WRITE (add). FILE_DELETE has no
-   * body to carry, but still consumes its slot so later events stay aligned.
-   *
-   * Matching is positional per path, not first-wins: one path can be changed
-   * several times in a turn (add → update → delete) and each change has its own
-   * body. An INITIATED event and the COMPLETED event that follows it describe the
-   * *same* change, so only a non-INITIATED event advances that path's cursor.
-   *
-   * Paths are compared case-insensitively with separators normalized, and a
-   * logged absolute path matches a relative event path (or vice versa) by
-   * suffix — headless Codex reports absolute paths while the log may not.
-   *
-   * Returns the original array when nothing changed so callers can skip a copy.
-   */
-  private static applyLoggedChangesToFileEvents(
-    events: CliEvent[],
-    loggedChanges: CodexLoggedFileChange[]
-  ): CliEvent[] {
-    if (loggedChanges.length === 0) {
-      return events;
-    }
-
-    const normalize = (p: string) => p.replace(/\\/g, "/").toLowerCase();
-    const samePath = (a: string, b: string) =>
-      a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
-
-    // Per logged path: that path's changes in application order, plus how many
-    // have already been consumed by earlier events.
-    const queues = new Map<
-      string,
-      { changes: CodexLoggedFileChange[]; cursor: number }
-    >();
-    for (const change of loggedChanges) {
-      const key = normalize(change.path);
-      const queue = queues.get(key) ?? { changes: [], cursor: 0 };
-      queue.changes.push(change);
-      queues.set(key, queue);
-    }
-
-    let changed = false;
-    const result = events.map((event) => {
-      if (!CodexCliProvider.FILE_CHANGE_EVENT_TYPES.includes(event.type)) {
-        return event;
-      }
-      const data = event.data as
-        | (FileEditData & FileWriteData & FileDeleteData)
-        | undefined;
-      if (!data?.path) {
-        return event;
-      }
-
-      const eventPath = normalize(data.path);
-      const entry = [...queues.entries()].find(([key]) =>
-        samePath(key, eventPath)
-      );
-      if (!entry) {
-        return event;
-      }
-
-      const queue = entry[1];
-      // Clamp: more file events than logged changes means the tail all describe
-      // the last known change rather than nothing at all.
-      const logged =
-        queue.changes[Math.min(queue.cursor, queue.changes.length - 1)];
-      if (data.status !== OPERATION_STATUS.INITIATED) {
-        queue.cursor++;
-      }
-
-      if (
-        event.type === CLI_EVENT_TYPES.FILE_EDIT &&
-        (data.structuredPatch?.length ?? 0) === 0
-      ) {
-        changed = true;
-        return { ...event, data: { ...data, structuredPatch: logged.hunks } };
-      }
-      if (event.type === CLI_EVENT_TYPES.FILE_WRITE && !data.content) {
-        changed = true;
-        return { ...event, data: { ...data, content: logged.content ?? "" } };
-      }
-      return event;
-    });
-
-    if (!changed) {
-      return events;
-    }
-    Log.debug(
-      `[CodexCliProvider] Restored bodies on headless file events from session ` +
-        `log (${loggedChanges.length} logged change(s))`
-    );
-    return result;
   }
 
   /**

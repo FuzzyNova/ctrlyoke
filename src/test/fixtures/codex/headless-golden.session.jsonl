@@ -1,0 +1,9 @@
+{"timestamp":"2026-07-27T00:39:29.072Z","type":"session_meta","payload":{"id":"019fa103-318c-7a23-89aa-afc14c0b03ee","model":"gpt-5.6-terra","cli_version":"0.145.0"}}
+{"timestamp":"2026-07-27T00:39:31.521Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I’ll update that single word and verify the resulting file."}]}}
+{"timestamp":"2026-07-27T00:39:32.955Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call_read","name":"exec","input":"const r = await tools.shell_command({\"command\":\"Get-Content -Raw -LiteralPath 'golden.txt'\"}); text(r);"}}
+{"timestamp":"2026-07-27T00:39:34.079Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_read","output":"Exit code: 0\nOutput:\nbefore\r\n"}}
+{"timestamp":"2026-07-27T00:39:36.451Z","type":"response_item","payload":{"type":"reasoning","content":null,"encrypted_content":"captured-reasoning"}}
+{"timestamp":"2026-07-27T00:39:52.292Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call_write","name":"exec","input":"const r = await tools.shell_command({\"command\":\"[System.IO.File]::WriteAllText('golden.txt', 'after')\"}); text(r);"}}
+{"timestamp":"2026-07-27T00:39:53.106Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_write","output":"Exit code: 0\nOutput:\nafter\r\n"}}
+{"timestamp":"2026-07-27T00:39:54.605Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Updated `golden.txt`: replaced `before` with `after`."}]}}
+{"timestamp":"2026-07-27T00:39:54.644Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":54917,"cached_input_tokens":48128,"output_tokens":518,"reasoning_output_tokens":114},"last_token_usage":{"total_tokens":14156},"model_context_window":258400}}}
