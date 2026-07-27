@@ -693,9 +693,14 @@ export class CodexLogParser extends BaseLogParser {
   async discoverSessionLog(
     promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null> {
     try {
+      if (signal?.aborted) {
+        return null;
+      }
+
       const basePath = path.join(os.homedir(), ".codex", "sessions");
 
       // FAST PATH: If session ID provided, search for matching file recursively
@@ -731,7 +736,7 @@ export class CodexLogParser extends BaseLogParser {
             return null; // File doesn't exist yet, will retry
           },
           {
-            // Uses default: 14 attempts, ~10s total (0, 100, 200, 300, 500, 1000ms repeating)
+            signal,
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
                 Log.debug(
@@ -741,6 +746,10 @@ export class CodexLogParser extends BaseLogParser {
             },
           }
         );
+
+        if (signal?.aborted) {
+          return null;
+        }
 
         if (result) {
           Log.debug(
@@ -852,7 +861,7 @@ export class CodexLogParser extends BaseLogParser {
           return null; // No match found, will retry
         },
         {
-          // Uses default: 10s
+          signal,
           onRetry: (attempt, max, delay) => {
             if (attempt > 1) {
               Log.debug(
@@ -862,6 +871,10 @@ export class CodexLogParser extends BaseLogParser {
           },
         }
       );
+
+      if (signal?.aborted) {
+        return null;
+      }
 
       if (result) {
         Log.debug(`[CodexLogParser] Found matching log: ${result}`);

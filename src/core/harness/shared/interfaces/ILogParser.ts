@@ -196,11 +196,14 @@ export interface ILogParser {
    *   new Date()
    * );
    * ```
+   *
+   * @param signal Optional cancellation signal for discovery retries
    */
   discoverSessionLog(
     promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null>;
 
   /**

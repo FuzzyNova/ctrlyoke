@@ -730,9 +730,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   async discoverSessionLog(
     promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null> {
     try {
+      if (signal?.aborted) {
+        return null;
+      }
+
       // Get Claude project directory for current workspace
       const projectDir = this.getClaudeProjectDirectory();
       if (!projectDir) {
@@ -771,7 +776,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             return null; // File doesn't exist yet, will retry
           },
           {
-            // Uses default: 10s
+            signal,
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
                 Log.debug(
@@ -781,6 +786,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             },
           }
         );
+
+        if (signal?.aborted) {
+          return null;
+        }
 
         if (result) {
           Log.debug(

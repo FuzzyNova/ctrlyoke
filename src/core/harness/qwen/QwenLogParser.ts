@@ -459,9 +459,14 @@ export class QwenLogParser extends BaseLogParser {
   async discoverSessionLog(
     promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null> {
     try {
+      if (signal?.aborted) {
+        return null;
+      }
+
       const projectDir = this.getQwenProjectDirectory();
       if (!projectDir) {
         Log.debug("[QwenLogParser] No Qwen project directory found");
@@ -496,6 +501,7 @@ export class QwenLogParser extends BaseLogParser {
             return null;
           },
           {
+            signal,
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
                 Log.debug(
@@ -505,6 +511,10 @@ export class QwenLogParser extends BaseLogParser {
             },
           }
         );
+
+        if (signal?.aborted) {
+          return null;
+        }
 
         if (result) {
           Log.debug(

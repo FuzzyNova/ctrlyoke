@@ -248,6 +248,53 @@ suite("RetryUtils", () => {
       assert.strictEqual(attempts, 2);
       assert.deepStrictEqual(delays, [0, 0]);
     });
+
+    test("should not start when the abort signal is already aborted", async () => {
+      const abortController = new AbortController();
+      abortController.abort();
+      let attempts = 0;
+
+      const result = await retryWithBackoff(
+        async (signal) => {
+          attempts++;
+          assert.strictEqual(signal, abortController.signal);
+          return "unexpected";
+        },
+        { signal: abortController.signal }
+      );
+
+      assert.strictEqual(result, undefined);
+      assert.strictEqual(attempts, 0);
+    });
+
+    test("should interrupt an active backoff delay when aborted", async function () {
+      this.timeout(1_000);
+
+      const abortController = new AbortController();
+      let attempts = 0;
+      const startTime = Date.now();
+
+      const result = await retryWithBackoff(
+        async (signal) => {
+          attempts++;
+          assert.strictEqual(signal, abortController.signal);
+          setTimeout(() => abortController.abort(), 10);
+          return null;
+        },
+        {
+          maxAttempts: 60,
+          delays: 10_000,
+          signal: abortController.signal,
+        }
+      );
+
+      assert.strictEqual(result, undefined);
+      assert.strictEqual(attempts, 1);
+      assert.ok(
+        Date.now() - startTime < 500,
+        "abort should end the active backoff without waiting for its timer"
+      );
+    });
   });
 
   suite("PermanentFailureError", () => {

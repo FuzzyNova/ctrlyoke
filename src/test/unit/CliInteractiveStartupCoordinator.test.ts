@@ -400,4 +400,76 @@ suite("CliInteractiveStartupCoordinator", () => {
       "Timed out waiting for interactive session startup after 20ms"
     );
   });
+
+  test("should abort in-flight session-log discovery when cancelled", async function () {
+    this.timeout(1_000);
+
+    let cancelled = false;
+    let discoveryAborted = false;
+
+    const coordinator = new CliInteractiveStartupCoordinator({
+      logParser: {
+        extractResponse: () => ({ events: [], metadata: {} }),
+        isComplete: () => false,
+        watchLogFile: () => ({ close() {} }) as any,
+        readNewLines: async () => [],
+        discoverSessionLog: async (
+          _promptText: string,
+          _startTime: Date,
+          _sessionId?: string,
+          signal?: AbortSignal
+        ) => {
+          assert.ok(signal, "discovery should receive an abort signal");
+          cancelled = true;
+          return await new Promise<null>((resolve) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                discoveryAborted = true;
+                resolve(null);
+              },
+              { once: true }
+            );
+          });
+        },
+        extractSessionId: () => null,
+        extractStructuredEventsFromEvent: () => [],
+        extractContentFromEvent: () => undefined,
+        formatStatistics: () => "",
+        getFinalEventsOnCompletion: async () => [],
+      },
+      notificationMonitor: {
+        supportsSessionIdInFilename: true,
+        supportsSessionStart: true,
+        monitorForCompletion: async () => ({ completed: false }),
+        buildHookConfig: () => ({ type: "none" as const }),
+        getNotificationDirectory: () => process.cwd(),
+        waitForSessionStart: async () => ({
+          completed: false,
+          error: "Timeout waiting for SessionStart notification",
+        }),
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getAbortState: () =>
+        cancelled ? { kind: INTERACTIVE_ABORT_KINDS.USER_CANCELLED } : null,
+      markProcessExitDuringStage: (_stage: string, exitCode: number) =>
+        `process exit ${exitCode}`,
+      setFailureReason: () => {},
+      startupTimeouts: {
+        sessionStartSoftTimeoutMs: 5,
+        sessionStartHardTimeoutMs: 100,
+        sessionStartPollMs: 1,
+        lateStartRecoveryPollMs: 1,
+      },
+    });
+
+    const result = await coordinator.resolveSession({
+      promptForDiscovery: "say hi",
+      startTime: new Date(),
+      runId: "run-cancel-discovery",
+    });
+
+    assert.strictEqual(result, null);
+    assert.strictEqual(discoveryAborted, true);
+  });
 });

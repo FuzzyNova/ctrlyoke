@@ -71,6 +71,56 @@ export interface RetryOptions {
    * @param delay - Delay in ms before this attempt (0 for first attempt)
    */
   onRetry?: (attempt: number, maxAttempts: number, delay: number) => void;
+
+  /**
+   * Optional cancellation signal.
+   *
+   * When aborted, retrying stops and the function returns undefined. Backoff
+   * delays are interrupted immediately. The signal is also passed to the
+   * operation so callers can cancel any operation-specific async work.
+   */
+  signal?: AbortSignal;
+}
+
+async function waitForRetryDelay(
+  delayMs: number,
+  signal?: AbortSignal
+): Promise<boolean> {
+  if (!signal) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return true;
+  }
+
+  if (signal.aborted) {
+    return false;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (completed: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      signal.removeEventListener("abort", handleAbort);
+      resolve(completed);
+    };
+
+    const handleAbort = () => finish(false);
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+    timeoutHandle = setTimeout(() => finish(true), delayMs);
+
+    // Guard the narrow race between the initial check and listener setup.
+    if (signal.aborted) {
+      handleAbort();
+    }
+  });
 }
 
 /**
@@ -121,13 +171,14 @@ export interface RetryOptions {
  * ```
  */
 export async function retryWithBackoff<T>(
-  operation: () => Promise<T | null | undefined>,
+  operation: (signal?: AbortSignal) => Promise<T | null | undefined>,
   options: RetryOptions = {}
 ): Promise<T | undefined> {
   const {
     maxAttempts = 60,
     delays = [100, 200, 500, 1000, 1500],
     onRetry,
+    signal,
   } = options;
 
   // Normalize delays to array
@@ -137,6 +188,10 @@ export async function retryWithBackoff<T>(
     : Array(maxAttempts - 1).fill(delays);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (signal?.aborted) {
+      return undefined;
+    }
+
     // First attempt is always immediate (0 delay)
     // Subsequent attempts use delays array, repeating last value if array is too short
     let delay = 0;
@@ -148,7 +203,14 @@ export async function retryWithBackoff<T>(
 
     // Wait before retry (skip wait on first attempt)
     if (delay > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      const delayCompleted = await waitForRetryDelay(delay, signal);
+      if (!delayCompleted) {
+        return undefined;
+      }
+    }
+
+    if (signal?.aborted) {
+      return undefined;
     }
 
     // Notify callback (if provided)
@@ -156,15 +218,27 @@ export async function retryWithBackoff<T>(
       onRetry(attempt + 1, maxAttempts, delay);
     }
 
+    if (signal?.aborted) {
+      return undefined;
+    }
+
     // Execute operation
     try {
-      const result = await operation();
+      const result = await operation(signal);
+
+      if (signal?.aborted) {
+        return undefined;
+      }
 
       // Success - return result
       if (result !== null && result !== undefined) {
         return result;
       }
     } catch (error) {
+      if (signal?.aborted) {
+        return undefined;
+      }
+
       // Check if this is a permanent failure (stop retrying immediately)
       if (error instanceof PermanentFailureError) {
         return undefined;

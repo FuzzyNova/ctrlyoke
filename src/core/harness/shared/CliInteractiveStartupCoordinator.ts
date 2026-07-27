@@ -279,11 +279,13 @@ export class CliInteractiveStartupCoordinator {
     errorContext?: string
   ): Promise<InteractiveSessionDiscovery | null> {
     const discoveredLogPath = await this.waitForInteractiveStartupOperation(
-      this.deps.logParser.discoverSessionLog(
-        promptForDiscovery,
-        startTime,
-        sessionId || undefined
-      )
+      (signal) =>
+        this.deps.logParser.discoverSessionLog(
+          promptForDiscovery,
+          startTime,
+          sessionId || undefined,
+          signal
+        )
     );
 
     if (discoveredLogPath === INTERACTIVE_WAIT_ABORTED) {
@@ -373,9 +375,14 @@ export class CliInteractiveStartupCoordinator {
       }
 
       const waitResult = await this.waitForInteractiveStartupOperation(
-        this.delay(
-          Math.min(timeouts.lateStartRecoveryPollMs, Math.max(1, remainingMs))
-        )
+        (signal) =>
+          this.delay(
+            Math.min(
+              timeouts.lateStartRecoveryPollMs,
+              Math.max(1, remainingMs)
+            ),
+            signal
+          )
       );
       if (waitResult === INTERACTIVE_WAIT_ABORTED) {
         return null;
@@ -415,10 +422,11 @@ export class CliInteractiveStartupCoordinator {
   }
 
   private async waitForInteractiveStartupOperation<T>(
-    operation: Promise<T>
+    operation: (signal: AbortSignal) => Promise<T>
   ): Promise<T | typeof INTERACTIVE_WAIT_ABORTED> {
     return new Promise((resolve, reject) => {
       let settled = false;
+      const abortController = new AbortController();
 
       const finish = (action: () => void) => {
         if (settled) {
@@ -431,11 +439,13 @@ export class CliInteractiveStartupCoordinator {
 
       const intervalHandle = setInterval(() => {
         if (this.deps.getAbortState()) {
+          abortController.abort();
           finish(() => resolve(INTERACTIVE_WAIT_ABORTED));
         }
       }, this.getStartupTimeouts().sessionStartPollMs);
 
-      void operation
+      void Promise.resolve()
+        .then(() => operation(abortController.signal))
         .then((value) => {
           finish(() => resolve(value));
         })
@@ -445,7 +455,28 @@ export class CliInteractiveStartupCoordinator {
     });
   }
 
-  private async delay(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
+  private async delay(ms: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutHandle);
+        signal.removeEventListener("abort", finish);
+        resolve();
+      };
+      const timeoutHandle = setTimeout(finish, ms);
+      signal.addEventListener("abort", finish, { once: true });
+
+      if (signal.aborted) {
+        finish();
+      }
+    });
   }
 }

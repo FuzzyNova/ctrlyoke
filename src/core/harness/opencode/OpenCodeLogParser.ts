@@ -153,9 +153,10 @@ export class OpenCodeLogParser extends BaseLogParser {
   discoverSessionLog(
     _promptText: string,
     _startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null> {
-    return Promise.resolve(sessionId ?? null);
+    return Promise.resolve(signal?.aborted ? null : (sessionId ?? null));
   }
 
   /**

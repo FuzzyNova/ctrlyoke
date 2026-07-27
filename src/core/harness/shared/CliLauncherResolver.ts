@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
 import { Log } from "../../../utils/Log";
@@ -32,6 +33,7 @@ export interface CliResolvedCommand {
 }
 
 const launcherCache = new Map<string, Promise<CliLauncher>>();
+const MAX_BATCH_PROXY_BYTES = 16 * 1024;
 
 export async function resolveCliCommand(
   commandName: string,
@@ -117,6 +119,26 @@ async function resolveWindowsLauncher(
   }
 
   if (extension === ".cmd" || extension === ".bat") {
+    const powershellProxyTarget =
+      await resolvePowerShellBatchProxyTarget(resolvedPath);
+    if (powershellProxyTarget) {
+      Log.debug(
+        `[CliLauncherResolver] bypassing PowerShell batch proxy "${resolvedPath}" → "${powershellProxyTarget}"`
+      );
+      return {
+        kind: "powershell-file",
+        command: shell,
+        prefixArgs: [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          powershellProxyTarget,
+        ],
+        resolvedPath: powershellProxyTarget,
+      };
+    }
+
     return {
       kind: "cmd-file",
       command: "cmd.exe",
@@ -131,6 +153,59 @@ async function resolveWindowsLauncher(
     prefixArgs: [],
     resolvedPath,
   };
+}
+
+/**
+ * Recognize the VS Code Copilot launcher shape:
+ *
+ *   @echo off
+ *   powershell -ExecutionPolicy Bypass -File "C:\...\copilot.ps1" %*
+ *
+ * Launching that proxy through cmd.exe inserts an extra console/shell boundary
+ * that prevents Copilot's interactive `-i` prompt from reaching its TUI. Calling
+ * the referenced PowerShell file directly preserves argv boundaries and the PTY.
+ *
+ * The match is intentionally strict. General batch files (including npm shims)
+ * must continue through cmd.exe because their command language cannot be safely
+ * interpreted here.
+ */
+export function parsePowerShellBatchProxyTarget(
+  contents: string
+): string | undefined {
+  const match = contents.match(
+    /^\s*@echo\s+off\s*\r?\n\s*powershell(?:\.exe)?\s+-ExecutionPolicy\s+Bypass\s+-File\s+"([^"\r\n]+)"\s+%\*\s*$/i
+  );
+  const target = match?.[1]?.trim();
+  if (
+    !target ||
+    !path.win32.isAbsolute(target) ||
+    path.win32.extname(target).toLowerCase() !== ".ps1"
+  ) {
+    return undefined;
+  }
+  return target;
+}
+
+async function resolvePowerShellBatchProxyTarget(
+  batchPath: string
+): Promise<string | undefined> {
+  try {
+    const stat = await fs.promises.stat(batchPath);
+    if (!stat.isFile() || stat.size > MAX_BATCH_PROXY_BYTES) {
+      return undefined;
+    }
+
+    const contents = await fs.promises.readFile(batchPath, "utf8");
+    const target = parsePowerShellBatchProxyTarget(contents);
+    if (!target) {
+      return undefined;
+    }
+
+    const targetStat = await fs.promises.stat(target);
+    return targetStat.isFile() ? target : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function getWindowsCommandMetadata(

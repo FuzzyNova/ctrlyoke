@@ -108,12 +108,14 @@ export abstract class BaseLogParser implements ILogParser {
    * @param promptText - The prompt text sent to the CLI (used for matching if no sessionId)
    * @param startTime - Execution start timestamp (used to filter candidates)
    * @param sessionId - Optional session ID from SessionStart hook (faster, more reliable)
+   * @param signal - Optional cancellation signal for discovery retries
    * @returns Absolute path to session log file, or null if not found
    */
   abstract discoverSessionLog(
     promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null>;
 
   /**

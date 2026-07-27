@@ -747,9 +747,14 @@ export class CopilotLogParser extends BaseLogParser {
   async discoverSessionLog(
     promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null> {
     try {
+      if (signal?.aborted) {
+        return null;
+      }
+
       const logDir = path.join(os.homedir(), ".copilot", "session-state");
       if (!fs.existsSync(logDir)) {
         Log.debug("[CopilotLogParser] Session state directory not found");
@@ -844,7 +849,7 @@ export class CopilotLogParser extends BaseLogParser {
           return null; // No match found, will retry
         },
         {
-          // Uses default: 10s
+          signal,
           onRetry: (attempt, max, delay) => {
             if (attempt > 1) {
               Log.debug(
@@ -854,6 +859,10 @@ export class CopilotLogParser extends BaseLogParser {
           },
         }
       );
+
+      if (signal?.aborted) {
+        return null;
+      }
 
       if (result) {
         Log.debug(`[CopilotLogParser] Found matching session log: ${result}`);

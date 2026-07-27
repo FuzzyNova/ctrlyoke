@@ -217,8 +217,13 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   async discoverSessionLog(
     _promptText: string,
     startTime: Date,
-    sessionId?: string
+    sessionId?: string,
+    signal?: AbortSignal
   ): Promise<string | null> {
+    if (signal?.aborted) {
+      return null;
+    }
+
     const candidates = this.findModifiedSessionLogs(
       this.getLogDirectory(),
       startTime,
