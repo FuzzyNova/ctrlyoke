@@ -8,6 +8,7 @@ import {
   WorkflowStep,
   ScriptStep,
   isScriptStep,
+  hasExecutableSteps,
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -553,19 +554,26 @@ export class PromptFileParser {
   }
 
   /**
-   * Validate prompt items for execution
+   * Validate workflow steps for execution.
+   *
+   * `finalStep` participates in the emptiness check only: a final-step-only
+   * workflow has no queued steps by design (its final step appends them at
+   * runtime), so passing it keeps that shape valid.
    */
-  validateWorkflowSteps(items: WorkflowStep[]): {
+  validateWorkflowSteps(
+    items: WorkflowStep[],
+    options?: { finalStep?: WorkflowStep | null }
+  ): {
     valid: boolean;
     errors: string[];
   } {
     const errors: string[] = [];
 
-    if (!items || items.length === 0) {
-      errors.push("No prompts found");
+    if (!hasExecutableSteps({ steps: items, finalStep: options?.finalStep })) {
+      errors.push("No steps found");
     }
 
-    items.forEach((item, index) => {
+    (items ?? []).forEach((item, index) => {
       // Script steps only require a non-empty script field
       if (isScriptStep(item)) {
         if (!item.script || item.script.trim().length === 0) {

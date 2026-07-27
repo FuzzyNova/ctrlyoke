@@ -18,7 +18,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 - Workspace custom templates are discovered separately from `.ctrlyoke/templates/*.ctrlyoke.json` as `custom:<name>` IDs. Do not assume files under `src/templates/workflows/` cover all available templates.
 - `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
 - `spec-driven-loop` is the canonical example of `finalStep` orchestration, and deliberately ships `steps: []` — the orchestrator stages every step itself. It relies on `agent`, `mcpServers: [ctrlyoke]`, `resumeSession: true`, and `sessionId: finalStep` together; the resumed session (not `priorContext`) is what carries the plan across loops.
-- A final-step-only workflow is valid: template instantiation validates against the schema only, which allows an empty `steps` array. Note `PromptFileParser.validateWorkflowSteps` (used when *loading* a workflow file) still rejects empty steps, so a final-step-only workflow must reach execution through template creation or the dashboard, not by opening a bare file with no prompts.
+- A final-step-only workflow is valid everywhere — empty `steps` plus a `finalStep` passes both schema validation and `validateWorkflowSteps`. See the `hasExecutableSteps` bullet in `core.instructions.md` before adding any new "does this workflow have work" check.
 </workflowTemplates>
 
 <templateVariables>

@@ -478,6 +478,21 @@ export function isScriptStep(step: WorkflowStep): step is ScriptStep {
 }
 
 /**
+ * True when a workflow has something to execute. A `finalStep` counts as a
+ * step: a final-step-only workflow (empty `steps`, orchestrating `finalStep`)
+ * is a valid, supported shape — the final step appends the queue at runtime via
+ * `ctrlyoke_append_queue`. See the Spec-Driven Loop template. Anything that
+ * gates loading, validation, or execution on "does this workflow have work"
+ * must use this rather than checking `steps.length` alone.
+ */
+export function hasExecutableSteps(workflow: {
+  steps?: WorkflowStep[] | null;
+  finalStep?: WorkflowStep | null;
+}): boolean {
+  return Boolean(workflow.steps?.length) || Boolean(workflow.finalStep);
+}
+
+/**
  * Script execution output captured from a ScriptStep run.
  * Stored in PromptRuntimeMetadata to enable priorContext injection for script steps.
  */

@@ -1571,7 +1571,7 @@ export class WorkflowOrchestrator {
     }
     const parsed = await this.promptFileParser.parsePromptFile(filePath);
     if (!parsed?.steps?.length) {
-      throw new Error("No prompts found in file");
+      throw new Error("No steps found in file");
     }
     await this.appendAndContinueAtRun(
       mutation.address,

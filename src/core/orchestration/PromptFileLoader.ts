@@ -127,9 +127,12 @@ export class PromptFileLoader {
       return undefined;
     }
 
-    // Validate prompts
+    // Validate steps. A final-step-only workflow has no queued steps by design —
+    // its final step appends them at runtime — so the finalStep is passed through
+    // to keep the emptiness check honest.
     const validation = this.promptFileParser.validateWorkflowSteps(
-      promptFile.steps
+      promptFile.steps,
+      { finalStep: promptFile.finalStep }
     );
     if (!validation.valid) {
       const errors = validation.errors.join("\n");
@@ -208,7 +211,8 @@ export class PromptFileLoader {
     }
 
     Log.debug(
-      `Loaded ${promptFile.steps.length} prompt(s) from ${displayName}`
+      `Loaded ${promptFile.steps.length} step(s)` +
+        `${promptFile.finalStep ? " + final step" : ""} from ${displayName}`
     );
 
     return workingFilePath;

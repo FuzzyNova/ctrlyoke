@@ -20,10 +20,10 @@
     },
     {
       "id": "full-feature",
-      "label": "Full Feature Workflow",
-      "description": "Complete Plan→Implement→Review→Docs→Commit workflow",
+      "label": "Full Feature Pipeline",
+      "description": "Fixed pipeline: Plan → Review plan → Implement → Polish → Review → Docs → Commit, with a second harness reviewing and a test gate",
       "file": "full-feature.ctrlyoke.yaml",
-      "tags": ["advanced", "complete"],
+      "tags": ["advanced", "pipeline", "gated"],
       "icon": "$(rocket)"
     },
     {

@@ -1770,7 +1770,7 @@ export class WorkflowInstance {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
 
       if (!parsed?.steps?.length) {
-        this.platform.error("No prompts found in file");
+        this.platform.error("No steps found in file");
         return;
       }
 

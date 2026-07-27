@@ -333,7 +333,23 @@ suite("PromptFileParser Tests", () => {
     test("should reject empty prompts array", () => {
       const result = parser.validateWorkflowSteps([]);
       assert.strictEqual(result.valid, false);
-      assert.ok(result.errors.some((e) => e.includes("No prompts")));
+      assert.ok(result.errors.some((e) => e.includes("No steps found")));
+    });
+
+    test("should accept an empty steps array when a finalStep is present", () => {
+      const result = parser.validateWorkflowSteps([], {
+        finalStep: { prompt: "Orchestrate the work" },
+      });
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.errors.length, 0);
+    });
+
+    test("should still validate queued steps alongside a finalStep", () => {
+      const result = parser.validateWorkflowSteps([{ prompt: "  " }], {
+        finalStep: { prompt: "Orchestrate the work" },
+      });
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.errors.some((e) => e.includes("Empty prompt")));
     });
 
     test("should reject prompts with empty text", () => {

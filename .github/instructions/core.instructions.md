@@ -77,6 +77,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 
 - `PromptFileParser` validates against the bundled schema in `out/schemas`, but the editable source of truth is `schemas/`.
 - Parsing normalizes both queue steps and `finalStep`; either can be a prompt step or `type: "script"` step.
+- **A `finalStep` counts as a step.** A final-step-only workflow (empty `steps`, orchestrating `finalStep` that appends its own queue at runtime) is a supported shape — the Spec-Driven Loop template ships it. Anything gating load, validation, or execution on "does this workflow have work" must call `hasExecutableSteps()` from `src/types/CtrlYokeTypes.ts`, never `steps.length` alone; `validateWorkflowSteps` therefore takes the `finalStep` for its emptiness check.
 - Workflow-level execution properties (`harness`, `model`, `agent`, `skills`, `mcpServers`, `hooks`, `priorContext`, `additionalArgs`, `toolPermissions`, etc.) are copied onto the normalized `PromptFile` and then resolved per step later by `PropertyResolver`.
 - Prompt values that look like file paths are resolved relative to prompt file directory, workspace root, then `.ctrlyoke/`.
 - `schemas/workflow-schema.json` has a separate `scriptStep` allowlist with `additionalProperties: false`; when adding a field shared by prompt execution properties and script steps, update both definitions because `scriptStep` does not inherit `executionProperties`.

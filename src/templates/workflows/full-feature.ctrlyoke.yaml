@@ -1,6 +1,6 @@
 _templateMeta:
-  name: Full Feature
-  description: "Plan → Implement → Review → Docs → Commit"
+  name: Full Feature Pipeline
+  description: "Plan → Review plan → Implement → Polish → Review → Docs → Commit. A fixed pipeline where each step is its own session, a second harness reviews, and the tests gate the work."
   variables:
     featureDescription:
       type: text
@@ -8,8 +8,24 @@ _templateMeta:
       description: What to build — describe the feature or change in a sentence or two.
     planDocument:
       type: text
-      default: docs/plan.md
-      description: Path where the plan is written and referenced by later steps.
+      default: .ctrlyoke/plans/plan.md
+      description: Where the plan is written. Every later step reads it, so name it per feature. Use forward slashes.
+    reviewHarness:
+      type: harness
+      default: codex-cli
+      description: Second opinion. Pick a different harness than the one running the rest of the workflow — the model reviewing the plan and the implementation should not be the one that wrote them.
+    testCommand:
+      type: text
+      default: npm test
+      description: Your test suite. The polish step retries until this passes.
+    formatCommand:
+      type: text
+      default: npm run format
+      description: Your formatter. Runs as a script step, so no AI turn is spent on deterministic work.
+
+# Each step gets a fresh session — the plan document is the shared context, not a
+# chained conversation. Use the Simple Feature template for the one-session style.
+resumeSession: false
 
 # prompts
 steps:
@@ -17,32 +33,68 @@ steps:
     prompt: |
       {featureDescription}
 
-      Analyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called {planDocument}
+      Analyze the codebase and write an implementation plan to {planDocument}: which files change,
+      the approach, the existing patterns and conventions to follow, and the risks. Do not write
+      any implementation code yet.
     endCondition:
-      script: "test -f {planDocument}"
+      script: node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "{planDocument}"
       returns: "true"
       maxRetries: 2
       retryPrompt: |
-        The plan document was not created. Please create {planDocument} with the implementation plan.
+        {planDocument} was not created. Write the implementation plan to it.
+
+  - name: review-plan
+    harness: "{reviewHarness}"
+    prompt: |
+      Review the implementation plan in @{planDocument} as a second opinion — you did not write it.
+
+      Does it actually deliver this?
+
+      {featureDescription}
+
+      Check it against the real code: does the approach fit existing patterns, is anything missing,
+      wrong, or over-built? Update {planDocument} directly with your corrections, and note anything
+      you deliberately left alone.
 
   - name: implement
     prompt: |
-      Implement the feature according to the plan in @{planDocument}. Make all necessary code changes.
+      Implement the plan in @{planDocument}. Make all the code changes it describes — complete, with
+      no TODOs, stubs, or placeholders.
+
+  - name: polish
+    prompt: |
+      Finish the implementation: handle the edge cases and error paths, add tests covering the new
+      behavior, and clean up anything the linter or formatter complains about.
+
+      Run {testCommand} and fix what it reports.
+    endCondition:
+      script: "{testCommand}"
+      returns: "true"
+      maxRetries: 3
+      retryPrompt: |
+        {testCommand} is still failing. Fix the remaining issues:
+
+        {stdout}
 
   - name: review
+    harness: "{reviewHarness}"
     prompt: |
-      Review the implementation for:
-      - Code quality
-      - Type safety
-      - Error handling
-      - Security issues
+      Review the finished implementation against @{planDocument} — again as a second opinion.
 
-      Fix any problems found.
+      Look for correctness bugs, missed edge cases, type errors, security issues, and drift from the
+      codebase's existing patterns. Fix what you find, and say what you changed and why.
 
   - name: update-docs
     prompt: |
-      Update relevant documentation to explain the new feature.
+      Update the documentation for this feature — what a user or another developer needs to read.
+      If the change is neither user-visible nor architecturally interesting, say so and change
+      nothing.
 
-  - name: commit-message
+  - name: format
+    type: script
+    script: "{formatCommand}"
+
+  - name: commit
     prompt: |
-      Generate a conventional commit message. Format: feat(scope): description
+      Review the working tree changes, then commit them with a conventional commit message
+      (`feat(scope): description`). No attribution or generated-by trailers.

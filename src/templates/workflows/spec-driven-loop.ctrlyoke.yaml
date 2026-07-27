@@ -11,6 +11,12 @@ _templateMeta:
         - "**/*.json"
       autoFillFilename: true
 
+# Every queued step is its own island: a fresh session that gets all the context
+# it needs from its own prompt and the repo. Chaining them into one session just
+# drives that session into repeated compaction as it tries to hold every step at
+# once. The finalStep overrides this for itself — see below.
+resumeSession: false
+
 # No prompts up front — deliberately. Most specs need more than one session of
 # work, and a fixed "implement it all" step just fails and leaves the loop to
 # clean up. Instead the queue starts empty and the orchestrator decides how to
@@ -23,7 +29,8 @@ finalStep:
   agent: spec-orchestrator
   mcpServers:
     - ctrlyoke
-  # The orchestrator resumes its own session on every loop, so it remembers the
+  # The orchestrator is the one exception to the workflow-level resumeSession:
+  # false above. It resumes its own session on every loop, so it remembers the
   # plan it staged and does not re-derive it. Prior context stays off: it reads
   # the repo (and ctrlyoke_read_output when it needs a step's report) instead of
   # inlining every step's output into the prompt.
