@@ -15,7 +15,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 type CopilotToolArgs = Record<string, unknown> | string;
@@ -195,7 +195,7 @@ export class CopilotToolBuilder {
 
     if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT) {
       const structuredPatch = completionData?.result?.detailedContent
-        ? CliResponseParser.parseUnifiedDiff(
+        ? CliParseUtils.parseUnifiedDiff(
             completionData.result.detailedContent
           )
         : undefined;

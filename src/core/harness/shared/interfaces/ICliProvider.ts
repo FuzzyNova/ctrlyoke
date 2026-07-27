@@ -4,7 +4,7 @@ import type {
   IToolPermissionMapper,
   ToolPermissionConfig,
 } from "./IToolPermissionMapper";
-import type { ILogParser } from "./ILogParser";
+import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type {
   HookEvent,
   PromptStep,
@@ -101,6 +101,37 @@ export interface ICliProvider {
 
   /** Log parser component (for log file monitoring in interactive mode) */
   readonly logParser?: ILogParser;
+
+  /**
+   * Convert headless stdout into the event vocabulary understood by this
+   * provider's log parser.
+   *
+   * A provider implementing this method is stdout-sourced: the returned
+   * events are passed through the log parser's response mapping. This method
+   * must not return CliEvent[] directly or introduce a second event mapping.
+   * A provider that does not implement this method is log-sourced (unless it
+   * is still using the temporary response-parser fallback during migration).
+   */
+  parseHeadlessStdout?(stdout: string): BaseCliEvent[];
+
+  /**
+   * Extract a session ID from a headless stdout chunk.
+   *
+   * This is a narrow session-ID lookup, not a response parser. A provider
+   * implementing only this method is log-sourced: stdout supplies the
+   * session-ID carrier while the session log supplies the events. Providers
+   * implementing parseHeadlessStdout() may also implement this method when
+   * their stdout carries the session ID.
+   */
+  extractSessionIdFromStdout?(chunk: string): string | undefined;
+
+  /**
+   * Classify a process-spawn error that should trigger a retry without the
+   * resume flag. Providers that do not implement this method default to
+   * false; this belongs on the provider because it classifies transport
+   * errors, not CLI output.
+   */
+  isRecoverableSessionError?(error: unknown): boolean;
 
   /**
    * Build complete CLI arguments array for execution

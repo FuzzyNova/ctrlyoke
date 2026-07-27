@@ -13,7 +13,7 @@ import {
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { getCopilotContextWindowSize } from "../../../utils/ModelConstants";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
 
 /**
@@ -70,7 +70,7 @@ export class CopilotResponseParser
     exitCode: number
   ): UniversalCliOutput {
     const events: CliEvent[] = [];
-    const { objects } = CliResponseParser.extractJsonObjectsFromStream(stdout);
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
 
     let sessionId: string | undefined;
     let model: string | undefined;
@@ -324,7 +324,7 @@ export class CopilotResponseParser
     buffer += chunk;
 
     const { objects, remainder } =
-      CliResponseParser.extractJsonObjectsFromStream(buffer);
+      CliParseUtils.extractJsonObjectsFromStream(buffer);
     streamState.set("streamBuffer", remainder);
 
     if (objects.length === 0) {
@@ -441,7 +441,7 @@ export class CopilotResponseParser
       return undefined;
     }
 
-    const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(output);
     for (const json of objects) {
       if (json.type === "result" && json.sessionId) {
         return json.sessionId;

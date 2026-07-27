@@ -476,7 +476,7 @@ src/flightpath/
 │   ├── ClaudeCommandLineIntegration.ts   # Claude Code CLI
 │   ├── CodexCommandLineIntegration.ts    # OpenAI Codex CLI
 │   └── shared/
-│       ├── CliResponseParser.ts       # Multi-format response parsing
+│       ├── CliParseUtils.ts           # Multi-format response parsing
 │       ├── CliToolPermissionMapper.ts # Cross-CLI tool mapping
 │       ├── CliMcpConfigGenerator.ts   # MCP config generation
 │       └── CliNotificationMonitor.ts  # Completion notification monitoring

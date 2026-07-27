@@ -18,7 +18,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import { CodexToolBuilder } from "./CodexToolBuilder";
 
 // ============================================================
@@ -164,7 +164,7 @@ export class CodexResponseParser
     let isError = false;
     let errorMessage: string | undefined;
 
-    const objects = CliResponseParser.parseJsonLines(
+    const objects = CliParseUtils.parseJsonLines(
       stdout
     ) as CodexCliJsonEvent[];
 
@@ -593,7 +593,7 @@ export class CodexResponseParser
    * @returns Session ID if found
    */
   extractSessionId(output: string): string | undefined {
-    const objects = CliResponseParser.parseJsonLines(
+    const objects = CliParseUtils.parseJsonLines(
       output
     ) as CodexCliJsonEvent[];
 

@@ -16,6 +16,7 @@ import { QwenLogParser } from "./QwenLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getQwenModelIdsSync } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
@@ -649,5 +650,21 @@ export class QwenCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion("qwen --version");
+  }
+
+  /**
+   * Check if error is a Qwen Code CLI invalid session error.
+   *
+   * This classifies a process-spawn error so the runner can retry without
+   * the resume flag; it is intentionally a provider concern, not output
+   * parsing.
+   */
+  isRecoverableSessionError(error: unknown): boolean {
+    const message = getErrorMessage(error);
+    return (
+      message.includes("invalid session") ||
+      message.includes("session not found") ||
+      message.includes("--resume requires a valid session")
+    );
   }
 }

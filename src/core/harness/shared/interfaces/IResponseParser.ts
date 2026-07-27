@@ -51,17 +51,6 @@ export interface IResponseParser {
   ): { prompt: number; completion: number } | undefined;
 
   /**
-   * Check if an error is a recoverable session error that should trigger retry without resume flag
-   *
-   * Some harnesses (e.g., Claude CLI) reject invalid session IDs with specific error messages.
-   * When detected, ctrlyoke can retry the same prompt without the --resume flag to start a new session.
-   *
-   * @param error The error to check (Error object or string)
-   * @returns True if this is a recoverable session error (retry without resume), false otherwise
-   */
-  isRecoverableSessionError?(error: unknown): boolean;
-
-  /**
    * Set the resolved model ID for the current execution.
    *
    * Called by CliResponseCollector before parsing headless output.
@@ -156,16 +145,4 @@ export abstract class ResponseParserBase implements IResponseParser {
     }
   }
 
-  /**
-   * Default implementation: No recoverable session errors
-   *
-   * Most harnesses don't have special error recovery logic.
-   * Override this method in harness-specific parsers to implement custom recovery.
-   *
-   * @param error The error to check
-   * @returns False by default (no recovery)
-   */
-  isRecoverableSessionError(_error: unknown): boolean {
-    return false;
-  }
 }

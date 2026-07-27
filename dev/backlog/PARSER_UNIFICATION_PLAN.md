@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** In progress — phases staged as queued ctrlyoke steps on 2026-07-26. Each phase below is one step; update this file as phases land.
+**Status:** Phase 0a complete; Phase 0b and later phases remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -13,7 +13,7 @@ The **goal is right**: there should be exactly one event-mapping implementation 
 
 The **stated mechanism is wrong in two places**, and correcting them makes the change both cheaper and non-lossy:
 
-1. **`src/core/harness/shared/CliResponseParser.ts` must not be deleted.** Despite the name it is not part of the response-parser layer — it's a static utility class, and its `parseUnifiedDiff()` has two **log-side** consumers today: `CodexLogParser.ts:1454`, `CodexLogParser.ts:1615`, and `CopilotToolBuilder.ts:198`. The thing to remove is the `IResponseParser` layer (the six `*ResponseParser.ts` classes, 2,466 LOC). `CliResponseParser` should survive, renamed to something honest like `CliParseUtils`.
+1. **`src/core/harness/shared/CliParseUtils.ts` must not be deleted.** Despite its predecessor's name it is not part of the response-parser layer — it's a static utility class, and its `parseUnifiedDiff()` has log-side consumers today: `CodexLogParser.ts:1454`, `CodexLogParser.ts:1615`, `CopilotToolBuilder.ts:198`, and `AntigravityToolEventBuilder.ts:244`. The thing to remove is the `IResponseParser` layer (the six `*ResponseParser.ts` classes, 2,466 LOC). `CliParseUtils` survives the eventual deletion.
 
 2. **"Unify on log parsers" does not have to mean "wait for the session log."** Those are separable. The invariant that matters is *one mapping implementation per harness, and it is the log parser's*. Where those events come from is a second, independent choice, made per harness on **fidelity** grounds:
 
@@ -151,7 +151,7 @@ Things that are **not** parsing and must survive the deletion:
 | Capability | Current location | Disposition |
 | --- | --- | --- |
 | Session ID from stdout | `*ResponseParser.extractSessionId()`; read at `CliResponseCollector.ts:74` | **Must survive.** Only Copilot and Antigravity implement `ICliProvider.extractSessionIdFromLogs`; Claude, Codex, OpenCode and Qwen headless get their session ID from stdout metadata. Losing it forces every harness through `discoverSessionLog()` prompt-text matching. |
-| Recoverable-session retry | `ClaudeResponseParser.isRecoverableSessionError()`; called at `CliExecutionRunner.ts:394` | Move to `ICliProvider`. It classifies a spawn error, not output. |
+| Recoverable-session retry | `ClaudeResponseParser.isRecoverableSessionError()` and the existing Qwen equivalent; called at `CliExecutionRunner.ts:394` | Move the implementations to `ICliProvider`. They classify spawn errors, not output. |
 | Headless failure classification | `CliResponseCollector.getHeadlessFailure()` (exit code, stderr, CLI-invocation-error patterns) | Unaffected — transport-level, stays. |
 | `parseTokenCounts` | `CliIntegration.ts:338` → `WorkflowExecutor.ts:1531` | Re-point at log-parser metadata or drop; it parses an already-formatted statistics string. |
 | Copilot plain-text fallback | `CopilotResponseParser.parsePlainText()`, sets `rawTextOutput: true` | Decide explicitly. If `--output-format json` is now unconditional (`CopilotCliProvider.ts:670`), this is dead code and should be deleted with the rest; if it's a real fallback, it needs a home outside `IResponseParser`. |
@@ -183,16 +183,21 @@ No startup coordinator, no notification monitor, no completion detection. Discov
 
 Each phase is independently shippable and independently revertible. `ICliProvider.responseParser` stays on the interface until the last harness is migrated.
 
-### Phase 0 — Prepare the seam
+### Phase 0a — Prepare the seam (complete 2026-07-26)
 
-1. Rename `CliResponseParser` → `CliParseUtils` (`extractJsonObjectsFromStream`, `parseJsonLines`, `parseUnifiedDiff`, `formatStatistics`). Update the three log-side callers.
+1. Rename `CliResponseParser` → `CliParseUtils` (`extractJsonObjectsFromStream`, `parseJsonLines`, `parseUnifiedDiff`, `formatStatistics`). Update all callers, including the log-side callers and utility test.
 2. Add two optional `ICliProvider` members: `parseHeadlessStdout?(stdout): BaseCliEvent[]` (stdout-sourced mode — turns stdout into events the harness's **log parser** understands) and `extractSessionIdFromStdout?(chunk): string | undefined`. A provider with the former is stdout-sourced; a provider with only the latter is log-sourced.
-3. Build `HeadlessLogTail` — the log-sourced runtime. Owns: session-ID capture, retried `discoverSessionLog()`, `readNewLines()` on each stdout tick, the idle-poll backstop, and the post-exit bounded drain. **Session-ID discovery must be pluggable, not stdout-only:** Codex yields it from `thread.started` on stdout, but Antigravity has no stdout session marker and resolves it through the provider's existing `extractSessionIdFromLogs()`. Accept either source (stdout extractor first, provider log lookup as the alternative) or Phase 2 is blocked. It reuses `CliLogEventPump` for per-event streaming and deliberately does **not** reuse `CliLogMonitor` (no completion detection, no notification monitor, no background-work hold — process exit settles it).
-4. Teach `CliResponseCollector.collectHeadlessResponse` to select: `parseHeadlessStdout()` → `logParser.extractResponse()`; else `HeadlessLogTail`'s accumulated events → `extractResponse()`; else today's `responseParser.parse()`. All three land in the same `UniversalCliOutput`, so `getHeadlessFailure`, statistics, and session-ID plumbing below it are untouched.
-5. Move `isRecoverableSessionError` to `ICliProvider`.
-6. Route headless live streaming through `logParser.extractStructuredEventsFromEvent()` for both new modes (`CliTransportCoordinator.ts:337-367` currently calls `responseParser.processStreamingChunk`).
+3. Move `isRecoverableSessionError` from `IResponseParser` to `ICliProvider`, retaining the default-false behavior for providers without a provider-level implementation.
 
 **Exit criteria:** no behavior change; every harness still on `responseParser.parse()`.
+
+**Discovery recorded for later phases:** `AntigravityToolEventBuilder` is also a current log-parser consumer of the shared diff utility. Qwen had its own recoverable-session classifier in addition to Claude; both implementations now live on their providers so the runner's retry behavior remains unchanged.
+
+### Phase 0b — Build the log-sourced runtime (queued)
+
+1. Build `HeadlessLogTail` — the log-sourced runtime. Owns: session-ID capture, retried `discoverSessionLog()`, `readNewLines()` on each stdout tick, the idle-poll backstop, and the post-exit bounded drain. **Session-ID discovery must be pluggable, not stdout-only:** Codex yields it from `thread.started` on stdout, but Antigravity has no stdout session marker and resolves it through the provider's existing `extractSessionIdFromLogs()`. Accept either source (stdout extractor first, provider log lookup as the alternative) or Phase 2 is blocked. It reuses `CliLogEventPump` for per-event streaming and deliberately does **not** reuse `CliLogMonitor` (no completion detection, no notification monitor, no background-work hold — process exit settles it).
+2. Teach `CliResponseCollector.collectHeadlessResponse` to select: `parseHeadlessStdout()` → `logParser.extractResponse()`; else `HeadlessLogTail`'s accumulated events → `extractResponse()`; else today's `responseParser.parse()`. All three land in the same `UniversalCliOutput`, so `getHeadlessFailure`, statistics, and session-ID plumbing below it are untouched.
+3. Route headless live streaming through `logParser.extractStructuredEventsFromEvent()` for both new modes (`CliTransportCoordinator.ts:337-367` currently calls `responseParser.processStreamingChunk`).
 
 ### Phase 1 — Codex, log-sourced (highest payoff; proves the hard mode first)
 

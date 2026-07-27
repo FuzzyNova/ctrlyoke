@@ -19,6 +19,7 @@ import {
 } from "../../../utils/ConfigurationUtils";
 import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
@@ -584,5 +585,21 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     return CliProviderUtils.getCliVersion("claude --version");
+  }
+
+  /**
+   * Check if error is a Claude CLI invalid session error.
+   *
+   * This classifies a process-spawn error so the runner can retry without
+   * the resume flag; it is intentionally a provider concern, not output
+   * parsing.
+   */
+  isRecoverableSessionError(error: unknown): boolean {
+    const message = getErrorMessage(error);
+    return (
+      message.includes("--resume requires a valid session ID") ||
+      message.includes("Session IDs must be in UUID format") ||
+      message.includes("No conversation found with session ID")
+    );
   }
 }

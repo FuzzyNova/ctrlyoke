@@ -44,7 +44,7 @@
     "src/core/harness/chat/ChatSessionParser.ts",
     "src/core/harness/shared/CliFailureTracker.ts",
     "src/core/harness/shared/CliMcpConfigGenerator.ts",
-    "src/core/harness/shared/CliResponseParser.ts",
+    "src/core/harness/shared/CliParseUtils.ts",
     "src/core/harness/shared/CliToolPermissionMapper.ts",
     "src/git/CommitMessageGenerationTracker.ts",
     "src/utils/HarnessFileManager.ts",

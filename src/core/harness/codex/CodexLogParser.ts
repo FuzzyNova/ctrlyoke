@@ -19,7 +19,7 @@ import {
   FileEditData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
@@ -1451,7 +1451,7 @@ export class CodexLogParser extends BaseLogParser {
       return undefined;
     }
     if (typeof change.unified_diff === "string") {
-      return CliResponseParser.parseUnifiedDiff(change.unified_diff);
+      return CliParseUtils.parseUnifiedDiff(change.unified_diff);
     }
     if (typeof change.content !== "string") {
       return undefined;
@@ -1612,7 +1612,7 @@ export class CodexLogParser extends BaseLogParser {
       if (change?.unified_diff) {
         correctedByPath.set(
           changePath.toLowerCase(),
-          CliResponseParser.parseUnifiedDiff(change.unified_diff)
+          CliParseUtils.parseUnifiedDiff(change.unified_diff)
         );
       }
     }

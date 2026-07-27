@@ -390,9 +390,7 @@ export class CliExecutionRunner {
           headlessEnv
         );
       } catch (error) {
-        if (
-          this.deps.provider.responseParser.isRecoverableSessionError?.(error)
-        ) {
+        if (this.deps.provider.isRecoverableSessionError?.(error) ?? false) {
           const currentHarness =
             session.resolvedProperties?.harness ??
             this.deps.provider.config.harnessId;

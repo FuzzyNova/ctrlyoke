@@ -14,9 +14,8 @@ import {
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 
 /**
@@ -81,7 +80,7 @@ export class ClaudeResponseParser
     let errorMessage: string | undefined;
     let cliVersion: string | undefined;
 
-    const { objects } = CliResponseParser.extractJsonObjectsFromStream(stdout);
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
 
     // Extract data from parsed objects and create structured events
     for (const json of objects) {
@@ -402,7 +401,7 @@ export class ClaudeResponseParser
     streamBuffer += chunk;
 
     const { objects, remainder } =
-      CliResponseParser.extractJsonObjectsFromStream(streamBuffer);
+      CliParseUtils.extractJsonObjectsFromStream(streamBuffer);
     streamState.set("streamBuffer", remainder);
 
     const events: CliEvent[] = [];
@@ -529,7 +528,7 @@ export class ClaudeResponseParser
    * @returns Session ID if found
    */
   extractSessionId(output: string): string | undefined {
-    const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(output);
 
     for (const json of objects) {
       if (json.type === "result" && json.session_id) {
@@ -585,25 +584,4 @@ export class ClaudeResponseParser
     };
   }
 
-  /**
-   * Check if error is a Claude CLI invalid session error
-   *
-   * Claude CLI validates UUIDs strictly and rejects invalid formats with specific error messages:
-   * - "--resume requires a valid session ID"
-   * - "Session IDs must be in UUID format"
-   * - "No conversation found with session ID"
-   *
-   * When detected, ctrlyoke can retry without the resume flag to start a new session.
-   *
-   * @param error The error to check (Error object or string)
-   * @returns True if this is a recoverable Claude CLI session error
-   */
-  isRecoverableSessionError(error: unknown): boolean {
-    const message = getErrorMessage(error);
-    return (
-      message.includes("--resume requires a valid session ID") ||
-      message.includes("Session IDs must be in UUID format") ||
-      message.includes("No conversation found with session ID")
-    );
-  }
 }

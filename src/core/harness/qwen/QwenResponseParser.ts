@@ -12,8 +12,7 @@ import {
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
@@ -72,7 +71,7 @@ export class QwenResponseParser
     let isError = false;
     let errorMessage: string | undefined;
 
-    const { objects } = CliResponseParser.extractJsonObjectsFromStream(stdout);
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
 
     // Extract data from parsed objects and create structured events
     for (const json of objects) {
@@ -270,7 +269,7 @@ export class QwenResponseParser
     streamBuffer += chunk;
 
     const { objects, remainder } =
-      CliResponseParser.extractJsonObjectsFromStream(streamBuffer);
+      CliParseUtils.extractJsonObjectsFromStream(streamBuffer);
     streamState.set("streamBuffer", remainder);
 
     const events: CliEvent[] = [];
@@ -309,7 +308,7 @@ export class QwenResponseParser
    * @returns Session ID if found
    */
   extractSessionId(output: string): string | undefined {
-    const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(output);
 
     for (const json of objects) {
       // Session ID can be in system init or result event
@@ -364,21 +363,4 @@ export class QwenResponseParser
     };
   }
 
-  /**
-   * Check if error is a Qwen Code CLI invalid session error
-   *
-   * Qwen Code CLI may reject invalid session IDs with specific error messages.
-   * When detected, ctrlyoke can retry without the resume flag to start a new session.
-   *
-   * @param error The error to check (Error object or string)
-   * @returns True if this is a recoverable session error
-   */
-  isRecoverableSessionError(error: unknown): boolean {
-    const message = getErrorMessage(error);
-    return (
-      message.includes("invalid session") ||
-      message.includes("session not found") ||
-      message.includes("--resume requires a valid session")
-    );
-  }
 }

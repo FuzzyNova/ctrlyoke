@@ -36,7 +36,7 @@ export interface CliUsage {
  * - JSONL format (Codex CLI - newline-delimited JSON)
  * - Text format (Copilot CLI - plain text with statistics)
  */
-export class CliResponseParser {
+export class CliParseUtils {
   /**
    * Extract JSON objects from a concatenated stream (stream-json format)
    *

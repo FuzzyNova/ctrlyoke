@@ -12,7 +12,7 @@ import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
-import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import {
   AntigravityPlannerToolCall,
   AntigravityTranscriptEntry,
@@ -241,7 +241,7 @@ export class AntigravityToolEventBuilder {
     }
 
     const diff = this.diffBlock(resultText) ?? resultText;
-    const structuredPatch = CliResponseParser.parseUnifiedDiff(diff);
+    const structuredPatch = CliParseUtils.parseUnifiedDiff(diff);
     return [
       {
         type: CLI_EVENT_TYPES.FILE_EDIT,
