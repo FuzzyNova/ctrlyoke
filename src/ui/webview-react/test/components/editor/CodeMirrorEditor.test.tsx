@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
@@ -10,6 +10,7 @@ import {
   findContextReferenceMatches,
   findAtomicReferences,
   getRetryPlaceholderCompletions,
+  keyboardTooltipSpace,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
 import {
@@ -681,5 +682,106 @@ describe("CodeMirrorEditor atomic reference chips", () => {
       view.destroy();
       parent.remove();
     }
+  });
+});
+
+describe("keyboardTooltipSpace", () => {
+  const originalVisualViewport = window.visualViewport;
+
+  function stubDocumentElement(width: number, height: number) {
+    Object.defineProperty(document.documentElement, "clientWidth", {
+      value: width,
+      configurable: true,
+    });
+    Object.defineProperty(document.documentElement, "clientHeight", {
+      value: height,
+      configurable: true,
+    });
+  }
+
+  function stubVisualViewport(
+    viewport:
+      | Pick<VisualViewport, "offsetTop" | "offsetLeft" | "width" | "height">
+      | undefined
+  ) {
+    Object.defineProperty(window, "visualViewport", {
+      value: viewport,
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    stubVisualViewport(
+      originalVisualViewport as unknown as VisualViewport | undefined
+    );
+    Reflect.deleteProperty(document.documentElement, "clientWidth");
+    Reflect.deleteProperty(document.documentElement, "clientHeight");
+  });
+
+  it("falls back to the document element when there is no visual viewport", () => {
+    stubDocumentElement(390, 800);
+    stubVisualViewport(undefined);
+
+    expect(keyboardTooltipSpace()).toEqual({
+      top: 0,
+      left: 0,
+      bottom: 800,
+      right: 390,
+    });
+  });
+
+  it("clamps the bottom to the keyboard line so the dropdown can flip above", () => {
+    stubDocumentElement(390, 800);
+    // Keyboard up: the layout viewport keeps its full 800px, the visual
+    // viewport shrinks to the 460px band above the keyboard.
+    stubVisualViewport({
+      offsetTop: 0,
+      offsetLeft: 0,
+      width: 390,
+      height: 460,
+    });
+
+    expect(keyboardTooltipSpace()).toEqual({
+      top: 0,
+      left: 0,
+      bottom: 460,
+      right: 390,
+    });
+  });
+
+  it("expresses a panned visual viewport in layout-viewport coordinates", () => {
+    stubDocumentElement(390, 800);
+    // iOS panned the visual viewport down by 120px — coordsAtPos still reports
+    // client rects against the layout viewport, so the band is 120..580.
+    stubVisualViewport({
+      offsetTop: 120,
+      offsetLeft: 0,
+      width: 390,
+      height: 460,
+    });
+
+    expect(keyboardTooltipSpace()).toEqual({
+      top: 120,
+      left: 0,
+      bottom: 580,
+      right: 390,
+    });
+  });
+
+  it("matches CodeMirror's default window space when no keyboard is open", () => {
+    stubDocumentElement(1280, 900);
+    stubVisualViewport({
+      offsetTop: 0,
+      offsetLeft: 0,
+      width: 1280,
+      height: 900,
+    });
+
+    expect(keyboardTooltipSpace()).toEqual({
+      top: 0,
+      left: 0,
+      bottom: 900,
+      right: 1280,
+    });
   });
 });

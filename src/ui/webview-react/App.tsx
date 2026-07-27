@@ -63,17 +63,17 @@ function isIosWebKitBrowser(): boolean {
   );
 }
 
+function isEditableElement(element: HTMLElement): boolean {
+  const tagName = element.tagName;
+  return (
+    tagName === "INPUT" || tagName === "TEXTAREA" || element.isContentEditable
+  );
+}
+
 function isEditableElementFocused(): boolean {
   const activeElement = document.activeElement;
-  if (!(activeElement instanceof HTMLElement)) {
-    return false;
-  }
-
-  const tagName = activeElement.tagName;
   return (
-    tagName === "INPUT" ||
-    tagName === "TEXTAREA" ||
-    activeElement.isContentEditable
+    activeElement instanceof HTMLElement && isEditableElement(activeElement)
   );
 }
 
@@ -182,8 +182,12 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
       );
       const viewportLooksKeyboardAdjusted = keyboardInset > 80 || offsetTop > 0;
 
+      // Arming on focus alone (not focus AND a keyboard-adjusted viewport) is
+      // deliberate — see handleFocusIn. Deactivation still waits for the
+      // viewport to return to normal, so the pin survives the whole time the
+      // keyboard is up even if focus moves to a non-editable element.
       const editableFocused = isEditableElementFocused();
-      if (editableFocused && viewportLooksKeyboardAdjusted) {
+      if (editableFocused) {
         keyboardViewportActive = true;
       } else if (!viewportLooksKeyboardAdjusted) {
         keyboardViewportActive = false;
@@ -203,6 +207,11 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
       // the runaway loop. `top`/height only (no transform) so fixed descendants
       // aren't trapped and no body background is exposed (the "black box").
       lockScroll();
+      // iOS can still set `scrollTop` on an overflow:hidden ancestor after the
+      // lock (its reveal-the-caret pass runs asynchronously). Re-assert 0 on
+      // every viewport event: unlike changing the root's `top`, this does not
+      // reflow the root, so it cannot restart the scroll→reflow→re-pan loop.
+      resetScrollContainers();
       const nextStyle: IosVisualViewportRootStyle = {
         position: "fixed",
         top: 0,
@@ -229,12 +238,30 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
       frameId = requestAnimationFrame(updateRootStyle);
     };
 
+    // Lock SYNCHRONOUSLY the moment an editable is focused — before the keyboard
+    // animates in, and before the rAF-deferred style update runs. Waiting for
+    // the visual viewport to look keyboard-adjusted (the `resize` event) leaves
+    // a window in which iOS runs its own scroll-the-caret-into-view pass against
+    // a still-scrollable document. The pan it establishes then outlives the pin,
+    // which uses a constant `top: 0` and so paints the root off the top of the
+    // visible area — the "tapping the editor scrolls the page to the bottom,
+    // only the editor footer is left visible" bug. Locking first leaves iOS
+    // nothing to scroll, so no pan is ever established.
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && isEditableElement(target)) {
+        keyboardViewportActive = true;
+        lockScroll();
+      }
+      scheduleUpdate();
+    };
+
     scheduleUpdate();
     visualViewport.addEventListener("resize", scheduleUpdate);
     visualViewport.addEventListener("scroll", scheduleUpdate);
     window.addEventListener("resize", scheduleUpdate);
     window.addEventListener("orientationchange", scheduleUpdate);
-    document.addEventListener("focusin", scheduleUpdate);
+    document.addEventListener("focusin", handleFocusIn);
     document.addEventListener("focusout", scheduleUpdate);
 
     return () => {
@@ -245,7 +272,7 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
       visualViewport.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
       window.removeEventListener("orientationchange", scheduleUpdate);
-      document.removeEventListener("focusin", scheduleUpdate);
+      document.removeEventListener("focusin", handleFocusIn);
       document.removeEventListener("focusout", scheduleUpdate);
       // Never leave the body locked if the hook tears down mid-keyboard.
       unlockScroll();

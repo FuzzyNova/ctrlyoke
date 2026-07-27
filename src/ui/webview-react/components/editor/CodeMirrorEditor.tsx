@@ -8,6 +8,7 @@ import {
   Decoration,
   WidgetType,
   tooltips,
+  repositionTooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
 import { EditorState } from "@codemirror/state";
@@ -489,6 +490,49 @@ export function buildPromptReferenceInsertion(
 }
 
 /**
+ * Rectangle the autocomplete dropdown is allowed to occupy.
+ *
+ * CodeMirror's default (`windowSpace`) uses `documentElement.clientHeight` — the
+ * LAYOUT viewport, which on iOS keeps its full height while the on-screen
+ * keyboard is up. The dropdown therefore believes it has room below the caret
+ * and renders straight down into the region the keyboard covers, leaving only
+ * its first row or two visible. Clamping the bottom to the keyboard line makes
+ * CodeMirror flip the dropdown above the caret when it no longer fits below
+ * (and shrink it when neither side fits), with no bespoke positioning code.
+ *
+ * Coordinate space matters: tooltip positions come from `coordsAtPos`, i.e.
+ * client rects relative to the layout viewport, so the visible band has to be
+ * expressed the same way — `offsetTop` .. `offsetTop + height`, NOT `0 ..
+ * height`. Using the latter would clip the wrong band (and hide the tooltip
+ * outright) whenever iOS has panned the visual viewport. Everywhere else —
+ * desktop, and iOS with no keyboard — `offsetTop` is 0 and `height` equals
+ * `clientHeight`, so this returns exactly what `windowSpace` would.
+ */
+export function keyboardTooltipSpace(): {
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+} {
+  const docElt = document.documentElement;
+  const vv = window.visualViewport;
+  if (!vv) {
+    return {
+      top: 0,
+      left: 0,
+      bottom: docElt.clientHeight,
+      right: docElt.clientWidth,
+    };
+  }
+  return {
+    top: Math.max(0, vv.offsetTop),
+    left: Math.max(0, vv.offsetLeft),
+    bottom: Math.min(docElt.clientHeight, vv.offsetTop + vv.height),
+    right: Math.min(docElt.clientWidth, vv.offsetLeft + vv.width),
+  };
+}
+
+/**
  * CodeMirrorEditor - CodeMirror 6 integration for prompt editing
  *
  * Features:
@@ -655,11 +699,21 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const handleScroll = () => viewRef.current?.requestMeasure();
+    // requestMeasure alone does NOT re-run the tooltip plugin's own measure
+    // request, so an already-open dropdown would keep the placement it computed
+    // against the pre-keyboard viewport. repositionTooltips re-evaluates
+    // keyboardTooltipSpace, which is what flips it above the caret.
+    const handleScroll = () => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.requestMeasure();
+      repositionTooltips(view);
+    };
     const handleResize = () => {
       const view = viewRef.current;
       if (!view) return;
       view.requestMeasure();
+      repositionTooltips(view);
       if (!view.hasFocus) return;
       view.dispatch({
         effects: EditorView.scrollIntoView(view.state.selection.main.head, {
@@ -1242,11 +1296,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         // position:absolute for tooltips, which causes them to be clipped and
         // hidden behind the EditorFooter). The body container is outside any
         // overflow:hidden chain, so the tooltip renders above the footer.
-        // We intentionally omit tooltipSpace here — the default windowSpace
-        // (document.documentElement.clientHeight) matches what coordsAtPos
-        // uses for cursor Y, avoiding the mismatch that would hide the tooltip
-        // when vv.offsetTop is non-zero (iOS browser chrome height).
-        tooltips({ parent: document.body }),
+        tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace }),
         autocompletion({
           override:
             mode === "endCondition"
