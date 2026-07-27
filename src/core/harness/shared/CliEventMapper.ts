@@ -21,7 +21,7 @@ export type ToolClassification =
  * All CLI harnesses (Copilot, Claude, Codex) map tool names to semantic event types
  * using the same categories (BASH_COMMAND, FILE_READ, FILE_WRITE, etc.). This utility
  * centralizes that classification to avoid ~500 lines of duplicated switch/if-else chains
- * across CopilotLogParser, ClaudeLogParser, ClaudeResponseParser, and CodexLogParser.
+ * across CopilotLogParser, ClaudeLogParser, and CodexLogParser.
  *
  * **Harness-specific tool name variations handled:**
  * - Bash/shell: `bash`, `shell`, `powershell`, `command`, `execute_command`, `run_command`, `shell_command`

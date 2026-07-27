@@ -80,9 +80,17 @@ import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 interface ClaudeProviderEvent extends BaseCliEvent {
   message?: Record<string, any>;
   sessionId?: string;
+  model?: string;
   subtype?: string;
   durationMs?: number;
   toolUseResult?: Record<string, any>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
   data?: Record<string, any>;
   content?: string;
   attachment?: {
@@ -177,6 +185,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let totalOutputTokens = 0;
     let cacheCreationTokens = 0;
     let cacheReadTokens = 0;
+    let resultUsage: ClaudeProviderEvent["usage"];
+    let resultTotalTokens: number | undefined;
     let lastAssistantUsage:
       | {
           input_tokens: number;
@@ -192,6 +202,32 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       // Extract session ID from any event
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
+      }
+
+      // Claude's headless stream ends with a result event that is not present
+      // in the session JSONL. Fold its billing/session metadata into the same
+      // output metadata used by the log path; it is never a user-facing event.
+      if (event.type === "result") {
+        if (event.sessionId) {
+          sessionId = event.sessionId;
+        }
+        if (event.model && !model) {
+          model = event.model;
+        }
+        if (event.usage) {
+          resultUsage = event.usage;
+          totalInputTokens = event.usage.input_tokens ?? totalInputTokens;
+          totalOutputTokens = event.usage.output_tokens ?? totalOutputTokens;
+          cacheCreationTokens =
+            event.usage.cache_creation_input_tokens ?? cacheCreationTokens;
+          cacheReadTokens =
+            event.usage.cache_read_input_tokens ?? cacheReadTokens;
+          resultTotalTokens = event.usage.total_tokens;
+        }
+      }
+
+      if (event.type === "system" && event.model && !model) {
+        model = event.model;
       }
 
       // Get timestamp for events
@@ -309,10 +345,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     // Compute context window occupancy from last assistant turn only.
     // Cumulative totals (totalInputTokens etc.) are billing totals across all turns,
     // not the current context window state.
-    const contextWindowUsedTokens = lastAssistantUsage
-      ? (lastAssistantUsage.input_tokens || 0) +
-        (lastAssistantUsage.cache_creation_input_tokens || 0) +
-        (lastAssistantUsage.cache_read_input_tokens || 0)
+    const contextUsage = lastAssistantUsage ?? resultUsage;
+    const contextWindowUsedTokens = contextUsage
+      ? (contextUsage.input_tokens || 0) +
+        (contextUsage.cache_creation_input_tokens || 0) +
+        (contextUsage.cache_read_input_tokens || 0)
       : undefined;
 
     return {
@@ -327,7 +364,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             ? {
                 inputTokens: totalInputTokens,
                 outputTokens: totalOutputTokens,
-                totalTokens: totalInputTokens + totalOutputTokens,
+                totalTokens:
+                  resultTotalTokens ?? totalInputTokens + totalOutputTokens,
                 cachedInputTokens:
                   cacheReadTokens > 0 ? cacheReadTokens : undefined,
                 cacheCreatedTokens:

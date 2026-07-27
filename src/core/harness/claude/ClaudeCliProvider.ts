@@ -2,13 +2,11 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
-import { ClaudeResponseParser } from "./ClaudeResponseParser";
 import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
 import { ClaudeLogParser } from "./ClaudeLogParser";
@@ -21,6 +19,8 @@ import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { CliParseUtils } from "../shared/CliParseUtils";
+import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -36,13 +36,12 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  *
  * Implements all Claude-specific logic using composition pattern:
  * - Log file monitoring and Stop hook for completion detection
- * - Stream-json output parsing with real-time content extraction
+ * - Stream-json stdout adaptation for the shared Claude log event mapper
  * - Tool permission conversion with Anthropic tool name format (Bash, Write)
  * - MCP server configuration with "type": "stdio"
  * - Session discovery via log file analysis
  *
  * This provider aggregates four specialized components:
- * - ClaudeResponseParser: Parses stream-json output and tool calls
  * - ClaudeNotificationMonitor: Monitors Stop hook notifications
  * - ClaudeToolPermissionMapper: Converts permissions to CLI arguments
  * - CliMcpConfigGenerator: Generates MCP configuration files (shared)
@@ -69,12 +68,60 @@ export class ClaudeCliProvider implements ICliProvider {
     usesInteractiveNotificationMonitor: true,
   };
 
-  readonly responseParser: IResponseParser = new ClaudeResponseParser();
   readonly notificationMonitor: INotificationMonitor =
     new ClaudeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new ClaudeToolPermissionMapper();
   readonly logParser = new ClaudeLogParser();
+  readonly headlessSource = "stdout" as const;
+
+  /**
+   * Adapt Claude's stream-json stdout to the event vocabulary consumed by
+   * ClaudeLogParser. The log parser remains the only event mapper.
+   */
+  parseHeadlessStdout(stdout: string): BaseCliEvent[] {
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
+
+    return objects.map((event) => {
+      const normalized = { ...event };
+
+      if (typeof event.session_id === "string") {
+        normalized.sessionId = event.session_id;
+      }
+      if (event.tool_use_result !== undefined) {
+        normalized.toolUseResult = event.tool_use_result;
+      }
+
+      return normalized as BaseCliEvent;
+    });
+  }
+
+  /** Extract the session ID from Claude's system/init event. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(chunk);
+    const initEvent = objects.find(
+      (event) =>
+        event.type === "system" &&
+        event.subtype === "init" &&
+        typeof event.session_id === "string"
+    );
+    return initEvent?.session_id as string | undefined;
+  }
+
+  /** Parse legacy statistics strings used by workflow token reporting. */
+  parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number } | undefined {
+    const match = statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/);
+    if (!match) {
+      return undefined;
+    }
+
+    return {
+      prompt: Number.parseInt(match[1], 10),
+      completion: Number.parseInt(match[2], 10),
+    };
+  }
 
   /**
    * Build complete CLI arguments array for Claude CLI execution

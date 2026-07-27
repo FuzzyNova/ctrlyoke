@@ -1,6 +1,6 @@
 # Parser Unification — One Event Mapping Per Harness
 
-**Status:** Phases 0, 1, 2, 3, and 4 complete; Phases 5 and later remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
+**Status:** Phases 0 through 5 complete; Phases 6 and 7 remain in progress. Phases were staged as queued ctrlyoke steps on 2026-07-26.
 **Motivation:** Maintaining a response-parser path and a log-parser path per harness is a recurring tax. The response path is routinely the one missing data, and the fix is always "read it back out of the session log anyway" — see `353ad5f0` (Codex headless `file_change` items carry `{path, kind}` with no patch body; `CodexCliProvider.augmentParsedOutput()` back-fills hunks from `event_msg:patch_apply_end`).
 
 That back-fill is not just maintenance debt, it is a **user-visible defect**: because it runs only after the prompt completes, a headless Codex run shows a bare `Edited <file>` with no diff for its entire duration. The information exists in the log the whole time. Deleting `augmentParsedOutput()` as a stdout-repair mechanism is a primary goal of this plan, not a side effect.
@@ -272,11 +272,13 @@ extracts the session ID from stdout, and retains legacy token-stat parsing.
 Golden-output coverage compares headless stdout with the equivalent interactive
 export event shape and asserts that the headless path makes no `export` calls.
 
-### Phase 5 — Claude, stdout-sourced
+### Phase 5 — Claude, stdout-sourced — **complete 2026-07-26**
 
 `parseHeadlessStdout` = `CliParseUtils.extractJsonObjectsFromStream` + field aliasing (`session_id`→`sessionId`, `tool_use_result`→`toolUseResult`) + folding the `result` event into metadata. Both sides already share `ClaudeToolBuilder`. Delete `ClaudeResponseParser` (609 LOC); keep `isRecoverableSessionError` on the provider.
 
-**Watch:** background-work tracking (`trackBackgroundWorkState` / `hasPendingBackgroundWork`) is log-parser state. Confirm it behaves when fed stdout events, or switch Claude to log-sourced if it needs the `attachment` events only the log carries.
+**Finding:** Claude background-work tracking is driven by `assistant` launches and delivered `user` task notifications, both present in stdout. Feeding the aliased stdout events through `trackBackgroundWorkState` preserves the pending-work/resumed-turn latch, so the marginal `attachment` events in the session log do not justify switching Claude to log-sourced mode.
+
+**Verify:** cache-token and context-window math, tool/file/thinking mappings, recoverable-session retry, and a golden stdout/session-log comparison are covered in `LogParsers.test.ts` and the Claude fixtures.
 
 ### Phase 6 — Qwen
 

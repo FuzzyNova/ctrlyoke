@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { ClaudeLogParser } from "../../../core/harness/claude/ClaudeLogParser";
+import { ClaudeCliProvider } from "../../../core/harness/claude/ClaudeCliProvider";
 import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
 import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
@@ -121,6 +122,111 @@ suite("ClaudeLogParser", () => {
 
   setup(() => {
     parser = new ClaudeLogParser();
+  });
+
+  suite("headless golden output", () => {
+    test("maps Claude stdout and session-log events to equivalent universal output", () => {
+      const fixtureRoot = path.resolve(
+        __dirname,
+        "../../../../src/test/fixtures/claude"
+      );
+      const provider = new ClaudeCliProvider();
+      provider.logParser.setCurrentModel("claude-sonnet-4-6");
+      const stdout = fs.readFileSync(
+        path.join(fixtureRoot, "headless-golden.stdout.jsonl"),
+        "utf8"
+      );
+      const sessionLog = fs
+        .readFileSync(
+          path.join(fixtureRoot, "headless-golden.session.jsonl"),
+          "utf8"
+        )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+
+      const stdoutOutput = provider.logParser.extractResponse(
+        provider.parseHeadlessStdout(stdout)
+      );
+      const logOutput = parser.extractResponse(sessionLog);
+      const normalize = (output: UniversalCliOutput) =>
+        JSON.parse(
+          JSON.stringify(output, (key, value) =>
+            key === "timestamp" ? undefined : value
+          )
+        );
+
+      assert.deepStrictEqual(normalize(stdoutOutput), normalize(logOutput));
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout(stdout),
+        "claude-session-golden"
+      );
+      assert.ok(
+        stdoutOutput.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.THINKING
+        ),
+        "stdout path should preserve thinking blocks"
+      );
+      assert.ok(
+        stdoutOutput.events.some(
+          (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
+        ),
+        "stdout path should preserve file edits"
+      );
+      assert.strictEqual(stdoutOutput.metadata.usage?.inputTokens, 240);
+      assert.strictEqual(stdoutOutput.metadata.usage?.outputTokens, 30);
+      assert.strictEqual(
+        stdoutOutput.metadata.usage?.cachedInputTokens,
+        40
+      );
+      assert.strictEqual(
+        stdoutOutput.metadata.usage?.contextWindowUsedTokens,
+        155
+      );
+    });
+
+    test("feeds stdout aliases into Claude background-work tracking", () => {
+      const provider = new ClaudeCliProvider();
+      const events = provider.parseHeadlessStdout(
+        [
+          {
+            type: "assistant",
+            message: {
+              content: [
+                {
+                  type: "tool_use",
+                  id: "toolu_stdout_background",
+                  name: "Bash",
+                  input: { command: "sleep 60", run_in_background: true },
+                },
+              ],
+            },
+          },
+          {
+            type: "user",
+            message: {
+              content:
+                "<task-notification><tool-use-id>toolu_stdout_background</tool-use-id></task-notification>",
+            },
+          },
+          {
+            type: "assistant",
+            message: { content: [], stop_reason: "end_turn" },
+          },
+        ]
+          .map((event) => JSON.stringify(event))
+          .join(""),
+      );
+
+      for (const event of events) {
+        provider.logParser.trackBackgroundWorkState?.(event);
+      }
+
+      assert.strictEqual(
+        provider.logParser.hasPendingBackgroundWork?.(),
+        false
+      );
+    });
   });
 
   suite("extractResponse", () => {

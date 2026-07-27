@@ -21,8 +21,8 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
  * - `processToolResultBlocks` — tool_result in user content → TOOL_RESULT events
  * - `processToolUseResultMetadata` — CLI structured metadata → COMPLETED semantic events
  *
- * Both ClaudeLogParser and ClaudeResponseParser use these methods so the
- * event-shaping logic is never duplicated.
+ * ClaudeLogParser uses these methods for both interactive log events and
+ * headless stdout events, so the event-shaping logic is never duplicated.
  *
  * Note: Claude's lifecycle differs from Copilot's — there is no start/complete
  * pair correlated by toolCallId. Instead, tool_use and tool_result are separate
