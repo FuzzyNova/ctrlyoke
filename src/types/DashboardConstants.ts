@@ -1092,6 +1092,17 @@ export const COMPARE_SOURCES = {
   EXIT_CODE: "exitCode",
 } as const;
 
+/** Display labels for COMPARE_SOURCES values (script/endCondition/preCondition editors) */
+export const COMPARE_SOURCE_LABELS: Record<
+  (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
+  string
+> = {
+  auto: "Auto",
+  stdout: "Stdout",
+  stderr: "Stderr",
+  exitCode: "Exit Code",
+};
+
 // ============================================================================
 // SCRIPT OUTPUT SOURCES - Origin values for unified script execution output
 // ============================================================================

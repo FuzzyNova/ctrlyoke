@@ -293,9 +293,9 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     allowedExternalFileRoots: [],
   },
   execution: {
-    injectMode: false,
+    injectMode: true,
     maxPromptTimeout: -1,
-    scriptTimeout: 300,
+    scriptTimeout: 3600,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
   },

@@ -2,16 +2,17 @@ import React, { useState, useEffect } from "react";
 import { DrawerRow } from "./DrawerRow";
 import { CustomSelect } from "./CustomSelect";
 import {
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
   COMPARE_SOURCE_LABELS,
-  type EndConditionCompareSource,
-} from "../../utils/endCondition";
-import { CONDITION_ACTIONS, COMPARE_SOURCES } from "../../types/messages";
+  type CompareSource,
+} from "../../types/messages";
 import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
-  Object.values(COMPARE_SOURCES) as EndConditionCompareSource[]
+  Object.values(COMPARE_SOURCES) as CompareSource[]
 ).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
 /** Action options for end condition (onPass/onFail) */
@@ -97,7 +98,6 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   scriptLabel = "Script",
 }) => {
   const v = value ?? {};
-  const isScriptStep = variant === "scriptStep";
   const actionOptions =
     variant === "endCondition"
       ? END_CONDITION_ACTION_OPTIONS
@@ -116,9 +116,12 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [returnsInput, setReturnsInput] = useState(v.returns ?? "");
 
   // Local string state for timeout to prevent auto-reset when clearing.
-  // scriptStep: empty string means "inherit from settings" (undefined); others default to 30000.
+  // Empty string means "inherit from settings" (ctrlyoke.scriptTimeout) — timeout stays
+  // undefined on the underlying value across all variants; the runtime (EndConditionEvaluator,
+  // WorkflowExecutor) already falls back to ConfigurationUtils.getScriptTimeoutMs() whenever
+  // timeout is unset, so there is no separate UI-level default to keep in sync.
   const [timeoutInput, setTimeoutInput] = useState(
-    v.timeout !== undefined ? String(v.timeout) : isScriptStep ? "" : "30000"
+    v.timeout !== undefined ? String(v.timeout) : ""
   );
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
@@ -133,11 +136,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   }, [v.returns]);
 
   useEffect(() => {
-    setTimeoutInput(
-      v.timeout !== undefined ? String(v.timeout) : isScriptStep ? "" : "30000"
-    );
-    // isScriptStep is derived from the variant prop which doesn't change at runtime
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : "");
   }, [v.timeout]);
 
   useEffect(() => {
@@ -147,8 +146,25 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const update = (patch: Partial<ScriptConditionValue>) =>
     onChange({ ...v, ...patch });
 
+  // Shared across variants: empty input inherits ctrlyoke.scriptTimeout; otherwise commit the
+  // parsed number verbatim (no minimum/maximum substitution — those aren't enforced anywhere
+  // downstream, so clamping here would just be another UI-invented magic number).
+  const commitTimeout = () => {
+    if (timeoutInput.trim() === "") {
+      update({ timeout: undefined });
+      return;
+    }
+    const parsed = parseInt(timeoutInput, 10);
+    if (isNaN(parsed)) {
+      setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : "");
+      return;
+    }
+    setTimeoutInput(String(parsed));
+    update({ timeout: parsed });
+  };
+
   const compareSource = (v.compareSource ??
-    COMPARE_SOURCES.AUTO) as EndConditionCompareSource;
+    COMPARE_SOURCES.AUTO) as CompareSource;
   const { affUri, dicUri } = getDictionaryUris();
   const compareSourceHint =
     compareSource === COMPARE_SOURCES.AUTO
@@ -210,7 +226,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             id={`${idPrefix}-compare-source`}
             value={compareSource}
             onChange={(val) =>
-              update({ compareSource: val as EndConditionCompareSource })
+              update({ compareSource: val as CompareSource })
             }
             options={COMPARE_SOURCE_OPTIONS}
             disabled={disabled}
@@ -301,14 +317,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               id={`${idPrefix}-timeout`}
               value={timeoutInput}
               onChange={(e) => setTimeoutInput(e.target.value)}
-              onBlur={() => {
-                const parsed = parseInt(timeoutInput);
-                const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-                setTimeoutInput(String(val));
-                update({ timeout: val });
-              }}
-              min={1000}
-              max={300000}
+              onBlur={commitTimeout}
+              min={0}
+              placeholder="Default (from settings)"
               disabled={disabled}
               className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
             />
@@ -354,27 +365,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             id={`${idPrefix}-timeout`}
             value={timeoutInput}
             onChange={(e) => setTimeoutInput(e.target.value)}
-            onBlur={() => {
-              if (isScriptStep) {
-                // scriptStep: empty = inherit from settings (undefined); no minimum enforced
-                if (timeoutInput.trim() === "") {
-                  update({ timeout: undefined });
-                } else {
-                  const parsed = parseInt(timeoutInput);
-                  const val = isNaN(parsed) ? undefined : parsed;
-                  setTimeoutInput(val !== undefined ? String(val) : "");
-                  update({ timeout: val });
-                }
-              } else {
-                const parsed = parseInt(timeoutInput);
-                const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-                setTimeoutInput(String(val));
-                update({ timeout: val });
-              }
-            }}
-            min={isScriptStep ? 0 : 1000}
-            max={isScriptStep ? undefined : 300000}
-            placeholder={isScriptStep ? "Default (from settings)" : undefined}
+            onBlur={commitTimeout}
+            min={0}
+            placeholder="Default (from settings)"
             disabled={disabled}
             className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
           />

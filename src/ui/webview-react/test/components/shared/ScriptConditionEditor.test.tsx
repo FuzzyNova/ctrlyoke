@@ -70,4 +70,73 @@ describe("ScriptConditionEditor", () => {
       })
     );
   });
+
+  describe("timeout inherit-from-settings behavior", () => {
+    it.each(["endCondition", "preCondition", "scriptStep"] as const)(
+      "%s: renders an empty timeout with an inherit placeholder when unset",
+      (variant) => {
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test", returns: "true" }}
+            onChange={vi.fn()}
+            idPrefix="test-condition"
+          />
+        );
+
+        const timeout = screen.getByLabelText("Timeout (ms)");
+        expect(timeout).toHaveValue(null);
+        expect(timeout).toHaveAttribute(
+          "placeholder",
+          "Default (from settings)"
+        );
+      }
+    );
+
+    it.each(["endCondition", "preCondition", "scriptStep"] as const)(
+      "%s: clearing the timeout field commits undefined (inherit)",
+      (variant) => {
+        const onChange = vi.fn();
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test", returns: "true", timeout: 5000 }}
+            onChange={onChange}
+            idPrefix="test-condition"
+          />
+        );
+
+        const timeout = screen.getByLabelText("Timeout (ms)");
+        fireEvent.change(timeout, { target: { value: "" } });
+        fireEvent.blur(timeout);
+
+        expect(onChange).toHaveBeenCalledWith(
+          expect.objectContaining({ timeout: undefined })
+        );
+      }
+    );
+
+    it.each(["endCondition", "preCondition", "scriptStep"] as const)(
+      "%s: commits an explicit timeout verbatim without clamping",
+      (variant) => {
+        const onChange = vi.fn();
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test", returns: "true" }}
+            onChange={onChange}
+            idPrefix="test-condition"
+          />
+        );
+
+        const timeout = screen.getByLabelText("Timeout (ms)");
+        fireEvent.change(timeout, { target: { value: "500" } });
+        fireEvent.blur(timeout);
+
+        expect(onChange).toHaveBeenCalledWith(
+          expect.objectContaining({ timeout: 500 })
+        );
+      }
+    );
+  });
 });

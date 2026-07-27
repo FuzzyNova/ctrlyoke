@@ -96,7 +96,6 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
   script: "",
   returns: "",
-  timeout: 30000,
   maxRetries: 0,
   retryPrompt: "",
 };

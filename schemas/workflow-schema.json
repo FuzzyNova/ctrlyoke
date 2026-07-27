@@ -472,7 +472,7 @@
         },
         "timeout": {
           "type": "number",
-          "description": "Timeout in milliseconds"
+          "description": "Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting."
         },
         "maxRetries": {
           "type": "number",
