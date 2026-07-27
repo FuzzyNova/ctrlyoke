@@ -28,3 +28,7 @@ fix formatting of pre / post condition
 commit message generation should use CLI ouput and display the raw output of the harness.
 
 template doesn't load final step only templates correctly
+
+codex hook cleanup
+
+opencode.json gitignore

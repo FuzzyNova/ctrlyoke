@@ -59,6 +59,43 @@ suite("Prompt property round trip (drawer -> working file)", () => {
     assert.strictEqual(steps[0].agent, "reviewer.agent.md");
   });
 
+  test("agent override, inherit, and explicit null survive the full round trip", async () => {
+    const { h } = await harness();
+    await h.routeWorkflowPropertyUpdate("agent", "workflow-agent");
+    await h.routeUpdatePrompt({
+      index: 0,
+      text: "first",
+      properties: { agent: "prompt-agent" },
+    });
+
+    let definition = await h.readRunDefinition();
+    let step = definition.steps?.[0];
+    assert.ok(step && "prompt" in step);
+    assert.strictEqual(step.agent, "prompt-agent");
+
+    await h.routeUpdatePrompt({
+      index: 0,
+      text: "first",
+      properties: {},
+      clearProperties: ["agent"],
+    });
+    definition = await h.readRunDefinition();
+    step = definition.steps?.[0];
+    assert.ok(step && "prompt" in step);
+    assert.ok(!("agent" in step));
+    assert.strictEqual(definition.agent, "workflow-agent");
+
+    await h.routeUpdatePrompt({
+      index: 0,
+      text: "first",
+      properties: { agent: null },
+    });
+    definition = await h.readRunDefinition();
+    step = definition.steps?.[0];
+    assert.ok(step && "prompt" in step);
+    assert.strictEqual(step.agent, null);
+  });
+
   test("executionMode override survives save/reload and inherit clears it", async () => {
     const { h } = await harness();
     await h.routeUpdatePrompt({

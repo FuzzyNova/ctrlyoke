@@ -4,6 +4,7 @@ import {
   ExecutionProperties,
   HarnessId,
   EndCondition,
+  PreCondition,
   ErrorBehavior,
   PriorContext,
   McpServerConfig,
@@ -60,6 +61,9 @@ export interface ResolvedProperties {
 
   /** End condition validation - undefined if not specified */
   endCondition?: EndCondition;
+
+  /** Pre-condition gate - undefined if not specified */
+  preCondition?: PreCondition;
 
   /** Controls injection of prior prompt outputs - undefined means no injection */
   priorContext?: PriorContext;
@@ -132,6 +136,7 @@ export class PropertyResolver {
       hooks: this.resolveHooks(prompt, workflow),
       sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
+      preCondition: this.resolvePreCondition(prompt, workflow),
       priorContext: this.resolvePriorContext(prompt, workflow),
       additionalArgs: this.resolveAdditionalArgs(prompt, workflow, harness),
       toolPermissions: this.resolveToolPermissions(prompt, workflow),
@@ -487,15 +492,9 @@ export class PropertyResolver {
     workflow: PromptFile
   ): EndCondition | undefined {
     // 1. Prompt-level override (highest priority)
-    // Check for property existence, not just truthiness, to distinguish null from undefined
-    if (Object.prototype.hasOwnProperty.call(prompt, "endCondition")) {
-      const promptEndCondition = prompt.endCondition;
+    if (prompt.endCondition !== undefined) {
       // null means "explicitly disabled" - return undefined to skip validation
-      if (promptEndCondition === null) {
-        return undefined;
-      }
-      // Object means "override workflow" - use prompt's end condition
-      return promptEndCondition;
+      return prompt.endCondition ?? undefined;
     }
 
     // 2. Workflow-level default
@@ -505,6 +504,24 @@ export class PropertyResolver {
 
     // 3. No fallback - end conditions are explicit
     return undefined;
+  }
+
+  /**
+   * Resolve pre-condition with two-tier precedence.
+   *
+   * Settings defaults are materialized into new workflows, so runtime
+   * resolution only needs prompt > workflow. undefined inherits and null
+   * explicitly disables the inherited gate.
+   */
+  private static resolvePreCondition(
+    prompt: PromptStep,
+    workflow: PromptFile
+  ): PreCondition | undefined {
+    if (prompt.preCondition !== undefined) {
+      return prompt.preCondition ?? undefined;
+    }
+
+    return workflow.preCondition ?? undefined;
   }
 
   /**
@@ -649,7 +666,7 @@ export class PropertyResolver {
     prompt: PromptStep,
     workflow: PromptFile
   ): ErrorBehavior | undefined {
-    if (Object.prototype.hasOwnProperty.call(prompt, "errorBehavior")) {
+    if (prompt.errorBehavior !== undefined) {
       return prompt.errorBehavior ?? undefined;
     }
 

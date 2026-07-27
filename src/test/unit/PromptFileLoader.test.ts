@@ -6,7 +6,11 @@ import { suite, test, afterEach } from "mocha";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { PromptFileLoader } from "../../core/orchestration/PromptFileLoader";
 import { PromptQueue } from "../../core/PromptQueue";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../types/DashboardConstants";
 import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -198,6 +202,81 @@ suite("PromptFileLoader Tests", () => {
         Object.prototype.hasOwnProperty.call(defaults, "errorBehavior"),
         "errorBehavior should be seeded even when null"
       );
+    });
+
+    test("should materialize every settings-backed execution property", () => {
+      const preCondition = { script: "settings-pre.js" };
+      const endCondition = { script: "settings-end.js", returns: "true" };
+      const hooks = [{ event: "stop" as const, command: "echo settings" }];
+      const errorBehavior = { onError: "retry" as const, maxRetries: 2 };
+      const toolPermissions = {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["read"],
+        deniedTools: ["write"],
+      };
+      configService.setCliOverlay({
+        defaults: {
+          harness: HARNESS_IDS.CODEX_CLI,
+          models: { [HARNESS_IDS.CODEX_CLI]: "settings-model" },
+          additionalArgs: {
+            [HARNESS_IDS.CODEX_CLI]: "--settings-args",
+          },
+          agent: "settings-agent",
+          skills: ["settings-skill"],
+          executionMode: EXECUTION_MODES.HEADLESS,
+          resumeSession: true,
+          priorContext: "all",
+          mcpServers: ["settings-mcp"],
+          hooks,
+          errorBehavior,
+          toolPermissions,
+          preCondition,
+          endCondition,
+        },
+      });
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+
+      assert.deepStrictEqual(defaults, {
+        harness: HARNESS_IDS.CODEX_CLI,
+        model: "settings-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        agent: "settings-agent",
+        skills: ["settings-skill"],
+        resumeSession: true,
+        mcpServers: ["settings-mcp"],
+        hooks,
+        endCondition,
+        preCondition,
+        priorContext: "all",
+        errorBehavior,
+        additionalArgs: "--settings-args",
+        toolPermissions,
+      });
+    });
+
+    test("should never seed over explicit workflow execution properties", () => {
+      const explicitValues: Record<string, unknown> = {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        agent: null,
+        skills: null,
+        resumeSession: false,
+        mcpServers: null,
+        hooks: null,
+        endCondition: null,
+        preCondition: null,
+        priorContext: "none",
+        errorBehavior: null,
+        additionalArgs: null,
+        toolPermissions: null,
+      };
+
+      const defaults =
+        PromptFileLoader.populateSettingsDefaults(explicitValues);
+
+      assert.deepStrictEqual(defaults, {});
     });
   });
 

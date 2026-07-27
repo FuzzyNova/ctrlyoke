@@ -506,14 +506,12 @@ export class WorkflowExecutor {
 
       // Evaluate pre-condition gate before running the AI prompt.
       const workflowFileForPre = this.promptQueue.getWorkflowFile();
-      const resolvedPreCondition =
-        prompt.preCondition !== undefined
-          ? prompt.preCondition
-          : (workflowFileForPre.preCondition ?? null);
-      const preErrorBehavior = PropertyResolver.resolve(
+      const preResolvedProperties = PropertyResolver.resolve(
         prompt,
         workflowFileForPre
-      ).errorBehavior;
+      );
+      const resolvedPreCondition = preResolvedProperties.preCondition;
+      const preErrorBehavior = preResolvedProperties.errorBehavior;
 
       if (
         resolvedPreCondition !== null &&

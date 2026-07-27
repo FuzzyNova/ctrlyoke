@@ -10,6 +10,283 @@ import {
 import { configService } from "../../config/CtrlYokeConfigService";
 
 suite("PropertyResolver Tests", () => {
+  teardown(() => {
+    PropertyResolver.setHostCanProvidePty(true);
+    configService.setCliOverlay({});
+  });
+
+  suite("execution property precedence contracts", () => {
+    test("runtime-fallback properties resolve prompt, then workflow, then settings", () => {
+      configService.setCliOverlay({
+        defaults: {
+          harness: HARNESS_IDS.COPILOT_CLI,
+          models: {
+            [HARNESS_IDS.COPILOT_CLI]: "settings-model",
+          },
+          executionMode: EXECUTION_MODES.HEADLESS,
+          agent: "settings-agent",
+          skills: ["settings-skill"],
+          resumeSession: true,
+          mcpServers: ["settings-mcp"],
+          priorContext: "previous",
+          additionalArgs: {
+            [HARNESS_IDS.COPILOT_CLI]: "--settings",
+          },
+        },
+      });
+
+      const workflow: PromptFile = {
+        steps: [],
+        harness: HARNESS_IDS.CODEX_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        agent: "workflow-agent",
+        skills: ["workflow-skill"],
+        resumeSession: false,
+        mcpServers: ["workflow-mcp"],
+        priorContext: "all",
+        additionalArgs: "--workflow",
+      };
+      const prompt: PromptStep = {
+        prompt: "test",
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "prompt-model",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        agent: "prompt-agent",
+        skills: ["prompt-skill"],
+        resumeSession: true,
+        mcpServers: ["prompt-mcp"],
+        priorContext: [1],
+        additionalArgs: "--prompt",
+      };
+
+      const fromPrompt = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(fromPrompt.harness, HARNESS_IDS.CLAUDE_CLI);
+      assert.strictEqual(fromPrompt.model, "prompt-model");
+      assert.strictEqual(fromPrompt.executionMode, EXECUTION_MODES.INTERACTIVE);
+      assert.strictEqual(fromPrompt.agent, "prompt-agent");
+      assert.deepStrictEqual(fromPrompt.skills, ["prompt-skill"]);
+      assert.strictEqual(fromPrompt.resumeSession, true);
+      assert.deepStrictEqual(fromPrompt.mcpServers, ["prompt-mcp"]);
+      assert.deepStrictEqual(fromPrompt.priorContext, [1]);
+      assert.strictEqual(fromPrompt.additionalArgs, "--prompt");
+
+      const fromWorkflow = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          harness: undefined,
+          model: undefined,
+          executionMode: undefined,
+          agent: undefined,
+          skills: undefined,
+          resumeSession: undefined,
+          mcpServers: undefined,
+          priorContext: undefined,
+          additionalArgs: undefined,
+        },
+        workflow
+      );
+      assert.strictEqual(fromWorkflow.harness, HARNESS_IDS.CODEX_CLI);
+      assert.strictEqual(fromWorkflow.model, "workflow-model");
+      assert.strictEqual(fromWorkflow.executionMode, EXECUTION_MODES.HEADLESS);
+      assert.strictEqual(fromWorkflow.agent, "workflow-agent");
+      assert.deepStrictEqual(fromWorkflow.skills, ["workflow-skill"]);
+      assert.strictEqual(fromWorkflow.resumeSession, false);
+      assert.deepStrictEqual(fromWorkflow.mcpServers, ["workflow-mcp"]);
+      assert.strictEqual(fromWorkflow.priorContext, "all");
+      assert.strictEqual(fromWorkflow.additionalArgs, "--workflow");
+
+      const fromSettings = PropertyResolver.resolve(
+        { prompt: "test" },
+        { steps: [] }
+      );
+      assert.strictEqual(fromSettings.harness, HARNESS_IDS.COPILOT_CLI);
+      assert.strictEqual(fromSettings.model, "settings-model");
+      assert.strictEqual(fromSettings.executionMode, EXECUTION_MODES.HEADLESS);
+      assert.strictEqual(fromSettings.agent, "settings-agent");
+      assert.deepStrictEqual(fromSettings.skills, ["settings-skill"]);
+      assert.strictEqual(fromSettings.resumeSession, true);
+      assert.deepStrictEqual(fromSettings.mcpServers, ["settings-mcp"]);
+      assert.strictEqual(fromSettings.priorContext, "previous");
+      assert.strictEqual(fromSettings.additionalArgs, "--settings");
+    });
+
+    test("undefined prompt properties inherit every workflow-resolved value", () => {
+      const workflow: PromptFile = {
+        steps: [],
+        agent: "workflow-agent",
+        skills: ["workflow-skill"],
+        mcpServers: ["workflow-mcp"],
+        hooks: [{ event: "stop", command: "echo workflow" }],
+        sessionId: "workflow-session",
+        endCondition: { script: "workflow-end.js", returns: "true" },
+        preCondition: { script: "workflow-pre.js" },
+        additionalArgs: "--workflow",
+        toolPermissions: {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: ["read"],
+          deniedTools: ["write"],
+        },
+        errorBehavior: { onError: "retry", maxRetries: 2 },
+      };
+
+      const resolved = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          agent: undefined,
+          skills: undefined,
+          mcpServers: undefined,
+          hooks: undefined,
+          sessionId: undefined,
+          endCondition: undefined,
+          preCondition: undefined,
+          additionalArgs: undefined,
+          toolPermissions: undefined,
+          errorBehavior: undefined,
+        },
+        workflow
+      );
+
+      assert.strictEqual(resolved.agent, "workflow-agent");
+      assert.deepStrictEqual(resolved.skills, ["workflow-skill"]);
+      assert.deepStrictEqual(resolved.mcpServers, ["workflow-mcp"]);
+      assert.deepStrictEqual(resolved.hooks, [
+        { event: "stop", command: "echo workflow" },
+      ]);
+      assert.strictEqual(resolved.sessionId, "workflow-session");
+      assert.deepStrictEqual(resolved.endCondition, {
+        script: "workflow-end.js",
+        returns: "true",
+      });
+      assert.deepStrictEqual(resolved.preCondition, {
+        script: "workflow-pre.js",
+      });
+      assert.strictEqual(resolved.additionalArgs, "--workflow");
+      assert.deepStrictEqual(resolved.toolPermissions, {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["read"],
+        deniedTools: ["write"],
+      });
+      assert.deepStrictEqual(resolved.errorBehavior, {
+        onError: "retry",
+        maxRetries: 2,
+      });
+    });
+
+    test("prompt policies override materialized workflow policies", () => {
+      const resolved = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          hooks: [{ event: "stop", command: "echo prompt" }],
+          endCondition: {
+            script: "prompt-end.js",
+            returns: "passed",
+          },
+          preCondition: { script: "prompt-pre.js" },
+          toolPermissions: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: ["prompt-read"],
+            deniedTools: [],
+          },
+          errorBehavior: { onError: "continue" },
+        },
+        {
+          steps: [],
+          hooks: [{ event: "stop", command: "echo workflow" }],
+          endCondition: {
+            script: "workflow-end.js",
+            returns: "passed",
+          },
+          preCondition: { script: "workflow-pre.js" },
+          toolPermissions: {
+            mode: PERMISSION_MODES.ALLOW_ALL,
+          },
+          errorBehavior: { onError: "retry", maxRetries: 2 },
+        }
+      );
+
+      assert.deepStrictEqual(resolved.hooks, [
+        { event: "stop", command: "echo prompt" },
+      ]);
+      assert.deepStrictEqual(resolved.endCondition, {
+        script: "prompt-end.js",
+        returns: "passed",
+      });
+      assert.deepStrictEqual(resolved.preCondition, {
+        script: "prompt-pre.js",
+      });
+      assert.deepStrictEqual(resolved.toolPermissions, {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["prompt-read"],
+        deniedTools: [],
+      });
+      assert.deepStrictEqual(resolved.errorBehavior, {
+        onError: "continue",
+      });
+    });
+
+    test("null prompt properties explicitly disable every nullable inherited value", () => {
+      const workflow: PromptFile = {
+        steps: [],
+        agent: "workflow-agent",
+        skills: ["workflow-skill"],
+        mcpServers: ["workflow-mcp"],
+        hooks: [{ event: "stop", command: "echo workflow" }],
+        endCondition: { script: "workflow-end.js", returns: "true" },
+        preCondition: { script: "workflow-pre.js" },
+        additionalArgs: "--workflow",
+        toolPermissions: {
+          mode: PERMISSION_MODES.ALLOW_ALL,
+        },
+        errorBehavior: { onError: "retry", maxRetries: 2 },
+      };
+
+      const resolved = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          agent: null,
+          skills: null,
+          mcpServers: null,
+          hooks: null,
+          endCondition: null,
+          preCondition: null,
+          additionalArgs: null,
+          toolPermissions: null,
+          errorBehavior: null,
+        },
+        workflow
+      );
+
+      assert.strictEqual(resolved.agent, undefined);
+      assert.strictEqual(resolved.skills, undefined);
+      assert.strictEqual(resolved.mcpServers, null);
+      assert.strictEqual(resolved.hooks, null);
+      assert.strictEqual(resolved.endCondition, undefined);
+      assert.strictEqual(resolved.preCondition, undefined);
+      assert.strictEqual(resolved.additionalArgs, undefined);
+      assert.strictEqual(resolved.toolPermissions, null);
+      assert.strictEqual(resolved.errorBehavior, undefined);
+    });
+
+    test("non-nullable empty values still override inherited values", () => {
+      const resolved = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          resumeSession: false,
+          priorContext: "none",
+        },
+        {
+          steps: [],
+          resumeSession: true,
+          priorContext: "all",
+        }
+      );
+
+      assert.strictEqual(resolved.resumeSession, false);
+      assert.strictEqual(resolved.priorContext, "none");
+    });
+  });
+
   suite("resolveHarness", () => {
     test("should use prompt-level harness when specified", () => {
       const prompt: PromptStep = {
@@ -349,7 +626,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.endCondition, undefined);
     });
 
-    test("should allow prompt to override workflow endCondition with undefined", () => {
+    test("should inherit workflow endCondition when prompt value is undefined", () => {
       const workflowCondition = {
         script: "workflow-test.js",
         returns: "true",
@@ -364,11 +641,8 @@ suite("PropertyResolver Tests", () => {
         endCondition: workflowCondition,
       };
 
-      // When prompt.endCondition is explicitly set to undefined,
-      // it should OVERRIDE the workflow condition (disable validation for this prompt)
-      // If user wanted workflow default, they would omit the property entirely
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.endCondition, undefined);
+      assert.strictEqual(resolved.endCondition, workflowCondition);
     });
   });
 
