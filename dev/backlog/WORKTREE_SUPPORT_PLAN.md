@@ -1,60 +1,75 @@
 # Git Worktree Support for Workflows
 
-> **Status:** Design complete — ready to implement.
-> **Revision note:** Substantially revised twice after codebase audits. Three earlier
-> decisions were reversed: worktrees live **outside** the repo (not `.ctrlyoke/worktrees/`),
-> the cwd mechanism is a real **root split** (not a "pass a cwd parameter" change, which
-> the code does not support), and the managed mode **lands a branch rather than
-> auto-merging**. See [Reversed Decisions](#reversed-decisions-and-why).
+> **Status:** Design complete — ready to implement in phases.
+>
+> **Revision note (2026-07-27):** Revised after a full codebase audit. The final
+> design uses sibling worktrees, lands branches by default, models state and
+> execution roots separately, preserves existing parallel non-worktree execution
+> through shared/exclusive execution leases, and makes managed-worktree cleanup,
+> snapshots, undo, ownership, and merge behavior explicit.
 
 ---
 
 ## Goal
 
-Give a workflow its own working directory so agents stop interfering with each other —
-and with you. Two coherent shapes, serving different users:
+Give a workflow its own working directory so agents can run concurrently without
+interfering with one another or with the user's live checkout.
 
-**A scratch space you never visit.** Several independent tasks that must not stomp each
-other. The worktree is invisible infrastructure; you never `cd` into it. Its whole job is
-keeping agent A's `npm install` away from agent B's test run.
+There are two supported shapes:
 
-**A place you already live.** The UI-window / backend-window habit. ctrlyoke does not
-create anything here — it *targets* a worktree you already have open, so there is nothing
-to feel disconnected from.
+1. **Managed worktree:** ctrlyoke creates a run-scoped worktree and branch, runs
+   the workflow there, commits any resulting changes, removes the directory, and
+   leaves the branch for review.
+2. **Named worktree:** ctrlyoke targets a persistent worktree the user already
+   owns, or creates it on first use. It never commits, merges, or removes that
+   worktree automatically.
 
-The shape to avoid is the middle: an ephemeral worktree whose output never comes back.
-That strands the result in a directory you have no window on. Every design decision below
-follows from refusing that state.
+Existing non-worktree workflows remain supported and may continue running in
+parallel exactly as they do today. Choosing worktree mode opts into stronger
+directory isolation; it does not globally serialize ordinary workflows.
 
-### The result lives in the branch, not the directory
+### The result lives in the branch
 
-Worktrees share the object store and the refs. A branch created inside a worktree is an
-ordinary branch in your repo, visible from your main VS Code window, and it **survives
-`git worktree remove`**.
+Git worktrees share the object store and refs. A managed branch remains visible
+from the initiating checkout after its linked directory is removed:
 
-So a single-window user reviews agent output with `git diff main...ctrlyoke/foo`, GitLens,
-or a PR — no second window required. You only need a window on the worktree when you want
-its tree to stay *live* while you work elsewhere, which is exactly the named/persistent
-case where you already have one.
+```text
+git diff <base-commit>...ctrlyoke/ui-refactor/run-2026-07-27T14-02-11
+```
 
-This is why the managed mode removes the directory but keeps the branch.
+This avoids the unusable middle state where the agent worked in an ephemeral
+directory but left no reviewable result behind.
+
+### Non-goals for the first release
+
+- A workflow does not switch worktrees between steps.
+- A worktree does not span several repositories.
+- ctrlyoke does not silently expose other repositories or non-repository
+  workspace folders to a worktree run.
+- Managed-worktree history does not provide filesystem undo after the worktree
+  directory has been removed. The captured diff remains viewable.
+- ctrlyoke does not automatically rebase, pull, or synchronize named branches.
 
 ---
 
-## How git Worktrees Work
+## Git Worktree Model
 
-A linked checkout of the same repository at a different path. Each worktree is on its own
-branch (two worktrees cannot share a branch). They share one `.git` object store but have
-independent working trees.
+A linked checkout of the same repository at a different path. Each worktree has
+its own checked-out branch and working directory while sharing Git objects and
+refs:
 
+```text
+C:\dev\FlightPath\                       branch: main
+C:\dev\FlightPath.worktrees\ui-work\     branch: ui-work
+C:\dev\FlightPath.worktrees\backend\     branch: backend
 ```
-C:\dev\FlightPath\                       ← main checkout (branch: main)
-C:\dev\FlightPath.worktrees\ui-work\     ← worktree A (branch: ui-work)
-C:\dev\FlightPath.worktrees\backend\     ← worktree B (branch: backend)
-```
 
-The harness CLI launches with `cwd` set to the worktree path. From the agent's
-perspective it is a normal repo at that path.
+The harness process launches with its cwd in the selected worktree. From the
+agent's perspective it is an ordinary repository checkout.
+
+Two worktrees cannot check out the same branch simultaneously. Discovery and
+errors must surface the existing checkout path rather than forwarding Git's raw
+"already checked out" failure.
 
 ---
 
@@ -62,586 +77,1179 @@ perspective it is a normal repo at that path.
 
 ### Default layout
 
-```
-<parentOf(repoRoot)>/<repoName>.worktrees/<slug>/
+```text
+<parentOf(sourceCheckoutRoot)>/<repoName>.worktrees/<safe-run-id>/
 ```
 
-`C:\dev\FlightPath` → `C:\dev\FlightPath.worktrees\ui-work\`. Sorts next to the repo,
-obviously ctrlyoke-owned, removable as a unit, and outside every tool's view of the repo.
+Example:
+
+```text
+C:\dev\FlightPath
+C:\dev\FlightPath.worktrees\ui-refactor-a13f9082
+```
+
+The physical directory name is generated independently from the Git branch
+name. It uses a readable, length-bounded slug plus a stable hash, so branch
+slashes, long workflow names, collisions, and path traversal cannot affect
+filesystem placement.
 
 ### Resolution order
 
-1. `ctrlyoke.worktree.root` setting (absolute, or `~`-prefixed).
-2. `<parentOf(repoRoot)>/<repoName>.worktrees/` when the parent is writable.
-3. `~/.ctrlyoke/worktrees/<repoSlug>/` — covers read-only parents (devcontainer mounts,
-   `/workspaces/<repo>`, network shares).
+1. User-scope `worktrees.root`, when configured. Accept an absolute path or a
+   path beginning with `~`.
+2. `<parentOf(sourceCheckoutRoot)>/<repoName>.worktrees/`.
+3. `~/.ctrlyoke/worktrees/<repo-identity>/`.
 
-`repoSlug` uses `ClaudeLogParser.normalizeWorkspacePath`-style flattening so same-named
-repos cannot collide. Resolved once per run and recorded in the working file, so crash
-recovery never re-derives it.
+`repo-identity` is a readable repository slug plus a hash of the canonical Git
+common-directory identity. Flattening a path alone is insufficient because
+different paths can flatten to the same string.
 
-### Why NOT `.ctrlyoke/worktrees/` (reversed)
+Root creation is the writability probe: attempt to create the directory and
+fall back on an actual permission/filesystem failure. Do not rely only on
+`fs.access(W_OK)`.
 
-Nesting a worktree inside the repo is legal git, but breaks concrete things here:
+### Placement guards
 
-| Breakage                                                                                                                                                                                                                                                          | Evidence                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| **`npm run typecheck` and `compile:extension` fail.** `tsconfig.json` has no `include` and sets `"rootDir": "src"`. Absent `include`, tsc compiles every `.ts` under the project dir except `exclude`; a nested worktree contributes `.../src/**/*.ts` outside `rootDir` → TS6059. | `tsconfig.json`                                                     |
-| **Repo attribution silently wrong.** `findRepoForPath` is pure containment, so every worktree file resolves to the _main_ repo — hosted SCM and snapshot/undo would run git against the wrong working tree.                                                        | `src/utils/WorkspaceRepoDiscovery.ts:114-123`                       |
-| **Snapshots go blind.** `PATH_CONSTANTS.CTRLYOKE_DIR` is in the filesystem walker's `EXCLUDED_DIRS`, so nested worktree files are never captured — per-step diff and undo silently stop working for the workflows using the feature.                                | `src/utils/WorkspaceSnapshotService.ts:68`                          |
-| **`.ctrlyoke/` is not wholesale gitignored.** Root `.gitignore` ignores only `temp/`, `.runs/`, `logs/`, `.search-index/`, `snapshots/`, `attachments/`, `capabilities.json`. Prompts/agents/skills/templates are committed.                                       | `.gitignore`, `src/core/orchestration/WorkspaceInitializer.ts:6-17`  |
-| **`git clean -xdf` destroys it**, orphaning `.git/worktrees/<name>` admin entries.                                                                                                                                                                                 | git behavior                                                        |
-| **Every non-git tool still walks it.** gitignore hides a path from git only — watchers, test globs, eslint, bundlers, VS Code search all see a second copy of the repo inside the workspace. The opposite of isolation.                                             | —                                                                   |
+After resolving symlinks and existing ancestors:
 
-Sibling placement costs one thing: worktree paths fall outside `workspaceRoots`, so
-`evaluateFileAccess` blocks them. Handled in [Path trust](#path-trust).
+- Reject a configured root equal to or contained within the source checkout.
+- Reject a configured root contained within any discovered worktree.
+- Reject a worktree path that escapes its resolved worktree root.
+- Warn, but do not fail, when the resulting root path exceeds 150 characters on
+  Windows.
 
-### External-location consequences
+The worktree root setting is user-controlled only. Workspace-scope configuration
+must not be able to redirect checkout creation to an arbitrary external
+directory.
 
-- **`node_modules` is absent** in a fresh worktree (gitignored → not checked out).
-  Building or testing requires an install. Not solved in Phase 1; see Phase 5.
-- **Windows path length.** Warn (do not fail) when the resolved worktree root exceeds
-  150 chars, since `node_modules` trees can then breach `MAX_PATH`.
+### Why worktrees are not nested under `.ctrlyoke/`
 
----
+Nesting a worktree under the repository breaks or weakens several existing
+systems:
 
-## Three Roots
+| Problem                                                                               | Current evidence                        |
+| ------------------------------------------------------------------------------------- | --------------------------------------- |
+| TypeScript sees a second `src/**/*.ts` outside `rootDir` and fails with TS6059.       | `tsconfig.json`                         |
+| Pure containment attributes nested worktree files to the source checkout.             | `src/utils/WorkspaceRepoDiscovery.ts`   |
+| Snapshot walking excludes `.ctrlyoke`, so worktree changes disappear.                 | `src/utils/WorkspaceSnapshotService.ts` |
+| `.ctrlyoke/` is not wholesale ignored or runtime-only.                                | `.gitignore`, `WorkspaceInitializer.ts` |
+| `git clean -xdf` can destroy the nested checkout and orphan Git administration state. | Git behavior                            |
+| Search, watchers, linting, tests, and bundlers see a second repository copy.          | Tool behavior                           |
 
-Worktree support turns one conflated value into three named ones. Establish all three
-vocabulary-wise in the split PR even though only the first two are used at that point.
+Sibling placement is therefore a correctness requirement, not only a
+convention.
 
-| Root            | Meaning                                        | Source                                                    |
-| --------------- | ---------------------------------------------- | --------------------------------------------------------- |
-| `stateRoot`     | Where ctrlyoke keeps its own state             | `platform.getWorkspaceRoot()` — never changes              |
-| `executionRoot` | Where the agent runs (cwd)                     | worktree path when active, else `stateRoot`                |
-| `repoRoot`      | The git toplevel that owns the worktree        | `git rev-parse --show-toplevel`                            |
+### Fresh-checkout consequences
 
-### Workspace-below-repo mapping
+A new managed worktree does not contain ignored files such as `node_modules`,
+local `.env` files, generated assets, or initialized caches. Managed mode is not
+considered ready until it supports a setup command that runs once after
+creation and before the first workflow step.
 
-`discoverRepos` already supports a workspace root sitting *below* the git toplevel
-(`WorkspaceRepoDiscovery.ts:44-51`) — e.g. workspace `<repo>/packages/web`. A worktree is
-always a **full-repo** checkout, so the execution root must preserve the user's relative
-position:
-
-```
-executionRoot = join(worktreePath, relative(repoRoot, stateRoot))
-```
-
-For a workspace at the repo root this collapses to `worktreePath`. The same mapping
-handles multi-root workspaces whose roots all live in one repo — each root remaps
-independently into the worktree.
-
-### Role assignment
-
-One value currently serves all of these. The split assigns each side:
-
-| Role                                                        | Root          | Call sites                                                                              |
-| ----------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------- |
-| Harness process cwd                                         | execution     | `CliTransportCoordinator.ts:86`, `:183`                                                 |
-| Temp prompt files + base for relative `@` refs              | execution     | `CliPromptPreparer.ts:186-191`, `CliIntegration.ts:350`, `:365-374`                     |
-| Session-log project directory (`~/.claude/projects/<slug>`) | **execution** | `ClaudeLogParser.ts:1124-1138`, `QwenLogParser.ts:787`                                  |
-| Hook/notification directories                               | execution     | `CliTransportCoordinator.ts:105-113`, `CliExecutionRunner.ts:365`, `:594`               |
-| endCondition / preCondition / script cwd                    | execution     | `EndConditionEvaluator.ts:609`, `WorkflowExecutor.ts:978`, `:993`                        |
-| Snapshot capture root                                       | execution     | `WorkflowExecutor.ts:1196-1220`                                                          |
-| `CTRLYOKE_WORKSPACE` for the MCP server                     | **state**     | `CliMcpConfigGenerator.ts:216`, `:377`, `CliProviderUtils.ts:367`                        |
-| Run storage, working files, lineage, locks, history         | **state**     | `WorkflowPaths.ts`, `WorkingFileManager.ts`                                              |
-
-Two rows deserve emphasis:
-
-- **Session-log discovery must follow the execution root.** `ClaudeLogParser` derives
-  `~/.claude/projects/<flattened-cwd>` from its `workspaceRoot`, and the Claude CLI
-  slugifies its *actual cwd*. Diverge and session logs are never found — the run hangs
-  waiting for output being written somewhere nobody is watching. Same for `QwenLogParser`.
-  This alone invalidates any "only change the cwd" approach.
-- **`CTRLYOKE_WORKSPACE` must stay on the state root.** The MCP server writes queue and
-  run state; pointing it at the worktree forks ctrlyoke's own state per run and breaks the
-  dashboard.
-
-### Implementation shape
-
-`IntegrationFactory.createForExecution()` (`WorkflowInstance.ts:3042`) creates a fresh
-integration per run, so `executionRoot` is constructor state, not a threaded parameter.
-
-```
-WorkflowInstance (resolves worktree, owns WorktreeInfo)
-  ├─ WorkflowExecutionContext.executionRoot?   ← scripts, endConditions, snapshots
-  └─ IntegrationFactory.createForExecution(harness, executionRoot?)
-       └─ CliIntegration.getExecutionRoot() = this.executionRoot ?? this.getWorkspaceRoot()
-```
-
-Add one private `getExecutionRoot()` to `CliIntegration` and repoint the execution-role
-call sites. `getWorkspaceRoot()` keeps its current meaning (state root). **When
-`executionRoot` is unset every path must be byte-identical to today** — the no-worktree
-case is a strict no-op, and that is the acceptance test for the split.
-
-**Multi-root `--add-dir`.** `getWorkspaceRoots()` feeds `--add-dir` and
-`getEffectiveAbsolute()`. When a worktree is active, remap *every* root that belongs to
-the worktree's repo through the relative-path mapping above; leave non-repo roots and
-other-repo roots at their real paths. Without this the agent gets `--add-dir` write access
-to the live checkout the worktree exists to isolate it from.
+Setup failure marks the worktree blocked and leaves the directory in place for
+inspection. ctrlyoke must never delete a directory after a failed setup if that
+directory contains uncommitted changes. Persist the blocked state and release
+the execution lease so recovery is possible. Reuse the existing script
+execution/reporting infrastructure with the worktree as cwd rather than adding
+a second shell runner.
 
 ---
 
-## Two Lifecycle Modes
+## Execution Workspace and Root Separation
 
-### Mode A — Managed / Ephemeral (`worktree: true`)
+The current code uses "workspace root" for state storage, process cwd, prompt
+resolution, script security, snapshots, MCP routing, and multi-root access.
+Worktree support makes those roles distinct.
 
-Run-scoped. `runner.json` already prevents concurrent runs of one lineage.
+Use one immutable execution-workspace contract rather than threading an
+optional cwd through individual calls:
 
-1. **On run start**: `git worktree add <root>/<workflowKey>-<runRef> -b ctrlyoke/<workflowKey>-<runRef>`
-2. **During execution**: `executionRoot` = worktree path, `stateRoot` unchanged
-3. **On completion**: auto-commit anything uncommitted onto the managed branch, then
-   `git worktree remove` — **the branch stays, no merge**
-4. Dashboard shows the branch, the diff, and a merge affordance
+```typescript
+interface ExecutionWorkspace {
+  /** Where ctrlyoke stores .ctrlyoke/.runs, history, queue state, and locks. */
+  stateRoot: string;
 
-The default is deliberately *not* a merge. Landing the branch gives a single-window user
-a reviewable result with no second window and no rewrite of whatever branch their main
-checkout happens to be sitting on.
+  /** The cwd used by the harness, scripts, conditions, and temp prompt files. */
+  executionRoot: string;
 
-**Use for:** independent work you want isolated and then reviewable.
+  /** The checkout from which the worktree was created and optional merge targets run. */
+  sourceCheckoutRoot: string;
 
-### Mode B — Named / Persistent (`worktree: ui-work`)
+  /** Trusted roots as seen by the executing harness, with repo-owned roots remapped. */
+  workspaceRoots: string[];
 
-Discovered if it exists, lazily created if not. No merge, no removal — you own the branch
-lifecycle.
-
-**Use for:** long-running parallel tracks with their own VS Code windows.
-
-### Auto-merge (opt-in only)
-
-`worktree: { merge: true }` restores the original automated behavior. Because it rewrites
-the branch the main checkout is on, it carries guards that the default does not need:
-
-1. Auto-commit uncommitted worktree changes onto the managed branch.
-2. No commits past the fork point → `"nothing-to-merge"`, remove worktree, delete branch.
-3. **Refuse when the main checkout is dirty** — a mid-merge failure would leave the user's
-   own work conflicted. Report `"blocked"`, leave the branch.
-4. `git merge --ff-only`, then `git merge --no-ff`.
-5. On conflict: `git merge --abort`, collect `git diff --name-only --diff-filter=U`, leave
-   the branch, notify.
-
-All merge commands run with `-C <repoRoot>` against the main checkout, never the worktree.
-
-### Guard rails (both modes)
-
-- **Dirty main checkout** is fine for *creation* — worktrees fork from `HEAD`, not the index.
-- **Branch already checked out elsewhere** → surface the existing worktree path, not the
-  raw git error.
-- **Not a git repo** → fail before the first step, with an actionable message.
-- **Uncommitted changes at completion** are always auto-committed. Without this the agent's
-  uncommitted work is silently discarded when the worktree is removed — the single most
-  likely real-world data-loss path.
-
----
-
-## Discovery
-
-`git worktree list --porcelain` at run start. Discovery buys three things: `worktree: ui-work`
-resolves to *your* existing worktree instead of failing with a raw "branch already checked
-out" error; schema completions can offer real worktree names; and the dashboard can show
-which worktrees are in use.
-
-**Discovery is not ownership.** The `ctrlyoke/` branch-name prefix marks worktrees ctrlyoke
-created. We list yours, we run in yours, we never remove, merge, or auto-commit one we did
-not create. A discovered worktree with uncommitted changes at run end is left exactly as
-the agent left it.
-
----
-
-## Concurrency: two ctrlyoke instances, one execution root
-
-Two VS Code windows are two extension hosts and two ctrlyoke instances, each with its own
-`stateRoot` — so window A's `.ctrlyoke/.runs/<key>/runner.json` and window B's are
-**different files on disk**. The existing runner lock therefore does *not* protect a shared
-worktree, and this is the first feature that lets two instances share an execution root at
-all (VS Code refuses to open two windows on the same folder, so today it cannot happen).
-
-Three concrete failure modes when window A targets `worktree: ui-work` while window B is
-open on that same worktree:
-
-1. **Two agents in one directory** — precisely the interference worktrees exist to prevent.
-2. **State corruption.** Window B's ctrlyoke state lives at `<worktree>/.ctrlyoke/`. Window
-   A's agent, running with cwd there, can see and modify window B's live `runner.json` and
-   `.runs/`. Worse than file interference.
-3. **Session cross-attribution** — narrow. `ClaudeLogParser` resolves by session ID first
-   (`:754`); the directory-scan fallback (`:807-840`) filters by mtime and matches the
-   first 100 chars of prompt text, so it misfires only when both instances run
-   near-identical prompt text concurrently.
-
-### Fix: an execution-root lock
-
-Lock the *directory*, not the lineage: `<executionRoot>/.ctrlyoke/execution-lock.json`,
-naming pid, host stateRoot, workflow key, runRef, and timestamp. Because it lives in the
-shared filesystem location, both instances see it regardless of which one "owns" the
-worktree.
-
-Take it for **every** run, including runs whose execution root is just their own workspace
-root. That generalizes correctly — it also catches the case where window B is running
-natively in the worktree with no `worktree` property at all, which is the most likely
-collision in practice.
-
-Advisory and PID-based, same contract as `runner.json`: a stale file with a dead PID is
-safe to delete. Add the filename to `PATH_CONSTANTS` and to `GITIGNORE_CONTENT` in
-`WorkspaceInitializer` so it never shows up as an untracked file. Worktrees holding a live
-lock render as "in use" in the discovery list.
-
----
-
-## Multi-repo workspaces
-
-A worktree is a checkout of exactly one repo — there is no such thing as a worktree
-spanning two. And ctrlyoke cannot know up front which repos a workflow will touch, since
-the agent decides at runtime. So the rule has to be structural rather than intent-based,
-and it is checkable with a call already made: `discoverRepos(getNamedWorkspaceRoots())`.
-
-**Phase 1 refuses `worktree` when the workspace spans more than one repo**, with an error
-naming the repos found. The tempting alternative — worktree the primary root and leave the
-others live — is the worst option available, because it delivers *silent partial
-isolation*: the user believes they are sandboxed while half the workflow writes straight
-into the live checkouts.
-
-Two cases that are **not** multi-repo and must keep working:
-
-- **Several roots inside one repo.** `discoverRepos` collapses them to a single entry
-  (`WorkspaceRepoDiscovery.ts:44-51`). One worktree; each root remaps through the
-  relative-path mapping.
-- **Non-repo roots** (a docs folder, a scratch dir). `discoverRepos` drops them entirely,
-  so they do not count toward the repo total and pass through at their real paths.
-
-Deferred: `worktree: { repo: "repoA" }` for explicit single-repo selection in a multi-repo
-workspace, and N-worktree fan-out. Both are Phase 5 at the earliest.
-
----
-
-## Schema
-
-Workflow-level only. Step-level `worktree` is out of scope — a workflow runs in one
-worktree for its whole lifetime; mid-run cwd switches create ambiguity about which
-worktree `resumeSession` targets and where the next step's session log lives.
-
-```yaml
-worktree: true                  # ephemeral; land the branch, remove the directory
-worktree: ui-work               # named; discovered or created, never removed
-worktree: { merge: true }       # ephemeral + auto-merge into the current branch
-worktree: { branch: ui-work }   # explicit named form
-worktree: { keep: true }        # ephemeral, but leave the directory in place
-```
-
-```json
-"worktree": {
-  "oneOf": [
-    { "type": "boolean" },
-    { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._/-]+$" },
-    {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "branch": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._/-]+$" },
-        "merge": { "type": "boolean" },
-        "keep": { "type": "boolean" }
-      }
-    }
-  ],
-  "description": "Run this workflow in a git worktree. true: ctrlyoke creates a run-scoped branch and worktree, auto-commits on completion, then removes the directory and leaves the branch for you to review and merge. A branch name string (e.g. \"ui-work\"): uses that worktree, creating it on first use, never removing it. Object form adds merge (auto-merge into the current branch on completion) and keep (leave the worktree directory in place)."
+  /** Name/path pairs used by multi-root references and snapshots, also remapped. */
+  namedWorkspaceRoots: ResolverWorkspaceFolder[];
 }
 ```
 
-`"auto"` as a bare string is ambiguous with a branch named `auto`; reject it in validation
-with a message pointing at `worktree: true`.
+When no worktree is active:
+
+```text
+executionRoot = stateRoot
+workspaceRoots = platform.getWorkspaceRoots()
+namedWorkspaceRoots = platform.getNamedWorkspaceRoots()
+```
+
+That no-worktree case must remain behaviorally identical to today.
+
+### Mapping a checkout into a worktree
+
+For a source root contained in the repository:
+
+```text
+mappedRoot = join(worktreeToplevel, relative(sourceCheckoutRoot, sourceRoot))
+```
+
+Every named workspace root belonging to the repository is mapped this way.
+
+`stateRoot` can legitimately be outside the repository, for example when it is
+the directory containing a saved `.code-workspace` file. In that case:
+
+- `stateRoot` remains unchanged for ctrlyoke state.
+- `executionRoot` is the worktree toplevel.
+- Every named repository root is remapped into the worktree.
+
+This avoids `relative(repoRoot, stateRoot)` producing an escaping `..` path.
+
+### Role assignment
+
+| Role                                                      | Root                                |
+| --------------------------------------------------------- | ----------------------------------- |
+| Harness process cwd                                       | execution                           |
+| Temp prompt and harness-config files                      | execution                           |
+| Relative `@` references and prompt rendering              | execution plus remapped named roots |
+| Claude/Qwen session-log project lookup                    | execution                           |
+| Provider hooks, notifications, and workspace-local config | execution                           |
+| `preCondition`, `endCondition`, and script cwd            | execution                           |
+| Script-path security allowlist                            | execution plus user home scripts    |
+| Snapshot capture and per-repo discovery                   | execution plus remapped named roots |
+| Harness `--add-dir` workspace arguments                   | remapped execution workspace roots  |
+| MCP `CTRLYOKE_WORKSPACE`                                  | state                               |
+| MCP `CTRLYOKE_WORKING_FILE`                               | state working-file path             |
+| Run storage, lineage, history, runner locks               | state                               |
+
+`CliMcpConfigGenerator` therefore needs separate locations for where it writes
+its temporary config and which state root it exports to the MCP server.
+
+`EndConditionEvaluator` must accept the execution workspace as both cwd and an
+allowed script root. Merely changing cwd would cause its existing security check
+to reject scripts inside the sibling worktree.
+
+### Integration lifecycle
+
+`IntegrationFactory.createForExecution()` receives the immutable
+`ExecutionWorkspace`. `CliIntegration` exposes explicit state/execution accessors
+instead of changing the meaning of `getWorkspaceRoot()` invisibly.
+
+An integration retained for PTY injection or post-completion session activity
+is reusable only when the next execution has the same execution-workspace
+identity. Managed-run finalization must dispose retained integrations and
+session watchers before committing or removing their directory.
 
 ---
 
-## Architecture
+## Workspace Eligibility
 
-### `WorktreeManager`
+A worktree checks out exactly one repository. The first release uses a strict,
+structural rule:
 
-`src/core/orchestration/WorktreeManager.ts` — lifecycle policy. Pure git plumbing goes in
-`src/utils/GitUtils.ts`, which already owns the `execFile`-based git helpers. `src/git/`
-stays out of it per `git.instructions.md` ("intentionally narrow" — commit-message
-generation only).
+1. Discover repositories from all named workspace roots.
+2. Require exactly one distinct repository.
+3. Require every named workspace root to be contained within that repository.
+4. Permit `stateRoot` itself to sit outside the repository solely as ctrlyoke
+   state storage.
 
-New in `GitUtils.ts`:
+Refuse worktree mode when:
+
+- No Git repository is present.
+- More than one repository is present.
+- A named root is not inside the sole repository.
+
+This intentionally rejects non-repository passthrough roots. Passing those
+roots to `--add-dir` would give the agent write access to live files and create
+the same silent partial-isolation problem as worktreeing only one repository in
+a multi-repo workspace.
+
+Deferred designs:
+
+- Explicit read-only passthrough roots.
+- `worktree: { repo: "repoA" }` in a multi-repo workspace.
+- One worktree per repository.
+
+---
+
+## Lifecycle Modes
+
+### Managed / ephemeral
+
+Shorthand:
+
+```yaml
+worktree: true
+```
+
+Lifecycle:
+
+1. Promote/resolve the run so `workflowKey` and `runRef` are stable.
+2. Capture the source checkout path, target branch, and exact base commit.
+3. Create an ownership record in Git administrative storage.
+4. Create the managed branch and linked worktree from the captured base commit.
+5. Persist creating worktree runtime metadata through `WorkingFileManager`.
+6. Acquire an exclusive execution lease for that worktree.
+7. Run the configured setup command once.
+8. Persist active worktree runtime metadata through `WorkingFileManager`.
+9. Run every workflow phase there.
+10. On terminal settlement, stop integrations and clean provider artifacts.
+11. Auto-commit all tracked/untracked, non-ignored changes.
+12. Optionally merge when explicitly requested.
+13. Remove the worktree directory unless `keep: true` or safe finalization
+    failed.
+14. Leave the branch and ownership record for review/cleanup.
+
+Terminal settlement includes successful completion, cancellation, stopped
+execution, and handled execution failure. Partial work is still data and must be
+landed safely. A pause is not terminal: the worktree and lease stay live.
+
+If auto-commit fails because of Git identity, hooks, signing, filesystem errors,
+or another cause, finalization becomes blocked and the directory remains.
+
+### Named / persistent
+
+Shorthand:
+
+```yaml
+worktree: ui-work
+```
+
+Behavior:
+
+- Resolve an existing worktree by its local branch name.
+- If the branch exists but is not checked out, attach a worktree under the
+  configured root.
+- If neither branch nor worktree exists, create both from the captured base.
+- Acquire an exclusive execution lease before running setup or workflow code.
+- Run setup only when ctrlyoke creates the named worktree.
+- Never auto-commit, merge, remove, or delete the branch.
+
+Once created, a named worktree is user-owned even though ctrlyoke performed the
+initial creation.
+
+### Finalization order
+
+Managed finalization must occur in this order:
+
+1. Stop session activity watchers and background monitors.
+2. Dispose integrations rooted in the worktree; do not park them for injection.
+3. Restore/clean provider-specific hook and MCP config artifacts.
+4. Remove temporary runtime trust grants that are no longer needed.
+5. Auto-commit the remaining user/agent changes.
+6. Perform optional merge handling.
+7. Remove the worktree if allowed.
+8. Release the execution lease.
+9. Persist the final branch and directory outcomes.
+
+The lease remains held through commit and removal so another process cannot
+enter halfway through finalization. Because leases live in Git administration
+storage rather than the checkout, `git add -A` cannot commit them.
+
+### Completion result
+
+Branch state and directory state are independent:
 
 ```typescript
-export async function listWorktrees(repoRoot: string): Promise<GitWorktreeEntry[]>;
-export async function addWorktree(repoRoot: string, path: string, branch: string, opts?: { createBranch?: boolean }): Promise<void>;
-export async function removeWorktree(repoRoot: string, path: string, force?: boolean): Promise<void>;
-export async function pruneWorktrees(repoRoot: string): Promise<void>;
+interface WorktreeCompletionResult {
+  branchOutcome:
+    | "landed"
+    | "merged"
+    | "nothing-to-merge"
+    | "conflict"
+    | "blocked";
+  directoryOutcome: "removed" | "kept" | "remove-failed";
+  branchName: string;
+  targetBranch?: string;
+  mergeStrategy?: "fast-forward" | "merge-commit";
+  conflictFiles?: string[];
+  autoCommitted?: boolean;
+  message?: string;
+}
+```
+
+`keep: true` affects only directory cleanup; it does not erase whether the
+branch landed or merged.
+
+---
+
+## Optional Merge
+
+Merging is opt-in:
+
+```yaml
+worktree:
+  mode: managed
+  merge: true
+```
+
+The merge target is the source checkout and branch captured when the managed
+worktree was created. It is never "whatever branch happens to be current later."
+
+Merge sequence:
+
+1. Auto-commit worktree changes.
+2. Compare managed `HEAD` to the captured base commit.
+3. If unchanged, remove the worktree and delete the empty managed branch.
+4. Require the source checkout to still be on the captured target branch.
+5. Require the source checkout working tree and index to be clean.
+6. Attempt `git merge --ff-only`.
+7. If the histories diverged, attempt a non-interactive `git merge --no-ff --no-edit`.
+8. On conflict, collect unmerged paths **before** `git merge --abort`.
+9. Verify abort restored a clean, non-merging state.
+10. Leave the managed branch for manual resolution/review.
+
+The source checkout may advance on the same target branch while the agent runs;
+that simply determines whether the merge is fast-forward or a merge commit.
+
+Creation itself does not require a clean source checkout because a worktree is
+created from a commit, not the source index. Uncommitted source-checkout changes
+are not copied into the worktree; surface that fact in run details. Declarative
+merge is unavailable when the captured source checkout was detached.
+
+The same merge engine serves:
+
+- Declarative `merge: true`.
+- The dashboard's explicit **Merge** action.
+
+The UI action must not be exposed before that engine exists.
+
+---
+
+## Discovery and Ownership
+
+Run `git worktree list --porcelain` through a single parser that represents:
+
+- Worktree path.
+- HEAD commit.
+- Optional local branch.
+- Detached state.
+- Bare state.
+- Locked state and reason.
+- Prunable state and reason.
+
+Discovery is not ownership. A `ctrlyoke/` branch prefix is a naming convention,
+not proof that ctrlyoke may delete anything.
+
+### Durable ownership records
+
+Managed worktrees get an atomic record under the repository's Git common
+directory:
+
+```text
+<git-common-dir>/ctrlyoke/managed-worktrees/<branch-hash>.json
+```
+
+The record includes:
+
+- Schema version.
+- Branch name and worktree path.
+- Source checkout root.
+- Base commit and target branch.
+- Host `stateRoot`.
+- `workflowKey` and `runRef`.
+- Created timestamp.
+- Current directory/branch outcomes.
+
+This survives linked-directory removal and supports safe branch cleanup. A
+branch prefix, path under the configured worktree root, or runtime working file
+alone is never sufficient authority to delete a branch.
+
+### Recovery
+
+Creation and finalization are idempotent:
+
+- If a managed run resumes and its ownership record plus worktree still exist,
+  reuse them.
+- If the directory is gone but the branch exists, reconcile the run as landed.
+- If the worktree exists but the originating runner and execution lease are
+  stale, expose it as recoverable.
+- If the branch was deleted manually, remove the stale ownership record after
+  confirmation or safe reconciliation.
+
+Activation performs read-only discovery and reports recoverable managed
+worktrees. It does not delete user worktrees automatically.
+
+---
+
+## Concurrency: Shared and Exclusive Execution Leases
+
+The existing `runner.json` remains the per-lineage execution lock. Worktree
+support adds a second mechanism for directory-level coordination across
+ctrlyoke instances.
+
+A single exclusive `execution-lock.json` would unnecessarily prevent today's
+parallel non-worktree workflows. Use a lease set instead:
+
+| Run                            | Lease mode           | Compatible leases in the same execution root |
+| ------------------------------ | -------------------- | -------------------------------------------- |
+| Ordinary non-worktree workflow | `shared-native`      | Other `shared-native` leases                 |
+| Managed worktree workflow      | `exclusive-worktree` | None                                         |
+| Named worktree workflow        | `exclusive-worktree` | None                                         |
+
+Leases are scoped by canonical execution-root identity. Therefore:
+
+- Several ordinary workflows can continue running in the source checkout.
+- Managed worktrees run concurrently with them because each has a unique root.
+- Different named worktrees run concurrently.
+- Two worktree-targeted workflows cannot use the same named worktree.
+- A worktree-targeted workflow cannot enter a named worktree while a VS Code
+  window opened on that worktree is running ordinary workflows there.
+- Ordinary workflows started in a directory with an exclusive worktree lease
+  are blocked until that lease ends.
+
+Parallel native workflows retain today's interference risk by explicit design.
+Users choose worktree mode when they require isolation.
+
+### Lease storage
+
+For Git roots, store leases in the worktree-specific Git administrative
+directory resolved by Git, not inside the checkout:
+
+```text
+git rev-parse --git-path ctrlyoke/execution-leases
+```
+
+```text
+ctrlyoke/execution-leases/
+  <owner-token>.json
+```
+
+For a non-Git ordinary execution root, fall back to:
+
+```text
+<executionRoot>/.ctrlyoke/execution-leases/
+```
+
+Each lease contains:
+
+```typescript
+interface ExecutionLease {
+  ownerToken: string;
+  mode: "shared-native" | "exclusive-worktree";
+  pid: number;
+  runner: "vscode" | "cli";
+  instanceId: string;
+  stateRoot: string;
+  executionRoot: string;
+  workflowKey: string;
+  runRef: string;
+  startedAt: number;
+  lastHeartbeat: number;
+}
+```
+
+Acquisition performs scan, stale cleanup, compatibility validation, and
+exclusive file creation while holding a short arbitration lock. This prevents a
+shared/exclusive check-create race across processes. Every run owns its own
+lease file, so one shared workflow finishing cannot release another's lease.
+
+Use the existing runner-lock safety model:
+
+- Random owner token.
+- Five-second heartbeat.
+- PID plus heartbeat staleness.
+- Owner-token verification on update and release.
+- Actionable owner information in conflicts.
+
+### Lease UX
+
+An incompatible live lease is a hard failure in the first release. Do not queue
+or prompt.
+
+The error reports:
+
+- Owning workflow and run.
+- Runner/instance and PID.
+- Owning state root.
+- Lease age.
+- Retry action.
+- Open Owning Workspace action where available.
+
+Worktree discovery renders any root with a live lease as **in use**.
+
+---
+
+## Workflow Schema
+
+`worktree` is workflow-level only. Introduce a separate
+`workflowOnlyProperties` definition and apply it to both top-level workflow
+shapes (single-step root and multi-step/working-file root). Do not add it to the
+shared `executionProperties` definition used by nested steps and runtime
+metadata.
+
+Supported forms:
+
+```yaml
+worktree: false                 # explicit no-worktree
+worktree: true                  # managed shorthand
+worktree: ui-work               # named shorthand
+
+worktree:
+  mode: managed
+  merge: false
+  keep: false
+  base: main
+  setup: npm ci
+
+worktree:
+  mode: named
+  branch: ui-work
+  base: main
+  setup: npm ci
+```
+
+TypeScript contract:
+
+```typescript
+type WorktreeConfig =
+  | boolean
+  | string
+  | {
+      mode: "managed";
+      merge?: boolean;
+      keep?: boolean;
+      base?: string;
+      setup?: string;
+    }
+  | {
+      mode: "named";
+      branch: string;
+      base?: string;
+      setup?: string;
+    };
+```
+
+Rules:
+
+- `true` means `{ mode: "managed" }`.
+- A string means `{ mode: "named", branch: value }`.
+- `false` or omission means ordinary execution.
+- `merge` and `keep` are not legal in named mode.
+- `branch` is required in named object mode and illegal in managed mode.
+- The default base is the source checkout's exact `HEAD` commit.
+- `base` must resolve to a commit before any directory is created.
+- `base` affects creation only; it is ignored when resolving an existing named
+  branch/worktree.
+- `setup` runs once only when ctrlyoke creates the worktree.
+
+JSON Schema performs structural and coarse character validation. Runtime
+validation calls:
+
+```text
+git check-ref-format --branch <branch>
+```
+
+The validated branch string is never used as a filesystem-relative path.
+There are no reserved string names; a quoted branch named `auto` is simply a
+named branch.
+
+Do not add a global `worktree.enabled` or default-on setting. Worktree behavior
+must be explicit in the workflow. The only initial global setting is the
+user-scope worktree root.
+
+Expose schema forms only when their behavior is implemented. For example,
+`merge` must not validate before the merge engine exists.
+
+---
+
+## Core Architecture
+
+### `GitUtils`
+
+Pure Git plumbing stays in `src/utils/GitUtils.ts`. Move the existing private
+Git-toplevel implementation from `WorkspaceRepoDiscovery` into this module so
+repo identity has one source.
+
+```typescript
+interface GitWorktreeEntry {
+  worktreePath: string;
+  headCommit: string;
+  branchName?: string;
+  detached: boolean;
+  bare: boolean;
+  lockedReason?: string;
+  prunableReason?: string;
+}
+
 export async function repoToplevel(dir: string): Promise<string | null>;
-export async function currentBranch(repoRoot: string): Promise<string | null>;
+export async function gitCommonDir(dir: string): Promise<string | null>;
+export async function gitPath(dir: string, relativePath: string): Promise<string | null>;
+export async function listWorktrees(repoRoot: string): Promise<GitWorktreeEntry[]>;
+export async function addWorktree(...): Promise<void>;
+export async function removeWorktree(...): Promise<void>;
+export async function pruneWorktrees(...): Promise<void>;
+export async function currentBranch(dir: string): Promise<string | null>;
+export async function resolveCommit(dir: string, ref: string): Promise<string>;
 export async function hasUncommittedChanges(dir: string): Promise<boolean>;
 export async function commitAll(dir: string, message: string): Promise<boolean>;
 ```
 
-```typescript
-interface WorktreeInfo {
-  branchName: string;
-  worktreePath: string;   // the worktree's own toplevel
-  executionRoot: string;  // worktreePath + relative(repoRoot, stateRoot)
-  repoRoot: string;
-  managed: boolean;       // ctrlyoke created it (ctrlyoke/ prefix)
-  discovered: boolean;    // pre-existing; never removed or auto-committed
-  workflowKey: string;
-  runRef?: string;
-  createdAt: number;
-}
+`src/git/` remains limited to commit-message generation per its existing
+instructions.
 
-interface CompletionResult {
-  outcome: "landed" | "merged" | "nothing-to-merge" | "conflict" | "blocked" | "kept";
+### `WorktreeManager`
+
+`src/core/orchestration/WorktreeManager.ts` owns policy and lifecycle:
+
+```typescript
+type WorktreeMode = "managed" | "named";
+type WorktreeOrigin = "created" | "discovered" | "recovered";
+type WorktreeLifecycleOwner = "ctrlyoke" | "user";
+
+interface WorktreeInfo {
+  mode: WorktreeMode;
+  origin: WorktreeOrigin;
+  lifecycleOwner: WorktreeLifecycleOwner;
   branchName: string;
-  targetBranch?: string;         // merge modes only
-  mergeStrategy?: "fast-forward" | "merge-commit";
-  conflictFiles?: string[];
-  autoCommitted?: boolean;
+  worktreePath: string;
+  sourceCheckoutRoot: string;
+  baseCommit: string;
+  targetBranch?: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  createdAt: number;
+  executionWorkspace: ExecutionWorkspace;
 }
 
 class WorktreeManager {
-  async resolveWorktreeRoot(repoRoot: string): Promise<string>;
-  async createManagedWorktree(workflowKey: string, runRef: string): Promise<WorktreeInfo>;
-  async resolveNamedWorktree(branchName: string, workflowKey: string): Promise<WorktreeInfo>;
-  async listWorktrees(repoRoot: string): Promise<WorktreeInfo[]>;   // discovered + managed
-  async completeRun(info: WorktreeInfo, opts: { merge?: boolean; keep?: boolean }): Promise<CompletionResult>;
-  async removeWorktree(info: WorktreeInfo, force?: boolean): Promise<void>;
-  async pruneOrphans(repoRoot: string): Promise<WorktreeInfo[]>;
+  async resolveWorktreeRoot(sourceCheckoutRoot: string): Promise<string>;
+  async listWorktrees(sourceCheckoutRoot: string): Promise<GitWorktreeEntry[]>;
+  async ensureManagedWorktree(...): Promise<WorktreeInfo>;
+  async resolveNamedWorktree(...): Promise<WorktreeInfo>;
+  async recoverManagedWorktree(...): Promise<WorktreeInfo | undefined>;
+  async completeManagedRun(...): Promise<WorktreeCompletionResult>;
+  async removeManagedWorktree(...): Promise<void>;
+  async discoverRecoverableManagedWorktrees(...): Promise<WorktreeInfo[]>;
 }
 ```
 
-### Path trust
+Public removal never uses force automatically. A force operation is an explicit,
+confirmed Manage Worktrees action.
 
-`evaluateFileAccess` blocks paths outside `workspaceRoots`
-(`src/utils/FileAccessPolicy.ts:60-93`), and a sibling worktree is outside. Register the
-worktree path via the existing external-roots mechanism
-(`ConfigurationUtils.getEffectiveApprovedExternalFileRoots` /
-`src/config/ExternalRootsTrustStore.ts`) for the run's duration — **session-scoped, not
-persisted into the saved trust store**. Without it, dashboard "open file",
-`PromptLinkProvider`, and attachment flows all reject worktree files.
+### `ExecutionRootLeaseManager`
 
-### Repo discovery
+`src/core/orchestration/ExecutionRootLeaseManager.ts` owns the shared/exclusive
+lease protocol and reuses/extracts the heartbeat and owner-token primitives
+currently embodied by `WorkflowLockManager`.
 
-Feed the active worktree path in as an extra probe root. `git rev-parse --show-toplevel`
-inside a worktree returns the worktree's own path, so `discoverRepos` needs the extra root
-and no new logic — snapshot/undo and hosted SCM then resolve worktree files correctly.
+It is separate from lineage runner locking because the two locks answer
+different questions:
 
-### WorkingFile
+- Runner lock: who executes this lineage/run?
+- Execution lease: which runs may use this directory concurrently?
+
+### Runtime trusted roots
+
+Do not persist worktree paths into `ExternalRootsTrustStore`; that store records
+user decisions about workspace-requested external roots.
+
+Add a process-session, owner-token/ref-counted runtime trusted-root registry.
+File-access callers combine:
+
+- Workspace roots.
+- User-approved external roots.
+- Validated runtime worktree roots.
+
+The harness itself receives the worktree through its remapped execution
+workspace, not by pretending it is a user-approved external root.
+
+Grant lifetime:
+
+- Managed ephemeral: while the worktree exists.
+- Named/kept: while the associated run/session is loaded or discoverable in the
+  current ctrlyoke process and the path still resolves to the same repository.
+
+This keeps output file links usable after a named run completes without
+persisting a permanent trust decision.
+
+### Repo discovery and snapshots
+
+Snapshot capture receives the execution workspace's remapped named roots.
+Hosted SCM/file attribution may additionally probe active runtime worktree
+roots, but must distinguish the source checkout and linked checkout rather than
+assuming they are one toplevel.
+
+Adding only the worktree path as an extra global repo probe is insufficient:
+prefix mapping and snapshot capture must also use the execution-scoped roots.
+
+### Working-file persistence
+
+`WorkingFileManager` remains the only writer of
+`workflow.ctrlyoke.json`. Worktree lifecycle code updates runtime metadata
+through a typed `WorkingFileManager`/queue seam; it does not write the JSON file
+directly.
 
 ```typescript
+interface WorkingFileWorktreeRuntime {
+  mode: "managed" | "named";
+  branchName: string;
+  worktreePath: string;
+  executionRoot: string;
+  sourceCheckoutRoot: string;
+  baseCommit: string;
+  targetBranch?: string;
+  lifecycleOwner: "ctrlyoke" | "user";
+  state:
+    | "creating"
+    | "active"
+    | "paused"
+    | "finalizing"
+    | "landed"
+    | "merged"
+    | "conflict"
+    | "blocked"
+    | "orphaned";
+  directoryState: "present" | "removed" | "remove-failed";
+  mergeStrategy?: "fast-forward" | "merge-commit";
+  conflictFiles?: string[];
+  updatedAt: number;
+}
+
 interface WorkingFileRuntime {
-  worktree?: {
-    branchName: string;
-    worktreePath: string;
-    executionRoot: string;
-    repoRoot: string;
-    managed: boolean;
-    discovered: boolean;
-    state: "active" | "landed" | "merged" | "conflict" | "blocked" | "orphaned" | "removed";
-    mergeStrategy?: "fast-forward" | "merge-commit";
-    conflictFiles?: string[];
-  };
+  // existing fields...
+  worktree?: WorkingFileWorktreeRuntime;
 }
 ```
 
-Written at run start (`"active"`) so a crash leaves a recoverable record; updated at
-completion.
+Every ordinary runtime update must preserve this nested block. Promotion to a
+new run starts with no old worktree runtime and resolves a fresh worktree after
+the new `RunRef` exists.
+
+### Parser and property persistence
+
+Adding the schema/type is not enough. Keep all workflow-property paths aligned:
+
+- `PromptFileParser.copyWorkflowLevelProperties`
+- The parser's single root-level script normalization path, which currently
+  returns before workflow properties are copied
+- `PromptFileLoader` workflow property extraction
+- Working-file seed/promote/re-run paths
+- Dashboard workflow-property constants and payload normalization, if the
+  property is editable there
+
+Worktree resolution is workflow-level plus explicit runtime defaults only. It
+does not use the prompt > workflow > settings `PropertyResolver.resolve()` path
+because step-level worktree overrides are forbidden.
 
 ---
 
-## Dashboard / UI
+## Snapshots, Diffs, and Undo
 
-```
+### Capture
+
+Before/after snapshots run against:
+
+- `executionRoot` for the primary capture.
+- Remapped `namedWorkspaceRoots` for multi-root segments.
+- The linked worktree's Git toplevel, not the source checkout.
+
+Persisted snapshot repo metadata therefore names the actual checkout used by the
+agent.
+
+### Active and persistent worktrees
+
+Named and `keep: true` worktrees support existing per-step filesystem undo as
+long as:
+
+- The worktree still exists.
+- It resolves to the recorded repository/branch identity.
+- The undo coordinator uses the recorded execution root and remapped named
+  roots, not the window's current source roots.
+
+### Landed managed branches
+
+After a managed directory is removed:
+
+- Keep snapshot diffs viewable.
+- Disable filesystem undo with a clear "worktree landed as branch" explanation.
+- Offer View Branch Diff and, when implemented, Merge.
+
+Recreating a temporary worktree to apply a reverse patch and commit the result
+is deferred. The UI must not silently redirect historical undo into the user's
+source checkout.
+
+---
+
+## Dashboard and CLI UX
+
+Running:
+
+```text
 ▶ ui-refactor   [claude-cli] [sonnet]  ● running
-  Branch: ctrlyoke/ui-refactor-2026-07-27T14-02-11
-  Worktree: ..\FlightPath.worktrees\ui-refactor-2026-07-27T14-02-11
+  Branch: ctrlyoke/ui-refactor/run-2026-07-27T14-02-11
+  Worktree: ..\FlightPath.worktrees\ui-refactor-a13f9082
 ```
 
-Named mode shows `Branch: ui-work` with no run suffix. On completion:
+Completion:
 
-- `✓ branch ready — 12 files` — neutral, with **View Diff** and **Merge** actions (default)
-- `✓ merged (fast-forward)` / `✓ merged (merge commit)` — green (opt-in merge)
-- `✓ no changes` — neutral
-- `⚠ merge conflict — resolve manually` — yellow, links to the branch
-- `⚠ merge skipped — main checkout is dirty` — yellow
+- `✓ branch ready — 12 files` with **View Diff**
+- **Merge** only after the shared merge engine exists
+- `✓ merged (fast-forward)`
+- `✓ merged (merge commit)`
+- `✓ no changes`
+- `⚠ merge conflict — branch preserved`
+- `⚠ merge blocked — source checkout changed or is dirty`
+- `⚠ commit blocked — worktree kept at …`
+- `⚠ worktree removal failed — branch safe, directory kept`
 
-Worktree paths render relative to the repo parent when they sit under it, absolute
-otherwise. An **Open Worktree in New Window** action covers the case where you do want a
-window on a live tree. `WorkspaceSessionManager.discoverSessions()` already reads working
-files — surface `_runtime.worktree` in the detail string, no structural change.
+Actions:
 
----
+- **View Diff** uses the recorded base commit and managed branch.
+- **Open Worktree in New Window** appears only while the directory exists.
+- **Merge** re-runs every dirty/branch/lease guard at click time.
+- **Manage Worktrees** lists ownership, lease state, branch state, age, and
+  safe actions.
 
-## `ctrlyoke_global_status`
+Paths render relative to the source checkout parent when possible, absolute
+otherwise.
+
+### `ctrlyoke_global_status`
+
+Expose persisted worktree runtime:
 
 ```json
 {
   "workflowName": "ui-refactor",
   "executionState": "running",
   "worktree": {
-    "branchName": "ctrlyoke/ui-refactor-2026-07-27T14-02-11",
-    "worktreePath": "C:/dev/FlightPath.worktrees/ui-refactor-2026-07-27T14-02-11",
-    "managed": true,
-    "state": "active"
+    "mode": "managed",
+    "branchName": "ctrlyoke/ui-refactor/run-2026-07-27T14-02-11",
+    "worktreePath": "C:/dev/FlightPath.worktrees/ui-refactor-a13f9082",
+    "state": "active",
+    "directoryState": "present"
   }
 }
 ```
 
+`WorkspaceSessionManager.discoverSessions()` includes the branch and worktree
+state in its detail string.
+
+### Named branch divergence
+
+Show cached, non-blocking ahead/behind information when a comparison base is
+known:
+
+```text
+ui-work — 7 ahead, 14 behind main
+```
+
+Use the recorded base/upstream and label it. Do not infer an unlabeled base from
+whatever branch happens to be checked out, and never auto-sync.
+
 ---
 
-## Harness Notes
+## Cleanup and Retention Decisions
 
-The harness set is the six CLI harnesses in `HARNESS_IDS`
-(`src/types/DashboardConstants.ts:557`): `copilot-cli`, `claude-cli`, `codex-cli`,
-`opencode-cli`, `qwen-cli`, `antigravity-cli`. There is no `copilot-chat` and no
-`gemini-cli`; an earlier revision referenced both plus a nonexistent
-`src/core/harness/chat/CopilotChatIntegration.ts`. Uniform coverage across all six is the
-reason to build this rather than lean on `claude --worktree`, which covers one.
+### Concurrency ceiling
 
-Two harnesses need per-provider verification in the split phase because their session-log
-discovery is cwd-derived: **claude-cli** (`ClaudeLogParser.ts:1124`) and **qwen-cli**
-(`QwenLogParser.ts:787`). For the rest, confirm hook/notification directories resolve
-under the execution root.
+There is no hard maximum in the first release. Repository size, dependency
+layout, and available disk vary too much for a universal cap.
+
+Warn when starting approximately the sixth active managed worktree, but allow
+the run. Count live managed execution leases, not every persistent or landed
+worktree. Show the active count and resolved worktree root.
+
+Do not add `worktree.maxConcurrent` until usage demonstrates a need.
+
+### Landed branch retention
+
+Never delete landed branches automatically in the first release.
+
+Manage Worktrees provides bulk cleanup. It may preselect only branches that:
+
+- Have a valid ctrlyoke ownership record.
+- Are not checked out in any worktree.
+- Have no live/recoverable run or lease.
+- Are proven fully merged into their recorded target branch.
+
+Squash/rebase merges are not provable through ancestry and remain explicit
+user-selected deletions.
+
+### Manual directory deletion and pruning
+
+Use discovery at activation and mutation on demand:
+
+- Activation performs `git worktree list --porcelain` and read-only stale/
+  prunable reporting.
+- Manage Worktrees offers explicit prune.
+- Resolving a requested branch with a stale admin entry offers targeted repair.
+- ctrlyoke may automatically reconcile only an entry proven managed by its
+  ownership record and protected by no live lease.
+
+Never automatically run `git worktree prune --expire now` against user-owned
+entries. A temporarily unavailable network/removable path can look deleted.
+
+### Execution lease conflicts
+
+Incompatible leases fail immediately with owner details and Retry/Open actions.
+No cross-process queue is introduced in the first release.
 
 ---
 
-## Files Changed
+## Harness Coverage
 
-| File                                                            | Change                                                                                  |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `src/types/CtrlYokeTypes.ts`                                    | `worktree?` on `PromptFile`; `worktree?` block on `WorkingFileRuntime`                   |
-| `src/utils/PropertyResolver.ts`                                 | Resolve `worktree` (workflow-level + global setting; no step tier)                       |
-| `src/utils/GitUtils.ts`                                         | Worktree primitives + `repoToplevel`, `hasUncommittedChanges`, `commitAll`                |
-| `src/utils/ConfigurationUtils.ts`                               | `ctrlyoke.worktree.root` / `.enabled`; `PATH_CONSTANTS` execution-lock filename           |
-| `package.json`                                                  | Contribute the settings                                                                  |
-| `schemas/workflow-schema.json`                                  | `worktree` in `executionProperties`                                                      |
-| `src/core/orchestration/WorktreeManager.ts`                     | **New** — root resolution, discovery, create, complete, prune                             |
-| `src/core/orchestration/WorkspaceInitializer.ts`                | Execution-lock filename in `GITIGNORE_CONTENT`                                            |
-| `src/core/WorkflowInstance.ts`                                  | Resolve worktree; own `WorktreeInfo`; execution-root lock; `executionRoot` on the context |
-| `src/core/IntegrationFactory.ts`                                | `createForExecution(harness, executionRoot?)`                                             |
-| `src/core/harness/CliIntegration.ts`                            | `executionRoot` + `getExecutionRoot()`; repoint execution-role call sites                 |
-| `src/core/harness/shared/CliTransportCoordinator.ts`            | cwd from execution root                                                                  |
-| `src/core/harness/shared/CliExecutionRunner.ts`                 | Notification dirs + `CTRLYOKE_WORKSPACE_ROOT` from execution root                         |
-| `src/core/harness/shared/CliMcpConfigGenerator.ts`              | `CTRLYOKE_WORKSPACE` explicitly from the **state** root                                   |
-| `src/core/harness/shared/CliPromptPreparer.ts`                  | `TempFileManager` on the execution root                                                   |
-| `src/core/WorkflowExecutor.ts`                                  | Script/endCondition cwd and snapshot root from `context.executionRoot`                    |
-| `src/core/EndConditionEvaluator.ts`                             | Accept the execution root as script cwd                                                   |
-| `src/utils/WorkspaceRepoDiscovery.ts`                           | Active worktree as an extra probe root                                                    |
-| `src/config/ExternalRootsTrustStore.ts`                         | Session-scoped worktree grant (not persisted)                                            |
-| `src/mcp-server.ts`                                             | `worktree` in `ctrlyoke_global_status`                                                    |
-| `src/core/orchestration/WorkspaceSessionManager.ts`             | Worktree info in `discoverSessions()` detail                                              |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | Worktree badge, View Diff / Merge / Open in New Window actions                             |
-| `src/test/unit/WorktreeManager.test.ts`                         | **New** — root resolution, discovery, create, complete, prune, multi-repo refusal          |
-| `src/test/unit/GitUtils.test.ts`                                | `git worktree list --porcelain` parsing                                                   |
-| `src/test/unit/CliIntegration.test.ts`                          | Execution-root vs state-root routing, including the unset no-op                            |
+The supported CLI harness set is the six entries in `HARNESS_IDS`:
+
+- `copilot-cli`
+- `claude-cli`
+- `codex-cli`
+- `opencode-cli`
+- `qwen-cli`
+- `antigravity-cli`
+
+All six must use the same execution-workspace contract.
+
+Provider-specific verification:
+
+- Claude and Qwen session-log lookup follows `executionRoot`.
+- Every provider's hook/notification path follows `executionRoot`.
+- Provider workspace-local settings/hook files are restored before managed
+  commit.
+- `CTRLYOKE_WORKSPACE` remains `stateRoot`.
+- Workspace/additional-directory arguments use remapped roots and never expose
+  the live source checkout during a worktree run.
+- Retained PTY/session activity integrations cannot survive managed directory
+  removal.
+
+Real-harness tests remain focused on behavior mocks cannot prove; ordinary
+path-routing coverage belongs in unit/integration tests.
+
+---
+
+## Files and Cross-Layer Changes
+
+The exact diff may evolve, but the implementation must cover these areas.
+
+| Area                      | Files / responsibility                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Workflow contracts        | `src/types/CtrlYokeTypes.ts`, `src/types/WorkflowContextTypes.ts`                                              |
+| Shared constants/messages | `DashboardConstants.ts`, `WebviewMessageTypes.ts`, output/status contracts                                     |
+| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, config/settings UI; user-scope `worktrees.root`, no `.enabled` |
+| Schema/parser             | `schemas/workflow-schema.json`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                   |
+| Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                              |
+| Execution roots           | `IntegrationFactory.ts`, `CliIntegration.ts`, transport/runner/prompt/MCP helpers                              |
+| Scripts/conditions        | `WorkflowExecutor.ts`, `EndConditionEvaluator.ts`                                                              |
+| Git/worktrees             | `GitUtils.ts`, new `WorktreeManager.ts`, ownership record helper                                               |
+| Concurrency               | new `ExecutionRootLeaseManager.ts`; shared lease primitives with `WorkflowLockManager`                         |
+| Snapshots/repos           | `WorkspaceSnapshotService.ts`, `WorkspaceRepoDiscovery.ts`, `UndoRedoCoordinator.ts`                           |
+| Runtime file trust        | new session registry plus file-access callers; do not persist into `ExternalRootsTrustStore`                   |
+| Recovery/status           | `WorkspaceSessionManager.ts`, activation recovery, `mcp-server.ts`                                             |
+| UI actions                | router/sink/message handler/store plus workflow status/steps components                                        |
+| VS Code commands          | Open Worktree, View Diff, Merge, Manage Worktrees                                                              |
+| Tests                     | focused Git, manager, lease, persistence, lifecycle, snapshot/undo, UI, and provider-routing tests             |
+
+Dynamic completion of discovered branch names is optional ergonomics and should
+not be claimed as a schema capability. Static schema completion covers the
+property shape; a separate top-level completion provider would be required for
+live branch values.
+
+---
+
+## Test Matrix
+
+### Root split
+
+- No-worktree paths and arguments remain identical.
+- Saved `.code-workspace` state root outside the repo maps safely.
+- Several named roots inside one repo remap correctly.
+- Non-repo named root and multi-repo workspace refuse worktree mode.
+- Script path resolution accepts the worktree and rejects escapes.
+- MCP state variables remain rooted at `stateRoot`.
+
+### Schema and persistence
+
+- Worktree is accepted at workflow root and rejected on steps/finalStep runtime.
+- Parser and loader preserve every shorthand/object form.
+- Promotion/re-run keeps the definition and starts fresh runtime metadata.
+- Ordinary runtime writes preserve `_runtime.worktree`.
+
+### Leases
+
+- Two shared-native leases coexist.
+- Exclusive acquisition fails while any live lease exists.
+- Shared acquisition fails while an exclusive lease exists.
+- Exclusive leases on different roots coexist.
+- Stale shared/exclusive leases are reclaimed.
+- Owner-token release cannot delete another run's lease.
+- Scan/check/create is race-safe across processes.
+
+### Named worktrees
+
+- Discover existing branch checkout.
+- Attach an existing un-checked-out branch.
+- Create a missing branch/worktree and run setup once.
+- Never commit/remove a named worktree.
+- Native run in the same worktree blocks exclusive targeting.
+
+### Managed worktrees
+
+- Safe branch/path creation from captured base.
+- Ownership record creation and recovery.
+- Setup success/failure behavior.
+- Auto-commit and branch landing.
+- Cancellation/failure lands partial work.
+- Commit failure keeps the directory.
+- Removal failure is reported without losing the branch.
+- Retained integrations are disposed before finalization.
+- Nothing-to-commit and `keep: true`.
+
+### Merge
+
+- Target branch changed.
+- Dirty source checkout.
+- Fast-forward.
+- Merge commit.
+- Conflict paths captured before abort.
+- Abort failure.
+- Empty branch cleanup.
+
+### Snapshots and undo
+
+- Snapshots capture only the worktree checkout.
+- Same-repo multi-root segments use remapped paths.
+- Named/kept undo targets the worktree.
+- Landed managed runs disable filesystem undo and retain diff display.
+
+### Security
+
+- Branch traversal strings fail semantic validation.
+- Directory name never derives directly from the branch.
+- Configured worktree root inside a checkout is rejected.
+- Ownership prefix alone cannot authorize deletion.
+- Workspace-scope config cannot redirect worktree root placement.
 
 ---
 
 ## Implementation Order
 
-### Phase 1 — Root split (no `worktree` property, no behavior change)
+### Phase 1 — Typed execution-workspace split
 
-1. Three-root vocabulary; `getExecutionRoot()` on `CliIntegration`; `executionRoot` on
-   `WorkflowExecutionContext` and `createForExecution`.
-2. Repoint every execution-role call site in the table above.
-3. `CliMcpConfigGenerator` takes the state root explicitly.
-4. Workspace-below-repo relative-path mapping helper (unused until Phase 3, but tested).
-5. Tests asserting **byte-identical behavior when `executionRoot` is unset**.
+1. Introduce `ExecutionWorkspace`.
+2. Preserve byte-equivalent/no-op behavior when no worktree is active.
+3. Route process cwd, temp files, refs, hooks, notifications, and log parsers
+   through execution roots.
+4. Route MCP state variables explicitly through state roots.
+5. Update script/condition security to accept execution roots.
+6. Make snapshots accept execution-scoped primary and named roots.
+7. Add mapping and no-op tests.
 
-Lands and bakes on its own. Roughly 80% of the total work, mechanical, and any regression
-shows up as a small isolated diff instead of tangled with lifecycle logic.
+This phase changes vocabulary and dependency boundaries but exposes no worktree
+schema.
 
-### Phase 2 — Execution-root lock
+### Phase 2 — Named worktrees and execution leases
 
-6. `<executionRoot>/.ctrlyoke/execution-lock.json`, taken for every run including
-   non-worktree runs; stale-PID reclaim; gitignore entry.
-7. Tests: concurrent acquisition, stale reclaim, release on crash paths.
+8. Consolidate Git identity helpers and implement porcelain parsing.
+9. Implement strict workspace eligibility and safe root resolution.
+10. Implement `ExecutionRootLeaseManager` shared/exclusive leases.
+11. Add named worktree schema forms, parser, loader, and runtime persistence.
+12. Implement named discovery/create/setup.
+13. Add runtime trusted-root registration.
+14. Route snapshots, hosted repo attribution, and undo through the execution
+    workspace.
+15. Verify all providers, including Claude and Qwen session logs.
 
-Independently useful — it closes the "two instances, one directory" hole even before
-worktrees exist.
+Exit criterion: existing parallel native workflows still coexist; a named
+worktree runs safely and is blocked only by incompatible activity in that same
+directory.
 
-### Phase 3 — Discovery + named worktrees
+### Phase 3 — Managed branch landing
 
-8. `GitUtils` worktree primitives with `--porcelain` parsing.
-9. `WorktreeManager.resolveWorktreeRoot()` (writability probe + `~/.ctrlyoke` fallback)
-   and `listWorktrees()`.
-10. Schema + types + `PropertyResolver` for the string form.
-11. **Multi-repo refusal** via `discoverRepos`, plus the same-repo and non-repo-root passes.
-12. `resolveNamedWorktree()`; `WorkflowInstance` wiring; `_runtime.worktree`.
-13. Path trust: session-scoped external-root grant.
-14. Repo discovery: worktree as an extra probe root.
-15. `--add-dir` remapping for repo-owned roots.
-16. Tests, including a claude-cli and a qwen-cli run in a worktree confirming session logs
-    resolve.
+16. Implement ownership records and idempotent create/recovery.
+17. Add managed shorthand/object schema without `merge`.
+18. Run setup before execution.
+19. Implement terminal-settlement cleanup, auto-commit, landing, `keep`, and
+    removal failure handling.
+20. Prevent retained integrations from outliving managed roots.
+21. Persist status and enrich global/session status.
+22. Add View Diff and conditional Open Worktree actions.
+23. Implement read-only activation recovery and warnings.
+24. Enforce landed-run undo behavior.
 
-Exit criterion: `worktree: ui-work` works against a pre-existing worktree. Serves the
-multi-window habit with no lifecycle risk, and validates the split against real harness
-behavior.
+Exit criterion: managed runs cannot lose uncommitted work on any ordinary
+completion/failure/cancellation path, and crash leftovers are discoverable.
 
-### Phase 4 — Ephemeral worktrees, branch landing
+### Phase 4 — Merge and management UX
 
-17. `createManagedWorktree()` with run-scoped branch naming.
-18. `completeRun()` — auto-commit, remove the directory, keep the branch. `keep: true`.
-19. Dashboard badge, View Diff, Merge action.
-20. **Orphan recovery on activation** — `pruneOrphans()` finds `ctrlyoke/`-prefixed
-    worktrees with no live run and offers keep or discard.
-21. `ctrlyoke_global_status` + `discoverSessions()` enrichment.
-22. Tests: create, auto-commit, land, nothing-to-commit, orphan recovery.
+25. Implement one guarded merge engine.
+26. Expose declarative `merge` and the dashboard Merge action together.
+27. Implement Manage Worktrees with safe remove/prune/branch cleanup.
+28. Show cached ahead/behind data for named branches.
+29. Add the active-managed-worktree concurrency warning.
 
-### Phase 5 — Opt-in merge and ergonomics
+### Phase 5 — Deferred expansion
 
-23. `merge: true`: nothing-to-merge → dirty-main refusal → FF → no-ff → conflict, with the
-    conflict notification.
-24. `ctrlyoke: Manage Worktrees` command — list, state, Remove / Open in VS Code.
-25. `worktreeSetup` script hook run once after creation (`npm ci`, `.env` copy).
-26. `worktreeBase: <branch>` to fork from something other than `HEAD`.
-27. `worktree: { repo: "repoA" }` for multi-repo workspaces.
-
----
-
-## Reversed Decisions (and why)
-
-### Auto-merge default → land the branch
-
-Auto-merging into whatever branch the main checkout happens to be on rewrites the user's
-working branch without review. The tell was that the merge chain already needed a
-"refuse when the main checkout is dirty" guard — the design was fighting the user. Landing
-the branch delivers the same single-window review experience (branches are shared across
-worktrees) while leaving the merge deliberate. Merge remains available as `merge: true`.
-
-### `.ctrlyoke/worktrees/` → sibling directory
-
-The original rationale was that `.ctrlyoke/` is "already gitignored and runtime-owned." It
-is neither. The decisive item is that a nested worktree breaks `npm run typecheck` in this
-very repo via `tsconfig.json`'s implicit-`include` + `rootDir` combination. Sibling
-placement is also the dominant external convention, so existing worktree habits transfer.
-
-### "Pass a cwd parameter" → three-root split
-
-The original plan asserted "the `cwd` is already passed through as a parameter in
-`CliExecutionRunner`." There is no such parameter — cwd derives from
-`runtimeState.getWorkspaceRoot()` (`CliTransportCoordinator.ts:86`, `:183`), and that one
-value simultaneously drives temp-file placement, relative `@`-ref bases, MCP
-`CTRLYOKE_WORKSPACE`, hook directories, and session-log discovery. Overriding it wholesale
-moves ctrlyoke state into the worktree; overriding only the spawn cwd breaks Claude/Qwen
-session-log discovery.
-
-### Harness list
-
-`copilot-chat` and `gemini-cli` no longer exist. The former "worktrees are meaningless for
-copilot-chat" open question is moot.
+30. Temporary-worktree historical undo for landed branches.
+31. Explicit read-only passthrough roots.
+32. Explicit repo selection or N-worktree fan-out for multi-repo workspaces.
+33. Optional retention policies informed by actual usage.
+34. Dependency/cache sharing ergonomics where safe.
 
 ---
 
-## Open Questions
+## Settled Design Decisions
 
-1. **Concurrency ceiling.** Nothing limits how many worktrees are live at once; each is a
-   full checkout plus its own `node_modules` once installed. Consider
-   `ctrlyoke.worktree.maxConcurrent`, or at minimum a warning past ~5.
-2. **Landed-branch accumulation.** The default never deletes branches. After fifty runs
-   that is fifty `ctrlyoke/*` refs. Offer a retention policy (delete merged `ctrlyoke/*`
-   branches older than N days) or a bulk cleanup in the Manage Worktrees command.
-3. **Named-worktree divergence.** A `worktree: ui-work` branch can drift far from `main`
-   and ctrlyoke never merges it. Should the dashboard show ahead/behind counts?
-4. **Manual worktree deletion.** Deleting the directory by hand leaves a stale admin entry.
-   `pruneOrphans()` should call `git worktree prune` — decide whether on activation, on
-   demand, or both.
-5. **Execution-lock UX.** When a run is blocked by another instance's lock, is that a hard
-   failure, a queue, or a prompt? Hard failure with the owner's details is the Phase 2
-   answer; queuing may be worth revisiting.
+1. **No hard concurrency ceiling.** Warn around the sixth active managed
+   worktree; do not block and do not add a setting yet.
+2. **No automatic landed-branch retention policy.** Provide explicit bulk
+   cleanup and preselect only provably safe merged branches.
+3. **Show named-branch ahead/behind counts.** Compare against a labeled,
+   recorded base/upstream; never auto-sync.
+4. **Discover stale worktrees on activation, prune on demand.** Automatically
+   reconcile only entries proven ctrlyoke-owned and inactive.
+5. **Lease conflicts are hard failures with owner details.** No queue in the
+   first release.
+6. **Parallel native workflows remain allowed.** They use compatible shared
+   leases; worktree-targeted runs use exclusive leases.
+7. **Managed worktree results land as branches by default.** Merge is explicit.
+8. **Transient worktree trust is session-scoped, not persisted as a user trust
+   decision.**
+9. **Managed directory removal disables filesystem undo for that run.** Diff
+   display remains; temporary recreation is deferred.
+10. **Worktree mode is explicit per workflow.** There is no global enable or
+    default-on setting.
+
+---
+
+## Reversed Decisions and Why
+
+### Default auto-merge → land the branch
+
+Automatically rewriting the source checkout creates unnecessary risk and fights
+the review workflow. A shared branch already gives single-window users a
+reviewable result.
+
+### Nested `.ctrlyoke/worktrees/` → sibling directory
+
+Nested worktrees break this repository's TypeScript build, attribution,
+snapshot walking, and isolation assumptions.
+
+### Single cwd override → typed execution workspace
+
+The current root drives more than spawn cwd: prompt refs, temp files, hooks,
+MCP state, session-log discovery, scripts, and snapshots. A typed contract makes
+the state/execution split explicit and carries remapped multi-root data.
+
+### One exclusive execution lock → shared/exclusive lease set
+
+A single lock would remove existing parallel non-worktree execution. Shared
+native leases preserve that behavior, while exclusive worktree leases protect
+the particular directory that must be isolated.
+
+### Non-repo roots pass through → strict first-release eligibility
+
+Passing a live non-repo root to a worktree run is silent partial isolation.
+Explicit read-only passthrough can be designed later; the first release refuses
+the ambiguous shape.
+
+### Branch prefix as ownership → durable Git-admin ownership records
+
+Names are conventions, not deletion authority. A durable record survives
+directory removal and makes cleanup and crash recovery safe.
