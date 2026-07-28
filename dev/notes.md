@@ -23,11 +23,11 @@ do a follow up for agy and see if we can get better context window stats
 
 render all references as chips in output history
 
-fix formatting of pre / post condition
+☑️ fix formatting of pre / post condition
 
 commit message generation should use CLI ouput and display the raw output of the harness.
 
-template doesn't load final step only templates correctly
+☑️ template doesn't load final step only templates correctly
 
 codex hook cleanup
 
