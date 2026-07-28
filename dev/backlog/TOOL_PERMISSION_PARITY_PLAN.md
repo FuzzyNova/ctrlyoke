@@ -1,6 +1,6 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Proposed
+> **Status:** Ready for implementation
 >
 > **Priority:** P1 — immediate honesty, then parity
 >
@@ -40,20 +40,41 @@ materially different from an unavailable convenience feature.
 Treat granular allow/deny support as follows until behavioral verification says
 otherwise:
 
-| Harness         | Permission mode                             | Allowed/denied lists              | Current disposition                              |
-| --------------- | ------------------------------------------- | --------------------------------- | ------------------------------------------------ |
-| Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                      |
-| Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                      |
-| Qwen Code       | Supported                                   | Broken/unverified                 | Warn now; implement workspace config             |
-| OpenCode        | Supported                                   | Not implemented                   | Warn now; implement workspace config             |
-| Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only; investigate safe partial translations |
-| Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only                                        |
-| Copilot Chat    | Harness-managed                             | Not applicable                    | Unsupported                                      |
+| Harness         | Permission mode                             | Allowed/denied lists              | Current disposition                                                                          |
+| --------------- | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                  |
+| Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
+| Qwen Code       | Supported                                   | Broken/unverified                 | Warn now; implement workspace config                                                         |
+| OpenCode        | Supported                                   | Not implemented                   | Warn now; implement workspace config                                                         |
+| Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
+| Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
+| Copilot Chat    | Harness-managed                             | Not applicable                    | Unsupported                                                                                  |
 
 This table belongs in the shared capability registry once that registry exists.
 Do not copy it into multiple UI components.
 
-## Phase 0 — Honest UI Now
+## Staging Within the Parent Plan
+
+This is the first consumer of the compatibility architecture, not an
+independently startable parallel plan. Implement it in this order:
+
+1. complete Compatibility Phase 1A (shared contracts and pure property
+   resolution);
+2. complete Compatibility Phase 1B (permission descriptors, registry,
+   analyzer, preflight, and client snapshot);
+3. complete the honest authoring UI below as Compatibility Phase 1C;
+4. evolve the runtime permission-preparation contract;
+5. implement the shared workspace-policy lease/writer and blocking-conflict UX;
+6. implement and behaviorally verify Qwen;
+7. implement OpenCode and coordinate its config writes with the MCP writer;
+8. continue to Compatibility Phase 2 for dry run, CLI/reporting, and MCP
+   serialization.
+
+The Codex partial-support investigation follows the verified Qwen/OpenCode
+paths and does not block the permission vertical slice. Antigravity remains an
+explicit unsupported granular-list declaration unless new evidence changes it.
+
+## Compatibility Phase 1C — Honest UI
 
 Until a harness has a passing behavioral test, the permissions UI must state that
 Allowed Tools and Denied Tools are currently supported only by Copilot CLI and
@@ -73,16 +94,24 @@ Required behavior:
   the existing mapper.
 - A harness-specific warning explains whether the lists are ignored,
   unverified, or require workspace configuration.
-- Fields that cannot affect the selected harness are disabled at the
-  workflow/prompt level.
-- The defaults page, which has no single effective harness, keeps fields editable
-  but displays the support summary.
+- Keep Allowed/Denied Tools editable at workflow, prompt, and defaults scope
+  regardless of harness support. Workflow-level lists can still be inherited by
+  steps whose harness overrides support them, and authored values may become
+  effective after a later harness change.
+- Resolve support per AI step/final-step consumer, then aggregate it at the
+  workflow field. A Codex-default workflow with Claude override steps must not
+  be classified wholesale as Codex mode-only.
+- The defaults page, which has no concrete consumers, displays the cross-harness
+  support summary without disabling the fields.
 - The warning must state that a denied list is **not enforced**. Avoid softer
   wording such as "may behave differently."
+- Ignored Allowed/Denied Tools are non-blocking warnings. They never require
+  confirmation, acknowledgment, or an extra click before execution.
 
-The first implementation may use the existing shared helper, but it must migrate
-to the capability registry in the same vertical slice so the UI and execution
-cannot drift again.
+This stage requires Compatibility Phases 1A and 1B. Implement it directly
+against the shared registry/analyzer and remove the existing helper switch in
+the same change. Do not add a temporary support table or leave the old helper as
+a fallback.
 
 ## Workspace-Configuration Support
 
@@ -104,8 +133,9 @@ two unrelated ad hoc writers.
 - Preserve unrelated user settings, formatting limitations permitting.
 - Capture the original value before the first active owner.
 - Reference-count identical active configurations.
-- Reject or serialize conflicting configurations in the same workspace. Two
-  parallel workflows must never silently replace one another's security policy.
+- Never merge or alternate conflicting active configurations in the same
+  workspace. Two parallel workflows must never silently replace one another's
+  security policy.
 - On final release, restore only ctrlyoke-owned changes.
 - Do not overwrite edits the user made while the workflow was running. Use an
   ownership/three-way comparison and surface a cleanup conflict.
@@ -125,7 +155,68 @@ workspace. While ctrlyoke's injected permission policy is active, it can affect:
 - an interactive session that outlives the workflow step.
 
 Show this caveat before execution and in dry-run output. The caveat should name
-the exact file and whether ctrlyoke will restore its owned changes.
+the exact file and whether ctrlyoke will restore its owned changes. This is a
+non-blocking warning and does not add a confirmation gate.
+
+### Conflict decision — reject the later acquisition
+
+Reference counting is required but resolves only identical policies. If
+workflow A and workflow B request the same normalized permission configuration,
+the writer applies it once, records both owners, and restores the baseline only
+after both release it.
+
+For non-identical policies targeting the same harness configuration file,
+reject the later acquisition. Preparation returns a structured blocking
+conflict diagnostic naming the active owner, harness, and target file. The
+first workflow continues unchanged; the user can retry the second after the
+active policy is released.
+
+A file mutex is still required, but it is not itself a conflict strategy: it
+prevents two read-modify-write operations from interleaving while still
+allowing a later write to replace the first policy immediately after the lock
+is released unless the ownership check and acquisition happen atomically under
+that lock.
+
+The public application contract represents `acquired`, `shared`, and `conflict`
+outcomes. Do not add a dormant `waiting` state or make the workflow appear
+queued. If workflow chaining/queuing is implemented later, the conflict
+diagnostic can gain a `queue-after-owner` remediation action and the lease
+contract can add a waiting outcome without changing the ownership semantics.
+
+Compare the final normalized, harness-specific permission policy when deciding
+whether configurations are identical. Canonicalize only fields whose ordering
+is behaviorally irrelevant; preserve order where harness rule precedence makes
+it meaningful.
+
+### Blocking conflict UX
+
+A workspace permission conflict is an `error`, not a warning-severity
+diagnostic, because ctrlyoke cannot safely prepare the requested execution. It
+blocks only the workflow whose later acquisition failed.
+
+When a dashboard user presses Run and atomic acquisition returns `conflict`,
+show a shared React modal with:
+
+- title: **Workflow can't start**;
+- the active workflow name, harness, and workspace configuration path;
+- an explanation that the workflows require different permission policies and
+  that replacing the active policy could invalidate its security controls;
+- **View active workflow** when that workflow can be selected in the dashboard;
+- **Close**;
+- no Continue Anyway, confirmation, or unavailable Queue action.
+
+This is a blocking-result dialog, not a confirmation dialog: it reports that
+the requested start failed and offers no unsafe override. Use the existing
+shared React `Modal` foundation so the VS Code webview and hosted browser behave
+the same. Do not use `vscode.window.showErrorMessage` and do not wait for a
+future toast-unification project.
+
+The modal is the immediate interruption, but not the only record. Persist the
+same diagnostic code and details in dashboard status/output and expose it
+through validation/dry-run results while the conflict remains. CLI starts exit
+nonzero with the structured diagnostic; MCP callers receive the same error
+contract. Once the active owner releases the policy, a retry performs a fresh
+atomic acquisition and may proceed.
 
 ## Qwen Implementation
 
@@ -143,8 +234,9 @@ versions:
 - retain coarse mode arguments only where the installed version accepts them.
 
 Version differences matter because Qwen has changed both its settings schema and
-CLI arguments. Detect the installed version and mark unverified versions rather
-than falling back to stale flags.
+CLI arguments. Record Qwen mode, Allowed Tools, and Denied Tools verification
+evidence independently, detect the installed version, and mark only
+out-of-range capabilities unverified rather than falling back to stale flags.
 
 Behavioral tests must launch Qwen in an isolated fixture workspace and prove that:
 
@@ -195,12 +287,15 @@ Only advertise `partial` for categories with behavioral tests. A partial mapping
 must emit diagnostics for every untranslatable rule. Never translate a broad
 denial into a weaker rule silently.
 
-Codex remains mode-only for the generic lists until this investigation lands.
+Until this investigation lands, the analyzer derives Codex's mode-only summary
+from supported coarse mode plus unsupported Allowed Tools and Denied Tools
+capabilities. Harness mappers do not store `mode-only` as a capability value.
 
 ## Antigravity
 
-Keep Antigravity mode-only unless its supported CLI/configuration exposes a
-documented granular policy mechanism.
+Keep deriving an Antigravity mode-only summary unless its supported
+CLI/configuration exposes a documented granular policy mechanism. Harness
+adapters do not store that summary as a capability value.
 
 Do not infer granular support from Gemini/Qwen configuration merely because the
 products share history or directories. Antigravity needs its own verified
@@ -219,7 +314,12 @@ interface ToolPermissionApplication {
 }
 
 interface IToolPermissionMapper {
-  describeSupport(version?: string): ToolPermissionCapability;
+  /**
+   * Static permission facts owned by this harness mapper and referenced by the
+   * harness descriptor. The backend registry is the only layer that evaluates
+   * these declarations against an installed version.
+   */
+  readonly capabilities: PermissionCapabilityDescriptor;
   prepare(
     config: ToolPermissionConfig,
     context: PermissionContext
@@ -228,8 +328,11 @@ interface IToolPermissionMapper {
 }
 ```
 
-The final names may differ, but command arguments, workspace side effects, and
-diagnostics must be returned through one preparation contract.
+The harness adapter's registry descriptor must reference this same
+`capabilities` object rather than copy it. Do not add
+`describeSupport(version)` or any second mapper-owned version evaluator.
+Command arguments, workspace side effects, and diagnostics must be returned
+through one preparation contract.
 
 ## Testing Strategy
 
@@ -237,13 +340,13 @@ Keep mapper unit tests, but add:
 
 - capability completeness tests for every harness;
 - workspace writer merge/restore/conflict/crash-recovery tests;
-- provider command/config snapshot tests;
-- UI tests for each support state;
+- harness command/config snapshot tests;
+- UI tests for the relevant fidelity/mechanism/verification combinations;
 - integration tests against pinned harness versions;
 - negative behavioral tests that exercise safe denied operations.
 
-An argument/config snapshot is not sufficient evidence for the `supported`
-capability state.
+An argument/config snapshot is not sufficient evidence for `exact` or `partial`
+fidelity with verified status.
 
 ## Acceptance Criteria
 
@@ -251,12 +354,19 @@ capability state.
 - Qwen no longer emits unverified tool-list flags as if they were enforced.
 - OpenCode no longer claims a permission config side effect it does not perform.
 - Qwen and OpenCode granular policies pass behavioral allow/deny tests before
-  their UI support state becomes enabled.
+  their capability declarations advance from unsupported/unverified to the
+  behaviorally justified fidelity and verified status.
 - Conflicting workspace permission policies cannot run concurrently without an
-  explicit resolution.
+  explicit resolution; the later acquisition is rejected without modifying the
+  active policy.
+- A dashboard start rejected by a permission-policy conflict shows the shared
+  blocking modal and persists the same diagnostic in status/output; CLI and MCP
+  surfaces return the same error code without relying on a toast or VS Code
+  notification.
 - Cleanup preserves pre-existing settings and user edits.
 - Codex and Antigravity never silently ignore configured granular rules; the
-  compatibility layer emits a pre-execution warning.
+  compatibility layer emits a non-blocking pre-execution warning without a
+  confirmation gate.
 - Dry run shows the exact permission translation and workspace file side effect.
 
 ## Non-goals
@@ -265,4 +375,5 @@ capability state.
 - Writing user-global harness configuration.
 - Leaving workspace permission mutations behind as persistent project policy.
 - Treating prompt instructions such as "do not use shell" as a security control.
-- Marking support complete based only on provider documentation or emitted flags.
+- Claiming verified exact/partial fidelity based only on harness documentation
+  or emitted flags.
