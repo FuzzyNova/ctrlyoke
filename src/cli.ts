@@ -270,7 +270,6 @@ async function runCommand(
     quiet: options.quiet ?? false,
     json: options.json ?? false,
     color: options.color !== false,
-    headless: options.headless,
     cliExecutionMode: executionMode,
   };
 
