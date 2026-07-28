@@ -1,80 +1,130 @@
-# Workflow Execution Guardrails Plan
+# Global Execution Guardrail Hardening Plan
 
-**Status:** Proposed  
-**Priority:** High — before scheduling or parallel-step expansion
+> **Status:** Revised — reduced scope
+>
+> **Priority:** P2 — complete with or before unattended scheduling
 
-## Problem
+## Existing Product Contract
 
-ctrlyoke supports retries, long-running scripts, parallel workflows, and dynamic
-queue extension by an AI agent. Those capabilities need run-level limits before
-the product encourages unattended scheduling or expands concurrency.
+ctrlyoke already exposes and enforces execution guardrails through the settings
+layer:
 
-Today a valid workflow can consume more wall time, retries, or dynamically added
-steps than the author intended. Provider token reporting is also uneven, so the
-design must distinguish hard limits ctrlyoke can always enforce from best-effort
-usage limits.
+| Concern           | Existing setting                 | Current role                                          |
+| ----------------- | -------------------------------- | ----------------------------------------------------- |
+| Prompt duration   | `execution.maxPromptTimeout`     | Bounds one harness prompt; `-1` is unlimited          |
+| Script duration   | `execution.scriptTimeout`        | Default timeout for pre/end-condition scripts         |
+| Workflow growth   | `queue.maxSize`                  | Bounds the queue, including dynamic appends           |
+| Workflow duration | `queue.maxWorkflowExecutionTime` | Stops at safe execution boundaries; `-1` is unlimited |
+| Explicit opt-out  | `queue.unlimitedMode`            | Disables queue-size and workflow-time limits          |
+
+Retry behavior already has focused controls:
+
+- `errorBehavior.maxRetries` bounds harness/session-failure retries;
+- `endCondition.maxRetries` bounds validation retries;
+- condition-level `timeout` can override the global script timeout where a
+  particular validation script genuinely needs a different budget.
+
+These settings are the product's guardrail surface. They are configurable at
+the settings scopes supported by `CtrlYokeConfigService`; they are not workflow
+execution properties.
 
 ## Product Decision
 
-Add a single `limits` contract with three-tier resolution (step, workflow, global
-settings) and conservative, observable enforcement.
+Do **not** add a workflow `limits` object or step/workflow/global resolution.
+Do not add per-prompt overrides for queue size, workflow duration, prompt
+duration, aggregate attempts, observed tokens, or concurrency.
 
-Hard limits:
+Per-step limits would mainly buy exceptions such as “allow this unusually long
+step while keeping the default tight.” That is occasionally useful, but it does
+not justify another inheritance system and more authoring controls:
 
-- `maxDurationMs` — wall-clock run or step duration
-- `maxSteps` — total executable steps, including dynamically appended steps
-- `maxTotalAttempts` — attempts across the run, including retries
-- `maxConcurrentSteps` — future-facing cap used by parallel-step execution
+- a workflow could weaken a user's safety preference;
+- copied workflows would carry machine-specific operational policy;
+- mixed step limits make the effective run envelope harder to explain;
+- the existing global prompt/workflow timeouts and focused retry settings cover
+  the practical cases;
+- script conditions already retain their existing timeout override because
+  script runtimes vary substantially and that behavior is established.
 
-Best-effort limit:
+If users later demonstrate a recurring need for prompt-specific AI timeouts,
+design that narrow feature from evidence rather than introducing a generic
+limits hierarchy now.
 
-- `maxObservedTokens` — stops before the next prompt once reported cumulative
-  usage reaches the threshold; never claim exact enforcement when a harness
-  cannot report usage
+## Remaining Work
 
-Limits do not replace existing per-script timeouts or end-condition retry
-settings. They are the outer safety envelope.
+This plan is an enforcement and consistency audit, not a new schema feature.
 
-## Phase 1 — Hard run envelope
+### Phase 1 — Single-source existing enforcement
 
-- Add typed and schema-validated `limits` to workflow/default settings.
-- Resolve limits through the existing property-resolution pattern.
-- Count original and dynamically appended executable steps.
-- Count attempts at the executor boundary so harness failures, pre/end-condition
-  retries, and script retries cannot each maintain separate budgets.
-- Classify a limit stop distinctly from user cancellation and harness failure.
-- Persist the triggering limit and observed counters in the run manifest.
+- Create or identify one shared queue-limit check used by initial workflow load,
+  manual append, MCP/API append, working-file reload, and `finalStep` dynamic
+  extension.
+- Reject an initially loaded workflow whose executable step count exceeds
+  `queue.maxSize` before its first step starts. Current append paths enforce the
+  limit, but initial loading relies on later execution checks.
+- Count enabled and disabled queue entries consistently with the existing queue
+  definition; do not create a second “billable step” count.
+- Audit `execution.maxPromptTimeout` across interactive/headless transports and
+  completion monitors so `-1` and finite values have the same meaning for every
+  CLI harness.
+- Audit `queue.maxWorkflowExecutionTime` across normal steps, script steps,
+  retries, `finalStep`, pause/resume, and dynamically extended queues. Continue
+  enforcing it only at safe boundaries; do not kill a harness while it may be
+  writing files.
+- Keep `unlimitedMode`, `maxSize <= 0`, and `-1` semantics consistent across
+  core, CLI, MCP, dashboard messages, and settings copy.
 
-## Phase 2 — UX and preview
+### Phase 2 — Observable outcomes
 
-- Show effective limits in workflow properties.
-- Display remaining time/steps/attempts while a run is active.
-- Include resolved limits and warnings in dry-run preview.
-- Warn before starting a workflow whose current step count already exceeds its
-  configured cap.
+- Use stable structured reason codes for queue-size, prompt-timeout, and
+  workflow-time stops across dashboard status/output, CLI results, MCP results,
+  logs, and notifications.
+- State the configured threshold and observed value in each stop message.
+- Include the effective global guardrails in dry-run output once
+  `DRY_RUN_PREVIEW_PLAN.md` is implemented.
+- Keep configuration in the existing Execution and Queue settings sections; do
+  not add workflow or prompt property controls.
 
-## Phase 3 — Observed token limit
+## Explicitly Rejected Scope
 
-- Build on cumulative prompt usage rather than the current context-window
-  percentage.
-- Label incomplete provider data as partial.
-- Stop only at safe step/attempt boundaries; do not kill a harness mid-write
-  solely because a delayed token event crossed the threshold.
+- `limits` in `schemas/workflow-schema.json`.
+- Step → workflow → settings limit resolution.
+- `maxSteps`; it duplicates `queue.maxSize`.
+- `maxDurationMs`; it duplicates the existing prompt/workflow/script timeout
+  settings.
+- `maxTotalAttempts`; focused retry caps plus workflow time already bound retry
+  behavior, and an aggregate counter would add another surprising stop rule.
+- `maxObservedTokens`; usage is incomplete for some harnesses and belongs in
+  usage visibility, not a purported hard guardrail.
+- `maxConcurrentSteps`; parallel-step execution must own its global concurrency
+  setting when that feature is designed.
+- Administrator ceilings that workflow files may lower but not raise.
+- Live remaining-budget widgets in workflow authoring.
 
-## Semantics to settle during implementation
+## Relationship to Future Automation
 
-- Global defaults should be finite for dynamic queue growth but generous enough
-  not to break normal workflows.
-- A workflow may lower global limits freely. Raising an administrator-enforced
-  ceiling should require an explicit setting outside the workflow file.
-- A resumed run retains its original consumed counters.
-- A manually appended step is subject to the same `maxSteps` cap as an
-  AI-appended step.
+Scheduling and standalone automation consume the same effective settings; they
+must not invent workflow-authored limits. If scheduling later requires finite
+values for a particular unattended mode, make that an explicit scheduler policy
+and user choice.
 
-## Acceptance criteria
+Parallel steps inherit the existing queue and workflow-time settings. Their
+concurrency cap belongs to `PARALLEL_STEPS_PLAN.md`, while safe file isolation
+belongs to `WORKTREE_SUPPORT_PLAN.md`.
 
-- No dynamic workflow can grow beyond its effective hard step cap.
-- Retry/attempt accounting is shared and persisted.
-- Limit-triggered stops are visible and distinguishable from errors/cancel.
-- Scheduling and parallel-step work consume this contract rather than inventing
-  their own safety settings.
+Observed token totals remain reporting data under
+`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`. They do not block execution.
+
+## Acceptance Criteria
+
+- No workflow or prompt schema gains a generic `limits` property.
+- Every queue-entry path applies the same effective `queue.maxSize` semantics.
+- An oversized initial workflow is rejected before any step executes.
+- Prompt and workflow timeouts behave consistently across supported execution
+  modes and harnesses.
+- Limit stops use stable reason codes and remain distinguishable from user
+  cancellation and harness failure.
+- Dashboard, CLI, MCP, settings copy, and dry-run output agree on unlimited
+  values and configured thresholds.
+- Scheduling and parallel-step plans reference these existing global controls
+  without adding a second limits hierarchy.

@@ -58,7 +58,7 @@ to drive.
 4. Close release-critical accessibility, security, and regression gaps. Use
    [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md) as generated input, not as a
    percentage target that blocks forever.
-5. Ship honest tool-permission messaging from phase 0 of
+5. Ship honest tool-permission messaging from the authoring slice of
    [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md).
    Until behavioral tests prove otherwise, the UI must say granular Allowed
    Tools and Denied Tools are supported only by Copilot CLI and Claude CLI.
@@ -68,43 +68,40 @@ to drive.
 These are the best post-launch investments. They improve the workflows users
 already have instead of introducing new execution models.
 
-1. **Harness compatibility and portability** — add one provider-owned capability
-   registry, author-time diagnostics, and workflow portability reporting so
-   unsupported or lossy fields are visible before execution.
+1. **Harness compatibility and portability** — add one harness-adapter-owned
+   capability registry, author-time diagnostics, and workflow portability
+   reporting so unsupported or lossy fields are visible before execution.
    ([plan](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
 2. **Tool-permission parity** — make support claims honest, replace Qwen's
    unverified flags, implement ownership-safe workspace configuration for Qwen
    and OpenCode, and investigate partial Codex translations without overstating
    them.
    ([plan](../backlog/TOOL_PERMISSION_PARITY_PLAN.md))
-3. **Execution guardrails** — cap duration, attempts, queue growth, and future
-   concurrency before encouraging unattended runs.
-   ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
-4. **Complete MCP lifecycle control** — start, list, inspect, pause, resume, and
+3. **Complete MCP lifecycle control** — start, list, inspect, pause, resume, and
    cancel workflows through one shared application service.
    ([plan](../backlog/MCP_CONTROL_SURFACE_PLAN.md))
-5. **Secrets and redaction** — runtime secret references plus centralized
+4. **Secrets and redaction** — runtime secret references plus centralized
    redaction across logs, history, previews, exports, and remote transports.
    ([plan](../backlog/SECRETS_AND_REDACTION_PLAN.md))
-6. **Dry-run preview** — show the categorized payload, provider translation,
+5. **Dry-run preview** — show the categorized payload, provider translation,
    compatibility diagnostics, workspace side effects, and command without
    invoking a harness.
    ([plan](../backlog/DRY_RUN_PREVIEW_PLAN.md))
-7. **Template required variables + Feature-Driven Loop** — fix unresolved
+6. **Template required variables + Feature-Driven Loop** — fix unresolved
    optional placeholders, validate required template input, and add the
    idea-to-plan orchestrator template without arbitrary setup scripts.
    ([plan](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md))
-8. **Native diagnostics gates** — implement phases 1–2 only: VS Code diagnostics
+7. **Native diagnostics gates** — implement phases 1–2 only: VS Code diagnostics
    as an end condition and retry context. Defer the generic IDE MCP bridge.
    ([plan](../backlog/VSCODE_LSP_MCP_PLAN.md))
-9. **Attention-needed notifications** — add the canonical harness
+8. **Attention-needed notifications** — add the canonical harness
    `notification` event so remote/unfocused users know when a workflow is
    waiting for input.
    ([plan](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md))
-10. **Accessibility and semantic testability** — keyboard parity, accessible
-    names/states, landmarks, and resilient role-based tests.
-    ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
-11. **Automation API structured results** — finish the rich JSON result work in
+9. **Accessibility and semantic testability** — keyboard parity, accessible
+   names/states, landmarks, and resilient role-based tests.
+   ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
+10. **Automation API structured results** — finish the rich JSON result work in
     [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md). Variable substitution is
     already implemented; an SDK remains deferred.
 
@@ -122,29 +119,34 @@ Start these after real launch feedback and the P1 safety contracts exist.
    tabs for comparison. Do not add a native split view; coordinated racing
    waits for worktree isolation.
    ([plan](../backlog/WORKFLOW_VARIANTS_PLAN.md))
-3. **Standalone server** — reuse the shipped hosted dashboard without requiring
+3. **Global execution-limit hardening** — consolidate and test the existing
+   settings-level prompt, script, queue-size, and workflow-time enforcement.
+   Do not add workflow or per-step limit properties.
+   ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
+4. **Standalone server** — reuse the shipped hosted dashboard without requiring
    VS Code. The hosted server is implemented; `ctrlyoke server` is not.
    ([plan](../backlog/STANDALONE_SERVER_PLAN.md))
-4. **Workflow scheduling** — useful once execution limits and secrets exist.
-   Keep the decided orchestrator-bound model; ctrlyoke must be running.
+5. **Workflow scheduling** — use the existing global execution limits and
+   secrets. Keep the decided orchestrator-bound model; ctrlyoke must be running.
    ([plan](../backlog/WORKFLOW_SCHEDULING_PLAN.md))
-5. **Parallel steps** — valuable for independent research/test branches, but
-   only after guardrails and worktree isolation define safe concurrency.
+6. **Parallel steps** — valuable for independent research/test branches, but
+   only after worktree isolation and a feature-owned global concurrency cap
+   define safe concurrency.
    ([plan](../backlog/PARALLEL_STEPS_PLAN.md))
-6. **Cumulative prompt and workflow usage** — distinguish current context
+7. **Cumulative prompt and workflow usage** — distinguish current context
    fullness from total usage across compactions, then surface each run's
    observed workflow total in the workflow list for lightweight comparison.
    ([plan](../backlog/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md))
-7. **Harness usage/quota view** — show observed usage and clearly labeled
+8. **Harness usage/quota view** — show observed usage and clearly labeled
    last-known quota; never fabricate precision.
    ([plan](../backlog/HARNESS_USAGE_TRACKING_PLAN.md))
-8. **Privacy-respecting telemetry** — ship only after public release, preserve
+9. **Privacy-respecting telemetry** — ship only after public release, preserve
    VS Code's telemetry controls, and never collect user content or paths.
    ([plan](../backlog/TELEMETRY_PLAN.md))
-9. **Prompt authoring suggestions** — manual continuation first, followed by
-   opt-in automatic ghost text. Keep the service provider-neutral and
-   `CodeMirrorEditor.tsx` as a thin integration point.
-   ([plan](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md))
+10. **Prompt authoring suggestions** — manual continuation first, followed by
+    opt-in automatic ghost text. Keep the service provider-neutral and
+    `CodeMirrorEditor.tsx` as a thin integration point.
+    ([plan](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md))
 
 ### P3 — Demand-driven parking lot
 
@@ -266,30 +268,30 @@ new core subsystem.
 Post-launch automation foundation
   ├─ capability registry ──► permission parity ──┐
   │                         └─► portability report │
-  ├─ secrets/redaction ───────────────────────────┤
-  ├─ execution guardrails ────────────────────────┼─► standalone server / scheduling
-  ├─ MCP lifecycle control ───────────────────────┘
+  ├─ secrets/redaction ───────────────────────────┼─► scheduling
+  ├─ global execution-limit hardening ────────────┘
+  ├─ MCP lifecycle control ─────────────────────────► standalone server / scheduling
   ├─ capability registry + redaction ──► dry-run preview
   └─ required template variables + diagnostics gates
 
 Safe concurrency
-  execution guardrails ─┐
-  worktree isolation ───┼─► parallel steps
-  cumulative usage ─────┘
+  worktree isolation ─────────────┐
+  feature-owned concurrency cap ──┼─► parallel steps
+  cumulative usage ───────────────┘
 ```
 
 ---
 
 ## Milestones
 
-| Milestone                                    | Outcome                                                                                                       |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **0.1.0 — Public launch**                    | Installable, documented, correctly licensed, and published with honest support claims.                        |
-| **0.1.x — Trust and portability**            | Capability diagnostics, permission parity, guardrails, secrets, dry-run preview, and required template input. |
-| **0.2 — Authoring and comparison**           | Prompt suggestions, workflow variants, complete MCP lifecycle control, and rich CLI JSON results.             |
-| **0.3 — Isolated execution**                 | Worktree-backed workflows with clear recovery and branch landing.                                             |
-| **0.4 — Long-running automation**            | Standalone server and orchestrator-bound scheduling.                                                          |
-| **0.5 — Safe concurrency and observability** | Parallel steps plus cumulative usage/quota views, driven by adoption data.                                    |
+| Milestone                                    | Outcome                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **0.1.0 — Public launch**                    | Installable, documented, correctly licensed, and published with honest support claims.            |
+| **0.1.x — Trust and portability**            | Capability diagnostics, permission parity, secrets, dry-run preview, and required template input. |
+| **0.2 — Authoring and comparison**           | Prompt suggestions, workflow variants, complete MCP lifecycle control, and rich CLI JSON results. |
+| **0.3 — Isolated execution**                 | Worktree-backed workflows with clear recovery and branch landing.                                 |
+| **0.4 — Long-running automation**            | Hardened global limits, standalone server, and orchestrator-bound scheduling.                     |
+| **0.5 — Safe concurrency and observability** | Parallel steps plus cumulative usage/quota views, driven by adoption data.                        |
 
 No calendar dates are assigned until 0.1.0 is published. Sequence and exit
 criteria matter more than speculative dates.
@@ -314,9 +316,9 @@ criteria matter more than speculative dates.
 
 | Plan                                                                                                | Priority           |
 | --------------------------------------------------------------------------------------------------- | ------------------ |
-| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                           | P1                 |
+| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                           | P2 (reduced scope) |
 | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P1                 |
-| [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                       | P1 (phase 0 is P0) |
+| [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                       | P1                 |
 | [`MCP_CONTROL_SURFACE_PLAN.md`](../backlog/MCP_CONTROL_SURFACE_PLAN.md)                             | P1                 |
 | [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                         | P1                 |
 | [`DRY_RUN_PREVIEW_PLAN.md`](../backlog/DRY_RUN_PREVIEW_PLAN.md)                                     | P1                 |
