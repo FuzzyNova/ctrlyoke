@@ -2,11 +2,18 @@
 
 > **Status:** Design complete — ready to implement in phases.
 >
-> **Revision note (2026-07-27):** Revised after a full codebase audit. The final
-> design uses sibling worktrees, lands branches by default, models state and
-> execution roots separately, preserves existing parallel non-worktree execution
-> through shared/exclusive execution leases, and makes managed-worktree cleanup,
-> snapshots, undo, ownership, and merge behavior explicit.
+> **Revision note (2026-07-28):** Revised across several codebase audits. The design
+> uses sibling worktrees, lands branches by default, models state and execution
+> roots separately, preserves existing parallel non-worktree execution through
+> shared/exclusive execution leases, and makes managed-worktree cleanup, snapshots,
+> undo, ownership, and merge behavior explicit.
+>
+> Latest pass closed three verified gaps — `.ctrlyoke/.gitignore` seeding so
+> auto-commit cannot sweep runtime files into a user branch, an explicit answer for
+> where ctrlyoke assets are discovered, and a single lease-scope definition — and
+> corrected the undo model: ctrlyoke has exactly one undo mechanism (filesystem
+> content restore), not a filesystem tier plus a git tier. The concurrency-warning
+> threshold is explicitly unresolved rather than guessed.
 
 ---
 
@@ -46,8 +53,10 @@ directory but left no reviewable result behind.
 - A worktree does not span several repositories.
 - ctrlyoke does not silently expose other repositories or non-repository
   workspace folders to a worktree run.
-- Managed-worktree history does not provide filesystem undo after the worktree
-  directory has been removed. The captured diff remains viewable.
+- Managed-worktree history does not provide undo after the worktree directory has
+  been removed. ctrlyoke's only undo mechanism is filesystem content restore, so
+  there is no git-based fallback. The captured diff and its attribution remain
+  viewable.
 - ctrlyoke does not automatically rebase, pull, or synchronize named branches.
 
 ---
@@ -153,6 +162,30 @@ the execution lease so recovery is possible. Reuse the existing script
 execution/reporting infrastructure with the worktree as cwd rather than adding
 a second shell runner.
 
+### Seeding `.ctrlyoke/.gitignore` in the worktree
+
+A fresh worktree usually has **no `.ctrlyoke/.gitignore`**, and without it managed
+auto-commit sweeps ctrlyoke's own runtime files into the user's branch.
+
+`WorkspaceInitializer.ensureGitignore` only ever manages `<ctrlyokeDir>/.gitignore`;
+it never writes to the repository root. That generated file lists `.gitignore`
+among its own entries (`WorkspaceInitializer.ts:15`), so it ignores itself, stays
+untracked, and is absent from any fresh checkout. Meanwhile the role table below
+routes temp prompt files, hook artifacts, and notification directories to
+`<executionRoot>/.ctrlyoke/`. Those paths are then non-ignored, and managed
+finalization commits "all tracked/untracked, non-ignored changes."
+
+This repository is incidentally immune — `.ctrlyoke/.gitignore` was force-added
+here and the root `.gitignore` duplicates the entries by hand — so the failure
+will not reproduce locally. Neither condition holds for a typical user repository.
+
+**Requirement:** call `WorkspaceInitializer.initializeIfNeeded(executionRoot)`
+immediately after creating or attaching a worktree and before running `setup`, so
+the ignore file exists before the first harness write. This is idempotent and
+reuses existing code. Auto-commit must additionally verify that no path under
+`.ctrlyoke/` runtime directories is staged, and fail finalization as `blocked`
+rather than committing them if the guard trips.
+
 ---
 
 ## Execution Workspace and Root Separation
@@ -225,6 +258,9 @@ This avoids `relative(repoRoot, stateRoot)` producing an escaping `..` path.
 | Script-path security allowlist                            | execution plus user home scripts    |
 | Snapshot capture and per-repo discovery                   | execution plus remapped named roots |
 | Harness `--add-dir` workspace arguments                   | remapped execution workspace roots  |
+| `endCondition` / `preCondition` script **files**          | execution plus user home scripts    |
+| Agent, skill, and template **definition files**           | state (see below)                   |
+| Workflow/prompt file discovery                            | state                               |
 | MCP `CTRLYOKE_WORKSPACE`                                  | state                               |
 | MCP `CTRLYOKE_WORKING_FILE`                               | state working-file path             |
 | Run storage, lineage, history, runner locks               | state                               |
@@ -235,6 +271,35 @@ its temporary config and which state root it exports to the MCP server.
 `EndConditionEvaluator` must accept the execution workspace as both cwd and an
 allowed script root. Merely changing cwd would cause its existing security check
 to reject scripts inside the sibling worktree.
+
+### ctrlyoke asset discovery
+
+The split above assigns where the harness *runs*. It must also state where
+user-authored ctrlyoke assets are *found*, because the two answers differ and the
+difference is currently accidental rather than chosen.
+
+**Decision for the first release: assets resolve from `stateRoot`; scripts resolve
+from `executionRoot`.**
+
+Scripts follow execution because `EndConditionEvaluator.resolveScriptPath` is
+already parameterized by root, and because a condition script exists to test the
+code the agent just wrote — the branch's version is the correct one.
+
+Agents, skills, and templates stay on state because `AgentDiscovery.ts:128` and
+`SkillDiscovery.ts:104` read `workspaceFolder.uri.fsPath` directly from VS Code
+and are not parameterized by root at all. Making them follow the execution root is
+a real refactor, not a plumbing change. Keeping them on state also preserves
+uncommitted local agent/skill definitions, which users commonly rely on and which
+would silently vanish inside a fresh worktree.
+
+The consequence is a known, accepted inconsistency: a workflow whose branch edits
+an agent or skill definition still runs with the source checkout's version.
+`SkillDiscovery.ts:138` additionally calls `findGitRoot()`, whose behavior inside a
+linked worktree is unexamined; it is not reached while discovery stays on state,
+and revisiting this must include it.
+
+Assert this in tests so it cannot drift silently. Parameterizing the discovery
+modules is deferred to Phase 5.
 
 ### Integration lifecycle
 
@@ -259,6 +324,12 @@ structural rule:
 3. Require every named workspace root to be contained within that repository.
 4. Permit `stateRoot` itself to sit outside the repository solely as ctrlyoke
    state storage.
+
+**A multi-root workspace is not disqualified by being multi-root.** A monorepo
+opened as several workspace folders passes: `discoverRepos` collapses roots sharing
+a Git toplevel to one entry, every root is contained in that repository, and each
+one remaps into the worktree independently. What is refused is *multiple
+repositories*, and roots that fall outside the sole repository.
 
 Refuse worktree mode when:
 
@@ -297,7 +368,8 @@ Lifecycle:
 4. Create the managed branch and linked worktree from the captured base commit.
 5. Persist creating worktree runtime metadata through `WorkingFileManager`.
 6. Acquire an exclusive execution lease for that worktree.
-7. Run the configured setup command once.
+7. Seed `.ctrlyoke/.gitignore` into the worktree before any harness write.
+8. Run the configured setup command once.
 8. Persist active worktree runtime metadata through `WorkingFileManager`.
 9. Run every workflow phase there.
 10. On terminal settlement, stop integrations and clean provider artifacts.
@@ -494,7 +566,19 @@ parallel non-worktree workflows. Use a lease set instead:
 | Managed worktree workflow      | `exclusive-worktree` | None                                         |
 | Named worktree workflow        | `exclusive-worktree` | None                                         |
 
-Leases are scoped by canonical execution-root identity. Therefore:
+Leases are scoped by **canonical lease-scope identity**, defined once as: the
+worktree-specific Git administrative directory when the execution root is inside a
+Git repository, and the canonical execution-root path otherwise. Both storage
+locations below derive from that single definition — an earlier draft described
+leases as keyed by execution root while storing them by Git directory, which are
+different keys and would diverge the moment eligibility rules relax.
+
+Because one worktree hosts exactly one run under the eligibility rules, Git-directory
+scope and execution-root scope currently coincide. Any future change that allows
+several concurrent runs inside one worktree must revisit this definition before
+relying on it.
+
+Therefore:
 
 - Several ordinary workflows can continue running in the source checkout.
 - Managed worktrees run concurrently with them because each has a unique root.
@@ -551,13 +635,22 @@ exclusive file creation while holding a short arbitration lock. This prevents a
 shared/exclusive check-create race across processes. Every run owns its own
 lease file, so one shared workflow finishing cannot release another's lease.
 
-Use the existing runner-lock safety model:
+Reuse the existing runner-lock safety model and its actual constants from
+`WorkflowLockManager` rather than inventing a second cadence:
 
 - Random owner token.
-- Five-second heartbeat.
-- PID plus heartbeat staleness.
+- `ACQUIRE_TIMEOUT_MS = 5_000` — how long acquisition waits on a lease that is
+  still live before failing.
+- `STALE_HEARTBEAT_MS = 30_000` — a lease is reclaimable when its PID is dead or
+  its `lastHeartbeat` is older than this.
+- Heartbeat writes must stay comfortably inside the staleness window; extract the
+  interval alongside the constants rather than duplicating a literal.
 - Owner-token verification on update and release.
 - Actionable owner information in conflicts.
+
+Extract these primitives so `WorkflowLockManager` and `ExecutionRootLeaseManager`
+share one implementation; the two locks answer different questions but must not
+drift apart on staleness semantics.
 
 ### Lease UX
 
@@ -866,15 +959,35 @@ long as:
 
 ### Landed managed branches
 
+**There is only one undo mechanism, and it is filesystem content restore.**
+`UndoRedoCoordinator` routes every undo and redo through
+`snapshotService.undoFiles(...)` (`src/ui/UndoRedoCoordinator.ts:163`), which writes
+stored before-content back to resolved paths. No revert, reset, or checkout path
+exists. Git participates only as a *source of before-content* when a snapshot's
+base source is `GIT_HEAD` — never as the mechanism that performs the undo.
+
+So after a managed directory is removed there is no "git-based undo" to fall back
+on. What survives is the recorded diff and its attribution, which are persisted
+snapshot data and remain fully viewable. Reverting a landed branch is an ordinary
+Git operation the user performs themselves.
+
 After a managed directory is removed:
 
-- Keep snapshot diffs viewable.
+- Keep snapshot diffs and repo attribution viewable.
 - Disable filesystem undo with a clear "worktree landed as branch" explanation.
 - Offer View Branch Diff and, when implemented, Merge.
 
-Recreating a temporary worktree to apply a reverse patch and commit the result
-is deferred. The UI must not silently redirect historical undo into the user's
-source checkout.
+**Disabling the button is not sufficient.** `applySnapshotEntries` resolves paths
+against `getVsCodeNamedWorkspaceRoots()` (`src/ui/UndoRedoCoordinator.ts:155`) —
+the *current window's* roots, not the roots the run actually executed against. Any
+undo entry belonging to a worktree run would therefore resolve into the source
+checkout and write there. The coordinator itself needs a guard that refuses to
+apply an entry whose recorded execution workspace is absent or does not match, so
+a stale UI state, a queued request, or a future caller cannot bypass the UI check.
+
+Recreating a temporary worktree to apply a reverse patch and commit the result is
+deferred. The UI must not silently redirect historical undo into the user's source
+checkout.
 
 ---
 
@@ -948,16 +1061,20 @@ whatever branch happens to be checked out, and never auto-sync.
 
 ## Cleanup and Retention Decisions
 
-### Concurrency ceiling
+### Concurrency ceiling — UNRESOLVED
 
-There is no hard maximum in the first release. Repository size, dependency
-layout, and available disk vary too much for a universal cap.
+There is no hard maximum in the first release. Repository size, dependency layout,
+and available disk vary too much for a universal cap. That much is settled.
 
-Warn when starting approximately the sixth active managed worktree, but allow
-the run. Count live managed execution leases, not every persistent or landed
-worktree. Show the active count and resolved worktree root.
+**The warning threshold is not settled and must not be implemented on a guess.**
+An earlier draft specified "warn at approximately the sixth active managed
+worktree." That number has no basis — it was invented, not measured. Ship without
+a threshold, observe real usage, then choose one.
 
-Do not add `worktree.maxConcurrent` until usage demonstrates a need.
+When a threshold is eventually added, it should count live managed execution
+leases (not persistent or landed worktrees) and surface the active count plus the
+resolved worktree root. Do not add `worktree.maxConcurrent` until usage
+demonstrates a need.
 
 ### Landed branch retention
 
@@ -1038,8 +1155,9 @@ The exact diff may evolve, but the implementation must cover these areas.
 | Execution roots           | `IntegrationFactory.ts`, `CliIntegration.ts`, transport/runner/prompt/MCP helpers                              |
 | Scripts/conditions        | `WorkflowExecutor.ts`, `EndConditionEvaluator.ts`                                                              |
 | Git/worktrees             | `GitUtils.ts`, new `WorktreeManager.ts`, ownership record helper                                               |
-| Concurrency               | new `ExecutionRootLeaseManager.ts`; shared lease primitives with `WorkflowLockManager`                         |
-| Snapshots/repos           | `WorkspaceSnapshotService.ts`, `WorkspaceRepoDiscovery.ts`, `UndoRedoCoordinator.ts`                           |
+| Worktree scaffolding      | `WorkspaceInitializer.ts` — seed `.ctrlyoke/.gitignore` into a new worktree before first write                 |
+| Concurrency               | new `ExecutionRootLeaseManager.ts`; extract shared lease primitives from `WorkflowLockManager`                 |
+| Snapshots/repos           | `WorkspaceSnapshotService.ts`, `WorkspaceRepoDiscovery.ts`, `UndoRedoCoordinator.ts` (execution-workspace guard) |
 | Runtime file trust        | new session registry plus file-access callers; do not persist into `ExternalRootsTrustStore`                   |
 | Recovery/status           | `WorkspaceSessionManager.ts`, activation recovery, `mcp-server.ts`                                             |
 | UI actions                | router/sink/message handler/store plus workflow status/steps components                                        |
@@ -1062,6 +1180,8 @@ live branch values.
 - Several named roots inside one repo remap correctly.
 - Non-repo named root and multi-repo workspace refuse worktree mode.
 - Script path resolution accepts the worktree and rejects escapes.
+- Condition scripts resolve from the execution root; agents and skills resolve
+  from the state root.
 - MCP state variables remain rooted at `stateRoot`.
 
 ### Schema and persistence
@@ -1117,6 +1237,21 @@ live branch values.
 - Same-repo multi-root segments use remapped paths.
 - Named/kept undo targets the worktree.
 - Landed managed runs disable filesystem undo and retain diff display.
+- The coordinator refuses an undo entry whose recorded execution workspace is
+  missing or mismatched, even when invoked directly rather than through the UI.
+- An undo entry from a worktree run never resolves paths into the source checkout.
+
+### Worktree hygiene
+
+- A monorepo opened as several workspace roots is accepted, not refused.
+- A newly created worktree has `.ctrlyoke/.gitignore` before the first harness
+  write.
+- Auto-commit of a managed run stages no `.ctrlyoke/` runtime path, in a
+  repository whose root `.gitignore` says nothing about `.ctrlyoke/`.
+- Auto-commit fails as `blocked` rather than committing runtime files when the
+  guard trips.
+- Condition scripts resolve from the worktree; agents and skills resolve from the
+  source checkout (asserted, so the accepted inconsistency cannot drift).
 
 ### Security
 
@@ -1164,7 +1299,7 @@ directory.
 
 16. Implement ownership records and idempotent create/recovery.
 17. Add managed shorthand/object schema without `merge`.
-18. Run setup before execution.
+18. Seed `.ctrlyoke/.gitignore` into the worktree, then run setup before execution.
 19. Implement terminal-settlement cleanup, auto-commit, landing, `keep`, and
     removal failure handling.
 20. Prevent retained integrations from outliving managed roots.
@@ -1187,17 +1322,21 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
 ### Phase 5 — Deferred expansion
 
 30. Temporary-worktree historical undo for landed branches.
-31. Explicit read-only passthrough roots.
-32. Explicit repo selection or N-worktree fan-out for multi-repo workspaces.
-33. Optional retention policies informed by actual usage.
-34. Dependency/cache sharing ergonomics where safe.
+31. Parameterize `AgentDiscovery`/`SkillDiscovery` by root so assets can follow the
+    execution workspace, including `findGitRoot()` behavior inside a worktree.
+32. Explicit read-only passthrough roots.
+33. Explicit repo selection or N-worktree fan-out for multi-repo workspaces.
+34. Optional retention policies informed by actual usage.
+35. A measured concurrency-warning threshold, once real usage exists.
+36. Dependency/cache sharing ergonomics where safe.
 
 ---
 
 ## Settled Design Decisions
 
-1. **No hard concurrency ceiling.** Warn around the sixth active managed
-   worktree; do not block and do not add a setting yet.
+1. **No hard concurrency ceiling.** Do not block and do not add a setting. The
+   warning threshold itself is explicitly unresolved — ship without one rather
+   than guess a number.
 2. **No automatic landed-branch retention policy.** Provide explicit bulk
    cleanup and preselect only provably safe merged branches.
 3. **Show named-branch ahead/behind counts.** Compare against a labeled,
@@ -1211,10 +1350,18 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
 7. **Managed worktree results land as branches by default.** Merge is explicit.
 8. **Transient worktree trust is session-scoped, not persisted as a user trust
    decision.**
-9. **Managed directory removal disables filesystem undo for that run.** Diff
-   display remains; temporary recreation is deferred.
+9. **Managed directory removal disables undo for that run.** ctrlyoke has exactly
+   one undo mechanism — filesystem content restore — so there is no git-based
+   fallback to degrade to. Diff and attribution display remain; temporary
+   recreation is deferred. The coordinator, not just the UI, must enforce this.
 10. **Worktree mode is explicit per workflow.** There is no global enable or
     default-on setting.
+11. **ctrlyoke assets resolve from `stateRoot`; scripts resolve from
+    `executionRoot`.** Accepted inconsistency for the first release, asserted by
+    tests; parameterizing agent/skill discovery is deferred.
+12. **A monorepo spanning several workspace roots is supported.** Eligibility
+    refuses *multiple repositories* and roots outside the sole repository — not
+    multi-root workspaces as such.
 
 ---
 
@@ -1248,6 +1395,15 @@ the particular directory that must be isolated.
 Passing a live non-repo root to a worktree run is silent partial isolation.
 Explicit read-only passthrough can be designed later; the first release refuses
 the ambiguous shape.
+
+### "Filesystem undo plus git undo" → one undo mechanism
+
+An earlier revision implied a git-based undo tier survived managed directory
+removal. It does not exist. `UndoRedoCoordinator` performs every undo through
+`snapshotService.undoFiles(...)`; Git only supplies before-content for snapshots
+based on `GIT_HEAD`. Removing a managed directory therefore ends undo for that run
+outright, leaving diff and attribution display. Reverting a landed branch is an
+ordinary user Git operation, not a ctrlyoke feature.
 
 ### Branch prefix as ownership → durable Git-admin ownership records
 
