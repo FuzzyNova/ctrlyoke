@@ -1,5 +1,10 @@
 # Template Setup Scripts
 
+> **Status: REJECTED (2026-07-28).** Executing template-provided setup code adds
+> a large trust, sandboxing, and cross-platform surface. Typed required
+> variables and purpose-built templates solve the immediate onboarding problem
+> without arbitrary code execution.
+
 **Status**: Planning  
 **Date**: December 19, 2025  
 **Purpose**: Extend ctrlyoke's workflow template system to support setup scripts that dynamically generate workflow content

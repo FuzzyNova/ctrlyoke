@@ -1,5 +1,9 @@
 # Native Mobile App (iOS + Android)
 
+> **Status: REJECTED (2026-07-28).** The responsive hosted dashboard already
+> supplies the mobile control surface. Native apps would duplicate the client
+> and distribution stack without improving workflow orchestration.
+
 **Created:** 2026-05-01  
 **Status:** LONG-TERM / NOT STARTED  
 **Effort:** Large (separate project)

@@ -2,7 +2,7 @@
 
 **Status (updated 2026-07-05):** VS Code-hosted server is **shipped**. Standalone
 `ctrlyoke server` is **not started** (Phases 5–10 unimplemented) and is **deferred out of
-v0.1.0** — see `dev/backlog/RELEASE_PLAN.md` §2.11. The inert `server.standalonePort` UI row
+v0.1.0** — see [`RELEASE_PLAN.md`](../active/RELEASE_PLAN.md) §2.11. The inert `server.standalonePort` UI row
 has been removed from `ServerSection.tsx`; the type/schema/default (`4748`) are retained so
 standalone can re-surface the port from its own CLI surface later with no config migration.
 This document is the standalone implementation backlog for after v0.1.0.

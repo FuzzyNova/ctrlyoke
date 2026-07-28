@@ -1,5 +1,9 @@
 # Workflow-Level Additional Instructions Plan
 
+> **Status: REJECTED (2026-07-28).** This overlaps agents, skills, workflow
+> defaults, and harness-native project instruction files. Keeping those
+> explicit avoids another instruction channel with unclear precedence.
+
 Add `additionalInstructions` as a new three-tier execution property that injects a custom instruction block into every prompt in a workflow — without requiring a custom agent file.
 
 ---

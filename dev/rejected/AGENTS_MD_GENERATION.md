@@ -1,5 +1,11 @@
 # AGENTS.md Generation & Hierarchical Injection System
 
+> **Status: REJECTED (2026-07-28).** Harnesses increasingly own project
+> instruction discovery, and ctrlyoke already supports explicit agents, skills,
+> and purpose-built generation workflows. Automatic cross-harness injection
+> risks duplicate or conflicting instructions; generation does not require a
+> new core subsystem.
+
 **Status**: Planning  
 **Date**: December 19, 2025  
 **Purpose**: Standardize ctrlyoke on AGENTS.md with hierarchical concatenation, replacing Copilot's broken single-file approach

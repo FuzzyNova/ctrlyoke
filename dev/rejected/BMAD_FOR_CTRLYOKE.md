@@ -1,5 +1,9 @@
 # BMAD for ctrlyoke
 
+> **Status: REJECTED (2026-07-28).** ctrlyoke's built-in linear and
+> orchestrator-driven templates cover the useful workflow patterns without
+> coupling the product to a third-party methodology or trademark.
+
 This document outlines how ctrlyoke can leverage and customize the [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) (BMM) for fully automated workflow execution.
 
 ## Overview

@@ -1,180 +1,225 @@
-# Dry Run / Preview Plan
+# Dry Run / Execution Preview Plan
+
+> **Status:** Proposed — needs the compatibility and redaction contracts
+>
+> **Priority:** P1
+
+---
 
 ## Problem
 
-Users have no way to inspect what ctrlyoke will actually send to the AI before running a
-workflow. This makes debugging prompt construction opaque:
+Users cannot inspect the complete execution ctrlyoke is about to prepare:
 
-- What does the prompt look like after `{{var}}` substitution?
-- What agent content gets injected?
-- What `#file:` references got expanded?
-- What CLI command is actually invoked, including flags and temp file paths?
-- What does the temp file content look like?
+- resolved variables and inherited properties;
+- agent, skill, prior-context, and reference expansion;
+- categorized prompt files and their delivery order;
+- permission and MCP translation;
+- workspace-scoped settings mutations;
+- the executable and arguments passed to the harness;
+- compatibility warnings or ignored fields.
 
-Without this, users have to run the workflow and read logs to understand what happened.
-Preview mode surfaces all of this before any AI is invoked.
+Running the workflow and reading logs is too late, especially for denied tool
+rules, secrets, remote execution, and unattended automation.
 
----
+## Product Decision
 
-## Two Entry Points
+Build one side-effect-free execution-plan service used by the dashboard,
+standalone CLI, validation, and future automation API.
 
-### 1. Dashboard — Preview Button Per Step
+Preview must call the same resolvers, prompt builders, capability analyzer, and
+provider preparation logic as real execution. It must not maintain a simplified
+second command builder.
 
-A **Preview** button on each prompt card in the dashboard. Opens a modal/panel showing
-the fully resolved prompt and command for that step, given the current workflow properties
-and any runtime vars.
+## Entry Points
 
-This is the primary UX — most users author workflows in VS Code and want to verify them
-interactively before running.
+### Dashboard
 
-### 2. CLI — `--dry-run` Flag
+- Add **Preview** to a step and **Preview workflow** to workflow actions.
+- Show the current editor content, including unsaved working-file changes.
+- Recompute after harness, property, variable, or attachment changes.
 
-```bash
-ctrlyoke run workflow.yaml --dry-run
-ctrlyoke run workflow.yaml --dry-run --var "target=auth"
+### CLI
+
+```text
+ctrlyoke run workflow.ctrlyoke.yaml --dry-run
+ctrlyoke run workflow.ctrlyoke.yaml --dry-run --var target=auth
+ctrlyoke run workflow.ctrlyoke.yaml --dry-run --json
 ```
 
-Outputs the resolved command and prompt for each step to stdout (formatted or `--json`).
-Exits 0 without spawning any AI process. Useful for CI validation and scripted inspection.
+Exit without starting a harness, running scripts, or mutating harness settings.
+Structured output uses stable diagnostic codes.
 
----
-
-## What the Preview Shows
-
-For each prompt step, the preview reveals the full picture of what `WorkflowExecutor`
-would do if it ran that step right now:
-
-### Resolved Properties
-
-```
-Harness:  claude-cli
-Model:    claude-sonnet-4-5
-Session:  (new session)
-Agent:    .ctrlyoke/agents/senior-dev.agent.md
-```
-
-### Full CLI Command
-
-The exact string that would be passed to `spawn()`, including:
-
-- The binary path (e.g. `claude`)
-- All flags (`--model`, `--dangerously-skip-permissions`, `--resume`, etc.)
-- The prompt argument or `--prompt-file` path
-- Any `extraArgs`
-
-```
-claude --model claude-sonnet-4-5 --dangerously-skip-permissions \
-  --prompt-file /tmp/ctrlyoke-abc123.md
-```
-
-### Temp File Content
-
-If a temp file would be created (prompts > 300 chars), show its full resolved content:
-
-```markdown
-<agentInstructions>
-You are a senior TypeScript developer...
-</agentInstructions>
-
-Refactor the authentication module in src/auth/ to use the repository pattern.
-
-<fileContent path="src/auth/AuthService.ts">
-... (expanded file content) ...
-</fileContent>
-```
-
-For short prompts that go inline (≤ 300 chars), show the inline argument value instead.
-
-### Variables Applied
-
-```
-{{target}}  →  "auth"
-{{model}}   →  (not set, using workflow default)
-```
-
-### End Condition (if set)
-
-```
-Script:      .ctrlyoke/scripts/tests-pass.js
-Returns:     "true"
-Max retries: 3
-```
-
----
-
-## Implementation
-
-### Core: `dryRunStep()`
-
-The key insight is that prompt preparation (`CliPromptPreparer.preparePrompt`) and command
-building (`ICliProvider.buildCommand`) are already separate from execution
-(`CliExecutionRunner`). A dry run calls the first two but not the third.
-
-Add a `dryRunStep(promptIndex: number): Promise<StepPreview>` method to
-`CliIntegration` (or a new `CliDryRunCoordinator`):
+## Execution Plan Contract
 
 ```typescript
-interface StepPreview {
+interface WorkflowExecutionPreview {
+  workflow: WorkflowPreviewSummary;
+  steps: StepExecutionPreview[];
+  diagnostics: CompatibilityDiagnostic[];
+}
+
+interface StepExecutionPreview {
   stepIndex: number;
-  stepName: string | undefined;
-  resolvedProperties: ResolvedProperties;
-  command: string; // full CLI command string
-  promptMode: "inline" | "tempFile";
-  promptText: string; // resolved prompt (inline arg value or temp file content)
-  tempFilePath: string | undefined;
-  vars: Record<string, string>;
-  endCondition: EndConditionPreview | undefined;
+  stepId?: string;
+  stepName?: string;
+  type: "prompt" | "script";
+  resolvedProperties: ResolvedPropertiesPreview;
+  prompt?: CategorizedPromptPreview;
+  command?: CommandPreview;
+  permissionApplication?: PermissionApplicationPreview;
+  mcpApplication?: McpApplicationPreview;
+  workspaceMutations: WorkspaceMutationPreview[];
+  variables: VariableResolutionPreview[];
+  conditions: ConditionPreview;
+  diagnostics: CompatibilityDiagnostic[];
 }
 ```
 
-The temp files for a dry run should be written to a separate temp path (so content can be
-inspected) but flagged for immediate cleanup after the preview is dismissed. Alternatively,
-don't write temp files at all — just return the content that _would_ be written.
+Use preview-safe DTOs rather than returning runtime service objects or secrets.
 
-### Dashboard Integration
+## What Preview Shows
 
-**Preview button** on each `PromptCard` component (alongside the existing Run / Skip / etc.
-controls). Only visible when workflow is in idle/paused state (not while running).
+### Resolved properties
 
-Clicking Preview sends a `PREVIEW_STEP` message to the extension host, which calls
-`dryRunStep()` on the active workflow's `CliIntegration`, and returns a `StepPreview`
-payload. The dashboard renders it in a modal or expandable drawer below the prompt card.
+- harness and detected version;
+- model;
+- execution and continuation mode;
+- session behavior without exposing sensitive session content;
+- agent, skills, MCP servers, hooks, permissions, limits, and conditions;
+- property source: prompt, workflow, or global default.
 
-The preview modal has:
+### Categorized payload
 
-- Tabs: **Command** | **Prompt** | **Properties**
-- A **Copy command** button
-- A **Copy prompt** button
-- An **Open temp file** button (if temp file path is available)
+Show each payload category separately and in final delivery order:
 
-### CLI Integration
+- agent instructions;
+- skill content;
+- prompt text;
+- prior context;
+- inline-expanded references;
+- provider-formatted file references;
+- image metadata.
 
-In `src/cli.ts`, add `--dry-run` flag to the `run` command:
+Show the content that would be written to each temporary prompt file without
+creating that file. Do not rely on a prompt-length threshold or describe the
+current categorized multi-file architecture as one generic temp file.
+
+### Command
+
+Show an argument array as the canonical value and a shell-escaped rendering for
+copy/readability:
 
 ```typescript
-.option("--dry-run", "Preview what commands would be run without executing")
+interface CommandPreview {
+  executable: string;
+  args: string[];
+  displayCommand: string;
+  cwd: string;
+  environmentKeys: string[];
+}
 ```
 
-When `--dry-run` is set, iterate each prompt step, call `dryRunStep()`, and print the
-preview. With `--json`, output the full `StepPreview[]` array. Without `--json`, print a
-formatted summary.
+Never construct `displayCommand` by joining unescaped arguments. Do not expose
+environment values.
 
----
+### Permissions and compatibility
 
-## What NOT to preview
+Show:
 
-- End condition script execution — don't run the script during preview
-- Session ID resolution for `resumeSession: true` — show `(will resume latest session)`
-  rather than resolving the actual session ID, which requires file system state at runtime
-- Actual temp file creation — return content only, don't write to disk
+- effective permission mode;
+- every allowed/denied rule;
+- provider-native translation;
+- ignored, partial, unverified, or unsupported rules;
+- the exact workspace config path and owned keys that would be changed;
+- the workspace-wide side-effect warning;
+- harness capability/version diagnostics from
+  `HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`.
 
----
+For security-sensitive settings, "ignored" is a warning by default and can be
+promoted to an error by CLI policy.
 
-## Effort
+### MCP, variables, limits, and conditions
 
-~2–3 days. `CliPromptPreparer` and `ICliProvider.buildCommand` already exist and are
-testable in isolation. The main work is:
+- MCP server IDs, transports, tool filters, and injection method;
+- variable values after centralized redaction;
+- execution guardrails and already-detectable limit violations;
+- pre/end-condition configuration without executing scripts;
+- retry and error behavior.
 
-1. `dryRunStep()` method wiring the two stages together without executing
-2. Dashboard message handler + preview modal component
-3. CLI `--dry-run` flag + formatted output
+## Side-Effect-Free Preparation
+
+Provider preparation currently mixes pure argument construction with file
+mutation in some harnesses. Split it into:
+
+1. `plan` — resolve and return arguments, intended files/mutations, payloads, and
+   diagnostics;
+2. `apply` — perform the planned mutations immediately before process start;
+3. `release` — remove owned mutations after the consuming process exits.
+
+Real execution and preview both call `plan`; preview never calls `apply`.
+
+This contract is shared with tool-permission workspace configuration and should
+also replace misleading provider methods whose comments promise side effects
+they do not perform.
+
+## Redaction and Access
+
+- Run all preview DTOs through the centralized secrets/redaction service before
+  crossing a process, webview, hosted-server, log, or CLI-output boundary.
+- Default to redacted values in the UI and CLI.
+- A reveal action, if added, must be local-only, explicit, and separately
+  authorized; it must not make hosted transport carry the original secret.
+- Do not show authentication tokens, environment values, secret file contents,
+  or sensitive session state.
+- Copy actions copy the displayed/redacted representation unless the user has
+  explicitly entered an approved local reveal flow.
+
+## Dashboard UX
+
+Use tabs only where they help:
+
+- **Summary** — diagnostics, properties, limits, and workspace side effects.
+- **Payload** — categorized content and token contribution.
+- **Command** — executable, arguments, cwd, and environment key names.
+- **Conditions** — scripts, expected results, retries, and error behavior.
+
+Include copy actions for the redacted command and payload. There is no **Open temp
+file** action because preview creates no temp files.
+
+## CLI Behavior
+
+- Human output groups diagnostics before step details.
+- `--json` returns the full redacted preview contract.
+- Add policy flags only if needed after the compatibility analyzer exists, for
+  example `--fail-on lossy`.
+- Exit nonzero for invalid workflow/provider combinations. Lossy and unverified
+  behavior follow the selected validation policy.
+
+## Testing
+
+- Golden tests compare preview plans with the plan consumed by real execution.
+- Assert preview performs no harness spawn, script execution, config write, temp
+  file write, or session mutation.
+- Cover categorized multi-file prompts and every provider.
+- Cover redaction at DTO, webview-message, hosted-transport, log, and CLI output
+  boundaries.
+- Cover unsupported/partial permission rules and workspace mutation previews.
+- Verify command display escaping independently on Windows and POSIX.
+
+## Acceptance Criteria
+
+- A user can see the complete redacted payload and command before execution.
+- Preview and real execution consume the same immutable plan.
+- Categorized prompt delivery is represented accurately.
+- Every ignored/lossy provider translation is visible.
+- Workspace-setting side effects are named before execution.
+- Preview does not mutate the workspace or harness state.
+- CLI and dashboard diagnostics use the same codes and severities.
+
+## Non-goals
+
+- Running pre/end-condition scripts.
+- Resolving a "latest session" by opening or changing session state.
+- Creating temporary prompt or harness config files.
+- Guaranteeing that external workspace state will not change between preview and
+  execution.

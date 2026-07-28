@@ -1,7 +1,7 @@
 # ctrlyoke Landing Page Plan
 
 **Created:** May 21, 2026  
-**Status:** IN PROGRESS — site, docs, and deploy pipeline implemented; DNS + first production deploy + testing pending. (Updated June 26, 2026.)  
+**Status:** ACTIVE — site, docs, and deploy pipeline implemented; DNS + first production deploy + testing pending. (Updated July 28, 2026.)  
 **Domain:** ctrlyoke.dev (purchased, hosted on Netlify)
 **Launch dependency:** business email, support inboxes, vendor account ownership, and publisher identity are tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
@@ -349,5 +349,5 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) — Pro licensing model, `LicenseService`, tier gating (split out of this plan)
 - [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — top-level launch sequence, business email, account ownership, legal, and support readiness
 - [`RELEASE_PLAN.md`](RELEASE_PLAN.md) — VS Code Marketplace release prerequisites
-- [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) — Usage telemetry for the extension
+- [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md) — Usage telemetry for the extension
 - [`ROADMAP.md`](ROADMAP.md) — Long-term feature roadmap

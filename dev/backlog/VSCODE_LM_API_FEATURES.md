@@ -141,6 +141,12 @@ Implement Option A (`vscode.lm`) as the default. Add a settings toggle so users 
 
 The editor already has completions for `@file`, `#selection`, and `~git` references via extension host dispatch. These are structural completions. AI-powered completions would add a different layer.
 
+> **Canonical plan:** [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md)
+> now owns this feature. The options below are retained as research. The product
+> decision is manual continuation first, opt-in automatic ghost text second,
+> behind a provider-neutral service. Do not implement the direct
+> CodeMirror-to-`vscode.lm` architecture sketched below.
+
 ### Option A — LM-Powered Inline Ghost Text
 
 Use CodeMirror's inline completion / decoration system to show ghost-text suggestions as the user types (similar to Copilot inline completions in code editors, but for natural language prompts).
@@ -176,11 +182,13 @@ Augment the existing autocomplete dropdown with AI-suggested completions alongsi
 
 **Less ideal than Option A** — inline ghost text is more natural for prose/prompt editing than a dropdown. Dropdowns work well for structured token completions but feel clunky for sentence-level suggestions.
 
-### Option C — "Complete Prompt" Button Action
+### Option C — Manual "Suggest Continuation" Action
 
 Instead of automatic inline suggestions, a discrete button/command that asks the LM to complete or extend the current partial prompt. Less intrusive — no debounce/streaming needed during typing.
 
-**Recommended:** Start with Option C (lowest complexity, no latency concerns during typing), then graduate to Option A once the plumbing is in place.
+**Selected:** Start with Option C using the provider-neutral service and
+revision-aware CodeMirror extension in the canonical plan. Graduate to Option A
+only after measuring suggestion quality, latency, cancellation, and quota use.
 
 ---
 
@@ -278,16 +286,20 @@ A new `LmFeatureHandler` class (or methods added to the existing webview provide
 
 ## 7. Recommended Implementation Order
 
-| Priority | Feature                                       | Complexity | Value      |
-| -------- | --------------------------------------------- | ---------- | ---------- |
-| 1        | "Improve Prompt" button (vscode.lm, Option A) | Medium     | Very High  |
-| 2        | Token counter indicator                       | Low        | High       |
-| 3        | Harness-based improve prompt (Option B)       | Medium     | Medium     |
-| 4        | "Complete Prompt" button (Option C)           | Low-Medium | Medium     |
-| 5        | Inline ghost text completions (Option A)      | High       | Medium     |
-| 6        | "Explain Prompt" hints                        | Low        | Low-Medium |
+| Priority | Feature                                           | Complexity | Value      |
+| -------- | ------------------------------------------------- | ---------- | ---------- |
+| 1        | Manual "Suggest continuation" (canonical P2 plan) | Medium     | High       |
+| 2        | Token counter indicator                           | Low        | High       |
+| 3        | "Improve Prompt" with a review/diff UX            | Medium     | Very High  |
+| 4        | Opt-in automatic ghost text                       | High       | Medium     |
+| 5        | Additional configured-provider adapter            | Medium     | Medium     |
+| 6        | "Explain Prompt" hints                            | Low        | Low-Medium |
 
-Start with the "Improve Prompt" button — it has the clearest UX, the most obvious value for ctrlyoke users who iterate on prompts, and the infrastructure it builds (vscode.lm request/stream/response pipeline) directly enables every other feature on this list.
+Start with manual continuation because it exercises provider capability,
+cancellation, stale-response protection, ghost-text rendering, and acceptance
+without sending a draft after every typing pause. The provider-neutral service
+then supports automatic suggestions and a separate whole-prompt improvement
+flow without coupling either feature directly to `vscode.lm`.
 
 ---
 

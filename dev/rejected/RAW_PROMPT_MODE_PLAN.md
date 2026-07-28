@@ -1,5 +1,10 @@
 # Raw Prompt Mode Plan
 
+> **Status: REJECTED (2026-07-28).** This adds a second prompt-preparation path
+> for a narrow debugging use case. Existing fenced-code suppression, explicit
+> property controls, and the planned dry-run preview provide safer, more
+> inspectable behavior without bypassing ctrlyoke's core value.
+
 ## Overview
 
 Add a new `rawPromptMode` execution property that bypasses ctrlyoke's entire context expansion and categorized temp file pipeline. When enabled, the prompt text is sent verbatim to the harness — no `@path`/`#sym:`/`#selection:` expansion, no categorized temp files, no agent/skills injection, no prior context wrapping. The prompt is sent inline (if it qualifies as a simple prompt) or via a single bare temp file with no instruction wrapper.

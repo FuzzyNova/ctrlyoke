@@ -1,8 +1,9 @@
-# Prompt Total Token Usage Plan
+# Prompt and Workflow Total Token Usage Plan
 
 **Status:** Proposed  
 **Created:** July 9, 2026  
-**Related:** `HARNESS_USAGE_TRACKING_PLAN.md`
+**Revised:** July 28, 2026
+**Related:** `HARNESS_USAGE_TRACKING_PLAN.md`, `WORKFLOW_VARIANTS_PLAN.md`
 
 ---
 
@@ -19,8 +20,16 @@ Users need both signals:
 
 - **Current context window usage:** "How full is the conversation right now?"
 - **Total prompt usage:** "How much work did this prompt actually consume?"
+- **Total workflow usage:** "How many observed tokens did this run consume
+  across all of its AI attempts?"
 
 Do not replace the current context-window display. Add a separate per-prompt cumulative usage concept.
+
+The workflow dropdown also lacks a token total. That makes a common comparison
+flow unnecessarily laborious: duplicate a workflow, select a different harness,
+run both variants, then open each run and inspect its individual steps. The
+latest run's observed total should be visible directly in
+`src/ui/webview-react/components/workflow/WorkflowList.tsx`.
 
 ---
 
@@ -41,12 +50,21 @@ Recommended UX:
 4. Tooltips should explain the split:
    - context usage is the final/current window only
    - prompt total is cumulative usage across API turns and compactions
+5. Aggregate prompt-attempt totals into one run-scoped workflow total and show
+   it in every workflow-list row:
+   - completed recent workflow: `410k tokens`
+   - active workflow: `183k tokens` with an accessible "observed so far" label
+   - incomplete provider coverage: `≥183k tokens`
+   - unavailable usage: omit the value or show `Tokens unavailable` in the
+     tooltip; never show zero
 
 Rationale:
 
 - A compaction count alone is too coarse for cost and performance. Two compactions on a 200k model suggest a lower bound, but not the actual token shape or output/cached/reasoning mix.
 - Total tokens can later feed effective-cost display, prompt-level analytics, and harness comparison.
 - Compaction count remains useful because users understand why the context percentage dropped after a long run.
+- An aligned workflow total makes lightweight harness comparison possible
+  without introducing a dedicated comparison view.
 
 ---
 
@@ -66,6 +84,56 @@ export interface TokenStats {
   contextWindowSize?: number;
 }
 ```
+
+Add one shared run-scoped summary type in `src/types/CtrlYokeTypes.ts` and reuse
+it from `WorkflowSummary`, `RecentWorkflowsMessage`, and the React
+`RecentWorkflow` projection:
+
+```typescript
+export interface WorkflowTokenTotals {
+  /** Sum of all normalized AI attempt totals observed in this run. */
+  total: number;
+  /** Complete only when every executed AI attempt reported a usable total. */
+  coverage: "complete" | "partial";
+  /** Number of AI attempts included in `total`. */
+  reportedAttemptCount: number;
+  /** Number of AI attempts executed, including retries and manual reruns. */
+  attemptCount: number;
+  /** False while the workflow can still add more usage. */
+  isFinal: boolean;
+}
+
+export interface WorkflowSummary {
+  // existing fields...
+  tokenTotals?: WorkflowTokenTotals;
+}
+```
+
+Keep this as a shared contract rather than spelling the same optional fields
+independently in backend messages and UI stores. `total` is an observed token
+total, not a cost estimate. When `coverage === "partial"`, it is a lower bound
+and the UI must format it with `≥`.
+
+### Workflow Total Semantics
+
+A workflow total is scoped to one run, not the entire lineage:
+
+- Include every executed AI attempt in the run: ordinary prompts, final steps,
+  automatic retries, manual step reruns, and dynamically added AI steps.
+- Count each attempt's cumulative `promptTotal.total` exactly once. Streaming
+  updates replace that attempt's current snapshot; they are not summed as new
+  usage.
+- Exclude script steps unless a future script-backed harness reports normalized
+  AI usage.
+- Do not include earlier runs from the lineage.
+- A draft that has never executed has no total, not a zero total.
+- A running workflow exposes an observed-so-far total with `isFinal: false`.
+- If any executed AI attempt lacks a usable total, preserve the known sum with
+  `coverage: "partial"` rather than comparing it as complete.
+
+For retries, the per-step UI may choose whether to emphasize the latest attempt,
+but the workflow total includes every attempt because all of them consumed
+tokens.
 
 Add cumulative prompt fields:
 
@@ -189,6 +257,28 @@ Responsibilities:
 
 React should only render the normalized fields.
 
+### Workflow Aggregation
+
+Add one pure workflow-token aggregator over normalized per-attempt totals. The
+executor/history layer owns it; `WorkflowList.tsx` must not walk output rows or
+reconstruct provider usage.
+
+Responsibilities:
+
+- identify attempts by stable execution target plus attempt/rerun identity;
+- replace streaming snapshots for an attempt instead of double-counting them;
+- include retries, final steps, manual reruns, and dynamic steps;
+- track reported-versus-executed attempt coverage;
+- persist the latest aggregate with the run's durable runtime summary so
+  pause/resume, history reload, CLI-managed runs, and hosted clients agree;
+- expose the same `WorkflowTokenTotals` through live `WorkflowSummary` and
+  recent-workflow list messages.
+
+The recent-workflow path already reads the addressed working file in
+`WorkflowSerializer.getRecentWorkflows`; use the persisted aggregate from that
+file rather than loading every `events.jsonl`. The running path should publish
+the same aggregate from the active workflow summary.
+
 ---
 
 ## UX Details
@@ -237,6 +327,33 @@ Mirror the stats row in `src/cli/CliTerminalFormatter.ts` so CLI users see the s
 Context: 10.0k/200.0k (5%)  Prompt total: 410.0k  Compacted 2x
 ```
 
+### Workflow List
+
+Show the addressed run's `WorkflowTokenTotals` in
+`src/ui/webview-react/components/workflow/WorkflowList.tsx`.
+
+- Recent rows show the total for the row's current/latest run.
+- Running rows show the live observed-so-far total. Because
+  `WorkflowList.tsx` delegates those rows to `RunningWorkflowItem.tsx`, update
+  that component too; the two row kinds must not diverge.
+- Extend `WorkflowRowLayout.tsx` with a dedicated usage metadata slot so totals
+  align vertically in flat rows and join the second metadata line in
+  stacked/compact rows.
+- Update the centralized row-track widths and responsive tier thresholds when
+  adding the flat usage column.
+- Use the existing shared token formatter:
+  - complete: `410k`
+  - partial: `≥410k`
+  - absent: no numeric label
+- Include the full phrase in the accessible row name, for example
+  `410,000 total tokens` or `at least 410,000 observed tokens`.
+- The tooltip explains coverage and whether the value is still increasing.
+- Do not label a partial or unavailable value as a comparable exact total.
+
+The workflow list is the initial aggregate surface. Run-summary rows, sorting,
+and token filters may reuse the same contract later, but are not required for
+this plan.
+
 ---
 
 ## Implementation Phases
@@ -244,11 +361,17 @@ Context: 10.0k/200.0k (5%)  Prompt total: 410.0k  Compacted 2x
 ### Phase 1: Contracts And Rendering
 
 - [ ] Extend shared token types with cumulative prompt total fields.
+- [ ] Add shared `WorkflowTokenTotals` and thread it through live workflow
+      summaries, recent-workflow messages, and the React store.
 - [ ] Add formatting helpers in `src/ui/webview-react/utils/tokenUtils.ts` for token counts and prompt-total labels.
 - [ ] Update `OutputRow.tsx` stats row to show context, prompt total, and compaction count as distinct stats.
 - [ ] Update `WorkflowStep.tsx` to expose total prompt usage without changing the current context bar semantics.
 - [ ] Update `CliTerminalFormatter.ts` to use the same terminology.
+- [ ] Add a dedicated workflow-total metadata slot to `WorkflowRowLayout.tsx`
+      and render it from both recent and running rows in `WorkflowList.tsx`.
 - [ ] Add React tests for stats-row rendering with current-window-only, total-only, and compaction cases.
+- [ ] Add workflow-list tests for complete, partial, running, and unavailable
+      totals at flat, stacked, and compact tiers.
 
 ### Phase 2: Harness Accumulators
 
@@ -256,7 +379,13 @@ Context: 10.0k/200.0k (5%)  Prompt total: 410.0k  Compacted 2x
 - [ ] Wire parser metadata into the accumulator so provider cumulative totals win over derived estimates.
 - [ ] Persist summary fields into prompt `_runtime` metadata after completion.
 - [ ] Restore prompt totals from runtime metadata in the steps panel after undo/redo and history reload.
+- [ ] Add the shared workflow-token aggregator and persist its run-scoped
+      summary without replaying history events for every workflow-list refresh.
+- [ ] Publish rolling totals through `WorkflowSummary` and durable totals
+      through the recent-workflow list.
 - [ ] Add unit tests for compaction aggregation and runtime persistence.
+- [ ] Add unit tests proving streaming replacement, retry/manual-rerun
+      inclusion, partial coverage, dynamic-step inclusion, and run isolation.
 
 ### Phase 3: Harness-Specific Accuracy
 
@@ -278,11 +407,17 @@ Context: 10.0k/200.0k (5%)  Prompt total: 410.0k  Compacted 2x
 ## Edge Cases
 
 - Retries should track totals per attempt, not merge all attempts into a single visible number unless the UI explicitly says "all attempts".
+- The workflow total intentionally sums all retry and manual-rerun attempts,
+  even when the step row emphasizes only the latest attempt.
 - Final steps should use the same fields as normal prompt steps.
 - Script steps should not show AI token totals unless a future script harness reports them.
 - Streaming updates may show partial totals; completed output should replace them with durable totals.
 - If compaction happens without token counts, display compaction count but do not estimate total token usage.
 - If provider cumulative totals reset after compaction, mark confidence `partial` and fall back to compaction-derived values only when token counts are present.
+- Unknown attempt usage makes the workflow aggregate partial; it must not turn
+  into zero.
+- Editing a completed run into a draft does not carry the prior run's total into
+  the future run. Duplicate/Fork copy authored definitions, never usage.
 
 ---
 
@@ -291,6 +426,8 @@ Context: 10.0k/200.0k (5%)  Prompt total: 410.0k  Compacted 2x
 This plan is narrower than `HARNESS_USAGE_TRACKING_PLAN.md`.
 
 - This plan: per-prompt usage for a single ctrlyoke workflow step/attempt.
+- This plan also rolls those normalized prompt attempts into a single-run
+  workflow total for list display.
 - Harness usage plan: cross-session provider quota, observed usage rollups, and billing/limit windows.
 
 The per-prompt totals from this plan should eventually feed the observed usage rollups from the harness usage plan. Avoid building a second storage pipeline for aggregate usage here.
@@ -303,3 +440,26 @@ The per-prompt totals from this plan should eventually feed the observed usage r
 2. Should total prompt usage include cache-read tokens in the headline total, or should the headline use provider `total_tokens` exactly and leave billing-adjusted totals for the future cost UI?
 3. For retries, should collapsed output groups show the latest attempt total, all-attempt total, or both?
 4. Which harnesses can guarantee provider-cumulative totals across compactions, and which require derived estimates?
+
+Workflow aggregate semantics are not open: every incurred attempt belongs in
+the run total, partial coverage is labeled as a lower bound, and totals never
+span multiple runs.
+
+---
+
+## Acceptance Criteria
+
+- Current context, cumulative prompt usage, and cumulative workflow usage remain
+  distinct concepts in contracts and labels.
+- A completed workflow row displays the addressed run's observed total without
+  opening the run.
+- A running workflow row updates its observed-so-far total without
+  double-counting streaming snapshots.
+- Automatic retries, manual reruns, final steps, and dynamic AI steps contribute
+  exactly once per attempt.
+- Partial provider coverage renders as a lower bound; unavailable usage never
+  renders as zero.
+- Recent and running rows use the same formatter, summary type, and responsive
+  layout slot.
+- Workflow-list refresh does not read every historical output event.
+- Duplicate and fork operations do not copy token usage into the new lineage.

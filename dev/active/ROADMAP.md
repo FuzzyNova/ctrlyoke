@@ -1,612 +1,348 @@
-# ctrlyoke Extension — Strategic Roadmap
+# ctrlyoke Strategic Roadmap
 
-**Last updated:** July 7, 2026  
-**Current version:** 0.1.0 (unreleased — preparing the first VS Code Marketplace publish)  
-**Status:** Pre-release — no backward compatibility constraints
+**Last updated:** July 28, 2026
 
----
+**Current version:** 0.1.0 (unreleased)
 
-## Executive Summary
-
-ctrlyoke is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI, and Copilot Chat) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
-
-**ctrlyoke has not shipped yet.** The engine is feature-complete and a large number of post-MVP features are already implemented in the codebase — completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), inline prior context (2.6), pre-conditions, and the full error-behavior subsystem (2.1) — but nothing has been published to the VS Code Marketplace or npm. The architecture is clean and SOLID-compliant, making new features straightforward to add.
-
-**Recommended next focus — the launch path.** The remaining work before a public launch is no longer core features; it is the go-to-market layer:
-
-1. **Landing page + docs site** at `ctrlyoke.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md))
-2. **Pro licensing / monetization model** — now split into its own plan ([`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)) because the long-term licensing model (license key vs. user accounts) is a strategic decision that should be settled before launch, not after.
-3. **Marketplace publish mechanics** — the Tier 0 checklist below (publisher setup, production VSIX verification, CHANGELOG, listing polish, npm package).
-
-See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
+**Status:** Pre-release — no backward-compatibility constraints
 
 ---
 
-## Current Version & Completed Milestones
+## Product Direction
 
-### Core Engine (implemented)
+ctrlyoke is a workflow orchestrator for AI coding harnesses. Its durable product
+boundary is:
 
-- **Multi-harness execution**: Copilot CLI, Claude Code CLI, Codex CLI, OpenCode CLI, Qwen Code CLI, Antigravity CLI, Copilot Chat UI automation
-- **Composition-based CLI architecture**: Single `CliIntegration` class + `ICliProvider` interface; zero core changes needed to add new harnesses
-- **Parallel workflow execution**: `WorkflowInstance` (self-contained execution unit) + `WorkflowOrchestrator` (multi-workflow registry); per-workflow pause/resume/cancel; configurable concurrency
-- **Per-prompt session management**: Three-tier session ID resolution (prompt > workflow > global), session persistence across restarts
-- **Dynamic queue extension**: Copilot can autonomously extend workflows by modifying `.ctrlyoke.yaml`/`.ctrlyoke.json` files at runtime
-- **End condition evaluation**: Script-based validation with retry logic, timeout protection, and template variables
-- **Workflow-level properties**: Three-tier precedence (prompt > workflow > global settings) for harness, model, agent, end conditions
-- **Agent injection**: `AgentExpander.ts` reads agent file content and wraps in `<agentInstructions>` XML; supports workspace-relative, `.ctrlyoke/`-relative, and absolute paths
-- **Final prompt**: `finalStep` field on `PromptFile` runs once after all queue items complete
-- **Multi-format support**: `.ctrlyoke.yaml`, `.ctrlyoke.json`, `.prompt.md` with unified JSON schema (AJV validation)
-- **MCP server entrypoint**: `ctrlyoke-mcp` binary for tool-based queue operations
-- **Stale state recovery**: `WorkflowLockManager` with atomic writes, PID probing, 30s heartbeat, and `normalizeStaleLocks` on startup
-- **Standalone CLI binary**: `src/cli.ts` with Commander (`run`, `validate` commands); `PlatformAdapter`/`CliAdapter`/`VsCodeAdapter`; `out/cli.js` esbuild target
-- **Variable substitution**: `--var key=value` CLI flag; `{{varName}}` placeholders in workflow YAML; workflow-level `vars:` defaults; env var injection for end condition scripts
-- **Custom CLI args**: `extraArgs?: string[]` on `PromptItem` and `PromptFile`; per-provider pass-through in `buildCommand()`
-- **User-defined hooks**: `ExecutionProperties.hooks` for pre/post execution alongside agent/skills/mcpServers; headless mode support
-- **Script steps**: `type: script` step runs a shell command inline in the workflow, with `onFail` behavior
-- **Side-by-side diff**: Output diff view for comparing AI changes (responsive split/unified)
-- **Live context window**: Tracks token usage and context state during execution
-- **Global settings**: Extension settings panel integrated into the dashboard
-- **Inline prior context (2.6)**: `$previous`, `$all`, `$step:N` prior-context references injected into subsequent steps without requiring `resumeSession`
-- **Completion notifications (1.1)**: VS Code toast on workflow complete/error; `ctrlyoke.notifications.onComplete` setting
-- **Backtick context suppression (1.2)**: Context expansion skips `@path`, `#sym:`, etc. inside triple-backtick fenced blocks
-- **Workflow favorites (1.4)**: Star button persists `isFavorite` in working file; favorites sort to the top of the workflow list
-- **SCM commit message button (1.7)**: VS Code Source Control panel button generates a commit message via staged diff and active harness
-- **Error behavior (2.1)**: `errorBehavior` execution property (`stop`/`retry`/`continue`) for harness/session failures; structured `FailureKind` classification; Claude `StopFailure`, Copilot `errorOccurred`, and OpenCode `session.error` interactive error hooks; fixes the interactive-hang bug and the process-exit-routed-to-cancel bug
-- **Pre-conditions**: Script-based `preCondition` gate that must pass before a step runs, mirroring the end-condition mechanism
-- **MCP registry manager**: Central MCP server management UI with user/workspace merge and registry pagination
-- **Output virtualization**: Virtual row rendering for large outputs via `@tanstack/react-virtual`
-- **Output history search**: Dedicated history search modal with in-output find bar integration
-- **Markdown export**: Customizable workflow output export with command inclusion, metadata, and step range options
+- author and validate repeatable workflows;
+- execute them across supported harnesses;
+- control sessions, retries, conditions, permissions, and concurrency;
+- expose live output, history, diffs, and recovery controls;
+- make local and unattended automation safe and inspectable.
 
-### UI & Developer Experience (shipped)
+The product should not become a general-purpose source-code editor, a
+harness-specific feature layer, or a branded methodology bundle. The custom
+prompt editor is a core product surface. New work should strengthen
+orchestration, automation, safety, observability, or workflow authoring across
+harnesses.
 
-- **React 19 webview dashboard**: Zustand state, resizable panels, Tailwind CSS, full VS Code theme integration
-- **Multi-workflow UI**: Tab/list switching between active workflows, per-workflow status, independent controls
-- **CodeMirror 6 editor**: Replaced contenteditable (eliminates cursor jumping/blank line collapse bugs); Typo.js spell check, Ctrl+Click `#file:` navigation, undo/redo
-- **IntelliSense completions**: `@file`, `#file:`, `#sym:` references with gitignore-aware file filtering; dynamic model completions from live Copilot API
-- **Status bar integration**: Real-time execution state (Initializing → Ready → Running → Paused)
-- **Output history**: `OutputHistoryManager`, run selector UI, persistent run history
-- **Mobile-responsive layout**: Responsive breakpoints, overlay sidebar, drag-and-drop prompt reordering on mobile
-- **Embedded/interactive terminal**: `PtyProcessManager` singleton; xterm.js display; `kind: 'ai-cli'` and `kind: 'shell'` sessions
-- **Custom icons system**: SVG sources → auto-converted CSS; 7 harness-specific icons
-- **DashboardBroadcastHub**: Fan-out hub decoupling orchestrator from webview and other sinks
-- **Permission/Context quick pickers**: `PermissionsQuickPicker` and `ContextQuickPicker` footer controls
-- **Undo/redo controls**: `UndoRedoControl` in editor with action logging and workflow properties sync
-- **Drawer tab architecture**: `DrawerTabBar` in `EditorFooter`; per-tab state management; workflow properties panel
+The engine is already substantial. ctrlyoke supports Copilot CLI, Claude Code,
+Codex CLI, OpenCode CLI, Qwen Code, and Antigravity CLI; sequential workflows;
+parallel workflows; prompt and script steps; pre/end conditions; retries and
+error behavior; dynamic queue extension; per-step sessions; agents, skills, MCP
+servers, harness-specific permissions and hooks; a React dashboard; run history
+and search; diffs and undo; a hosted browser dashboard; a standalone CLI; and an
+MCP entrypoint. Shared workflow fields do not imply identical native harness
+capabilities; unsupported and lossy translations must be visible before
+execution.
 
-### CLI Infrastructure (shipped)
-
-- **Per-provider log parsers**: `BaseLogParser`, `CopilotLogParser`, `ClaudeLogParser`, `CodexLogParser`
-- **Universal CLI output format**: `UniversalCliOutput` + `CliOutputFormatter` for standardized response handling
-- **Adaptive prompt passing**: Direct injection ≤300 chars, temp file for complex prompts
-- **Two execution modes**: Interactive terminal (visible, Ctrl+C abort) and headless background
-
-### Schema & Tooling (shipped)
-
-- **Unified schema pipeline**: `workflow-schema.json` → auto-generated YAML schema → AJV runtime validation
-- **Model sync workflow**: `sync-models.mjs` syncs `ModelConstants.ts` ↔ `package.json` ↔ `workflow-schema.json`
-- **Build-time dev/prod split**: `IS_DEV_MODE` flag with esbuild dead code elimination strips dev commands from production
+The priority is no longer adding surface area before anyone can install the
+product. Finish the release, then make the existing automation safer and easier
+to drive.
 
 ---
 
-## Known Issues & Technical Debt
+## Priority Summary
 
-### Bugs / Broken Features
+### P0 — Ship 0.1.0
 
-- **Chat mode model switch**: `workbench.action.chat.changeModel` occasionally fails silently — shows warning and continues with current model, which may not match the configured default.
-- **Codex headless completion**: Detection via `{"type":"turn.completed"}` JSONL events is fragile; notify hook fallback behavior needs hardening.
-- **~~Interactive hang on harness error~~ ✅ FIXED**: Resolved by the error-behavior work (2.1). Claude `StopFailure`, Copilot `errorOccurred`, and OpenCode `session.error` now write `{sessionId}-error.json`, and process exit/timeout route through `errorBehavior` instead of hanging. Codex/Qwen/Gemini still rely on process-exit/timeout fallback (no verified session-level error hook yet).
+1. Finish the external launch checklist: production site/docs verification,
+   Marketplace publisher setup, final VSIX smoke test, and publish.
+2. Resolve the commercial-launch gate in
+   [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). The current strategy requires
+   Pro at launch; if that work would materially delay release, make an explicit
+   decision to ship a free public beta instead. Do not publish pricing and Pro
+   promises that the extension cannot enforce.
+3. Correct release artifacts that are populated but stale: `CHANGELOG.md`
+   currently claims a May 12 release and Copilot Chat support even though 0.1.0
+   has not shipped.
+4. Close release-critical accessibility, security, and regression gaps. Use
+   [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md) as generated input, not as a
+   percentage target that blocks forever.
+5. Ship honest tool-permission messaging from phase 0 of
+   [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md).
+   Until behavioral tests prove otherwise, the UI must say granular Allowed
+   Tools and Denied Tools are supported only by Copilot CLI and Claude CLI.
 
-### Technical Debt
+### P1 — Stabilize and complete the automation foundation
 
-- **`WorkflowInstance.ts` and `WorkflowOrchestrator.ts` are large**: Further responsibility migration to the `orchestration/` subdirectory should continue over time.
-- **Webview security — `style-src 'unsafe-inline'`**: Required by Tailwind CSS and CodeMirror — cannot be removed without migrating away from those libraries. Accepted risk, documented.
-- **Webview security — message payload validation**: Incoming messages from the webview are not schema-validated. Low priority given single-user local deployment, but should be addressed before any multi-user scenario.
-- **Test coverage gaps**: CLI/Chat integration tests are partial. End-to-end workflow tests require live AI responses (inherently manual). Unit test suite is solid but CLI output parsing needs more coverage.
+These are the best post-launch investments. They improve the workflows users
+already have instead of introducing new execution models.
 
----
+1. **Harness compatibility and portability** — add one provider-owned capability
+   registry, author-time diagnostics, and workflow portability reporting so
+   unsupported or lossy fields are visible before execution.
+   ([plan](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
+2. **Tool-permission parity** — make support claims honest, replace Qwen's
+   unverified flags, implement ownership-safe workspace configuration for Qwen
+   and OpenCode, and investigate partial Codex translations without overstating
+   them.
+   ([plan](../backlog/TOOL_PERMISSION_PARITY_PLAN.md))
+3. **Execution guardrails** — cap duration, attempts, queue growth, and future
+   concurrency before encouraging unattended runs.
+   ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
+4. **Complete MCP lifecycle control** — start, list, inspect, pause, resume, and
+   cancel workflows through one shared application service.
+   ([plan](../backlog/MCP_CONTROL_SURFACE_PLAN.md))
+5. **Secrets and redaction** — runtime secret references plus centralized
+   redaction across logs, history, previews, exports, and remote transports.
+   ([plan](../backlog/SECRETS_AND_REDACTION_PLAN.md))
+6. **Dry-run preview** — show the categorized payload, provider translation,
+   compatibility diagnostics, workspace side effects, and command without
+   invoking a harness.
+   ([plan](../backlog/DRY_RUN_PREVIEW_PLAN.md))
+7. **Template required variables + Feature-Driven Loop** — fix unresolved
+   optional placeholders, validate required template input, and add the
+   idea-to-plan orchestrator template without arbitrary setup scripts.
+   ([plan](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md))
+8. **Native diagnostics gates** — implement phases 1–2 only: VS Code diagnostics
+   as an end condition and retry context. Defer the generic IDE MCP bridge.
+   ([plan](../backlog/VSCODE_LSP_MCP_PLAN.md))
+9. **Attention-needed notifications** — add the canonical harness
+   `notification` event so remote/unfocused users know when a workflow is
+   waiting for input.
+   ([plan](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md))
+10. **Accessibility and semantic testability** — keyboard parity, accessible
+    names/states, landmarks, and resilient role-based tests.
+    ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
+11. **Automation API structured results** — finish the rich JSON result work in
+    [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md). Variable substitution is
+    already implemented; an SDK remains deferred.
 
-## Tier 0 — Launch Blockers
+### P2 — Strategic differentiators
 
-_ctrlyoke has **not** been published yet. This section is the remaining path to the first public release. The engineering MVP is done; the open work is the go-to-market layer (landing page, licensing model) plus the mechanical publish checklist. Prior drafts of this roadmap incorrectly marked these "shipped" — treat every item below as **needs verification before publish**, since the publish was never actually executed. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full checklist._
+Start these after real launch feedback and the P1 safety contracts exist.
 
-**The two strategic blockers (do these first):**
+1. **Worktree isolation** — the strongest next product differentiator. Safely
+   isolate concurrent or unattended work, preserve results as branches, and
+   avoid agents trampling one checkout.
+   ([plan](../backlog/WORKTREE_SUPPORT_PLAN.md))
+2. **Workflow variants / lightweight harness comparison** — duplicate a draft
+   or fork an exact stored run into a new independent workflow, optionally
+   changing harness/model, then use existing run navigation and hosted browser
+   tabs for comparison. Do not add a native split view; coordinated racing
+   waits for worktree isolation.
+   ([plan](../backlog/WORKFLOW_VARIANTS_PLAN.md))
+3. **Standalone server** — reuse the shipped hosted dashboard without requiring
+   VS Code. The hosted server is implemented; `ctrlyoke server` is not.
+   ([plan](../backlog/STANDALONE_SERVER_PLAN.md))
+4. **Workflow scheduling** — useful once execution limits and secrets exist.
+   Keep the decided orchestrator-bound model; ctrlyoke must be running.
+   ([plan](../backlog/WORKFLOW_SCHEDULING_PLAN.md))
+5. **Parallel steps** — valuable for independent research/test branches, but
+   only after guardrails and worktree isolation define safe concurrency.
+   ([plan](../backlog/PARALLEL_STEPS_PLAN.md))
+6. **Cumulative prompt and workflow usage** — distinguish current context
+   fullness from total usage across compactions, then surface each run's
+   observed workflow total in the workflow list for lightweight comparison.
+   ([plan](../backlog/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md))
+7. **Harness usage/quota view** — show observed usage and clearly labeled
+   last-known quota; never fabricate precision.
+   ([plan](../backlog/HARNESS_USAGE_TRACKING_PLAN.md))
+8. **Privacy-respecting telemetry** — ship only after public release, preserve
+   VS Code's telemetry controls, and never collect user content or paths.
+   ([plan](../backlog/TELEMETRY_PLAN.md))
+9. **Prompt authoring suggestions** — manual continuation first, followed by
+   opt-in automatic ghost text. Keep the service provider-neutral and
+   `CodeMirrorEditor.tsx` as a thin integration point.
+   ([plan](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md))
 
-- **0.A — Landing page + docs site** ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md)): `ctrlyoke.dev` marketing page, published VitePress docs, pricing page. The homepage is the extension's primary first impression outside the Marketplace.
-- **0.B — Pro licensing model** ([`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)): Decide and implement the monetization model. **This was previously folded into the landing-page plan and has now been split out** because the choice between a simple pasted license key and a full user-account/sign-in model is a long-term architectural decision that affects the extension, the website, and the backend. It must be settled before launch so the free/Pro gating ships in v0.1.0.
+### P3 — Demand-driven parking lot
 
-**The mechanical publish checklist (do after the strategic blockers):**
+Do not schedule these until users demonstrate the pain:
 
----
+| Candidate                                                                       | Disposition                                                                                                            |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [Skill `/skill:` syntax](../backlog/SKILL_SLASH_COMMANDS_PLAN.md)               | Useful shorthand, but the existing `skills:` property works.                                                           |
+| [Script-field completions](../backlog/SCRIPT_FIELD_COMPLETIONS_PLAN.md)         | Pleasant authoring polish after preview and template validation.                                                       |
+| [Quick-picker scope improvements](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md) | Low-risk polish; validate demand for workflow-scope edits first.                                                       |
+| [Harness session import](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)             | Powerful but parser-heavy and dependent on unstable native logs.                                                       |
+| [Workflow-step composition](../backlog/WORKFLOW_STEP_PLAN.md)                   | The plan itself recommends waiting; scripts and orchestrator templates cover current cases.                            |
+| [Cline integration](../backlog/CLINE_INTEGRATION_PLAN.md)                       | Add another harness only when user demand justifies its maintenance matrix.                                            |
+| [VS Code LM API features](../backlog/VSCODE_LM_API_FEATURES.md)                 | Keep ctrlyoke harness-neutral; revisit focused uses such as prompt improvement.                                        |
+| [E2E automation via MCP](../backlog/VSCODE_TESTING_E2E_MCP.md)                  | Engineering investment, not a product feature; pursue when current integration tests stop finding release regressions. |
 
-### 0.1 Populate the CHANGELOG
-
-**Status: NEEDS VERIFICATION**
-
-`CHANGELOG.md` must be populated before the Marketplace publish. Use "Current Version & Completed Milestones" above as source material.
-
----
-
-### 0.2 Production Build Verification
-
-**Status: NEEDS VERIFICATION**
-
-Run `npm run package`, install the VSIX locally via **Extensions: Install from VSIX**, and verify:
-
-- Dashboard panel loads (React webview renders, not blank)
-- New Workflow from Template works
-- Run a simple `.prompt.md` file end-to-end in at least one harness
-- Dev commands (DevMenu) are NOT visible in the command palette
-- Pro-gated features behave correctly in the unlicensed (free) state — see [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
-
----
-
-### 0.3 macOS Testing
-
-**Status: NEEDS VERIFICATION**
-
-ctrlyoke has primarily been developed and tested on Windows. macOS is the primary platform for VS Code users. Key risks: `node-pty` native binaries differ per architecture, Homebrew CLI paths may not be in `PATH`, `chokidar` uses FSEvents on macOS. Test on Apple Silicon (arm64) if possible.
-
----
-
-### 0.4 Publisher Setup & Publish
-
-**Status: NOT DONE — this is the actual ship gate**
-
-Create or verify the Azure DevOps publisher account (`fuzzynova`), generate a PAT, run `vsce login fuzzynova`, verify `vsce ls` output shows the correct file inclusion/exclusion, then `vsce publish` (and `ovsx publish` for Open VSX).
-
----
-
-### 0.5 Marketplace Listing Polish
-
-**Status: NEEDS VERIFICATION**
-
-- Update `package.json` description to mention all supported harnesses (current description undersells)
-- Add `keywords` field: `["AI", "automation", "copilot", "claude", "codex", "workflow", "prompt", "agent", "LLM"]`
-- Add `galleryBanner` (`"color": "#1e1e2e", "theme": "dark"`)
-- Add screenshots or demo GIF to README — significantly increases Marketplace click-through rate
-- Verify GitHub repo is public and README links resolve correctly
-
----
-
-### 0.6 CLI npm Package
-
-**Status: NEEDS VERIFICATION**
-
-The `ctrlyoke` CLI (`out/cli.js`) ships separately from the VSIX. Decide on single vs. separate `package.json` structure, add `files` field, test with `npm pack --dry-run`, publish to npm.
-
----
-
-## Prioritized Roadmap
-
-### Tier 1 — Quick Wins
-
-_Under 1 week each. High impact, low risk. Ship in the weeks immediately after v0.1.0._
-
----
-
-#### 1.1 Completion Notifications ✅ IMPLEMENTED (unreleased)
-
-**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md)
-
----
-
-#### 1.2 Backtick Context Suppression ✅ IMPLEMENTED (unreleased)
-
-**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md)
-
----
-
-#### 1.3 Raw Prompt Mode
-
-**Priority: HIGH** | **Effort: 1–2 days** | **Doc: [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)**
-
-New `rawPromptMode: true` execution property that bypasses the entire context expansion and categorized temp file pipeline. The prompt is sent verbatim — no `@path` expansion, no agent/skills injection, no prior context wrapping.
-
-**Why it matters:** Users who manage their own context references, or who are debugging ctrlyoke sessions (where the debug prompt contains raw ctrlyoke instruction strings), need a clean passthrough. Also a trust signal for skeptical users.
-
-**Dependencies:** ✅ Backtick suppression (1.2) is done — 1.3 is ready to implement now.
-
----
-
-#### 1.4 Workflow Favorites ✅ IMPLEMENTED (unreleased)
-
-**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/WORKFLOW_FAVORITES_PLAN.md)
-
----
-
-#### 1.5 Script Field Completions
-
-**Priority: MEDIUM** | **Effort: 2–3 days** | **Doc: [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)**
-
-Replace the plain `<input>` in `ScriptConditionEditor` with a single-line CodeMirror component that suggests workspace npm scripts (from `package.json`) and common shell commands (npm, git, pwsh, bash, etc.). CodeMirror is already in the webview bundle.
+`TRADEMARK_FILING_GUIDE.md` is business/legal reference material, not a product
+roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 ---
 
-#### 1.6 Dry Run / Preview
+## Launch Readiness
 
-**Priority: MEDIUM** | **Effort: 2–3 days** | **Doc: [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)**
+### Implemented or verified
 
-A **Preview** button on each prompt card in the dashboard shows the fully resolved CLI command, prompt text, and temp file content for that step — without executing. Also exposes `ctrlyoke run --dry-run` on the CLI.
+- Production package installation and smoke verification — marked done.
+- macOS testing — marked done.
+- Marketplace description, keywords, and gallery banner are populated.
+- `CHANGELOG.md` is populated, though its release date and feature list need a
+  final correction.
+- Astro landing site, VitePress docs, deploy workflows, pricing, privacy, terms,
+  and Pro documentation exist.
+- Native Getting Started walkthrough, harness preflight, built-in template
+  cleanup, tech-support agent, and Antigravity harness work are implemented.
+- The hosted browser dashboard is implemented with token access, TLS options,
+  mobile layout, push notifications, and workspace-viewer support.
 
-**Why it matters:** Currently users must run a workflow and dig through logs to understand what was actually sent to the AI. Preview mode makes prompt debugging immediate and transparent.
+### Remaining ship gates
 
----
+| Gate                                                                      | Status                                        | Source                                                                                                             |
+| ------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Final release artifact audit                                              | In progress                                   | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
+| Landing/docs production deployment and DNS verification                   | In progress                                   | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
+| Pro license provider, entitlement service, activation, and feature gating | Not implemented                               | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
+| Rebrand/external identity cutover                                         | In progress                                   | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                       |
+| Marketplace/Open VSX publisher authentication and publish                 | Not done                                      | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
+| Separate npm CLI packaging                                                | Deferred unless required for launch messaging | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
 
-#### 1.7 SCM Commit Message Button ✅ IMPLEMENTED (unreleased)
+### Launch sequence
 
-**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)
-
----
-
-#### 1.8 BMAD Workflow Templates
-
-**Priority: MEDIUM** | **Effort: 2–3 days** | **Doc: [`BMAD_FOR_CTRLYOKE.md`](BMAD_FOR_CTRLYOKE.md)**
-
-BMAD (Breakthrough Method of Agile AI-Driven Development) maps directly onto ctrlyoke's workflow model. Add self-contained agent prompt files (`analyst`, `pm`, `architect`, `developer`, `qa`) and workflow templates (Quick Flow, Full Method, Brownfield). Zero core changes — purely new template content.
-
-**Why it matters:** Opinionated "best practice" multi-agent workflow out of the box. Demonstrates the full power of multi-step orchestration to new users. High discoverability in README and marketplace listing.
-
----
-
-### Tier 2 — High-Value Features
-
-_1–4 weeks each. Core product improvements that significantly expand utility._
-
----
-
-#### 2.1 Error Behavior ✅ IMPLEMENTED (unreleased)
-
-**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/ERROR_BEHAVIOR_PLAN.md)
-
-All five phases are complete: the `errorBehavior` execution property (`stop`/`retry`/`continue`), structured `FailureKind` classification, Claude `StopFailure` / Copilot `errorOccurred` / OpenCode `session.error` interactive error hooks, `WorkflowExecutor` routing, and the prompt/workflow/default UI. This also fixed the interactive-hang bug and the process-exit-routed-to-cancel bug. Codex/Qwen/Gemini remain on the process-exit/timeout fallback (no verified session-level error hook yet).
-
----
-
-#### 2.2 Telemetry
-
-**Priority: HIGH** | **Effort: 1–2 days** | **Doc: [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)**
-
-Opt-in anonymous usage telemetry via `@vscode/extension-telemetry` (Azure Application Insights). Automatically respects VS Code `telemetry.telemetryLevel`. Track: harness used, step counts, durations, workflow outcomes, error types. Never prompt text, file paths, or user-generated strings.
-
-**Why it matters:** Post-release, building without usage data is slow. Knowing which harnesses users actually use, where workflows fail, and what features are adopted directly drives roadmap prioritization. Ship shortly after v0.1.0.
+1. Decide commercial launch versus free public beta.
+2. Finish or explicitly defer Pro activation/gating based on that decision.
+3. Correct CHANGELOG, README, supported-harness claims, screenshots, and demo.
+4. Deploy and verify `ctrlyoke.dev` plus `/docs/`.
+5. Build the final VSIX, repeat the short smoke matrix, publish to Marketplace
+   and Open VSX, then tag the actual release.
+6. Publish the npm CLI separately only after its package contents and support
+   promise are verified; it must not hold the VS Code release hostage.
 
 ---
 
-#### 2.3 Template Setup Scripts
+## Implemented Roadmap Items
 
-**Priority: HIGH** | **Effort: 1–2 weeks** | **Doc: [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)**
+The roadmap tracks outcomes, while completed implementation plans live in
+`dev/implemented/`.
 
-Templates currently require manual `{placeholder}` replacement. Setup scripts run automatically when a template is instantiated, auto-populating variables by inspecting the repository (directory structure, detected framework, repo name). Extends `WorkflowTemplate` type with `setupScript?: string`.
+| Outcome                                      | Evidence                                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Completion notifications                     | [`COMPLETION_NOTIFICATIONS_PLAN.md`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md)         |
+| Backtick context suppression                 | [`BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) |
+| Workflow favorites                           | [`WORKFLOW_FAVORITES_PLAN.md`](../implemented/WORKFLOW_FAVORITES_PLAN.md)                     |
+| SCM commit-message action                    | [`SCM_COMMIT_MESSAGE_BUTTON.md`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)                 |
+| Error behavior and failure routing           | [`ERROR_BEHAVIOR_PLAN.md`](../implemented/ERROR_BEHAVIOR_PLAN.md)                             |
+| Inline prior context                         | [`INLINE_PRIOR_CONTEXT_PLAN.md`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)                 |
+| Dropdown/multi-select validation styling     | [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](../implemented/DROPDOWN_VALIDATION_STYLING_PLAN.md)   |
+| Terminal follow-up tracking                  | [`TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md)     |
+| Generic hook-event notification pipeline     | [`HOOK_EVENT_NOTIFICATIONS_PLAN.md`](../implemented/HOOK_EVENT_NOTIFICATIONS_PLAN.md)         |
+| Native onboarding walkthrough                | [`ONBOARDING_TOUR_PLAN.md`](../implemented/ONBOARDING_TOUR_PLAN.md)                           |
+| Harness preflight                            | [`HARNESS_PREFLIGHT_PLAN.md`](../implemented/HARNESS_PREFLIGHT_PLAN.md)                       |
+| Hosted browser server and security hardening | [`SERVER_SECURITY_PLAN.md`](../implemented/SERVER_SECURITY_PLAN.md)                           |
 
-**Why it matters:** Closes the gap between "I imported a template" and "this workflow is ready to run on my codebase." Makes ctrlyoke feel intelligent rather than generic.
-
----
-
-#### 2.4 AGENTS.md Generation & Injection
-
-**Priority: HIGH** | **Effort: 1–2 weeks** | **Doc: [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)**
-
-Two subsystems:
-
-- **`AgentsFileResolver`**: Walk parent directories to find `AGENTS.md` files and inject discovered content as `<projectInstructions>` XML into CLI prompts (same discovery pattern as CLAUDE.md/GEMINI.md)
-- **`GenerateAgentsWorkflow` command**: Multi-prompt workflow template that analyzes the directory tree and generates a comprehensive `AGENTS.md`, validated by an end condition script
-
-**Why it matters:** AGENTS.md is becoming the standard project context file for AI coding assistants (GitHub, Anthropic, Google all support it). ctrlyoke should be the tool that generates and leverages these files.
-
-**Dependencies:** Template setup scripts (2.3) makes the generation workflow more robust.
-
----
-
-#### 2.5 Improved End Condition DX
-
-**Priority: MEDIUM** | **Effort: 3–5 days**
-
-End conditions are powerful but steep to learn:
-
-- **Common built-in end conditions** (no script required): `tests-pass`, `file-exists`, `no-typescript-errors`, `git-clean`
-- **`endCondition: "tests-pass"` shorthand syntax**: Resolve named conditions to built-in scripts
-- **Inline end condition preview**: Show last script output in the dashboard prompt card
-- **End condition sandbox**: Run a script manually against the current workspace state from the dashboard
-
-**Dependencies:** None — additive changes to `EndConditionEvaluator`.
+Known limitation: Antigravity's available logs do not currently provide reliable
+context-window usage, so ctrlyoke cannot display that metric with the same
+confidence as other harnesses.
 
 ---
 
-#### 2.6 Inline Prior Context ✅ IMPLEMENTED (unreleased)
+## Rejected and Removed Scope
 
-**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)
+Rejected plans remain in `dev/rejected/` so decisions and prior research are not
+lost.
 
----
+| Removed item                                                                   | Reason                                                                                                                 |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| [BMAD templates](../rejected/BMAD_FOR_CTRLYOKE.md)                             | Built-in linear and orchestrator templates cover the patterns without third-party methodology/trademark coupling.      |
+| [Raw prompt mode](../rejected/RAW_PROMPT_MODE_PLAN.md)                         | A bypass execution path weakens consistent preparation; fenced suppression and dry-run preview address the real needs. |
+| [Template setup scripts](../rejected/TEMPLATE_SETUP_SCRIPTS.md)                | Arbitrary template code creates avoidable trust and portability costs; typed variables are sufficient.                 |
+| [AGENTS.md generation/injection](../rejected/AGENTS_MD_GENERATION.md)          | Risks duplicate harness-native instructions; generation can remain a template/workflow concern.                        |
+| [Additional instructions channel](../rejected/ADDITIONAL_INSTRUCTIONS_PLAN.md) | Duplicates agents, skills, workflow defaults, and project instruction files.                                           |
+| [Native mobile app](../rejected/NATIVE_MOBILE_APP.md)                          | The responsive hosted dashboard is the mobile client.                                                                  |
+| [Conditional steps](../rejected/CONDITIONAL_STEPS_PLAN.md)                     | External scripts and programmatic orchestration avoid a workflow expression language.                                  |
+| [Mobile header redesign](../rejected/MOBILE_HEADER_REDESIGN_PLAN.md)           | Superseded by the implemented mobile layout.                                                                           |
 
-#### 2.7 Dropdown Validation Styling
-
-**Priority: LOW** | **Effort: 1–3 days** | **Doc: [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md)**
-
-Visual validation state (error/warning indicators) for dropdown and multi-checkbox controls in the workflow properties panel. Improves discoverability of misconfigured workflows before running.
-
----
-
-#### 2.8 Documentation Site + Landing Page
-
-**Priority: HIGH** | **Effort: 1–2 weeks** | **Doc: [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md)**
-
-VitePress site in `docs-site/` with:
-
-- Marketing homepage (hero section, feature highlights, harness logos, demo GIF)
-- Getting Started guide
-- Workflow Reference (schema auto-generated from `workflow-schema.json`)
-- Harness Configuration, CLI Reference, MCP Reference
-- Tutorials
-- Deployed to GitHub Pages via GitHub Actions on push to main
-
-**Why it matters:** A public docs site and landing page lowers onboarding friction and supports marketplace discoverability. Users searching for "Copilot workflow automation" need a page to land on before installing. The homepage is the extension's primary first impression outside the VS Code Marketplace.
-
-**Dependencies:** Stable v0.1.0 user-facing API should be in place first.
+AI-generated workflow scaffolding is also removed as a separate roadmap feature:
+the built-in workflow-composer/spec-orchestrator agents and
+`spec-driven-loop.ctrlyoke.yaml` already provide the useful behavior without a
+new core subsystem.
 
 ---
 
-### Tier 3 — Strategic Investments
-
-_1–2 months each. Architectural changes or significant new capabilities._
-
----
-
-#### 3.1 Parallel Steps
-
-**Priority: MEDIUM** | **Effort: 2–4 weeks** | **Doc: [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)**
-
-Run multiple prompt steps in parallel within a single workflow. Extends the existing parallel workflow (multi-workflow) model down to the step level. Requires careful orchestration of shared session state and output buffering.
-
----
-
-#### 3.2 Workflow Step Composition
-
-**Priority: MEDIUM** | **Effort: 2–4 weeks** | **Doc: [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)**
-
-A new step type (`type: workflow`) that invokes another workflow file as a sub-step, enabling reusable, composable workflow building blocks.
-
----
-
-#### 3.3 MCP Server Hardening
-
-**Priority: MEDIUM** | **Effort: 2–3 weeks**
-
-The `ctrlyoke-mcp` binary exists but MCP tool coverage may be incomplete. Harden the MCP interface to turn ctrlyoke into a platform other AI assistants can drive directly:
-
-- Complete tool surface: `queue_workflow`, `get_status`, `pause`, `resume`, `cancel`, `get_output`, `list_runs`
-- Token-based authentication
-- MCP tool schema validation against `workflow-schema.json`
-- Integration tests and usage guide for Claude Desktop, Cursor, and other MCP clients
-
----
-
-#### 3.4 Cline Integration
-
-**Priority: LOW** | **Effort: 1–2 weeks** | **Doc: [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)**
-
-Add `cline-cli` harness. Expands ctrlyoke's coverage to the popular open-source Cline agent. Follows the established `ICliProvider` composition pattern — no core changes.
-
----
-
-#### 3.5 VS Code LM API Features
-
-**Priority: LOW** | **Effort: unknown** | **Doc: [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)**
-
-Leverage VS Code's Language Model API for tighter GitHub Copilot integration beyond the current CLI harness. Potential: in-process model invocations, faster completions, richer tool call support.
-
----
-
-#### 3.6 Terminal Follow-up Tracking
-
-**Status: IMPLEMENTED** | **Doc: [`../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md)**
-
-Detect and record when users type follow-up commands or additional prompts in the embedded terminal after a workflow step completes, enabling richer context for subsequent steps.
-
----
-
-#### 3.7 Inline Suggestions
-
-**Priority: LOW** | **Effort: unknown** | **Doc: [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)**
-
-Surface AI-generated inline suggestions in the editor, driven by ctrlyoke workflow outputs — a tighter loop between workflow execution and code editing.
-
----
-
-#### 3.8 Additional Instructions
-
-**Priority: LOW** | **Effort: unknown** | **Doc: [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)**
-
-Global or workspace-level instruction text injected into every prompt, independent of agent files. A lightweight alternative to agent injection for cross-cutting instructions.
-
----
-
-#### 3.9 E2E Testing via MCP
-
-**Priority: LOW** | **Effort: 2–3 weeks** | **Doc: [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)**
-
-End-to-end integration test harness using the MCP server as an automation entry point, allowing scripted workflow execution and assertion without manual UI interaction.
-
----
-
-### Tier 4 — Future Vision
-
-_Longer-term or requiring external decisions before implementation._
-
----
-
-#### 4.1 AI-Powered Workflow Generation
-
-**Priority: SPECULATIVE** | **Effort: 2–4 weeks**
-
-`ctrlyoke: Generate Workflow from Description` command — natural language description → `.ctrlyoke.yaml` with appropriate prompts, end conditions, and agent assignments. Schema-validated before saving.
-
-**Dependencies:** AGENTS.md generation (2.4), template setup scripts (2.3), stable schema.
-
----
-
-#### 4.2 Premium Licensing (Pro Tier) — see [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
-
-**Priority: LAUNCH BLOCKER (0.B)** | **Effort: see plan**
-
-> **Reclassified.** This was a Tier 4 "someday" item, but the first paid tier and its gating must ship **with** v0.1.0 so the free/Pro boundary is set from day one. The full design — tier structure, licensing-model decision (pasted license key vs. user accounts/sign-in), offline entitlement verification, provider choice, and the extension `LicenseService` — now lives in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). The original Pro-licensing content has been moved out of [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) into that plan.
-
-Later, usage-data-driven tier tuning and a possible subscription "Pro+" / Teams tier follow telemetry (2.2) and real adoption data.
-
----
-
-#### 4.3 VS Code Marketplace Featured Listing
-
-**Priority: PREREQUISITE FOR GROWTH** | **Effort: 1 week prep**
-
-Getting listed on the VS Code Marketplace is the primary distribution channel. Requires completing all Tier 0 items.
-
-Pre-conditions:
-
-- PNG icon ✅ (already done)
-- `.vscodeignore` ✅ (already done)
-- CHANGELOG populated (from 0.1)
-- Passing `npm run lint` and `npm test`
-- Published GitHub repository with README
-
-Actions:
-
-- `vsce login fuzzynova`
-- `vsce publish`
-- Open VSX Registry publish (`ovsx publish`) for VSCodium users
-- Request VS Code Marketplace featured listing via GitHub issue on `microsoft/vscode-discussions`
-
----
-
-## Dependency Graph
-
-```
-LAUNCH (not yet shipped) — gated on:
-  0.A Landing Page + Docs ─┐
-  0.B Pro Licensing ───────┼─► Tier 0 publish checklist ─► 4.3 Marketplace Listing
-  Tier 0 publish mechanics ┘
-
-Launch-blocker sequencing (RELEASE_PLAN §2.5 / §2.9 — order is load-bearing):
-
-  1. Antigravity harness swap (§2.5)  ─┐  establish the correct, final harness list
-     Built-in agent + template cleanup │  (drop Gemini, fix dead model IDs / JSON→YAML,
-     — Part A + B (§2.9)              ─┘   add typed template variables)
-                                        │
-                                        ▼   ...only then author content that cites harnesses/formats:
-  2. ctrlyoke-tech-support agent (§2.9) ✅
-     Native Getting Started walkthrough  ─┐
-     Harness preflight (§2.9)            ─┴─► must reflect the corrected list, not stale facts
-                                        │
-                                        ▼
-  3. Screenshots + demo GIF (§4) ─────────► capture AFTER onboarding/UI is final
-                                            (visuals must show the shipped experience)
-
-  Independent tracks (any time before publish):
-    Pro licensing (§2.6) · rebrand cutover (§2.7) · legal [DATE] (§2.8) · security review (§2.10)
-
-0.B Pro Licensing (PRO_LICENSE_PLAN.md)
-  ├── needs: licensing-model decision (license key vs. user accounts)
-  └── consumes: 2.8 / 0.A Landing Page (pricing page + checkout)
-
-1.2 Backtick Context Suppression ✅ DONE
-  └─► 1.3 Raw Prompt Mode (ready to implement)
-
-2.1 Error Behavior ✅ DONE
-
-1.8 BMAD Templates
-  └─► 2.4 AGENTS.md Generation (agent personas improve generation quality)
-
-2.3 Template Setup Scripts
-  └─► 2.4 AGENTS.md Generation (generation workflow uses setup scripts)
-
-2.8 Documentation Site
-  └─► 4.3 Marketplace Listing
-
-4.1 AI Workflow Generation
-  └── depends on: 2.3 + 2.4 + stable schema
-
-4.2 Premium Licensing (Pro tier)
-  └── now tracked in PRO_LICENSE_PLAN.md; pricing/gating ships at launch,
-      usage-data-driven tier tuning follows telemetry (2.2)
+## Dependencies and Sequencing
+
+```text
+0.1.0 release
+  ├─ commercial launch? ── yes ─► Pro activation + gating
+  │                       no  ─► explicit free-beta messaging
+  └─ site/docs + release artifacts + publisher setup ─► publish
+
+Post-launch automation foundation
+  ├─ capability registry ──► permission parity ──┐
+  │                         └─► portability report │
+  ├─ secrets/redaction ───────────────────────────┤
+  ├─ execution guardrails ────────────────────────┼─► standalone server / scheduling
+  ├─ MCP lifecycle control ───────────────────────┘
+  ├─ capability registry + redaction ──► dry-run preview
+  └─ required template variables + diagnostics gates
+
+Safe concurrency
+  execution guardrails ─┐
+  worktree isolation ───┼─► parallel steps
+  cumulative usage ─────┘
 ```
 
 ---
 
-## Estimated Timeline
+## Milestones
 
-| Milestone                  | Items                                                                  | Target       |
-| -------------------------- | ---------------------------------------------------------------------- | ------------ |
-| **Engine MVP** ✅          | Core engine + 1.1, 1.2, 1.4, 1.7, 2.1, 2.6, pre-conditions (all built) | Done         |
-| **v0.1.0 Launch**          | 0.A landing page, 0.B Pro licensing, Tier 0 publish checklist          | Next up      |
-| **v0.1.x Rapid UX**        | 1.3 (ready), 1.5, 1.6                                                  | After launch |
-| **v0.2.0 Polish & DX**     | 1.8, 2.2 (telemetry), 2.5                                              | Following    |
-| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.8 (docs site expansion)                                  | Later        |
-| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                                        | Later        |
-| **v0.5.0 Platform & Pro+** | 4.1 + 4.2 (Pro+ tiers) + 4.3                                           | Later        |
+| Milestone                                    | Outcome                                                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **0.1.0 — Public launch**                    | Installable, documented, correctly licensed, and published with honest support claims.                        |
+| **0.1.x — Trust and portability**            | Capability diagnostics, permission parity, guardrails, secrets, dry-run preview, and required template input. |
+| **0.2 — Authoring and comparison**           | Prompt suggestions, workflow variants, complete MCP lifecycle control, and rich CLI JSON results.             |
+| **0.3 — Isolated execution**                 | Worktree-backed workflows with clear recovery and branch landing.                                             |
+| **0.4 — Long-running automation**            | Standalone server and orchestrator-bound scheduling.                                                          |
+| **0.5 — Safe concurrency and observability** | Parallel steps plus cumulative usage/quota views, driven by adoption data.                                    |
 
-_Dates removed: the prior timeline asserted a May 12, 2026 release that never happened. Pre-release — prioritize quality and the launch blockers over a schedule._
+No calendar dates are assigned until 0.1.0 is published. Sequence and exit
+criteria matter more than speculative dates.
 
 ---
 
-## Research Documents Index
+## Plan Index
 
-> **Convention:** Plans move to `dev/implemented/` when done. This index lists active/backlog items only — see `dev/implemented/` for the full archive.
+### Active
 
-### Active (in progress)
+| Plan                                                               | Current outcome                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)                     | Canonical external launch checklist                                |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               | Marketplace/package release work                                   |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                     | Implementation mostly complete; production verification remains    |
+| [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) | Infrastructure/content exists; freshness and deployment remain     |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                       | Architecture decided; provider and extension implementation remain |
+| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)       | External cutover work remains                                      |
+| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                 | Variables implemented; rich JSON output remains                    |
 
-| Document                                                                               | Status    | Roadmap Item |
-| -------------------------------------------------------------------------------------- | --------- | ------------ |
-| [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) | 🔄 ACTIVE | 2.8          |
-| [`../active/AUTOMATION_API_PLAN.md`](../active/AUTOMATION_API_PLAN.md)                 | 🔄 ACTIVE | —            |
+### Prioritized backlog
 
-### Launch Blockers (must land before publish)
+| Plan                                                                                                | Priority           |
+| --------------------------------------------------------------------------------------------------- | ------------------ |
+| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                           | P1                 |
+| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P1                 |
+| [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                       | P1 (phase 0 is P0) |
+| [`MCP_CONTROL_SURFACE_PLAN.md`](../backlog/MCP_CONTROL_SURFACE_PLAN.md)                             | P1                 |
+| [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                         | P1                 |
+| [`DRY_RUN_PREVIEW_PLAN.md`](../backlog/DRY_RUN_PREVIEW_PLAN.md)                                     | P1                 |
+| [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)             | P1                 |
+| [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md)                                       | P1 (phases 1–2)    |
+| [`NOTIFICATION_HOOK_EVENT_PLAN.md`](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md)                     | P1                 |
+| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)         | P1                 |
+| [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                   | P2                 |
+| [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                 | P2                 |
+| [`STANDALONE_SERVER_PLAN.md`](../backlog/STANDALONE_SERVER_PLAN.md)                                 | P2                 |
+| [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                             | P2                 |
+| [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md)                                       | P2                 |
+| [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../backlog/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                 |
+| [`HARNESS_USAGE_TRACKING_PLAN.md`](../backlog/HARNESS_USAGE_TRACKING_PLAN.md)                       | P2                 |
+| [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md)                                                 | P2                 |
+| [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md)           | P2                 |
+| [`SKILL_SLASH_COMMANDS_PLAN.md`](../backlog/SKILL_SLASH_COMMANDS_PLAN.md)                           | P3                 |
+| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](../backlog/SCRIPT_FIELD_COMPLETIONS_PLAN.md)                   | P3                 |
+| [`QUICK_PICKER_IMPROVEMENTS_PLAN.md`](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)                 | P3                 |
+| [`HARNESS_SESSION_IMPORT_PLAN.md`](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                       | P3                 |
+| [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md)                                         | P3                 |
+| [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md)                                 | P3                 |
+| [`VSCODE_LM_API_FEATURES.md`](../backlog/VSCODE_LM_API_FEATURES.md)                                 | P3                 |
+| [`VSCODE_TESTING_E2E_MCP.md`](../backlog/VSCODE_TESTING_E2E_MCP.md)                                 | P3 engineering     |
 
-| Document                                                                               | Status      | Roadmap Item      |
-| -------------------------------------------------------------------------------------- | ----------- | ----------------- |
-| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                         | 📝 PLANNING | 0.A / 2.8         |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                           | 📝 PLANNING | 0.B / 4.2         |
-| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                           | 📝 PLANNING | Release §2.7      |
-| [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)                   | ✅ DONE     | Release §2.5      |
-| [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) | ✅ DONE     | Release §2.9      |
-| [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md)             | ✅ DONE     | Release §2.9      |
-| [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md)                                   | 📝 PLANNING | Release §2.9 (P1) |
-| [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md)                               | 📝 PLANNING | Release §2.9      |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                   | 🔄 PARTIAL  | Tier 0            |
+### Operational references
 
-> **Ordering matters — see the launch-blocker sequencing in the Dependency Graph below.**
-> The corrected harness list, built-in-content cleanup, and tech-support agent are now landed.
-> The next onboarding implementation items are Getting Started and harness preflight.
-
-### Backlog (not yet started)
-
-| Document                                                                     | Status          | Roadmap Item |
-| ---------------------------------------------------------------------------- | --------------- | ------------ |
-| [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)                         | NOT_IMPLEMENTED | 1.3          |
-| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)       | NOT_IMPLEMENTED | 1.5          |
-| [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)                         | NOT_IMPLEMENTED | 1.6          |
-| [`BMAD_FOR_CTRLYOKE.md`](BMAD_FOR_CTRLYOKE.md)                               | NOT_IMPLEMENTED | 1.8          |
-| [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)                                     | NOT_IMPLEMENTED | 2.2          |
-| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                     | NOT_IMPLEMENTED | 2.3          |
-| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                         | NOT_IMPLEMENTED | 2.4          |
-| [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md) | NOT_IMPLEMENTED | 2.7          |
-| [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                           | NOT_IMPLEMENTED | 3.1          |
-| [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                             | NOT_IMPLEMENTED | 3.2          |
-| [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                     | NOT_IMPLEMENTED | 3.4          |
-| [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                     | NOT_IMPLEMENTED | 3.5          |
-| [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                   | NOT_IMPLEMENTED | 3.7          |
-| [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)         | NOT_IMPLEMENTED | 3.8          |
-| [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                     | NOT_IMPLEMENTED | 3.9          |
-
-The terminal follow-up tracking plan is implemented and is documented in
-`dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`.
-
-### Implemented Since April 2026 (moved to `dev/implemented/`)
-
-| Document                                                                                                     | Roadmap Item |
-| ------------------------------------------------------------------------------------------------------------ | ------------ |
-| [`../implemented/COMPLETION_NOTIFICATIONS_PLAN.md`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md)         | 1.1          |
-| [`../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) | 1.2          |
-| [`../implemented/WORKFLOW_FAVORITES_PLAN.md`](../implemented/WORKFLOW_FAVORITES_PLAN.md)                     | 1.4          |
-| [`../implemented/SCM_COMMIT_MESSAGE_BUTTON.md`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)                 | 1.7          |
-| [`../implemented/ERROR_BEHAVIOR_PLAN.md`](../implemented/ERROR_BEHAVIOR_PLAN.md)                             | 2.1          |
-| [`../implemented/INLINE_PRIOR_CONTEXT_PLAN.md`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)                 | 2.6          |
+- [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md)
+- [`TRADEMARK_FILING_GUIDE.md`](../backlog/TRADEMARK_FILING_GUIDE.md)
