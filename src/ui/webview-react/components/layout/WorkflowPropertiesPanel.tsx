@@ -293,6 +293,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
           globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
         return (workflowValue || "") !== (harnessDefault || "");
       }
+      if (property === "agent") {
+        // Persisted workflow agent uses null for "None" (see normalizeAgentSelection
+        // in WorkflowStepSanitizer), while the global default uses "" — treat both
+        // as equivalent so the button hides when the workflow matches the default.
+        return (workflowValue || "") !== (globalSettings.agent || "");
+      }
       // Array comparison for skills — compare against global default skills
       if (property === "skills") {
         return (
