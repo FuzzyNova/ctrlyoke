@@ -52,11 +52,12 @@ import { LOCK_STATUS } from "./types/DashboardConstants";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
 import {
+  registerRunCommand,
   registerRunScopedCommands,
   type AppendOptions,
-  type CliExecutionOptions,
   type ContinueOptions,
   type RerunOptions,
+  type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 
@@ -74,70 +75,7 @@ program
   .description("Execute AI-powered workflow automation from the command line")
   .version(version);
 
-program
-  .command("run [file]")
-  .description("Execute a prompt or workflow file")
-  .option(
-    "-H, --harness <harness>",
-    "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli",
-    HARNESS_IDS.COPILOT_CLI
-  )
-  .option("-m, --model <model>", "Model to use")
-  .option(
-    "-d, --cwd <path>",
-    "Working directory (default: directory of prompt file)"
-  )
-  .option("-t, --timeout <seconds>", "Global timeout in seconds", "3600")
-  .option("--script-timeout <seconds>", "End condition script timeout", "30")
-  .option("--headless", "Force headless mode (CI/CD, no user interaction)")
-  .option(
-    "--interactive",
-    "Force interactive mode (TUI passthrough, user controls session end)"
-  )
-  .option(
-    "--allow-tool <pattern>",
-    "Allow specific tool pattern (repeatable)",
-    collectRepeatable,
-    [] as string[]
-  )
-  .option(
-    "--deny-tool <pattern>",
-    "Deny specific tool pattern (repeatable)",
-    collectRepeatable,
-    [] as string[]
-  )
-  .option(
-    "--permission-mode <mode>",
-    "Tool permission mode: dangerouslyAllowAll, allowAll, custom (default: auto-detect)"
-  )
-  .option(
-    "--add-dir <path>",
-    "Add directory to Copilot CLI allowed paths (repeatable)",
-    collectRepeatable,
-    [] as string[]
-  )
-  .option(
-    "--var <assignment>",
-    "Variable substitution: key=value (repeatable). Replaces {{key}} in prompt text, model, hooks, and endCondition.",
-    collectVar,
-    {} as Record<string, string>
-  )
-  .option("-p, --prompt <text>", "Inline prompt string (alternative to file)")
-  .option(
-    "--session-id <id>",
-    "Session ID to resume (implies --resume-session)"
-  )
-  .option(
-    "--[no-]resume-session",
-    "Override resumeSession: --resume-session forces resume, --no-resume-session forces new session"
-  )
-  .option("--json", "Output results as JSON")
-  .option("-q, --quiet", "Suppress all output except errors")
-  .option("--verbose", "Show debug information")
-  .option("--no-color", "Disable colored output")
-  .action(async (file: string | undefined, options: RunOptions) => {
-    await runCommand(file, options);
-  });
+registerRunCommand(program, runCommand);
 
 registerRunScopedCommands(program, {
   rerun: rerunCommand,
@@ -185,40 +123,13 @@ program.parse();
 
 // ---- Types ----
 
-interface RunOptions extends CliExecutionOptions {
-  harness: string;
-  var: Record<string, string>;
-  prompt?: string;
-  sessionId?: string;
-  resumeSession?: boolean;
-}
+type RunOptions = RunCommandOptions;
 
 type CliRunOperation =
   | { kind: "run" }
   | { kind: "rerun"; workflow: string; from?: string }
   | { kind: "append"; workflow: string; run: string; file?: string }
   | { kind: "continue"; workflow: string; run: string };
-
-function collectRepeatable(value: string, previous: string[]): string[] {
-  return [...previous, value];
-}
-
-function collectVar(
-  value: string,
-  previous: Record<string, string>
-): Record<string, string> {
-  const eqIndex = value.indexOf("=");
-  if (eqIndex === -1) {
-    console.error(
-      chalk.red(`Error: --var "${value}" must be in key=value format`)
-    );
-    process.exit(2);
-  }
-  return {
-    ...previous,
-    [value.slice(0, eqIndex)]: value.slice(eqIndex + 1),
-  };
-}
 
 /**
  * Report workflow steps whose interactive request will be clamped because the

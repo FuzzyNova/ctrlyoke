@@ -1,4 +1,6 @@
 import { Command } from "commander";
+import chalk from "chalk";
+import { HARNESS_IDS } from "../types/DashboardConstants";
 
 export interface CliExecutionOptions {
   harness?: string;
@@ -38,10 +40,57 @@ export interface ContinueOptions extends CliExecutionOptions {
   run: string;
 }
 
+export interface RunCommandOptions extends CliExecutionOptions {
+  harness: string;
+  var: Record<string, string>;
+}
+
 export interface RunScopedCommandHandlers {
   rerun(options: RerunOptions): Promise<void>;
   append(file: string | undefined, options: AppendOptions): Promise<void>;
   continue(options: ContinueOptions): Promise<void>;
+}
+
+/** Registers the primary `run` command; execution stays in `cli.ts`. */
+export function registerRunCommand(
+  program: Command,
+  handler: (
+    file: string | undefined,
+    options: RunCommandOptions
+  ) => Promise<void>
+): void {
+  addExecutionOptions(
+    program
+      .command("run [file]")
+      .description("Execute a prompt or workflow file")
+      .option(
+        "-H, --harness <harness>",
+        "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli",
+        HARNESS_IDS.COPILOT_CLI
+      )
+      .option("-m, --model <model>", "Model to use")
+      .option(
+        "-p, --prompt <text>",
+        "Inline prompt string (alternative to file)"
+      )
+      .option(
+        "--session-id <id>",
+        "Session ID to resume (implies --resume-session)"
+      )
+      .option("--resume-session", "Force resume of the existing session")
+      .option(
+        "--no-resume-session",
+        "Force starting a new session, ignoring any existing session"
+      )
+      .option(
+        "--var <assignment>",
+        "Variable substitution: key=value (repeatable). Replaces {{key}} in prompt text, model, hooks, and endCondition.",
+        collectVar,
+        {} as Record<string, string>
+      )
+  ).action(async (file: string | undefined, options: RunCommandOptions) =>
+    handler(file, options)
+  );
 }
 
 /** Registers only the run-scoped CLI surface; execution stays in `cli.ts`. */
@@ -134,4 +183,21 @@ function addExecutionOptions(command: Command): Command {
 
 function collectRepeatable(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+function collectVar(
+  value: string,
+  previous: Record<string, string>
+): Record<string, string> {
+  const eqIndex = value.indexOf("=");
+  if (eqIndex === -1) {
+    console.error(
+      chalk.red(`Error: --var "${value}" must be in key=value format`)
+    );
+    process.exit(2);
+  }
+  return {
+    ...previous,
+    [value.slice(0, eqIndex)]: value.slice(eqIndex + 1),
+  };
 }
