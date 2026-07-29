@@ -2,9 +2,23 @@
 
 > **Status:** Ready for implementation
 >
-> **Priority:** P1 — immediate honesty, then parity
+> **Priority:** P0 — release gate for 0.1.0
 >
-> **Parent architecture:** `HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`
+> **Parent architecture:**
+> [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+
+This plan is implemented in full before 0.1.0 ships, not split into a pre-launch
+honesty slice and a post-launch parity slice. The staging below is therefore an
+engineering sequence, not a release boundary: no stage is deferred past release,
+and the honest-UI stage is built directly on the shared registry rather than as
+a throwaway stopgap.
+
+Capability _classifications_ still change as the sequence progresses. Qwen and
+OpenCode start classified as unsupported for granular lists and advance to
+verified support once their workspace-config implementations and behavioral
+tests land. The interim classification is a correct statement of what is
+enforced at that moment, not a placeholder — which is why it is safe to build
+the real UI against it.
 
 ---
 
@@ -21,12 +35,22 @@ lists are not reliably enforced across the supported harnesses.
 
 Current code overstates support in several places:
 
-- `QwenToolPermissionMapper` emits `--allowed-tools`, `--exclude-tools`, and
-  `--approval-mode`, but this is not behaviorally verified against the currently
-  supported Qwen CLI and has been observed not to work.
-- `OpenCodeToolPermissionMapper` says permissions are written to
-  `opencode.json`, but `OpenCodeCliProvider` only merges the MCP block; it never
-  writes the permission block.
+- `QwenToolPermissionMapper.buildArgs()` emits `--allowed-tools`,
+  `--exclude-tools`, and `--approval-mode`, but this is not behaviorally
+  verified against the currently supported Qwen CLI and has been observed not to
+  work.
+- `getPermissionHarnessSupport()` in
+  `src/ui/webview-react/components/shared/permissionUtils.ts` classifies only
+  Codex, OpenCode, and Antigravity as `mode-only`; every other harness falls
+  through to `"full"`. Qwen therefore reports **full granular support** in the
+  UI today, so a user's Denied Tools list is presented as enforced while the
+  flags carrying it are unverified. This is the most acute instance of the
+  problem and the first thing the honesty work must correct.
+- `OpenCodeToolPermissionMapper` states in its own doc comment that permission
+  overrides are written to `opencode.json` as a side effect of
+  `getMcpConfigArgs()`, but its `buildArgs()` always returns `[]` and
+  `OpenCodeCliProvider.getMcpConfigArgs()` merges only the `mcp` key. No
+  permission block is ever written.
 - Codex and Antigravity are intentionally mode-only, but the caveat is not
   consistently visible across every permissions surface.
 - Mapper unit tests assert generated strings. They do not prove that a harness
@@ -48,7 +72,12 @@ otherwise:
 | OpenCode        | Supported                                   | Not implemented                   | Warn now; implement workspace config                                                         |
 | Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
 | Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
-| Copilot Chat    | Harness-managed                             | Not applicable                    | Unsupported                                                                                  |
+
+These six CLI harnesses are the complete supported set (`HARNESS_IDS` in
+`src/types/DashboardConstants.ts`). The `copilot-chat` harness was permanently
+removed before release per
+`dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`; it must not reappear as
+a capability row, descriptor, or UI caveat.
 
 This table belongs in the shared capability registry once that registry exists.
 Do not copy it into multiple UI components.
@@ -73,6 +102,14 @@ independently startable parallel plan. Implement it in this order:
 The Codex partial-support investigation follows the verified Qwen/OpenCode
 paths and does not block the permission vertical slice. Antigravity remains an
 explicit unsupported granular-list declaration unless new evidence changes it.
+
+**Release-gate boundary.** Stages 1–8 above are the P0 gate. The Codex
+partial-support investigation is explicitly _not_ part of it: it is open-ended
+research whose outcome may be "no safe general mapping exists," and a release
+must never wait on a question that can legitimately answer no. Codex ships with
+its derived mode-only summary and a non-blocking warning, which is already
+honest. Schedule the investigation post-release, and only advertise `partial`
+for categories that then earn a behavioral test.
 
 ## Compatibility Phase 1C — Honest UI
 
@@ -124,8 +161,18 @@ Qwen and OpenCode support project-scoped permission configuration:
 
 Implement this through one reusable, ownership-aware workspace configuration
 mutation service. Reuse the locking, baseline, reference-counting, and cleanup
-lessons in `SettingsJsonHooksTracker` and `SettingsJsonMcpTracker`; do not create
-two unrelated ad hoc writers.
+lessons in `SettingsJsonHooksTracker` and `SettingsJsonMcpTracker`
+(`src/core/harness/shared/`); do not create two unrelated ad hoc writers.
+
+Note how those two existing trackers share a lock: `SettingsJsonMcpTracker` owns
+the `AsyncMutex`, and `SettingsJsonHooksTracker` has no mutex of its own — its
+class documentation requires callers to invoke it under
+`mcpTracker.withLock()`. That convention is easy to violate silently, because
+forgetting the wrapper produces a correct-looking call that only corrupts state
+under concurrency. The new permission writer must not extend this
+by-convention pattern: lock ownership belongs to the shared mutation service,
+and acquiring the lock must be structurally required by its API rather than
+documented in a comment.
 
 ### Required mutation semantics
 
@@ -268,6 +315,9 @@ Behavioral tests must prove allow and deny decisions with safe fixture tools and
 cover a config containing pre-existing MCP and permission entries.
 
 ## Codex Partial Support Investigation
+
+> Post-release. Not part of the 0.1.0 gate — see the release-gate boundary in
+> the staging section above.
 
 Codex has useful security primitives, but they do not form a general mapping for
 ctrlyoke tool names:

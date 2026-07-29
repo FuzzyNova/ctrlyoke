@@ -58,52 +58,60 @@ to drive.
 4. Close release-critical accessibility, security, and regression gaps. Use
    [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md) as generated input, not as a
    percentage target that blocks forever.
-5. Ship honest tool-permission messaging from the authoring slice of
+5. Complete harness compatibility and tool-permission parity **in full**:
+   phases 1–2 of
+   [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+   plus all of
    [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md).
-   Until behavioral tests prove otherwise, the UI must say granular Allowed
-   Tools and Denied Tools are supported only by Copilot CLI and Claude CLI.
+   ctrlyoke must not ship claiming granular Allowed/Denied Tools support that a
+   harness does not enforce — today the dashboard reports full support for Qwen
+   while its permission flags are unverified. This is deliberately a
+   full-implementation gate rather than an honest-messaging slice, so the
+   capability registry and behavioral verification land before launch instead of
+   the interim wording becoming the shipped behavior.
 
 ### P1 — Stabilize and complete the automation foundation
 
 These are the best post-launch investments. They improve the workflows users
 already have instead of introducing new execution models.
 
-1. **Harness compatibility and portability** — add one harness-adapter-owned
-   capability registry, author-time diagnostics, and workflow portability
-   reporting so unsupported or lossy fields are visible before execution.
-   ([plan](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
-2. **Tool-permission parity** — make support claims honest, replace Qwen's
-   unverified flags, implement ownership-safe workspace configuration for Qwen
-   and OpenCode, and investigate partial Codex translations without overstating
-   them.
-   ([plan](../backlog/TOOL_PERMISSION_PARITY_PLAN.md))
-3. **Complete MCP lifecycle control** — start, list, inspect, pause, resume, and
+Harness compatibility and tool-permission parity were previously listed here;
+both are now P0 release gates (see above). Their capability registry, shared
+compatibility analyzer, and pure effective-property resolver therefore already
+exist for the items below — dry-run preview in particular consumes them rather
+than reimplementing them.
+
+1. **Complete MCP lifecycle control** — start, list, inspect, pause, resume, and
    cancel workflows through one shared application service.
    ([plan](../backlog/MCP_CONTROL_SURFACE_PLAN.md))
-4. **Secrets and redaction** — runtime secret references plus centralized
+2. **Secrets and redaction** — runtime secret references plus centralized
    redaction across logs, history, previews, exports, and remote transports.
    ([plan](../backlog/SECRETS_AND_REDACTION_PLAN.md))
-5. **Dry-run preview** — show the categorized payload, provider translation,
+3. **Dry-run preview** — show the categorized payload, provider translation,
    compatibility diagnostics, workspace side effects, and command without
    invoking a harness.
    ([plan](../backlog/DRY_RUN_PREVIEW_PLAN.md))
-6. **Template required variables + Feature-Driven Loop** — fix unresolved
+4. **Template required variables + Feature-Driven Loop** — fix unresolved
    optional placeholders, validate required template input, and add the
    idea-to-plan orchestrator template without arbitrary setup scripts.
    ([plan](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md))
-7. **Native diagnostics gates** — implement phases 1–2 only: VS Code diagnostics
+5. **Native diagnostics gates** — implement phases 1–2 only: VS Code diagnostics
    as an end condition and retry context. Defer the generic IDE MCP bridge.
    ([plan](../backlog/VSCODE_LSP_MCP_PLAN.md))
-8. **Attention-needed notifications** — add the canonical harness
+6. **Attention-needed notifications** — add the canonical harness
    `notification` event so remote/unfocused users know when a workflow is
    waiting for input.
    ([plan](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md))
-9. **Accessibility and semantic testability** — keyboard parity, accessible
+7. **Accessibility and semantic testability** — keyboard parity, accessible
    names/states, landmarks, and resilient role-based tests.
    ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
-10. **Automation API structured results** — finish the rich JSON result work in
-    [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md). Variable substitution is
-    already implemented; an SDK remains deferred.
+8. **Automation API structured results** — finish the rich JSON result work in
+   [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md). Variable substitution is
+   already implemented; an SDK remains deferred.
+9. **Expand capability domains** — phase 3 of the compatibility plan: hooks,
+   MCP injection/tool filtering, images, and usage metadata, plus generated
+   compatibility documentation.
+   ([plan](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
 
 ### P2 — Strategic differentiators
 
@@ -188,6 +196,8 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 | Gate                                                                      | Status                                        | Source                                                                                                             |
 | ------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Harness capability registry and compatibility diagnostics (phases 1–2)    | Not implemented                               | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
+| Tool-permission honesty, Qwen/OpenCode parity, behavioral verification    | Not implemented                               | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
 | Final release artifact audit                                              | In progress                                   | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
 | Landing/docs production deployment and DNS verification                   | In progress                                   | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
 | Pro license provider, entitlement service, activation, and feature gating | Not implemented                               | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
@@ -199,11 +209,13 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 1. Decide commercial launch versus free public beta.
 2. Finish or explicitly defer Pro activation/gating based on that decision.
-3. Correct CHANGELOG, README, supported-harness claims, screenshots, and demo.
-4. Deploy and verify `ctrlyoke.dev` plus `/docs/`.
-5. Build the final VSIX, repeat the short smoke matrix, publish to Marketplace
+3. Land the capability registry and permission parity gates, including
+   behavioral allow/deny verification for Qwen and OpenCode.
+4. Correct CHANGELOG, README, supported-harness claims, screenshots, and demo.
+5. Deploy and verify `ctrlyoke.dev` plus `/docs/`.
+6. Build the final VSIX, repeat the short smoke matrix, publish to Marketplace
    and Open VSX, then tag the actual release.
-6. Publish the npm CLI separately only after its package contents and support
+7. Publish the npm CLI separately only after its package contents and support
    promise are verified; it must not hold the VS Code release hostage.
 
 ---
@@ -263,15 +275,18 @@ new core subsystem.
 0.1.0 release
   ├─ commercial launch? ── yes ─► Pro activation + gating
   │                       no  ─► explicit free-beta messaging
+  ├─ pure effective-property resolver ─► capability registry + analyzer
+  │                                        ├─► honest permission UI
+  │                                        ├─► permission parity (Qwen/OpenCode
+  │                                        │    workspace config + behavioral tests)
+  │                                        └─► portability report
   └─ site/docs + release artifacts + publisher setup ─► publish
 
 Post-launch automation foundation
-  ├─ capability registry ──► permission parity ──┐
-  │                         └─► portability report │
-  ├─ secrets/redaction ───────────────────────────┼─► scheduling
-  ├─ global execution-limit hardening ────────────┘
-  ├─ MCP lifecycle control ─────────────────────────► standalone server / scheduling
-  ├─ capability registry + redaction ──► dry-run preview
+  ├─ secrets/redaction ───────────────────────────┐
+  ├─ global execution-limit hardening ────────────┼─► scheduling
+  ├─ MCP lifecycle control ───────────────────────┴─► standalone server
+  ├─ redaction (registry already shipped) ──► dry-run preview
   └─ required template variables + diagnostics gates
 
 Safe concurrency
@@ -284,14 +299,14 @@ Safe concurrency
 
 ## Milestones
 
-| Milestone                                    | Outcome                                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **0.1.0 — Public launch**                    | Installable, documented, correctly licensed, and published with honest support claims.            |
-| **0.1.x — Trust and portability**            | Capability diagnostics, permission parity, secrets, dry-run preview, and required template input. |
-| **0.2 — Authoring and comparison**           | Prompt suggestions, workflow variants, complete MCP lifecycle control, and rich CLI JSON results. |
-| **0.3 — Isolated execution**                 | Worktree-backed workflows with clear recovery and branch landing.                                 |
-| **0.4 — Long-running automation**            | Hardened global limits, standalone server, and orchestrator-bound scheduling.                     |
-| **0.5 — Safe concurrency and observability** | Parallel steps plus cumulative usage/quota views, driven by adoption data.                        |
+| Milestone                                    | Outcome                                                                                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **0.1.0 — Public launch**                    | Installable, documented, correctly licensed, and published with capability diagnostics and behaviorally verified permission parity. |
+| **0.1.x — Trust and automation**             | Secrets and redaction, dry-run preview, required template input, and MCP lifecycle control.                                         |
+| **0.2 — Authoring and comparison**           | Prompt suggestions, workflow variants, complete MCP lifecycle control, and rich CLI JSON results.                                   |
+| **0.3 — Isolated execution**                 | Worktree-backed workflows with clear recovery and branch landing.                                                                   |
+| **0.4 — Long-running automation**            | Hardened global limits, standalone server, and orchestrator-bound scheduling.                                                       |
+| **0.5 — Safe concurrency and observability** | Parallel steps plus cumulative usage/quota views, driven by adoption data.                                                          |
 
 No calendar dates are assigned until 0.1.0 is published. Sequence and exit
 criteria matter more than speculative dates.
@@ -314,35 +329,35 @@ criteria matter more than speculative dates.
 
 ### Prioritized backlog
 
-| Plan                                                                                                | Priority           |
-| --------------------------------------------------------------------------------------------------- | ------------------ |
-| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                           | P2 (reduced scope) |
-| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P1                 |
-| [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                       | P1                 |
-| [`MCP_CONTROL_SURFACE_PLAN.md`](../backlog/MCP_CONTROL_SURFACE_PLAN.md)                             | P1                 |
-| [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                         | P1                 |
-| [`DRY_RUN_PREVIEW_PLAN.md`](../backlog/DRY_RUN_PREVIEW_PLAN.md)                                     | P1                 |
-| [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)             | P1                 |
-| [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md)                                       | P1 (phases 1–2)    |
-| [`NOTIFICATION_HOOK_EVENT_PLAN.md`](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md)                     | P1                 |
-| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)         | P1                 |
-| [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                   | P2                 |
-| [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                 | P2                 |
-| [`STANDALONE_SERVER_PLAN.md`](../backlog/STANDALONE_SERVER_PLAN.md)                                 | P2                 |
-| [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                             | P2                 |
-| [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md)                                       | P2                 |
-| [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../backlog/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                 |
-| [`HARNESS_USAGE_TRACKING_PLAN.md`](../backlog/HARNESS_USAGE_TRACKING_PLAN.md)                       | P2                 |
-| [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md)                                                 | P2                 |
-| [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md)           | P2                 |
-| [`SKILL_SLASH_COMMANDS_PLAN.md`](../backlog/SKILL_SLASH_COMMANDS_PLAN.md)                           | P3                 |
-| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](../backlog/SCRIPT_FIELD_COMPLETIONS_PLAN.md)                   | P3                 |
-| [`QUICK_PICKER_IMPROVEMENTS_PLAN.md`](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)                 | P3                 |
-| [`HARNESS_SESSION_IMPORT_PLAN.md`](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                       | P3                 |
-| [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md)                                         | P3                 |
-| [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md)                                 | P3                 |
-| [`VSCODE_LM_API_FEATURES.md`](../backlog/VSCODE_LM_API_FEATURES.md)                                 | P3                 |
-| [`VSCODE_TESTING_E2E_MCP.md`](../backlog/VSCODE_TESTING_E2E_MCP.md)                                 | P3 engineering     |
+| Plan                                                                                                | Priority                  |
+| --------------------------------------------------------------------------------------------------- | ------------------------- |
+| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                           | P2 (reduced scope)        |
+| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0 phases 1–2; P1 phase 3 |
+| [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                       | P0                        |
+| [`MCP_CONTROL_SURFACE_PLAN.md`](../backlog/MCP_CONTROL_SURFACE_PLAN.md)                             | P1                        |
+| [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                         | P1                        |
+| [`DRY_RUN_PREVIEW_PLAN.md`](../backlog/DRY_RUN_PREVIEW_PLAN.md)                                     | P1                        |
+| [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)             | P1                        |
+| [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md)                                       | P1 (phases 1–2)           |
+| [`NOTIFICATION_HOOK_EVENT_PLAN.md`](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md)                     | P1                        |
+| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)         | P1                        |
+| [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                   | P2                        |
+| [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                 | P2                        |
+| [`STANDALONE_SERVER_PLAN.md`](../backlog/STANDALONE_SERVER_PLAN.md)                                 | P2                        |
+| [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                             | P2                        |
+| [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md)                                       | P2                        |
+| [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../backlog/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                        |
+| [`HARNESS_USAGE_TRACKING_PLAN.md`](../backlog/HARNESS_USAGE_TRACKING_PLAN.md)                       | P2                        |
+| [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md)                                                 | P2                        |
+| [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md)           | P2                        |
+| [`SKILL_SLASH_COMMANDS_PLAN.md`](../backlog/SKILL_SLASH_COMMANDS_PLAN.md)                           | P3                        |
+| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](../backlog/SCRIPT_FIELD_COMPLETIONS_PLAN.md)                   | P3                        |
+| [`QUICK_PICKER_IMPROVEMENTS_PLAN.md`](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)                 | P3                        |
+| [`HARNESS_SESSION_IMPORT_PLAN.md`](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                       | P3                        |
+| [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md)                                         | P3                        |
+| [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md)                                 | P3                        |
+| [`VSCODE_LM_API_FEATURES.md`](../backlog/VSCODE_LM_API_FEATURES.md)                                 | P3                        |
+| [`VSCODE_TESTING_E2E_MCP.md`](../backlog/VSCODE_TESTING_E2E_MCP.md)                                 | P3 engineering            |
 
 ### Operational references
 

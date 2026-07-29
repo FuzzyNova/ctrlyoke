@@ -2,9 +2,15 @@
 
 > **Status:** Ready for implementation
 >
-> **Priority:** P1 — core product promise
+> **Priority:** P0 — release gate for 0.1.0
 >
-> **First implementation consumer:** Tool-permission honesty and parity
+> **First implementation consumer:**
+> [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
+
+Phases 1 and 2 are implemented before 0.1.0 ships, together with the full
+permission plan. Phase 3 (expanding capability domains beyond permissions)
+remains post-release: it adds new domains rather than correcting a dishonest
+support claim.
 
 ---
 
@@ -179,20 +185,13 @@ type CapabilityVerificationStatus = "verified" | "unknown";
 interface CapabilityDeclaration {
   fidelity: CapabilityFidelity;
   mechanism: CapabilityMechanism;
-  verification?:
-    | {
-        kind: "behavioral-test" | "manual";
-        reference: string;
-        basis: "cli-version";
-        /** Ranges for which this exact capability claim has evidence. */
-        verifiedVersions: HarnessVersionRange[];
-      }
-    | {
-        kind: "behavioral-test" | "manual";
-        reference: string;
-        /** For versionless adapters such as a stable host API contract. */
-        basis: "host-contract";
-      };
+  verification?: {
+    kind: "behavioral-test" | "manual";
+    reference: string;
+    basis: "cli-version";
+    /** Ranges for which this exact capability claim has evidence. */
+    verifiedVersions: HarnessVersionRange[];
+  };
   caveatCode?: string;
   remediationCode?: string;
 }
@@ -253,8 +252,12 @@ declaration, not to a domain or harness-wide `application` field. Permission
 mode may use CLI translation while Allowed Tools uses workspace configuration,
 and each may have been verified against different versions. A new version can
 therefore make one capability unverified without degrading unrelated claims.
-Versionless integrations use explicit `host-contract` evidence rather than a
-fake CLI version or permanent unknown state.
+
+Every currently supported harness is a versioned CLI, so `cli-version` is the
+only evidence basis this contract needs. If a non-CLI adapter is ever added, add
+an explicit versionless evidence basis at that point rather than giving it a
+fabricated CLI version or a permanent unknown state; do not add the variant
+speculatively now.
 
 `enabledDomains` is the rollout boundary. Phase 1 enables only `permissions`.
 An optional domain that is not enabled means **not modeled yet**, not
@@ -269,13 +272,18 @@ than being copied into React components.
 
 ### Registry ownership and assembly
 
+The supported harness set is the six CLI harnesses in `HARNESS_IDS`
+(`src/types/DashboardConstants.ts`): `copilot-cli`, `claude-cli`, `codex-cli`,
+`opencode-cli`, `qwen-cli`, and `antigravity-cli`. The `copilot-chat` harness was
+deliberately and permanently removed before release; see
+`dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`. Do not add a Copilot
+Chat descriptor, registry entry, or capability row.
+
 Capability facts belong beside the harness implementation that must keep them
 true:
 
 - each CLI harness exports its descriptor from its harness module and exposes it
   through the shared CLI-provider boundary;
-- the Copilot Chat adapter exposes the same descriptor contract without
-  pretending to be a CLI provider;
 - each declaration owns its fidelity, mechanism, version evidence, caveat code,
   and remediation code;
 - behavioral tests live with the harness and validate the declaration they
@@ -292,14 +300,14 @@ cross-harness mechanics:
 - snapshot schema versioning and serialization for dashboard/MCP consumers.
 
 The explicit mapping is the one permitted central list: it proves that every
-supported `HarnessId`, including Copilot Chat, has exactly one owner. It must
-not restate capability facts in the registry.
+supported `HarnessId` has exactly one owner. It must not restate capability
+facts in the registry.
 
 The VS Code bridge, CLI, hosted server, and MCP entrypoint obtain snapshots or
 queries from this registry. React imports only shared capability/diagnostic
 types and receives the serializable snapshot through the existing dashboard
-message channel. React must never import a CLI provider, Copilot Chat adapter,
-provider factory, version probe, or backend registry implementation.
+message channel. React must never import a CLI provider, provider factory,
+version probe, or backend registry implementation.
 
 ## Compatibility Diagnostics
 
@@ -439,9 +447,23 @@ editing the authored value.
 ### Pure effective-property resolver
 
 Property precedence must remain single-sourced across execution, compatibility
-analysis, and the React authoring UI. The current `PropertyResolver` combines
-precedence logic with direct reads from `ConfigurationUtils` and process-global
-host state, so it cannot be imported as the shared browser-safe implementation.
+analysis, and the React authoring UI. The current `PropertyResolver`
+(`src/utils/PropertyResolver.ts`) combines precedence logic with direct reads
+from `ConfigurationUtils` and process-global host state, so it cannot be
+imported as the shared browser-safe implementation. Concretely, it calls
+`ConfigurationUtils` from roughly nine points inside its resolution methods
+(`getIntegrationMode()`, `getDefaultAgent()`, `getModelForHarness()`, and
+similar), and it holds a mutable `private static hostCanProvidePty` flag whose
+`setHostCanProvidePty()` setter CLI and hosted entrypoints are expected to call
+before resolving steps.
+
+This is the highest-risk change in Phase 1A: it is an extraction from a module
+on the live execution path, not additive UI work. Land it as its own reviewable
+change, behind the conformance fixtures below, before any capability or UI work
+depends on it. The static PTY flag in particular must become an explicit
+`ExecutionResolutionContext` input — leaving a mutable static behind while
+adding a second pure caller would produce two resolvers that disagree depending
+on entrypoint startup order.
 
 Extract its resolution rules into a platform-neutral pure function. The exact
 type names may follow existing conventions, but the boundary should be
@@ -506,8 +528,12 @@ produce the same effective values and provenance used by execution.
 Compatibility feedback is persistent in-dashboard validation, not a transient
 VS Code notification.
 
-It should reuse the visual language completed by
-`DROPDOWN_VALIDATION_STYLING_PLAN.md`:
+It should reuse the visual language already shipped by
+[`DROPDOWN_VALIDATION_STYLING_PLAN.md`](../implemented/DROPDOWN_VALIDATION_STYLING_PLAN.md).
+The `warning-fg`/`border-warning-fg` token, the `warning?: string` prop on
+`CustomSelect`, `MultiCheckboxDropdown`, and `SkillsSelect`, and the shared
+border helpers in `src/ui/webview-react/utils/dropdownValidation.ts` all exist
+today — this plan consumes them rather than building new styling primitives:
 
 - warning/lossy/unverified: yellow `warning-fg` border, warning icon, and message;
 - invalid/error: red input-error border and error text;
@@ -597,8 +623,8 @@ There is a separate platform-parity gap worth its own audit:
 - backend code still contains many direct VS Code notification calls;
 - `uiStore` contains in-app toast state and several message handlers populate
   it, but the React application currently has no mounted toast renderer;
-- `DROPDOWN_VALIDATION_STYLING_PLAN.md` already identifies a broader runtime
-  diagnostics gap.
+- [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](../implemented/DROPDOWN_VALIDATION_STYLING_PLAN.md)
+  already identifies a broader runtime diagnostics gap.
 
 That work may become a dashboard notification/runtime-diagnostics plan, but it
 is not a prerequisite for author-time compatibility. Runtime compatibility
@@ -719,8 +745,6 @@ it.
 - An unavailable harness is an error only for an actual execution consumer.
   An available harness with a missing/out-of-range version produces
   non-blocking unverified warnings only for the affected capabilities.
-- Versionless adapters use capability-specific `host-contract` evidence and do
-  not participate in CLI version probing.
 
 Version tracking applies only to non-uniform behavior in the registry. It must
 not make workflow agents, workflow skills, execution mode, or session resume
@@ -855,8 +879,8 @@ contract, remove usage from this phase and from the registry.
 ## Acceptance Criteria
 
 - No React component contains a hardcoded harness list for permission support.
-- React does not import CLI providers, Copilot Chat adapters, provider factories,
-  version probes, or the backend registry implementation.
+- React does not import CLI providers, provider factories, version probes, or the
+  backend registry implementation.
 - `mode-only` is never stored in a capability declaration; permission summaries
   are derived from the separate mode, Allowed Tools, and Denied Tools
   capabilities.
