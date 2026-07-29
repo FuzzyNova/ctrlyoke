@@ -644,8 +644,10 @@ const WorkflowStepsPanelInner: React.FC<{
         : "Workflow continued after this step failed.";
     }
 
-    // TODO: End condition results would come from workflow state
-    // This will be populated when end condition evaluation is complete
+    // The step's persisted `_runtime` has no end-condition result. The executor
+    // currently sends that result on the STEP_STATUS_CHANGED status payload,
+    // while the webview handler only merges `details` into `_runtime`; exposing
+    // it here requires that message/runtime contract to be extended first.
 
     return details;
   };

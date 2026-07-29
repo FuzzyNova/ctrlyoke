@@ -1,12 +1,14 @@
 # Dead Class-Method & Incomplete-Feature Audit
 
-**Status (2026-07-29):** Phases 1, 3, 6, and 7 are complete. The completed
-Phase 1 harness, core-engine, utils/config/platform/git, and UI notification
-slices, followed by the final nominal-contract pass, leave the finder at **0
-candidates**. The two intentionally retained dashboard warning endpoints are
-`@keep`-tagged with their incomplete-protocol reason; the 11 settled
-`WorkflowOrchestrator` standalone-server tags remain untouched. This documents
-the output of two sweeps run after deleting
+**Status (2026-07-29):** Audit fixes for Phases 1–7 are **APPLIED**. The
+completed dead-method cleanup, nominal-contract pass, `onPass: retry` removal,
+manual finder entry, and UI-gap triage leave the finder at **0 candidates**.
+The audit is fully applied apart from the explicitly listed open items below:
+the owner-supplied VAPID email, the two lost-capability warning routes, and the
+deferred UI data/affordance work. The two intentionally retained dashboard
+warning endpoints are `@keep`-tagged with their incomplete-protocol reason; the
+11 settled `WorkflowOrchestrator` standalone-server tags remain untouched. This
+documents the output of two sweeps run after deleting
 `EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
@@ -505,26 +507,30 @@ harness log parsers' `todo_list` tool-call handling). The real findings:
    `WorkflowOrchestrator` special case above.
 
 3. **`src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx:647`** —
-   `// TODO: End condition results would come from workflow state`. The
-   step-details tooltip/panel has a placeholder comment where end-condition
-   evaluation results should be populated. Worth a look to confirm the data
-   just isn't wired through yet vs. genuinely unavailable at that point in
-   the render.
+   **Deferred: data is not available in this render.** The component receives
+   each step's `_runtime`, but the webview runtime type has no end-condition
+   result. The executor sends the evaluation result on the
+   `STEP_STATUS_CHANGED` status payload, while `useMessageHandler` only merges
+   that message's `details` into `_runtime`; the result is therefore not
+   present in the step object used by `getStepDetails`. The source comment now
+   names this missing message/runtime contract instead of promising a local
+   implementation.
 
-4. **`src/ui/webview-react/components/editor/PromptEditor.tsx:509` and `:531`**
-   — `forceNewWorkflow: false, // TODO: Add checkbox for this`.
-   `EXECUTE_PROMPT` messages hardcode `forceNewWorkflow: false` at **two**
-   call sites (only the second carries the TODO comment); there's no UI to
-   ever send `true`. Confirm whether that's an intentional current default
-   with the checkbox as future work, or a real gap (i.e. some other code path
-   is now unreachable for users who'd want to force a new workflow). If a
-   checkbox is added, both sites must be updated together.
+4. **`src/ui/webview-react/components/editor/PromptEditor.tsx:513` and `:539`**
+   — **Deferred UI affordance.** Both `EXECUTE_PROMPT` call sites intentionally
+   send `forceNewWorkflow: false`, and repository-wide search found no caller
+   that sends `true`. The receiving behavior is real and useful: the
+   extension-side handler passes the flag through, the orchestrator bypasses
+   addressed-run routing, and `WorkflowInstance` clears the current workflow
+   before initializing the submitted step. No checkbox was added because that
+   destructive action needs a deliberate, tested UI design; both source sites
+   now document the finding rather than carrying a bare TODO.
 
-5. **`src/server/WebPushService.ts:74`** — cosmetic: a hardcoded placeholder
-   support email in the VAPID `vapidSubject` constructor default
-   (`mailto:ctrlyoke@example.com`). Not functionally broken, just needs a real
-   address before this ships. Requires an owner decision on the address, so it
-   is not actionable by an implementing agent.
+5. **`src/server/WebPushService.ts:74`** — **OPEN: owner decision required.**
+   The hardcoded placeholder support email in the VAPID `vapidSubject`
+   constructor default (`mailto:ctrlyoke@example.com`) is intentionally left
+   unchanged. It needs the real owner-approved address before shipping; an
+   implementing agent must not invent one.
 
 6. **`ICliProvider.ts:404`** — "Other providers leave this unimplemented
    (returns undefined → treated as [])" is a documented, intentional default
@@ -675,11 +681,17 @@ the unreachable handler branch is gone, and tests cover pass continuation,
 pass stop, parser rejection, and direct prompt-step validation. `onFail: retry`
 and its retry loop were left unchanged.
 
-### Phase 5 — the smaller UI gaps
+### Phase 5 — the smaller UI gaps (completed 2026-07-29)
 
-Triage items 3–5 from Sweep 2 as normal small tickets; none are urgent, none
-block anything else in this plan. Item 5 (VAPID support email) needs an owner
-decision on the real address and is not actionable by an implementing agent.
+Sweep 2 items 3–5 were diagnosed and recorded. Item 3 is deferred because
+the end-condition result is sent in the status payload but is not present in
+the step `_runtime` consumed by `WorkflowStepsPanel`; the source comment names
+the required message/runtime contract extension. Item 4 is deferred because
+the backend `forceNewWorkflow` behavior is live but no UI caller sends `true`;
+both editor call sites retain the intentional `false` default and now explain
+the missing affordance. Item 5 remains open for the owner-approved VAPID
+support address and was left unchanged. Sweep 2 items 2 and 6 remain
+intentional and required no action.
 
 ### Phase 6 — keep the tool around (completed 2026-07-29)
 
@@ -718,3 +730,24 @@ were nominal and needed no `@keep` tag. The final Step 6 pass also made the
 transport, parser, persistence, and VS Code-only test-double contracts
 nominal, leaving only the two explicitly tagged future warning endpoints;
 the final finder count is **0 candidates**.
+
+## Open items after close-out
+
+- **VAPID support email:** `src/server/WebPushService.ts` still uses
+  `mailto:ctrlyoke@example.com` until an owner supplies the real address.
+- **Lost-capability warning routes:** `notifyQueueSizeLimitReached` and
+  `notifyExecutionTimeLimitReached` remain `@keep`-tagged because the React
+  receivers have no current sender or replacement route. Restore the live
+  history warning protocol when the corresponding feature is implemented.
+- **End-condition result display:** Extend the `STEP_STATUS_CHANGED` /
+  `_runtime` contract so the evaluation result reaches the step object before
+  wiring the existing `StepDetails.endConditionResult` renderer.
+- **Force-new-workflow UI:** Design and test an explicit editor affordance for
+  the destructive `forceNewWorkflow: true` path, then wire both editor
+  submission sites together.
+
+Final close-out check: `node scripts/find-dead-methods.mjs` scanned 752 files
+and 1,717 class-method candidates on 2026-07-29 and reported **0 candidates**.
+The remaining known residue is the two intentionally `@keep`-tagged dashboard
+warning endpoints and the 11 intentional standalone-server API tags; there are
+no untagged finder candidates.

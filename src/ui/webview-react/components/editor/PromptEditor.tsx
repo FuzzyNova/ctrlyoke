@@ -506,6 +506,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           },
           action: finalAction,
           promptName: promptName.trim(),
+          // The backend option is real (it clears the current workflow before
+          // starting this submission), but no editor affordance currently sends
+          // true. Keep the intentional default until that destructive action
+          // gets a deliberate, tested UI design.
           forceNewWorkflow: false,
         });
         resetEditor();
@@ -528,7 +532,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         properties: propertyValues,
         action: finalAction,
         promptName: promptName.trim(),
-        forceNewWorkflow: false, // TODO: Add checkbox for this
+        // The backend option is real (it clears the current workflow before
+        // starting this submission), but no editor affordance currently sends
+        // true. Keep the intentional default until that destructive action
+        // gets a deliberate, tested UI design.
+        forceNewWorkflow: false,
       });
 
       // Clear editor after submission
