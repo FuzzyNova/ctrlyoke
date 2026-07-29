@@ -1,9 +1,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Terminal, IDisposable } from "@xterm/xterm";
+import type { FitAddon, ITerminalDimensions } from "@xterm/addon-fit";
+import type { WebglAddon } from "@xterm/addon-webgl";
 
 let terminalConstructCount = 0;
 
 vi.mock("@xterm/xterm", () => {
-  class MockTerminal {
+  class MockTerminal
+    implements
+      Pick<
+        Terminal,
+        | "loadAddon"
+        | "open"
+        | "resize"
+        | "write"
+        | "scrollLines"
+        | "refresh"
+        | "onData"
+      >
+  {
     element: HTMLElement | undefined;
     options: Record<string, unknown>;
     cols = 80;
@@ -15,7 +30,7 @@ vi.mock("@xterm/xterm", () => {
       this.options = options;
     }
 
-    loadAddon() {}
+    loadAddon(_addon: Parameters<Terminal["loadAddon"]>[0]) {}
 
     open(element: HTMLElement) {
       this.element = element;
@@ -30,11 +45,11 @@ vi.mock("@xterm/xterm", () => {
       this.writes.push(data);
     }
 
-    scrollLines() {}
+    scrollLines(_amount: number) {}
 
-    refresh() {}
+    refresh(_start: number, _end: number) {}
 
-    onData() {
+    onData(_listener: Parameters<Terminal["onData"]>[0]): IDisposable {
       return { dispose() {} };
     }
 
@@ -45,10 +60,12 @@ vi.mock("@xterm/xterm", () => {
 });
 
 vi.mock("@xterm/addon-fit", () => {
-  class MockFitAddon {
+  class MockFitAddon
+    implements Pick<FitAddon, "fit" | "proposeDimensions">
+  {
     fit() {}
 
-    proposeDimensions() {
+    proposeDimensions(): ITerminalDimensions {
       return { cols: 80, rows: 24 };
     }
   }
@@ -71,8 +88,8 @@ describe("terminalRegistry.attach", () => {
       return new Promise((resolve) => {
         resolveWebglImport = () =>
           resolve({
-            WebglAddon: class {
-              onContextLoss() {}
+            WebglAddon: class implements Pick<WebglAddon, "onContextLoss"> {
+              onContextLoss = () => ({ dispose() {} });
 
               dispose() {}
             },

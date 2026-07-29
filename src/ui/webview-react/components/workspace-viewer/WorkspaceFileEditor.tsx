@@ -12,7 +12,7 @@ import {
   RangeSetBuilder,
   type Extension,
 } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
+import { keymap, type PluginValue } from "@codemirror/view";
 import {
   indentWithTab,
   undo,
@@ -393,7 +393,7 @@ function findWorkspaceReferenceMatches(
 
 function createWorkspaceReferenceDecorationExtension() {
   return ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations;
 
       constructor(view: EditorView) {

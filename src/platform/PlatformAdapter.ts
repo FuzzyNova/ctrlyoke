@@ -9,6 +9,12 @@ import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
  */
 export interface PlatformAdapter {
   /**
+   * Read a configuration value when the platform provides a resolved config
+   * surface, such as the standalone CLI adapter.
+   */
+  getConfig?(key: string, defaultValue: string): string;
+
+  /**
    * Get the directory that contains the `.ctrlyoke` folder for the current
    * workspace. The value is window-stable (resolved once per window session).
    *

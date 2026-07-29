@@ -5,6 +5,7 @@ import {
   keymap,
   ViewPlugin,
   ViewUpdate,
+  type PluginValue,
   Decoration,
   WidgetType,
   tooltips,
@@ -1889,7 +1890,7 @@ export function createAtomicReferenceExtension(
   };
 
   return ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations;
 
       constructor(view: EditorView) {
@@ -2076,7 +2077,7 @@ function createLinterThemeExtension() {
 const activeLineDeco = Decoration.line({ class: "cm-activeLine" });
 function createActiveLineHighlightExtension() {
   return ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations: ReturnType<typeof Decoration.set>;
       constructor(view: EditorView) {
         this.decorations = this.getDeco(view);
@@ -2596,7 +2597,7 @@ export function isInFencedBlock(
 // Apply disabled/italic styling to triple-backtick fenced blocks
 function createFencedBlockDecorationExtension() {
   return ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations;
 
       constructor(view: EditorView) {
@@ -2643,7 +2644,7 @@ function createLinkDecorationExtension(
   referenceValidity?: Map<string, boolean>
 ) {
   const linkPlugin = ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations;
 
       constructor(view: EditorView) {
@@ -2731,7 +2732,7 @@ function createLinkDecorationExtension(
 // Decorate the entire editor content when it is a lone file-path reference
 function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
   return ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations;
 
       constructor(view: EditorView) {
@@ -2843,7 +2844,7 @@ function findInlinePriorContextRefs(
 /** Apply cm-link decoration to inline $prior-context references. */
 function createPriorContextDecorationExtension() {
   return ViewPlugin.fromClass(
-    class {
+    class implements PluginValue {
       decorations;
 
       constructor(view: EditorView) {

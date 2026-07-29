@@ -223,14 +223,12 @@ export class CliIntegration extends HarnessIntegration {
    * When the platform adapter exposes a `getConfig()` method (i.e. CliAdapter), its value
    * takes precedence over the global configService. This allows callers like
    * CommitMessageGenerator to force headless mode via CliAdapter without affecting VS Code
-   * user settings — mirrors the duck-typing pattern used by isVsCodeContext().
+   * user settings — the optional PlatformAdapter hook keeps that compatibility
+   * behavior explicit without widening the global config service.
    */
   protected getExecutionMode(): CliExecutionMode {
-    const adapter = this.platform as unknown as {
-      getConfig?: (key: string, defaultValue: string) => string;
-    };
-    if (typeof adapter.getConfig === "function") {
-      const mode = adapter.getConfig("cliExecutionMode", "");
+    if (this.platform.getConfig) {
+      const mode = this.platform.getConfig("cliExecutionMode", "");
       if (mode === "headless" || mode === "interactive") {
         return mode as CliExecutionMode;
       }

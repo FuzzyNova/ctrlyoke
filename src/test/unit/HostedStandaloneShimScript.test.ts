@@ -25,9 +25,14 @@ interface FakeSocket {
   url: string;
   readyState: number;
   sent: any[];
-  listeners: Map<string, ((event?: any) => void)[]>;
+  listeners: Map<string, WebSocketEventListener[]>;
   emit(event: string, payload?: any): void;
 }
+
+type WebSocketEventListener = Parameters<WebSocket["addEventListener"]>[1];
+type WebSocketEventListenerOptions = Parameters<
+  WebSocket["addEventListener"]
+>[2];
 
 /**
  * Evaluates the rendered shim against just enough browser surface to reach
@@ -37,31 +42,41 @@ interface FakeSocket {
 function loadShim(): { api: any; sockets: FakeSocket[] } {
   const sockets: FakeSocket[] = [];
 
-  class FakeWebSocket implements FakeSocket {
+  class FakeWebSocket
+    implements FakeSocket, Pick<WebSocket, "addEventListener" | "send" | "close">
+  {
     static readonly CONNECTING = 0;
     static readonly OPEN = 1;
     static readonly CLOSING = 2;
     static readonly CLOSED = 3;
     readyState = FakeWebSocket.CONNECTING;
     sent: any[] = [];
-    listeners = new Map<string, ((event?: any) => void)[]>();
+    listeners = new Map<string, WebSocketEventListener[]>();
     constructor(public url: string) {
       sockets.push(this);
     }
-    addEventListener(event: string, handler: (event?: any) => void): void {
+    addEventListener(
+      event: string,
+      handler: WebSocketEventListener,
+      _options?: WebSocketEventListenerOptions
+    ): void {
       const handlers = this.listeners.get(event) ?? [];
       handlers.push(handler);
       this.listeners.set(event, handlers);
     }
-    send(raw: string): void {
-      this.sent.push(JSON.parse(raw));
+    send(raw: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+      this.sent.push(JSON.parse(raw as string));
     }
     close(): void {
       this.readyState = FakeWebSocket.CLOSED;
     }
     emit(event: string, payload?: any): void {
       for (const handler of this.listeners.get(event) ?? []) {
-        handler(payload);
+        if (typeof handler === "function") {
+          handler(payload);
+        } else {
+          handler.handleEvent(payload);
+        }
       }
     }
   }

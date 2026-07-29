@@ -1,6 +1,7 @@
 # Dead Class-Method & Incomplete-Feature Audit
 
-**Status (2026-07-29):** Audit complete, fixes not yet applied. This documents
+**Status (2026-07-29):** Phase 7 is complete. The nominal-type fixes described
+below are applied, reducing the finder from 91 to 56 candidates. This documents
 the output of two sweeps run after deleting `EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
@@ -63,19 +64,16 @@ files still shows up as referenced. No dependency install was needed —
 **Known false-positive sources** (confirmed while triaging this run's
 output — see "Bucket C" below):
 
-1. **Duck-typed structural casts.** `CliIntegration.ts:229` does
-   `this.platform as unknown as { getConfig?: ... }` and calls through that
-   inline type instead of the real `PlatformAdapter` type. The language
-   service can't connect that call site back to `CliAdapter.getConfig` or the
-   `MockPlatform.getConfig` test doubles, so all of them read as dead when
-   they're genuinely load-bearing.
-2. **Structural (non-`implements`) interface satisfaction.** Test doubles like
-   `FakeWebSocket`/`FakeStorage` in `src/test/unit/StandaloneShim*.test.ts`
-   satisfy a parameter type by shape, without an `implements` clause. The
-   script only excludes interface members when the class has an explicit
-   `implements X` heritage clause naming an interface/type that declares the
-   member (this **is** handled correctly now — see next point — but classes
-   with no heritage clause at all can't be excluded this way).
+1. **Duck-typed structural casts.** `CliIntegration.ts:229` formerly did
+   `this.platform as unknown as { getConfig?: ... }` and called through that
+   inline type. Phase 7 added the optional member to `PlatformAdapter` and
+   removed the cast, so `CliAdapter.getConfig` and all three
+   `MockPlatform.getConfig` declarations now resolve nominally.
+2. **Structural (non-`implements`) interface satisfaction.** Phase 7 added
+   explicit DOM/library heritage clauses to the `FakeWebSocket`/`FakeStorage`
+   doubles in `src/test/unit/StandaloneShim*.test.ts` and to the webview
+   `ResizeObserver`, xterm terminal, fit-addon, and WebGL mocks. Those methods
+   now resolve nominally.
 3. One real bug was found and fixed while building this: the interface-member
    exclusion originally bailed out via `type.getSymbol()` returning
    `undefined`, which happens for aliased intersection types like
@@ -92,13 +90,20 @@ output — see "Bucket C" below):
    `extends` too (same `getPropertyOfType` mechanism), which handles this
    case generically. A fixed list of React lifecycle method names is also
    kept in `IGNORED_METHOD_NAMES` as defense-in-depth.
-5. **Anonymous framework-plugin classes and structural runtime mocks with no
-   heritage clause at all.** This one is **not mechanically fixable** by the
-   heritage-clause check, because there's no heritage clause to inspect:
+5. **Anonymous framework-plugin classes and structural runtime mocks.** The
+   seven CodeMirror classes and 13 webview mocks originally had no heritage
+   clause. Phase 7 added `implements PluginValue` and the relevant
+   `Pick<...>` clauses, so those methods now resolve nominally. The remaining
+   `MockVsCodePlatform.getExtensionContext()` candidate is different: it is a
+   VS Code-only method reached through the intentional dynamic discriminator
+   in `CliIntegration`, and remains for Step 6 rather than broadening the
+   cross-platform `PlatformAdapter` contract.
+   Before Phase 7, this category was **not mechanically fixable** by the
+   heritage-clause check, because there was no heritage clause to inspect:
    - CodeMirror's `ViewPlugin.fromClass(class { update(update) {...} ... })`
      pattern (7 hits in `CodeMirrorEditor.tsx` and `WorkspaceFileEditor.tsx`)
-     — CodeMirror calls `update()` on the instance it constructs; the class
-     literal never declares what it implements.
+      — CodeMirror calls `update()` on the instance it constructs; the class
+      literal never declared what it implemented.
    - `vi.stubGlobal("ResizeObserver", class { observe() {} ... })` and
      `vi.mock("@xterm/xterm", () => class MockTerminal { ... })`-style test
      doubles (13 hits across `test/setup.ts` and `terminalRegistry.test.ts`)
@@ -331,9 +336,9 @@ small.
 | --- | --- |
 | `src/ui/webview-react/terminalRegistry.ts` `InputCapture` | Removed 2026-07-29. `reset()` had no callers, and the remaining browser-keystroke heuristic was also obsolete: provider session logs now authoritatively produce `USER_STEER` output events where available. The heuristic could misclassify TUI commands and does not observe backend inject-mode writes. |
 
-### Confirmed false positives — CodeMirror plugin lifecycle (7)
+### Resolved false positives — CodeMirror plugin lifecycle (7)
 
-All follow the exact same shape: `ViewPlugin.fromClass(class { ... update(update) {...} ... })` in `CodeMirrorEditor.tsx`, an anonymous class literal with **no heritage clause** handed straight to CodeMirror's plugin constructor. CodeMirror calls `.update()` on the instance it creates via its own internal dispatch — there is no static call site to find, and there never will be, regardless of how the script's heritage-clause check is improved (there's no heritage clause to check).
+All follow the exact same shape: `ViewPlugin.fromClass(class { ... update(update) {...} ... })` in `CodeMirrorEditor.tsx`, an anonymous class literal handed straight to CodeMirror's plugin constructor. Phase 7 added `implements PluginValue` to each class, making CodeMirror's lifecycle relationship visible to the language service without changing runtime behavior.
 
 | Location | Method |
 | --- | --- |
@@ -345,13 +350,13 @@ All follow the exact same shape: `ViewPlugin.fromClass(class { ... update(update
 | `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2853` | `update()` |
 | `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx:403` | `update()` |
 
-### Confirmed false positives — structural test/runtime mocks (13)
+### Resolved false positives — structural test/runtime mocks (13)
 
 Same blind spot as the `FakeWebSocket`/`FakeStorage` doubles found on the
-extension side (Bucket C), just more common in the webview's test suite:
-`vi.stubGlobal(...)` and `vi.mock(...)` register a class literal in place of
-a real browser/library API, and the real production code that calls those
-methods only ever sees the mocked-in type, not the literal declaration.
+extension side (Bucket C), just more common in the webview's test suite.
+Phase 7 added explicit `implements`/`Pick<...>` clauses and matched the real
+library signatures where required; no test assertions or runtime behavior
+changed.
 
 | Location | Method | Mocking what |
 | --- | --- | --- |
@@ -369,8 +374,10 @@ methods only ever sees the mocked-in type, not the literal declaration.
 | `src/ui/webview-react/test/terminalRegistry.test.ts:51` | `MockFitAddon.proposeDimensions()` | `@xterm/addon-fit`'s `FitAddon` |
 | `src/ui/webview-react/test/terminalRegistry.test.ts:75` | `onContextLoss()` | `@xterm/addon-webgl`'s `WebglAddon` (inline `vi.doMock`) |
 
-All 20 false positives above (7 CodeMirror + 13 mocks) should get `@keep`
-tags rather than deletion — see Phase 3.
+All 20 false positives above (7 CodeMirror + 13 mocks) are now nominal and
+need no `@keep` tags. `MockVsCodePlatform.getExtensionContext()` remains a
+separate Step 6 candidate because the call site intentionally uses a
+VS Code-only dynamic discriminator.
 
 ## Special cases worth reading before touching anything
 
@@ -546,13 +553,15 @@ Use the language service directly (or the IDE's Find All References) per
 candidate, not the grep count — the count only tells you "worth a closer
 look," it can't tell you "dead." Confirmed so far:
 - Delete: `CommitMessageGenerator.generate()`.
-- Confirmed false positives, to be fixed nominally in Phase 7 and `@keep`-tagged
-  only if that fails: `CliAdapter.getConfig()`, all three
-  `MockPlatform.getConfig()` declarations, `MockVsCodePlatform`'s duck-typed
-  callers, the `FakeWebSocket`/`FakeStorage` structural test doubles, and — from
-  Sweep 1b — all 7 CodeMirror `ViewPlugin.fromClass` `update()` methods plus all
-  13 webview structural test/runtime mocks (`ResizeObserver`, `MockTerminal`,
+- Confirmed false positives now made nominally in Phase 7 and needing no
+  `@keep`: `CliAdapter.getConfig()`, all three `MockPlatform.getConfig()`
+  declarations, the `FakeWebSocket`/`FakeStorage` structural test doubles,
+  all 7 CodeMirror `ViewPlugin.fromClass` `update()` methods, and all 13
+  webview structural test/runtime mocks (`ResizeObserver`, `MockTerminal`,
   `MockFitAddon`, `WebglAddon`).
+- `MockVsCodePlatform.getExtensionContext()` remains a candidate for Step 6:
+  its call site intentionally detects the VS Code-only adapter by property
+  presence, and adding it to `PlatformAdapter` would violate that contract.
 - Everything else in Bucket C: unverified, needs the per-symbol check.
 
 ### Phase 4 — fix `onPass: "retry"`
@@ -603,15 +612,27 @@ an `npm run find-dead-methods` script entry and running it periodically
 (alongside `npm run test:coverage`'s zero-coverage scan) rather than gating
 merges on it.
 
-### Phase 7 — make the confirmed false positives nominal instead of `@keep`-tagging them
+### Phase 7 — make the confirmed false positives nominal instead of `@keep`-tagging them (completed 2026-07-29)
 
-Optional, lower priority than Phases 1–4, but worth doing opportunistically:
-apply the "Coding conventions" patterns above to the specific false-positive
-sites this audit found — add `getConfig` to `PlatformAdapter`, add the
-missing `Pick<...>`/interface heritage clauses to `FakeWebSocket`,
-`FakeStorage`, `MockTerminal`, `MockFitAddon`, and the `ResizeObserver` mock,
-and add `implements PluginValue` to the CodeMirror `ViewPlugin.fromClass`
-classes. Each one converts a permanent `@keep` tag into a self-verifying
-reference the script (and VS Code's own "Find All References") can resolve
-correctly going forward, and fixes the underlying VS Code navigation gap you
-run into day to day, not just this script's blind spot.
+Applied all three requested patterns without changing runtime behavior:
+
+- Added optional `getConfig(key, defaultValue: string): string` to
+  `PlatformAdapter` and removed the inline cast in `CliIntegration`. This was
+  chosen over a separate interface because the existing CLI and test adapters
+  already expose the same compatibility hook, while `VsCodeAdapter` can omit
+  it.
+- Added `Pick<WebSocket, ...>`, `Pick<Storage, ...>`, `Pick<Terminal, ...>`,
+  `Pick<FitAddon, ...>`, `Pick<WebglAddon, ...>`, and `implements
+  ResizeObserver` clauses to the extension and webview test doubles. Mock
+  signatures were widened to match the real APIs where the clauses required it.
+- Verified `PluginValue` is exported by the installed `@codemirror/view`
+  6.43.0 and added `implements PluginValue` to all seven anonymous plugin
+  classes.
+
+The finder now reports **56 candidates**, down from the 91-candidate
+baseline. All 35 `getConfig`/structural-mock/CodeMirror entries are nominal
+and need no `@keep` tag. The one requested site that remains is
+`src/test/unit/CliIntegration.test.ts:53`:
+`MockVsCodePlatform.getExtensionContext()` is reached through the intentional
+VS Code-only property-presence check in `CliIntegration`; it remains for
+Step 6 rather than broadening `PlatformAdapter`.

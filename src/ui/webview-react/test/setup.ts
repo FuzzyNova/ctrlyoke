@@ -6,9 +6,9 @@ import { vi } from "vitest";
 // ---------------------------------------------------------------------------
 vi.stubGlobal(
   "ResizeObserver",
-  class {
-    observe() {}
-    unobserve() {}
+  class implements ResizeObserver {
+    observe(_target: Element, _options?: ResizeObserverOptions) {}
+    unobserve(_target: Element) {}
     disconnect() {}
   }
 );

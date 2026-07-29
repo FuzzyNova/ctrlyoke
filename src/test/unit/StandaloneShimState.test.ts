@@ -5,9 +5,14 @@ import * as vm from "vm";
 import { suite, test } from "mocha";
 import { renderHostedStandaloneShimScript } from "../../server/HostedStandaloneShimScript";
 
+type WebSocketEventListener = Parameters<WebSocket["addEventListener"]>[1];
+type WebSocketEventListenerOptions = Parameters<
+  WebSocket["addEventListener"]
+>[2];
+
 type StorageSeed = Record<string, string>;
 
-class FakeStorage {
+class FakeStorage implements Pick<Storage, "setItem" | "removeItem"> {
   private readonly values = new Map<string, string>();
 
   constructor(seed: StorageSeed = {}) {
@@ -29,19 +34,25 @@ class FakeStorage {
   }
 }
 
-class FakeWebSocket {
+class FakeWebSocket
+  implements Pick<WebSocket, "addEventListener" | "send" | "close">
+{
   static readonly OPEN = 1;
   readonly readyState = FakeWebSocket.OPEN;
 
   constructor(readonly url: string) {}
 
-  addEventListener(): void {
+  addEventListener(
+    _type: string,
+    _listener: WebSocketEventListener,
+    _options?: WebSocketEventListenerOptions
+  ): void {
     // The state tests do not need to drive socket lifecycle events.
   }
 
-  send(): void {}
+  send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {}
 
-  close(): void {}
+  close(_code?: number, _reason?: string): void {}
 }
 
 function loadShim(options: {

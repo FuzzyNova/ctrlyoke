@@ -7,6 +7,10 @@ import { renderHostedStandaloneShimScript } from "../../server/HostedStandaloneS
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
 
 type TimerCallback = () => void;
+type WebSocketEventListener = Parameters<WebSocket["addEventListener"]>[1];
+type WebSocketEventListenerOptions = Parameters<
+  WebSocket["addEventListener"]
+>[2];
 
 class FakeClock {
   now = 10_000;
@@ -70,7 +74,9 @@ interface FakeSocketEvent {
   currentTarget?: FakeWebSocket;
 }
 
-class FakeWebSocket {
+class FakeWebSocket
+  implements Pick<WebSocket, "addEventListener" | "send" | "close">
+{
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSING = 2;
@@ -81,7 +87,7 @@ class FakeWebSocket {
   readonly sent: Array<Record<string, unknown>> = [];
   private readonly listeners = new Map<
     string,
-    Array<(event: FakeSocketEvent) => void>
+    Array<WebSocketEventListener>
   >();
 
   constructor(readonly url: string) {
@@ -90,18 +96,19 @@ class FakeWebSocket {
 
   addEventListener(
     type: string,
-    listener: (event: FakeSocketEvent) => void
+    listener: WebSocketEventListener,
+    _options?: WebSocketEventListenerOptions
   ): void {
     const listeners = this.listeners.get(type) ?? [];
     listeners.push(listener);
     this.listeners.set(type, listeners);
   }
 
-  send(data: string): void {
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     if (this.readyState !== FakeWebSocket.OPEN) {
       throw new Error("Socket is not open");
     }
-    this.sent.push(JSON.parse(data) as Record<string, unknown>);
+    this.sent.push(JSON.parse(data as string) as Record<string, unknown>);
   }
 
   close(): void {
@@ -128,7 +135,13 @@ class FakeWebSocket {
   }
 
   private emit(type: string, event: FakeSocketEvent): void {
-    for (const listener of this.listeners.get(type) ?? []) listener(event);
+    for (const listener of this.listeners.get(type) ?? []) {
+      if (typeof listener === "function") {
+        listener(event as unknown as Event);
+      } else {
+        listener.handleEvent(event as unknown as Event);
+      }
+    }
   }
 }
 
