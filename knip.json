@@ -41,7 +41,6 @@
     "src/ui/webview-react/components/shared/StepContextMenu.tsx",
     "src/ui/webview-react/hooks/useMessageHandler.ts",
     "src/ui/CtrlYokeWebviewProvider.ts",
-    "src/core/harness/chat/ChatSessionParser.ts",
     "src/core/harness/shared/CliFailureTracker.ts",
     "src/core/harness/shared/CliMcpConfigGenerator.ts",
     "src/core/harness/shared/CliParseUtils.ts",

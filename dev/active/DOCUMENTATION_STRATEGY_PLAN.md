@@ -103,7 +103,7 @@ These are essentially free to implement and highly valuable:
 ```json
 "ctrlyoke.harness": {
   "type": "string",
-  "description": "Active harness to use for AI execution. Options: copilot-cli, claude-cli, codex-cli, copilot-chat.",
+  "description": "Active harness to use for AI execution. Options: copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli.",
   "markdownDescription": "Active **harness** for AI execution. See [harness documentation](https://docs.ctrlyoke.dev/harnesses) for details."
 }
 ```
@@ -465,8 +465,7 @@ ctrlyoke/
 │   │   ├── codex-cli.md           # OpenAI Codex CLI
 │   │   ├── opencode-cli.md        # OpenCode multi-provider CLI
 │   │   ├── qwen-cli.md            # Qwen Code CLI
-│   │   ├── antigravity-cli.md     # Google Antigravity CLI
-│   │   └── copilot-chat.md        # Copilot Chat window (UI automation)
+│   │   └── antigravity-cli.md     # Google Antigravity CLI
 │   │
 │   ├── workflows/                 # Workflow authoring guide
 │   │   ├── index.md               # Workflow file overview
@@ -556,7 +555,6 @@ sidebar: [
       { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
       { text: "Qwen Code CLI", link: "/harnesses/qwen-cli" },
       { text: "Antigravity CLI", link: "/harnesses/antigravity-cli" },
-      { text: "Copilot Chat", link: "/harnesses/copilot-chat" },
     ],
   },
   {
@@ -723,7 +721,7 @@ ctrlyoke run <workflow-file>
 
   Options:
     -H, --harness <id>      AI harness: copilot-cli (default), claude-cli, codex-cli,
-                            opencode-cli, qwen-cli, antigravity-cli, copilot-chat
+                            opencode-cli, qwen-cli, antigravity-cli
     -m, --model <name>      Override the AI model
     --headless              Force headless mode (CI/CD, no user interaction)
     --interactive           Force interactive mode (TUI passthrough)

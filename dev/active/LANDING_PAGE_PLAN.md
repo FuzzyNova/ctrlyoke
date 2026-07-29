@@ -214,7 +214,7 @@ This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pus
 | **Hero**                  | Headline + subhead + primary CTA ("Install for VS Code" → marketplace link)                                       |
 | **Problem / Solution**    | 1-sentence pitch: "AI coding assistants are powerful but manual. ctrlyoke turns them into automated workflows."   |
 | **Key Features**          | 4–6 cards: multi-harness support, YAML workflows, end conditions, session resumption, MCP integration, CLI binary |
-| **Harness Grid**          | Logos/icons for all 7 supported harnesses (Copilot, Claude, Codex, OpenCode, Qwen, Gemini, Copilot Chat)          |
+| **Harness Grid**          | Logos/icons for all 6 supported harnesses (Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI) |
 | **How It Works**          | 3-step visual: Write workflow → Run → Validate. Animated or static code snippet showing a `.ctrlyoke.yaml`        |
 | **Pro Callout**           | Brief teaser of Pro features with link to `/pricing/`                                                             |
 | **Install / Get Started** | VS Code marketplace badge + `npm install -g ctrlyoke` snippet                                                     |

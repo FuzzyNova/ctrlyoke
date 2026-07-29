@@ -11,7 +11,7 @@ Initial release.
 
 ### Added
 
-- Multi-harness execution: Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI, and Copilot Chat UI automation
+- Multi-harness execution: Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity CLI
 - Parallel workflow execution with independent pause, resume, and cancel per workflow
 - React dashboard with CodeMirror 6 prompt editor, live output viewer, and embedded terminal
 - Script-based end conditions with retry logic, timeout protection, and template variable substitution

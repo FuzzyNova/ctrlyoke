@@ -6,7 +6,8 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 <orientation>
 ## Terminology
-- Use **harness** for AI execution strategies (`copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `antigravity-cli`, `copilot-chat`). Reserve **provider** for VS Code API types such as `CompletionItemProvider` or `WebviewViewProvider`.
+- Use **harness** for AI execution strategies. There are exactly six, and `HARNESS_IDS` in `src/types/DashboardConstants.ts` is the source of truth: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `antigravity-cli`. Reserve **provider** for VS Code API types such as `CompletionItemProvider` or `WebviewViewProvider`.
+- **There is no `copilot-chat` harness.** It was permanently removed before release for policy/legal reasons (see `dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`) and must never be reintroduced into code, schemas, docs, plans, or capability tables. Historical references survive in `dev/implemented/`, `dev/rejected/`, `dev/reference/`, and `dev/research/` as an accurate record of past work — do not treat those as evidence that the harness still exists.
 </orientation>
 
 <debugging>
@@ -71,7 +72,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 1. Prompt files (`.ctrlyoke.yaml/.yml/.json`, `.prompt.md`) are parsed and validated by `PromptFileParser` against `schemas/workflow-schema.json`.
 2. `WorkflowOrchestrator` manages harness integrations and shared services.
 3. `WorkflowInstance`, `WorkflowExecutor`, `WorkflowStateMachine`, `PromptQueue`, and end-condition classes run the workflow lifecycle.
-4. `src/core/harness/` adapts the core engine to CLI harnesses, shared CLI services, and Copilot Chat.
+4. `src/core/harness/` adapts the core engine to CLI harnesses and shared CLI services.
 5. `src/ui/` is the VS Code-side dashboard adapter layer; `src/ui/webview-react/` is the React client used by both the webview and hosted browser dashboard.
 6. `src/cli.ts` and `src/mcp-server.ts` provide standalone binaries on top of the same core.
 </architecture>
@@ -85,7 +86,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 | `src/mcp-server.ts` | Standalone MCP server binary |
 | `src/core/*.ts` | Core workflow engine and runtime orchestration |
 | `src/core/orchestration/` | File loading, watching, command handling, history, session helpers |
-| `src/core/harness/` | Harness runtime, CLI provider implementations, shared CLI services, Copilot Chat integration |
+| `src/core/harness/` | Harness runtime, CLI provider implementations, shared CLI services |
 | `src/ui/` | VS Code-side dashboard bridge, message routing, notifications, serialization |
 | `src/ui/webview-react/` | React dashboard, Zustand stores, hooks, components, hosted-browser support |
 | `src/types/` | Shared contracts and runtime constants across core/UI/server |
@@ -111,7 +112,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 <knowledgeCapture>
 ## Capturing project knowledge (shared memory)
-- **If you record project knowledge, record it here — never in harness-private memory.** ctrlyoke is built with 7 different harnesses (Claude, Copilot, Codex, Qwen, Antigravity, Copilot Chat, opencode); anything you save to a single harness's private/internal memory (e.g. Claude's `~/.claude` memory) is invisible to the other six and is effectively lost. The `.github/instructions/*.instructions.md` files and this root file are the project's shared, cross-harness memory. If you catch yourself about to write a harness-private note about ctrlyoke, put it in the right instruction file (or a backlog doc) instead.
+- **If you record project knowledge, record it here — never in harness-private memory.** ctrlyoke is *developed using* several different AI assistants (Claude, Copilot CLI, Copilot Chat, Codex, Qwen, Antigravity, opencode); anything you save to a single assistant's private/internal memory (e.g. Claude's `~/.claude` memory) is invisible to the others and is effectively lost. Note that this is the list of tools used to build ctrlyoke — it is **not** the list of harnesses ctrlyoke supports, which is the six in `HARNESS_IDS` above. The `.github/instructions/*.instructions.md` files and this root file are the project's shared, cross-harness memory. If you catch yourself about to write a harness-private note about ctrlyoke, put it in the right instruction file (or a backlog doc) instead.
 - **Most turns should not touch an instruction file, and that's expected.** These files are not a running log of what you did — git history already has that. Do not feel obligated to add an entry just because you changed code or finished a task. The bar is high on purpose: instruction files stay valuable only while they stay lean.
 - **Only add to an instruction file when the knowledge clears this bar:** it is durable (still true after this task), and it is *not* readily discoverable by reading the code — a genuine gotcha, a non-obvious cross-layer coupling, an architectural decision and its "why", a "do it this way / not that way" convention, or a sharp edge that cost real debugging time and would cost the next agent the same. If a competent agent would find it quickly by reading the relevant file, leave it out; the code is the source of truth for how things work, and instruction files exist to surface only what the code can't easily tell you.
 - **Plans for unimplemented work go in `dev/backlog/`, not instruction files.** Instruction files describe how the code *currently* works. Keep design proposals, and any gotchas specific to a not-yet-built feature, inside that feature's backlog doc.

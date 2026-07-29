@@ -52,9 +52,10 @@ to drive.
    Pro at launch; if that work would materially delay release, make an explicit
    decision to ship a free public beta instead. Do not publish pricing and Pro
    promises that the extension cannot enforce.
-3. Correct release artifacts that are populated but stale: `CHANGELOG.md`
-   currently claims a May 12 release and Copilot Chat support even though 0.1.0
-   has not shipped.
+3. Correct release artifacts that are populated but stale: `CHANGELOG.md` still
+   claims a May 12 release date even though 0.1.0 has not shipped. (Its Copilot
+   Chat support claim has been removed, along with the stale harness lists in
+   `QUICK_START.md` and the landing/docs plans.)
 4. Close release-critical accessibility, security, and regression gaps. Use
    [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md) as generated input, not as a
    percentage target that blocks forever.

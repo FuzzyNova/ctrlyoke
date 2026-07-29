@@ -6,16 +6,19 @@
  * This script reads model constants from ModelConstants.ts and updates:
  * 1. package.json enum arrays for settings:
  *    - ctrlyoke.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
- *    - ctrlyoke.copilotChatModel (uses COPILOT_MODELS keys - full set)
  *    - ctrlyoke.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
  *    - ctrlyoke.codexCliModel (uses CODEX_CLI_MODELS - Codex models)
  * 2. workflow-schema.json model examples (combines all models for autocomplete)
  *
  * IMPORTANT: Different providers support different model sets!
  * - Copilot CLI models come from `copilot help config` (smaller subset)
- * - Copilot Chat models come from VS Code's Language Model API (larger set)
  * - Claude CLI models come from Anthropic's Claude Code CLI (separate)
  * - Codex CLI models come from OpenAI's Codex CLI (separate)
+ *
+ * COPILOT_MODELS (parsed here as `chatModels`) is the broader set discoverable
+ * via VS Code's Language Model API. It no longer backs a harness — the
+ * copilot-chat harness was removed — but it is still used to populate
+ * workflow-schema.json model examples for autocomplete.
  *
  * Usage:
  *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts
@@ -327,7 +330,6 @@ function updatePackageJson(
   // Map setting keys to their model lists
   const settingsMap = {
     "ctrlyoke.copilotCliModel": cliModels,
-    "ctrlyoke.copilotChatModel": chatModels,
     "ctrlyoke.claudeCliModel": claudeModels,
     "ctrlyoke.codexCliModel": codexModels,
   };

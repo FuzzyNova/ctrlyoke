@@ -11,9 +11,9 @@ This document is the standalone implementation backlog for after v0.1.0.
 
 Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessible web app. Two delivery modes are planned, both built on a shared `IDashboardProvider` interface:
 
-1. **VS Code-Hosted Server** — an HTTP/WebSocket server started _inside_ the running VS Code extension process via an "Enable Server" button in the webview. The live `WorkflowOrchestrator` instance is the server backend. Browser tabs connect as additional clients alongside the existing VS Code sidebar panel. All VS Code capabilities remain available (file pickers, Copilot Chat harness, settings integration) because the server _is_ the extension.
+1. **VS Code-Hosted Server** — an HTTP/WebSocket server started _inside_ the running VS Code extension process via an "Enable Server" button in the webview. The live `WorkflowOrchestrator` instance is the server backend. Browser tabs connect as additional clients alongside the existing VS Code sidebar panel. All VS Code capabilities remain available (file pickers, settings integration) because the server _is_ the extension.
 
-2. **Standalone Server** (`ctrlyoke server` CLI subcommand) — a fully independent Node.js process with no VS Code dependency. Useful for headless/CI scenarios and remote access where VS Code is not running. The only exclusions are capabilities that are inherently VS Code-specific (file pickers, Copilot Chat harness).
+2. **Standalone Server** (`ctrlyoke server` CLI subcommand) — a fully independent Node.js process with no VS Code dependency. Useful for headless/CI scenarios and remote access where VS Code is not running. The only exclusions are capabilities that are inherently VS Code-specific (such as file pickers). All six harnesses are CLI-based, so every harness remains usable in the standalone server.
 
 `IDashboardProvider` and the hosted browser transport are already implemented in the current codebase. The remaining work is now almost entirely on the standalone side: removing the last VS Code-only seams from orchestration, adding the `ctrlyoke server` CLI subcommand, and reusing the hosted server's token/TLS/browser shim behavior in a plain Node.js process.
 
@@ -26,7 +26,6 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 | Workflow switcher dropdown | No                   | **Yes**                 | **Yes**                        | **Yes**           |
 | Run history                | No                   | **Yes**                 | **Yes**                        | **Yes**           |
 | File picker dialogs        | No                   | No (browser limitation) | No (path input only)           | Yes               |
-| `copilot-chat` harness     | No                   | **Yes**                 | No (VS Code UI automation)     | Yes               |
 | Requires VS Code open      | No                   | **Yes**                 | No                             | Yes               |
 | Headless / CI use          | Yes                  | No                      | **Yes**                        | No                |
 
@@ -44,7 +43,6 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - Real-time multi-user collaboration (each server instance = one workspace)
 - Remote workflow execution beyond what the CLI already supports
 - A full VS Code extension replacement
-- Supporting the `copilot-chat` harness in the standalone server (directly automates VS Code's UI)
 
 ## Current Codebase Audit (updated 2026-07-05)
 
@@ -253,7 +251,6 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/ui/StatusBarManager.ts`                      | VS Code status bar — no equivalent needed                                                       |
 | `src/completions/PromptCompletionProvider.ts`     | VS Code IntelliSense in text editor                                                             |
 | `src/completions/PromptLinkProvider.ts`           | VS Code document links — CodeMirror has its own                                                 |
-| `src/core/harness/chat/`                          | Automates VS Code's Copilot Chat UI                                                             |
 | `src/completions/ContextMenuReferenceCommands.ts` | Explorer/SCM/Timeline right-click commands — no equivalent UI surface in a browser-only server  |
 | `src/completions/WorkspaceReferencePaths.ts`      | `toWorkspaceRelativeReferencePath()` — only consumer is `ContextMenuReferenceCommands.ts` above |
 
@@ -590,7 +587,7 @@ This is also implemented: the webview captures theme vars, the router forwards `
 
 This file already exists and is already shared by the hosted server. Standalone should reuse it instead of forking the browser bridge.
 
-> **Key advantage over standalone**: No harness limitations, no VS Code-command replacements. The hosted server is a transport layer over the existing extension runtime — every VS Code capability (file pickers, Copilot Chat harness, output panel, Git diff, settings sync, completions) works unchanged because the server IS the extension.
+> **Key advantage over standalone**: No VS Code-command replacements. The hosted server is a transport layer over the existing extension runtime — every VS Code capability (file pickers, output panel, Git diff, settings sync, completions) works unchanged because the server IS the extension.
 
 ---
 
@@ -1212,9 +1209,9 @@ Full message coverage including multi-workflow types:
 | `opencode-cli`    | ✅ Yes           | Spawns process, no VS Code dep                                                      |
 | `qwen-cli`        | ✅ Yes           | Spawns process, no VS Code dep                                                      |
 | `antigravity-cli` | ✅ Yes           | Spawns process, no VS Code dep (replaces `gemini-cli` — see `RELEASE_PLAN.md` §2.5) |
-| `copilot-chat`    | ❌ No            | Automates VS Code's Chat UI directly                                                |
 
-Server validates harness at startup and rejects `copilot-chat` with a clear error.
+All six harnesses spawn processes and have no VS Code dependency, so the standalone
+server needs no harness allowlist or startup rejection path.
 
 > **Harness-list note:** `WorkflowOrchestrator` currently still builds a `geminiCliIntegration`
 > (`WorkflowOrchestrator.ts:227`). The Gemini→Antigravity swap is tracked separately in

@@ -652,10 +652,11 @@ export class ClineLogParser implements ILogParser {
 ```typescript
 export enum Harness {
   CopilotCli = "copilot-cli",
-  CopilotChat = "copilot-chat",
   ClaudeCli = "claude-cli",
   CodexCli = "codex-cli",
   OpenCodeCli = "opencode-cli",
+  QwenCli = "qwen-cli",
+  AntigravityCli = "antigravity-cli",
   ClineCli = "cline-cli", // NEW
 }
 ```
@@ -665,10 +666,11 @@ export enum Harness {
 ```typescript
 export const HARNESS_IDS = {
   COPILOT_CLI: "copilot-cli",
-  COPILOT_CHAT: "copilot-chat",
   CLAUDE_CLI: "claude-cli",
   CODEX_CLI: "codex-cli",
   OPENCODE_CLI: "opencode-cli",
+  QWEN_CLI: "qwen-cli",
+  ANTIGRAVITY_CLI: "antigravity-cli",
   CLINE_CLI: "cline-cli", // NEW
 } as const;
 ```

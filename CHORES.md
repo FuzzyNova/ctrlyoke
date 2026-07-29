@@ -85,11 +85,13 @@ npm run sync-models            # propagates to package.json + workflow-schema.js
 
 Or just run `npm run chores -- --task sync-models`, which does both automatically.
 
-#### 2b. Copilot Chat models — requires one manual VS Code step
+#### 2b. `COPILOT_MODELS` superset — requires one manual VS Code step
 
-`COPILOT_MODELS` (the full display-name superset used by Chat mode) can only be read from
-VS Code's `vscode.lm.selectChatModels()` Language Model API, which isn't reachable outside
-the extension host. This one step can't be scripted:
+`COPILOT_MODELS` is the full display-name superset used to populate workflow-schema model
+examples for autocomplete. (It no longer backs a harness — the copilot-chat harness was
+removed — but the schema still uses it.) It can only be read from VS Code's
+`vscode.lm.selectChatModels()` Language Model API, which isn't reachable outside the
+extension host. This one step can't be scripted:
 
 1. **Launch extension in dev mode**:
    - Press `F5` in VS Code to start debugging session

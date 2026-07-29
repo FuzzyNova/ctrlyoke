@@ -1,6 +1,6 @@
 # ctrlyoke Quick Start
 
-ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI, and Copilot Chat — through structured prompt workflows you define in YAML, JSON, or Markdown.
+ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity CLI — through structured prompt workflows you define in YAML, JSON, or Markdown.
 
 ---
 
@@ -8,15 +8,14 @@ ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, Ope
 
 ctrlyoke drives whichever AI CLI tool you have installed. You need at least one:
 
-| Harness           | CLI Tool                              |
-| ----------------- | ------------------------------------- |
-| `copilot-cli`     | `gh` with GitHub Copilot extension    |
-| `claude-cli`      | `claude` (Claude Code CLI)            |
-| `codex-cli`       | `codex` (OpenAI Codex CLI)            |
-| `opencode-cli`    | `opencode`                            |
-| `qwen-cli`        | Qwen Code CLI                         |
-| `antigravity-cli` | `agy` (Google Antigravity CLI)        |
-| `copilot-chat`    | GitHub Copilot Chat VS Code extension |
+| Harness           | CLI Tool                           |
+| ----------------- | ---------------------------------- |
+| `copilot-cli`     | `gh` with GitHub Copilot extension |
+| `claude-cli`      | `claude` (Claude Code CLI)         |
+| `codex-cli`       | `codex` (OpenAI Codex CLI)         |
+| `opencode-cli`    | `opencode`                         |
+| `qwen-cli`        | Qwen Code CLI                      |
+| `antigravity-cli` | `agy` (Google Antigravity CLI)     |
 
 The default harness is `copilot-cli`. Change it in **ctrlyoke Settings** inside the dashboard, or set it per-workflow (see below).
 

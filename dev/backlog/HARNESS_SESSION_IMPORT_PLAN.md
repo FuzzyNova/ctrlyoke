@@ -353,9 +353,9 @@ in `OutputPane`, distinguishing "observed" turns from ctrlyoke-dispatched ones.
     disabled (diffs still visible) unless the user opts in via allowed external roots.
   - This is strictly safer than the old "disable undo for all imports" stance: same-project
     imports keep full per-file undo; only genuinely out-of-workspace writes are withheld.
-- **Non-file harnesses.** Copilot Chat has no native JSONL log; `listNativeSessions`
-  returns `[]` for harnesses without a `logParser`. Only file-backed CLI harnesses are
-  importable.
+- **Non-file harnesses.** `listNativeSessions` returns `[]` for any harness without a
+  `logParser`. Only file-backed CLI harnesses are importable. All six current harnesses
+  are CLI-based, so this is a guard for future harnesses rather than an exclusion today.
 
 ---
 

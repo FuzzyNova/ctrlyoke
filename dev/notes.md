@@ -32,3 +32,15 @@ commit message generation should use CLI ouput and display the raw output of the
 codex hook cleanup
 
 opencode.json gitignore
+
+fix where ctrlyoke right click menu shortcuts show up in vs code (currently doesn't show up in scm)
+
+Add more context menus to the app, specifically workspace explorer (copy/move files)
+
+Add file link to diff views so it opens the full file
+
+Make undo modal take up full window space and use diff view used by workspace
+
+Add animation for output window new messages and fix scroll lock behavior and glitchiness when live events are coming in
+
+add find to output window and make icons bigger
