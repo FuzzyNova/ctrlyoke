@@ -367,27 +367,4 @@ export class CommitMessageGenerator {
 
     return { message: responseText, prompt: fullPrompt, cliCommand };
   }
-
-  async generate(
-    cwd: string,
-    token?: AbortSignal,
-    instructions?: string
-  ): Promise<CommitResult | null> {
-    const diffResult = await this.getDiff(cwd);
-    if (!diffResult) {
-      return null;
-    }
-
-    const { message } = await this.generateMessage(
-      diffResult.diff,
-      cwd,
-      token,
-      instructions
-    );
-    return {
-      message,
-      staged: diffResult.staged,
-      truncated: diffResult.truncated,
-    };
-  }
 }

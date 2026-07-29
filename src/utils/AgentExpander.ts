@@ -64,68 +64,6 @@ export class AgentExpander {
   }
 
   /**
-   * Extract the `name:` field from agent frontmatter.
-   * Returns undefined if no frontmatter or no name field is present.
-   */
-  static extractFrontmatterName(content: string): string | undefined {
-    if (!content.startsWith("---")) {
-      return undefined;
-    }
-    const closingIdx = content.indexOf("---", 3);
-    if (closingIdx === -1) {
-      return undefined;
-    }
-    const frontmatter = content.substring(3, closingIdx);
-    const match = frontmatter.match(/^\s*name\s*:\s*(.+)$/m);
-    if (!match) {
-      return undefined;
-    }
-    // Strip surrounding quotes if present
-    return match[1].trim().replace(/^["']|["']$/g, "");
-  }
-
-  /**
-   * Get the VS Code command name suffix for an agent.
-   *
-   * VS Code registers agent commands using the frontmatter `name:` field, not the filename:
-   *   `workbench.action.chat.open<frontmatterName>`
-   *
-   * For example, `senior-developer.agent.md` with `name: Senior Developer` registers as
-   * `workbench.action.chat.openSenior Developer`.
-   *
-   * Falls back to the file-based name if the frontmatter name is unavailable.
-   *
-   * @param agentName Agent name (without .agent.md extension)
-   * @param workspaceRoot Workspace root for resolving workspace agents
-   */
-  static async getAgentCommandName(
-    agentName: string,
-    workspaceRoot?: string
-  ): Promise<string> {
-    const agents = await AgentExpander.getAgents(workspaceRoot);
-    const agent = AgentDiscovery.findAgentByName(agents, agentName);
-
-    if (!agent?.path) {
-      return agentName;
-    }
-
-    try {
-      const content = await fs.promises.readFile(agent.path, "utf-8");
-      const frontmatterName = AgentExpander.extractFrontmatterName(content);
-      if (frontmatterName) {
-        Log.debug(
-          `🤖 Agent command name: "${frontmatterName}" (file: ${agentName})`
-        );
-        return frontmatterName;
-      }
-    } catch (error) {
-      Log.warn(`⚠️ Could not read agent file for command name: ${error}`);
-    }
-
-    return agentName;
-  }
-
-  /**
    * Strip YAML frontmatter from agent file content, returning only the markdown body.
    *
    * ctrlyoke does NOT honor agent-level model or tool overrides:

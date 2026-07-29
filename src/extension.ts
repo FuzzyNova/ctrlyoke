@@ -325,16 +325,11 @@ export async function activate(context: vscode.ExtensionContext) {
     // so isDiagnosticLogsEnabled() reads the correct user/workspace value when
     // deciding whether to open the log file.
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    const userConfigBackend = createUserConfigBackend(() => {
-      configService.notify();
-    });
+    const userConfigBackend = createUserConfigBackend();
     configService.setUserBackend(userConfigBackend);
     if (workspaceFolders && workspaceFolders.length > 0) {
       const workspaceConfigBackend = createWorkspaceConfigBackend(
-        getVsCodeWorkspaceRoot(),
-        () => {
-          configService.notify();
-        }
+        getVsCodeWorkspaceRoot()
       );
       configService.setWorkspaceBackend(workspaceConfigBackend);
 

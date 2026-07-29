@@ -53,6 +53,12 @@ export interface Disposable {
   dispose(): void;
 }
 
+interface VscodeEventEmitter<T> {
+  readonly event: (listener: (e: T) => unknown) => Disposable;
+  fire(data: T): void;
+  dispose(): void;
+}
+
 const noopDisposable: Disposable = { dispose: () => {} };
 
 // ---------------------------------------------------------------------------
@@ -264,7 +270,7 @@ export class Range {
 // ---------------------------------------------------------------------------
 // EventEmitter  (vscode.EventEmitter<T>)
 // ---------------------------------------------------------------------------
-export class EventEmitter<T> {
+export class EventEmitter<T> implements VscodeEventEmitter<T> {
   private listeners: Array<(e: T) => unknown> = [];
 
   readonly event = (listener: (e: T) => unknown): Disposable => {

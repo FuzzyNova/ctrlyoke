@@ -43,13 +43,6 @@ export class TempFileManager {
   }
 
   /**
-   * Get the temp directory path
-   */
-  getTempDir(): string {
-    return this.tempDir;
-  }
-
-  /**
    * The single, flat directory all pasted images are written to:
    * `.ctrlyoke/attachments/`.
    *
@@ -511,70 +504,5 @@ export class TempFileManager {
    */
   getRelativePath(absolutePath: string): string {
     return path.relative(this.workspaceRoot, absolutePath);
-  }
-
-  /**
-   * Get statistics about temp directory
-   * Useful for debugging and monitoring
-   */
-  async getStats(): Promise<{
-    exists: boolean;
-    fileCount: number;
-    totalSizeBytes: number;
-    oldestFileAgeMs: number;
-  }> {
-    try {
-      // Check if directory exists
-      try {
-        await fs.promises.access(this.tempDir);
-      } catch {
-        return {
-          exists: false,
-          fileCount: 0,
-          totalSizeBytes: 0,
-          oldestFileAgeMs: 0,
-        };
-      }
-
-      const files = await fs.promises.readdir(this.tempDir);
-      let fileCount = 0;
-      let totalSize = 0;
-      let oldestAge = 0;
-      const now = Date.now();
-
-      for (const file of files) {
-        if (!file.endsWith(".md")) {
-          continue;
-        }
-
-        const filePath = path.join(this.tempDir, file);
-        try {
-          const stats = await fs.promises.stat(filePath);
-          fileCount++;
-          totalSize += stats.size;
-          const age = now - stats.mtimeMs;
-          if (age > oldestAge) {
-            oldestAge = age;
-          }
-        } catch {
-          // Ignore files we can't stat
-        }
-      }
-
-      return {
-        exists: true,
-        fileCount,
-        totalSizeBytes: totalSize,
-        oldestFileAgeMs: oldestAge,
-      };
-    } catch (err) {
-      Log.error(`Failed to get temp dir stats: ${err}`);
-      return {
-        exists: false,
-        fileCount: 0,
-        totalSizeBytes: 0,
-        oldestFileAgeMs: 0,
-      };
-    }
   }
 }

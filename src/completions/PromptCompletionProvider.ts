@@ -8,7 +8,6 @@ import {
   getGitChangeCompletions,
   getPriorContextCompletions,
   toVSCodeCompletionItem,
-  clearFilesCache,
 } from "./CompletionHelpers";
 
 /**
@@ -454,14 +453,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     }
 
     return new vscode.CompletionList(items, false);
-  }
-
-  /**
-   * Clear the cache (useful for testing or when workspace changes)
-   */
-  public clearCache(): void {
-    // Delegate to shared cache in CompletionHelpers
-    clearFilesCache();
   }
 
   /**

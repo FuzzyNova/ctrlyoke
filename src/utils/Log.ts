@@ -275,12 +275,6 @@ export class Log {
     }
   }
 
-  static show(): void {
-    if (this.outputChannel) {
-      this.outputChannel.show();
-    }
-  }
-
   /**
    * Write directly to output channel (without console.log or timestamp).
    * Use for formatted output like logPrompt/logResponse that need custom formatting.
@@ -292,23 +286,6 @@ export class Log {
     if (this.logFilePath) {
       try {
         fs.appendFileSync(this.logFilePath, message + "\n");
-      } catch {
-        // Ignore file write errors
-      }
-    }
-  }
-
-  /**
-   * Write directly to output channel without newline (without console.log or timestamp).
-   * Use for streaming output that needs to preserve formatting.
-   */
-  static append(message: string): void {
-    if (this.outputChannel) {
-      this.outputChannel.append(message);
-    }
-    if (this.logFilePath) {
-      try {
-        fs.appendFileSync(this.logFilePath, message);
       } catch {
         // Ignore file write errors
       }

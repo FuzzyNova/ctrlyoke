@@ -1,18 +1,13 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import * as chokidar from "chokidar";
 import type { ConfigBackend } from "./CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 
 export class FileConfigBackend implements ConfigBackend {
   private cache?: PartialCtrlYokeSettings;
-  private watcher?: chokidar.FSWatcher;
 
-  constructor(
-    private readonly configPath: string,
-    private readonly onChanged?: () => void
-  ) {}
+  constructor(private readonly configPath: string) {}
 
   /** Returns the path this backend reads from */
   get filePath(): string {
@@ -38,43 +33,6 @@ export class FileConfigBackend implements ConfigBackend {
     );
     await this.save(current);
     this.cache = undefined;
-  }
-
-  /** Start watching the config file for external changes */
-  startWatching(): void {
-    if (this.watcher) return;
-
-    const dir = path.dirname(this.configPath);
-    try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    } catch {
-      // best-effort: if we can't create the dir, watching may not work
-    }
-
-    this.watcher = chokidar.watch(dir, {
-      ignoreInitial: true,
-      persistent: false,
-    });
-
-    const invalidate = (changedPath: string) => {
-      if (path.resolve(changedPath) === path.resolve(this.configPath)) {
-        this.cache = undefined;
-        this.onChanged?.();
-      }
-    };
-
-    this.watcher.on("add", invalidate);
-    this.watcher.on("change", invalidate);
-  }
-
-  /** Stop watching */
-  stopWatching(): void {
-    if (this.watcher) {
-      void this.watcher.close();
-      this.watcher = undefined;
-    }
   }
 
   private load(): PartialCtrlYokeSettings {
@@ -145,18 +103,15 @@ export class FileConfigBackend implements ConfigBackend {
 }
 
 /** Create a FileConfigBackend for the user global config (~/.ctrlyoke/settings.json) */
-export function createUserConfigBackend(
-  onChanged?: () => void
-): FileConfigBackend {
+export function createUserConfigBackend(): FileConfigBackend {
   const configPath = path.join(os.homedir(), ".ctrlyoke", "settings.json");
-  return new FileConfigBackend(configPath, onChanged);
+  return new FileConfigBackend(configPath);
 }
 
 /** Create a FileConfigBackend for a workspace config (<workspaceRoot>/.ctrlyoke/settings.json) */
 export function createWorkspaceConfigBackend(
-  workspaceRoot: string,
-  onChanged?: () => void
+  workspaceRoot: string
 ): FileConfigBackend {
   const configPath = path.join(workspaceRoot, ".ctrlyoke", "settings.json");
-  return new FileConfigBackend(configPath, onChanged);
+  return new FileConfigBackend(configPath);
 }

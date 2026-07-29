@@ -3,7 +3,7 @@
 **Status (2026-07-29):** Phase 7 is complete, and the Phase 1 harness slice is
 complete. The nominal-type fixes described
 below are applied, reducing the finder from 91 to 56 candidates; the completed
-Phase 1 harness slice and core-engine slice reduce it to 29. This documents
+Phase 1 harness, core-engine, and utils/config/platform/git slices reduce it to 15. This documents
 the output of two sweeps run after deleting `EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
@@ -59,7 +59,7 @@ node scripts/find-dead-methods.mjs --json    # machine-readable
 **Scope:** all of `src/`. The two projects are merged into one program (base
 options taken from the webview tsconfig, since it carries the `paths` aliases
 and DOM lib; `lib`/`target` widened to a superset covering both Node and DOM
-globals) precisely so a method that's only called from the *other* project's
+globals) precisely so a method that's only called from the _other_ project's
 files still shows up as referenced. No dependency install was needed —
 `@types/react` was already present.
 
@@ -104,8 +104,8 @@ output — see "Bucket C" below):
    heritage-clause check, because there was no heritage clause to inspect:
    - CodeMirror's `ViewPlugin.fromClass(class { update(update) {...} ... })`
      pattern (7 hits in `CodeMirrorEditor.tsx` and `WorkspaceFileEditor.tsx`)
-      — CodeMirror calls `update()` on the instance it constructs; the class
-      literal never declared what it implemented.
+     — CodeMirror calls `update()` on the instance it constructs; the class
+     literal never declared what it implemented.
    - `vi.stubGlobal("ResizeObserver", class { observe() {} ... })` and
      `vi.mock("@xterm/xterm", () => class MockTerminal { ... })`-style test
      doubles (13 hits across `test/setup.ts` and `terminalRegistry.test.ts`)
@@ -130,7 +130,7 @@ the checker can walk, symbol by symbol, from the call site back to the
 declaration. Anything that breaks that chain — an `as unknown as {...}`
 cast, a class that satisfies a type structurally without saying so, an
 anonymous class handed straight into a framework function — makes the
-reference invisible to *both* tools at once, not just one. Text search still
+reference invisible to _both_ tools at once, not just one. Text search still
 finds it because text search doesn't care about types; it's also why text
 search is a noisier, weaker signal (Bucket C above), not a stronger one.
 
@@ -149,12 +149,12 @@ the code does, only what the type checker can see:
    this is exactly what caused `getConfig()` to read as dead everywhere it's
    actually defined.
 
-2. **Give test doubles an `implements` clause for *every* type they stand
+2. **Give test doubles an `implements` clause for _every_ type they stand
    in for, not just the narrowest one.** `FakeWebSocket implements FakeSocket`
    in `HostedStandaloneShimScript.test.ts` looks like it should have
    prevented the `addEventListener`/`send`/`close` false positives, but
    `FakeSocket` is a narrow local interface that doesn't declare those
-   methods — `FakeWebSocket` is *also* structurally standing in for
+   methods — `FakeWebSocket` is _also_ structurally standing in for
    `window.WebSocket` at its injection site, just without saying so. Adding
    a second heritage entry, e.g.
    `implements FakeSocket, Pick<WebSocket, "addEventListener" | "send" | "close">`,
@@ -181,7 +181,7 @@ the code does, only what the type checker can see:
    invisible to both tools regardless of any heritage-clause fix — there's
    no symbol-level edge to find at all. If ctrlyoke ever needs dynamic
    dispatch, keep the set of valid keys as a typed union/const object next to
-   the dispatch site so at least the *set* of valid targets is checked, even
+   the dispatch site so at least the _set_ of valid targets is checked, even
    though individual call-site tracing still won't work.
 
 None of this is required for the Phase 1–3 deletions below — those still get
@@ -210,77 +210,77 @@ per-class breakdown. Treat it as a coarse pre-filter, not a verdict.
 
 ### Bucket A — zero occurrences anywhere in the repo (39 candidates)
 
-Strongest signal: not found via symbolic reference *or* as plain text,
+Strongest signal: not found via symbolic reference _or_ as plain text,
 including in docs, prompts, and templates. Still verify each one the way
 `handleExecutionError` was verified — this narrows the search, it doesn't
 replace it.
 
-| Location | Method |
-| --- | --- |
-| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:100` | `ToolPermissionMapperBase.matchesAnyPattern()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:155` | `ToolPermissionMapperBase.isValidPattern()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:164` | `ToolPermissionMapperBase.normalizeTool()` — **deleted 2026-07-29 (Step 2)** |
-| `src/utils/AgentExpander.ts:101` | `AgentExpander.getAgentCommandName()` |
-| `src/utils/TempFileManager.ts:48` | `TempFileManager.getTempDir()` |
-| `src/utils/TempFileManager.ts:520` | `TempFileManager.getStats()` |
-| `src/core/HarnessIntegration.ts:612` | `HarnessIntegration.buildPriorContextXml()` — **deleted 2026-07-29 (Step 3)**; live code uses `buildPriorContextXmlFromItems()` and its module-level serializer |
-| `src/core/HarnessIntegration.ts:616` | `HarnessIntegration.stripAnsiCodes()` — **deleted 2026-07-29 (Step 3)**; live code calls the module-level sanitizer |
-| `src/core/HarnessIntegration.ts:820` | `HarnessIntegration.updateWorkflowProgress()` — **deleted 2026-07-29 (Step 3)**; no caller or status-bar contract exists |
-| `src/core/HarnessIntegration.ts:945` | `HarnessIntegration.testAutomation()` — **deleted 2026-07-29 (Step 3)**; no caller or diagnostic contract exists |
-| `src/core/harness/shared/HeadlessLogTail.ts:148` | `HeadlessLogTail.handleStdout()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/harness/copilot/CopilotToolBuilder.ts:94` | `CopilotToolBuilder.buildInitiatedEvent()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/harness/shared/SettingsJsonMcpTracker.ts:501` | `SettingsJsonMcpTracker.hasActiveManagedServers()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/harness/shared/SettingsJsonMcpTracker.ts:506` | `SettingsJsonMcpTracker.getBaselineServerNames()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/harness/qwen/QwenCliProvider.ts:518` | `QwenCliProvider.getAvailableModels()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/orchestration/TimelineRecorder.ts:33` | `TimelineRecorder.isRunEntry()` — **deleted 2026-07-29 (Step 3)**; run-directory filtering uses `WorkflowPaths` directly, with its two legacy filename helpers removed as cascade |
-| `src/core/orchestration/TimelineRecorder.ts:48` | `TimelineRecorder.extractRunTimestamp()` — **deleted 2026-07-29 (Step 3)**; run ordering uses lineage/run metadata rather than this legacy parser |
-| `src/core/WorkflowStateMachine.ts:78` | `WorkflowStateMachine.executionEndTime()` — **deleted 2026-07-29 (Step 3)**; timing consumers use `getSnapshot()` and persisted runtime state |
-| `src/core/PromptQueue.ts:945` | `PromptQueue.reloadAndMergeQueue()` — **deleted 2026-07-29 (Step 3)**; dynamic queue merging now runs through `WorkingFileManager.mergeDiskSteps()` during reload/write paths |
-| `src/utils/WorkspaceSnapshotService.ts:1181` | `WorkspaceSnapshotService.hashCurrentFile()` |
-| `src/config/FileConfigBackend.ts:44` | `FileConfigBackend.startWatching()` |
-| `src/config/FileConfigBackend.ts:73` | `FileConfigBackend.stopWatching()` |
-| `src/completions/PromptCompletionProvider.ts:462` | `PromptCompletionProvider.clearCache()` |
-| `src/utils/HarnessFileManager.ts:530` | `HarnessFileManager.syncToHarnesses()` |
-| `src/core/orchestration/HistorySearchService.ts:79` | `HistorySearchService.enqueueIndexRefresh()` — **deleted 2026-07-29 (Step 3)**; `OutputHistoryManager` owns direct index refresh scheduling |
-| `src/ui/CtrlYokeWebviewProvider.ts:641` | `CtrlYokeWebviewProvider.notifyTerminalStarted()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:657` | `CtrlYokeWebviewProvider.notifyTerminalOutput()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:671` | `CtrlYokeWebviewProvider.notifyTerminalEnded()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:686` | `CtrlYokeWebviewProvider.notifyQueueExtended()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:785` | `CtrlYokeWebviewProvider.notifyQueueSizeLimitReached()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:796` | `CtrlYokeWebviewProvider.notifyExecutionTimeLimitReached()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:896` | `CtrlYokeWebviewProvider.sendHistoryUndoData()` |
-| `src/ui/CtrlYokeWebviewProvider.ts:928` | `CtrlYokeWebviewProvider.sendUndoPromptResult()` |
-| `src/core/WorkflowOrchestrator.ts:440` | `WorkflowOrchestrator.addDashboardProvider()` — see special case |
-| `src/core/WorkflowOrchestrator.ts:444` | `WorkflowOrchestrator.removeDashboardProvider()` — see special case |
-| `src/core/WorkflowOrchestrator.ts:623` | `WorkflowOrchestrator.getAllWorkflows()` — see special case |
-| `src/core/WorkflowOrchestrator.ts:647` | `WorkflowOrchestrator.getActiveWorkflowId()` — see special case |
-| `src/core/WorkflowOrchestrator.ts:1649` | `WorkflowOrchestrator.cancelPauseWorkflow()` — see special case |
-| `src/core/WorkflowOrchestrator.ts:4297` | `WorkflowOrchestrator.getHarnessDetailedStatus()` — see special case |
+| Location                                                          | Method                                                                                                                                                                            |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:100` | `ToolPermissionMapperBase.matchesAnyPattern()` — **deleted 2026-07-29 (Step 2)**                                                                                                  |
+| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:155` | `ToolPermissionMapperBase.isValidPattern()` — **deleted 2026-07-29 (Step 2)**                                                                                                     |
+| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:164` | `ToolPermissionMapperBase.normalizeTool()` — **deleted 2026-07-29 (Step 2)**                                                                                                      |
+| `src/utils/AgentExpander.ts:101`                                  | `AgentExpander.getAgentCommandName()` — **deleted 2026-07-29 (Step 4)**; its private frontmatter-name helper became dead and was removed as cascade                               |
+| `src/utils/TempFileManager.ts:48`                                 | `TempFileManager.getTempDir()` — **deleted 2026-07-29 (Step 4)**                                                                                                                  |
+| `src/utils/TempFileManager.ts:520`                                | `TempFileManager.getStats()` — **deleted 2026-07-29 (Step 4)**                                                                                                                    |
+| `src/core/HarnessIntegration.ts:612`                              | `HarnessIntegration.buildPriorContextXml()` — **deleted 2026-07-29 (Step 3)**; live code uses `buildPriorContextXmlFromItems()` and its module-level serializer                   |
+| `src/core/HarnessIntegration.ts:616`                              | `HarnessIntegration.stripAnsiCodes()` — **deleted 2026-07-29 (Step 3)**; live code calls the module-level sanitizer                                                               |
+| `src/core/HarnessIntegration.ts:820`                              | `HarnessIntegration.updateWorkflowProgress()` — **deleted 2026-07-29 (Step 3)**; no caller or status-bar contract exists                                                          |
+| `src/core/HarnessIntegration.ts:945`                              | `HarnessIntegration.testAutomation()` — **deleted 2026-07-29 (Step 3)**; no caller or diagnostic contract exists                                                                  |
+| `src/core/harness/shared/HeadlessLogTail.ts:148`                  | `HeadlessLogTail.handleStdout()` — **deleted 2026-07-29 (Step 2)**                                                                                                                |
+| `src/core/harness/copilot/CopilotToolBuilder.ts:94`               | `CopilotToolBuilder.buildInitiatedEvent()` — **deleted 2026-07-29 (Step 2)**                                                                                                      |
+| `src/core/harness/shared/SettingsJsonMcpTracker.ts:501`           | `SettingsJsonMcpTracker.hasActiveManagedServers()` — **deleted 2026-07-29 (Step 2)**                                                                                              |
+| `src/core/harness/shared/SettingsJsonMcpTracker.ts:506`           | `SettingsJsonMcpTracker.getBaselineServerNames()` — **deleted 2026-07-29 (Step 2)**                                                                                               |
+| `src/core/harness/qwen/QwenCliProvider.ts:518`                    | `QwenCliProvider.getAvailableModels()` — **deleted 2026-07-29 (Step 2)**                                                                                                          |
+| `src/core/orchestration/TimelineRecorder.ts:33`                   | `TimelineRecorder.isRunEntry()` — **deleted 2026-07-29 (Step 3)**; run-directory filtering uses `WorkflowPaths` directly, with its two legacy filename helpers removed as cascade |
+| `src/core/orchestration/TimelineRecorder.ts:48`                   | `TimelineRecorder.extractRunTimestamp()` — **deleted 2026-07-29 (Step 3)**; run ordering uses lineage/run metadata rather than this legacy parser                                 |
+| `src/core/WorkflowStateMachine.ts:78`                             | `WorkflowStateMachine.executionEndTime()` — **deleted 2026-07-29 (Step 3)**; timing consumers use `getSnapshot()` and persisted runtime state                                     |
+| `src/core/PromptQueue.ts:945`                                     | `PromptQueue.reloadAndMergeQueue()` — **deleted 2026-07-29 (Step 3)**; dynamic queue merging now runs through `WorkingFileManager.mergeDiskSteps()` during reload/write paths     |
+| `src/utils/WorkspaceSnapshotService.ts:1181`                      | `WorkspaceSnapshotService.hashCurrentFile()` — **deleted 2026-07-29 (Step 4)**; snapshot reads remain shared by capture/enrichment paths                                          |
+| `src/config/FileConfigBackend.ts:44`                              | `FileConfigBackend.startWatching()` — **deleted 2026-07-29 (Step 4)**; no startup caller or `ConfigBackend` contract uses file watching                                           |
+| `src/config/FileConfigBackend.ts:73`                              | `FileConfigBackend.stopWatching()` — **deleted 2026-07-29 (Step 4)**; watcher state/imports and unused factory callbacks removed as cascade                                       |
+| `src/completions/PromptCompletionProvider.ts:462`                 | `PromptCompletionProvider.clearCache()` — **deleted 2026-07-29 (Step 4)**; the shared `clearFilesCache()` remains owned by `CompletionHelpers`                                    |
+| `src/utils/HarnessFileManager.ts:530`                             | `HarnessFileManager.syncToHarnesses()` — **deleted 2026-07-29 (Step 4)**; `SyncResult` and its error-formatting import were dead with it                                          |
+| `src/core/orchestration/HistorySearchService.ts:79`               | `HistorySearchService.enqueueIndexRefresh()` — **deleted 2026-07-29 (Step 3)**; `OutputHistoryManager` owns direct index refresh scheduling                                       |
+| `src/ui/CtrlYokeWebviewProvider.ts:641`                           | `CtrlYokeWebviewProvider.notifyTerminalStarted()`                                                                                                                                 |
+| `src/ui/CtrlYokeWebviewProvider.ts:657`                           | `CtrlYokeWebviewProvider.notifyTerminalOutput()`                                                                                                                                  |
+| `src/ui/CtrlYokeWebviewProvider.ts:671`                           | `CtrlYokeWebviewProvider.notifyTerminalEnded()`                                                                                                                                   |
+| `src/ui/CtrlYokeWebviewProvider.ts:686`                           | `CtrlYokeWebviewProvider.notifyQueueExtended()`                                                                                                                                   |
+| `src/ui/CtrlYokeWebviewProvider.ts:785`                           | `CtrlYokeWebviewProvider.notifyQueueSizeLimitReached()`                                                                                                                           |
+| `src/ui/CtrlYokeWebviewProvider.ts:796`                           | `CtrlYokeWebviewProvider.notifyExecutionTimeLimitReached()`                                                                                                                       |
+| `src/ui/CtrlYokeWebviewProvider.ts:896`                           | `CtrlYokeWebviewProvider.sendHistoryUndoData()`                                                                                                                                   |
+| `src/ui/CtrlYokeWebviewProvider.ts:928`                           | `CtrlYokeWebviewProvider.sendUndoPromptResult()`                                                                                                                                  |
+| `src/core/WorkflowOrchestrator.ts:440`                            | `WorkflowOrchestrator.addDashboardProvider()` — see special case                                                                                                                  |
+| `src/core/WorkflowOrchestrator.ts:444`                            | `WorkflowOrchestrator.removeDashboardProvider()` — see special case                                                                                                               |
+| `src/core/WorkflowOrchestrator.ts:623`                            | `WorkflowOrchestrator.getAllWorkflows()` — see special case                                                                                                                       |
+| `src/core/WorkflowOrchestrator.ts:647`                            | `WorkflowOrchestrator.getActiveWorkflowId()` — see special case                                                                                                                   |
+| `src/core/WorkflowOrchestrator.ts:1649`                           | `WorkflowOrchestrator.cancelPauseWorkflow()` — see special case                                                                                                                   |
+| `src/core/WorkflowOrchestrator.ts:4297`                           | `WorkflowOrchestrator.getHarnessDetailedStatus()` — see special case                                                                                                              |
 
 ### Bucket B — 1–3 occurrences, none of them real call sites (14 candidates)
 
 The occurrences that exist are in `dev/backlog/*.md`, `prompts/*.md`, or
-test/mock declarations of the *same* dead method (i.e. the declaration line
+test/mock declarations of the _same_ dead method (i.e. the declaration line
 itself in a differently-named sibling file) — not a production caller. Still
 worth an individual look since 1–3 is a small enough number to just read.
 
-| Location | Method | Where the occurrence(s) are |
-| --- | --- | --- |
-| `src/core/harness/claude/ClaudeLogParser.ts:127` | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)** | Live via `CliIntegration`'s intentional property-presence dispatch |
-| `src/core/harness/qwen/QwenLogParser.ts:158` | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)** | Live via `CliIntegration`'s intentional property-presence dispatch |
-| `src/core/harness/opencode/OpenCodeLogParser.ts:539` | `getLogDirectory()` — **deleted 2026-07-29 (Step 2)** | No caller; OpenCode uses the session ID as its export path |
-| `src/core/PromptQueue.ts:733` | `getWorkflowName()` — **deleted 2026-07-29 (Step 3)** | Queue consumers use `getState().workflowName`; the working-file adapter already captures state directly |
-| `src/core/PromptQueue.ts:893` | `persistSessionId()` — **kept 2026-07-29 (Step 3)** | `WorkflowExecutor` passes the queue as `WorkflowWorkingFilePersistence`; `CliExecutionRunner` calls the optional hook when session/log discovery resolves an ID |
-| `src/ui/StatusBarManager.ts:153` | `hide()` | — |
-| `src/core/TemplateManager.ts:767` | `setDefaultTemplateId()` — **deleted 2026-07-29 (Step 3)** | The active UI route persists through `ConfigurationUtils.setDefaultWorkflowTemplate()` directly |
-| `src/core/harness/shared/HeadlessLogTail.ts:179` | `getLogPath()` — **deleted 2026-07-29 (Step 2)** | The result exposes `logPath` directly; no method caller existed |
-| `src/ui/CtrlYokeWebviewProvider.ts:1337` | `getPanelScopedSend()` | — |
-| `src/ui/NotificationManager.ts:65` | `notifyStartupComplete()` | **confirmed true positive** — see special case |
-| `src/test/unit/CliIntegration.test.ts:53` | `MockVsCodePlatform.getExtensionContext()` | — |
-| `src/core/WorkflowOrchestrator.ts:637` | `getActiveWorkflow()` | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case |
-| `src/core/WorkflowOrchestrator.ts:1634` | `pauseWorkflow()` | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case |
-| `src/core/WorkflowOrchestrator.ts:1669` | `resumeWorkflow()` | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case |
-| `src/core/WorkflowOrchestrator.ts:1717` | `stopWorkflow()` | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case |
+| Location                                             | Method                                                                                       | Where the occurrence(s) are                                                                                                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/harness/claude/ClaudeLogParser.ts:127`     | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)**                                          | Live via `CliIntegration`'s intentional property-presence dispatch                                                                                              |
+| `src/core/harness/qwen/QwenLogParser.ts:158`         | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)**                                          | Live via `CliIntegration`'s intentional property-presence dispatch                                                                                              |
+| `src/core/harness/opencode/OpenCodeLogParser.ts:539` | `getLogDirectory()` — **deleted 2026-07-29 (Step 2)**                                        | No caller; OpenCode uses the session ID as its export path                                                                                                      |
+| `src/core/PromptQueue.ts:733`                        | `getWorkflowName()` — **deleted 2026-07-29 (Step 3)**                                        | Queue consumers use `getState().workflowName`; the working-file adapter already captures state directly                                                         |
+| `src/core/PromptQueue.ts:893`                        | `persistSessionId()` — **kept 2026-07-29 (Step 3)**                                          | `WorkflowExecutor` passes the queue as `WorkflowWorkingFilePersistence`; `CliExecutionRunner` calls the optional hook when session/log discovery resolves an ID |
+| `src/ui/StatusBarManager.ts:153`                     | `hide()` — **deleted 2026-07-29 (Step 4)**; status updates call the underlying item directly |
+| `src/core/TemplateManager.ts:767`                    | `setDefaultTemplateId()` — **deleted 2026-07-29 (Step 3)**                                   | The active UI route persists through `ConfigurationUtils.setDefaultWorkflowTemplate()` directly                                                                 |
+| `src/core/harness/shared/HeadlessLogTail.ts:179`     | `getLogPath()` — **deleted 2026-07-29 (Step 2)**                                             | The result exposes `logPath` directly; no method caller existed                                                                                                 |
+| `src/ui/CtrlYokeWebviewProvider.ts:1337`             | `getPanelScopedSend()`                                                                       | —                                                                                                                                                               |
+| `src/ui/NotificationManager.ts:65`                   | `notifyStartupComplete()`                                                                    | **confirmed true positive** — see special case                                                                                                                  |
+| `src/test/unit/CliIntegration.test.ts:53`            | `MockVsCodePlatform.getExtensionContext()`                                                   | —                                                                                                                                                               |
+| `src/core/WorkflowOrchestrator.ts:637`               | `getActiveWorkflow()`                                                                        | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                                                      |
+| `src/core/WorkflowOrchestrator.ts:1634`              | `pauseWorkflow()`                                                                            | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                                             |
+| `src/core/WorkflowOrchestrator.ts:1669`              | `resumeWorkflow()`                                                                           | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                                                      |
+| `src/core/WorkflowOrchestrator.ts:1717`              | `stopWorkflow()`                                                                             | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                                             |
 
 ### Bucket C — 4+ occurrences, name too common to trust the count (29 candidates)
 
@@ -309,20 +309,27 @@ One item in this bucket was manually verified as a **real dead method**
 despite the noisy count:
 
 - `src/git/CommitMessageGenerator.ts:371` — `CommitMessageGenerator.generate()`
-  (count 6, all unrelated). The class also has `generateMessage()` at line
-  148, which is what every real caller (`cli.ts`, `ScmCommitCommand.ts`,
-  `HostedWorkspaceViewerService.ts`) actually uses.  `generate()` just calls
-  `this.generateMessage(...)` internally and has no callers of its own — an
-  orphaned second entry point. Delete it.
+  (count 6, all unrelated) — **deleted 2026-07-29 (Step 4)**. The class's
+  real entry point remains `generateMessage()`, used by `cli.ts`,
+  `ScmCommitCommand.ts`, and `HostedWorkspaceViewerService.ts`; `generate()`
+  was only an orphaned forwarding wrapper.
 
-Everything else in this bucket still needs a one-by-one check:
-`vscode-shim.ts` `EventEmitter.fire()` (46), `Log.show()`/`StatusBarManager.show()`
-(10, shared name), `Log.append()` (4), `HarnessIntegration.resolveWorkspacePath()`
+The remaining unverified items in this bucket are:
+`HarnessIntegration.resolveWorkspacePath()`
 (5),
 `PromptQueue.loadWorkingFile()` (7), `StreamingHistoryBuffer.clear()` (58,
 very common name), `WorkflowInstance.initialize()` (17, common name),
 `WorkflowOrchestrator.readWorkingFile()` (22, common name — see special case
 below).
+
+The Phase 1 utils/config/platform/git slice also resolved the other requested
+Bucket C names: `vscode-shim.ts` `EventEmitter.fire()` was **made nominal**
+2026-07-29 (Step 4) by having the shim emitter implement its emulated
+contract; `Log.show()` and `Log.append()`, plus
+`StatusBarManager.show()`, were **deleted** 2026-07-29 (Step 4) after
+per-class searches found no callers. The shim emitter is live through
+shim-backed `vscode.EventEmitter` instances in `ModelRegistry`, so it was not
+deleted.
 
 The four core-engine Bucket C candidates in this slice were individually
 verified and deleted on 2026-07-29 (Step 3); their current source line numbers
@@ -357,22 +364,22 @@ small.
 
 ### Resolved since audit (1)
 
-| Removed code | Resolution |
-| --- | --- |
+| Removed code                                              | Resolution                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/ui/webview-react/terminalRegistry.ts` `InputCapture` | Removed 2026-07-29. `reset()` had no callers, and the remaining browser-keystroke heuristic was also obsolete: provider session logs now authoritatively produce `USER_STEER` output events where available. The heuristic could misclassify TUI commands and does not observe backend inject-mode writes. |
 
 ### Resolved false positives — CodeMirror plugin lifecycle (7)
 
 All follow the exact same shape: `ViewPlugin.fromClass(class { ... update(update) {...} ... })` in `CodeMirrorEditor.tsx`, an anonymous class literal handed straight to CodeMirror's plugin constructor. Phase 7 added `implements PluginValue` to each class, making CodeMirror's lifecycle relationship visible to the language service without changing runtime behavior.
 
-| Location | Method |
-| --- | --- |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:1899` | `update()` |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2084` | `update()` |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2606` | `update()` |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2653` | `update()` |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2741` | `update()` |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2853` | `update()` |
+| Location                                                                       | Method     |
+| ------------------------------------------------------------------------------ | ---------- |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:1899`             | `update()` |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2084`             | `update()` |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2606`             | `update()` |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2653`             | `update()` |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2741`             | `update()` |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:2853`             | `update()` |
 | `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx:403` | `update()` |
 
 ### Resolved false positives — structural test/runtime mocks (13)
@@ -383,21 +390,21 @@ Phase 7 added explicit `implements`/`Pick<...>` clauses and matched the real
 library signatures where required; no test assertions or runtime behavior
 changed.
 
-| Location | Method | Mocking what |
-| --- | --- | --- |
-| `src/ui/webview-react/test/setup.ts:10` | `observe()` | `window.ResizeObserver` (jsdom doesn't implement it) |
-| `src/ui/webview-react/test/setup.ts:11` | `unobserve()` | `window.ResizeObserver` |
-| `src/ui/webview-react/test/setup.ts:12` | `disconnect()` | `window.ResizeObserver` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:18` | `MockTerminal.loadAddon()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:20` | `MockTerminal.open()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:24` | `MockTerminal.resize()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:29` | `MockTerminal.write()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:33` | `MockTerminal.scrollLines()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:35` | `MockTerminal.refresh()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:37` | `MockTerminal.onData()` | `@xterm/xterm`'s `Terminal` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:49` | `MockFitAddon.fit()` | `@xterm/addon-fit`'s `FitAddon` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:51` | `MockFitAddon.proposeDimensions()` | `@xterm/addon-fit`'s `FitAddon` |
-| `src/ui/webview-react/test/terminalRegistry.test.ts:75` | `onContextLoss()` | `@xterm/addon-webgl`'s `WebglAddon` (inline `vi.doMock`) |
+| Location                                                | Method                             | Mocking what                                             |
+| ------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------- |
+| `src/ui/webview-react/test/setup.ts:10`                 | `observe()`                        | `window.ResizeObserver` (jsdom doesn't implement it)     |
+| `src/ui/webview-react/test/setup.ts:11`                 | `unobserve()`                      | `window.ResizeObserver`                                  |
+| `src/ui/webview-react/test/setup.ts:12`                 | `disconnect()`                     | `window.ResizeObserver`                                  |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:18` | `MockTerminal.loadAddon()`         | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:20` | `MockTerminal.open()`              | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:24` | `MockTerminal.resize()`            | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:29` | `MockTerminal.write()`             | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:33` | `MockTerminal.scrollLines()`       | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:35` | `MockTerminal.refresh()`           | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:37` | `MockTerminal.onData()`            | `@xterm/xterm`'s `Terminal`                              |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:49` | `MockFitAddon.fit()`               | `@xterm/addon-fit`'s `FitAddon`                          |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:51` | `MockFitAddon.proposeDimensions()` | `@xterm/addon-fit`'s `FitAddon`                          |
+| `src/ui/webview-react/test/terminalRegistry.test.ts:75` | `onContextLoss()`                  | `@xterm/addon-webgl`'s `WebglAddon` (inline `vi.doMock`) |
 
 All 20 false positives above (7 CodeMirror + 13 mocks) are now nominal and
 need no `@keep` tags. `MockVsCodePlatform.getExtensionContext()` remains a
@@ -439,7 +446,7 @@ Empty body, zero callers. The real implementation is
 `DashboardBroadcastHub.notifyStartupComplete()` (`src/ui/DashboardBroadcastHub.ts:115`),
 which **is** called, from `WorkflowOrchestrator.ts:1470`. `NotificationManager`
 implements `DashboardClient` (`IDashboardProvider & Partial<IDashboardSink>`)
-so the interface requires *some* method with this name to exist, but the
+so the interface requires _some_ method with this name to exist, but the
 broadcast hub is what actually fans it out — this override is dead weight,
 not a missing wire-up. Safe to delete once confirmed nothing depends on it
 being present-but-empty (e.g. a mock `implements DashboardClient` check).
@@ -568,8 +575,9 @@ core-engine slice handled 12 more Bucket A/B candidates (11 deleted and
 `PromptQueue.persistSessionId()` kept because it is reached through the
 `WorkflowWorkingFilePersistence` contract), leaving **19 Phase 1 Bucket A/B
 candidates** for the remaining area slices. Four additional Bucket C
-candidates were deleted as documented above. The combined finder now reports
-29 candidates; the kept harness methods and `persistSessionId()` remain
+candidates were deleted as documented above. The utils/config/platform/git
+slice in Step 4 deleted nine more Bucket A/B candidates and made the shim
+emitter nominal; the kept harness methods and `persistSessionId()` remain
 expected false negatives of the heuristic.
 
 ### Phase 2 — retain the `WorkflowOrchestrator` standalone-server API (completed 2026-07-29)
@@ -587,7 +595,13 @@ false positives below resolve on their own. Only tag what survives.
 Use the language service directly (or the IDE's Find All References) per
 candidate, not the grep count — the count only tells you "worth a closer
 look," it can't tell you "dead." Confirmed so far:
-- Delete: `CommitMessageGenerator.generate()`.
+
+- Delete: `CommitMessageGenerator.generate()`; `Log.show()`;
+  `Log.append()`; `StatusBarManager.hide()`; and
+  `StatusBarManager.show()` (all **2026-07-29, Step 4**).
+- Made nominal: `vscode-shim.ts` `EventEmitter.fire()` (**2026-07-29,
+  Step 4**); live through shim-backed `vscode.EventEmitter` instances in
+  `ModelRegistry`.
 - Confirmed false positives now made nominally in Phase 7 and needing no
   `@keep`: `CliAdapter.getConfig()`, all three `MockPlatform.getConfig()`
   declarations, the `FakeWebSocket`/`FakeStorage` structural test doubles,
@@ -658,7 +672,7 @@ Applied all three requested patterns without changing runtime behavior:
   it.
 - Added `Pick<WebSocket, ...>`, `Pick<Storage, ...>`, `Pick<Terminal, ...>`,
   `Pick<FitAddon, ...>`, `Pick<WebglAddon, ...>`, and `implements
-  ResizeObserver` clauses to the extension and webview test doubles. Mock
+ResizeObserver` clauses to the extension and webview test doubles. Mock
   signatures were widened to match the real APIs where the clauses required it.
 - Verified `PluginValue` is exported by the installed `@codemirror/view`
   6.43.0 and added `implements PluginValue` to all seven anonymous plugin

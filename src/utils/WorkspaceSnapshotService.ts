@@ -1178,18 +1178,6 @@ export class WorkspaceSnapshotService {
     return { restoredFiles, failedFiles, redoInstructions };
   }
 
-  async hashCurrentFile(
-    workspacePath: string,
-    relativePath: string
-  ): Promise<string | undefined> {
-    const absPath = path.join(workspacePath, relativePath);
-    const result = await readFileForSnapshot(absPath);
-    if (!result) {
-      return undefined;
-    }
-    return result.hash;
-  }
-
   /**
    * Hydrate `beforeContent` for modified gitHead entries that are missing it.
    *

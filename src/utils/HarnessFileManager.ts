@@ -1,7 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
 import { Log } from "./Log";
-import { getErrorMessage } from "./ErrorUtils";
 import type {
   HarnessId,
   AnyTargetId,
@@ -66,12 +65,6 @@ export interface ManagedTargetDirectory {
   harnessId: AnyTargetId;
   scope: SettingWriteScope;
   path: string;
-}
-
-export interface SyncResult {
-  harnessId: HarnessId;
-  success: boolean;
-  error?: string;
 }
 
 // ============================================================================
@@ -522,39 +515,6 @@ export class HarnessFileManager {
       await fs.promises.rm(dirPath, { recursive: true, force: true });
       Log.info(`Deleted skill "${name}" from ${dirPath}`);
     }
-  }
-
-  /**
-   * Export to all listed harness directories at once.
-   */
-  static async syncToHarnesses(
-    sourcePath: string,
-    targetHarnessIds: HarnessId[],
-    workspaceRoot: string,
-    type: "agent" | "skill"
-  ): Promise<SyncResult[]> {
-    const results: SyncResult[] = [];
-
-    for (const harnessId of targetHarnessIds) {
-      try {
-        await HarnessFileManager.exportToHarness(
-          sourcePath,
-          harnessId,
-          workspaceRoot,
-          type,
-          true
-        );
-        results.push({ harnessId, success: true });
-      } catch (error) {
-        results.push({
-          harnessId,
-          success: false,
-          error: getErrorMessage(error),
-        });
-      }
-    }
-
-    return results;
   }
 
   /**

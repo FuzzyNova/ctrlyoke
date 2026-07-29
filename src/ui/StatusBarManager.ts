@@ -148,20 +148,6 @@ export class StatusBarManager {
   }
 
   /**
-   * Hide status bar item
-   */
-  hide(): void {
-    this.statusBarItem.hide();
-  }
-
-  /**
-   * Show status bar item
-   */
-  show(): void {
-    this.statusBarItem.show();
-  }
-
-  /**
    * Calculate progress from queue state
    */
   private calculateProgress(state: QueueState): {
