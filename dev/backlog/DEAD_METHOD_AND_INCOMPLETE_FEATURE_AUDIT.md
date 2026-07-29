@@ -457,29 +457,65 @@ harness log parsers' `todo_list` tool-call handling). The real findings:
    needed — included here only because it's the UI-side confirmation of the
    `WorkflowOrchestrator` special case above.
 
-3. **`WorkflowStepsPanel.tsx:647`** — `// TODO: End condition results would
-   come from workflow state`. The step-details tooltip/panel has a
-   placeholder comment where end-condition evaluation results should be
-   populated. Worth a look to confirm the data just isn't wired through yet
-   vs. genuinely unavailable at that point in the render.
+3. **`src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx:647`** —
+   `// TODO: End condition results would come from workflow state`. The
+   step-details tooltip/panel has a placeholder comment where end-condition
+   evaluation results should be populated. Worth a look to confirm the data
+   just isn't wired through yet vs. genuinely unavailable at that point in
+   the render.
 
-5. **`PromptEditor.tsx:531`** — `forceNewWorkflow: false, // TODO: Add
-   checkbox for this`. `EXECUTE_PROMPT` messages hardcode
-   `forceNewWorkflow: false`; there's no UI to ever send `true`. Confirm
-   whether that's an intentional current default with the checkbox as future
-   work, or a real gap (i.e. some other code path is now unreachable for
-   users who'd want to force a new workflow).
+4. **`src/ui/webview-react/components/editor/PromptEditor.tsx:509` and `:531`**
+   — `forceNewWorkflow: false, // TODO: Add checkbox for this`.
+   `EXECUTE_PROMPT` messages hardcode `forceNewWorkflow: false` at **two**
+   call sites (only the second carries the TODO comment); there's no UI to
+   ever send `true`. Confirm whether that's an intentional current default
+   with the checkbox as future work, or a real gap (i.e. some other code path
+   is now unreachable for users who'd want to force a new workflow). If a
+   checkbox is added, both sites must be updated together.
 
-6. **`WebPushService.ts:74`** — cosmetic: a hardcoded placeholder support
-   email in the VAPID subject (`mailto:ctrlyoke@example.com`). Not
-   functionally broken, just needs a real address before this ships.
+5. **`src/server/WebPushService.ts:74`** — cosmetic: a hardcoded placeholder
+   support email in the VAPID `vapidSubject` constructor default
+   (`mailto:ctrlyoke@example.com`). Not functionally broken, just needs a real
+   address before this ships. Requires an owner decision on the address, so it
+   is not actionable by an implementing agent.
 
-7. **`ICliProvider.ts:404`** — "Other providers leave this unimplemented
+6. **`ICliProvider.ts:404`** — "Other providers leave this unimplemented
    (returns undefined → treated as [])" is a documented, intentional default
    for an optional hook, not a bug. No action needed; excluded from the plan
    below.
 
 ## Plan
+
+**Execution order (revised 2026-07-29 during orchestration).** The phases below
+are numbered by topic, not by the order they should be done. Two ordering
+corrections were made before staging the work:
+
+1. **Phase 7 (make false positives nominal) runs _first_, before Phase 3's
+   `@keep`-tagging.** As originally written the plan tags ~33 false positives
+   with `@keep` in Phase 3 and then, in Phase 7, converts those same sites to
+   nominal types and removes the tags again — editing the same lines twice and
+   leaving `@keep` tags in the tree that were never needed. Doing Phase 7 first
+   shrinks the finder's output from 91 candidates to the genuinely suspicious
+   ones, which makes every subsequent verification pass cheaper and less noisy.
+   Phase 3 then only tags the residue that is provably un-fixable.
+2. **Phase 1's ~55 candidates are split into four area-sized chunks** (harness,
+   core engine, utils/config/platform/git, UI notification family) rather than
+   one pass. Each area shares context and a test surface, and the UI
+   notification family needs its own `git log -p` archaeology per the special
+   case above.
+
+Baselines established before staging, both at commit `360a36fa`:
+
+- `node scripts/find-dead-methods.mjs` reports **91 candidates**, consistent
+  with the 103 documented here minus the 11 `@keep`-tagged
+  `WorkflowOrchestrator` methods and the removed `InputCapture.reset()`.
+- `npm test` is **fully green** — 2190 passing (extension host) and 103 test
+  files / 1236 tests passing (React dashboard). There are no pre-existing
+  failures to explain away, so any failure introduced while applying these
+  phases is caused by that phase's own changes.
+
+`npm test` is the gate for every phase. Never run `npm run test:harness` — it
+makes real paid API calls.
 
 ### Phase 1 — delete remaining Bucket A + Bucket B candidates
 
@@ -503,30 +539,54 @@ in this audit until standalone implementation changes the API.
 
 ### Phase 3 — verify Bucket C individually, then either delete or `@keep`-tag
 
+**Runs after Phase 7**, which should already have made most of the confirmed
+false positives below resolve on their own. Only tag what survives.
+
 Use the language service directly (or the IDE's Find All References) per
 candidate, not the grep count — the count only tells you "worth a closer
 look," it can't tell you "dead." Confirmed so far:
 - Delete: `CommitMessageGenerator.generate()`.
-- `@keep`-tag (false positives, confirmed): `CliAdapter.getConfig()`,
-  both `MockPlatform.getConfig()` declarations, `MockVsCodePlatform`'s
-  duck-typed callers, the `FakeWebSocket`/`FakeStorage` structural test
-  doubles, and — from Sweep 1b — all 7 CodeMirror `ViewPlugin.fromClass`
-  `update()` methods plus all 13 webview structural test/runtime mocks
-  (`ResizeObserver`, `MockTerminal`, `MockFitAddon`, `WebglAddon`).
+- Confirmed false positives, to be fixed nominally in Phase 7 and `@keep`-tagged
+  only if that fails: `CliAdapter.getConfig()`, all three
+  `MockPlatform.getConfig()` declarations, `MockVsCodePlatform`'s duck-typed
+  callers, the `FakeWebSocket`/`FakeStorage` structural test doubles, and — from
+  Sweep 1b — all 7 CodeMirror `ViewPlugin.fromClass` `update()` methods plus all
+  13 webview structural test/runtime mocks (`ResizeObserver`, `MockTerminal`,
+  `MockFitAddon`, `WebglAddon`).
 - Everything else in Bucket C: unverified, needs the per-symbol check.
 
 ### Phase 4 — fix `onPass: "retry"`
 
-Decide: implement real retry-on-pass orchestrator support, or strip `retry`
-from `schemas/workflow-schema.json`, `CtrlYokeTypes.ts`'s `EndConditionAction`,
-and `PromptPropertyCompletionProvider.ts` so it can't be selected. Silent
-downgrade-to-continue is the worse of the two options long-term since it's a
-correctness footgun that only shows up as a debug-log line.
+**Decision (2026-07-29): strip `retry` from `onPass` only.** Implementing real
+retry-on-pass needs orchestrator-level loop support — a genuine feature, too
+large to smuggle into a cleanup audit, and not something to leave half-wired in
+the meantime. Removing the option makes an invalid selection fail loudly at
+schema-validation time instead of silently downgrading to `continue`.
+
+Scope notes established while making this call:
+
+- `onFail: "retry"` **is** fully implemented and must keep working. Only the
+  `onPass` direction is affected.
+- `EndConditionAction` (`CtrlYokeTypes.ts:579`) is shared by both `onPass` and
+  `onFail`, so `onPass` needs its own narrower type
+  (e.g. `EndConditionPassAction = Exclude<EndConditionAction, "retry">`) rather
+  than editing `EndConditionAction` itself.
+- `schemas/workflow-schema.yaml` is **generated** from
+  `schemas/workflow-schema.json` by `npm run generate-schema` — edit the JSON
+  and regenerate; never hand-edit the YAML.
+- The `endCondition.onPass` enum and description at
+  `schemas/workflow-schema.json:539` and the prose at
+  `PromptPropertyCompletionProvider.ts:171` both advertise `retry`.
+- The schema's current `onPass: retry` description names a real use case
+  ("keep implementing backlog items while tests stay green"). Capture that as a
+  new `dev/backlog/` doc when removing it so the intent isn't lost — this phase
+  removes a broken option, it does not reject the feature.
 
 ### Phase 5 — the smaller UI gaps
 
-Triage items 3–6 from Sweep 2 as normal small tickets; none are urgent, none
-block anything else in this plan.
+Triage items 3–5 from Sweep 2 as normal small tickets; none are urgent, none
+block anything else in this plan. Item 5 (VAPID support email) needs an owner
+decision on the real address and is not actionable by an implementing agent.
 
 ### Phase 6 — keep the tool around
 
