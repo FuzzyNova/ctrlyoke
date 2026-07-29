@@ -137,12 +137,39 @@ CLI (v0.20.1): `write_file` now succeeds (`is_error: false`,
 previously failed.
 
 This does not by itself make Qwen's granular lists verified/production-ready
-— see Qwen Implementation below for the remaining canonical-name translation,
-workspace-config, and behavioral-test work — but it removes the specific
-silent-failure mode and lets `--input-format stream-json` become the standing
-invocation shape headless Qwen runs use going forward. Interactive mode
-(`buildInteractiveArgs`, the `-i` flag) never sets `--output-format`, so it was
-never classified non-interactive and never hit this gate.
+— see Qwen Implementation below for the remaining workspace-config and formal
+behavioral-test-suite work — but it removes the specific silent-failure mode
+and lets `--input-format stream-json` become the standing invocation shape
+headless Qwen runs use going forward. Interactive mode (`buildInteractiveArgs`,
+the `-i` flag) never sets `--output-format`, so it was never classified
+non-interactive and never hit this gate.
+
+`QwenToolPermissionMapper` was also updated to emit `WriteFile`/`ShellTool`
+instead of `Write`/`Bash` (both alias tables recognize the former; only the
+newer one recognizes the latter — see the mapper's doc comments). All three
+security-relevant properties were re-verified empirically against the
+installed CLI (v0.20.1) with this invocation shape:
+
+- **allow proceeds**: `--allowed-tools "WriteFile,..."` → `write_file`
+  succeeds (`is_error: false`, `permission_denials: []`, file written).
+- **deny blocks**: `--exclude-tools "WriteFile,..."` → `write_file` refused
+  (`permission_denials` populated with the denied call, file not written).
+- **deny wins over allow**: `--allowed-tools "WriteFile" --exclude-tools
+  "WriteFile"` → refused, same as deny-only.
+
+Not yet covered by this session's manual verification (still required before
+Qwen's capability declaration can advance to verified, per Testing Strategy
+below): automated test-suite coverage of these three behaviors (as opposed to
+one-off manual runs), and the `.qwen/settings.json` restore-after-exit/
+cancellation/startup-failure behavior.
+
+`QwenToolPermissionMapper`'s `delete`/`remove` pattern handling was also fixed:
+it previously mapped to a literal `"Delete"` specifier, which is a silent
+no-op — Qwen's full `TOOL_NAME_ALIASES` registry (grepped directly from the
+installed CLI) has no delete/remove-file tool at all, so an allow/deny rule
+targeting it never matched any real Qwen tool call. The mapper now skips
+`delete`/`remove` patterns with a `Log.warn` pointing users at `shell(rm:*)`
+instead, which is how Qwen actually performs file deletion.
 
 ## Staging Within the Parent Plan
 

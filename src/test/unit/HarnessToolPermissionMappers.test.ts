@@ -731,8 +731,8 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--allowed-tools"));
         const toolsIdx = args.indexOf("--allowed-tools");
         const toolsArg = args[toolsIdx + 1];
-        assert.ok(toolsArg.includes("Write"), "write → Write");
-        assert.ok(toolsArg.includes("Bash"), "shell → Bash");
+        assert.ok(toolsArg.includes("WriteFile"), "write → WriteFile");
+        assert.ok(toolsArg.includes("ShellTool"), "shell → ShellTool");
       });
 
       test("custom with denied tools → --exclude-tools with comma-separated list", () => {
@@ -742,8 +742,8 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--exclude-tools"));
         const toolsIdx = args.indexOf("--exclude-tools");
         const toolsArg = args[toolsIdx + 1];
-        assert.ok(toolsArg.includes("Write"), "write → Write");
-        assert.ok(toolsArg.includes("Bash"), "shell → Bash");
+        assert.ok(toolsArg.includes("WriteFile"), "write → WriteFile");
+        assert.ok(toolsArg.includes("ShellTool"), "shell → ShellTool");
       });
 
       test("custom with both allowed and denied tools → both flags present", () => {
@@ -779,6 +779,32 @@ suite("HarnessToolPermissionMappers", () => {
         const toolsIdx = args.indexOf("--allowed-tools");
         const toolsArg = args[toolsIdx + 1];
         assert.ok(toolsArg.includes("myCustomTool"));
+      });
+
+      test("delete/remove patterns have no Qwen equivalent and are skipped, not emitted as a dead 'Delete' specifier", () => {
+        const allowArgs = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, ["delete", "remove"], [])
+        );
+        assert.ok(
+          !allowArgs.includes("--allowed-tools"),
+          "no allowed-tools flag when only unmappable delete/remove patterns are given"
+        );
+
+        const denyArgs = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, [], ["delete", "remove"])
+        );
+        assert.ok(
+          !denyArgs.includes("--exclude-tools"),
+          "no exclude-tools flag when only unmappable delete/remove patterns are given"
+        );
+
+        const mixedArgs = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, ["delete", "write"], [])
+        );
+        const toolsIdx = mixedArgs.indexOf("--allowed-tools");
+        const toolsArg = mixedArgs[toolsIdx + 1];
+        assert.ok(!toolsArg.includes("Delete"), "no phantom 'Delete' specifier");
+        assert.ok(toolsArg.includes("WriteFile"), "other patterns still convert");
       });
 
       test("dangerouslyAllowAll does not include approval-mode or tool lists", () => {

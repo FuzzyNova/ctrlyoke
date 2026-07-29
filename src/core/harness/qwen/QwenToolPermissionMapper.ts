@@ -110,16 +110,28 @@ export class QwenToolPermissionMapper
    *
    * Qwen supports sub-command filtering with the same parentheses syntax as
    * Claude Code, but uses a space instead of a colon as the command/args separator:
-   *   ctrlyoke: shell(rm:*)      → Qwen: Bash(rm *)
-   *   ctrlyoke: shell(git:*)     → Qwen: Bash(git *)
-   *   ctrlyoke: shell            → Qwen: Bash          (block all shell)
+   *   ctrlyoke: shell(rm:*)      → Qwen: ShellTool(rm *)
+   *   ctrlyoke: shell(git:*)     → Qwen: ShellTool(git *)
+   *   ctrlyoke: shell            → Qwen: ShellTool          (block all shell)
    *
    * MCP tools support server-level wildcards:
    *   mcp__servername              → matches all tools from that server
    *   mcp__servername__toolname    → matches one specific tool
    *
+   * Uses "ShellTool"/"WriteFile" rather than Claude-style "Bash"/"Write": both
+   * spellings resolve to the same Qwen tool via its current alias table, but
+   * only the former is also recognized by an older, narrower alias table Qwen
+   * still consults on some code paths — see the Root Cause section of
+   * dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md for the silent-deny bug this
+   * avoids.
+   *
    * Deduplicates via Set so multiple shell(X:*) patterns mapping to the same
-   * Qwen specifier don't produce repeated entries (e.g. Bash,Bash,Bash).
+   * Qwen specifier don't produce repeated entries (e.g. ShellTool,ShellTool).
+   *
+   * `delete`/`remove` patterns are skipped (with a warning), not mapped: Qwen
+   * has no dedicated file-delete tool, so there is no specifier that would
+   * make such a rule actually take effect. File deletion on Qwen goes through
+   * ShellTool(rm ...) and must be governed by a shell(rm:*) rule instead.
    *
    * @param patterns ctrlyoke tool patterns
    * @returns Qwen tool specifiers array (deduplicated)
@@ -144,12 +156,12 @@ export class QwenToolPermissionMapper
         normalizedToolName === "bash" ||
         normalizedToolName === "run_shell_command"
       ) {
-        qwenTools.add(this.buildQwenShellSpec("Bash", toolArgs));
+        qwenTools.add(this.buildQwenShellSpec("ShellTool", toolArgs));
       } else if (
         normalizedToolName === "write" ||
         normalizedToolName === "create"
       ) {
-        qwenTools.add("Write");
+        qwenTools.add("WriteFile");
       } else if (normalizedToolName === "read") {
         qwenTools.add("Read");
       } else if (
@@ -161,7 +173,17 @@ export class QwenToolPermissionMapper
         normalizedToolName === "delete" ||
         normalizedToolName === "remove"
       ) {
-        qwenTools.add("Delete");
+        // Qwen has no dedicated file-delete tool (confirmed against its full
+        // TOOL_NAME_ALIASES registry — shell/edit/write/read/grep/glob/
+        // list_directory/todo/webfetch/websearch/mcp/agent/skill/plan-mode/
+        // lsp/monitor are the complete set). Qwen deletes files via
+        // ShellTool(rm ...), so a ctrlyoke delete/remove rule has no faithful
+        // Qwen equivalent — emitting a literal "Delete" specifier would
+        // silently match nothing and create a false sense of enforcement.
+        // Skip it and warn instead of emitting a dead specifier.
+        Log.warn(
+          `[QwenPermissionMapper] Qwen has no delete/remove tool equivalent; pattern "${pattern}" has no effect and was skipped. Use a shell(rm:*) rule to control file deletion on Qwen.`
+        );
       } else if (
         normalizedToolName === "web_search" ||
         normalizedToolName === "search" ||
@@ -184,15 +206,15 @@ export class QwenToolPermissionMapper
   }
 
   /**
-   * Convert a ctrlyoke shell pattern to a Qwen Bash specifier.
+   * Convert a ctrlyoke shell pattern to a Qwen ShellTool specifier.
    *
-   * Qwen uses a space between command and argument glob (Bash(rm *)), while
+   * Qwen uses a space between command and argument glob (ShellTool(rm *)), while
    * ctrlyoke uses a colon (shell(rm:*)). A bare "shell"/"shell(*)"/"shell(*:*)"
-   * with no specific command means "block all shell" → plain "Bash".
+   * with no specific command means "block all shell" → plain "ShellTool".
    *
-   * @param qwenToolName The Qwen tool name (e.g. "Bash")
+   * @param qwenToolName The Qwen tool name (e.g. "ShellTool")
    * @param toolArgs Raw args from parsePattern, including parentheses (e.g. "(rm:*)")
-   * @returns Qwen specifier string (e.g. "Bash(rm *)" or "Bash")
+   * @returns Qwen specifier string (e.g. "ShellTool(rm *)" or "ShellTool")
    */
   private buildQwenShellSpec(qwenToolName: string, toolArgs: string): string {
     if (!toolArgs) {
@@ -209,7 +231,7 @@ export class QwenToolPermissionMapper
 
     const colonIdx = inner.indexOf(":");
     if (colonIdx === -1) {
-      // No colon: treat entire inner as command name (e.g. shell(npm) → Bash(npm *))
+      // No colon: treat entire inner as command name (e.g. shell(npm) → ShellTool(npm *))
       return `${qwenToolName}(${inner} *)`;
     }
 
@@ -222,11 +244,11 @@ export class QwenToolPermissionMapper
     }
 
     if (!argPattern || argPattern === "*") {
-      // "command with any args" → Bash(command *)
+      // "command with any args" → ShellTool(command *)
       return `${qwenToolName}(${command} *)`;
     }
 
-    // Specific command + specific arg pattern → Bash(command argPattern)
+    // Specific command + specific arg pattern → ShellTool(command argPattern)
     return `${qwenToolName}(${command} ${argPattern})`;
   }
 }
