@@ -189,16 +189,6 @@ export class StreamingHistoryBuffer {
     }
   }
 
-  /** Drop buffered state without writing. Used when disposing. */
-  clear(): void {
-    for (const entry of this.pending.values()) {
-      if (entry.timer) {
-        clearTimeout(entry.timer);
-      }
-    }
-    this.pending.clear();
-  }
-
   private ensureEntry(
     historyFilePath: string,
     target: OutputExecutionTarget,

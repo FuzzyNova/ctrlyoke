@@ -22,43 +22,12 @@ export class TimelineRecorder {
     Promise<void>
   >();
 
-  static isLegacyRunFile(entryName: string): boolean {
-    return /^run-.*\.json$/.test(entryName);
-  }
-
-  static isTimelineRunDirectory(entryName: string): boolean {
-    return /^run-/.test(entryName) && !entryName.endsWith(".json");
-  }
-
-  static isRunEntry(entry: fs.Dirent): boolean {
-    return (
-      (entry.isFile() && this.isLegacyRunFile(entry.name)) ||
-      (entry.isDirectory() && this.isTimelineRunDirectory(entry.name))
-    );
-  }
-
   static getManifestPathForRunDirectory(runDirectoryPath: string): string {
     return path.join(runDirectoryPath, this.MANIFEST_FILE_NAME);
   }
 
   static getEventsPathFromManifestPath(manifestPath: string): string {
     return path.join(path.dirname(manifestPath), this.EVENTS_FILE_NAME);
-  }
-
-  static extractRunTimestamp(entryName: string): number {
-    const match = entryName.match(
-      /^run-(?:\d+-)?(\d{4}-\d{2}-\d{2}T[\d-]+Z?)(?:\.json)?$/
-    );
-    if (!match) {
-      return 0;
-    }
-
-    const restored = match[1].replace(
-      /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})-(\d{3}Z?)$/,
-      "$1$2:$3:$4.$5"
-    );
-    const timestampMs = new Date(restored).getTime();
-    return Number.isNaN(timestampMs) ? 0 : timestampMs;
   }
 
   /**

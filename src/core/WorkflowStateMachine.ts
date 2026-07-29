@@ -75,10 +75,6 @@ export class WorkflowStateMachine {
     return this._totalPausedDuration;
   }
 
-  get executionEndTime(): number | undefined {
-    return this._executionEndTime;
-  }
-
   getSnapshot(): WorkflowRuntimeState {
     return {
       status: this._status,

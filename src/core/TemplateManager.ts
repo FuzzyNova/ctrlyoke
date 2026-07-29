@@ -2,10 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../utils/ConfigurationUtils";
+import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
@@ -761,14 +758,4 @@ export class TemplateManager {
     return templates;
   }
 
-  /**
-   * Set the default template ID in settings
-   */
-  async setDefaultTemplateId(templateId: string): Promise<void> {
-    await ConfigurationUtils.updateSetting(
-      "defaultWorkflowTemplate",
-      templateId,
-      vscode.ConfigurationTarget.Workspace
-    );
-  }
 }

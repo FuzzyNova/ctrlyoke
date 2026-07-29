@@ -1,4 +1,3 @@
-import * as path from "path";
 import {
   PromptStep,
   PriorContext,
@@ -609,14 +608,6 @@ export abstract class HarnessIntegration {
     return buildPriorContextXmlFromItems(contextItems);
   }
 
-  protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
-    return buildPriorContextXmlFromItems(contextItems);
-  }
-
-  protected stripAnsiCodes(text: string): string {
-    return stripAnsiCodes(text);
-  }
-
   /**
    * Return the SplitConfig to use when creating temp prompt files.
    * Override in subclasses to apply harness-specific limits.
@@ -744,22 +735,6 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Resolve relative path to absolute workspace path
-   * Uses Node.js path.resolve for cross-platform compatibility
-   */
-  protected resolveWorkspacePath(relativePath: string): string {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      throw new Error("No workspace folder open");
-    }
-
-    // path.resolve handles both absolute and relative paths correctly
-    // If relativePath is already absolute, it returns it as-is
-    // If relative, it joins with workspaceRoot
-    return path.resolve(workspaceRoot, relativePath);
-  }
-
-  /**
    * Get workspace root directory
    */
   protected getWorkspaceRoot(): string | undefined {
@@ -812,13 +787,6 @@ export abstract class HarnessIntegration {
   setWorkflowProgress(currentStep: number, totalSteps: number): void {
     this.workflowStep = currentStep;
     this.totalSteps = totalSteps;
-  }
-
-  /**
-   * Update workflow progress status bar message
-   */
-  protected async updateWorkflowProgress(): Promise<void> {
-    // No-op in base class; VS Code subclasses override for status bar integration.
   }
 
   /**
@@ -931,19 +899,6 @@ export abstract class HarnessIntegration {
    */
   getLastFailureOutput(): string | undefined {
     return undefined;
-  }
-
-  // ============================================================
-  // DIAGNOSTIC METHODS (Chat provides full implementations, CLI provides defaults)
-  // ============================================================
-
-  /**
-   * Test automation capability (diagnostic tool)
-   * CLI: Returns isReady() since CLI doesn't need automation testing
-   * Chat: Sends test message to verify automation works
-   */
-  async testAutomation(): Promise<boolean> {
-    return this.isReady();
   }
 
   /**

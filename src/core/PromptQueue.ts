@@ -727,14 +727,6 @@ export class PromptQueue {
   }
 
   /**
-   * Get the current workflow name
-   * Returns undefined if no workflow is loaded
-   */
-  getWorkflowName(): string | undefined {
-    return this.state.workflowName;
-  }
-
-  /**
    * Get the complete workflow file with workflow-level properties.
    * Used by PropertyResolver to apply three-tier property precedence.
    *
@@ -933,121 +925,6 @@ export class PromptQueue {
     this.cacheRuntimeOutput(promptIndex, {
       responseText: existing + additionalText,
     });
-  }
-
-  /**
-   * Reload and merge queue from working file (for Dynamic Queue feature)
-   * This method reads the working file, identifies new prompts, and appends them
-   * @param parser PromptFileParser instance (no longer needed, kept for compatibility)
-   * @param maxQueueSize Maximum queue size (0 = unlimited)
-   * @returns Number of new prompts added (-1 if error)
-   */
-  async reloadAndMergeQueue(
-    filePath: string, // This is now ignored - we always use working file
-    parser: { parsePromptFile(filePath: string): Promise<PromptFile | null> }, // PromptFileParser-compatible interface
-    maxQueueSize: number = 0
-  ): Promise<number> {
-    // Use working file if available, otherwise fall back to provided filePath
-    const targetPath = this.state.workingFilePath || filePath;
-
-    // 1. Reload file with validation
-    let reloadedFile;
-    try {
-      if (this.state.workingFilePath) {
-        // Read working file directly (already in JSON format)
-        reloadedFile = await this.readWorkingFile(targetPath);
-      } else {
-        // Fall back to parsing original file (legacy path)
-        reloadedFile = await parser.parsePromptFile(targetPath);
-      }
-
-      if (!reloadedFile || !reloadedFile.steps) {
-        throw new Error("Invalid prompt file structure");
-      }
-    } catch (error) {
-      // Invalid JSON - log error and continue with current queue
-      Log.error("Failed to reload queue - invalid JSON", error as Error);
-      Log.error(
-        "ctrlyoke: Queue file has invalid JSON. Continuing with current queue."
-      );
-      return -1;
-    }
-
-    const reloadedPrompts = reloadedFile.steps;
-
-    // 2. Identify new prompts (not in completedIndices AND not already in current queue)
-    const newPrompts: WorkflowStep[] = [];
-    const currentPromptHashes = new Set<string>();
-
-    // Build set of content hashes for prompts currently in queue
-    for (const existingStep of this.state.steps) {
-      const content = isScriptStep(existingStep)
-        ? existingStep.script
-        : existingStep.prompt;
-      const hash = hashPromptContent(content);
-      currentPromptHashes.add(hash);
-    }
-
-    // Find truly new prompts (not completed, not already in queue)
-    for (const step of reloadedPrompts) {
-      // Skip if already completed (per-prompt _runtime.completedAt is authoritative)
-      if (step._runtime?.completedAt !== undefined) {
-        continue;
-      }
-
-      // Skip if already in current pending queue (by content hash)
-      const content = isScriptStep(step) ? step.script : step.prompt;
-      const hash = hashPromptContent(content);
-      if (currentPromptHashes.has(hash)) {
-        continue;
-      }
-
-      // This is a truly new step
-      newPrompts.push(step);
-    }
-
-    if (newPrompts.length === 0) {
-      Log.trace("Queue reload: No new prompts found");
-      return 0;
-    }
-
-    // 3. Check queue size limit (if not unlimited)
-    const newQueueSize = this.state.steps.length + newPrompts.length;
-    if (maxQueueSize > 0 && newQueueSize > maxQueueSize) {
-      Log.warn(
-        `Queue size limit reached: ${newQueueSize} > ${maxQueueSize}. Cannot add ${newPrompts.length} new prompts.`
-      );
-      Log.warn(
-        `ctrlyoke: Queue limit reached (${this.state.steps.length}/${maxQueueSize} prompts). Cannot add more prompts. Consider increasing maxQueueSize in settings.`
-      );
-      return -1;
-    }
-
-    // 4. Append new prompts to current queue
-    this.state.steps.push(...newPrompts);
-
-    // Add new results for the new prompts
-    const newResults: PromptResult[] = newPrompts.map((step) => ({
-      prompt: isScriptStep(step) ? step.script : step.prompt,
-      status: STEP_STATUS.PENDING,
-      timestamp: new Date(),
-    }));
-    this.state.results.push(...newResults);
-
-    // 5. Update reload tracking
-    this.state.queueExtensions++;
-    this.state.lastReloadTime = Date.now();
-
-    this.emitStateChange();
-
-    // 6. Update working file with merged queue (if exists)
-    await this.updateWorkingFile();
-
-    Log.info(
-      `Queue extended: +${newPrompts.length} prompts added (total: ${this.state.steps.length})`
-    );
-
-    return newPrompts.length;
   }
 
   /**
@@ -2123,12 +2000,4 @@ export class PromptQueue {
       : STEP_STATUS.PENDING;
   }
 
-  /**
-   * Load working file from path
-   * @param filePath - Path to working file
-   */
-  public async loadWorkingFile(filePath: string): Promise<void> {
-    await this.restoreFromWorkingFile(filePath);
-    Log.debug(`Loaded working file: ${filePath}`);
-  }
 }

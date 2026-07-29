@@ -524,13 +524,6 @@ export class WorkflowInstance {
     }
   }
 
-  /**
-   * No-op for Phase 1; reserved for Phase 2 per-instance initialisation.
-   */
-  async initialize(): Promise<void> {
-    // No per-instance async setup required in Phase 1.
-  }
-
   /** Release file-system watchers and child processes owned by this instance */
   dispose(): void {
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles

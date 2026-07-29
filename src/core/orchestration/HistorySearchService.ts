@@ -76,10 +76,6 @@ export class HistorySearchService {
     }
   }
 
-  enqueueIndexRefresh(workspaceFolderPath: string): void {
-    void this.indexService.enqueueWorkspaceRefresh(workspaceFolderPath);
-  }
-
   private async searchLegacy(
     query: string,
     workspaceFolderPath: string,

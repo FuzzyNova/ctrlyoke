@@ -3,7 +3,7 @@
 **Status (2026-07-29):** Phase 7 is complete, and the Phase 1 harness slice is
 complete. The nominal-type fixes described
 below are applied, reducing the finder from 91 to 56 candidates; the completed
-Phase 1 harness slice reduces it to 44. This documents
+Phase 1 harness slice and core-engine slice reduce it to 29. This documents
 the output of two sweeps run after deleting `EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
@@ -223,25 +223,25 @@ replace it.
 | `src/utils/AgentExpander.ts:101` | `AgentExpander.getAgentCommandName()` |
 | `src/utils/TempFileManager.ts:48` | `TempFileManager.getTempDir()` |
 | `src/utils/TempFileManager.ts:520` | `TempFileManager.getStats()` |
-| `src/core/HarnessIntegration.ts:612` | `HarnessIntegration.buildPriorContextXml()` |
-| `src/core/HarnessIntegration.ts:616` | `HarnessIntegration.stripAnsiCodes()` |
-| `src/core/HarnessIntegration.ts:820` | `HarnessIntegration.updateWorkflowProgress()` |
-| `src/core/HarnessIntegration.ts:945` | `HarnessIntegration.testAutomation()` |
+| `src/core/HarnessIntegration.ts:612` | `HarnessIntegration.buildPriorContextXml()` — **deleted 2026-07-29 (Step 3)**; live code uses `buildPriorContextXmlFromItems()` and its module-level serializer |
+| `src/core/HarnessIntegration.ts:616` | `HarnessIntegration.stripAnsiCodes()` — **deleted 2026-07-29 (Step 3)**; live code calls the module-level sanitizer |
+| `src/core/HarnessIntegration.ts:820` | `HarnessIntegration.updateWorkflowProgress()` — **deleted 2026-07-29 (Step 3)**; no caller or status-bar contract exists |
+| `src/core/HarnessIntegration.ts:945` | `HarnessIntegration.testAutomation()` — **deleted 2026-07-29 (Step 3)**; no caller or diagnostic contract exists |
 | `src/core/harness/shared/HeadlessLogTail.ts:148` | `HeadlessLogTail.handleStdout()` — **deleted 2026-07-29 (Step 2)** |
 | `src/core/harness/copilot/CopilotToolBuilder.ts:94` | `CopilotToolBuilder.buildInitiatedEvent()` — **deleted 2026-07-29 (Step 2)** |
 | `src/core/harness/shared/SettingsJsonMcpTracker.ts:501` | `SettingsJsonMcpTracker.hasActiveManagedServers()` — **deleted 2026-07-29 (Step 2)** |
 | `src/core/harness/shared/SettingsJsonMcpTracker.ts:506` | `SettingsJsonMcpTracker.getBaselineServerNames()` — **deleted 2026-07-29 (Step 2)** |
 | `src/core/harness/qwen/QwenCliProvider.ts:518` | `QwenCliProvider.getAvailableModels()` — **deleted 2026-07-29 (Step 2)** |
-| `src/core/orchestration/TimelineRecorder.ts:33` | `TimelineRecorder.isRunEntry()` |
-| `src/core/orchestration/TimelineRecorder.ts:48` | `TimelineRecorder.extractRunTimestamp()` |
-| `src/core/WorkflowStateMachine.ts:78` | `WorkflowStateMachine.executionEndTime()` |
-| `src/core/PromptQueue.ts:945` | `PromptQueue.reloadAndMergeQueue()` |
+| `src/core/orchestration/TimelineRecorder.ts:33` | `TimelineRecorder.isRunEntry()` — **deleted 2026-07-29 (Step 3)**; run-directory filtering uses `WorkflowPaths` directly, with its two legacy filename helpers removed as cascade |
+| `src/core/orchestration/TimelineRecorder.ts:48` | `TimelineRecorder.extractRunTimestamp()` — **deleted 2026-07-29 (Step 3)**; run ordering uses lineage/run metadata rather than this legacy parser |
+| `src/core/WorkflowStateMachine.ts:78` | `WorkflowStateMachine.executionEndTime()` — **deleted 2026-07-29 (Step 3)**; timing consumers use `getSnapshot()` and persisted runtime state |
+| `src/core/PromptQueue.ts:945` | `PromptQueue.reloadAndMergeQueue()` — **deleted 2026-07-29 (Step 3)**; dynamic queue merging now runs through `WorkingFileManager.mergeDiskSteps()` during reload/write paths |
 | `src/utils/WorkspaceSnapshotService.ts:1181` | `WorkspaceSnapshotService.hashCurrentFile()` |
 | `src/config/FileConfigBackend.ts:44` | `FileConfigBackend.startWatching()` |
 | `src/config/FileConfigBackend.ts:73` | `FileConfigBackend.stopWatching()` |
 | `src/completions/PromptCompletionProvider.ts:462` | `PromptCompletionProvider.clearCache()` |
 | `src/utils/HarnessFileManager.ts:530` | `HarnessFileManager.syncToHarnesses()` |
-| `src/core/orchestration/HistorySearchService.ts:79` | `HistorySearchService.enqueueIndexRefresh()` |
+| `src/core/orchestration/HistorySearchService.ts:79` | `HistorySearchService.enqueueIndexRefresh()` — **deleted 2026-07-29 (Step 3)**; `OutputHistoryManager` owns direct index refresh scheduling |
 | `src/ui/CtrlYokeWebviewProvider.ts:641` | `CtrlYokeWebviewProvider.notifyTerminalStarted()` |
 | `src/ui/CtrlYokeWebviewProvider.ts:657` | `CtrlYokeWebviewProvider.notifyTerminalOutput()` |
 | `src/ui/CtrlYokeWebviewProvider.ts:671` | `CtrlYokeWebviewProvider.notifyTerminalEnded()` |
@@ -269,10 +269,10 @@ worth an individual look since 1–3 is a small enough number to just read.
 | `src/core/harness/claude/ClaudeLogParser.ts:127` | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)** | Live via `CliIntegration`'s intentional property-presence dispatch |
 | `src/core/harness/qwen/QwenLogParser.ts:158` | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)** | Live via `CliIntegration`'s intentional property-presence dispatch |
 | `src/core/harness/opencode/OpenCodeLogParser.ts:539` | `getLogDirectory()` — **deleted 2026-07-29 (Step 2)** | No caller; OpenCode uses the session ID as its export path |
-| `src/core/PromptQueue.ts:733` | `getWorkflowName()` | — |
-| `src/core/PromptQueue.ts:893` | `persistSessionId()` | — |
+| `src/core/PromptQueue.ts:733` | `getWorkflowName()` — **deleted 2026-07-29 (Step 3)** | Queue consumers use `getState().workflowName`; the working-file adapter already captures state directly |
+| `src/core/PromptQueue.ts:893` | `persistSessionId()` — **kept 2026-07-29 (Step 3)** | `WorkflowExecutor` passes the queue as `WorkflowWorkingFilePersistence`; `CliExecutionRunner` calls the optional hook when session/log discovery resolves an ID |
 | `src/ui/StatusBarManager.ts:153` | `hide()` | — |
-| `src/core/TemplateManager.ts:767` | `setDefaultTemplateId()` | — |
+| `src/core/TemplateManager.ts:767` | `setDefaultTemplateId()` — **deleted 2026-07-29 (Step 3)** | The active UI route persists through `ConfigurationUtils.setDefaultWorkflowTemplate()` directly |
 | `src/core/harness/shared/HeadlessLogTail.ts:179` | `getLogPath()` — **deleted 2026-07-29 (Step 2)** | The result exposes `logPath` directly; no method caller existed |
 | `src/ui/CtrlYokeWebviewProvider.ts:1337` | `getPanelScopedSend()` | — |
 | `src/ui/NotificationManager.ts:65` | `notifyStartupComplete()` | **confirmed true positive** — see special case |
@@ -323,6 +323,22 @@ Everything else in this bucket still needs a one-by-one check:
 very common name), `WorkflowInstance.initialize()` (17, common name),
 `WorkflowOrchestrator.readWorkingFile()` (22, common name — see special case
 below).
+
+The four core-engine Bucket C candidates in this slice were individually
+verified and deleted on 2026-07-29 (Step 3); their current source line numbers
+are reflected in the finder output above:
+
+- `HarnessIntegration.resolveWorkspacePath()` — no subclass or caller uses it;
+  `ContextExpander` owns the active workspace-path resolution and security
+  checks.
+- `PromptQueue.loadWorkingFile()` — no caller uses this thin wrapper;
+  `WorkflowInstance` and its loader use `readWorkingFile()` plus the explicit
+  reload modes.
+- `StreamingHistoryBuffer.clear()` — no disposal or test path calls it;
+  `OutputHistoryManager` flushes the buffer before lifecycle writes.
+- `WorkflowInstance.initialize()` — `WorkflowInstance` is a plain class with
+  direct construction and no initialization contract or call; all setup occurs
+  in its constructor and explicit load/execute methods.
 
 The Phase 1 harness slice checked the three harness-area Bucket C candidates:
 `CliTransportCoordinator.writeToCurrentPtySession()` — **kept** because
@@ -546,12 +562,15 @@ The webview-side `InputCapture` item is already resolved above; its removal
 also eliminated the incomplete ad-hoc attribution feature rather than
 retaining an inert heuristic.
 
-**Phase 1 progress (2026-07-29, Step 2):** The harness slice handled 12 of the
-42 Bucket A/B candidates assigned to Phase 1 (all 12 were deleted), leaving
-**30 Phase 1 Bucket A/B candidates** for the remaining area slices. Two
-additional Bucket C candidates were deleted and one was kept as documented
-above. The combined finder now reports 44 candidates; the three kept harness
-methods remain expected false negatives of the heuristic.
+**Phase 1 progress (2026-07-29, Step 3):** The harness slice handled 12 of the
+42 Bucket A/B candidates assigned to Phase 1 (all 12 were deleted). The
+core-engine slice handled 12 more Bucket A/B candidates (11 deleted and
+`PromptQueue.persistSessionId()` kept because it is reached through the
+`WorkflowWorkingFilePersistence` contract), leaving **19 Phase 1 Bucket A/B
+candidates** for the remaining area slices. Four additional Bucket C
+candidates were deleted as documented above. The combined finder now reports
+29 candidates; the kept harness methods and `persistSessionId()` remain
+expected false negatives of the heuristic.
 
 ### Phase 2 — retain the `WorkflowOrchestrator` standalone-server API (completed 2026-07-29)
 
