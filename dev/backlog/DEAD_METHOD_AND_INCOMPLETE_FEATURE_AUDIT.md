@@ -1,7 +1,9 @@
 # Dead Class-Method & Incomplete-Feature Audit
 
-**Status (2026-07-29):** Phase 7 is complete. The nominal-type fixes described
-below are applied, reducing the finder from 91 to 56 candidates. This documents
+**Status (2026-07-29):** Phase 7 is complete, and the Phase 1 harness slice is
+complete. The nominal-type fixes described
+below are applied, reducing the finder from 91 to 56 candidates; the completed
+Phase 1 harness slice reduces it to 44. This documents
 the output of two sweeps run after deleting `EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
@@ -215,9 +217,9 @@ replace it.
 
 | Location | Method |
 | --- | --- |
-| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:100` | `ToolPermissionMapperBase.matchesAnyPattern()` |
-| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:155` | `ToolPermissionMapperBase.isValidPattern()` |
-| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:164` | `ToolPermissionMapperBase.normalizeTool()` |
+| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:100` | `ToolPermissionMapperBase.matchesAnyPattern()` — **deleted 2026-07-29 (Step 2)** |
+| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:155` | `ToolPermissionMapperBase.isValidPattern()` — **deleted 2026-07-29 (Step 2)** |
+| `src/core/harness/shared/interfaces/IToolPermissionMapper.ts:164` | `ToolPermissionMapperBase.normalizeTool()` — **deleted 2026-07-29 (Step 2)** |
 | `src/utils/AgentExpander.ts:101` | `AgentExpander.getAgentCommandName()` |
 | `src/utils/TempFileManager.ts:48` | `TempFileManager.getTempDir()` |
 | `src/utils/TempFileManager.ts:520` | `TempFileManager.getStats()` |
@@ -225,11 +227,11 @@ replace it.
 | `src/core/HarnessIntegration.ts:616` | `HarnessIntegration.stripAnsiCodes()` |
 | `src/core/HarnessIntegration.ts:820` | `HarnessIntegration.updateWorkflowProgress()` |
 | `src/core/HarnessIntegration.ts:945` | `HarnessIntegration.testAutomation()` |
-| `src/core/harness/shared/HeadlessLogTail.ts:148` | `HeadlessLogTail.handleStdout()` |
-| `src/core/harness/copilot/CopilotToolBuilder.ts:94` | `CopilotToolBuilder.buildInitiatedEvent()` |
-| `src/core/harness/shared/SettingsJsonMcpTracker.ts:501` | `SettingsJsonMcpTracker.hasActiveManagedServers()` |
-| `src/core/harness/shared/SettingsJsonMcpTracker.ts:506` | `SettingsJsonMcpTracker.getBaselineServerNames()` |
-| `src/core/harness/qwen/QwenCliProvider.ts:518` | `QwenCliProvider.getAvailableModels()` |
+| `src/core/harness/shared/HeadlessLogTail.ts:148` | `HeadlessLogTail.handleStdout()` — **deleted 2026-07-29 (Step 2)** |
+| `src/core/harness/copilot/CopilotToolBuilder.ts:94` | `CopilotToolBuilder.buildInitiatedEvent()` — **deleted 2026-07-29 (Step 2)** |
+| `src/core/harness/shared/SettingsJsonMcpTracker.ts:501` | `SettingsJsonMcpTracker.hasActiveManagedServers()` — **deleted 2026-07-29 (Step 2)** |
+| `src/core/harness/shared/SettingsJsonMcpTracker.ts:506` | `SettingsJsonMcpTracker.getBaselineServerNames()` — **deleted 2026-07-29 (Step 2)** |
+| `src/core/harness/qwen/QwenCliProvider.ts:518` | `QwenCliProvider.getAvailableModels()` — **deleted 2026-07-29 (Step 2)** |
 | `src/core/orchestration/TimelineRecorder.ts:33` | `TimelineRecorder.isRunEntry()` |
 | `src/core/orchestration/TimelineRecorder.ts:48` | `TimelineRecorder.extractRunTimestamp()` |
 | `src/core/WorkflowStateMachine.ts:78` | `WorkflowStateMachine.executionEndTime()` |
@@ -264,14 +266,14 @@ worth an individual look since 1–3 is a small enough number to just read.
 
 | Location | Method | Where the occurrence(s) are |
 | --- | --- | --- |
-| `src/core/harness/claude/ClaudeLogParser.ts:127` | `setWorkspaceRoot()` | shared count with `QwenLogParser` below |
-| `src/core/harness/qwen/QwenLogParser.ts:158` | `setWorkspaceRoot()` | shared count with `ClaudeLogParser` above |
-| `src/core/harness/opencode/OpenCodeLogParser.ts:539` | `getLogDirectory()` | — |
+| `src/core/harness/claude/ClaudeLogParser.ts:127` | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)** | Live via `CliIntegration`'s intentional property-presence dispatch |
+| `src/core/harness/qwen/QwenLogParser.ts:158` | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)** | Live via `CliIntegration`'s intentional property-presence dispatch |
+| `src/core/harness/opencode/OpenCodeLogParser.ts:539` | `getLogDirectory()` — **deleted 2026-07-29 (Step 2)** | No caller; OpenCode uses the session ID as its export path |
 | `src/core/PromptQueue.ts:733` | `getWorkflowName()` | — |
 | `src/core/PromptQueue.ts:893` | `persistSessionId()` | — |
 | `src/ui/StatusBarManager.ts:153` | `hide()` | — |
 | `src/core/TemplateManager.ts:767` | `setDefaultTemplateId()` | — |
-| `src/core/harness/shared/HeadlessLogTail.ts:179` | `getLogPath()` | — |
+| `src/core/harness/shared/HeadlessLogTail.ts:179` | `getLogPath()` — **deleted 2026-07-29 (Step 2)** | The result exposes `logPath` directly; no method caller existed |
 | `src/ui/CtrlYokeWebviewProvider.ts:1337` | `getPanelScopedSend()` | — |
 | `src/ui/NotificationManager.ts:65` | `notifyStartupComplete()` | **confirmed true positive** — see special case |
 | `src/test/unit/CliIntegration.test.ts:53` | `MockVsCodePlatform.getExtensionContext()` | — |
@@ -316,13 +318,20 @@ despite the noisy count:
 Everything else in this bucket still needs a one-by-one check:
 `vscode-shim.ts` `EventEmitter.fire()` (46), `Log.show()`/`StatusBarManager.show()`
 (10, shared name), `Log.append()` (4), `HarnessIntegration.resolveWorkspacePath()`
-(5), `CliTransportCoordinator.writeToCurrentPtySession()` (4),
-`CliNotificationMonitor.monitorForCompletion()` (11),
-`AntigravityTranscriptReader.reset()` (28, common name),
+(5),
 `PromptQueue.loadWorkingFile()` (7), `StreamingHistoryBuffer.clear()` (58,
 very common name), `WorkflowInstance.initialize()` (17, common name),
 `WorkflowOrchestrator.readWorkingFile()` (22, common name — see special case
 below).
+
+The Phase 1 harness slice checked the three harness-area Bucket C candidates:
+`CliTransportCoordinator.writeToCurrentPtySession()` — **kept** because
+`CliExecutionRunner` calls it through the transport contract for inject mode;
+`CliNotificationMonitor.monitorForCompletion()` — **deleted 2026-07-29**
+because the class's current consumers use `NotificationMonitorBase` and only
+the shared path/command helpers remain; and
+`AntigravityTranscriptReader.reset()` — **deleted 2026-07-29** because no
+parser, test, or other runtime caller resets the reader.
 
 ## Sweep 1b: webview-side dead class-method candidates (21 found)
 
@@ -536,6 +545,13 @@ lint`, `npm run knip`, and the relevant test files after each file's edits.
 The webview-side `InputCapture` item is already resolved above; its removal
 also eliminated the incomplete ad-hoc attribution feature rather than
 retaining an inert heuristic.
+
+**Phase 1 progress (2026-07-29, Step 2):** The harness slice handled 12 of the
+42 Bucket A/B candidates assigned to Phase 1 (all 12 were deleted), leaving
+**30 Phase 1 Bucket A/B candidates** for the remaining area slices. Two
+additional Bucket C candidates were deleted and one was kept as documented
+above. The combined finder now reports 44 candidates; the three kept harness
+methods remain expected false negatives of the heuristic.
 
 ### Phase 2 — retain the `WorkflowOrchestrator` standalone-server API (completed 2026-07-29)
 

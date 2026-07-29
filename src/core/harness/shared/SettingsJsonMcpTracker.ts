@@ -494,16 +494,4 @@ export class SettingsJsonMcpTracker {
     return [...allowed];
   }
 
-  /**
-   * Whether any ctrlyoke-managed servers are currently registered.
-   * Used to decide if `--allowed-mcp-server-names` is needed.
-   */
-  hasActiveManagedServers(): boolean {
-    return this.refCounts.size > 0;
-  }
-
-  /** Get baseline server names (for debugging/testing). */
-  getBaselineServerNames(): ReadonlySet<string> {
-    return this.baselineServers;
-  }
 }

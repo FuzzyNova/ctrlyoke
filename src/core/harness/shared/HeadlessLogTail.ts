@@ -144,11 +144,6 @@ export class HeadlessLogTail {
     void this.enqueueTick("stdout", chunk);
   }
 
-  /** Alias for callers that expose stream-like callback terminology. */
-  handleStdout(chunk: string): void {
-    this.onStdoutChunk(chunk);
-  }
-
   /** Stop polling, drain the log, and return the accumulated raw log events. */
   async finish(): Promise<HeadlessLogTailResult> {
     if (this.finished) {
@@ -174,10 +169,6 @@ export class HeadlessLogTail {
 
   getSessionId(): string | undefined {
     return this.sessionId;
-  }
-
-  getLogPath(): string | undefined {
-    return this.logPath;
   }
 
   getResult(): HeadlessLogTailResult {

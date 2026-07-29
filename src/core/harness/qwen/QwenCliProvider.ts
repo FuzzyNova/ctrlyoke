@@ -12,7 +12,6 @@ import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { getQwenModelIdsSync } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
@@ -509,14 +508,6 @@ export class QwenCliProvider implements ICliProvider {
     // settings.json. Clean it up since the user didn't have it before we ran.
     const origPath = path.join(workspaceRoot, ".qwen", "settings.json.orig");
     await fs.unlink(origPath).catch(() => {});
-  }
-
-  /**
-   * Return available Qwen model IDs discovered from ~/.qwen/settings.json.
-   * Populated at extension startup by ModelRegistry; falls back to ["qwen3.5-plus"].
-   */
-  getAvailableModels(): string[] {
-    return getQwenModelIdsSync();
   }
 
   /**

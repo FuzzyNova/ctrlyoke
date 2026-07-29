@@ -72,14 +72,6 @@ export class AntigravityTranscriptReader {
     }
   }
 
-  reset(transcriptPath?: string): void {
-    if (transcriptPath) {
-      this.states.delete(transcriptPath);
-    } else {
-      this.states.clear();
-    }
-  }
-
   private async readRecordsExclusive(
     transcriptPath: string
   ): Promise<AntigravityTranscriptRecord[]> {

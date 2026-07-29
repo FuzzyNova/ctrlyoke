@@ -23,8 +23,8 @@ type CopilotToolArgs = Record<string, unknown> | string;
 /**
  * Builds CliEvents from Copilot CLI tool call payloads.
  *
- * Two static methods cover the full tool call lifecycle:
- * - `buildInitiatedEvent` — called on tool.execution_start (or toolRequests);
+ * The static builders cover the full tool call lifecycle:
+ * - `buildInitiatedEvents` — called on tool.execution_start (or toolRequests);
  *   includes old/new content for FILE_EDIT so the attempted diff is visible
  *   immediately and on failure.
  * - `buildCompletedEvents` — called on tool.execution_complete; carries
@@ -89,15 +89,6 @@ export class CopilotToolBuilder {
       toolCallId,
       timestamp
     ) as CliEvent[];
-  }
-
-  static buildInitiatedEvent(
-    toolName: string,
-    args: CopilotToolArgs,
-    toolCallId: string | undefined,
-    timestamp: number
-  ): CliEvent {
-    return this.buildInitiatedEvents(toolName, args, toolCallId, timestamp)[0];
   }
 
   /**

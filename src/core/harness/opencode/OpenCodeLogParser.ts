@@ -1,5 +1,3 @@
-import * as path from "path";
-import * as os from "os";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { EventEmitter } from "events";
@@ -534,10 +532,6 @@ export class OpenCodeLogParser extends BaseLogParser {
 
   async getFinalEventsOnCompletion(sessionId: string): Promise<BaseCliEvent[]> {
     return this.fetchNewEvents(sessionId);
-  }
-
-  getLogDirectory(): string {
-    return path.join(os.homedir(), ".config", "opencode", "logs");
   }
 
   // ──────────────────────────────────────────────────────────────────

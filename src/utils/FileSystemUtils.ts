@@ -15,45 +15,6 @@ export async function readJsonFile(filePath: string): Promise<any> {
 }
 
 /**
- * Read JSON file, parse it, and delete it immediately.
- * Returns parsed data or null on any failure.
- *
- * Useful for reading notification/hook files that should be cleaned up after reading.
- *
- * @param filePath Absolute path to JSON file
- * @returns Parsed JSON data, or null if file doesn't exist or is invalid
- */
-export async function readJsonFileAndDelete(
-  filePath: string
-): Promise<unknown | null> {
-  try {
-    // Check if file exists
-    await fs.access(filePath);
-  } catch {
-    return null;
-  }
-
-  try {
-    // Read and parse JSON file
-    const content = await fs.readFile(filePath, "utf8");
-    const data = JSON.parse(content);
-
-    // Delete file immediately after reading
-    try {
-      await fs.unlink(filePath);
-      Log.debug("🗑️ Cleaned up notification file");
-    } catch (cleanupError) {
-      Log.debug(`Failed to clean up notification file: ${cleanupError}`);
-    }
-
-    return data;
-  } catch (error) {
-    Log.debug(`Failed to read/parse notification file: ${error}`);
-    return null;
-  }
-}
-
-/**
  * Save a file if it is open in a VS Code editor with unsaved changes.
  * No-op if the file is not open or is already saved.
  *
