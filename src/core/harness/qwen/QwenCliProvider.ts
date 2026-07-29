@@ -542,7 +542,7 @@ export class QwenCliProvider implements ICliProvider {
    * Build CLI arguments for headless mode
    *
    * Qwen CLI expects the prompt as a positional argument.
-   * Format: qwen "prompt" --output-format stream-json [other args]
+   * Format: qwen "prompt" --output-format stream-json --input-format stream-json [other args]
    *
    * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
    *
@@ -551,8 +551,24 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // --output-format stream-json enables structured JSON output for reliable parsing
-    return [prompt, "--output-format", "stream-json", ...baseArgs];
+    // --output-format stream-json enables structured JSON output for reliable parsing.
+    // --input-format stream-json is required alongside it (Qwen rejects the combination
+    // otherwise) and exempts this run from Qwen's non-interactive auto-deny gate, which
+    // resolves --allowed-tools entries against a narrower, stale alias table than the
+    // one used everywhere else and silently force-denies tools it doesn't recognize
+    // (e.g. write_file) even when explicitly allowed. Qwen auto-wraps this positional
+    // prompt into the initial stream-json user message internally — no stdin writing
+    // needed — and ctrlyoke's headless spawn already runs with stdin ignored, so the
+    // session's stdin read loop EOFs immediately and drains the in-flight turn before
+    // exiting, matching the existing process-exit completion signal.
+    return [
+      prompt,
+      "--output-format",
+      "stream-json",
+      "--input-format",
+      "stream-json",
+      ...baseArgs,
+    ];
   }
 
   /**

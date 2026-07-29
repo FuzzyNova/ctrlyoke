@@ -82,6 +82,68 @@ a capability row, descriptor, or UI caveat.
 This table belongs in the shared capability registry once that registry exists.
 Do not copy it into multiple UI components.
 
+## Root Cause: Why Qwen's Allow/Deny Lists Silently No-Op
+
+Confirmed by reading `packages/cli/src/config/config.ts` and
+`packages/core/src/{utils/tool-utils.ts,permissions/rule-parser.ts}` in a
+checkout of `qwen-code` (v0.21.1, installed CLI v0.20.1) and reproducing the
+failure against the real CLI. `--allowed-tools`/`--exclude-tools`/
+`--approval-mode` are real, live, non-hidden yargs options — they only
+disappear from `qwen --help` because of a yargs help-rendering quirk when no
+positional query is present (`qwen hello --help` lists them); this is not
+evidence they were removed.
+
+Qwen has **two independent, drifted-apart tool-name alias tables**:
+
+- `packages/core/src/permissions/rule-parser.ts` (`TOOL_NAME_ALIASES`) is the
+  current permission engine and explicitly maps Claude-Code-style names —
+  `Write` → `write_file`, `Bash` → `run_shell_command` — with the code comment
+  `// Claude Code compatibility`. It also supports `Bash(git status *)`-style
+  glob specifiers via real picomatch/shell-aware parsing.
+- `packages/core/src/utils/tool-utils.ts` (`TOOL_ALIAS_MAP`) is an older,
+  narrower table built only from internal canonical/display names
+  (`write_file`/`WriteFile`/`WriteFileTool`, `run_shell_command`/`Shell`/
+  `ShellTool`). It has **no entry for `Write` or `Bash`** and was never
+  updated when the Claude-compat table was introduced.
+
+`config.ts`'s non-interactive auto-deny gate (~line 1810) uses the **old**
+table to decide whether a tool the model wants to call is "explicitly
+allowed." When ctrlyoke's Qwen invocation is classified non-interactive
+(query + `--output-format stream-json`, historically with no
+`--input-format`) and approval mode is `default`/`auto`, the gate doesn't
+recognize `Write` or `Bash` as covering `write_file`/`run_shell_command`, so
+it force-adds the canonical name to the deny list — which then wins over the
+correctly-resolved allow entry, because Qwen's permission evaluator applies
+`deny > ask > allow`. The CLI process exits 0; the tool call is silently
+rejected as a `tool_result` with `EXECUTION_DENIED`, which is exactly the
+symptom observed (`write_file` blocked despite `Write` being in
+`--allowed-tools`, no error surfaced).
+
+**The fix**: the auto-deny gate is unconditionally skipped when
+`--input-format stream-json` is set (`config.ts` guard:
+`inputFormat !== InputFormat.STREAM_JSON`), regardless of interactive
+classification. `QwenCliProvider.buildHeadlessArgs()` now sends
+`--input-format stream-json` alongside the existing `--output-format
+stream-json`. Qwen auto-wraps the positional prompt into the initial
+stream-json user message internally (`gemini.tsx` → `nonInteractive/session.ts`
+`runNonInteractiveStreamJson`), so no stdin protocol writing was needed;
+ctrlyoke's headless spawn already runs with `stdio: ["ignore", "pipe", "pipe"]`
+(`CliProcessManager.ts`), so Qwen's stream-json stdin reader hits EOF
+immediately and `Session.drainAndShutdown()` still correctly awaits the
+in-flight turn before the process exits — the existing process-exit
+completion signal is unaffected. Verified empirically against the installed
+CLI (v0.20.1): `write_file` now succeeds (`is_error: false`,
+`permission_denials: []`) with the exact `Write`/`Bash(...)` alias syntax that
+previously failed.
+
+This does not by itself make Qwen's granular lists verified/production-ready
+— see Qwen Implementation below for the remaining canonical-name translation,
+workspace-config, and behavioral-test work — but it removes the specific
+silent-failure mode and lets `--input-format stream-json` become the standing
+invocation shape headless Qwen runs use going forward. Interactive mode
+(`buildInteractiveArgs`, the `-i` flag) never sets `--output-format`, so it was
+never classified non-interactive and never hit this gate.
+
 ## Staging Within the Parent Plan
 
 This is the first consumer of the compatibility architecture, not an
@@ -270,8 +332,14 @@ atomic acquisition and may proceed.
 Replace the unverified CLI-list mapping with project configuration for verified
 versions:
 
-- translate ctrlyoke patterns to Qwen's current canonical tool aliases and
-  specifier syntax;
+- `--input-format stream-json` is now sent for headless runs (see Root Cause
+  above), which removes the silent-deny failure mode independent of tool-name
+  choice. Still translate ctrlyoke patterns to Qwen's current canonical tool
+  names as defense in depth — `WriteFile`/`write_file` and
+  `ShellTool`/`run_shell_command` are recognized by *both* Qwen alias tables,
+  where bare `Write`/`Bash` are only recognized by the newer one — so a future
+  Qwen build or an interactive/non-stream-json code path can't reintroduce the
+  same class of bug;
 - write `permissions.allow` and `permissions.deny`;
 - preserve existing `permissions.ask`;
 - preserve the documented precedence `deny` > `ask` > `allow`;
