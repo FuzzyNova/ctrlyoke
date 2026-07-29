@@ -2452,6 +2452,26 @@ describe("EXECUTION_STARTED", () => {
     expect(sessions[0].id).toBe("session-1");
   });
 
+  it("clears a pending rewind when another viewer continues the run", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.setState({
+      pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 3 },
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 3,
+        isContinuation: true,
+        preserveStepCount: 1,
+      });
+    });
+
+    expect(useUiStore.getState().pendingRewind).toBeNull();
+  });
+
   it("clears ai-cli sessions on fresh non-inject starts", () => {
     renderHook(() => useMessageHandler());
     useUiStore.getState().setActiveWorkflowId("workflow-1");

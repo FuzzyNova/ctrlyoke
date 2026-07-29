@@ -750,6 +750,16 @@ function createMessageHandlers(): MessageHandlerMap {
     const isContinuation = message.isContinuation === true;
     const preserveStepCount = message.preserveStepCount ?? 0;
 
+    // A continuation can only begin after the backend commits its pending
+    // rewind, which removes the durable marker and its discard snapshot. Every
+    // viewer receives EXECUTION_STARTED, whereas the follow-up run-view refresh
+    // may not arrive until execution has returned, so clear this view-local
+    // snapshot here as well. Without this, a second viewer keeps showing the
+    // stale "Discard Continuation" banner while the run is already executing.
+    if (isContinuation && uiStore.pendingRewind !== null) {
+      useUiStore.setState({ pendingRewind: null });
+    }
+
     WebviewLog.debug(
       `[EXECUTION_STARTED] isContinuation=${isContinuation}, preserveStepCount=${preserveStepCount}, ` +
         `totalSteps=${message.totalSteps}, isViewingHistory=${uiStore.isViewingHistory}, ` +
