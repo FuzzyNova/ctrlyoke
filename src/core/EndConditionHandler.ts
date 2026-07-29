@@ -1,6 +1,4 @@
-import * as path from "path";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
-import { SCRIPT_EXTENSIONS } from "../utils/ValidationUtils";
 import {
   PromptStep,
   type ScriptProperties,
@@ -25,8 +23,6 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 /** Dialog action labels used in error/retry dialogs (single-sourced to prevent typo drift) */
 const DIALOG_ACTIONS = {
   STOP_WORKFLOW: "Stop Workflow",
-  SKIP_CONDITION: "Skip Condition",
-  OPEN_SCRIPT: "Open Script",
   CONTINUE_ANYWAY: "Continue Anyway",
   RETRY_ONCE_MORE: "Retry Once More",
 } as const;
@@ -93,7 +89,6 @@ export interface EndConditionHandlerResult {
  * Responsibilities:
  * - Determine success/failure of end condition evaluations
  * - Orchestrate retry attempts with configurable prompts
- * - Handle execution errors (script failures, timeouts)
  * - Handle validation failures (output doesn't match expected)
  * - Provide user interaction for error recovery decisions
  *
@@ -106,8 +101,7 @@ export class EndConditionHandler {
     private readonly promptQueue: PromptQueue,
     private readonly getDashboard: () => IDashboardSink | undefined = () =>
       undefined,
-    private readonly platform?: PlatformAdapter,
-    private readonly openFile?: (filePath: string) => Promise<void>
+    private readonly platform?: PlatformAdapter
   ) {}
 
   /**
@@ -209,84 +203,6 @@ export class EndConditionHandler {
       retryContext,
       sendRetryPrompt
     );
-  }
-
-  /**
-   * Handle execution errors (script failed, timed out, etc.)
-   * @returns Result object with shouldContinue and optional failureReason
-   */
-  async handleExecutionError(
-    prompt: PromptStep,
-    evaluationResult: EvaluationResult,
-    retryContext: RetryContext
-  ): Promise<EndConditionHandlerResult> {
-    let errorMessage = "End condition script execution failed";
-
-    if (evaluationResult.timeout) {
-      errorMessage = `End condition script timed out after ${evaluationResult.duration}ms`;
-    } else if (evaluationResult.error) {
-      errorMessage = `End condition script error: ${evaluationResult.error}`;
-    }
-
-    Log.error(`❌ ${errorMessage}`);
-
-    const action = await this.platform?.showChoice(
-      `ctrlyoke: ${errorMessage}`,
-      DIALOG_ACTIONS.STOP_WORKFLOW,
-      DIALOG_ACTIONS.SKIP_CONDITION,
-      DIALOG_ACTIONS.OPEN_SCRIPT
-    );
-
-    if (action === DIALOG_ACTIONS.SKIP_CONDITION) {
-      Log.info("⏭️ Skipping end condition and continuing");
-      this.promptQueue.resetRetryCount();
-      retryContext.runtime.completeAttempt(
-        retryContext.attemptTarget,
-        retryContext.attemptIndex
-      );
-      return { shouldContinue: true };
-    } else if (action === DIALOG_ACTIONS.OPEN_SCRIPT) {
-      // Try to open the script file (only if the script looks like a file path)
-      if (prompt.endCondition?.script) {
-        const { scriptPath: script } = EndConditionEvaluator.parseScriptCommand(
-          prompt.endCondition.script
-        );
-        if (this.looksLikeFilePath(script)) {
-          try {
-            if (this.openFile) {
-              await this.openFile(script);
-            } else if (this.platform?.openTextFile) {
-              await this.platform.openTextFile(script);
-            } else {
-              this.platform?.warn(
-                `Open Script is not available in this execution context: ${script}`
-              );
-            }
-          } catch {
-            this.platform?.error(`Could not open script file: ${script}`);
-          }
-        } else {
-          this.platform?.log(
-            `"${prompt.endCondition.script}" appears to be a shell command, not a file path.`
-          );
-        }
-      }
-
-      retryContext.runtime.failAttempt(
-        retryContext.attemptTarget,
-        retryContext.attemptIndex,
-        errorMessage
-      );
-      return { shouldContinue: false, failureReason: errorMessage };
-    }
-
-    // Default: stop workflow
-    retryContext.runtime.failAttempt(
-      retryContext.attemptTarget,
-      retryContext.attemptIndex,
-      errorMessage
-    );
-    return { shouldContinue: false, failureReason: errorMessage };
   }
 
   /**
@@ -548,20 +464,6 @@ export class EndConditionHandler {
       evaluationResult,
       prompt.endCondition!.returns,
       prompt.endCondition?.compareSource
-    );
-  }
-
-  /**
-   * Check if a string looks like a file path (vs. a bare shell command like "npm").
-   * Returns true if it contains path separators or has a known script extension.
-   */
-  private looksLikeFilePath(script: string): boolean {
-    const ext = path.extname(script).toLowerCase();
-    return (
-      (SCRIPT_EXTENSIONS as readonly string[]).includes(ext) ||
-      script.includes("/") ||
-      script.includes("\\") ||
-      script.startsWith(".")
     );
   }
 }

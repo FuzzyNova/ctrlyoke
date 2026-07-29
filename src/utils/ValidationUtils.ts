@@ -9,11 +9,8 @@ import {
   ANTIGRAVITY_CLI_MODELS,
 } from "./ModelConstants";
 
-/**
- * Allowed script file extensions for end condition scripts.
- * Single source of truth used by both validation and path detection.
- */
-export const SCRIPT_EXTENSIONS = [
+/** Allowed script file extensions for end condition scripts. */
+const SCRIPT_EXTENSIONS = [
   ".py",
   ".js",
   ".ts",

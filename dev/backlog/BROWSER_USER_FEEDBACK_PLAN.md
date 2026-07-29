@@ -519,6 +519,11 @@ already answered declaratively in `schemas/workflow-schema.json`.
 
 #### Site 1 — `handleExecutionError` (`EndConditionHandler.ts:218–290`)
 
+**Implemented 2026-07-29: method deleted**, along with its now-unreachable
+`looksLikeFilePath` helper, the unused `openFile` constructor parameter, the
+`SKIP_CONDITION`/`OPEN_SCRIPT` dialog actions, and the `SCRIPT_EXTENSIONS`
+export it was the last external consumer of.
+
 **Dead code. Delete the whole method.** A repo-wide search finds no caller.
 `handleEndConditionResult` returns early for evaluator errors at line 130 with
 an explicit comment — _"Evaluation errors are internal failures, not condition
