@@ -405,16 +405,6 @@ export function getCliSupportedModelIdsSync(): string[] {
 }
 
 /**
- * Check if a model is available via the Language Model API
- *
- * @param modelId The model ID to check
- * @returns true if the model was discovered via the LM API
- */
-export function isModelAvailable(modelId: string): boolean {
-  return cachedModels.some((m) => m.id === modelId);
-}
-
-/**
  * Check if a model is supported by Copilot CLI
  *
  * @param modelId The model ID to check

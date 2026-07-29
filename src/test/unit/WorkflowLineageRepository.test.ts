@@ -414,4 +414,44 @@ suite("WorkflowLineageRepository", () => {
       );
     });
   });
+
+  suite("pruneStaleStagingDirs", () => {
+    test("removes a staging dir whose last write is older than the stale threshold", async () => {
+      const ws = await makeWorkspace("ctrlyoke-lineage-prune-stale-");
+      const lineage = await repository.createLineage(ws, "wf", "Wf");
+      const staleDir = WorkflowPaths.stagingRunDir(
+        ws,
+        lineage.workflowKey,
+        "orphan"
+      );
+      await fs.mkdir(staleDir, { recursive: true });
+      const old = new Date(Date.now() - 10 * 60 * 1000);
+      await fs.utimes(staleDir, old, old);
+
+      await repository.pruneStaleStagingDirs(ws, lineage.workflowKey);
+
+      await assert.rejects(fs.access(staleDir));
+    });
+
+    test("leaves a just-created staging dir from an in-flight allocation alone", async () => {
+      const ws = await makeWorkspace("ctrlyoke-lineage-prune-fresh-");
+      const lineage = await repository.createLineage(ws, "wf", "Wf");
+      const allocation = await repository.allocateRun(ws, lineage.workflowKey);
+
+      await repository.pruneStaleStagingDirs(ws, lineage.workflowKey);
+
+      await fs.access(allocation.stagingRunDir);
+    });
+
+    test("does not touch promoted run directories or the draft dir", async () => {
+      const ws = await makeWorkspace("ctrlyoke-lineage-prune-safe-");
+      const lineage = await repository.createLineage(ws, "wf", "Wf");
+      const allocation = await publishRun(ws, lineage.workflowKey);
+
+      await repository.pruneStaleStagingDirs(ws, lineage.workflowKey);
+
+      await fs.access(allocation.runDir);
+      await fs.access(WorkflowPaths.draftDir(ws, lineage.workflowKey));
+    });
+  });
 });

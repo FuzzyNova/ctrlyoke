@@ -49,7 +49,7 @@ export interface PromotedRun {
 }
 
 /** Parsed run definition head (`workflow.ctrlyoke.json`), as raw JSON. */
-export type RunDefinition = Record<string, unknown> & {
+type RunDefinition = Record<string, unknown> & {
   steps?: Array<Record<string, unknown>>;
   finalStep?: Record<string, unknown>;
   definitionRevision?: number;

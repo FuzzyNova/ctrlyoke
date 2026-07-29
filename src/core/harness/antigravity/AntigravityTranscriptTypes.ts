@@ -26,7 +26,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function isAntigravityPlannerToolCall(
+function isAntigravityPlannerToolCall(
   value: unknown
 ): value is AntigravityPlannerToolCall {
   if (!isRecord(value) || typeof value.name !== "string") {

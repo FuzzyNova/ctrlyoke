@@ -152,7 +152,7 @@ export class ExternalRootsTrustStore {
 }
 
 /** Create the trust store backed by `~/.ctrlyoke/external-roots-trust.json`. */
-export function createExternalRootsTrustStore(): ExternalRootsTrustStore {
+function createExternalRootsTrustStore(): ExternalRootsTrustStore {
   const storePath = path.join(
     os.homedir(),
     ".ctrlyoke",

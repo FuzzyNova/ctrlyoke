@@ -88,7 +88,7 @@ export function stripViewOnlyWorkflowStepFields(
  * Pre-release cutover deliberately does not migrate or fall back to these
  * obsolete duplicate fields; events.jsonl is the only durable response record.
  */
-export function stripTimelineDuplicatedRuntimeOutput(
+function stripTimelineDuplicatedRuntimeOutput(
   step: WorkflowStep
 ): WorkflowStep {
   if (!step._runtime) {

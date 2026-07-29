@@ -23,7 +23,7 @@
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
-export type ViewerTab = "explorer" | "sourceControl";
+type ViewerTab = "explorer" | "sourceControl";
 
 export interface Route {
   /** Active lineage draft or promoted run, addressed without a filesystem path. */

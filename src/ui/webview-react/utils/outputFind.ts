@@ -21,7 +21,7 @@ import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 
-export type OutputFindField =
+type OutputFindField =
   | "header"
   | "prompt"
   | "command"

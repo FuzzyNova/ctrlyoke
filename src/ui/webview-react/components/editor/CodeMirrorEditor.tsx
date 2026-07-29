@@ -1823,8 +1823,8 @@ const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
 // document — correlates an async symbol-kind lookup (resolved in
 // createContextReferenceLintExtension) back to the matching chip icon in
 // createAtomicReferenceExtension without changing the reference's stored
-// text/wire format. Exported for unit testing only.
-export function symbolIconCacheKey(
+// text/wire format.
+function symbolIconCacheKey(
   path: string,
   symbolName: string,
   lineStart?: string,

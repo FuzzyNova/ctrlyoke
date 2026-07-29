@@ -13,7 +13,7 @@ export type EndConditionCompareSource = CompareSource;
 /**
  * End condition configuration
  */
-export interface EndCondition {
+interface EndCondition {
   script: string;
   returns: string;
   compareSource?: EndConditionCompareSource;

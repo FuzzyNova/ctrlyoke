@@ -7,7 +7,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { deriveRoute, type Route, type RouteSourceState } from "./route";
 
-export function currentSourceState(): RouteSourceState {
+function currentSourceState(): RouteSourceState {
   const ui = useUiStore.getState();
   const wv = useWorkspaceViewerStore.getState();
   return {

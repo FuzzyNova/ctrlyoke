@@ -11,7 +11,7 @@ type ThemeSurface = "editor" | "input";
 // context) a distinct, always-available accent, reused for both the chip's
 // icon (via SYMBOL_ICON_COLORS below) and its border accent (via
 // buildChipAccentShadowRules below) so the two never drift apart.
-export const CHART_ACCENT_COLORS = {
+const CHART_ACCENT_COLORS = {
   blue: "var(--vscode-charts-blue, #59a4f9)",
   green: "var(--vscode-charts-green, #89d185)",
   purple: "var(--vscode-charts-purple, #b180d7)",

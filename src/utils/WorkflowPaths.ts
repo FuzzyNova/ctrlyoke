@@ -19,9 +19,9 @@ import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
  */
 
 export const WORKING_FILE_NAME = "workflow.ctrlyoke.json";
-export const DESCRIPTOR_FILE_NAME = "workflow.json";
-export const RUNNER_LOCK_FILE_NAME = "runner.json";
-export const DRAFT_DIR_NAME = "draft";
+const DESCRIPTOR_FILE_NAME = "workflow.json";
+const RUNNER_LOCK_FILE_NAME = "runner.json";
+const DRAFT_DIR_NAME = "draft";
 const CREATING_PREFIX = ".creating-";
 
 const RUN_REF_PREFIX = "run-";
@@ -56,7 +56,7 @@ const WINDOWS_RESERVED_NAMES = new Set([
   "lpt9",
 ]);
 
-export class WorkflowPathError extends Error {
+class WorkflowPathError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "WorkflowPathError";
@@ -110,7 +110,7 @@ export function assertValidRunRef(value: string): asserts value is RunRef {
   }
 }
 
-export function isValidRunRef(value: string): value is RunRef {
+function isValidRunRef(value: string): value is RunRef {
   try {
     assertValidRunRef(value);
     return true;
@@ -119,7 +119,7 @@ export function isValidRunRef(value: string): value is RunRef {
   }
 }
 
-export function isValidWorkflowKey(value: string): value is WorkflowKey {
+function isValidWorkflowKey(value: string): value is WorkflowKey {
   try {
     assertValidWorkflowKey(value);
     return true;

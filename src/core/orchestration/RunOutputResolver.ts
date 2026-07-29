@@ -41,7 +41,7 @@ export interface ResolvedRunAttempt {
   definition?: ResolvedAttemptDefinition;
 }
 
-export interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
+interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
   output: CliOutput;
   /** Exact response used for runtime responseText and output previews. */
   responseText: string;

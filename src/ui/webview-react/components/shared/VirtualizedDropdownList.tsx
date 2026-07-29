@@ -10,7 +10,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 // every row on each open is what blocks the main thread and starves the
 // dropdown's open/close animation of frames, so only the rows scrolled into
 // view get mounted.
-export const DROPDOWN_LIST_VIRTUALIZATION_THRESHOLD = 50;
+const DROPDOWN_LIST_VIRTUALIZATION_THRESHOLD = 50;
 const DEFAULT_ROW_ESTIMATED_HEIGHT = 36;
 const DEFAULT_ROW_OVERSCAN = 12;
 

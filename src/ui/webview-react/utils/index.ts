@@ -30,7 +30,6 @@ export {
   isPromptRunning,
   isPromptPending,
   getPromptLabel,
-  type EndCondition,
   type RawPrompt,
   type PromptDetails,
   type PromptStep,

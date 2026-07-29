@@ -71,11 +71,5 @@
     "src/ui/webview-react/types/index.ts",
     "src/ui/webview-react/utils/index.ts"
   ],
-  "ignoreDependencies": [
-    "@vscode/codicons",
-    "autoprefixer",
-    "tailwindcss",
-    "typo-js"
-  ],
-  "ignoreBinaries": ["vsce", "nyc"]
+  "ignoreDependencies": ["@vscode/codicons", "autoprefixer", "typo-js"]
 }

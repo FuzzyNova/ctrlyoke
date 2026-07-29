@@ -14,7 +14,7 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 
 /** Builds the stable list key for a run-panel row — draft or run:{workflowKey}:{runRef}. */
-export function runPanelRowKey(
+function runPanelRowKey(
   workflowKey: WorkflowKey,
   row: RunPanelRow
 ): string {

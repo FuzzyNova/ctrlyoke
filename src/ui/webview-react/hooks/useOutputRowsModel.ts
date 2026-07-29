@@ -3,7 +3,7 @@ import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
 } from "@utils/outputProjection";
-import { buildOutputRows, type OutputRenderRow } from "@utils/outputRows";
+import { buildOutputRows } from "@utils/outputRows";
 import { measurePhase } from "@utils/performanceProfiler";
 import { CLI_EVENT_TYPES } from "@/types/messages";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
@@ -482,5 +482,3 @@ export function useOutputRowsModel({
     handleBashExpansionChange,
   };
 }
-
-export type { OutputRenderRow };

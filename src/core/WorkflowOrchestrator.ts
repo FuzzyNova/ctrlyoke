@@ -4797,6 +4797,25 @@ export class WorkflowOrchestrator {
       recoveredPaths = [];
     }
 
+    // Prune `.creating-*` staging dirs orphaned by an allocateRun that never reached
+    // finalizeAllocatedRun (crash, disk full, thrown validation error). Kept off the
+    // blocks above/below so a failure here can't discard their recovery results.
+    try {
+      const workflowKeys =
+        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
+      for (const workflowKey of workflowKeys) {
+        await this.lineageRepository.pruneStaleStagingDirs(
+          workspaceFolderPath,
+          workflowKey
+        );
+      }
+    } catch (err) {
+      Log.warn(
+        "[WorkflowOrchestrator] setupCliWatching: pruneStaleStagingDirs failed:",
+        err
+      );
+    }
+
     // Close out history manifests left RUNNING by the dead owner. Kept off the
     // block above so a recovery failure cannot discard activeCliPaths and
     // silently leave CLI-managed workflows unwatched.

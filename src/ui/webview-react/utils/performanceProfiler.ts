@@ -13,7 +13,7 @@ type PerformanceProfilerState = Required<PerformanceProfilerOptions> & {
   enabled: boolean;
 };
 
-export interface PerformanceProfiler {
+interface PerformanceProfiler {
   enable: (options?: PerformanceProfilerOptions) => void;
   disable: () => void;
   configure: (options: PerformanceProfilerOptions) => void;

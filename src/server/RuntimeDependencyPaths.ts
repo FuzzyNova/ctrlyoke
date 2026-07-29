@@ -7,7 +7,7 @@ const RUNTIME_NODE_MODULES_DIR = path.join(
   "node_modules"
 );
 
-export function resolveRuntimePackageDir(packageName: string): string {
+function resolveRuntimePackageDir(packageName: string): string {
   return path.join(RUNTIME_NODE_MODULES_DIR, ...packageName.split("/"));
 }
 

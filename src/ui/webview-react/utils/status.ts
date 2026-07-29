@@ -275,7 +275,7 @@ export type WorkflowExecutionControlAction =
   | "stop"
   | "none";
 
-export interface WorkflowExecutionControlSlot {
+interface WorkflowExecutionControlSlot {
   action: WorkflowExecutionControlAction;
   label: string;
   icon: string;

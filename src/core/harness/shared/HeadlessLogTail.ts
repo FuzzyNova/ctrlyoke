@@ -6,7 +6,7 @@ import type { ICliProvider } from "./interfaces/ICliProvider";
 import type { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 
 /** Default idle poll interval for log growth while stdout is quiet. */
-export const HEADLESS_LOG_TAIL_POLL_INTERVAL_MS = 750;
+const HEADLESS_LOG_TAIL_POLL_INTERVAL_MS = 750;
 
 export interface HeadlessLogTailOptions {
   parser: ILogParser;

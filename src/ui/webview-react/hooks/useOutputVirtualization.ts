@@ -41,7 +41,7 @@ interface RowHeightBucketStats {
   maxAbsDelta: number;
 }
 
-export interface OutputRowLayoutModel {
+interface OutputRowLayoutModel {
   rowStartsByIndex: number[];
   rowStartsByKey: Map<string, number>;
   rowSizesByKey: Map<string, number>;

@@ -85,7 +85,7 @@ async function readJsonFile(filePath: string): Promise<unknown> {
   }
 }
 
-export async function writeJsonFileAtomic(
+async function writeJsonFileAtomic(
   filePath: string,
   data: unknown
 ): Promise<void> {

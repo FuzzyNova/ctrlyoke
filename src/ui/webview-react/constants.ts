@@ -202,7 +202,7 @@ export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
  * rows makes the scrollbar lie and drops seeks well short of their target on a
  * long list.
  */
-export const WORKFLOW_DROPDOWN_ROW_HEIGHT = {
+const WORKFLOW_DROPDOWN_ROW_HEIGHT = {
   flat: 36,
   stacked: 54,
 } as const;

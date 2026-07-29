@@ -22,7 +22,7 @@ function forCompare(value: string): string {
  * branch on this to decide whether to act directly, offer a "Trust Parent
  * Folder" action, or block outright.
  */
-export type FileAccessReason =
+type FileAccessReason =
   | "workspace"
   | "trustedExternalRoot"
   | "outsideTrustedRoots";

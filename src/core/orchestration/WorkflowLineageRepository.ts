@@ -13,6 +13,8 @@ import { withFileLock } from "../../utils/FileLockUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 
 const DESCRIPTOR_SCHEMA_VERSION = 1;
+/** How long a `.creating-*` staging dir can go without a new write before `pruneStaleStagingDirs` removes it. */
+const STALE_STAGING_DIR_MS = 5 * 60 * 1000;
 
 export interface CreatedLineage {
   workflowKey: WorkflowKey;
@@ -168,10 +170,10 @@ export class WorkflowLineageRepository {
           }
         }
         try {
-          const stageName = `.creating-${candidate}-${crypto.randomUUID()}`;
-          const candidateStagingDir = path.join(
-            WorkflowPaths.lineageDir(workspaceRoot, workflowKey),
-            stageName
+          const candidateStagingDir = WorkflowPaths.stagingRunDir(
+            workspaceRoot,
+            workflowKey,
+            `${candidate}-${crypto.randomUUID()}`
           );
           await fs.promises.mkdir(candidateStagingDir);
           runRef = candidate;
@@ -437,6 +439,46 @@ export class WorkflowLineageRepository {
         );
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Removes `.creating-*` staging directories left behind when an `allocateRun` never
+   * reached `finalizeAllocatedRun` (crash, disk full, a thrown validation error before
+   * publishing) — otherwise they accumulate forever, since nothing else lists, counts,
+   * or surfaces them. Only removes directories whose last write is older than
+   * `STALE_STAGING_DIR_MS`, so this never races a legitimate in-flight allocation (which
+   * normally publishes within milliseconds of creation).
+   */
+  async pruneStaleStagingDirs(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<void> {
+    const lineageDir = WorkflowPaths.lineageDir(workspaceRoot, workflowKey);
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(lineageDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    const now = Date.now();
+    for (const entry of entries) {
+      if (!WorkflowPaths.isStagingDirEntry(entry)) {
+        continue;
+      }
+      const dir = path.join(lineageDir, entry.name);
+      try {
+        const stat = await fs.promises.stat(dir);
+        if (now - stat.mtimeMs < STALE_STAGING_DIR_MS) {
+          continue;
+        }
+        await fs.promises.rm(dir, { recursive: true, force: true });
+      } catch (error) {
+        // console.warn (not Log) — this module is imported by mcp-server.ts, which has no vscode logging infrastructure.
+        console.warn(
+          `[WorkflowLineageRepository] Failed to prune stale staging dir ${dir}: ${getErrorMessage(error)}`
+        );
+      }
     }
   }
 

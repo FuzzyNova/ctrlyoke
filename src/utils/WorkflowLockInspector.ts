@@ -8,7 +8,7 @@ import {
 import * as WorkflowPaths from "./WorkflowPaths";
 
 /** Shared, Node-only runner-lock reader for CLI and MCP process boundaries. */
-export const WORKFLOW_LOCK_STALE_HEARTBEAT_MS = 30_000;
+const WORKFLOW_LOCK_STALE_HEARTBEAT_MS = 30_000;
 
 export async function readWorkflowLock(
   workspaceRoot: string,
