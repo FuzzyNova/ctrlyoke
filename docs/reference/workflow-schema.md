@@ -69,7 +69,7 @@ Prompt steps also accept the execution fields listed in the workflow-level table
 | `maxRetries`           | number                              | `-1` for unlimited          |
 | `retryPrompt`          | string                              | Retry template              |
 | `resumeSessionOnRetry` | boolean                             | Reuse same session on retry |
-| `onPass`               | `continue`, `retry`, `stopWorkflow` | Pass behavior               |
+| `onPass`               | `continue`, `stopWorkflow`         | Pass behavior               |
 | `onFail`               | `continue`, `retry`, `stopWorkflow` | Failure behavior            |
 
 ## Tool permissions

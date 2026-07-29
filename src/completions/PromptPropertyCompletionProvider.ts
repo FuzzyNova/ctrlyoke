@@ -168,7 +168,7 @@ export class PromptPropertyCompletionProvider
       key: PROMPT_PROPERTIES.END_CONDITION,
       detail: "Validation script run after AI response",
       documentation:
-        "End condition evaluated after the AI responds. If the condition fails, the step retries with `retryPrompt`. Supports `onPass` and `onFail` actions: continue | retry | stopWorkflow.",
+        "End condition evaluated after the AI responds. If the condition fails, the step retries with `retryPrompt`. `onPass` supports `continue | stopWorkflow`; `onFail` supports `continue | retry | stopWorkflow`.",
       insertSnippet: `${PROMPT_PROPERTIES.END_CONDITION}:\n  script: \n  returns: "true"`,
     },
     {

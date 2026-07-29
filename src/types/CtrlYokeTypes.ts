@@ -575,8 +575,11 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
  */
 export type EndConditionCompareSource = CompareSource;
 
-/** Action options for endCondition onPass/onFail */
+/** Action options for endCondition onFail */
 export type EndConditionAction = Exclude<ConditionAction, "skipPrompt">;
+
+/** Action options for endCondition onPass. Retry requires orchestrator loop support. */
+export type EndConditionPassAction = Exclude<EndConditionAction, "retry">;
 
 /** Action options for preCondition onPass/onFail */
 export type PreConditionAction = Exclude<ConditionAction, "retry">;
@@ -603,7 +606,7 @@ export interface EndCondition extends ScriptProperties {
   retryPrompt?: string; // Template with placeholders for retry messages
   resumeSessionOnRetry?: boolean; // Resume the same session for retries (default: true). Set false to start a fresh session for each retry.
   /** What to do when the end condition passes. Default: "continue". */
-  onPass?: EndConditionAction;
+  onPass?: EndConditionPassAction;
   /** What to do when the end condition fails. Default: "stopWorkflow". When "retry" and maxRetries unset, defaults to 1 retry. */
   onFail?: EndConditionAction;
 }

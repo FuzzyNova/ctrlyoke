@@ -1,6 +1,9 @@
 import Ajv, { JSONSchemaType } from "ajv";
 import { PromptStep } from "../types/CtrlYokeTypes";
-import { HARNESS_IDS } from "../types/DashboardConstants";
+import {
+  CONDITION_ACTIONS,
+  HARNESS_IDS,
+} from "../types/DashboardConstants";
 import { Log } from "./Log";
 import {
   COPILOT_CLI_MODEL_IDS,
@@ -95,8 +98,23 @@ export class ValidationUtils {
           maxRetries: { type: "number", nullable: true },
           retryPrompt: { type: "string", nullable: true },
           resumeSessionOnRetry: { type: "boolean", nullable: true },
-          onPass: { type: "string", nullable: true },
-          onFail: { type: "string", nullable: true },
+          onPass: {
+            type: "string",
+            enum: [
+              CONDITION_ACTIONS.CONTINUE,
+              CONDITION_ACTIONS.STOP_WORKFLOW,
+            ],
+            nullable: true,
+          },
+          onFail: {
+            type: "string",
+            enum: [
+              CONDITION_ACTIONS.CONTINUE,
+              CONDITION_ACTIONS.RETRY,
+              CONDITION_ACTIONS.STOP_WORKFLOW,
+            ],
+            nullable: true,
+          },
         },
         required: ["script", "returns"],
         nullable: true,

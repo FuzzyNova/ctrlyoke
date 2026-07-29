@@ -182,6 +182,44 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
+    test("should reject onPass retry because pass retries are not implemented", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-on-pass-retry-invalid-")
+      );
+      const filePath = path.join(
+        tempDir,
+        "invalid-on-pass-retry.ctrlyoke.json"
+      );
+
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify(
+            {
+              steps: [
+                {
+                  prompt: "Test prompt",
+                  endCondition: {
+                    script: "npm test",
+                    returns: "true",
+                    onPass: "retry",
+                  },
+                },
+              ],
+            },
+            null,
+            2
+          ),
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+        assert.strictEqual(result, null);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("should keep resumeSession undefined when not explicitly set (uses global setting at execution time)", async () => {
       const filePath = path.join(fixturesPath, "multi.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);

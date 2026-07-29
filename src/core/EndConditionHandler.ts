@@ -5,6 +5,7 @@ import {
   type ScriptVerdict,
   type WorkflowAttemptTarget,
   type EndConditionAction,
+  type EndConditionPassAction,
 } from "../types/CtrlYokeTypes";
 import {
   STATUS_MESSAGE_SEVERITY,
@@ -114,7 +115,7 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    const onPass: EndConditionAction =
+    const onPass: EndConditionPassAction =
       prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
     const onFail: EndConditionAction =
       prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
@@ -130,10 +131,9 @@ export class EndConditionHandler {
       };
     }
 
-    // Apply maxRetries default of 1 when either field is "retry" and maxRetries is unset
+    // Apply maxRetries default of 1 when onFail is "retry" and maxRetries is unset
     if (
-      (onPass === CONDITION_ACTIONS.RETRY ||
-        onFail === CONDITION_ACTIONS.RETRY) &&
+      onFail === CONDITION_ACTIONS.RETRY &&
       prompt.endCondition &&
       prompt.endCondition.maxRetries === undefined
     ) {
@@ -164,15 +164,6 @@ export class EndConditionHandler {
           reason
         );
         return { shouldContinue: false, failureReason: reason };
-      }
-
-      // CONTINUE or RETRY — advance to next step
-      // Note: onPass "retry" (re-run while passing) requires orchestrator-level loop support;
-      // for now it behaves as "continue" to avoid breaking workflow state.
-      if (onPass === CONDITION_ACTIONS.RETRY) {
-        Log.info(
-          "⚠️ onPass: retry is not yet fully implemented — advancing to next step"
-        );
       }
 
       retryContext.runtime.completeAttempt(

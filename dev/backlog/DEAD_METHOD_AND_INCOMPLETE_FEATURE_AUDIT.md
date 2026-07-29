@@ -492,18 +492,11 @@ Most of the 74 hits are noise (dictionary words in the spellcheck data file,
 lifecycle method, literal `"TODO"` strings used as test fixture content, the
 harness log parsers' `todo_list` tool-call handling). The real findings:
 
-1. **`EndConditionHandler.ts:174` — `onPass: "retry"` silently behaves as
-   `"continue"`.** This is the highest-priority item in this whole audit: it
-   isn't a private implementation detail, it's a **schema-validated,
-   autocomplete-advertised option**. `schemas/workflow-schema.json` and
-   `PromptPropertyCompletionProvider.ts:171` both tell users `onPass` accepts
-   `continue | retry | stopWorkflow`. A user who picks `retry` gets silently
-   downgraded to `continue` with only a debug-log line
-   (`⚠️ onPass: retry is not yet fully implemented`) — no schema error, no
-   visible warning. Either implement real retry-on-pass semantics (the code
-   comment says it "requires orchestrator-level loop support") or remove
-   `retry` from the schema/completions/types until it's real, so an invalid
-   selection fails loudly instead of quietly doing the wrong thing.
+1. **Resolved in Phase 4:** `EndConditionHandler.ts` no longer silently
+   downgrades `onPass: "retry"` to `"continue"`. The option was removed from
+   the `onPass` type, schema, and completions; parser coverage confirms it is
+   rejected, while `onFail: "retry"` remains supported. The deferred feature
+   is captured in [`END_CONDITION_PASS_RETRY_PLAN.md`](END_CONDITION_PASS_RETRY_PLAN.md).
 
 2. **`ServerSection.tsx:338`** — already correctly documented as inert
    pending `STANDALONE_SERVER_PLAN.md` Phases 5–10, with the type/schema/
@@ -648,7 +641,7 @@ look," it can't tell you "dead." Confirmed so far:
   currently exists for the checker to trace.
 - The finder reports **0 candidates** after this resolution pass.
 
-### Phase 4 — fix `onPass: "retry"`
+### Phase 4 — fix `onPass: "retry"` (completed 2026-07-29)
 
 **Decision (2026-07-29): strip `retry` from `onPass` only.** Implementing real
 retry-on-pass needs orchestrator-level loop support — a genuine feature, too
@@ -673,7 +666,14 @@ Scope notes established while making this call:
 - The schema's current `onPass: retry` description names a real use case
   ("keep implementing backlog items while tests stay green"). Capture that as a
   new `dev/backlog/` doc when removing it so the intent isn't lost — this phase
-  removes a broken option, it does not reject the feature.
+  removes a broken option, it does not reject the feature. See
+  [`END_CONDITION_PASS_RETRY_PLAN.md`](END_CONDITION_PASS_RETRY_PLAN.md).
+
+**Landed:** `EndConditionPassAction` now excludes `retry`, the generated JSON/YAML
+schemas and YAML completion text advertise the two valid `onPass` actions,
+the unreachable handler branch is gone, and tests cover pass continuation,
+pass stop, parser rejection, and direct prompt-step validation. `onFail: retry`
+and its retry loop were left unchanged.
 
 ### Phase 5 — the smaller UI gaps
 

@@ -15,6 +15,7 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   type PromptStep,
   type ScriptProperties,
+  type EndConditionPassAction,
 } from "../../types/CtrlYokeTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
@@ -147,7 +148,10 @@ function validationFailure(result: string = "bad"): EvaluationResult {
   };
 }
 
-function createPrompt(maxRetries: number): PromptStep {
+function createPrompt(
+  maxRetries: number,
+  onPass: EndConditionPassAction = "continue"
+): PromptStep {
   return {
     prompt: "run task",
     endCondition: {
@@ -155,6 +159,7 @@ function createPrompt(maxRetries: number): PromptStep {
       returns: "ok",
       retryPrompt: "Please fix the issues",
       maxRetries,
+      onPass,
     },
   };
 }
@@ -164,7 +169,7 @@ suite("EndConditionHandler", () => {
     const platform = new MockPlatform();
     const runtime = new WorkflowStateMachine();
     const queue = new PromptQueue(runtime);
-    const prompt = createPrompt(1);
+    const prompt = createPrompt(1, "continue");
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
     const handler = new EndConditionHandler(
@@ -204,6 +209,44 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(transitions, [
       { command: WORKFLOW_ATTEMPT_COMMANDS.COMPLETE, attemptIndex: 0 },
     ]);
+  });
+
+  test("stops the workflow when the end condition passes with stopWorkflow", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(1, "stopWorkflow");
+    const integration = new MockHarnessIntegration(undefined, false);
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform),
+      queue,
+      () => undefined,
+      platform
+    );
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult(),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => {
+        throw new Error("retry callback should not be invoked");
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, false);
+    assert.strictEqual(
+      result.failureReason,
+      "End condition passed with onPass: stopWorkflow"
+    );
   });
 
   test("schedules a retry and completes the retry attempt on retry success", async () => {

@@ -239,6 +239,20 @@ suite("ValidationUtils Extended Tests", () => {
       assert.strictEqual(result.valid, true);
     });
 
+    test("should reject retry as an end-condition onPass action", () => {
+      const result = ValidationUtils.validatePromptStep({
+        prompt: "Test prompt",
+        endCondition: {
+          script: "test.py",
+          returns: "true",
+          onPass: "retry",
+        },
+      });
+
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.errors.length > 0);
+    });
+
     test("should reject retryPrompt as non-string", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
