@@ -32,7 +32,6 @@ export const MESSAGE_TYPES = {
   CONTEXT_WINDOW_UPDATE: "contextWindowUpdate", // Live context window usage update (extension -> webview)
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
-  QUEUE_EXTENDED: "queueExtended",
   STEPS_EXTENDED: "stepsExtended", // Send updated steps list after queue extension
   PROMPT_DELETED: "promptDeleted", // Notify webview that a prompt was deleted
   UPDATE_FINAL_PROMPT: "updateFinalStep", // Bidirectional: webview updates workflow-level finalStep; extension pushes latest finalStep

@@ -1,10 +1,11 @@
 # Dead Class-Method & Incomplete-Feature Audit
 
-**Status (2026-07-29):** Phase 7 is complete, and the Phase 1 harness slice is
-complete. The nominal-type fixes described
-below are applied, reducing the finder from 91 to 56 candidates; the completed
-Phase 1 harness, core-engine, and utils/config/platform/git slices reduce it to 15. This documents
-the output of two sweeps run after deleting `EndConditionHandler.handleExecutionError`
+**Status (2026-07-29):** Phase 7 is complete, and the Phase 1 UI notification
+slice is complete. The nominal-type fixes described below are applied,
+reducing the finder from 91 to 56 candidates; the completed Phase 1 harness,
+core-engine, utils/config/platform/git, and UI notification slices reduce it to
+7. This documents the output of two sweeps run after deleting
+`EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
 find more of the same pattern.
@@ -242,14 +243,14 @@ replace it.
 | `src/completions/PromptCompletionProvider.ts:462`                 | `PromptCompletionProvider.clearCache()` — **deleted 2026-07-29 (Step 4)**; the shared `clearFilesCache()` remains owned by `CompletionHelpers`                                    |
 | `src/utils/HarnessFileManager.ts:530`                             | `HarnessFileManager.syncToHarnesses()` — **deleted 2026-07-29 (Step 4)**; `SyncResult` and its error-formatting import were dead with it                                          |
 | `src/core/orchestration/HistorySearchService.ts:79`               | `HistorySearchService.enqueueIndexRefresh()` — **deleted 2026-07-29 (Step 3)**; `OutputHistoryManager` owns direct index refresh scheduling                                       |
-| `src/ui/CtrlYokeWebviewProvider.ts:641`                           | `CtrlYokeWebviewProvider.notifyTerminalStarted()`                                                                                                                                 |
-| `src/ui/CtrlYokeWebviewProvider.ts:657`                           | `CtrlYokeWebviewProvider.notifyTerminalOutput()`                                                                                                                                  |
-| `src/ui/CtrlYokeWebviewProvider.ts:671`                           | `CtrlYokeWebviewProvider.notifyTerminalEnded()`                                                                                                                                   |
-| `src/ui/CtrlYokeWebviewProvider.ts:686`                           | `CtrlYokeWebviewProvider.notifyQueueExtended()`                                                                                                                                   |
-| `src/ui/CtrlYokeWebviewProvider.ts:785`                           | `CtrlYokeWebviewProvider.notifyQueueSizeLimitReached()`                                                                                                                           |
-| `src/ui/CtrlYokeWebviewProvider.ts:796`                           | `CtrlYokeWebviewProvider.notifyExecutionTimeLimitReached()`                                                                                                                       |
-| `src/ui/CtrlYokeWebviewProvider.ts:896`                           | `CtrlYokeWebviewProvider.sendHistoryUndoData()`                                                                                                                                   |
-| `src/ui/CtrlYokeWebviewProvider.ts:928`                           | `CtrlYokeWebviewProvider.sendUndoPromptResult()`                                                                                                                                  |
+| `src/ui/CtrlYokeWebviewProvider.ts:641`                           | `CtrlYokeWebviewProvider.notifyTerminalStarted()` — **deleted 2026-07-29 (Step 5)**; terminal messages use `ptyPostMessage`, workflow-instance sends, and per-client replay |
+| `src/ui/CtrlYokeWebviewProvider.ts:657`                           | `CtrlYokeWebviewProvider.notifyTerminalOutput()` — **deleted 2026-07-29 (Step 5)**; terminal output uses `ptyPostMessage` and replay buffers |
+| `src/ui/CtrlYokeWebviewProvider.ts:671`                           | `CtrlYokeWebviewProvider.notifyTerminalEnded()` — **deleted 2026-07-29 (Step 5)**; PTY exit callbacks use `ptyPostMessage` |
+| `src/ui/CtrlYokeWebviewProvider.ts:686`                           | `CtrlYokeWebviewProvider.notifyQueueExtended()` — **deleted 2026-07-29 (Step 5)**; `STEPS_EXTENDED` is the current sink route and the orphaned `QUEUE_EXTENDED` constant was removed |
+| `src/ui/CtrlYokeWebviewProvider.ts:785`                           | `CtrlYokeWebviewProvider.notifyQueueSizeLimitReached()` — **retained as a finding 2026-07-29 (Step 5)**; React still handles the message, but no current sender or replacement exists |
+| `src/ui/CtrlYokeWebviewProvider.ts:796`                           | `CtrlYokeWebviewProvider.notifyExecutionTimeLimitReached()` — **retained as a finding 2026-07-29 (Step 5)**; React still handles the message, but no current sender or replacement exists |
+| `src/ui/CtrlYokeWebviewProvider.ts:896`                           | `CtrlYokeWebviewProvider.sendHistoryUndoData()` — **deleted 2026-07-29 (Step 5)**; `OUTPUT_HISTORY_LOADED` now carries replayed history |
+| `src/ui/CtrlYokeWebviewProvider.ts:928`                           | `CtrlYokeWebviewProvider.sendUndoPromptResult()` — **deleted 2026-07-29 (Step 5)**; `UndoRedoCoordinator` emits the result through the client-scoped router |
 | `src/core/WorkflowOrchestrator.ts:440`                            | `WorkflowOrchestrator.addDashboardProvider()` — see special case                                                                                                                  |
 | `src/core/WorkflowOrchestrator.ts:444`                            | `WorkflowOrchestrator.removeDashboardProvider()` — see special case                                                                                                               |
 | `src/core/WorkflowOrchestrator.ts:623`                            | `WorkflowOrchestrator.getAllWorkflows()` — see special case                                                                                                                       |
@@ -274,8 +275,8 @@ worth an individual look since 1–3 is a small enough number to just read.
 | `src/ui/StatusBarManager.ts:153`                     | `hide()` — **deleted 2026-07-29 (Step 4)**; status updates call the underlying item directly |
 | `src/core/TemplateManager.ts:767`                    | `setDefaultTemplateId()` — **deleted 2026-07-29 (Step 3)**                                   | The active UI route persists through `ConfigurationUtils.setDefaultWorkflowTemplate()` directly                                                                 |
 | `src/core/harness/shared/HeadlessLogTail.ts:179`     | `getLogPath()` — **deleted 2026-07-29 (Step 2)**                                             | The result exposes `logPath` directly; no method caller existed                                                                                                 |
-| `src/ui/CtrlYokeWebviewProvider.ts:1337`             | `getPanelScopedSend()`                                                                       | —                                                                                                                                                               |
-| `src/ui/NotificationManager.ts:65`                   | `notifyStartupComplete()`                                                                    | **confirmed true positive** — see special case                                                                                                                  |
+| `src/ui/CtrlYokeWebviewProvider.ts:1337`             | `getPanelScopedSend()`                                                                       | **deleted 2026-07-29 (Step 5)**; no callers remained after client-scoped router wiring                                                                                              |
+| `src/ui/NotificationManager.ts:65`                   | `notifyStartupComplete()`                                                                    | **deleted 2026-07-29 (Step 5)**; see special case                                                                                                                  |
 | `src/test/unit/CliIntegration.test.ts:53`            | `MockVsCodePlatform.getExtensionContext()`                                                   | —                                                                                                                                                               |
 | `src/core/WorkflowOrchestrator.ts:637`               | `getActiveWorkflow()`                                                                        | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                                                      |
 | `src/core/WorkflowOrchestrator.ts:1634`              | `pauseWorkflow()`                                                                            | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                                             |
@@ -446,10 +447,11 @@ Empty body, zero callers. The real implementation is
 `DashboardBroadcastHub.notifyStartupComplete()` (`src/ui/DashboardBroadcastHub.ts:115`),
 which **is** called, from `WorkflowOrchestrator.ts:1470`. `NotificationManager`
 implements `DashboardClient` (`IDashboardProvider & Partial<IDashboardSink>`)
-so the interface requires _some_ method with this name to exist, but the
-broadcast hub is what actually fans it out — this override is dead weight,
-not a missing wire-up. Safe to delete once confirmed nothing depends on it
-being present-but-empty (e.g. a mock `implements DashboardClient` check).
+so the sink half does not require this optional member. A repository search
+found no `implements DashboardClient` mock or other existence check; the only
+startup test double supplies `notifyStartupComplete` on its private hub stub,
+not on a `DashboardClient`. The override was deleted in Step 5 and
+`npm run typecheck` proved the contract remains satisfied.
 
 ### `CtrlYokeWebviewProvider` notify*/send* family
 
@@ -458,15 +460,33 @@ being present-but-empty (e.g. a mock `implements DashboardClient` check).
 `notifyExecutionTimeLimitReached`, `sendHistoryUndoData`,
 `sendUndoPromptResult`, `getPanelScopedSend` — none of these are part of
 `IDashboardSink` (checked directly against `src/types/IDashboardSink.ts`),
-so they're not dead interface stubs, they're extra methods beyond the
-provider's interface contract. Given `NotificationManager` and
-`DashboardBroadcastHub` both exist as newer centralized notification paths,
-the likely story is the same as `notifyStartupComplete()` above: these were
-the pre-centralization way `CtrlYokeWebviewProvider` pushed messages directly,
-superseded by routing through `NotificationManager`/`DashboardBroadcastHub`,
-and never deleted. Worth confirming with `git log -p` on
-`CtrlYokeWebviewProvider.ts` around when `DashboardBroadcastHub` was
-introduced before deleting the whole family at once.
+so they were extra methods beyond the provider's interface contract. The
+archaeology was conclusive: `git log -p --follow` identifies commit
+`3c41b2f8` ("Refactor dashboard communication by introducing
+DashboardBroadcastHub") as the centralization point. The terminal trio was
+superseded by `ptyPostMessage`, direct `WorkflowInstance` PTY sends, and
+`WorkflowOrchestrator.replayTerminalSessionsTo()`; the React terminal client
+still receives `TERMINAL_STARTED`, `TERMINAL_OUTPUT`, and `TERMINAL_ENDED` from
+those routes. This remains consistent with the preceding
+`360a36fa` terminal-input-capture removal.
+
+`notifyQueueExtended` was superseded by the typed `STEPS_EXTENDED` sink path
+used by `PromptFileLoader` and CLI-watch routing. Its old `QUEUE_EXTENDED`
+constant had no receiver and was removed. `sendHistoryUndoData` was made
+obsolete when history replay moved to `OUTPUT_HISTORY_LOADED`; undo result and
+record messages are now emitted by `UndoRedoCoordinator` via the router's
+client-scoped `postMessage`. `getPanelScopedSend` had no callers after that
+router migration and was removed with the dead helpers/imports.
+
+Two findings are intentionally retained rather than silently deleted:
+`notifyQueueSizeLimitReached` and `notifyExecutionTimeLimitReached`. React
+still has handlers for both messages, but repository-wide tracing found no
+current sender and no equivalent dashboard route. The core currently warns
+through the platform/log and transitions execution to failed/stopped state;
+it does not publish the corresponding live-history warning payload. The
+methods and their shared constants/receivers therefore remain as an explicit
+lost-capability finding for a future feature fix. After Step 5, the finder
+reports 7 candidates: those two findings plus five unrelated candidates.
 
 ## Sweep 2: half-implemented features (grep sweep)
 
@@ -579,6 +599,16 @@ candidates were deleted as documented above. The utils/config/platform/git
 slice in Step 4 deleted nine more Bucket A/B candidates and made the shim
 emitter nominal; the kept harness methods and `persistSessionId()` remain
 expected false negatives of the heuristic.
+
+**Phase 1 progress (2026-07-29, Step 5):** The UI notification slice removed
+`NotificationManager.notifyStartupComplete()`, the terminal trio, the old
+queue-extension sender, the obsolete history-undo replay method and its dead
+undo-record helper, the obsolete undo-result sender, and
+`getPanelScopedSend()`. The two queue-limit methods remain as explicit
+lost-capability findings because their React receivers have no current sender
+or replacement route. The `QUEUE_EXTENDED` constant was removed because it
+had neither a sender nor receiver. The combined finder now reports **7
+candidates**.
 
 ### Phase 2 — retain the `WorkflowOrchestrator` standalone-server API (completed 2026-07-29)
 

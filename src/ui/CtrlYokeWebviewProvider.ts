@@ -3,7 +3,6 @@ import * as path from "path";
 import * as fsSync from "fs";
 import {
   DEFAULT_WORKFLOW_NAME,
-  FINAL_STEP_PHASES,
   MESSAGE_TYPES,
   LOG_LEVELS,
   type StatusMessageSeverity,
@@ -25,16 +24,9 @@ import type {
   DevStatus,
   PromptEditorInsertRequest,
   UndoExecutionTarget,
-  UndoResult,
-  UndoPromptResultMessage,
-  UndoRecordUpdatedMessage,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkspaceSnapshot,
-  WorkflowOutputHistory,
-  StepOutput,
-  UndoRecord,
-  OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { TemplateManager } from "../core/TemplateManager";
@@ -637,65 +629,6 @@ export class CtrlYokeWebviewProvider
     this.sink.updateExecutionCompleted(workflowId);
   }
 
-  /** Notify webview that a terminal PTY session started */
-  public notifyTerminalStarted(
-    workflowId: string,
-    sessionId: string,
-    stepName: string,
-    kind: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.TERMINAL_STARTED,
-      workflowId,
-      sessionId,
-      stepName,
-      kind,
-    });
-  }
-
-  /** Stream PTY output bytes to the webview terminal */
-  public notifyTerminalOutput(
-    workflowId: string,
-    sessionId: string,
-    data: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-      workflowId,
-      sessionId,
-      data,
-    });
-  }
-
-  /** Notify webview that a PTY session ended */
-  public notifyTerminalEnded(
-    workflowId: string,
-    sessionId: string,
-    kind: string,
-    exitCode: number
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.TERMINAL_ENDED,
-      workflowId,
-      sessionId,
-      kind,
-      exitCode,
-    });
-  }
-
-  public notifyQueueExtended(
-    addedCount: number,
-    currentSize: number,
-    maxSize?: number
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.QUEUE_EXTENDED,
-      addedCount,
-      currentSize,
-      maxSize,
-    });
-  }
-
   public updateStepsExtended(
     steps: any[],
     finalStep?: WorkflowStep | null,
@@ -874,71 +807,6 @@ export class CtrlYokeWebviewProvider
     workspaceSnapshot?: WorkspaceSnapshot
   ): void {
     this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot);
-  }
-
-  /** Notify webview that an undo record was created or updated for a step. */
-  public sendUndoRecordUpdated(
-    target: OutputExecutionTarget,
-    undoRecord: UndoRecord
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
-      target,
-      undoRecord,
-    } as UndoRecordUpdatedMessage);
-  }
-
-  /**
-   * Send all undo-related data for a history to the webview.
-   * Iterates all StepOutputs and sends STEP_UNDO_DATA_UPDATED for snapshots
-   * and UNDO_RECORD_UPDATED for undoRecords.
-   */
-  public sendHistoryUndoData(history: WorkflowOutputHistory): void {
-    const sendForOutput = (
-      target: OutputExecutionTarget,
-      stepOutput: StepOutput
-    ) => {
-      if (stepOutput.workspaceSnapshot) {
-        this.sendStepUndoDataUpdated(target, stepOutput.workspaceSnapshot);
-      }
-      if (stepOutput.undoRecord) {
-        this.sendUndoRecordUpdated(target, stepOutput.undoRecord);
-      }
-    };
-
-    for (const [idx, stepOutput] of Object.entries(history.promptOutputs)) {
-      sendForOutput(
-        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: Number(idx) },
-        stepOutput
-      );
-    }
-    if (history.finalStepOutputs) {
-      for (const [idx, stepOutput] of Object.entries(
-        history.finalStepOutputs
-      )) {
-        sendForOutput(
-          { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: Number(idx) },
-          stepOutput
-        );
-      }
-    }
-  }
-
-  /** Send the result of an undo operation back to the webview. */
-  public sendUndoPromptResult(
-    requestId: string,
-    target: UndoExecutionTarget,
-    result: UndoResult
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-      data: {
-        requestId,
-        target,
-        restoredFiles: result.restoredFiles,
-        failedFiles: result.failedFiles,
-      },
-    } as UndoPromptResultMessage);
   }
 
   // ============================================================================
@@ -1331,11 +1199,6 @@ export class CtrlYokeWebviewProvider
 
   public postMessage(message: unknown): void {
     this.view?.webview.postMessage(message);
-  }
-
-  /** Returns a scoped send function targeting this panel's webview. */
-  getPanelScopedSend(): (msg: unknown) => void {
-    return (msg) => this.postMessage(msg);
   }
 
   /** Public postMessage for use by PtyProcessManager (terminal output routing) */

@@ -62,7 +62,6 @@ export class NotificationManager implements DashboardClient {
   notifyCliPromptsExtended(): void {}
   notifyHarnessAvailability(): void {}
   postMessage(): void {}
-  notifyStartupComplete(): void {}
   updateExecutionState(): void {}
   updateExecutionCompleted(): void {}
 
