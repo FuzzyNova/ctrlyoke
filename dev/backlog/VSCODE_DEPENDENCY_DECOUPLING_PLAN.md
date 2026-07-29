@@ -1,0 +1,433 @@
+# VS Code Dependency Decoupling Plan
+
+**Status (2026-07-29):** Proposed. This is the shared-foundation plan for making
+`ctrlyoke run` and the future `ctrlyoke server` use a Node-only runtime graph
+instead of depending on the CLI esbuild `vscode-shim`.
+
+**Related plans:**
+
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md)
+- [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md)
+
+## Decision
+
+Use one adapter-first/shared application core and compose host capabilities at
+the entry point. Do not create a second standalone message router or preserve a
+`WorkflowOrchestrator` constructor that silently creates `VsCodeAdapter`
+instances.
+
+The extension may continue using native VS Code APIs in extension-only
+composition, editor integration, commands, completions, status-bar, trust, and
+notification files. The standalone and CLI module graphs must not import those
+files.
+
+For the first standalone release, one process owns one repository/root:
+
+- `getWorkspaceRoot()` is the configured `cwd`;
+- `getWorkspaceRoots()` contains that root;
+- `getNamedWorkspaceRoots()` contains one basename/path pair;
+- no `.code-workspace` parsing or multi-root UI is required;
+- shared path contracts still use forward-slash viewer paths so the standalone
+  simplification does not fork downstream code.
+
+## Goals
+
+- Make reusable orchestration, routing, settings, serialization, discovery, and
+  logging code compile and run without `vscode`.
+- Reuse one message router and one set of domain services in the VS Code panel,
+  VS Code-hosted browser, and standalone browser.
+- Keep valid VS Code-native behavior at an explicit boundary.
+- Replace no-op shim behavior with real Node implementations or explicit
+  unsupported-capability results.
+- Make the single-root standalone assumption an intentional composition choice,
+  not a fake `workspaceFolders` value hidden inside a shim.
+- Add automated dependency boundaries so future shared code cannot reintroduce
+  `vscode`.
+
+## Non-Goals
+
+- Removing VS Code from the extension entry point or VS Code-native features.
+- Supporting multi-root standalone workspaces in the first release.
+- Reimplementing VS Code editor, Quick Pick, workspace trust, or status bar in
+  Node.
+- Building a generic remote command-execution protocol.
+- Preserving the current internal constructor signatures; the project is
+  pre-release and should prefer the cleaner architecture.
+
+## Audit Method and Snapshot
+
+The audit parsed production `.ts`/`.tsx` files with the TypeScript AST, excluding
+tests, comments, and declarations.
+
+### Summary
+
+| Finding                                                        | Count |
+| -------------------------------------------------------------- | ----: |
+| Production files importing `vscode`                            |    39 |
+| Files directly accessing `vscode.window` or `vscode.workspace` |    33 |
+| Direct `window`/`workspace` member accesses                    |   248 |
+| `vscode.window` accesses                                       |   163 |
+| `vscode.workspace` accesses                                    |    85 |
+| Native `show*Message()` calls                                  |   116 |
+| Direct `workspaceFolders` reads                                |    39 |
+| Direct `createFileSystemWatcher()` calls                       |     5 |
+
+This is broader than the prior standalone-plan audit. Adapter construction and
+watchers are load-bearing blockers, but they are not the only VS Code seams in
+the standalone-reachable graph.
+
+## Exhaustive `window` / `workspace` Inventory
+
+### VS Code boundary files — calls may remain
+
+These files are valid native integrations. Their shared types and domain logic
+must move out if a Node path needs them, and standalone code must not import the
+files themselves.
+
+| File                                              | Direct APIs                                                                                                                              | Disposition                                                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `src/completions/ContextMenuReferenceCommands.ts` | `activeTextEditor` ×4, `showWarningMessage` ×6                                                                                           | Keep as Explorer/SCM/editor context-menu integration.                                           |
+| `src/completions/PromptCompletionProvider.ts`     | `activeTextEditor` ×2, `workspaceFolders` ×1                                                                                             | Keep as VS Code IntelliSense adapter; extract reusable completion index/query logic.            |
+| `src/completions/PromptLinkProvider.ts`           | `workspaceFolders` ×1                                                                                                                    | Keep as VS Code document-link adapter.                                                          |
+| `src/completions/WorkspaceReferencePaths.ts`      | `asRelativePath` ×1, `getWorkspaceFolder` ×1                                                                                             | Keep beside context-menu integration; shared path rules stay in `WorkspaceViewerPath`.          |
+| `src/dev/DevCommands.ts`                          | active editor ×1, terminal ×1, webview panel ×1, errors ×6, information ×4, warnings ×2, quick pick ×1, documents/editors ×8, roots ×3   | Keep dev-only.                                                                                  |
+| `src/extension.ts`                                | theme/provider events ×2, errors ×16, information ×2, warnings ×2, quick pick ×1, documents/editors ×4, trust/folder events ×2, roots ×6 | Keep as the VS Code composition root.                                                           |
+| `src/platform/VsCodeAdapter.ts`                   | six accesses for native messages and editor opening                                                                                      | Keep as an explicit implementation boundary.                                                    |
+| `src/platform/VsCodeWorkspaceRoot.ts`             | configuration, workspace file, and `workspaceFolders` ×4                                                                                 | Keep as the multi-root VS Code resolver input adapter.                                          |
+| `src/scm/ScmCommitCommand.ts`                     | errors ×2, information ×2, warning ×1, progress ×1, roots ×1                                                                             | Keep as a VS Code command facade; commit generation stays in shared services.                   |
+| `src/ui/CtrlYokeWebviewProvider.ts`               | `workspaceFolders` ×1                                                                                                                    | Keep as VS Code webview lifecycle/URI composition.                                              |
+| `src/ui/ExternalFileTrustPrompt.ts`               | information ×1, warnings ×2, quick pick ×1, editor opening ×1, workspace trust ×1                                                        | Keep a VS Code trust implementation; move neutral path-policy types/rules out.                  |
+| `src/ui/NotificationManager.ts`                   | native messages ×3 and window focus state                                                                                                | Keep as the VS Code completion-notification sink.                                               |
+| `src/ui/StatusBarManager.ts`                      | `createStatusBarItem` ×1                                                                                                                 | Keep as an optional VS Code status sink; remove its construction from shared orchestrator code. |
+
+### Shared/reusable files — direct calls must be removed
+
+| File                                               | Direct APIs                                                                                                 | Replacement                                                                                                    |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `src/completions/CompletionHelpers.ts`             | `findFiles` ×2, `workspaceFolders` ×1, `asRelativePath` ×3, `visibleTextEditors` ×1                         | Split a Node-capable workspace completion index from VS Code active-editor/SCM enrichment.                     |
+| `src/core/orchestration/CliWatchSession.ts`        | `createFileSystemWatcher` ×3                                                                                | Inject a host-neutral watcher factory.                                                                         |
+| `src/core/orchestration/PromptFileLoader.ts`       | `showErrorMessage` ×5                                                                                       | Inject/scoped user feedback; keep parse errors as returned data where possible.                                |
+| `src/core/orchestration/PromptFileWatcher.ts`      | `createFileSystemWatcher` ×1                                                                                | Inject the watcher factory.                                                                                    |
+| `src/core/orchestration/TemplateImporter.ts`       | errors ×4, information ×2, warning ×1, quick pick ×1, document/editor ×2, `workspace.fs` ×5                 | Split import/file operations from VS Code selection/confirmation/opening.                                      |
+| `src/core/orchestration/WorkflowCommandHandler.ts` | errors ×8, information ×3, warnings ×2, inputs ×2, quick picks ×2, documents/editors ×10, `workspace.fs` ×4 | Move domain operations into shared services; keep a VS Code command UI facade.                                 |
+| `src/core/WorkflowOrchestrator.ts`                 | messages ×7, quick pick ×1, watcher ×1                                                                      | Inject platform, feedback, watcher, status, and host actions once.                                             |
+| `src/ui/McpManagerService.ts`                      | native messages ×8                                                                                          | Return typed results or emit scoped feedback.                                                                  |
+| `src/ui/PromptEditorSupportService.ts`             | roots ×5, documents ×2, editor ×1, error ×1                                                                 | Inject workspace context and document host; use workspace-viewer HTTP path in browsers.                        |
+| `src/ui/TerminalMessageHandlers.ts`                | `showWarningMessage` ×2                                                                                     | Emit client-scoped typed failure/feedback.                                                                     |
+| `src/ui/UndoRedoCoordinator.ts`                    | native messages ×5                                                                                          | Emit typed undo/redo results to the initiating client.                                                         |
+| `src/ui/WebviewMessageRouter.ts`                   | roots ×2 and temporary-document/editor calls ×2                                                             | Make the router host-neutral and inject domain-specific host actions.                                          |
+| `src/ui/WebviewSettingsSync.ts`                    | roots ×2 and `showOpenDialog` ×1                                                                            | Inject workspace context; keep browser selection in `FileBrowserModal`, native selection behind a host action. |
+| `src/ui/WorkflowMutationCoordinator.ts`            | `showErrorMessage` ×1                                                                                       | Use its existing client-scoped failure contract exclusively.                                                   |
+| `src/ui/WorkflowSerializer.ts`                     | roots ×11, errors ×5, information ×2, warning ×1, open dialogs ×2, save dialog ×1, document/editor ×2       | Inject workspace/state/file services; move native dialogs/opening to host actions.                             |
+| `src/ui/WorkflowStepHandlers.ts`                   | `showErrorMessage` ×5                                                                                       | Emit scoped typed operation results.                                                                           |
+| `src/utils/AttachmentBuilders.ts`                  | `workspace.fs` ×2                                                                                           | Use Node filesystem primitives behind neutral helpers.                                                         |
+| `src/utils/DiscoveryUtils.ts`                      | `workspaceFolders` ×1                                                                                       | Accept explicit root/named-root inputs.                                                                        |
+| `src/utils/FileSystemUtils.ts`                     | `textDocuments` ×1, `showWarningMessage` ×1                                                                 | Split VS Code dirty-document handling from neutral JSON/file helpers.                                          |
+| `src/utils/Log.ts`                                 | output channel and configuration-change listener                                                            | Inject/configure log sinks; VS Code output channel is one sink, console/file are Node sinks.                   |
+
+### Other `vscode` imports
+
+Six additional production files import `vscode` without a direct
+`window`/`workspace` access:
+
+| File                                                  | Dependency                                                                           | Disposition                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `src/completions/PromptPropertyCompletionProvider.ts` | completion types/classes                                                             | Keep extension-only.                                                                                        |
+| `src/core/TemplateManager.ts`                         | `ExtensionContext`, `ConfigurationTarget`, `VsCodeAdapter`, VS Code workspace folder | Refactor to explicit extension path, workspace root, parser/platform, and config writer.                    |
+| `src/ui/HarnessFileMessageService.ts`                 | commands and URI                                                                     | Inject host actions; keep filesystem/harness logic shared.                                                  |
+| `src/utils/AgentDiscovery.ts`                         | `WorkspaceFolder` type                                                               | Accept a root path or project-owned named-root type.                                                        |
+| `src/utils/SkillDiscovery.ts`                         | `WorkspaceFolder` type                                                               | Accept a root path or project-owned named-root type.                                                        |
+| `src/utils/ModelRegistry.ts`                          | `EventEmitter` and Language Model API                                                | Use the project emitter and inject an optional VS Code LM-model source; CLI model discovery remains shared. |
+
+## Target Architecture
+
+```text
+extension.ts
+  -> createVsCodeHostServices(context)
+       -> native editor/dialog/trust/status/notification implementations
+
+cli.ts / ServerCommand.ts
+  -> createNodeHostServices(cwd, config)
+       -> Node filesystem/watch/log implementations
+       -> console or browser feedback implementations
+
+Shared application
+  -> WorkflowOrchestrator(options)
+  -> shared dashboard message router
+  -> shared serializers/settings/domain services
+  -> dashboard transport (VS Code postMessage or WebSocket)
+```
+
+The shared application depends on project-owned interfaces and data only. It
+does not accept `vscode.ExtensionContext`, `vscode.WorkspaceFolder`,
+`vscode.Uri`, `vscode.FileSystemWatcher`, or VS Code command IDs.
+
+## Capability Boundaries
+
+Avoid turning `PlatformAdapter` into a broad god interface. Keep workspace and
+runtime identity there, and introduce small capability ports where behavior has
+different lifecycles or semantics.
+
+### `PlatformAdapter`
+
+Keep:
+
+- workspace root(s) and named roots;
+- extension/package asset root;
+- execution/runtime identity needed by harness integration.
+
+Deprecate ambiguous UI/logging methods after their callers move to dedicated
+ports. Avoid `isVsCode()` branches in domain logic when composition can provide
+the right implementation directly.
+
+### Watcher factory
+
+Use a project-owned watcher contract:
+
+```typescript
+interface FileWatcher {
+  onDidCreate(listener: (path: string) => void): Disposable;
+  onDidChange(listener: (path: string) => void): Disposable;
+  onDidDelete(listener: (path: string) => void): Disposable;
+  dispose(): void;
+}
+
+interface FileWatcherFactory {
+  create(basePath: string, glob: string): FileWatcher;
+}
+```
+
+- VS Code implementation adapts `RelativePattern` and URI events.
+- Node implementation adapts `chokidar`.
+- Callers receive normalized absolute string paths.
+- Watcher ownership/disposal is explicit.
+- The five current watcher sites are `CliWatchSession` ×3,
+  `PromptFileWatcher` ×1, and the orchestrator runner watcher ×1.
+
+### User feedback and interactions
+
+Follow
+[`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md). Do not use
+diagnostic logging as a user-notification substitute.
+
+### Dashboard host actions
+
+Make the shared router depend on domain-specific capabilities rather than
+calling `vscode.commands.executeCommand()`:
+
+```typescript
+interface DashboardHostActions {
+  openWorkspaceTarget(target: WorkspaceOpenTarget): Promise<ActionResult>;
+  openContentPreview(content: ContentPreview): Promise<ActionResult>;
+  selectWorkspacePath?(
+    request: PathSelectionRequest
+  ): Promise<string | undefined>;
+  revealOutput?(): Promise<void>;
+}
+```
+
+Prefer direct orchestrator/domain-service calls for run/pause/resume/stop and
+workflow mutations. Only genuinely host-native operations belong in this port.
+
+The browser already demonstrates the correct pattern:
+
+- file/directory selection uses `FileBrowserModal`;
+- context-reference links use `WorkspaceFileEditor` in hosted mode;
+- VS Code panel links use native editor commands.
+
+### Logging
+
+Split formatting/levels from output:
+
+- `VsCodeOutputChannelLogSink`;
+- `ConsoleLogSink`;
+- existing file/session logging where applicable.
+
+Shared code imports a project logger only. Configuration changes are pushed into
+the logger from each composition root instead of the logger subscribing to
+`vscode.workspace` itself.
+
+### Model discovery
+
+Split registry aggregation from sources:
+
+- CLI model sources run in every host;
+- VS Code LM API source is optional and extension-only;
+- standalone uses CLI/static sources;
+- subscriptions use the existing project emitter pattern, not
+  `vscode.EventEmitter`.
+
+## Implementation Plan
+
+### Phase 0 — Add dependency guards
+
+1. Define shared and VS Code-only path groups.
+2. Add lint/source-audit rules that reject `vscode` imports in shared groups.
+3. Add an explicit temporary allowlist matching this audit.
+4. Make the allowlist shrink-only.
+5. Add a bundle/metafile check for the Node server entry graph.
+
+This lands before refactoring so the measured baseline cannot grow.
+
+### Phase 1 — Introduce host composition
+
+1. Replace `WorkflowOrchestrator(context, provider)` with an options/dependencies
+   object containing project-owned interfaces.
+2. Construct one `VsCodeAdapter` in `extension.ts`; remove the five internal
+   `new VsCodeAdapter(...)` calls.
+3. Remove the shared orchestrator's `ExtensionContext` field.
+4. Inject an optional status sink instead of constructing
+   `StatusBarManager`.
+5. Use an explicit disposable registry/lifecycle contract instead of pushing
+   shared disposables directly into `context.subscriptions`.
+6. Update `WorkflowInstance` creation to reuse the injected platform and watcher
+   dependencies.
+
+Do not keep a VS Code-context default constructor: it would preserve the import
+and allow standalone tests to miss hidden construction.
+
+### Phase 2 — Replace all watcher calls
+
+1. Add VS Code and chokidar watcher implementations.
+2. Inject the factory into `PromptFileWatcher`.
+3. Inject it into `CliWatchSession` and replace its three watchers.
+4. Replace the orchestrator `runner.json` watcher.
+5. Test create/change/delete normalization, atomic rename behavior, and
+   disposal.
+
+### Phase 3 — Split command UI from domain operations
+
+1. Extract shared operations from `WorkflowCommandHandler`.
+2. Extract template copy/import/overwrite operations from `TemplateImporter`.
+3. Refactor `TemplateManager` to accept explicit paths, parser/platform, and
+   config services.
+4. Keep VS Code `InputBox`, `QuickPick`, native documents, and post-operation
+   actions in thin extension command facades.
+5. Expose browser equivalents through existing React modals and typed router
+   requests.
+6. Give headless CLI/server paths explicit defaults or unsupported results for
+   operations that require user input.
+
+### Phase 4 — Make the existing router reusable
+
+1. Refactor `WebviewMessageRouter` into a host-neutral dashboard router (rename
+   only if it improves clarity).
+2. Inject workspace context, host actions, feedback, settings, serializer, and
+   domain services.
+3. Replace command execution for run/pause/resume/stop with direct orchestrator
+   methods.
+4. Keep legacy VS Code editor/diff behavior inside the VS Code host actions.
+5. Reuse this router from both `CtrlYokeWebviewProvider` and the standalone
+   WebSocket server.
+6. Preserve `WebviewClientContext` reply scoping and READY/replay semantics.
+
+Do **not** add a parallel `WebSocketMessageRouter` or copy handlers into a
+`BaseMessageRouter` hierarchy. Transport already enters through a scoped send
+callback; host actions are the missing seam.
+
+### Phase 5 — Decouple shared UI services
+
+Migrate in dependency order:
+
+1. `WorkflowMutationCoordinator`, `WorkflowStepHandlers`,
+   `UndoRedoCoordinator`, and terminal handlers to typed/scoped results.
+2. `McpManagerService` and `HarnessFileMessageService` to returned result types
+   and host actions.
+3. `WorkflowSerializer` to explicit workspace root, state store, filesystem,
+   feedback, and optional path selection/opening capabilities.
+4. `WebviewSettingsSync` to explicit roots and browser/native picker
+   capabilities.
+5. `PromptEditorSupportService` to explicit roots, completion service, trust
+   policy, and document host.
+
+### Phase 6 — Decouple utilities and completions
+
+1. Split `FileSystemUtils` into neutral file/JSON helpers and a VS Code
+   `saveIfDirty` helper.
+2. Replace `workspace.fs` in attachment builders with neutral/Node operations.
+3. Pass roots into discovery utilities, agent discovery, and skill discovery.
+4. Extract a Node-capable completion index; layer VS Code active selection,
+   visible editors, symbols, and SCM ignore support on top only in the extension.
+5. Split model registry sources and replace `vscode.EventEmitter`.
+6. Refactor `Log` to host-provided sinks.
+
+### Phase 7 — Standalone application/server composition
+
+1. Build Node host services from one canonical `cwd`.
+2. Reuse the shared router, orchestrator, settings, serializers, and domain
+   services.
+3. Extract common HTTP/WebSocket/token/TLS/workspace-viewer route installers
+   from `CtrlYokeHostedServer` rather than copying its implementation.
+4. Construct `HostedWorkspaceViewerService` with one
+   `ResolverWorkspaceFolder` for standalone; preserve its named-root contract.
+5. Add browser feedback and static theme sources.
+6. Add the `ctrlyoke server` CLI composition/command.
+
+### Phase 8 — Retire the Node-side shim
+
+1. Verify `ctrlyoke run`, `validate`, `commit`, and `server` with the real Node
+   module graph.
+2. Remove `registerCliAdapter()` compatibility reads after all config callers
+   use `CtrlYokeConfigService`/injected config.
+3. Remove the CLI esbuild alias to `src/platform/vscode-shim.ts`.
+4. Delete the shim when no bundle target consumes it.
+5. Fail CI if the Node bundle graph contains the `vscode` package or a
+   VS Code-only source path.
+
+The browser-side `standalone-shim.js` remains. It replaces
+`acquireVsCodeApi()` in the browser and is unrelated to the Node-side
+`vscode-shim.ts`.
+
+## Testing Strategy
+
+### Contract tests
+
+Run the same suites against VS Code and Node implementations where practical:
+
+- workspace root/named-root behavior;
+- watcher create/change/delete/dispose;
+- user feedback and headless choice fallback;
+- document open unsupported/supported behavior;
+- logger sinks;
+- model-source aggregation.
+
+### Shared application tests
+
+- instantiate `WorkflowOrchestrator` with no VS Code module available;
+- run/load/validate a workflow using a temporary single root;
+- route every dashboard message through an in-memory transport;
+- verify request-scoped versus broadcast replies with two clients;
+- verify file-watch recovery and CLI watch sessions;
+- verify template and serializer operations using Node filesystem services.
+
+### Build tests
+
+- build the extension and CLI/server bundles;
+- inspect the server/CLI metafile for forbidden VS Code modules/files;
+- run `node out/cli.js --help`, `validate`, and a representative headless run;
+- start the standalone server from the packed npm artifact, not only source.
+
+### Regression tests
+
+- VS Code native file links still open in an editor.
+- Hosted browser links still open `WorkspaceFileEditor`.
+- VS Code native dialogs remain available from the panel.
+- Hosted/standalone browser path selection remains web-native.
+- Extension multi-root behavior remains unchanged.
+- Standalone stays intentionally single-root.
+
+## Acceptance Criteria
+
+- `WorkflowOrchestrator` and `WorkflowInstance` have no `vscode` import or
+  `ExtensionContext` dependency.
+- The five watcher sites use the project watcher contract.
+- Shared dashboard routing and services have no direct VS Code commands,
+  window, workspace, URI, or editor dependencies.
+- One router implementation serves VS Code postMessage and WebSocket
+  transports.
+- Node composition uses one root without fabricating VS Code workspace objects.
+- Valid VS Code-native integrations remain native and extension-only.
+- `ctrlyoke run` and `ctrlyoke server` do not require `vscode-shim.ts`.
+- CI enforces the import and bundle boundaries.
+- Browser feedback satisfies
+  [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md).
