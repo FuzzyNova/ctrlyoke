@@ -391,12 +391,6 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
             sessionId,
             data: input,
           });
-          // Ad-hoc prompt capture for ai-cli sessions
-          const captured = entry.inputCapture.accumulate(input);
-          if (captured) {
-            // TODO: emit ad-hoc prompt capture event for Output tab attribution
-            WebviewLog.debug("[ctrlyoke] Ad-hoc prompt captured:", captured);
-          }
         });
       }
 
@@ -540,10 +534,6 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         sessionId,
         data: input,
       });
-      const captured = entry.inputCapture.accumulate(input);
-      if (captured) {
-        WebviewLog.debug("[ctrlyoke] Ad-hoc prompt captured:", captured);
-      }
     });
     // Becoming controller: restore fit-to-container sizing.
     // If we were previously a viewer, also send TERMINAL_RESIZE so the PTY is

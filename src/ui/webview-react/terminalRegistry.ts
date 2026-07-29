@@ -28,57 +28,11 @@ import { WebviewLog } from "./utils/logger";
 
 export type { Terminal, ITheme };
 
-/**
- * Accumulates keystrokes from an AI CLI PTY session.
- * Only for ai-cli sessions (not shell sessions).
- * Detects user-typed long-form prompts and emits them for retroactive queue attribution.
- */
-class InputCapture {
-  private buffer = "";
-  private readonly threshold: number;
-
-  constructor(threshold = 10) {
-    this.threshold = threshold;
-  }
-
-  /**
-   * Feed a raw xterm data chunk into the capture buffer.
-   * Returns captured text if Enter was pressed and text exceeds threshold, else null.
-   */
-  accumulate(data: string): string | null {
-    for (const char of data) {
-      if (char === "\r" || char === "\n") {
-        const captured = this.buffer.trim();
-        this.buffer = "";
-        if (captured.length > this.threshold) {
-          return captured;
-        }
-        return null;
-      } else if (char === "\x7f" || char === "\b") {
-        // Backspace
-        this.buffer = this.buffer.slice(0, -1);
-      } else if (char === "\x03" || char === "\x04") {
-        // Ctrl+C / Ctrl+D — discard buffer
-        this.buffer = "";
-      } else if (char >= " ") {
-        // Printable chars only
-        this.buffer += char;
-      }
-    }
-    return null;
-  }
-
-  reset(): void {
-    this.buffer = "";
-  }
-}
-
 export interface RegistryEntry {
   term: Terminal;
   fitAddon: FitAddon;
   /** Root element xterm rendered into; may be detached from the document */
   domEl: HTMLElement;
-  inputCapture: InputCapture;
   /** true for ended ai-cli sessions — onData is not registered when frozen */
   frozen: boolean;
   /** Disposable returned by term.onData (stored so we can dispose it when freezing) */
@@ -330,7 +284,6 @@ export const terminalRegistry = {
       term,
       fitAddon,
       domEl,
-      inputCapture: new InputCapture(),
       frozen: false,
     };
 

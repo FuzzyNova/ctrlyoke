@@ -325,11 +325,11 @@ New in the second pass, once `src/ui/webview-react` was added to the combined
 program. All 21 were individually read (not just grepped) since the set is
 small.
 
-### Confirmed true positive (1)
+### Resolved since audit (1)
 
-| Location | Method | Notes |
-| --- | --- | --- |
-| `src/ui/webview-react/terminalRegistry.ts:71` | `InputCapture.reset()` | `InputCapture` has exactly two methods, `accumulate()` and `reset()`. `accumulate()` is called from `terminalMessageHandlers.ts`; `reset()` has zero callers anywhere in `src/ui/webview-react` (checked directly, not just via the tool). Safe to delete. |
+| Removed code | Resolution |
+| --- | --- |
+| `src/ui/webview-react/terminalRegistry.ts` `InputCapture` | Removed 2026-07-29. `reset()` had no callers, and the remaining browser-keystroke heuristic was also obsolete: provider session logs now authoritatively produce `USER_STEER` output events where available. The heuristic could misclassify TUI commands and does not observe backend inject-mode writes. |
 
 ### Confirmed false positives — CodeMirror plugin lifecycle (7)
 
@@ -389,15 +389,13 @@ not-yet-built standalone server) and in `prompts/copilot-integration.prompt.md`
 This is **scaffolding for an unimplemented plan, not abandoned code** —
 `STANDALONE_SERVER_PLAN.md` is still in `dev/backlog/` (not `dev/implemented/`),
 and `ServerSection.tsx:338` explicitly says "Phases 5–10 are unimplemented."
-Don't delete this family unilaterally. Options, in order of preference:
-1. Leave as-is with an explicit `@keep` note pointing at
-   `STANDALONE_SERVER_PLAN.md` if that plan is on the near-term roadmap.
-2. If it isn't, delete now — `git log` plus the plan doc's message-routing
-   table is enough to re-add them accurately whenever that plan actually
-   starts.
 
-Either way, this is a decision for whoever owns `STANDALONE_SERVER_PLAN.md`
-sequencing, not a mechanical dead-code deletion.
+**Decision (2026-07-29): retain this near-term standalone-server API.** All 11
+methods are marked `@keep` in `WorkflowOrchestrator.ts`, each pointing to
+`STANDALONE_SERVER_PLAN.md`, so the dead-method finder excludes them until
+that implementation begins. This resolves the audit item; revisit the tags
+only if the standalone-server plan is abandoned or its message-routing API
+changes materially.
 
 ### `NotificationManager.notifyStartupComplete()` — confirmed no-op
 
@@ -459,12 +457,7 @@ harness log parsers' `todo_list` tool-call handling). The real findings:
    needed — included here only because it's the UI-side confirmation of the
    `WorkflowOrchestrator` special case above.
 
-3. **`TerminalInstance.tsx:397`** — `// TODO: emit ad-hoc prompt capture
-   event for Output tab attribution`. Ad-hoc prompt text is captured
-   (`entry.inputCapture.accumulate(input)`) and logged, but never surfaces in
-   the Output tab. Minor UX gap, not a correctness bug.
-
-4. **`WorkflowStepsPanel.tsx:647`** — `// TODO: End condition results would
+3. **`WorkflowStepsPanel.tsx:647`** — `// TODO: End condition results would
    come from workflow state`. The step-details tooltip/panel has a
    placeholder comment where end-condition evaluation results should be
    populated. Worth a look to confirm the data just isn't wired through yet
@@ -488,26 +481,25 @@ harness log parsers' `todo_list` tool-call handling). The real findings:
 
 ## Plan
 
-### Phase 1 — delete Bucket A + Bucket B, minus the `WorkflowOrchestrator` family
+### Phase 1 — delete remaining Bucket A + Bucket B candidates
 
-For each of the 39 + 14 extension-side candidates (minus the 11-method
-`WorkflowOrchestrator` family, which needs the owner decision above first),
-plus the one confirmed webview-side true positive
-(`InputCapture.reset()` in `terminalRegistry.ts`): verify with the same rigor
-as `handleExecutionError` — repo-wide search including tests and docs,
+For each of the remaining 42 extension-side candidates, verify with the same
+rigor as `handleExecutionError` — repo-wide search including tests and docs,
 confirm the equivalent behavior lives elsewhere if one would expect it to —
-then delete the method and any support code/imports/constants that become
-dead as a result (mirroring the `looksLikeFilePath`/`SCRIPT_EXTENSIONS`
-cascade from the `handleExecutionError` deletion). Run `npm run typecheck`,
-`npm run lint`, `npm run knip`, and the relevant test files after each file's
-edits, same as before — for the webview change, also run `npm run test:ui`.
+then delete the method and any support code/imports/constants that become dead
+as a result (mirroring the `looksLikeFilePath`/`SCRIPT_EXTENSIONS` cascade
+from the `handleExecutionError` deletion). Run `npm run typecheck`, `npm run
+lint`, `npm run knip`, and the relevant test files after each file's edits.
+The webview-side `InputCapture` item is already resolved above; its removal
+also eliminated the incomplete ad-hoc attribution feature rather than
+retaining an inert heuristic.
 
-### Phase 2 — resolve the `WorkflowOrchestrator` family
+### Phase 2 — retain the `WorkflowOrchestrator` standalone-server API (completed 2026-07-29)
 
-Get a decision from whoever owns `STANDALONE_SERVER_PLAN.md` sequencing:
-`@keep`-tag the 11 methods if that plan is near-term, otherwise delete them
-now and let the plan doc's message-routing table drive re-adding them
-accurately later.
+The owner confirmed `STANDALONE_SERVER_PLAN.md` is near-term. The 11 methods
+listed in the special case are tagged `@keep` with a reference to that plan,
+so the dead-method finder no longer reports them. No further action is needed
+in this audit until standalone implementation changes the API.
 
 ### Phase 3 — verify Bucket C individually, then either delete or `@keep`-tag
 

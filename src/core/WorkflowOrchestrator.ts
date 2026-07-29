@@ -436,11 +436,14 @@ export class WorkflowOrchestrator {
   /**
    * Register an additional dashboard client to receive orchestrator and
    * workflow-instance updates.
+   *
+   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
    */
   public addDashboardProvider(provider: DashboardClient): void {
     this.dashboardBroadcastHub.addClient(provider);
   }
 
+  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   public removeDashboardProvider(provider: DashboardClient): void {
     this.dashboardBroadcastHub.removeClient(provider);
   }
@@ -620,6 +623,7 @@ export class WorkflowOrchestrator {
     return this.findInstance(workflowId);
   }
 
+  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getAllWorkflows(): WorkflowInstance[] {
     return [...this.instances.values()];
   }
@@ -634,6 +638,7 @@ export class WorkflowOrchestrator {
     });
   }
 
+  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflow(): WorkflowInstance | undefined {
     const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     if (id) {
@@ -644,6 +649,7 @@ export class WorkflowOrchestrator {
     return undefined;
   }
 
+  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflowId(): string | null {
     return this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
   }
@@ -1630,6 +1636,8 @@ export class WorkflowOrchestrator {
   /**
    * Pause a specific workflow by ID.
    * Used by per-workflow controls in the dropdown; allows pausing non-active instances.
+   *
+   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
    */
   async pauseWorkflow(workflowId: string): Promise<void> {
     const instance = this.instances.get(workflowId);
@@ -1645,6 +1653,8 @@ export class WorkflowOrchestrator {
 
   /**
    * Cancel a pending pause for a specific workflow by ID.
+   *
+   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
    */
   async cancelPauseWorkflow(workflowId: string): Promise<void> {
     const instance = this.instances.get(workflowId);
@@ -1665,6 +1675,7 @@ export class WorkflowOrchestrator {
    * @param workingFilePath - Working file path forwarded from the webview. Used as a
    *   fallback when the instance has been evicted from retiredInstances (e.g. after a
    *   panel hide/show cycle disposed it). Reloads from disk so the resume can proceed.
+   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
    */
   async resumeWorkflow(
     workflowId: string,
@@ -1713,6 +1724,8 @@ export class WorkflowOrchestrator {
   /**
    * Stop a specific workflow by ID.
    * Used by per-workflow controls in the dropdown; allows stopping non-active instances.
+   *
+   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
    */
   async stopWorkflow(workflowId: string): Promise<void> {
     const instance = this.instances.get(workflowId);
@@ -2752,6 +2765,7 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().getCurrentPromptFile();
   }
 
+  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
     return this.getActiveInstance().readWorkingFile(workingFilePath);
   }
@@ -4294,6 +4308,7 @@ export class WorkflowOrchestrator {
     await this.getDefaultIntegration().retryDetection();
   }
 
+  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getHarnessDetailedStatus() {
     return this.getDefaultIntegration().getDetailedStatus();
   }
