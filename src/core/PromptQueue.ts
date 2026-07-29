@@ -27,6 +27,7 @@ import {
  */
 type InternalQueueState = Omit<QueueState, keyof WorkflowRuntimeState>;
 import type { WorkingFile } from "../types/CtrlYokeTypes";
+import type { WorkflowWorkingFilePersistence } from "../types/WorkflowContextTypes";
 import {
   QUEUE_POSITION,
   type QueuePosition,
@@ -86,7 +87,7 @@ function resolveRetrySettings(
   return { maxRetries, retryPrompt };
 }
 
-export class PromptQueue {
+export class PromptQueue implements WorkflowWorkingFilePersistence {
   private state: InternalQueueState;
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
   private finalStepRuntime?: FinalStepRuntimeState;
@@ -1999,5 +2000,4 @@ export class PromptQueue {
       ? STEP_STATUS.SENT
       : STEP_STATUS.PENDING;
   }
-
 }

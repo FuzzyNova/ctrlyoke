@@ -191,14 +191,9 @@ export class CliIntegration extends HarnessIntegration {
     // Propagate workspace root to the log parser for session log discovery.
     // For example, ClaudeLogParser uses this to locate ~/.claude/projects/<workspace>.
     const workspaceRoot = this.getWorkspaceRoot();
-    if (
-      workspaceRoot &&
-      this.provider.logParser &&
-      "setWorkspaceRoot" in this.provider.logParser
-    ) {
-      (
-        this.provider.logParser as { setWorkspaceRoot(r: string): void }
-      ).setWorkspaceRoot(workspaceRoot);
+    const logParser = this.provider.logParser;
+    if (workspaceRoot && logParser?.setWorkspaceRoot) {
+      logParser.setWorkspaceRoot(workspaceRoot);
     }
 
     const services = this.createServices();

@@ -1,10 +1,12 @@
 # Dead Class-Method & Incomplete-Feature Audit
 
-**Status (2026-07-29):** Phase 7 is complete, and the Phase 1 UI notification
-slice is complete. The nominal-type fixes described below are applied,
-reducing the finder from 91 to 56 candidates; the completed Phase 1 harness,
-core-engine, utils/config/platform/git, and UI notification slices reduce it to
-7. This documents the output of two sweeps run after deleting
+**Status (2026-07-29):** Phases 1, 3, 6, and 7 are complete. The completed
+Phase 1 harness, core-engine, utils/config/platform/git, and UI notification
+slices, followed by the final nominal-contract pass, leave the finder at **0
+candidates**. The two intentionally retained dashboard warning endpoints are
+`@keep`-tagged with their incomplete-protocol reason; the 11 settled
+`WorkflowOrchestrator` standalone-server tags remain untouched. This documents
+the output of two sweeps run after deleting
 `EndConditionHandler.handleExecutionError`
 (a dead public method that `knip` could not see because it lives on an
 otherwise-live class — see `git log` for that commit) and building a tool to
@@ -96,11 +98,12 @@ output — see "Bucket C" below):
 5. **Anonymous framework-plugin classes and structural runtime mocks.** The
    seven CodeMirror classes and 13 webview mocks originally had no heritage
    clause. Phase 7 added `implements PluginValue` and the relevant
-   `Pick<...>` clauses, so those methods now resolve nominally. The remaining
-   `MockVsCodePlatform.getExtensionContext()` candidate is different: it is a
-   VS Code-only method reached through the intentional dynamic discriminator
-   in `CliIntegration`, and remains for Step 6 rather than broadening the
-   cross-platform `PlatformAdapter` contract.
+   `Pick<...>` clauses, so those methods now resolve nominally. The previously
+   flagged `MockVsCodePlatform.getExtensionContext()` candidate was handled separately:
+   it is a VS Code-only method reached through the intentional dynamic
+   discriminator in `CliIntegration`, so the test double now declares a
+   `Pick<VsCodeAdapter, "getExtensionContext">` heritage entry rather than
+   broadening the cross-platform `PlatformAdapter` contract.
    Before Phase 7, this category was **not mechanically fixable** by the
    heritage-clause check, because there was no heritage clause to inspect:
    - CodeMirror's `ViewPlugin.fromClass(class { update(update) {...} ... })`
@@ -247,8 +250,8 @@ replace it.
 | `src/ui/CtrlYokeWebviewProvider.ts:657`                           | `CtrlYokeWebviewProvider.notifyTerminalOutput()` — **deleted 2026-07-29 (Step 5)**; terminal output uses `ptyPostMessage` and replay buffers |
 | `src/ui/CtrlYokeWebviewProvider.ts:671`                           | `CtrlYokeWebviewProvider.notifyTerminalEnded()` — **deleted 2026-07-29 (Step 5)**; PTY exit callbacks use `ptyPostMessage` |
 | `src/ui/CtrlYokeWebviewProvider.ts:686`                           | `CtrlYokeWebviewProvider.notifyQueueExtended()` — **deleted 2026-07-29 (Step 5)**; `STEPS_EXTENDED` is the current sink route and the orphaned `QUEUE_EXTENDED` constant was removed |
-| `src/ui/CtrlYokeWebviewProvider.ts:785`                           | `CtrlYokeWebviewProvider.notifyQueueSizeLimitReached()` — **retained as a finding 2026-07-29 (Step 5)**; React still handles the message, but no current sender or replacement exists |
-| `src/ui/CtrlYokeWebviewProvider.ts:796`                           | `CtrlYokeWebviewProvider.notifyExecutionTimeLimitReached()` — **retained as a finding 2026-07-29 (Step 5)**; React still handles the message, but no current sender or replacement exists |
+| `src/ui/CtrlYokeWebviewProvider.ts:718`                           | `CtrlYokeWebviewProvider.notifyQueueSizeLimitReached()` — **`@keep`-tagged 2026-07-29 (Step 6)**; the webview warning receiver is a future protocol endpoint and no sender route exists for the checker to trace |
+| `src/ui/CtrlYokeWebviewProvider.ts:729`                           | `CtrlYokeWebviewProvider.notifyExecutionTimeLimitReached()` — **`@keep`-tagged 2026-07-29 (Step 6)**; the webview warning receiver is a future protocol endpoint and no sender route exists for the checker to trace |
 | `src/ui/CtrlYokeWebviewProvider.ts:896`                           | `CtrlYokeWebviewProvider.sendHistoryUndoData()` — **deleted 2026-07-29 (Step 5)**; `OUTPUT_HISTORY_LOADED` now carries replayed history |
 | `src/ui/CtrlYokeWebviewProvider.ts:928`                           | `CtrlYokeWebviewProvider.sendUndoPromptResult()` — **deleted 2026-07-29 (Step 5)**; `UndoRedoCoordinator` emits the result through the client-scoped router |
 | `src/core/WorkflowOrchestrator.ts:440`                            | `WorkflowOrchestrator.addDashboardProvider()` — see special case                                                                                                                  |
@@ -267,17 +270,17 @@ worth an individual look since 1–3 is a small enough number to just read.
 
 | Location                                             | Method                                                                                       | Where the occurrence(s) are                                                                                                                                     |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/core/harness/claude/ClaudeLogParser.ts:127`     | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)**                                          | Live via `CliIntegration`'s intentional property-presence dispatch                                                                                              |
-| `src/core/harness/qwen/QwenLogParser.ts:158`         | `setWorkspaceRoot()` — **kept 2026-07-29 (Step 2)**                                          | Live via `CliIntegration`'s intentional property-presence dispatch                                                                                              |
+| `src/core/harness/claude/ClaudeLogParser.ts:127`     | `setWorkspaceRoot()` — **made nominal 2026-07-29 (Step 6)**                                  | `ILogParser` now owns the optional hook; `CliIntegration` calls that typed contract directly                                                                    |
+| `src/core/harness/qwen/QwenLogParser.ts:158`         | `setWorkspaceRoot()` — **made nominal 2026-07-29 (Step 6)**                                  | `ILogParser` now owns the optional hook; `CliIntegration` calls that typed contract directly                                                                    |
 | `src/core/harness/opencode/OpenCodeLogParser.ts:539` | `getLogDirectory()` — **deleted 2026-07-29 (Step 2)**                                        | No caller; OpenCode uses the session ID as its export path                                                                                                      |
 | `src/core/PromptQueue.ts:733`                        | `getWorkflowName()` — **deleted 2026-07-29 (Step 3)**                                        | Queue consumers use `getState().workflowName`; the working-file adapter already captures state directly                                                         |
-| `src/core/PromptQueue.ts:893`                        | `persistSessionId()` — **kept 2026-07-29 (Step 3)**                                          | `WorkflowExecutor` passes the queue as `WorkflowWorkingFilePersistence`; `CliExecutionRunner` calls the optional hook when session/log discovery resolves an ID |
+| `src/core/PromptQueue.ts:885`                        | `persistSessionId()` — **made nominal 2026-07-29 (Step 6)**                                  | `PromptQueue` now explicitly implements `WorkflowWorkingFilePersistence`, the contract passed by `WorkflowExecutor`                                                 |
 | `src/ui/StatusBarManager.ts:153`                     | `hide()` — **deleted 2026-07-29 (Step 4)**; status updates call the underlying item directly |
 | `src/core/TemplateManager.ts:767`                    | `setDefaultTemplateId()` — **deleted 2026-07-29 (Step 3)**                                   | The active UI route persists through `ConfigurationUtils.setDefaultWorkflowTemplate()` directly                                                                 |
 | `src/core/harness/shared/HeadlessLogTail.ts:179`     | `getLogPath()` — **deleted 2026-07-29 (Step 2)**                                             | The result exposes `logPath` directly; no method caller existed                                                                                                 |
 | `src/ui/CtrlYokeWebviewProvider.ts:1337`             | `getPanelScopedSend()`                                                                       | **deleted 2026-07-29 (Step 5)**; no callers remained after client-scoped router wiring                                                                                              |
 | `src/ui/NotificationManager.ts:65`                   | `notifyStartupComplete()`                                                                    | **deleted 2026-07-29 (Step 5)**; see special case                                                                                                                  |
-| `src/test/unit/CliIntegration.test.ts:53`            | `MockVsCodePlatform.getExtensionContext()`                                                   | —                                                                                                                                                               |
+| `src/test/unit/CliIntegration.test.ts:53`            | `MockVsCodePlatform.getExtensionContext()` — **made nominal 2026-07-29 (Step 6)**             | The test double explicitly implements `Pick<VsCodeAdapter, "getExtensionContext">`, matching the intentional VS Code-only discriminator                              |
 | `src/core/WorkflowOrchestrator.ts:637`               | `getActiveWorkflow()`                                                                        | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                                                      |
 | `src/core/WorkflowOrchestrator.ts:1634`              | `pauseWorkflow()`                                                                            | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                                             |
 | `src/core/WorkflowOrchestrator.ts:1669`              | `resumeWorkflow()`                                                                           | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                                                      |
@@ -292,19 +295,14 @@ patterns from the "known false-positive sources" section above account for
 most of this bucket:
 
 - **Duck-typed cast (`getConfig`, count 7):** `CliAdapter.getConfig()`,
-  `MockPlatform.getConfig()` (×3, one per test file),
-  `MockHarness`'s `MockPlatform.getConfig()` — all genuinely used via
-  `CliIntegration.ts:229`'s `as unknown as { getConfig?: ... }` cast. **Do
-  not delete these.** Tag with `@keep` in a follow-up so future runs of the
-  script skip them without re-litigating.
+  `MockPlatform.getConfig()` (×3, one per test file), and
+  `MockHarness`'s `MockPlatform.getConfig()` were made nominal in Phase 7 by
+  adding the optional hook to `PlatformAdapter` and removing the cast from
+  `CliIntegration`.
 - **Structural test doubles (`addEventListener`/`send`/`close`/`setItem`,
-  counts 9–101):** `FakeWebSocket` in `HostedStandaloneShimScript.test.ts`,
-  `StandaloneShimLiveness.test.ts`, `StandaloneShimState.test.ts`, and
-  `FakeStorage.setItem`/`.removeItem` in `StandaloneShimState.test.ts`. These
-  satisfy their target types structurally (no `implements` clause), so the
-  script's interface-exclusion can't see them. Very likely all false
-  positives — confirm each test still exercises the method via the object it
-  hands to the code under test, then `@keep`-tag rather than delete.
+  counts 9–101):** `FakeWebSocket` and `FakeStorage` now explicitly declare
+  the `Pick<...>` contracts they satisfy, so their live test calls are
+  nominally visible to the finder.
 
 One item in this bucket was manually verified as a **real dead method**
 despite the noisy count:
@@ -315,13 +313,9 @@ despite the noisy count:
   `ScmCommitCommand.ts`, and `HostedWorkspaceViewerService.ts`; `generate()`
   was only an orphaned forwarding wrapper.
 
-The remaining unverified items in this bucket are:
-`HarnessIntegration.resolveWorkspacePath()`
-(5),
-`PromptQueue.loadWorkingFile()` (7), `StreamingHistoryBuffer.clear()` (58,
-very common name), `WorkflowInstance.initialize()` (17, common name),
-`WorkflowOrchestrator.readWorkingFile()` (22, common name — see special case
-below).
+All Bucket C items are now resolved: the dead methods were deleted, the
+confirmed structural relationships were made nominal, and the two retained
+dashboard warning endpoints were tagged with explicit reasons.
 
 The Phase 1 utils/config/platform/git slice also resolved the other requested
 Bucket C names: `vscode-shim.ts` `EventEmitter.fire()` was **made nominal**
@@ -349,8 +343,9 @@ are reflected in the finder output above:
   in its constructor and explicit load/execute methods.
 
 The Phase 1 harness slice checked the three harness-area Bucket C candidates:
-`CliTransportCoordinator.writeToCurrentPtySession()` — **kept** because
-`CliExecutionRunner` calls it through the transport contract for inject mode;
+`CliTransportCoordinator.writeToCurrentPtySession()` — **made nominal 2026-07-29
+(Step 6)** because `CliExecutionRunner` calls it through the exported transport
+contract for inject mode;
 `CliNotificationMonitor.monitorForCompletion()` — **deleted 2026-07-29**
 because the class's current consumers use `NotificationMonitorBase` and only
 the shared path/command helpers remain; and
@@ -408,9 +403,9 @@ changed.
 | `src/ui/webview-react/test/terminalRegistry.test.ts:75` | `onContextLoss()`                  | `@xterm/addon-webgl`'s `WebglAddon` (inline `vi.doMock`) |
 
 All 20 false positives above (7 CodeMirror + 13 mocks) are now nominal and
-need no `@keep` tags. `MockVsCodePlatform.getExtensionContext()` remains a
-separate Step 6 candidate because the call site intentionally uses a
-VS Code-only dynamic discriminator.
+need no `@keep` tags. `MockVsCodePlatform.getExtensionContext()` is also
+nominal: its test double declares the VS Code-only heritage contract while
+the production discriminator remains intentionally dynamic.
 
 ## Special cases worth reading before touching anything
 
@@ -485,8 +480,8 @@ current sender and no equivalent dashboard route. The core currently warns
 through the platform/log and transitions execution to failed/stopped state;
 it does not publish the corresponding live-history warning payload. The
 methods and their shared constants/receivers therefore remain as an explicit
-lost-capability finding for a future feature fix. After Step 5, the finder
-reports 7 candidates: those two findings plus five unrelated candidates.
+lost-capability finding for a future feature fix. They are now retained by
+reasoned `@keep` tags, and the final finder reports **0 candidates**.
 
 ## Sweep 2: half-implemented features (grep sweep)
 
@@ -576,7 +571,7 @@ Baselines established before staging, both at commit `360a36fa`:
 `npm test` is the gate for every phase. Never run `npm run test:harness` — it
 makes real paid API calls.
 
-### Phase 1 — delete remaining Bucket A + Bucket B candidates
+### Phase 1 — delete remaining Bucket A + Bucket B candidates (completed 2026-07-29)
 
 For each of the remaining 42 extension-side candidates, verify with the same
 rigor as `handleExecutionError` — repo-wide search including tests and docs,
@@ -598,7 +593,8 @@ candidates** for the remaining area slices. Four additional Bucket C
 candidates were deleted as documented above. The utils/config/platform/git
 slice in Step 4 deleted nine more Bucket A/B candidates and made the shim
 emitter nominal; the kept harness methods and `persistSessionId()` remain
-expected false negatives of the heuristic.
+expected contract-backed false positives; Step 6 made those relationships
+nominal.
 
 **Phase 1 progress (2026-07-29, Step 5):** The UI notification slice removed
 `NotificationManager.notifyStartupComplete()`, the terminal trio, the old
@@ -607,8 +603,13 @@ undo-record helper, the obsolete undo-result sender, and
 `getPanelScopedSend()`. The two queue-limit methods remain as explicit
 lost-capability findings because their React receivers have no current sender
 or replacement route. The `QUEUE_EXTENDED` constant was removed because it
-had neither a sender nor receiver. The combined finder now reports **7
-candidates**.
+had neither a sender nor receiver. The final finder count is recorded below
+after the Step 6 nominal-contract pass.
+
+**Phase 1 completion (2026-07-29, Step 6):** Every Phase 1 candidate is now
+resolved. The two intentionally retained queue-limit endpoints are tagged as
+future protocol surfaces; all other verified-dead methods were deleted or
+made nominal. `CommitMessageGenerator.generate()` is gone, as required.
 
 ### Phase 2 — retain the `WorkflowOrchestrator` standalone-server API (completed 2026-07-29)
 
@@ -617,7 +618,7 @@ listed in the special case are tagged `@keep` with a reference to that plan,
 so the dead-method finder no longer reports them. No further action is needed
 in this audit until standalone implementation changes the API.
 
-### Phase 3 — verify Bucket C individually, then either delete or `@keep`-tag
+### Phase 3 — verify Bucket C individually, then either delete or `@keep`-tag (completed 2026-07-29)
 
 **Runs after Phase 7**, which should already have made most of the confirmed
 false positives below resolve on their own. Only tag what survives.
@@ -638,10 +639,14 @@ look," it can't tell you "dead." Confirmed so far:
   all 7 CodeMirror `ViewPlugin.fromClass` `update()` methods, and all 13
   webview structural test/runtime mocks (`ResizeObserver`, `MockTerminal`,
   `MockFitAddon`, `WebglAddon`).
-- `MockVsCodePlatform.getExtensionContext()` remains a candidate for Step 6:
-  its call site intentionally detects the VS Code-only adapter by property
-  presence, and adding it to `PlatformAdapter` would violate that contract.
-- Everything else in Bucket C: unverified, needs the per-symbol check.
+- `CliTransportCoordinator.writeToCurrentPtySession()`, both
+  `setWorkspaceRoot()` implementations, `PromptQueue.persistSessionId()`, and
+  `MockVsCodePlatform.getExtensionContext()` were made nominal using explicit
+  shared/heritage contracts.
+- The two dashboard warning methods were `@keep`-tagged because their live
+  webview receivers preserve a future protocol endpoint while no sender route
+  currently exists for the checker to trace.
+- The finder reports **0 candidates** after this resolution pass.
 
 ### Phase 4 — fix `onPass: "retry"`
 
@@ -676,7 +681,7 @@ Triage items 3–5 from Sweep 2 as normal small tickets; none are urgent, none
 block anything else in this plan. Item 5 (VAPID support email) needs an owner
 decision on the real address and is not actionable by an implementing agent.
 
-### Phase 6 — keep the tool around
+### Phase 6 — keep the tool around (completed 2026-07-29)
 
 `scripts/find-dead-methods.mjs` is a real, working detector for this pattern
 now that the interface-exclusion bug is fixed and both the extension and
@@ -686,10 +691,9 @@ CI — false-positive rate is too high for a hard gate without the
 (framework plugins, `vi.mock`/`vi.stubGlobal` test doubles) means it will
 never reach zero false positives no matter how much the heritage-clause check
 improves — there's structurally no signal to check for an unnamed class with
-no `implements`/`extends`. Once Phase 3's `@keep` tags land, consider adding
-an `npm run find-dead-methods` script entry and running it periodically
-(alongside `npm run test:coverage`'s zero-coverage scan) rather than gating
-merges on it.
+no `implements`/`extends`. The tool is now exposed as
+`npm run find-dead-methods`. It remains a manual
+periodic check and is not wired into `knip`, `pretest`, `npm test`, or CI.
 
 ### Phase 7 — make the confirmed false positives nominal instead of `@keep`-tagging them (completed 2026-07-29)
 
@@ -708,10 +712,9 @@ ResizeObserver` clauses to the extension and webview test doubles. Mock
   6.43.0 and added `implements PluginValue` to all seven anonymous plugin
   classes.
 
-The finder now reports **56 candidates**, down from the 91-candidate
-baseline. All 35 `getConfig`/structural-mock/CodeMirror entries are nominal
-and need no `@keep` tag. The one requested site that remains is
-`src/test/unit/CliIntegration.test.ts:53`:
-`MockVsCodePlatform.getExtensionContext()` is reached through the intentional
-VS Code-only property-presence check in `CliIntegration`; it remains for
-Step 6 rather than broadening `PlatformAdapter`.
+The Phase 7 intermediate finder reported **56 candidates**, down from the
+91-candidate baseline. All 35 `getConfig`/structural-mock/CodeMirror entries
+were nominal and needed no `@keep` tag. The final Step 6 pass also made the
+transport, parser, persistence, and VS Code-only test-double contracts
+nominal, leaving only the two explicitly tagged future warning endpoints;
+the final finder count is **0 candidates**.

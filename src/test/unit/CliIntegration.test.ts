@@ -15,10 +15,13 @@ import type {
 } from "../../core/harness/shared/interfaces/ILogParser";
 import { CliAdapter } from "../../platform/CliAdapter";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 
-class MockVsCodePlatform implements PlatformAdapter {
+class MockVsCodePlatform
+  implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
+{
   getWorkspaceRoot(): string {
     return process.cwd();
   }

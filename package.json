@@ -780,7 +780,8 @@
     "sync-models:discover": "node scripts/sync-models.mjs --discover",
     "chores": "node scripts/chores.mjs",
     "compile:prod": "npm run compile:extension && npm run build:webview",
-    "knip": "knip"
+    "knip": "knip",
+    "find-dead-methods": "node scripts/find-dead-methods.mjs"
   },
   "devDependencies": {
     "@lezer/highlight": "^1.2.3",

@@ -59,6 +59,9 @@ export type UserEventClassification =
  * - Build complete responses from streaming events
  */
 export interface ILogParser {
+  /** Set the workspace root used by parsers that discover session logs there. */
+  setWorkspaceRoot?(root: string): void;
+
   /**
    * Extract complete response from parsed log events
    *

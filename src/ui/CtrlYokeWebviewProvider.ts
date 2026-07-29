@@ -715,6 +715,7 @@ export class CtrlYokeWebviewProvider
     });
   }
 
+  /** @keep The webview warning receiver is a future protocol endpoint; no sender route exists for the checker to trace. */
   public notifyQueueSizeLimitReached(
     currentSize: number,
     maxSize: number
@@ -726,6 +727,7 @@ export class CtrlYokeWebviewProvider
     });
   }
 
+  /** @keep The webview warning receiver is a future protocol endpoint; no sender route exists for the checker to trace. */
   public notifyExecutionTimeLimitReached(
     elapsedSeconds: number,
     maxSeconds: number,

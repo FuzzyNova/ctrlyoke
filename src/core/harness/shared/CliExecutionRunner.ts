@@ -3,7 +3,6 @@ import * as fs from "fs";
 import * as path from "path";
 import type { CliEvent } from "../../../types/CliOutputTypes";
 import { FAILURE_KINDS, HARNESS_IDS } from "../../../types/DashboardConstants";
-import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
@@ -22,43 +21,7 @@ import type { ICliProvider } from "./interfaces/ICliProvider";
 import { HookEventMonitor } from "./HookEventMonitor";
 import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
-
-interface CliExecutionTransportCoordinator {
-  executeStandaloneInteractiveProcess(
-    args: string[],
-    promptArgument: string,
-    tempFilePaths: string[],
-    resolvedSessionId?: string
-  ): Promise<{ success: boolean; sessionId?: string }>;
-  startInteractiveProcess(
-    args: string[],
-    promptArgument: string,
-    workflowContext?: WorkflowContext,
-    env?: Record<string, string>
-  ): Promise<void>;
-  executeHeadless(
-    args: string[],
-    promptArgument: string,
-    tempFilePaths: string[],
-    executeCallback: (result: {
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-      headlessLogTail?: HeadlessLogTail;
-    }) => Promise<boolean>,
-    env?: Record<string, string>,
-    source?: HeadlessStreamingSource
-  ): Promise<boolean>;
-  /** Write text to the currently active PTY session. Returns false if no session is active. */
-  writeToCurrentPtySession(text: string): boolean;
-  /** Refresh display metadata for the current PTY session when it is reused by inject mode. */
-  updateCurrentPtySessionMetadata?(workflowContext?: WorkflowContext): boolean;
-  /**
-   * Terminate the current PTY when another execution mode needs exclusive
-   * ownership of the same AI session.
-   */
-  terminateCurrentPtySession?(reason: string): Promise<string | undefined>;
-}
+import type { CliExecutionTransportCoordinator } from "./CliTransportCoordinator";
 
 interface CliInteractiveStartupCoordinatorLike {
   resolveSession(params: {

@@ -56,7 +56,44 @@ export interface CliTransportCoordinatorDeps {
   postTerminalMessage?: (message: unknown) => void;
 }
 
-export class CliTransportCoordinator {
+export interface CliExecutionTransportCoordinator {
+  executeStandaloneInteractiveProcess(
+    args: string[],
+    promptArgument: string,
+    tempFilePaths: string[],
+    resolvedSessionId?: string
+  ): Promise<{ success: boolean; sessionId?: string }>;
+  startInteractiveProcess(
+    args: string[],
+    promptArgument: string,
+    workflowContext?: WorkflowContext,
+    env?: Record<string, string>
+  ): Promise<void>;
+  executeHeadless(
+    args: string[],
+    promptArgument: string,
+    tempFilePaths: string[],
+    executeCallback: (result: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+      headlessLogTail?: HeadlessLogTail;
+    }) => Promise<boolean>,
+    env?: Record<string, string>,
+    source?: HeadlessStreamingSource
+  ): Promise<boolean>;
+  /** Write text to the currently active PTY session. Returns false if no session is active. */
+  writeToCurrentPtySession(text: string): boolean;
+  /** Refresh display metadata for the current PTY session when it is reused by inject mode. */
+  updateCurrentPtySessionMetadata?(workflowContext?: WorkflowContext): boolean;
+  /**
+   * Terminate the current PTY when another execution mode needs exclusive
+   * ownership of the same AI session.
+   */
+  terminateCurrentPtySession?(reason: string): Promise<string | undefined>;
+}
+
+export class CliTransportCoordinator implements CliExecutionTransportCoordinator {
   private currentPtySession?: PtySession;
   /** ID of the last PTY spawned — persists after currentPtySession is cleared so inject-fallback suppression can find it. */
   private lastPtySessionId?: string;
