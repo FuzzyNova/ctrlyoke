@@ -76,6 +76,42 @@ This is broader than the prior standalone-plan audit. Adapter construction and
 watchers are load-bearing blockers, but they are not the only VS Code seams in
 the standalone-reachable graph.
 
+### Audit blind spot: a `vscode`-free import list is not a host-neutral one
+
+An import/member scan cannot see code that reaches VS Code **through the
+injected adapter**. `PlatformAdapter` already declares `log()`, `warn()`,
+`error()`, `showProgress()`, and `showChoice()`, all documented as mapping to
+`vscode.window.show*Message` in `VsCodeAdapter`. Nineteen call sites use them:
+
+| File                                 | Calls | Kind                                |
+| ------------------------------------ | ----: | ----------------------------------- |
+| `src/core/WorkflowInstance.ts`       |     9 | `log`/`warn`/`error`                |
+| `src/core/WorkflowExecutor.ts`       |     3 | `log`/`warn`/`error`                |
+| `src/core/PromptFileParser.ts`       |     3 | `log`/`warn`/`error`                |
+| `src/core/EndConditionHandler.ts`    |     2 | `showChoice` — **blocks execution** |
+| `src/core/harness/CliIntegration.ts` |     2 | `warn` ×1, `showChoice` ×1          |
+
+None of these files appear in any table above, and all of them are in the
+standalone-reachable graph. `EndConditionHandler` is the sharpest case: it halts
+a workflow on a native modal that, in the hosted server, renders only on the
+host machine. Both of its sites are **deleted rather than ported** — one is
+dead code, the other overrides declared `endCondition.onFail` policy. See
+`BROWSER_USER_FEEDBACK_PLAN.md` Phase 2.5.
+
+**Corollary for every stage: triage before porting.** Some VS Code UI in
+reusable code should simply be removed — it duplicates a typed reply that
+already exists, announces routine success the dashboard already shows, or asks
+at runtime what workflow config already declares. Deleting a site is strictly
+cheaper than giving it a message type, a browser renderer, and a headless
+fallback. Apply the triage table in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 2
+before writing any adapter for a call site.
+
+Treat "file has no `vscode` import" as a necessary but insufficient exit
+criterion. The real criterion is that reusable code has no path to a host UI
+except through an injected capability port whose headless implementation is
+defined. See
+[`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) Phase 2.5.
+
 ## Exhaustive `window` / `workspace` Inventory
 
 ### VS Code boundary files — calls may remain
@@ -176,9 +212,19 @@ Keep:
 - extension/package asset root;
 - execution/runtime identity needed by harness integration.
 
-Deprecate ambiguous UI/logging methods after their callers move to dedicated
-ports. Avoid `isVsCode()` branches in domain logic when composition can provide
-the right implementation directly.
+**Remove, once their 19 callers move to dedicated ports:** `log()`, `warn()`,
+`error()`, `showProgress()` → `UserFeedbackSink`; `showChoice()` → the
+interaction port. Deleting the declarations is part of the work, not a
+follow-up — leaving them on the interface is precisely what lets "decoupled"
+core code keep opening native dialogs, and no import-boundary lint rule will
+catch it.
+
+`openTextFile()` and `focusDashboard()` are already optional host actions and
+should move to `DashboardHostActions` for consistency rather than staying as
+optional adapter methods.
+
+Avoid `isVsCode()` branches in domain logic when composition can provide the
+right implementation directly.
 
 ### Watcher factory
 
@@ -257,6 +303,50 @@ Split registry aggregation from sources:
 - subscriptions use the existing project emitter pattern, not
   `vscode.EventEmitter`.
 
+## Cross-Plan Execution Order (canonical)
+
+The three plans each carry their own phase numbering, and
+`STANDALONE_SERVER_PLAN.md` additionally carries two internally inconsistent
+lists (its "Next Steps" puts the watcher seam second and the shared router
+third; its older "Implementation Order" puts them tenth and eighth, and omits
+browser feedback entirely). **This table is the single authoritative sequence.**
+Where a per-plan phase number disagrees with a stage here, this table wins.
+
+| Stage | Work                                     | Owning plan / phase                           | Done when                                                                                            |
+| ----: | ---------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+|     0 | Dependency guards + baselines            | This plan, Phase 0 (absorbs Feedback Phase 5) | CI fails on a new `vscode` import in a shared group, a new `show*Message`, or a 20th adapter-UI call |
+|     1 | Toast queue + `ToastViewport`            | Feedback Phase 1                              | `showToast()` renders; panel shows no duplicate; browser-delivery decision recorded                  |
+|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | `WorkflowOrchestrator` instantiates with no `vscode` module loadable                                 |
+|     3 | Watcher factory                          | This plan, Phase 2                            | All five sites use the port; create/change/delete/dispose contract tests pass on both impls          |
+|     4 | Feedback port + adapter migration        | Feedback Phases 2 and 2.5                     | Adapter-UI counter is 0; no run can block on an unanswerable prompt                                  |
+|     5 | Command UI / domain split                | This plan, Phase 3                            | Domain ops callable headlessly; VS Code pickers confined to command facades                          |
+|     6 | Reusable router + client-scoped feedback | This plan Phase 4 **∪** Feedback Phase 3      | One router serves both transports; two-tab test proves no cross-client leakage                       |
+|     7 | Shared UI services                       | This plan, Phase 5                            | Serializer/settings/editor-support take injected roots and services                                  |
+|     8 | Utilities, completions, `Log`            | This plan, Phase 6                            | `Log` writes through injected sinks; discovery takes explicit roots                                  |
+|     9 | Interactive choices                      | Feedback Phase 4                              | Every interaction has a defined headless fallback and disconnect behavior                            |
+|    10 | Standalone composition                   | This plan Phase 7 + Standalone Phases 5–9     | Standalone server boots from Node host services and the shared router                                |
+|    11 | `ctrlyoke server` CLI + launch UX        | Standalone Phase 10                           | Tokenized URL/QR/TLS hint printed; Open Question 1 resolved                                          |
+|    12 | Retire the Node-side shim                | This plan, Phase 8                            | CLI/server bundle graph contains no `vscode`; alias and shim deleted                                 |
+
+Notes on the merges:
+
+- **Stage 0 absorbs `BROWSER_USER_FEEDBACK_PLAN.md` Phase 5.** That plan
+  scheduled its `show*Message` lint rule last; this plan schedules equivalent
+  guards first, with the explicit rationale that the baseline must not grow
+  during refactoring. Landing the same rule at both ends is contradictory —
+  the rule goes in at Stage 0 with a shrink-only allowlist.
+- **Stage 6 is one piece of work, not two.** This plan's Phase 5 item 1
+  (`WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`,
+  terminal handlers → typed/scoped results) and the feedback plan's Phase 3
+  (thread `WebviewClientContext` into those same delegates) describe the same
+  edits to the same files. Do them once.
+- **Stage 1 is independent** of Stages 2–3 and can run in parallel; it is pure
+  React plus one handler gate.
+- **Stage 4 gates Stage 10.** `StandaloneServerAdapter` cannot implement
+  `PlatformAdapter` until Stage 4 removes the five UI methods.
+- `Log.ts` imports `vscode` but is not decoupled until Stage 8. It must be on
+  the Stage 0 allowlist from day one; that entry is expected to be long-lived.
+
 ## Implementation Plan
 
 ### Phase 0 — Add dependency guards
@@ -266,6 +356,11 @@ Split registry aggregation from sources:
 3. Add an explicit temporary allowlist matching this audit.
 4. Make the allowlist shrink-only.
 5. Add a bundle/metafile check for the Node server entry graph.
+6. Add a **shrink-only counter for adapter-mediated host UI** —
+   `platform.log|warn|error|showProgress|showChoice` call sites, baseline 19.
+   An import-graph rule cannot see these, so without a separate counter the
+   `vscode`-import metric can reach zero while core code still opens native
+   modals.
 
 This lands before refactoring so the measured baseline cannot grow.
 
@@ -274,7 +369,10 @@ This lands before refactoring so the measured baseline cannot grow.
 1. Replace `WorkflowOrchestrator(context, provider)` with an options/dependencies
    object containing project-owned interfaces.
 2. Construct one `VsCodeAdapter` in `extension.ts`; remove the five internal
-   `new VsCodeAdapter(...)` calls.
+   `new VsCodeAdapter(...)` calls in `WorkflowOrchestrator.ts` (lines 358, 378,
+   381, 385, 4536). A sixth lives in `TemplateManager.ts:122` and is removed by
+   the `TemplateManager` refactor in Phase 3 — six constructions total, so the
+   "one adapter" invariant is not met until both land.
 3. Remove the shared orchestrator's `ExtensionContext` field.
 4. Inject an optional status sink instead of constructing
    `StatusBarManager`.
@@ -416,10 +514,36 @@ Run the same suites against VS Code and Node implementations where practical:
 - Extension multi-root behavior remains unchanged.
 - Standalone stays intentionally single-root.
 
+## Open Questions
+
+Only the first is blocking; the rest can be answered inside their stage.
+
+1. ~~**Stage 2 landing strategy.**~~ **Decided 2026-07-29: test-first.** Write
+   the "instantiate `WorkflowOrchestrator` with no `vscode` module available"
+   test before touching the constructor, and let it drive the shape of the
+   dependency object. It is the only real exit gate for the stage, and having it
+   red from the start prevents the refactor from drifting toward a signature
+   that merely compiles. A permanent context-based default remains ruled out.
+2. **`DashboardHostActions` shape.** The sketch has four methods. Confirm
+   against the actual VS Code-only router call sites that this is sufficient and
+   that nothing generic (a command-ID passthrough) creeps back in.
+3. **`Log` sink configuration.** Shared code must not subscribe to
+   `vscode.workspace` for log-level changes, so each composition root pushes
+   configuration in. Confirm the push model covers runtime level changes in the
+   extension without a listener in `Log` itself.
+4. **`PlatformAdapter.isVsCode()`.** The plan says to avoid `isVsCode()`
+   branches in domain logic, but `CliIntegration` uses it to choose terminal vs
+   piped execution. Does that become an injected execution capability, or is it
+   the one legitimate remaining branch?
+
 ## Acceptance Criteria
 
 - `WorkflowOrchestrator` and `WorkflowInstance` have no `vscode` import or
   `ExtensionContext` dependency.
+- `PlatformAdapter` no longer declares `log`, `warn`, `error`, `showProgress`,
+  or `showChoice`, and the adapter-mediated host-UI counter is zero.
+- No reusable code path can block execution on a prompt whose headless behavior
+  is undefined.
 - The five watcher sites use the project watcher contract.
 - Shared dashboard routing and services have no direct VS Code commands,
   window, workspace, URI, or editor dependencies.

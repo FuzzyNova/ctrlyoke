@@ -106,6 +106,14 @@ _Orchestration seams (Track 1 — shared prerequisites, still all open):_
   `showInformationMessage` calls**. Sixty-three are in reusable/shared code and
   currently leave hosted-browser users without equivalent feedback. See
   `BROWSER_USER_FEEDBACK_PLAN.md`.
+- **Plus 19 adapter-mediated host-UI calls** that no `vscode`-import audit can
+  see: `PlatformAdapter.log/warn/error/showProgress/showChoice` in
+  `WorkflowInstance` ×9, `WorkflowExecutor` ×3, `PromptFileParser` ×3,
+  `EndConditionHandler` ×2, and `CliIntegration` ×2. The two
+  `EndConditionHandler.showChoice()` sites **block workflow execution** on a
+  modal that renders only on the host machine, so a browser-driven run stalls
+  with no visible cause. This is the sharpest hosted-parity defect that exists
+  today and it is not a standalone-only problem.
 
 _Standalone-only pieces (Track 3, none exist yet):_
 
@@ -147,6 +155,11 @@ _Standalone-only pieces (Track 3, none exist yet):_
 
 ### Next Steps (post-v0.1.0, in dependency order)
 
+> The authoritative cross-plan sequence is the **Cross-Plan Execution Order**
+> table in
+> [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md).
+> The list below is the standalone-oriented view of that same order.
+
 Do these roughly in order; steps 1–3 are the shared foundation and unblock everything else.
 
 1. **Add dependency guards and host composition.** Follow
@@ -164,7 +177,10 @@ Do these roughly in order; steps 1–3 are the shared foundation and unblock eve
    clients; do not create a duplicate `WebSocketMessageRouter`.
 4. **Browser user feedback.** Land the visible toast queue and operational
    feedback protocol from `BROWSER_USER_FEEDBACK_PLAN.md`. This fixes the
-   existing hosted-browser gap and supplies the standalone feedback sink.
+   existing hosted-browser gap and supplies the standalone feedback sink. It
+   also narrows `PlatformAdapter`, which step 5 depends on to compile, and
+   resolves the execution-blocking `showChoice` sites — so it is a hard
+   prerequisite for step 5, not a parallel nicety.
 5. **Install standalone deps & add the entrypoint:** `fast-glob`, `ignore`, `open` (and
    `vscode-jsonrpc` only if the LSP symbol client ships). Then build the standalone pieces
    modeled on `CtrlYokeHostedServer` — Node host services/adapter (Phase 5),
@@ -756,6 +772,11 @@ export interface StandaloneServerConfig {
   timeout: number;
 }
 
+// NOTE: this sketch assumes `PlatformAdapter` has already been narrowed. Today
+// the interface still *requires* log/warn/error/showProgress/showChoice, so
+// this class does not compile until the feedback-port migration lands. That
+// ordering dependency is real: Phase 5 cannot start before
+// BROWSER_USER_FEEDBACK_PLAN Phase 2.
 export class StandaloneServerAdapter implements PlatformAdapter {
   constructor(private config: StandaloneServerConfig) {}
 
@@ -1335,6 +1356,14 @@ Implementation requirements:
 ---
 
 ## Implementation Order
+
+> **Superseded as a sequence.** This section predates the split into three
+> plans: it omits browser feedback entirely and orders the watcher seam (item 10) and shared router (item 8) _after_ standalone composition, contradicting
+> the "Next Steps" list above and the shared-foundation dependencies. Use the
+> **Cross-Plan Execution Order** table in
+> [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
+> as the authoritative sequence. The Track 3 entries below remain useful as a
+> checklist of standalone-specific deliverables.
 
 ### Track 1 — Shared Foundation (required for both modes)
 
