@@ -18,6 +18,7 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   buildDefinitionSnapshot,
@@ -60,24 +61,17 @@ async function writeWorkingFileAtomicTo(
   workingFile: WorkingFile,
   options: { skipLock?: boolean } = {}
 ): Promise<void> {
-  const tempPath = `${workingFilePath}.tmp`;
-
   const writeAction = async () => {
     try {
-      await fs.writeFile(
-        tempPath,
+      await writeFileAtomic(
+        workingFilePath,
         JSON.stringify(
           stripTimelineDuplicatedWorkingFileOutput(workingFile),
           null,
           2
         )
       );
-      await fs.rename(tempPath, workingFilePath);
     } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-
       throw new Error(
         `Failed to write working file: ${getErrorMessage(error)}`
       );
@@ -97,12 +91,9 @@ async function writeSnapshotAtomic(
   snapshotPath: string,
   content: Buffer
 ): Promise<void> {
-  const tempPath = `${snapshotPath}.tmp`;
   try {
-    await fs.writeFile(tempPath, content);
-    await fs.rename(tempPath, snapshotPath);
+    await writeFileAtomic(snapshotPath, content);
   } catch (error) {
-    await fs.unlink(tempPath).catch(() => {});
     throw new Error(
       `Failed to write pending rewind snapshot: ${getErrorMessage(error)}`
     );
@@ -114,12 +105,9 @@ async function restoreSnapshotAtomic(
   workingFilePath: string,
   content: Buffer
 ): Promise<void> {
-  const tempPath = `${workingFilePath}.tmp`;
   try {
-    await fs.writeFile(tempPath, content);
-    await fs.rename(tempPath, workingFilePath);
+    await writeFileAtomic(workingFilePath, content);
   } catch (error) {
-    await fs.unlink(tempPath).catch(() => {});
     throw new Error(
       `Failed to restore pending rewind snapshot: ${getErrorMessage(error)}`
     );

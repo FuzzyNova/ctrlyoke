@@ -3668,6 +3668,69 @@ suite("WorkflowOrchestrator client view addressing", () => {
     });
   });
 
+  // Driven through the instance's real `onDidChangeState` listener, because the
+  // defect this guards is in the *wiring*: a run start that throws after its
+  // promotion published the run (harness unavailable, lock contention, timeline
+  // init) never reaches RUNNING, and the draft those clients address was
+  // deleted by that promotion. Syncing only on RUNNING stranded them on a file
+  // that no longer exists while their definition sat in the promoted run.
+  test("lands a draft holder on the promoted run when the start fails before RUNNING", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "failed-start-lineage" as never;
+    const runRef = "run-2026-07-30T14-00-00-000Z" as never;
+
+    internal.context = {};
+    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.instances = new Map();
+    internal.retiredInstances = new Map();
+    internal.viewerRegistry = new Map();
+    internal.viewAddressRegistry = new Map();
+    internal.viewMessageSinks = new Map();
+    // A real instance broadcasts state through the hub as an IDashboardSink;
+    // this test is about view addressing, so every notification is a no-op.
+    internal.dashboardBroadcastHub = new Proxy(
+      {},
+      { get: () => () => undefined }
+    );
+    internal.resolveDetectorIntegration = () => ({});
+    internal.propagateWorkflowNameToIntegrations = () => undefined;
+    internal.updateStatusBar = () => undefined;
+
+    const instance = internal.buildWorkflowInstance();
+    internal.viewerRegistry.set("client-a", instance.id);
+    internal.viewAddressRegistry.set("client-a", {
+      workflowKey,
+      kind: "draft",
+    });
+    internal.viewMessageSinks.set("client-a", () => undefined);
+    const loaded: unknown[] = [];
+    internal.loadRunViewForClient = async (address: unknown) => {
+      loaded.push(address);
+    };
+
+    // The promotion published its run, then the start threw: the queue carries
+    // the new RunRef and the runtime reports ERROR without ever having run.
+    const queue = instance.promptQueue as any;
+    queue.state.workflowKey = workflowKey;
+    queue.state.runRef = runRef;
+    (instance as any).workflowRuntime.fail();
+    queue.emitStateChange();
+
+    assert.deepStrictEqual(
+      loaded,
+      [{ workflowKey, kind: "run", runRef }],
+      "the failed start's run must be published to the stranded draft holder"
+    );
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+      workflowKey,
+      kind: "run",
+      runRef,
+    });
+  });
+
   test("drops the previous lineage's address when a client switches to a blank workflow", () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype

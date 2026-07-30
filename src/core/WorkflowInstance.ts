@@ -45,6 +45,7 @@ import {
   QUEUE_POSITION,
   RUNNER_IDS,
   SESSION_KINDS,
+  STATUS_MESSAGE_SEVERITY,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -1172,6 +1173,14 @@ export class WorkflowInstance {
     // Declared outside try so the catch block can finalize history on early errors
     // (errors thrown before startWorkflowExecution, which has its own finally block).
     let historyFilePath = preinitializedHistoryFilePath;
+    // The run *this call* promoted, if any. Publishing a run deletes the
+    // lineage's draft, so from that moment the run is the only thing the user's
+    // definition lives in and the only address a client can be sent to — the
+    // catch below has to be able to name it even when the throw beat
+    // `historyFilePath` being resolved. Never read the queue's `runRef` for
+    // this: on a later run's failed start that still holds the *previous*,
+    // legitimately completed run.
+    let promotedRunRef: RunRef | undefined;
 
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
@@ -1304,6 +1313,7 @@ export class WorkflowInstance {
         );
         if (promoted) {
           workingFilePath = promoted.workingFilePath;
+          promotedRunRef = promoted.runRef;
           this.syncCurrentPromptFileFromQueue(promoted.workingFilePath);
           this.executionRunRef = promoted.runRef;
           const historyInit = await this.outputHistoryManager.initializeRunAt(
@@ -1525,10 +1535,29 @@ export class WorkflowInstance {
       // Finalize the history run if it was initialized before the error occurred
       // (errors thrown between initializeRun and startWorkflowExecution; the latter
       // has its own finally block that handles finalization for errors within execution).
-      if (historyFilePath) {
+      //
+      // A run promoted by this call must be finalized even when the throw came
+      // from `initializeRunAt` itself, before `historyFilePath` was resolved:
+      // the run directory is already published (and the draft already deleted),
+      // and its staged manifest says RUNNING. Left that way the lineage shows a
+      // permanently executing run that retention never prunes, and the header
+      // offers neither Resume nor "Run" for the one address the user's
+      // definition now lives at.
+      // The lineage *key* is stable across a promotion (only the RunRef moves),
+      // so reading it from the queue here still names the run promoted above.
+      const failedRunKey = this.promptQueue.getState().workflowKey;
+      const runToFinalize =
+        historyFilePath ||
+        (promotedRunRef && failedRunKey
+          ? this.outputHistoryManager.getHistoryFilePath(
+              failedRunKey,
+              promotedRunRef
+            )
+          : "");
+      if (runToFinalize) {
         await this.outputHistoryManager
           .finalizeRun(
-            historyFilePath,
+            runToFinalize,
             EXECUTION_STATES.ERROR,
             this.promptQueue.getProgress().total
           )
@@ -1537,6 +1566,15 @@ export class WorkflowInstance {
           );
       }
       this.platform.error(`ctrlyoke: Execution failed: ${error}`);
+      // `platform.error` is a VS Code notification, which a hosted browser
+      // client never sees — without this the run simply stops with no stated
+      // reason there.
+      this.dashboardSink?.updateStatusMessage(
+        this.promptQueue.getState().currentIndex,
+        `Execution failed: ${getErrorMessage(error)}`,
+        STATUS_MESSAGE_SEVERITY.ERROR,
+        this.id
+      );
     }
   }
 

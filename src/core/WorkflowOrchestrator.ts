@@ -4680,7 +4680,20 @@ export class WorkflowOrchestrator {
       // Rebind clients viewing that instance from the draft snapshot to the
       // executing run so subsequent dashboard property edits address and
       // persist to the same run working file as the executor.
-      if (state.status === EXECUTION_STATES.RUNNING) {
+      //
+      // Terminal states matter for the same reason and are not redundant: a run
+      // start that throws after the promotion published its run (harness
+      // unavailable, lock contention, timeline init) never reaches RUNNING, and
+      // the draft those clients are addressing was deleted by that promotion.
+      // Without this they are stranded on a file that no longer exists, while
+      // the definition they spent the session building sits in the promoted run
+      // nothing has pointed them at.
+      if (
+        state.status === EXECUTION_STATES.RUNNING ||
+        state.status === EXECUTION_STATES.ERROR ||
+        state.status === EXECUTION_STATES.STOPPED ||
+        state.status === EXECUTION_STATES.COMPLETED
+      ) {
         this.syncExecutingRunViews(instance);
       }
 
@@ -4759,6 +4772,11 @@ export class WorkflowOrchestrator {
    * draft" for a run that has already finished, and every addressed action it
    * sends is rejected because the backend resolved a file that no longer
    * exists.
+   *
+   * Called on the run's terminal states as well as RUNNING, so a start that
+   * failed after publishing its run still lands those clients on it — that run
+   * holds the definition the draft used to, and the header's Resume/Run gives
+   * them a one-click retry there.
    */
   private syncExecutingRunViews(instance: WorkflowInstance): void {
     const state = instance.getQueueState();

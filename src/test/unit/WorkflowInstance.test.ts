@@ -1585,6 +1585,104 @@ suite("WorkflowInstance append-and-continue", () => {
     ]);
   });
 
+  // Publishing a run deletes the lineage's draft, so once promotion succeeds the
+  // run is the only place the user's definition lives. A start that throws after
+  // that point — here the timeline init the promotion itself needs — must still
+  // finalize the run it published: its staged manifest reads RUNNING, and left
+  // that way the lineage shows a permanently executing run that retention never
+  // prunes and whose header offers neither Resume nor Run. `historyFilePath` is
+  // not yet resolved on this path, which is exactly why the promoted RunRef is
+  // tracked separately.
+  test("finalizes and reports a run whose start failed after the promotion published it", async () => {
+    const platform = new MockPlatform();
+    const statusMessages: Array<{ message: string; severity: string }> = [];
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: (
+        _stepIndex: number,
+        message: string,
+        severity: string
+      ) => {
+        statusMessages.push({ message, severity });
+      },
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "an hour of work" }],
+    });
+    instance.setCurrentPromptFile("workflow.ctrlyoke.json", {
+      steps: [{ prompt: "an hour of work" }],
+    });
+    const workflowKey = "doomed-2026-07-30T14-00-00-000";
+    const runRef = "run-2026-07-30T14-00-00-000Z";
+    (instance.promptQueue as any).state.workflowKey = workflowKey;
+    (instance.promptQueue as any).promoteToNewRun = async () => ({
+      workingFilePath: "run/workflow.ctrlyoke.json",
+      runRef,
+      runId: 1,
+      runDir: "run",
+      stagingRunDir: "staging",
+      stagingWorkingFilePath: "staging/workflow.ctrlyoke.json",
+      allocation: {},
+    });
+    (instance as any).syncCurrentPromptFileFromQueue = () => {};
+
+    const history = (instance as any).outputHistoryManager;
+    // The published run exists; only its timeline init fails.
+    history.initializeRunAt = async () => ({ filePath: "" });
+    history.getHistoryFilePath = (key: string, ref: string) =>
+      `${key}/${ref}/manifest.json`;
+    const finalized: Array<{ path: string; state: string }> = [];
+    history.finalizeRun = async (filePath: string, state: string) => {
+      finalized.push({ path: filePath, state });
+    };
+
+    await (instance as any).executeLoadedPromptFile();
+
+    assert.deepStrictEqual(
+      finalized,
+      [
+        {
+          path: `${workflowKey}/${runRef}/manifest.json`,
+          state: EXECUTION_STATES.ERROR,
+        },
+      ],
+      "the published run must not be left reading RUNNING forever"
+    );
+    assert.strictEqual(
+      statusMessages.filter((entry) => entry.severity === "error").length,
+      1,
+      "the failure must reach the dashboard, not only the VS Code notification"
+    );
+  });
+
   test("keeps an earlier harness terminal alive when the next prompt switches harnesses", () => {
     class TrackingIntegration extends MockHarnessIntegration {
       closeTerminalCalls = 0;

@@ -10,6 +10,10 @@ import type {
 import { isWorkflowRunAddress } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { withFileLock } from "../../utils/FileLockUtils";
+import {
+  renameWithTransientRetry,
+  writeFileAtomic,
+} from "../../utils/AtomicFileUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 
 const DESCRIPTOR_SCHEMA_VERSION = 1;
@@ -262,7 +266,13 @@ export class WorkflowLineageRepository {
         );
       }
       try {
-        await fs.promises.rename(allocation.stagingRunDir, allocation.runDir);
+        // A directory rename, but the same Windows sharing failures apply: the
+        // staging directory's files were just written, so a scanner can still
+        // be holding one when this publishes.
+        await renameWithTransientRetry(
+          allocation.stagingRunDir,
+          allocation.runDir
+        );
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "EEXIST") {
           throw new Error(
@@ -550,20 +560,12 @@ export class WorkflowLineageRepository {
     await fs.promises.mkdir(path.dirname(descriptorPath), {
       recursive: true,
     });
-    const tempPath = `${descriptorPath}.tmp`;
     try {
-      await fs.promises.writeFile(
-        tempPath,
-        JSON.stringify(descriptor, null, 2),
-        "utf8"
+      await writeFileAtomic(
+        descriptorPath,
+        JSON.stringify(descriptor, null, 2)
       );
-      await fs.promises.rename(tempPath, descriptorPath);
     } catch (error) {
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch {
-        // best-effort cleanup
-      }
       // console.warn (not Log) — this module is imported by mcp-server.ts, which has no vscode logging infrastructure.
       console.warn(
         `[WorkflowLineageRepository] Failed to write descriptor for ${workflowKey}: ${getErrorMessage(error)}`

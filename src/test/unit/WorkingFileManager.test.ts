@@ -430,6 +430,57 @@ suite("WorkingFileManager", () => {
       }
     });
 
+    // The draft is a session's worth of the user's work and the run is built
+    // from it, so publishing must be all-or-nothing: stage the run's files,
+    // rename them into place, and only then delete the draft. A promotion that
+    // fails anywhere before that rename must leave the draft exactly as it was
+    // — there is nowhere else the definition exists yet.
+    test("keeps the draft intact when publishing the run fails", async () => {
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
+      tempPaths.push(tmpWorkspace);
+
+      const creator = new WorkingFileManager(makeMockAccess());
+      const { workflowKey, workingFilePath } = await creator.createWorkingFile(
+        "doomed-workflow",
+        [{ prompt: "an hour of tweaking" }] as PromptStep[],
+        tmpWorkspace,
+        "Doomed Workflow"
+      );
+      const draftBefore = await fs.readFile(workingFilePath, "utf-8");
+
+      const failingRepository = new WorkflowLineageRepository();
+      failingRepository.finalizeAllocatedRun = async () => {
+        throw new Error("publish failed");
+      };
+      const access = makeMockAccess(workingFilePath);
+      access.getSteps = () =>
+        [{ prompt: "an hour of tweaking" }] as PromptStep[];
+
+      await assert.rejects(
+        new WorkingFileManager(access, failingRepository).promoteToNewRun(
+          tmpWorkspace,
+          workflowKey as any,
+          Date.now()
+        ),
+        /publish failed/
+      );
+
+      assert.strictEqual(
+        await fs.readFile(workingFilePath, "utf-8"),
+        draftBefore,
+        "a failed promotion must not touch the draft it was promoting"
+      );
+      const runsDir = path.dirname(path.dirname(workingFilePath));
+      const published = (await fs.readdir(runsDir)).filter((entry) =>
+        entry.startsWith("run-")
+      );
+      assert.deepStrictEqual(
+        published,
+        [],
+        "no run may be published when finalization failed"
+      );
+    });
+
     test("carries the draft's workflow settings into the first run", async () => {
       tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
       tempPaths.push(tmpWorkspace);
