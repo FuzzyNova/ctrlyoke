@@ -1,6 +1,6 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Step 1 implemented; steps 2–7 remain queued (see "Implementation Steps"
+**Status:** Step 2 implemented; steps 3–7 remain queued (see "Implementation Steps"
 at the bottom)
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
@@ -312,6 +312,24 @@ support multiple values:
 - This mirrors the merge approach the user suggested, and avoids needing Google to add
   multi-statusline support.
 
+#### Wrapper command contract
+
+The provider configures agy with exactly `node <absolute-path-to-ctrlyoke-antigravity-statusline.js>`
+and no positional arguments. agy splits command strings on whitespace without shell
+quote processing, so the wrapper receives its per-run values through inherited
+environment variables instead:
+
+- `CTRLYOKE_AGY_STATUSLINE_TOKEN` — the correlation token used in the snapshot filename.
+- `CTRLYOKE_AGY_STATUSLINE_DIR` — the absolute workspace `.ctrlyoke/temp` directory.
+- `CTRLYOKE_AGY_STATUSLINE_FORWARD` — optional full baseline user statusline command;
+  the wrapper executes this string with shell semantics, forwards the original stdin
+  bytes, and relays successful stdout verbatim. It is absent when ctrlyoke owns the
+  statusline.
+
+The forward command is independent of snapshot writing and has a 200ms timeout. A
+missing, failed, or timed-out forward falls back to ctrlyoke's branded line; all paths
+exit with status 0.
+
 ### 4. Collector on the ctrlyoke side
 
 - Both interactive and headless execution use one unified sidecar (not two separate
@@ -490,7 +508,7 @@ Never `npm run test:harness` (see `test.instructions.md` — it drives live AI C
    permission lease to an arbitrary top-level key; reimplement
    `registerPermissionPolicy`/`unregisterPermissionPolicy` as wrappers over it. Add the
    on-disk owner-state file with dead-PID pruning. Unit tests.
-2. **`src/scripts/ctrlyoke-antigravity-statusline.js`.** Reads stdin JSON, writes the
+2. **[x] `src/scripts/ctrlyoke-antigravity-statusline.js`.** Reads stdin JSON, writes the
    snapshot atomically, wrap-and-forwards to a baseline user command with the ~200ms
    timeout, emits the ctrlyoke-branded ANSI line as fallback. Unit tests. (Independent
    of step 1.)
