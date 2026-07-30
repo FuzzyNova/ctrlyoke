@@ -1,6 +1,8 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Researched and verified / ready for implementation
+**Status:** Researched and verified / staged for implementation (see "Implementation
+Steps" at the bottom — steps 1–7 queued 2026-07-30; update each step's status there as
+it lands)
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
 pattern for Claude Code; this plan is the Antigravity equivalent), `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`,
@@ -198,14 +200,27 @@ ctrlyoke writers via the tracker's mutex (section 1). No irreducible race remain
 `SettingsJsonMcpTracker` already solves "shared mutable global JSON file, multiple
 parallel workflows, baseline preservation, atomic writes, async mutex" — but its data
 shape is a *named/keyed* collection (`mcpServers`), and `statusLine` is a single
-un-keyed field. Add a small sibling, e.g. `SettingsJsonSingleValueTracker` (or extend
-`SettingsJsonMcpTracker` with a second lease type alongside its existing
-`registerPermissionPolicy`/`unregisterPermissionPolicy` pair, which already does
-almost exactly this: capture baseline value, apply while ≥1 owner, restore when the
-last owner releases, warn-and-preserve if the user hand-edited the value while
-ctrlyoke held the lease). Reusing the permission-lease machinery directly (generalizing
-it from `settings.permission` to an arbitrary top-level key) is probably less code than
-a new class.
+un-keyed field. Its existing `registerPermissionPolicy`/`unregisterPermissionPolicy`
+pair already does almost exactly what's needed (capture baseline value, apply while ≥1
+owner, restore when the last owner releases, warn-and-preserve if the user hand-edited
+the value while ctrlyoke held the lease) — it is just hardcoded to the `permission` key.
+
+**Decided:** generalize that lease to an arbitrary top-level key (a `registerValueLease(
+workflowKey, workspaceRoot, key, value, merge?)` / `unregisterValueLease(...)` pair) and
+reimplement `registerPermissionPolicy`/`unregisterPermissionPolicy` as thin wrappers over
+it that supply the `permission` key plus `mergePermissionPolicy` — one implementation, no
+duplicated lease machinery, no behavior change for OpenCode/Qwen.
+
+**This requires a second tracker instance, not a second lease on the existing one.**
+`SettingsJsonMcpTracker.getInstance("antigravity")` is already bound to
+`.agents/mcp_config.json` (`AntigravityCliProvider.ts:44`). The statusline lease targets
+the *global* `~/.gemini/antigravity-cli/settings.json`, so it needs its own singleton —
+e.g. `getInstance("antigravity-cli-settings", { projectConfigPath: () => <that global
+path> })`, whose `projectConfigPath` ignores its `workspaceRoot` argument because the file
+is global. Note the consequence: the lease is process-global across workspaces, so two
+workflows in *different* workspaces share one lease and one owner set. That is correct —
+the file itself is global — but the owner keys must stay workflow-scoped so ref-counting
+still works across workspaces.
 
 Lifecycle:
 
@@ -220,10 +235,19 @@ Lifecycle:
   each workflow's hook group is independently keyed and simply becomes orphaned/inert
   garbage if cleanup never runs; `statusLine` is a single value so an orphaned
   registration would **permanently leave ctrlyoke's script installed** even after every
-  workflow ends. Mitigate with either (a) an extension-activation-time sweep that
-  restores/clears the value if no ctrlyoke workflows are currently tracked as running,
-  or (b) writing a small marker file (PID + timestamp) alongside the baseline snapshot
-  that a startup check can use to detect a stale registration from a dead process.
+  workflow ends.
+
+  **Decided: on-disk owner state, not an extension-activation sweep.** ctrlyoke runs in
+  three hosts (VS Code extension, `src/cli.ts` binary, `src/mcp-server.ts`), and an
+  activation-time sweep only covers one of them — a crashed CLI run would leave the
+  setting installed until the user happened to open VS Code. Persist
+  `{ baseline, owners: [{ pid, workflowKey, ts }] }` to a ctrlyoke-owned sidecar file
+  next to the settings file (e.g. `~/.gemini/antigravity-cli/.ctrlyoke-statusline.json`),
+  written under the same tracker mutex. On **every** register and unregister, prune owner
+  entries whose PID is no longer alive (`process.kill(pid, 0)`); when the pruned owner set
+  is empty, restore the baseline. This self-heals in whichever host runs next, with no
+  host-specific hook. An extension-activation-time prune call is still worth adding as a
+  belt-and-braces early trigger, but it is not the mechanism.
 
 ### 2. Correlation token, not `conversation_id`, for the snapshot filename
 
@@ -245,6 +269,17 @@ was present and correct in all 10 captured payloads for the run. agy's `os/exec.
 does inherit the parent environment into the statusline child unmodified — the
 correlation-token design is safe to build on directly, no fallback to the
 `conversation_id`-after-first-payload scheme needed.
+
+**Delivery mechanism is already solved — follow `CopilotCliProvider` exactly.** It has the
+identical problem (a per-invocation OTel file path that must be known before spawn and set
+in the child env): generate the value in `buildCliArgs()`, stash it on the provider
+instance, and return it from `getHeadlessSpawnEnv()` **and** `getInteractiveSpawnEnv()`.
+Both call sites already exist and merge provider env (`CliTransportCoordinator.ts:570` for
+headless, `:125`/`:225` for the two interactive spawn paths). `AntigravityCliProvider`
+currently implements neither method, so both must be added. Note that provider/parser
+instances are reused across prompts *within* a workflow but are fresh per workflow
+execution (`IntegrationFactory`), so the token must be regenerated in `buildCliArgs()` on
+every prompt — the same rule that already applies to Copilot's OTel path.
 
 The wrapper script reads its own token from `process.env.CTRLYOKE_AGY_STATUSLINE_TOKEN`
 and writes to `.ctrlyoke/temp/agy-statusline-<token>.json` — a filename ctrlyoke knows
@@ -287,6 +322,22 @@ support multiple values:
   sidecar" already established for other harnesses — but here it's watching
   ctrlyoke's own small JSON file instead of scanning the CLI's multi-MB log, so no
   `discoverSessionLog`-style retry-and-scan loop is needed at all).
+- **Attachment point (decided).** "One code path covers both modes" is only true at one
+  place in the current code: `CliIntegration.runExecutionSession`, which is where the
+  `isInteractive ? executeInteractive : executeHeadless` branch is taken. Below it the
+  modes genuinely diverge (headless builds a `HeadlessLogTail` in
+  `CliExecutionRunner.createHeadlessStreamingSource`; interactive runs through
+  `CliLogMonitor`), so wiring the sidecar into either one would need a duplicate in the
+  other. Add an optional `ICliProvider.startExecutionSidecar?(deps): { stop(): void }`
+  hook, start it in `runExecutionSession` before that branch and stop it in a `finally`
+  after. `deps` supplies `workspaceRoot`, `model`, `onStreamingEvents`, and
+  `onContextWindowUpdate` — all already available on `CliIntegration`'s host callbacks
+  (`emitStreamingEvents` / `emitContextWindowUpdate`). Antigravity is the only
+  implementor; every other provider is untouched.
+- Fire snapshots through the same `CliLogEventPump`-shaped path the other harnesses use:
+  the sidecar builds one synthetic `AntigravityLogEvent` per changed snapshot and calls
+  `onContextWindowUpdate` via the parser's existing `extractLiveContextWindow` (see
+  "Live Context Window Integration").
 - Populate `AntigravityLogEvent.contextWindowUsedTokens`/`contextWindowSize`/
   `outputTokens` from `context_window.total_input_tokens` (+ output) /
   `context_window.context_window_size`, and separately surface
@@ -296,7 +347,11 @@ support multiple values:
   time ctrlyoke reads it" as good enough — no need to correlate specific payloads to
   specific turns beyond what `current_usage` already gives per-poll.
 - Snapshot files need the same cleanup treatment as other workflow artifacts
-  (`getAdditionalCleanupFilePaths()`/`cleanupWorkspaceArtifacts()`).
+  (`getAdditionalCleanupFilePaths()`/`cleanupWorkspaceArtifacts()`). **Also add the
+  `agy-statusline-` prefix to `TempFileManager.cleanupOrphanedFiles`'s allow-list**: that
+  sweep only matches `.md`, the MCP-config prefix, and the pasted-image prefix
+  (`TempFileManager.ts:406`), so a snapshot orphaned by a crash would otherwise never be
+  swept and would accumulate in `.ctrlyoke/temp/` indefinitely.
 
 ### 5. Settings surface
 
@@ -356,13 +411,17 @@ before the process even starts:
   log files interactive mode already watches). For Antigravity, statusline fires
   identically in both modes, so one code path covers both — no headless-specific
   branch needed at all.
-- `AntigravityLogParser.extractLiveContextWindow` reads from the watched snapshot file
-  (via the sidecar's `fs.watch` callback) rather than from `agy`'s own log/transcript
-  events, unlike every other harness's implementation of that method. Returns
-  `{ used: context_window.total_input_tokens + total_output_tokens, size:
-  context_window.context_window_size }` on each snapshot change — reuses
-  `LIVE_CONTEXT_WINDOW_PLAN.md` Layers 3–7 (`CliLogMonitor` wiring, webview message,
-  store, `WorkflowStepItem` bar) completely unchanged.
+- **`AntigravityLogParser.extractLiveContextWindow` needs no change at all.** It already
+  exists (`AntigravityLogParser.ts:353`) as a pure `event → { used, size }` mapping over
+  `AntigravityLogEvent.contextWindowUsedTokens`/`contextWindowSize`, which is the contract
+  `CliLogEventPump` calls it under. Making it reach into a file would break that contract
+  for every other caller. Instead the **sidecar converts each snapshot into a synthetic
+  `AntigravityLogEvent`** carrying `contextWindowUsedTokens` (= `context_window.total_input_tokens`
+  + `total_output_tokens`), `contextWindowSize` (= `context_window.context_window_size`),
+  `outputTokens`, and `model`, and feeds it through the normal event path. The existing
+  `extractLiveContextWindow` then maps it unchanged, and `LIVE_CONTEXT_WINDOW_PLAN.md`
+  Layers 3–7 (pump wiring, webview message, store, `WorkflowStepItem` bar) are reused
+  verbatim.
 - Add a row for Antigravity to that plan's "Current State" harness table once
   implemented: `Antigravity | ctrlyoke statusline snapshot (own sidecar, not agy's log) | YES — every ~300ms poll, both interactive & headless`.
 
@@ -422,28 +481,33 @@ other ctrlyoke-managed config file, not worth spending more research time on.
 
 ---
 
-## Implementation Sketch (rough sizing, not a committed plan)
+## Implementation Steps (committed order, staged 2026-07-30)
 
-1. Generalize `SettingsJsonMcpTracker`'s permission-lease pattern (or add a sibling) for
-   a single arbitrary top-level key, targeting `~/.gemini/antigravity-cli/settings.json`.
-2. Add `ctrlyoke-antigravity-statusline.js` under the same `out/scripts/` location as
-   `ctrlyoke-antigravity-hook.js`, implementing wrap-and-forward (with the ~200ms
-   timeout) + atomic snapshot-file writing + the ctrlyoke-branded ANSI fallback output.
-3. Generate the per-invocation correlation token and set
-   `CTRLYOKE_AGY_STATUSLINE_TOKEN` in the spawn env in `AntigravityCliProvider`
-   (env inheritance into the statusline child process already verified).
-4. Wire tracker registration into `AntigravityCliProvider` alongside the existing
-   `buildNotificationHookArgs`/`buildHeadlessUserHookArgs` calls, and unregistration
-   into `cleanupWorkspaceArtifacts`.
-5. Add the startup sweep for orphaned registrations (extension activation).
-6. Build the unified sidecar (interactive + headless, one code path) that watches
-   `.ctrlyoke/temp/agy-statusline-<token>.json` from spawn time.
-7. Wire the sidecar into `extractSessionIdFromLogs` as the primary session-ID source,
-   ahead of the existing cache/log-scrape fallback.
-8. Implement `AntigravityLogParser.extractLiveContextWindow` reading from the sidecar,
-   and extend `LIVE_CONTEXT_WINDOW_PLAN.md`'s harness table — reuses that plan's
-   Layers 3–7 unchanged.
-9. Populate the existing `contextWindowUsedTokens`/`contextWindowSize`/`outputTokens`
-   fields for the final/completed-response path too (not just the live bar), plus a
-   per-turn `TokenStats` breakdown from `current_usage`.
-10. Settings toggle to disable the whole feature.
+Each step is one session's work, lands on top of the previous one, and commits itself.
+Verification gate for every step: `npm run typecheck`, `npm run lint`, `npm test`.
+Never `npm run test:harness` (see `test.instructions.md` — it drives live AI CLIs).
+
+1. **Generic single-key value lease in `SettingsJsonMcpTracker`.** Generalize the
+   permission lease to an arbitrary top-level key; reimplement
+   `registerPermissionPolicy`/`unregisterPermissionPolicy` as wrappers over it. Add the
+   on-disk owner-state file with dead-PID pruning. Unit tests.
+2. **`src/scripts/ctrlyoke-antigravity-statusline.js`.** Reads stdin JSON, writes the
+   snapshot atomically, wrap-and-forwards to a baseline user command with the ~200ms
+   timeout, emits the ctrlyoke-branded ANSI line as fallback. Unit tests. (Independent
+   of step 1.)
+3. **Settings toggle** (`CtrlYokeSettings.ts`, config service, `package.json`
+   contributions, dashboard settings UI) — must exist before the provider reads it.
+4. **Provider wiring.** Token generation in `buildCliArgs()`,
+   `getHeadlessSpawnEnv()`/`getInteractiveSpawnEnv()`, statusline lease register/
+   unregister, `getAdditionalCleanupFilePaths()`, and the `TempFileManager` orphan-sweep
+   prefix.
+5. **Unified sidecar + live context bar.** `ICliProvider.startExecutionSidecar?()` hook
+   wired in `CliIntegration.runExecutionSession`; sidecar watches the snapshot and emits
+   synthetic `AntigravityLogEvent`s. No `AntigravityLogParser` change needed.
+6. **Session-ID discovery.** Snapshot becomes the primary source in
+   `extractSessionIdFromLogs`, ahead of the existing cache/log-scrape fallback.
+7. **Final/headless usage + docs.** Populate `contextWindowUsedTokens`/
+   `contextWindowSize`/`outputTokens` on the completed-response path via
+   `augmentParsedOutput()`, plus the per-turn `TokenStats` breakdown from
+   `current_usage`; add the Antigravity row to `LIVE_CONTEXT_WINDOW_PLAN.md`'s harness
+   table.
