@@ -240,6 +240,86 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("round-trips a passing end-condition retry through history before advancing", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const retryRecords: Array<{
+      target: unknown;
+      runIndex: number;
+      attemptIndex: number;
+      previousAttemptIndex: number;
+      retryPrompt: string;
+    }> = [];
+    const outputHistoryManager = new Proxy(
+      {
+        recordRetryScheduled: async (
+          _historyFilePath: string,
+          target: unknown,
+          runIndex: number,
+          attemptIndex: number,
+          previousAttemptIndex: number,
+          retryPrompt: string
+        ) => {
+          retryRecords.push({
+            target,
+            runIndex,
+            attemptIndex,
+            previousAttemptIndex,
+            retryPrompt,
+          });
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    );
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "write the regression test",
+          endCondition: {
+            script: `node -e "process.stdout.write('ok')"`,
+            compareSource: "stdout",
+            returns: "ok",
+            onPass: "retry",
+            onFail: "stopWorkflow",
+            maxRetries: 1,
+            passRetryPrompt: "strengthen the regression test",
+          },
+        },
+        { prompt: "continue the workflow" },
+      ],
+    });
+
+    await executor.execute(integration, {
+      ...makeContext(integration),
+      historyFilePath: "history.json",
+      outputHistoryManager: outputHistoryManager as any,
+    });
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "write the regression test",
+      "strengthen the regression test",
+      "continue the workflow",
+    ]);
+    assert.deepStrictEqual(retryRecords, [
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 1,
+        previousAttemptIndex: 0,
+        retryPrompt: "strengthen the regression test",
+      },
+    ]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(queue.getState().currentIndex, 2);
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.COMPLETED);
+    assert.strictEqual(queue.getState().results[1].status, STEP_STATUS.COMPLETED);
+  });
+
   test("skips disabled queue steps without sending them to the harness", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

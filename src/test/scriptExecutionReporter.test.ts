@@ -202,4 +202,33 @@ suite("ScriptExecutionReporter", () => {
       assert.strictEqual(cacheWrites, 0);
     }
   });
+
+  test("preserves action detail for a passing retry verdict", async () => {
+    const events: string[] = [];
+    const { reporter, context } = makeReporter(makeResult(), events);
+
+    const report = await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+      properties: {
+        script: "check.sh",
+        compareSource: "stdout",
+        returns: "ok",
+      },
+      phase: EXECUTION_PHASES.END_CONDITION,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 1,
+      timestampMs: 100,
+      onPass: "retry",
+      onFail: "continue",
+      actionForErrored: "stopWorkflow",
+      actionDetail: (result) =>
+        result.passed ? "retry 1 of 3" : "retry failure detail",
+    });
+
+    assert.strictEqual(report.verdict.action, "retry");
+    assert.strictEqual(report.verdict.actionDetail, "retry 1 of 3");
+  });
 });

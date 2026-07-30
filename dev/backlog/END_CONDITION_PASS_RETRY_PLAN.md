@@ -252,3 +252,4 @@ so there is never a commit where `onPass: retry` parses but silently behaves as
 - Plan written 2026-07-29 (orchestrator); steps 1–5 queued.
 - Step 1 implemented 2026-07-29: restored the shared engine-level pass-retry loop, pass-retry prompt resolution, and coverage for mixed pass/fail budgets; no deviations from the plan.
 - Step 2 implemented 2026-07-29: reopened schemas, validation, completions, sanitizer/variable propagation, and authoring coverage for `onPass: retry` and `passRetryPrompt`; regenerated the YAML schema; all gates passed.
+- Step 3 implemented 2026-07-30: wired passing end-condition retry details through both executor report paths and added reporter plus executor round-trip/history coverage; all gates passed.

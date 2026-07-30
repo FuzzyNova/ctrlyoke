@@ -1887,6 +1887,15 @@ export class WorkflowExecutor {
     }
 
     const endCondition = prompt.endCondition;
+    const endConditionActionDetail = (result: {
+      passed: boolean;
+    }): string | undefined => {
+      if (result.passed && endCondition.onPass !== CONDITION_ACTIONS.RETRY) {
+        return undefined;
+      }
+
+      return `retry ${this.promptQueue.getCurrentRetryCount()} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
+    };
 
     await this.trackStatusMessage(
       context,
@@ -1917,6 +1926,7 @@ export class WorkflowExecutor {
       statusLabel: "End condition",
       timeoutMs: endCondition.timeout,
       vars,
+      actionDetail: endConditionActionDetail,
       emitStatus: false,
     });
     const evaluationResult = endReport.evaluationResult;
@@ -1973,10 +1983,7 @@ export class WorkflowExecutor {
           statusLabel: "End condition",
           timeoutMs: condition.timeout,
           vars,
-          actionDetail: (result) =>
-            result.passed
-              ? undefined
-              : `retry ${this.promptQueue.getCurrentRetryCount()} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`,
+          actionDetail: endConditionActionDetail,
           emitStatus: false,
         }),
       onEvaluation: async (
