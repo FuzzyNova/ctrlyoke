@@ -217,6 +217,10 @@
                   "type": "string",
                   "description": "Retry prompt template. Supports {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}."
                 },
+                "passRetryPrompt": {
+                  "type": "string",
+                  "description": "Pass-retry prompt template. Supports {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}. If omitted, the step's own prompt is re-sent."
+                },
                 "resumeSessionOnRetry": {
                   "type": "boolean",
                   "description": "Resume the same session for retries (default: true)."

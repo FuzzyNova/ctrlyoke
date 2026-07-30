@@ -176,13 +176,14 @@ suite("VarSubstitutor Tests", () => {
       assert.strictEqual(result.endCondition!.script, "scripts/check-prod.sh");
     });
 
-    test("substitutes endCondition retryPrompt", () => {
+    test("substitutes endCondition retry prompts", () => {
       const result = VarSubstitutor.applyToResolvedProperties(
         makeProps({
           endCondition: {
             script: "check.sh",
             returns: "true",
             retryPrompt: "Fix issues in {{repoPath}}",
+            passRetryPrompt: "Keep working in {{repoPath}}",
           },
         }),
         { repoPath: "/home/user/repo" }
@@ -190,6 +191,10 @@ suite("VarSubstitutor Tests", () => {
       assert.strictEqual(
         result.endCondition!.retryPrompt,
         "Fix issues in /home/user/repo"
+      );
+      assert.strictEqual(
+        result.endCondition!.passRetryPrompt,
+        "Keep working in /home/user/repo"
       );
     });
 

@@ -239,7 +239,7 @@ suite("ValidationUtils Extended Tests", () => {
       assert.strictEqual(result.valid, true);
     });
 
-    test("should reject retry as an end-condition onPass action", () => {
+    test("should accept retry as an end-condition onPass action", () => {
       const result = ValidationUtils.validatePromptStep({
         prompt: "Test prompt",
         endCondition: {
@@ -249,8 +249,7 @@ suite("ValidationUtils Extended Tests", () => {
         },
       });
 
-      assert.strictEqual(result.valid, false);
-      assert.ok(result.errors.length > 0);
+      assert.strictEqual(result.valid, true);
     });
 
     test("should reject retryPrompt as non-string", () => {
@@ -261,6 +260,25 @@ suite("ValidationUtils Extended Tests", () => {
       });
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("retryPrompt")));
+    });
+
+    test("should accept passRetryPrompt as string", () => {
+      const result = ValidationUtils.validateEndCondition({
+        script: "test.py",
+        returns: "true",
+        passRetryPrompt: "Keep working: {actual} vs {expected}",
+      });
+      assert.strictEqual(result.valid, true);
+    });
+
+    test("should reject passRetryPrompt as non-string", () => {
+      const result = ValidationUtils.validateEndCondition({
+        script: "test.py",
+        returns: "true",
+        passRetryPrompt: 123,
+      });
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.errors.some((e) => e.includes("passRetryPrompt")));
     });
 
     test("should reject non-object end condition", () => {

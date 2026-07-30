@@ -484,15 +484,19 @@
           "type": "string",
           "description": "Template for retry prompt with placeholders: {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}"
         },
+        "passRetryPrompt": {
+          "type": "string",
+          "description": "Template for pass-retry prompt with placeholders: {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}. If omitted, the step's own prompt is re-sent."
+        },
         "resumeSessionOnRetry": {
           "type": "boolean",
           "description": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry."
         },
         "onPass": {
           "type": "string",
-          "enum": ["continue", "stopWorkflow"],
+          "enum": ["continue", "retry", "stopWorkflow"],
           "default": "continue",
-          "description": "What to do when the end condition passes. 'continue': advance to the next step (default). 'stopWorkflow': halt execution immediately."
+          "description": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately."
         },
         "onFail": {
           "type": "string",

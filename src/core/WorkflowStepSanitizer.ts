@@ -304,6 +304,9 @@ function cloneEndCondition(value: unknown): EndCondition | null | undefined {
     ...(typeof value.retryPrompt === "string" && {
       retryPrompt: value.retryPrompt,
     }),
+    ...(typeof value.passRetryPrompt === "string" && {
+      passRetryPrompt: value.passRetryPrompt,
+    }),
     ...(typeof value.resumeSessionOnRetry === "boolean" && {
       resumeSessionOnRetry: value.resumeSessionOnRetry,
     }),

@@ -105,6 +105,10 @@ export class VarSubstitutor {
         cond.retryPrompt !== undefined
           ? this.substitute(cond.retryPrompt, vars)
           : undefined,
+      passRetryPrompt:
+        cond.passRetryPrompt !== undefined
+          ? this.substitute(cond.passRetryPrompt, vars)
+          : undefined,
     };
   }
 }

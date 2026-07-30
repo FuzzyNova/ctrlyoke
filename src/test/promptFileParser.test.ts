@@ -182,13 +182,13 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
-    test("should reject onPass retry because pass retries are not implemented", async () => {
+    test("should accept onPass retry and preserve the action", async () => {
       const tempDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "ctrlyoke-parser-on-pass-retry-invalid-")
+        path.join(os.tmpdir(), "ctrlyoke-parser-on-pass-retry-")
       );
       const filePath = path.join(
         tempDir,
-        "invalid-on-pass-retry.ctrlyoke.json"
+        "on-pass-retry.ctrlyoke.json"
       );
 
       try {
@@ -214,7 +214,11 @@ suite("PromptFileParser Tests", () => {
         );
 
         const result = await parser.parsePromptFile(filePath);
-        assert.strictEqual(result, null);
+        assertValidResult(result);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).endCondition?.onPass,
+          "retry"
+        );
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }

@@ -97,11 +97,13 @@ export class ValidationUtils {
           timeout: { type: "number", nullable: true },
           maxRetries: { type: "number", nullable: true },
           retryPrompt: { type: "string", nullable: true },
+          passRetryPrompt: { type: "string", nullable: true },
           resumeSessionOnRetry: { type: "boolean", nullable: true },
           onPass: {
             type: "string",
             enum: [
               CONDITION_ACTIONS.CONTINUE,
+              CONDITION_ACTIONS.RETRY,
               CONDITION_ACTIONS.STOP_WORKFLOW,
             ],
             nullable: true,
@@ -168,6 +170,7 @@ export class ValidationUtils {
               timeout: { type: "number", nullable: true },
               maxRetries: { type: "number", nullable: true },
               retryPrompt: { type: "string", nullable: true },
+              passRetryPrompt: { type: "string", nullable: true },
               resumeSessionOnRetry: { type: "boolean", nullable: true },
             },
             required: ["script", "returns"],
@@ -284,6 +287,13 @@ export class ValidationUtils {
       typeof condition.retryPrompt !== "string"
     ) {
       errors.push("End condition retryPrompt must be a string");
+    }
+
+    if (
+      condition.passRetryPrompt !== undefined &&
+      typeof condition.passRetryPrompt !== "string"
+    ) {
+      errors.push("End condition passRetryPrompt must be a string");
     }
 
     return { valid: errors.length === 0, errors };
