@@ -102,7 +102,8 @@ suite("AntigravityCliProvider", () => {
   async function publishSnapshot(
     provider: AntigravityCliProvider,
     conversationId: string,
-    writtenAt: number
+    writtenAt: number,
+    contextWindow?: Record<string, unknown>
   ) {
     const env = provider.getHeadlessSpawnEnv();
     const token = env.CTRLYOKE_AGY_STATUSLINE_TOKEN;
@@ -119,6 +120,7 @@ suite("AntigravityCliProvider", () => {
       snapshotPath,
       JSON.stringify({
         conversation_id: conversationId,
+        ...(contextWindow ? { context_window: contextWindow } : {}),
         _ctrlyoke: { sequence: 1, writtenAt },
       })
     );
@@ -243,6 +245,103 @@ suite("AntigravityCliProvider", () => {
       provider.getInteractiveSpawnEnv().CTRLYOKE_AGY_STATUSLINE_DIR,
       undefined
     );
+  });
+
+  suite("augmentParsedOutput", () => {
+    test("patches missing completed-response usage from the latest snapshot", async () => {
+      const provider = new AntigravityCliProvider();
+      try {
+        await buildArgs(provider);
+        const sidecar = provider.startExecutionSidecar({
+          workspaceRoot,
+          model: "gemini-3.6-flash-low",
+          onStreamingEvents: () => {},
+          onContextWindowUpdate: () => {},
+        });
+        assert.ok(sidecar);
+        await publishSnapshot(provider, "snapshot-session-id", 2_000, {
+          total_input_tokens: 1_000,
+          total_output_tokens: 200,
+          context_window_size: 10_000,
+          current_usage: {
+            input_tokens: 120,
+            output_tokens: 7,
+            cache_creation_input_tokens: 40,
+            cache_read_input_tokens: 30,
+          },
+        });
+        await waitForSnapshot(provider);
+
+        const output = await provider.augmentParsedOutput({
+          events: [],
+          metadata: { model: "gemini-3.6-flash-low" },
+        });
+
+        assert.strictEqual(output.metadata.usage?.inputTokens, 120);
+        assert.strictEqual(output.metadata.usage?.outputTokens, 200);
+        assert.strictEqual(output.metadata.usage?.cachedInputTokens, 30);
+        assert.strictEqual(output.metadata.usage?.cacheCreatedTokens, 40);
+        assert.strictEqual(
+          output.metadata.usage?.contextWindowUsedTokens,
+          1_200
+        );
+        assert.strictEqual(output.metadata.usage?.contextWindowSize, 10_000);
+        sidecar.stop();
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          path.join(workspaceRoot, "workflow.md")
+        );
+      }
+    });
+
+    test("does not overwrite usage values already produced by the parser", async () => {
+      const provider = new AntigravityCliProvider();
+      try {
+        await buildArgs(provider);
+        const sidecar = provider.startExecutionSidecar({
+          workspaceRoot,
+          model: "gemini-3.6-flash-low",
+          onStreamingEvents: () => {},
+          onContextWindowUpdate: () => {},
+        });
+        assert.ok(sidecar);
+        await publishSnapshot(provider, "snapshot-session-id", 2_000, {
+          total_input_tokens: 1_000,
+          total_output_tokens: 200,
+          context_window_size: 10_000,
+          current_usage: {
+            input_tokens: 120,
+            output_tokens: 7,
+            cache_creation_input_tokens: 40,
+            cache_read_input_tokens: 30,
+          },
+        });
+        await waitForSnapshot(provider);
+
+        const existingUsage = {
+          inputTokens: 8,
+          outputTokens: 9,
+          totalTokens: 17,
+          cachedInputTokens: 10,
+          cacheCreatedTokens: 11,
+          contextWindowUsedTokens: 12,
+          contextWindowSize: 13,
+        };
+        const output = await provider.augmentParsedOutput({
+          events: [],
+          metadata: { usage: existingUsage },
+        });
+
+        assert.deepStrictEqual(output.metadata.usage, existingUsage);
+        sidecar.stop();
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          path.join(workspaceRoot, "workflow.md")
+        );
+      }
+    });
   });
 
   suite("extractSessionIdFromLogs", () => {

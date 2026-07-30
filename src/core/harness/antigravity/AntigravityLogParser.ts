@@ -31,6 +31,10 @@ import {
 } from "./AntigravityTranscriptReader";
 import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
+import type {
+  AntigravityStatuslineSnapshot,
+  SnapshotCurrentUsage,
+} from "./AntigravityStatuslineSidecar";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -57,6 +61,14 @@ interface AntigravityLogEvent extends BaseCliEvent {
   contextWindowUsedTokens?: number;
   contextWindowSize?: number;
   outputTokens?: number;
+  currentUsage?: AntigravityCurrentUsage;
+}
+
+interface AntigravityCurrentUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
 }
 
 const SESSION_ID_REGEX =
@@ -89,6 +101,49 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     staleStopGuardChecks: 2,
   });
   private backgroundStateSessionId?: string;
+  private latestStatuslineUsage?: TokenUsage;
+
+  /** Reset the sidecar-derived usage before a new prompt starts. */
+  setStatuslineSnapshot(snapshot?: AntigravityStatuslineSnapshot): void {
+    this.latestStatuslineUsage = snapshot
+      ? this.extractTokenUsageFromStatuslineSnapshot(snapshot)
+      : undefined;
+  }
+
+  /** Map the statusline's per-turn and cumulative fields to the shared usage contract. */
+  extractTokenUsageFromStatuslineSnapshot(
+    snapshot: AntigravityStatuslineSnapshot
+  ): TokenUsage | undefined {
+    const contextWindow = snapshot.context_window;
+    const totalInputTokens = this.asFiniteNumber(
+      contextWindow?.total_input_tokens
+    );
+    const totalOutputTokens = this.asFiniteNumber(
+      contextWindow?.total_output_tokens
+    );
+    if (totalInputTokens === undefined || totalOutputTokens === undefined) {
+      return undefined;
+    }
+
+    const currentUsage = this.parseCurrentUsage(contextWindow?.current_usage);
+    const inputTokens = currentUsage?.inputTokens ?? totalInputTokens;
+    const outputTokens = currentUsage?.outputTokens ?? totalOutputTokens;
+    const contextWindowSize =
+      this.asFiniteNumber(contextWindow?.context_window_size) ??
+      getAntigravityContextWindowSize(
+        this.getSnapshotModel(snapshot) ?? this.resolvedModel
+      );
+
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      cachedInputTokens: currentUsage?.cacheReadInputTokens,
+      cacheCreatedTokens: currentUsage?.cacheCreationInputTokens,
+      contextWindowUsedTokens: totalInputTokens + totalOutputTokens,
+      contextWindowSize,
+    };
+  }
 
   override async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     // The transcript is polled after the Go log so a session discovered on this
@@ -838,23 +893,81 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         (candidate) => typeof candidate.contextWindowUsedTokens === "number"
       );
     if (!event) {
-      return undefined;
+      return this.latestStatuslineUsage;
     }
 
-    const outputTokens = event.outputTokens ?? 0;
+    const currentUsage =
+      event.currentUsage ?? this.getLatestCurrentUsageFromSnapshot();
+    const outputTokens = currentUsage?.outputTokens ?? event.outputTokens ?? 0;
     const contextWindowSize =
       event.contextWindowSize ??
       getAntigravityContextWindowSize(event.model ?? this.resolvedModel);
-    const inputTokens = Math.max(
-      event.contextWindowUsedTokens! - outputTokens,
-      0
-    );
+    const inputTokens =
+      currentUsage?.inputTokens ??
+      Math.max(event.contextWindowUsedTokens! - outputTokens, 0);
     return {
       inputTokens,
       outputTokens,
-      totalTokens: event.contextWindowUsedTokens!,
+      totalTokens: inputTokens + outputTokens,
+      cachedInputTokens: currentUsage?.cacheReadInputTokens,
+      cacheCreatedTokens: currentUsage?.cacheCreationInputTokens,
       contextWindowUsedTokens: event.contextWindowUsedTokens,
       contextWindowSize,
     };
+  }
+
+  private getLatestCurrentUsageFromSnapshot():
+    | AntigravityCurrentUsage
+    | undefined {
+    if (!this.latestStatuslineUsage) {
+      return undefined;
+    }
+    return {
+      inputTokens: this.latestStatuslineUsage.inputTokens,
+      outputTokens: this.latestStatuslineUsage.outputTokens,
+      cacheCreationInputTokens: this.latestStatuslineUsage.cacheCreatedTokens,
+      cacheReadInputTokens: this.latestStatuslineUsage.cachedInputTokens,
+    };
+  }
+
+  private parseCurrentUsage(
+    usage: SnapshotCurrentUsage | undefined
+  ): AntigravityCurrentUsage | undefined {
+    if (!usage || typeof usage !== "object") {
+      return undefined;
+    }
+    const current = usage as Record<string, unknown>;
+    const parsed: AntigravityCurrentUsage = {
+      inputTokens: this.asFiniteNumber(current.input_tokens),
+      outputTokens: this.asFiniteNumber(current.output_tokens),
+      cacheCreationInputTokens: this.asFiniteNumber(
+        current.cache_creation_input_tokens
+      ),
+      cacheReadInputTokens: this.asFiniteNumber(
+        current.cache_read_input_tokens
+      ),
+    };
+    return Object.values(parsed).some((value) => value !== undefined)
+      ? parsed
+      : undefined;
+  }
+
+  private getSnapshotModel(
+    snapshot: AntigravityStatuslineSnapshot
+  ): string | undefined {
+    if (typeof snapshot.model === "string") {
+      return snapshot.model;
+    }
+    if (snapshot.model && typeof snapshot.model === "object") {
+      const id = (snapshot.model as { id?: unknown }).id;
+      return typeof id === "string" ? id : undefined;
+    }
+    return undefined;
+  }
+
+  private asFiniteNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : undefined;
   }
 }

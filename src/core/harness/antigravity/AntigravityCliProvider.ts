@@ -19,6 +19,7 @@ import type {
   UserHookConfig,
   WorkflowStep,
 } from "../../../types/CtrlYokeTypes";
+import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   ConfigurationUtils,
@@ -128,6 +129,7 @@ export class AntigravityCliProvider implements ICliProvider {
     this.statusLineEnabledForPrompt = false;
     this.statusLineForwardCommand = undefined;
     this.statusLineSidecar = undefined;
+    this.logParser.setStatuslineSnapshot();
 
     if (
       workspaceRoot &&
@@ -219,6 +221,7 @@ export class AntigravityCliProvider implements ICliProvider {
       model: deps.model,
       parser: this.logParser,
       onContextWindowUpdate: deps.onContextWindowUpdate,
+      onSnapshot: (snapshot) => this.logParser.setStatuslineSnapshot(snapshot),
     });
     return this.statusLineSidecar;
   }
@@ -236,6 +239,56 @@ export class AntigravityCliProvider implements ICliProvider {
     return {
       ...CliProviderUtils.buildProcessEnv(),
       ...this.buildStatusLineSpawnEnv(),
+    };
+  }
+
+  async augmentParsedOutput(
+    output: UniversalCliOutput
+  ): Promise<UniversalCliOutput> {
+    const snapshot =
+      (await this.statusLineSidecar?.readLatestSnapshot()) ??
+      this.getLatestStatuslineSnapshot();
+    if (!snapshot) {
+      return output;
+    }
+
+    const snapshotUsage =
+      this.logParser.extractTokenUsageFromStatuslineSnapshot(snapshot);
+    const totalOutputTokens = this.asFiniteNumber(
+      snapshot.context_window?.total_output_tokens
+    );
+    if (!snapshotUsage || totalOutputTokens === undefined) {
+      return output;
+    }
+
+    const existingUsage = output.metadata.usage;
+    const inputTokens = existingUsage?.inputTokens ?? snapshotUsage.inputTokens;
+    const outputTokens = existingUsage?.outputTokens ?? totalOutputTokens;
+    const usage = {
+      ...existingUsage,
+      inputTokens,
+      outputTokens,
+      totalTokens: existingUsage?.totalTokens ?? inputTokens + outputTokens,
+      cachedInputTokens:
+        existingUsage?.cachedInputTokens ?? snapshotUsage.cachedInputTokens,
+      cacheCreatedTokens:
+        existingUsage?.cacheCreatedTokens ?? snapshotUsage.cacheCreatedTokens,
+      contextWindowUsedTokens:
+        existingUsage?.contextWindowUsedTokens ??
+        snapshotUsage.contextWindowUsedTokens,
+      contextWindowSize:
+        existingUsage?.contextWindowSize ?? snapshotUsage.contextWindowSize,
+    };
+
+    Log.debug(
+      `[AntigravityCliProvider] Context window from statusline: ${usage.contextWindowUsedTokens}/${usage.contextWindowSize} tokens`
+    );
+    return {
+      ...output,
+      metadata: {
+        ...output.metadata,
+        usage,
+      },
     };
   }
 
@@ -574,6 +627,12 @@ export class AntigravityCliProvider implements ICliProvider {
     const command = (value as { command?: unknown }).command;
     return typeof command === "string" && command.length > 0
       ? command
+      : undefined;
+  }
+
+  private asFiniteNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
       : undefined;
   }
 

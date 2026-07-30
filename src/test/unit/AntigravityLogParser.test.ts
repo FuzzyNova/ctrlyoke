@@ -933,14 +933,53 @@ suite("AntigravityLogParser", () => {
           contextWindowUsedTokens: 42,
           contextWindowSize: 1_000_000,
           outputTokens: 3,
+          currentUsage: {
+            inputTokens: 17,
+            outputTokens: 2,
+            cacheCreationInputTokens: 5,
+            cacheReadInputTokens: 11,
+          },
         },
       ]);
 
       assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 42);
       assert.strictEqual(result.metadata.usage?.contextWindowSize, 1_000_000);
-      assert.strictEqual(result.metadata.usage?.inputTokens, 39);
-      assert.strictEqual(result.metadata.usage?.outputTokens, 3);
-      assert.strictEqual(result.metadata.usage?.totalTokens, 42);
+      assert.strictEqual(result.metadata.usage?.inputTokens, 17);
+      assert.strictEqual(result.metadata.usage?.outputTokens, 2);
+      assert.strictEqual(result.metadata.usage?.totalTokens, 19);
+      assert.strictEqual(result.metadata.usage?.cacheCreatedTokens, 5);
+      assert.strictEqual(result.metadata.usage?.cachedInputTokens, 11);
+    });
+
+    test("uses the latest statusline snapshot when interactive events have no usage", () => {
+      const parser = new AntigravityLogParser();
+
+      parser.setStatuslineSnapshot({
+        model: { id: "gemini-test" },
+        context_window: {
+          total_input_tokens: 1_000,
+          total_output_tokens: 200,
+          context_window_size: 10_000,
+          current_usage: {
+            input_tokens: 120,
+            output_tokens: 7,
+            cache_creation_input_tokens: 40,
+            cache_read_input_tokens: 30,
+          },
+        },
+      });
+
+      const result = parser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]);
+
+      assert.strictEqual(result.metadata.usage?.inputTokens, 120);
+      assert.strictEqual(result.metadata.usage?.outputTokens, 7);
+      assert.strictEqual(result.metadata.usage?.totalTokens, 127);
+      assert.strictEqual(result.metadata.usage?.cachedInputTokens, 30);
+      assert.strictEqual(result.metadata.usage?.cacheCreatedTokens, 40);
+      assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 1_200);
+      assert.strictEqual(result.metadata.usage?.contextWindowSize, 10_000);
     });
 
     test("does not expose infrastructure log lines as response text", () => {

@@ -1,7 +1,8 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Step 5 implemented; steps 6–7 remain queued (see "Implementation Steps"
-at the bottom)
+**Status:** Fully implemented (steps 1–7 complete). The completed-response path now
+uses the sidecar's final snapshot, including the shared per-turn cache fields; no
+planned scope was deliberately left out.
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
 pattern for Claude Code; this plan is the Antigravity equivalent), `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`,
@@ -528,15 +529,17 @@ Never `npm run test:harness` (see `test.instructions.md` — it drives live AI C
    prefix.
 5. **[x] Unified sidecar + live context bar.** `ICliProvider.startExecutionSidecar?()` hook
    wired in `CliIntegration.runExecutionSession`; sidecar watches the snapshot and emits
-   synthetic `AntigravityLogEvent`s. No `AntigravityLogParser` change needed.
+   synthetic `AntigravityLogEvent`s. The live parser mapping remains event-based; final
+   usage and shared cache-field mapping were completed in step 7.
 6. **[x] Session-ID discovery.** Snapshot is now the primary source in
    `extractSessionIdFromLogs`, ahead of the existing cache/log-scrape fallback.
    The snapshot's invocation timestamp is checked against execution start time
    so a leftover file from a crashed run cannot latch a stale conversation.
    The cache/log-scrape path remains the fallback for disabled tracking and the
    window before the first snapshot arrives.
-7. **Final/headless usage + docs.** Populate `contextWindowUsedTokens`/
+7. **[x] Final/headless usage + docs.** Populate `contextWindowUsedTokens`/
    `contextWindowSize`/`outputTokens` on the completed-response path via
    `augmentParsedOutput()`, plus the per-turn `TokenStats` breakdown from
    `current_usage`; add the Antigravity row to `LIVE_CONTEXT_WINDOW_PLAN.md`'s harness
-   table.
+   table. The row and completed-response enrichment are implemented; the parser keeps
+   cumulative context occupancy separate from last-turn usage.

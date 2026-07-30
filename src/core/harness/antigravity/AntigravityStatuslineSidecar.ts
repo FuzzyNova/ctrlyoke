@@ -9,7 +9,14 @@ interface SnapshotContextWindow {
   total_input_tokens?: unknown;
   total_output_tokens?: unknown;
   context_window_size?: unknown;
-  current_usage?: unknown;
+  current_usage?: SnapshotCurrentUsage;
+}
+
+export interface SnapshotCurrentUsage {
+  input_tokens?: unknown;
+  output_tokens?: unknown;
+  cache_creation_input_tokens?: unknown;
+  cache_read_input_tokens?: unknown;
 }
 
 interface SnapshotMetadata {
@@ -31,6 +38,7 @@ export interface AntigravityStatuslineSidecarDeps {
   model: string;
   parser: Pick<AntigravityLogParser, "extractLiveContextWindow">;
   onContextWindowUpdate: (used: number, size: number) => void;
+  onSnapshot?: (snapshot: AntigravityStatuslineSnapshot) => void;
 }
 
 /**
@@ -46,6 +54,9 @@ export class AntigravityStatuslineSidecar {
     "extractLiveContextWindow"
   >;
   private readonly onContextWindowUpdate: (used: number, size: number) => void;
+  private readonly onSnapshot:
+    | ((snapshot: AntigravityStatuslineSnapshot) => void)
+    | undefined;
   private readonly snapshotDirectory: string;
   private readonly snapshotFileName: string;
   private watcher?: fs.FSWatcher;
@@ -60,6 +71,7 @@ export class AntigravityStatuslineSidecar {
     this.model = deps.model;
     this.parser = deps.parser;
     this.onContextWindowUpdate = deps.onContextWindowUpdate;
+    this.onSnapshot = deps.onSnapshot;
     this.snapshotDirectory = path.dirname(deps.snapshotPath);
     this.snapshotFileName = path.basename(deps.snapshotPath);
 
@@ -69,6 +81,15 @@ export class AntigravityStatuslineSidecar {
 
   /** The most recently accepted raw statusline payload. */
   getLatestSnapshot(): AntigravityStatuslineSnapshot | undefined {
+    return this.latestSnapshot;
+  }
+
+  /** Flush one final read so completed-response consumers see the newest snapshot. */
+  async readLatestSnapshot(): Promise<
+    AntigravityStatuslineSnapshot | undefined
+  > {
+    this.queueSnapshotRead();
+    await this.readQueue;
     return this.latestSnapshot;
   }
 
@@ -151,6 +172,7 @@ export class AntigravityStatuslineSidecar {
 
     this.lastSnapshotMarker = marker;
     this.latestSnapshot = snapshot;
+    this.onSnapshot?.(snapshot);
 
     const contextWindow = snapshot.context_window;
     const inputTokens = this.asFiniteNumber(contextWindow?.total_input_tokens);
@@ -177,6 +199,7 @@ export class AntigravityStatuslineSidecar {
       contextWindowUsedTokens: inputTokens + outputTokens,
       contextWindowSize,
       outputTokens,
+      currentUsage: this.getCurrentUsage(contextWindow?.current_usage),
     } as BaseCliEvent;
     const context = this.parser.extractLiveContextWindow(event, this.model);
     if (context && !this.stopped) {
@@ -207,6 +230,29 @@ export class AntigravityStatuslineSidecar {
       return typeof id === "string" && id.length > 0 ? id : undefined;
     }
     return undefined;
+  }
+
+  private getCurrentUsage(
+    usage: SnapshotCurrentUsage | undefined
+  ): Record<string, number> | undefined {
+    if (!usage || typeof usage !== "object") {
+      return undefined;
+    }
+
+    const values: Record<string, number> = {};
+    const fields: Record<string, unknown> = {
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheCreationInputTokens: usage.cache_creation_input_tokens,
+      cacheReadInputTokens: usage.cache_read_input_tokens,
+    };
+    for (const [key, value] of Object.entries(fields)) {
+      const number = this.asFiniteNumber(value);
+      if (number !== undefined) {
+        values[key] = number;
+      }
+    }
+    return Object.keys(values).length > 0 ? values : undefined;
   }
 
   private asFiniteNumber(value: unknown): number | undefined {
