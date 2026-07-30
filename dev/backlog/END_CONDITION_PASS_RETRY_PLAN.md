@@ -1,10 +1,12 @@
 # End-Condition Pass Retry (`onPass: retry`)
 
 > **Last Updated:** July 29, 2026
-> **Status:** In progress — implementation queued in 5 steps (see Progress Log).
+> **Status:** Implemented — pass retries now re-run the step with a shared
+> pass/fail budget, re-evaluate the end condition, and honor normal `onFail`
+> handling when a pass-retry re-check fails.
 > **Supersedes:** the "removed until orchestrator loop support exists" version of
 > this document. Commit `d9d3e688` stripped `retry` from `endCondition.onPass`
-> instead of implementing it. That decision is **reversed**: the option is being
+> instead of implementing it. That decision is **reversed**: the option has been
 > implemented for real.
 
 ## Why this feature exists
@@ -254,3 +256,4 @@ so there is never a commit where `onPass: retry` parses but silently behaves as
 - Step 2 implemented 2026-07-29: reopened schemas, validation, completions, sanitizer/variable propagation, and authoring coverage for `onPass: retry` and `passRetryPrompt`; regenerated the YAML schema; all gates passed.
 - Step 3 implemented 2026-07-30: wired passing end-condition retry details through both executor report paths and added reporter plus executor round-trip/history coverage; all gates passed.
 - Step 4 implemented 2026-07-29: added pass-retry dashboard authoring and settings plumbing, updated UI coverage, and documented pass-retry behavior and authoring guidance; all gates passed.
+- Step 5 implemented 2026-07-29: added the pass-retry manual fixture, reconciled the audit and scoped stale-claim sweep, and captured the shared retry-budget invariant. Typecheck, lint, and tests passed; format:check remains blocked by 30 pre-existing repository-wide formatting failures outside this close-out scope.

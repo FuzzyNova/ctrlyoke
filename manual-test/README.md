@@ -92,13 +92,14 @@ When creating new files:
 
 ### Retry Mechanism Tests
 
-| File                                      | Tests                            | Duration |
-| ----------------------------------------- | -------------------------------- | -------- |
-| `retry-counter-test.ctrlyoke.json`        | Basic retry with file validation | 15 sec   |
-| `retry-multi-step-test.ctrlyoke.json`     | Multi-step workflow with retries | 30 sec   |
-| `retry-max-exhaustion-test.ctrlyoke.json` | Max retries exhaustion behavior  | 15 sec   |
-| `retry-timeout-error-test.ctrlyoke.json`  | Timeout doesn't trigger retry    | 10 sec   |
-| `script-error-test.ctrlyoke.json`         | Script crash error handling      | 10 sec   |
+| File                                      | Tests                                | Duration |
+| ----------------------------------------- | ------------------------------------ | -------- |
+| `retry-counter-test.ctrlyoke.json`        | Basic retry with file validation     | 15 sec   |
+| `retry-multi-step-test.ctrlyoke.json`     | Multi-step workflow with retries     | 30 sec   |
+| `retry-max-exhaustion-test.ctrlyoke.json` | Max retries exhaustion behavior      | 15 sec   |
+| `retry-timeout-error-test.ctrlyoke.json`  | Timeout doesn't trigger retry        | 10 sec   |
+| `pass-retry-test.ctrlyoke.json`           | Pass-retry loops and onFail continue | 25 sec   |
+| `script-error-test.ctrlyoke.json`         | Script crash error handling          | 10 sec   |
 
 ### Advanced Features
 
@@ -200,7 +201,28 @@ echo 0 > multi-step-counter.txt
 
 ---
 
-### 6. Workflow Properties Test
+### 6. Pass Retry Test
+
+**File:** `pass-retry-test.ctrlyoke.json`
+
+**Setup:**
+
+```powershell
+echo 0 > counter.txt
+```
+
+**Expected:**
+
+- Step 1 uses `onPass: "retry"` with `maxRetries: 2`; the always-true condition
+  causes exactly two pass retries, so `manual-test/counter.txt` reaches `3`.
+- Step 2 writes `3`, passes its condition, then its pass-retry prompt changes
+  the marker to `4`; the failed re-check is handled by `onFail: "continue"`.
+- Step 3 runs and confirms that the workflow continued after the condition
+  failed.
+
+---
+
+### 7. Workflow Properties Test
 
 **File:** `workflow-properties-test.ctrlyoke.yaml`
 

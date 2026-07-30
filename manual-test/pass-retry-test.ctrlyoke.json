@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "name": "bounded-pass-retry",
+      "prompt": "This is the bounded onPass retry test. Read @manual-test/counter.txt and increment the single integer inside by 1. If the file does not exist, create it with 1. Keep the file to one number only. Actually save the file.",
+      "endCondition": {
+        "script": "manual-test/.ctrlyoke/scripts/always_true.py",
+        "returns": "true",
+        "maxRetries": 2,
+        "timeout": 10000,
+        "onPass": "retry",
+        "passRetryPrompt": "The end condition is still passing, so this is a bounded pass retry. Read @manual-test/counter.txt, increment the number by 1, and save only that number."
+      }
+    },
+    {
+      "name": "pass-retry-until-condition-fails",
+      "prompt": "This is the loop-until-failure recipe. Write exactly 3 to @manual-test/counter.txt and do not add any other text. The end condition should pass on this attempt.",
+      "endCondition": {
+        "script": "manual-test/.ctrlyoke/scripts/check_counter.py 3",
+        "returns": "true",
+        "maxRetries": 3,
+        "timeout": 10000,
+        "onPass": "retry",
+        "onFail": "continue",
+        "passRetryPrompt": "The marker is still at 3, so the condition passed again. Increment @manual-test/counter.txt to 4 and save only that number. The next condition check should fail and onFail: continue should advance the workflow."
+      }
+    },
+    {
+      "name": "confirm-pass-retry-continued",
+      "prompt": "Read @manual-test/counter.txt and respond with exactly: pass-retry continued after the condition failed. The expected final marker value is 4."
+    }
+  ]
+}
