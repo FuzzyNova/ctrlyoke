@@ -5,7 +5,6 @@ import {
   type ScriptVerdict,
   type WorkflowAttemptTarget,
   type EndConditionAction,
-  type EndConditionPassAction,
 } from "../types/CtrlYokeTypes";
 import {
   STATUS_MESSAGE_SEVERITY,
@@ -115,7 +114,7 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    const onPass: EndConditionPassAction =
+    const onPass: EndConditionAction =
       prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
     const onFail: EndConditionAction =
       prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
@@ -131,9 +130,11 @@ export class EndConditionHandler {
       };
     }
 
-    // Apply maxRetries default of 1 when onFail is "retry" and maxRetries is unset
+    // Apply maxRetries default of 1 when either retry direction is enabled and
+    // maxRetries is unset.
     if (
-      onFail === CONDITION_ACTIONS.RETRY &&
+      (onFail === CONDITION_ACTIONS.RETRY ||
+        onPass === CONDITION_ACTIONS.RETRY) &&
       prompt.endCondition &&
       prompt.endCondition.maxRetries === undefined
     ) {
@@ -143,52 +144,7 @@ export class EndConditionHandler {
       };
     }
 
-    // Success case - apply onPass action
-    if (evaluationResult.passed) {
-      Log.info("✅ End condition passed");
-      this.promptQueue.resetRetryCount();
-
-      // Update result with script output
-      const currentIndex = this.promptQueue.getState().currentIndex;
-      const currentResult = this.promptQueue.getState().results[currentIndex];
-      if (currentResult) {
-        currentResult.endConditionResult = true;
-        currentResult.scriptOutput = evaluationResult.stdout;
-      }
-
-      if (onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
-        const reason = "End condition passed with onPass: stopWorkflow";
-        retryContext.runtime.failAttempt(
-          retryContext.attemptTarget,
-          retryContext.attemptIndex,
-          reason
-        );
-        return { shouldContinue: false, failureReason: reason };
-      }
-
-      retryContext.runtime.completeAttempt(
-        retryContext.attemptTarget,
-        retryContext.attemptIndex
-      );
-
-      return { shouldContinue: true };
-    }
-
-    // Failure case — apply onFail action
-    if (onFail === CONDITION_ACTIONS.CONTINUE) {
-      // Advance despite failure
-      Log.warn("⚠️ End condition failed, continuing due to onFail: continue");
-      this.promptQueue.resetRetryCount();
-      retryContext.runtime.completeAttempt(
-        retryContext.attemptTarget,
-        retryContext.attemptIndex
-      );
-      return { shouldContinue: true };
-    }
-
-    // The script ran but its output did not match. Keep conversational retry
-    // semantics for onFail: retry; only evaluator errors use errorBehavior.
-    return await this.handleValidationFailureIterative(
+    return await this.handleEndConditionIterative(
       prompt,
       evaluationResult,
       retryContext,
@@ -197,9 +153,139 @@ export class EndConditionHandler {
   }
 
   /**
-   * Handle validation failure iteratively (script succeeded but output doesn't match expected).
-   * Uses an iterative loop instead of recursion to avoid stack overflow with many retries.
-   * @returns Result object with shouldContinue and optional failureReason
+   * Handle pass and validation-failure outcomes iteratively.
+   * Uses one loop so both retry directions share attempt bookkeeping and
+   * re-evaluation behavior.
+   */
+  private async handleEndConditionIterative(
+    prompt: PromptStep,
+    initialEvaluationResult: EvaluationResult,
+    retryContext: RetryContext,
+    sendRetryPrompt: SendRetryPromptCallback
+  ): Promise<EndConditionHandlerResult> {
+    const onPass: EndConditionAction =
+      prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
+    const onFail: EndConditionAction =
+      prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+    let evaluationResult = initialEvaluationResult;
+    let manualRetryRequested = false;
+    let currentAttemptIndex = retryContext.attemptIndex;
+
+    while (true) {
+      if (evaluationResult.errored) {
+        return {
+          shouldContinue: false,
+          failureReason:
+            evaluationResult.error ?? "End condition could not run",
+          errorResult: evaluationResult,
+          errorAttemptIndex: currentAttemptIndex,
+        };
+      }
+
+      if (evaluationResult.passed) {
+        Log.info("✅ End condition passed");
+        this.recordPassingEvaluation(evaluationResult);
+
+        if (onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
+          const reason = "End condition passed with onPass: stopWorkflow";
+          this.promptQueue.resetRetryCount();
+          retryContext.runtime.failAttempt(
+            retryContext.attemptTarget,
+            currentAttemptIndex,
+            reason
+          );
+          return { shouldContinue: false, failureReason: reason };
+        }
+
+        if (onPass === CONDITION_ACTIONS.RETRY) {
+          if (retryContext.runtime.stopped) {
+            return this.workflowStopped("Workflow stopped by user");
+          }
+
+          if (this.promptQueue.canPassRetry(prompt)) {
+            const retryResult = await this.sendRetryPromptAndEvaluate(
+              prompt,
+              evaluationResult,
+              retryContext,
+              sendRetryPrompt,
+              currentAttemptIndex,
+              "pass",
+              true
+            );
+            if ("handlerResult" in retryResult) {
+              return retryResult.handlerResult;
+            }
+            evaluationResult = retryResult.evaluationResult;
+            currentAttemptIndex = retryResult.attemptIndex;
+            continue;
+          }
+
+          Log.info(
+            `✅ Pass-retry budget exhausted after ${this.promptQueue.getCurrentRetryCount()} retries; advancing`
+          );
+        }
+
+        this.promptQueue.resetRetryCount();
+        retryContext.runtime.completeAttempt(
+          retryContext.attemptTarget,
+          currentAttemptIndex
+        );
+        return { shouldContinue: true };
+      }
+
+      // Preserve the existing failure-side behavior: onFail: continue
+      // advances immediately, while other actions use the conversational
+      // retry/exhaustion flow whenever retry settings permit it.
+      if (retryContext.runtime.stopped) {
+        Log.info("⚠️ Workflow stopped, aborting retry");
+        return this.workflowStopped("Workflow stopped by user");
+      }
+
+      if (onFail === CONDITION_ACTIONS.CONTINUE) {
+        Log.warn("⚠️ End condition failed, continuing due to onFail: continue");
+        this.promptQueue.resetRetryCount();
+        retryContext.runtime.completeAttempt(
+          retryContext.attemptTarget,
+          currentAttemptIndex
+        );
+        return { shouldContinue: true };
+      }
+
+      if (!manualRetryRequested && !this.promptQueue.canRetry(prompt)) {
+        const exhaustedResult = await this.handleMaxRetriesExhausted(
+          prompt,
+          evaluationResult,
+          retryContext,
+          currentAttemptIndex
+        );
+        if (exhaustedResult.retryOnceMore) {
+          manualRetryRequested = true;
+          continue;
+        }
+        return exhaustedResult;
+      }
+
+      const retryResult = await this.sendRetryPromptAndEvaluate(
+        prompt,
+        evaluationResult,
+        retryContext,
+        sendRetryPrompt,
+        currentAttemptIndex,
+        "failure",
+        !manualRetryRequested
+      );
+      manualRetryRequested = false;
+      if ("handlerResult" in retryResult) {
+        return retryResult.handlerResult;
+      }
+      evaluationResult = retryResult.evaluationResult;
+      currentAttemptIndex = retryResult.attemptIndex;
+    }
+  }
+
+  /**
+   * Backward-compatible entry point for callers that start with a validation
+   * failure. The implementation is shared with pass-retry handling.
    */
   async handleValidationFailureIterative(
     prompt: PromptStep,
@@ -207,175 +293,147 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    let evaluationResult = initialEvaluationResult;
-    let manualRetryRequested = false;
-    let currentAttemptIndex = retryContext.attemptIndex;
+    return this.handleEndConditionIterative(
+      prompt,
+      initialEvaluationResult,
+      retryContext,
+      sendRetryPrompt
+    );
+  }
 
-    while (true) {
-      // Check if workflow was stopped by user
-      if (retryContext.runtime.stopped) {
-        Log.info("⚠️ Workflow stopped, aborting retry");
-        return {
-          shouldContinue: false,
-          failureReason: "Workflow stopped by user",
-        };
-      }
+  private async sendRetryPromptAndEvaluate(
+    prompt: PromptStep,
+    evaluationResult: EvaluationResult,
+    retryContext: RetryContext,
+    sendRetryPrompt: SendRetryPromptCallback,
+    currentAttemptIndex: number,
+    retryKind: "pass" | "failure",
+    incrementRetryCount: boolean
+  ): Promise<
+    | { evaluationResult: EvaluationResult; attemptIndex: number }
+    | { handlerResult: EndConditionHandlerResult }
+  > {
+    if (retryContext.runtime.stopped) {
+      return { handlerResult: this.workflowStopped("Workflow stopped by user") };
+    }
 
-      if (!manualRetryRequested) {
-        // Check if retry is possible
-        if (!this.promptQueue.canRetry(prompt)) {
-          // Max retries exhausted or no retry configured
-          const exhaustedResult = await this.handleMaxRetriesExhausted(
-            prompt,
-            evaluationResult,
-            retryContext,
-            currentAttemptIndex
-          );
-          if (exhaustedResult.retryOnceMore) {
-            // User requested one more retry — loop again without incrementing count
-            manualRetryRequested = true;
-            continue;
-          }
-          return exhaustedResult;
-        }
+    if (incrementRetryCount) {
+      this.promptQueue.incrementRetryCount();
+    }
 
-        // Increment retry counter
-        this.promptQueue.incrementRetryCount();
-      } else {
-        // Manual retry: don't increment counter, reset flag
-        manualRetryRequested = false;
-      }
+    const currentRetry = this.promptQueue.getCurrentRetryCount();
+    const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
+    const currentIndex = this.promptQueue.getState().currentIndex;
+    const nextAttemptIndex = currentAttemptIndex + 1;
+    const retryPromptText =
+      retryKind === "pass"
+        ? this.buildPassRetryPrompt(prompt, evaluationResult)
+        : this.buildRetryPrompt(prompt, evaluationResult);
 
-      const currentRetry = this.promptQueue.getCurrentRetryCount();
-      const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
-      const currentIndex = this.promptQueue.getState().currentIndex;
-      const nextAttemptIndex = currentAttemptIndex + 1;
+    retryContext.runtime.scheduleRetry(
+      retryContext.attemptTarget,
+      nextAttemptIndex,
+      currentRetry,
+      maxRetries
+    );
 
-      retryContext.runtime.scheduleRetry(
-        retryContext.attemptTarget,
-        nextAttemptIndex,
-        currentRetry,
-        maxRetries
-      );
+    Log.info(
+      retryKind === "pass"
+        ? `🔄 End condition passed, re-running (pass retry ${currentRetry}/${maxRetries})...`
+        : `🔄 Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
+    );
 
-      Log.info(
-        `🔄 Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
-      );
-
-      const hasQueueStep =
-        currentIndex < this.promptQueue.getState().results.length;
-
-      // Build retry prompt
-      const retryPromptText = this.buildRetryPrompt(prompt, evaluationResult);
-
-      // Send status message: Retrying prompt (after building retryPrompt)
-      const retryDashboard = this.getDashboard();
-      if (retryDashboard && hasQueueStep) {
-        const retryPromptPreview = retryPromptText
-          .split("\n")[0]
-          .substring(0, 60);
-        const ellipsis = retryPromptText.length > 60 ? "..." : "";
-        retryDashboard.updateStatusMessage(
-          currentIndex,
-          `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`,
-          STATUS_MESSAGE_SEVERITY.WARNING
-        );
-      }
-
-      // Create retry prompt item
-      const retryPromptStep: PromptStep = {
-        prompt: retryPromptText,
-        model: prompt.model,
-        endCondition: prompt.endCondition, // Keep same end condition
-        resumeSession: prompt.endCondition?.resumeSessionOnRetry ?? true, // Retries continue in same session unless resumeSessionOnRetry is explicitly false
-      };
-
-      // Update workflow progress to show retry
-      retryContext.integration.setWorkflowProgress(
-        currentIndex + 1,
-        retryContext.totalSteps
-      );
-
-      // Send retry prompt and wait for response
-      const retryResponseText = await sendRetryPrompt(
-        retryPromptStep,
+    const hasQueueStep =
+      currentIndex < this.promptQueue.getState().results.length;
+    const retryDashboard = this.getDashboard();
+    if (retryDashboard && hasQueueStep) {
+      const retryPromptPreview = retryPromptText
+        .split("\n")[0]
+        .substring(0, 60);
+      const ellipsis = retryPromptText.length > 60 ? "..." : "";
+      const statusMessage =
+        retryKind === "pass"
+          ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
+          : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`;
+      retryDashboard.updateStatusMessage(
         currentIndex,
-        nextAttemptIndex
+        statusMessage,
+        STATUS_MESSAGE_SEVERITY.WARNING
       );
+    }
 
-      if (retryResponseText === null) {
-        // Failed to send retry prompt - get actual reason from integration
-        const failureReason = retryContext.integration.getLastFailureReason();
-        this.platform?.error(
-          `ctrlyoke: Failed to send retry prompt: ${failureReason}`
-        );
-        return { shouldContinue: false, failureReason };
-      }
+    const retryPromptStep: PromptStep = {
+      prompt: retryPromptText,
+      model: prompt.model,
+      endCondition: prompt.endCondition,
+      resumeSession: prompt.endCondition?.resumeSessionOnRetry ?? true,
+    };
 
-      // Check if workflow was stopped during retry
-      if (retryContext.runtime.stopped) {
-        Log.info("⚠️ Workflow stopped during retry");
-        return {
-          shouldContinue: false,
-          failureReason: "Workflow stopped during retry",
-        };
-      }
+    retryContext.integration.setWorkflowProgress(
+      currentIndex + 1,
+      retryContext.totalSteps
+    );
 
-      // Re-evaluate end condition after retry. Production callers provide a
-      // reporter-backed evaluator; the fallback retains the direct evaluator
-      // for focused handler use and must carry workflow vars too.
-      const retryReport = retryContext.evaluateCondition
-        ? await retryContext.evaluateCondition(
-            prompt.endCondition!,
-            nextAttemptIndex
-          )
-        : {
-            evaluationResult:
-              await this.endConditionEvaluator.evaluateCondition(
-                prompt.endCondition!,
-                retryContext.workspaceFolderPath,
-                retryContext.vars
-              ),
-          };
-      const retryEvaluation = retryReport.evaluationResult;
-      await retryContext.onEvaluation?.(
-        retryEvaluation,
-        nextAttemptIndex,
-        retryReport.verdict
+    const retryResponseText = await sendRetryPrompt(
+      retryPromptStep,
+      currentIndex,
+      nextAttemptIndex
+    );
+
+    if (retryResponseText === null) {
+      const failureReason = retryContext.integration.getLastFailureReason();
+      this.platform?.error(
+        `ctrlyoke: Failed to send retry prompt: ${failureReason}`
       );
+      this.promptQueue.resetRetryCount();
+      return { handlerResult: { shouldContinue: false, failureReason } };
+    }
 
-      if (retryEvaluation.errored) {
-        return {
-          shouldContinue: false,
-          failureReason: retryEvaluation.error ?? "End condition could not run",
-          errorResult: retryEvaluation,
-          errorAttemptIndex: nextAttemptIndex,
-        };
-      }
+    if (retryContext.runtime.stopped) {
+      Log.info("⚠️ Workflow stopped during retry");
+      return {
+        handlerResult: this.workflowStopped("Workflow stopped during retry"),
+      };
+    }
 
-      // Check if the retry succeeded
-      if (retryEvaluation.passed) {
-        Log.info("✅ End condition passed after retry");
-        this.promptQueue.resetRetryCount();
-
-        const resultIndex = this.promptQueue.getState().currentIndex;
-        const result = this.promptQueue.getState().results[resultIndex];
-        if (result) {
-          result.endConditionResult = true;
-          result.scriptOutput = retryEvaluation.stdout;
-        }
-
-        retryContext.runtime.completeAttempt(
-          retryContext.attemptTarget,
+    const retryReport = retryContext.evaluateCondition
+      ? await retryContext.evaluateCondition(
+          prompt.endCondition!,
           nextAttemptIndex
-        );
+        )
+      : {
+          evaluationResult: await this.endConditionEvaluator.evaluateCondition(
+            prompt.endCondition!,
+            retryContext.workspaceFolderPath,
+            retryContext.vars
+          ),
+        };
+    const retryEvaluation = retryReport.evaluationResult;
+    await retryContext.onEvaluation?.(
+      retryEvaluation,
+      nextAttemptIndex,
+      retryReport.verdict
+    );
 
-        return { shouldContinue: true };
-      }
+    return {
+      evaluationResult: retryEvaluation,
+      attemptIndex: nextAttemptIndex,
+    };
+  }
 
-      // Validation failure — continue the loop for another retry attempt
-      evaluationResult = retryEvaluation;
-      currentAttemptIndex = nextAttemptIndex;
+  private workflowStopped(
+    failureReason: string
+  ): EndConditionHandlerResult {
+    this.promptQueue.resetRetryCount();
+    return { shouldContinue: false, failureReason };
+  }
+
+  private recordPassingEvaluation(evaluationResult: EvaluationResult): void {
+    const currentIndex = this.promptQueue.getState().currentIndex;
+    const currentResult = this.promptQueue.getState().results[currentIndex];
+    if (currentResult) {
+      currentResult.endConditionResult = true;
+      currentResult.scriptOutput = evaluationResult.stdout;
     }
   }
 
@@ -452,6 +510,29 @@ export class EndConditionHandler {
     // Use EndConditionEvaluator's buildRetryPrompt method for placeholder replacement
     return this.endConditionEvaluator.buildRetryPrompt(
       retryPromptTemplate,
+      evaluationResult,
+      prompt.endCondition!.returns,
+      prompt.endCondition?.compareSource
+    );
+  }
+
+  /**
+   * Build the prompt sent after a passing end-condition evaluation.
+   * A missing pass template deliberately falls back to the step's own prompt.
+   */
+  buildPassRetryPrompt(
+    prompt: PromptStep,
+    evaluationResult: EvaluationResult
+  ): string {
+    const passRetryPromptTemplate =
+      this.promptQueue.getEffectivePassRetryPrompt(prompt);
+
+    if (!passRetryPromptTemplate) {
+      return prompt.prompt;
+    }
+
+    return this.endConditionEvaluator.buildRetryPrompt(
+      passRetryPromptTemplate,
       evaluationResult,
       prompt.endCondition!.returns,
       prompt.endCondition?.compareSource

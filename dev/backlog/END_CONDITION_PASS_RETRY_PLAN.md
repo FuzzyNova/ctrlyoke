@@ -250,3 +250,4 @@ so there is never a commit where `onPass: retry` parses but silently behaves as
 <!-- Each step appends one line: step number, date, what landed. -->
 
 - Plan written 2026-07-29 (orchestrator); steps 1–5 queued.
+- Step 1 implemented 2026-07-29: restored the shared engine-level pass-retry loop, pass-retry prompt resolution, and coverage for mixed pass/fail budgets; no deviations from the plan.

@@ -55,6 +55,7 @@ export interface ResolvedRuntimeOutputCacheEntry {
 interface RetrySettings {
   maxRetries: number;
   retryPrompt: string | undefined;
+  passRetryPrompt: string | undefined;
 }
 
 /**
@@ -65,7 +66,11 @@ function resolveRetrySettings(
   endCondition?: PromptStep["endCondition"]
 ): RetrySettings {
   if (!endCondition) {
-    return { maxRetries: 0, retryPrompt: undefined };
+    return {
+      maxRetries: 0,
+      retryPrompt: undefined,
+      passRetryPrompt: undefined,
+    };
   }
 
   const hasRetryPrompt = !!endCondition.retryPrompt;
@@ -84,7 +89,11 @@ function resolveRetrySettings(
       ? ConfigurationUtils.getDefaultRetryPrompt() || undefined
       : undefined;
 
-  return { maxRetries, retryPrompt };
+  const passRetryPrompt =
+    (endCondition.passRetryPrompt ??
+      ConfigurationUtils.getDefaultPassRetryPrompt()) || undefined;
+
+  return { maxRetries, retryPrompt, passRetryPrompt };
 }
 
 export class PromptQueue implements WorkflowWorkingFilePersistence {
@@ -785,6 +794,22 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
+   * Check if the current prompt can be retried after a passing condition.
+   * Pass retries intentionally do not require a configured template because
+   * the handler falls back to the prompt's own text.
+   */
+  canPassRetry(prompt: PromptStep): boolean {
+    const { maxRetries } = resolveRetrySettings(prompt.endCondition);
+
+    // -1 means unlimited retries
+    if (maxRetries === -1) {
+      return true;
+    }
+
+    return this.currentRetryCount < maxRetries;
+  }
+
+  /**
    * Get effective maxRetries for current prompt (including defaults)
    */
   getEffectiveMaxRetries(prompt: PromptStep): number {
@@ -796,7 +821,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   getEffectiveRetryPrompt(prompt: PromptStep): string | undefined {
     return resolveRetrySettings(prompt.endCondition).retryPrompt;
-  } /**
+  }
+
+  /**
+   * Get effective pass-retry prompt for current prompt (including settings defaults)
+   */
+  getEffectivePassRetryPrompt(prompt: PromptStep): string | undefined {
+    return resolveRetrySettings(prompt.endCondition).passRetryPrompt;
+  }
+
+  /**
    * Increment retry count for current prompt
    */
   incrementRetryCount(): void {

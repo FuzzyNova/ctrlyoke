@@ -299,6 +299,16 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Get default pass-retry prompt template (reads from endCondition)
+   */
+  getDefaultPassRetryPrompt(): string {
+    return (
+      configService.get(CONFIG_KEYS.DEFAULTS).endCondition?.passRetryPrompt ??
+      ""
+    );
+  },
+
+  /**
    * Set the default end condition in settings
    */
   async setDefaultEndCondition(value: EndCondition | null): Promise<void> {

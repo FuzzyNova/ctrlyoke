@@ -12,6 +12,7 @@ import {
   PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
 import { PromptStep, PromptFile } from "../types/CtrlYokeTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 /**
  * Helper to wrap prompts array into PromptFile for tests
@@ -748,6 +749,70 @@ suite("PromptQueue State Machine Tests", () => {
         queue.incrementRetryCount();
       }
       assert.strictEqual(queue.canRetry(prompt), true);
+    });
+
+    test("canPassRetry() should not require a pass retry prompt", () => {
+      const prompt: PromptStep = {
+        prompt: "Test",
+        endCondition: {
+          script: "test.py",
+          returns: "true",
+          maxRetries: 1,
+          onPass: "retry",
+        },
+      };
+      queue.loadPrompts(createPromptFile([prompt]));
+      assert.strictEqual(queue.canPassRetry(prompt), true);
+    });
+
+    test("canPassRetry() should be bounded by the shared retry counter", () => {
+      const prompt: PromptStep = {
+        prompt: "Test",
+        endCondition: {
+          script: "test.py",
+          returns: "true",
+          maxRetries: 2,
+          onPass: "retry",
+        },
+      };
+      queue.loadPrompts(createPromptFile([prompt]));
+      queue.incrementRetryCount();
+      queue.incrementRetryCount();
+      assert.strictEqual(queue.canPassRetry(prompt), false);
+    });
+
+    test("getEffectivePassRetryPrompt() should prefer the explicit template", () => {
+      const prompt: PromptStep = {
+        prompt: "Test",
+        endCondition: {
+          script: "test.py",
+          returns: "true",
+          passRetryPrompt: "Explicit",
+        },
+      };
+      queue.loadPrompts(createPromptFile([prompt]));
+      assert.strictEqual(
+        queue.getEffectivePassRetryPrompt(prompt),
+        "Explicit"
+      );
+    });
+
+    test("getEffectivePassRetryPrompt() should use the settings default", () => {
+      const original = ConfigurationUtils.getDefaultPassRetryPrompt;
+      ConfigurationUtils.getDefaultPassRetryPrompt = () => "From settings";
+      try {
+        const prompt: PromptStep = {
+          prompt: "Test",
+          endCondition: { script: "test.py", returns: "true" },
+        };
+        queue.loadPrompts(createPromptFile([prompt]));
+        assert.strictEqual(
+          queue.getEffectivePassRetryPrompt(prompt),
+          "From settings"
+        );
+      } finally {
+        ConfigurationUtils.getDefaultPassRetryPrompt = original;
+      }
     });
   });
 

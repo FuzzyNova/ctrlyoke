@@ -578,9 +578,6 @@ export type EndConditionCompareSource = CompareSource;
 /** Action options for endCondition onFail */
 export type EndConditionAction = Exclude<ConditionAction, "skipPrompt">;
 
-/** Action options for endCondition onPass. Retry requires orchestrator loop support. */
-export type EndConditionPassAction = Exclude<EndConditionAction, "retry">;
-
 /** Action options for preCondition onPass/onFail */
 export type PreConditionAction = Exclude<ConditionAction, "retry">;
 
@@ -602,11 +599,13 @@ export interface ScriptProperties {
 export interface EndCondition extends ScriptProperties {
   /** Required for endCondition: expected result to compare against. */
   returns: string;
-  maxRetries?: number; // Maximum number of retry attempts (default: 0)
+  /** Maximum shared retry attempts across both pass and fail directions (default: 0). */
+  maxRetries?: number;
   retryPrompt?: string; // Template with placeholders for retry messages
+  passRetryPrompt?: string; // Template with placeholders for pass-retry messages
   resumeSessionOnRetry?: boolean; // Resume the same session for retries (default: true). Set false to start a fresh session for each retry.
   /** What to do when the end condition passes. Default: "continue". */
-  onPass?: EndConditionPassAction;
+  onPass?: EndConditionAction;
   /** What to do when the end condition fails. Default: "stopWorkflow". When "retry" and maxRetries unset, defaults to 1 retry. */
   onFail?: EndConditionAction;
 }

@@ -12,10 +12,11 @@ import {
   HarnessStatus,
 } from "../../core/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { IDashboardSink } from "../../types/IDashboardSink";
 import {
   type PromptStep,
   type ScriptProperties,
-  type EndConditionPassAction,
+  type EndConditionAction,
 } from "../../types/CtrlYokeTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
@@ -149,18 +150,26 @@ function validationFailure(result: string = "bad"): EvaluationResult {
 }
 
 function createPrompt(
-  maxRetries: number,
-  onPass: EndConditionPassAction = "continue"
+  maxRetries: number | undefined,
+  onPass: EndConditionAction = "continue",
+  options: {
+    onFail?: EndConditionAction;
+    retryPrompt?: string;
+    passRetryPrompt?: string;
+    resumeSessionOnRetry?: boolean;
+  } = {}
 ): PromptStep {
+  const endCondition = {
+    script: "check-results.js",
+    returns: "ok",
+    retryPrompt: "Please fix the issues",
+    maxRetries,
+    onPass,
+    ...options,
+  };
   return {
     prompt: "run task",
-    endCondition: {
-      script: "check-results.js",
-      returns: "ok",
-      retryPrompt: "Please fix the issues",
-      maxRetries,
-      onPass,
-    },
+    endCondition,
   };
 }
 
@@ -422,5 +431,338 @@ suite("EndConditionHandler", () => {
     assert.strictEqual(result.failureReason, "Workflow stopped by user");
     assert.strictEqual(retryCallbackCount, 0);
     assert.strictEqual(runtime.stopped, true);
+  });
+
+  test("re-runs while the condition passes, then advances when the pass budget is exhausted", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(2, "retry", {
+      passRetryPrompt: "Run the task again",
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform, [
+      successResult("second"),
+      successResult("third"),
+    ]);
+    const retryPrompts: string[] = [];
+    const dashboardMessages: string[] = [];
+    const dashboard = {
+      updateStatusMessage: (_stepIndex: number, message: string) => {
+        dashboardMessages.push(message);
+      },
+    } as IDashboardSink;
+    const handler = new EndConditionHandler(evaluator, queue, () => dashboard, platform);
+    const transitions: string[] = [];
+
+    queue.loadPrompts({ steps: [prompt] });
+    runtime.onDidAttemptTransition((transition) => {
+      transitions.push(`${transition.command}:${transition.current.attemptIndex}`);
+    });
+
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult("first"),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async (retryPromptStep, _currentIndex, attemptIndex) => {
+        retryPrompts.push(`${retryPromptStep.prompt}:${attemptIndex}`);
+        return "response";
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, true);
+    assert.deepStrictEqual(retryPrompts, [
+      "Run the task again [retry]:1",
+      "Run the task again [retry]:2",
+    ]);
+    assert.deepStrictEqual(dashboardMessages, [
+      "Re-running Prompt 1 (Pass retry 1/2): Run the task again [retry]",
+      "Re-running Prompt 1 (Pass retry 2/2): Run the task again [retry]",
+    ]);
+    assert.deepStrictEqual(transitions, [
+      `${WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY}:1`,
+      `${WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY}:2`,
+      `${WORKFLOW_ATTEMPT_COMMANDS.COMPLETE}:2`,
+    ]);
+    assert.strictEqual(queue.getCurrentRetryCount(), 0);
+  });
+
+  test("pass retry followed by failure uses onFail: continue", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(2, "retry", {
+      onFail: "continue",
+      passRetryPrompt: "Strengthen the test",
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform, [
+      validationFailure("still green"),
+    ]);
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const retryPrompts: string[] = [];
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult("green"),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async (retryPromptStep) => {
+        retryPrompts.push(retryPromptStep.prompt);
+        return "response";
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, true);
+    assert.deepStrictEqual(retryPrompts, ["Strengthen the test [retry]"]);
+    assert.strictEqual(queue.getCurrentRetryCount(), 0);
+  });
+
+  test("applies onFail: stopWorkflow after a pass retry fails", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(1, "retry", {
+      onFail: "stopWorkflow",
+      retryPrompt: undefined,
+      passRetryPrompt: "Run again",
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform, [
+      validationFailure("red"),
+    ]);
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult(),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => "response"
+    );
+
+    assert.strictEqual(result.shouldContinue, false);
+    assert.match(result.failureReason ?? "", /End condition failed after 1 retries/);
+    assert.strictEqual(queue.getCurrentRetryCount(), 0);
+  });
+
+  test("defaults pass retries to one when maxRetries is unset", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(undefined, "retry", {
+      passRetryPrompt: "Again",
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform, [successResult()]);
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const retryAttempts: number[] = [];
+    const maxRetries: number[] = [];
+
+    queue.loadPrompts({ steps: [prompt] });
+    runtime.onDidAttemptTransition((transition) => {
+      if (transition.command === WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY) {
+        retryAttempts.push(transition.current.attemptIndex);
+        maxRetries.push(transition.current.maxRetries ?? 0);
+      }
+    });
+
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult(),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => "response"
+    );
+
+    assert.strictEqual(result.shouldContinue, true);
+    assert.deepStrictEqual(retryAttempts, [1]);
+    assert.deepStrictEqual(maxRetries, [1]);
+  });
+
+  test("honors a stop requested during a pass retry", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(2, "retry", { passRetryPrompt: "Again" });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform);
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    let retryCallbackCount = 0;
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult(),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => {
+        retryCallbackCount++;
+        runtime.requestStop();
+        return "response";
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, false);
+    assert.strictEqual(result.failureReason, "Workflow stopped during retry");
+    assert.strictEqual(retryCallbackCount, 1);
+  });
+
+  test("shares one retry budget across alternating pass and failure evaluations", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(2, "retry", {
+      onFail: "retry",
+      passRetryPrompt: "Pass again",
+      retryPrompt: "Fix failure",
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform, [
+      validationFailure("failure after pass retry"),
+      successResult("passing again"),
+    ]);
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const retryPrompts: string[] = [];
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      successResult("initial pass"),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async (retryPromptStep) => {
+        retryPrompts.push(retryPromptStep.prompt);
+        return "response";
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, true);
+    assert.deepStrictEqual(retryPrompts, [
+      "Pass again [retry]",
+      "Fix failure [retry]",
+    ]);
+    assert.strictEqual(queue.getCurrentRetryCount(), 0);
+  });
+
+  test("falls back to the step prompt and substitutes pass template placeholders", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(1, "retry", {
+      passRetryPrompt:
+        "out={stdout};err={stderr};exit={exitCode};actual={actual};expected={expected};source={compareSource}",
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new EndConditionEvaluator(platform);
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    let retryPromptText = "";
+
+    queue.loadPrompts({ steps: [prompt] });
+    await handler.handleEndConditionResult(
+      prompt,
+      {
+        ...successResult("actual-value"),
+        stderr: "stderr-value",
+        exitCode: 7,
+        result: "actual-value",
+      },
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+        evaluateCondition: async () => ({
+          evaluationResult: successResult("done"),
+        }),
+      },
+      async (retryPromptStep) => {
+        retryPromptText = retryPromptStep.prompt;
+        return "response";
+      }
+    );
+
+    assert.strictEqual(
+      retryPromptText,
+      "out=actual-value;err=stderr-value;exit=7;actual=actual-value;expected=ok;source=auto"
+    );
+
+    const fallbackPrompt = createPrompt(1, "retry", {
+      passRetryPrompt: undefined,
+    });
+    fallbackPrompt.endCondition!.passRetryPrompt = undefined;
+    const fallbackHandler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform, [successResult()]),
+      queue,
+      () => undefined,
+      platform
+    );
+    let fallbackText = "";
+    await fallbackHandler.handleEndConditionResult(
+      fallbackPrompt,
+      successResult(),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async (retryPromptStep) => {
+        fallbackText = retryPromptStep.prompt;
+        return "response";
+      }
+    );
+    assert.strictEqual(fallbackText, "run task");
   });
 });
