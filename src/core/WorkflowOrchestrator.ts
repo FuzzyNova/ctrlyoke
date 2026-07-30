@@ -53,6 +53,7 @@ import {
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
+import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
   CliOutput,
   ActiveTerminalWorkflowRef,
@@ -2312,12 +2313,20 @@ export class WorkflowOrchestrator {
         : {}),
     };
 
+    // Only a live view can hold in-memory output the timeline read above could
+    // have missed: the run that is actually executing, or a draft, which has no
+    // persisted timeline of its own. Every other addressed run is *fully*
+    // described by the history snapshot, so replaying the bound instance's
+    // buffer there re-sends an earlier execution's output on top of it. This
+    // must be evaluated independently of `boundWorkflowId` — that is non-null on
+    // every lineage switch, so folding the check into the `??` fallback below
+    // left it unreachable in exactly the case that matters.
+    const isLiveAddress =
+      address.kind === "draft" ||
+      (address.kind === "run" && address.runRef === executionRunRef);
     const runtimeWorkflowId =
       boundWorkflowId ??
-      (address.kind === "draft" ||
-      (address.kind === "run" && address.runRef === executionRunRef)
-        ? this.getViewedWorkflowId(clientId)
-        : null);
+      (isLiveAddress ? this.getViewedWorkflowId(clientId) : null);
     const boundInstance = runtimeWorkflowId
       ? this.findInstance(runtimeWorkflowId)
       : undefined;
@@ -2353,8 +2362,19 @@ export class WorkflowOrchestrator {
     // Overlay only in-memory output that may have arrived after the timeline
     // read, then restore PTY metadata/scrollback. Neither path resets the
     // snapshot, so completed/fresh instances keep their persisted output.
-    if (runtimeWorkflowId) {
-      boundInstance?.replayBufferedOutputTo(new PostMessageDashboardSink(send));
+    //
+    // The overlay is a stream of *live* updates, not a snapshot, so it is tagged
+    // with the instance it describes: every per-workflow guard in the webview is
+    // conditional on `message.workflowId`, which means an untagged overlay is
+    // accepted unconditionally by whatever view the client is displaying by the
+    // time it arrives — including a workflow the user switched to in between.
+    if (runtimeWorkflowId && isLiveAddress) {
+      boundInstance?.replayBufferedOutputTo(
+        new WorkflowTaggedSink(
+          new PostMessageDashboardSink(send),
+          runtimeWorkflowId
+        )
+      );
     }
     if (boundWorkflowId) {
       this.replayTerminalSessionsTo(boundWorkflowId, send, clientId);

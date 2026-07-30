@@ -1477,6 +1477,207 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     }
   });
 
+  /**
+   * Minimal on-disk timeline for an addressed run view: `loadRunViewForClient`
+   * reads the run's manifest/events through its own `OutputHistoryManager`, so a
+   * run-addressed test needs real files (a draft-addressed one does not).
+   */
+  async function writeRunTimeline(
+    workspace: string,
+    workflowKey: string,
+    runRef: string,
+    executionState: string
+  ): Promise<void> {
+    const runDir = path.join(
+      workspace,
+      ".ctrlyoke",
+      ".runs",
+      workflowKey,
+      runRef
+    );
+    await fs.mkdir(runDir, { recursive: true });
+    await fs.writeFile(
+      path.join(runDir, "manifest.json"),
+      JSON.stringify({
+        schemaVersion: "2.3.0",
+        storageKind: "timeline",
+        workflowId: workflowKey,
+        runId: 1,
+        startedAt: Date.now(),
+        executionState,
+        definitionRevision: 1,
+      })
+    );
+    await fs.writeFile(path.join(runDir, "events.jsonl"), "");
+  }
+
+  // Regression: the buffered-output overlay exists to catch in-memory output
+  // that raced the timeline read, which only a live view can have. A completed
+  // run's persisted timeline already holds every attempt, so overlaying the
+  // bound instance's buffer there re-sent an earlier execution's output on top
+  // of the snapshot — a pass-retry run whose first step took three attempts
+  // dumped all of them into whatever view the client was showing. The guard
+  // cannot live in the `boundWorkflowId ?? ...` fallback: bind returns non-null
+  // on every lineage switch, which is exactly when this happens.
+  test("does not overlay buffered output when the addressed run is not the executing run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-historical-run-view-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "Completed run",
+          definitionRevision: 4,
+          steps: [{ prompt: "Already persisted" }],
+        })
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const workflowId = "workflow-completed";
+      const workflowKey = "completed-lineage" as never;
+      const runRef = "run-2026-01-01T00-00-00-000Z" as never;
+      const operations: string[] = [];
+      await writeRunTimeline(workspace, workflowKey, runRef, "completed");
+
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewerRegistry = new Map<string, string | null>();
+      internal.viewAddressRegistry = new Map();
+      internal.viewMessageSinks = new Map();
+      internal.instances = new Map([
+        [
+          workflowId,
+          {
+            getSummary: () => ({ workingFilePath }),
+            replayBufferedOutputTo: (sink: {
+              updateCliOutput: (stepIndex: number, output: unknown) => void;
+            }) => {
+              operations.push("buffered-output");
+              sink.updateCliOutput(0, { response: "stale retry output" });
+            },
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.bindClientToAddressedLineage = async () => workflowId;
+      internal.resolveAddressFilePath = () => workingFilePath;
+      // Nothing is executing in this lineage — the addressed run is history.
+      internal.findExecutionRunRef = () => null;
+      internal.getActiveTerminalWorkflowRefs = () => [];
+      internal.replayTerminalSessionsTo = () => operations.push("terminals");
+      internal.lineageRepository = {
+        readDescriptor: async () => ({ revision: 3 }),
+      };
+
+      await orchestrator.loadRunViewForClient(
+        { workflowKey, kind: "run", runRef },
+        (message) => {
+          operations.push((message as { type?: string }).type ?? "unknown");
+        },
+        "browser:switch",
+        "run-view-request-historical"
+      );
+
+      assert.deepStrictEqual(operations, [
+        MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+        MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        MESSAGE_TYPES.RUN_VIEW_LOADED,
+        "terminals",
+      ]);
+      assert.ok(
+        !operations.includes("buffered-output"),
+        "a historical run view must be described by its snapshot alone"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  // The overlay is a stream of live updates, so it must be workflow-tagged:
+  // every per-workflow guard in the webview is conditional on `workflowId`, so
+  // an untagged overlay is accepted by whatever view the client is showing when
+  // it arrives — including a workflow the user switched to in the meantime.
+  test("tags the buffered-output overlay with the instance it describes", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-tagged-overlay-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "Executing run",
+          definitionRevision: 2,
+          steps: [{ prompt: "Running" }],
+        })
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const workflowId = "workflow-executing";
+      const workflowKey = "executing-lineage" as never;
+      const runRef = "run-2026-02-02T00-00-00-000Z" as never;
+      const sent: Array<Record<string, unknown>> = [];
+      await writeRunTimeline(workspace, workflowKey, runRef, "running");
+
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewerRegistry = new Map<string, string | null>();
+      internal.viewAddressRegistry = new Map();
+      internal.viewMessageSinks = new Map();
+      internal.instances = new Map([
+        [
+          workflowId,
+          {
+            getSummary: () => ({ workingFilePath }),
+            replayBufferedOutputTo: (sink: {
+              updateCliOutput: (stepIndex: number, output: unknown) => void;
+            }) => {
+              sink.updateCliOutput(0, {
+                response: "output that raced the read",
+              });
+            },
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.bindClientToAddressedLineage = async () => workflowId;
+      internal.resolveAddressFilePath = () => workingFilePath;
+      internal.findExecutionRunRef = () => runRef;
+      internal.getActiveTerminalWorkflowRefs = () => [];
+      internal.replayTerminalSessionsTo = () => undefined;
+      internal.lineageRepository = {
+        readDescriptor: async () => ({ revision: 1 }),
+      };
+
+      await orchestrator.loadRunViewForClient(
+        { workflowKey, kind: "run", runRef },
+        (message) => sent.push(message as Record<string, unknown>),
+        "browser:switch",
+        "run-view-request-executing"
+      );
+
+      const overlay = sent.find(
+        (message) => message.type === MESSAGE_TYPES.CLI_OUTPUT
+      );
+      assert.ok(overlay, "the executing run must still receive its overlay");
+      assert.strictEqual(
+        overlay?.workflowId,
+        workflowId,
+        "the overlay must carry the workflowId so a client that has since switched can drop it"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-run-summaries-")

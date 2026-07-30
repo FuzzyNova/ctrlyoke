@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeNamedWorkspaceRoots,
+  getVsCodeWorkspaceRoot,
+} from "../platform/VsCodeWorkspaceRoot";
+import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
@@ -390,6 +394,27 @@ export class WebviewMessageRouter {
     });
   }
 
+  /**
+   * Resolve a workflow file path supplied by a dashboard client.
+   *
+   * Client-supplied paths are not guaranteed absolute: `WorkflowFilePickerModal`
+   * documents its manual field as workspace-relative (`path/to/workflow.ctrlyoke.yaml`),
+   * and nothing downstream resolves one — `PromptFileParser.parsePromptFile`
+   * does a bare `fs.readFile`, so a relative path would silently resolve
+   * against the extension host's cwd and fail (or worse, hit an unrelated
+   * file). Both file-addressed actions — LOAD_WORKFLOW and APPEND_FILE —
+   * therefore resolve here, at the transport edge, so they cannot drift apart.
+   * Folder-name-prefixed multi-root paths (`otherFolder/flows/x.yaml`, the form
+   * workflow discovery reports) go through the same resolver as `@`-references.
+   */
+  private resolveClientWorkflowFilePath(filePath: string): string {
+    return resolveNamedRelativePath(
+      filePath,
+      getVsCodeWorkspaceRoot(),
+      getVsCodeNamedWorkspaceRoots()
+    );
+  }
+
   private registerWorkflowControl(table: DispatchTable): void {
     // ── Dashboard — Workflow Control ──────────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_PROMPT, () => {
@@ -408,7 +433,7 @@ export class WebviewMessageRouter {
         try {
           await this.getOrchestrator()?.appendFromFileForClient(
             mutation,
-            message.filePath,
+            this.resolveClientWorkflowFilePath(message.filePath),
             ctx.clientId,
             QUEUE_POSITION.END
           );
@@ -980,7 +1005,7 @@ export class WebviewMessageRouter {
           );
         } else if (message.filePath) {
           await orchestrator.loadPromptFileForClient(
-            message.filePath,
+            this.resolveClientWorkflowFilePath(message.filePath),
             ctx.postMessage,
             ctx.clientId
           );

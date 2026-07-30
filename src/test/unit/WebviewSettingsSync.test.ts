@@ -739,10 +739,16 @@ suite("WebviewSettingsSync", () => {
         filePath: "flows/example.ctrlyoke.yaml",
       });
 
-      assert.deepStrictEqual(
-        loadedPaths,
-        ["flows/example.ctrlyoke.yaml"],
+      assert.strictEqual(
+        loadedPaths.length,
+        1,
         "LOAD_WORKFLOW with a filePath must load that source file for the requesting client"
+      );
+      assert.ok(
+        loadedPaths[0]
+          .replace(/\\/g, "/")
+          .endsWith("flows/example.ctrlyoke.yaml"),
+        `expected the requested file to be loaded, got "${loadedPaths[0]}"`
       );
       assert.ok(
         sendPropsCalled,
@@ -1508,6 +1514,11 @@ suite("WebviewMessageRouter APPEND_FILE routing", () => {
     runRef: "run-2026-07-20T10-30-00-000Z" as never,
   };
 
+  // Fully-qualified so the router's workspace-relative resolution is the
+  // identity here — these tests are about mutation routing, and path resolution
+  // has its own coverage in WebviewMessageRouter.test.ts.
+  const absoluteDir = path.sep === "\\" ? "C:\\fake" : "/fake";
+
   function makeRouter(calls: Array<{ mutation: unknown; filePath: unknown }>) {
     const orchestrator = {
       appendFromFileForClient: async (mutation: unknown, filePath: unknown) => {
@@ -1533,29 +1544,27 @@ suite("WebviewMessageRouter APPEND_FILE routing", () => {
       expectedDescriptorRevision: 5,
     };
 
+    const filePath = path.join(absoluteDir, "prompts.ctrlyoke.yaml");
     await router.route({
       type: MESSAGE_TYPES.APPEND_FILE,
-      filePath: "/fake/prompts.ctrlyoke.yaml",
+      filePath,
       mutation,
     });
 
-    assert.deepStrictEqual(calls, [
-      { mutation, filePath: "/fake/prompts.ctrlyoke.yaml" },
-    ]);
+    assert.deepStrictEqual(calls, [{ mutation, filePath }]);
   });
 
   test("passes no mutation through when the client has no addressed context", async () => {
     const calls: Array<{ mutation: unknown; filePath: unknown }> = [];
     const router = makeRouter(calls);
 
+    const filePath = path.join(absoluteDir, "legacy.ctrlyoke.yaml");
     await router.route({
       type: MESSAGE_TYPES.APPEND_FILE,
-      filePath: "/fake/legacy.ctrlyoke.yaml",
+      filePath,
     });
 
-    assert.deepStrictEqual(calls, [
-      { mutation: undefined, filePath: "/fake/legacy.ctrlyoke.yaml" },
-    ]);
+    assert.deepStrictEqual(calls, [{ mutation: undefined, filePath }]);
   });
 });
 
