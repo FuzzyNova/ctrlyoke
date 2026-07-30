@@ -1816,6 +1816,27 @@ export class WorkflowOrchestrator {
     return instance;
   }
 
+  /**
+   * Load a workspace prompt file into a fresh instance for one client.
+   *
+   * The client-scoped counterpart of {@link loadPromptFile}, which always
+   * retargets the VS Code panel. "Load from File" names a *source* file (the
+   * standalone file picker and the workspace-editor context menu both do), so
+   * this goes through `loadPromptFile` to create the lineage's draft — not
+   * through `loadWorkflowForClient`, which expects an existing working file
+   * under `.ctrlyoke/.runs/`.
+   */
+  async loadPromptFileForClient(
+    filePath: string,
+    send: (msg: unknown) => void,
+    clientId: string
+  ): Promise<WorkflowInstance> {
+    const instance = this.registerNewInstance(clientId);
+    await instance.loadPromptFile(filePath);
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
+    return instance;
+  }
+
   /** Build a fresh workflow instance, register it, and make it the client's viewed workflow. */
   private registerNewInstance(clientId: string): WorkflowInstance {
     const instance = this.buildWorkflowInstance();

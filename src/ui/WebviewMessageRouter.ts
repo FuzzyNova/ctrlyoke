@@ -967,12 +967,26 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.LOAD_WORKFLOW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
-        if (!message.address) return;
-        await orchestrator.loadRunViewForClient(
-          message.address,
-          ctx.postMessage,
-          ctx.clientId
-        );
+        // Two payload shapes reach here and both must be honored: an execution
+        // `address` (an existing lineage/run) and a workspace `filePath` (a
+        // source workflow file — the standalone "Load from File" picker and the
+        // workspace-editor context menu). Dropping the filePath branch made
+        // both of those silently no-op with nothing logged.
+        if (message.address) {
+          await orchestrator.loadRunViewForClient(
+            message.address,
+            ctx.postMessage,
+            ctx.clientId
+          );
+        } else if (message.filePath) {
+          await orchestrator.loadPromptFileForClient(
+            message.filePath,
+            ctx.postMessage,
+            ctx.clientId
+          );
+        } else {
+          return;
+        }
         // FILE_SELECTED (emitted during replay) calls applyWorkflowChange() which
         // clears workflowProperties. Repopulate them so the PropertiesPanel reflects
         // the loaded workflow's saved configuration — same pattern as SWITCH_WORKFLOW.

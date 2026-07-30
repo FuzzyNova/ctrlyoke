@@ -700,6 +700,56 @@ suite("WebviewSettingsSync", () => {
       );
     });
 
+    // Regression: LOAD_WORKFLOW also arrives carrying a source `filePath` — the
+    // standalone "Load from File" picker and the workspace-editor context menu
+    // both send that shape. An address-only handler dropped them on the floor,
+    // so loading a workflow from file did nothing at all (and logged nothing).
+    test("should load a source file when the message carries filePath instead of address", async () => {
+      const loadedPaths: string[] = [];
+      let sendPropsCalled = false;
+
+      const mockSettingsSync = {
+        sendWorkflowPropertiesToSettings: async () => {
+          sendPropsCalled = true;
+        },
+      } as any;
+
+      const mockOrchestrator = {
+        loadRunViewForClient: async () => {
+          assert.fail(
+            "a filePath-only LOAD_WORKFLOW must not be routed as a run address"
+          );
+        },
+        loadPromptFileForClient: async (filePath: string) => {
+          loadedPaths.push(filePath);
+        },
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        {} as any,
+        () => mockOrchestrator,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+
+      await router.route({
+        type: MESSAGE_TYPES.LOAD_WORKFLOW,
+        filePath: "flows/example.ctrlyoke.yaml",
+      });
+
+      assert.deepStrictEqual(
+        loadedPaths,
+        ["flows/example.ctrlyoke.yaml"],
+        "LOAD_WORKFLOW with a filePath must load that source file for the requesting client"
+      );
+      assert.ok(
+        sendPropsCalled,
+        "the loaded file's properties must be synced to the PropertiesPanel"
+      );
+    });
+
     test("should NOT call sendWorkflowPropertiesToSettings when orchestrator is unavailable (falls back to serializer)", async () => {
       let sendPropsCalled = false;
 
