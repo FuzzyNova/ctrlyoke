@@ -18,6 +18,7 @@
       "endCondition": {
         "script": "manual-test/.ctrlyoke/scripts/check_counter.py 3",
         "returns": "true",
+        "compareSource": "stdout",
         "maxRetries": 3,
         "timeout": 10000,
         "onPass": "retry",

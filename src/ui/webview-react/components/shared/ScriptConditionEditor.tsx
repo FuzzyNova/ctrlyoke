@@ -229,9 +229,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <CustomSelect
             id={`${idPrefix}-compare-source`}
             value={compareSource}
-            onChange={(val) =>
-              update({ compareSource: val as CompareSource })
-            }
+            onChange={(val) => update({ compareSource: val as CompareSource })}
             options={COMPARE_SOURCE_OPTIONS}
             disabled={disabled}
           />

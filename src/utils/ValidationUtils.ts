@@ -1,9 +1,6 @@
 import Ajv, { JSONSchemaType } from "ajv";
 import { PromptStep } from "../types/CtrlYokeTypes";
-import {
-  CONDITION_ACTIONS,
-  HARNESS_IDS,
-} from "../types/DashboardConstants";
+import { CONDITION_ACTIONS, HARNESS_IDS } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import {
   COPILOT_CLI_MODEL_IDS,

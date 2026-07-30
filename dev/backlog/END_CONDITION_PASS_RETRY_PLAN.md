@@ -46,10 +46,10 @@ Two independent reasons:
 
 Given an `endCondition` whose evaluation **passes**:
 
-| `onPass`       | Behavior                                                                           |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `continue`     | (default) complete the attempt, advance the queue. Unchanged.                      |
-| `stopWorkflow` | fail the attempt with `End condition passed with onPass: stopWorkflow`. Unchanged. |
+| `onPass`       | Behavior                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `continue`     | (default) complete the attempt, advance the queue. Unchanged.                                                                                           |
+| `stopWorkflow` | fail the attempt with `End condition passed with onPass: stopWorkflow`. Unchanged.                                                                      |
 | `retry`        | **new** — re-send a pass-retry prompt into the step's session, re-evaluate the end condition, and loop while it keeps passing and retry budget remains. |
 
 Rules that define the loop:
@@ -257,3 +257,4 @@ so there is never a commit where `onPass: retry` parses but silently behaves as
 - Step 3 implemented 2026-07-30: wired passing end-condition retry details through both executor report paths and added reporter plus executor round-trip/history coverage; all gates passed.
 - Step 4 implemented 2026-07-29: added pass-retry dashboard authoring and settings plumbing, updated UI coverage, and documented pass-retry behavior and authoring guidance; all gates passed.
 - Step 5 implemented 2026-07-29: added the pass-retry manual fixture, reconciled the audit and scoped stale-claim sweep, and captured the shared retry-budget invariant. Typecheck, lint, and tests passed; format:check remains blocked by 30 pre-existing repository-wide formatting failures outside this close-out scope.
+- Review pass 2026-07-29 (orchestrator): verified all five steps against the code. Three fixes applied — (1) Step 5's format:check claim was wrong: 8 of those 30 failures were regressions from this feature, so the feature's own files plus its docs were formatted (30 → 18 remaining, all pre-existing); (2) the manual fixture's "loop until the condition fails" step could never fail, because `check_counter.py` always exits 0 and `auto` mode resolves `returns: "true"` to the exit code — it now sets `compareSource: "stdout"`, with the reason recorded in `manual-test/README.md`; (3) restored the `EndConditionAction` doc comment to cover both directions. Gate re-run green: typecheck, lint, 2208 extension-host tests, 1237 webview tests. `dev/backlog/DEAD_METHOD_AND_INCOMPLETE_FEATURE_AUDIT.md` is deliberately left unformatted — its failure predates this feature and reformatting it is ~112 lines of unrelated churn.

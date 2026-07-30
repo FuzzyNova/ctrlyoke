@@ -452,12 +452,19 @@ suite("EndConditionHandler", () => {
         dashboardMessages.push(message);
       },
     } as IDashboardSink;
-    const handler = new EndConditionHandler(evaluator, queue, () => dashboard, platform);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => dashboard,
+      platform
+    );
     const transitions: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
     runtime.onDidAttemptTransition((transition) => {
-      transitions.push(`${transition.command}:${transition.current.attemptIndex}`);
+      transitions.push(
+        `${transition.command}:${transition.current.attemptIndex}`
+      );
     });
 
     const result = await handler.handleEndConditionResult(
@@ -507,7 +514,12 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       validationFailure("still green"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
     const retryPrompts: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -547,7 +559,12 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       validationFailure("red"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
 
     queue.loadPrompts({ steps: [prompt] });
     const result = await handler.handleEndConditionResult(
@@ -566,7 +583,10 @@ suite("EndConditionHandler", () => {
     );
 
     assert.strictEqual(result.shouldContinue, false);
-    assert.match(result.failureReason ?? "", /End condition failed after 1 retries/);
+    assert.match(
+      result.failureReason ?? "",
+      /End condition failed after 1 retries/
+    );
     assert.strictEqual(queue.getCurrentRetryCount(), 0);
   });
 
@@ -578,8 +598,15 @@ suite("EndConditionHandler", () => {
       passRetryPrompt: "Again",
     });
     const integration = new MockHarnessIntegration(undefined, false);
-    const evaluator = new TestEndConditionEvaluator(platform, [successResult()]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const evaluator = new TestEndConditionEvaluator(platform, [
+      successResult(),
+    ]);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
     const retryAttempts: number[] = [];
     const maxRetries: number[] = [];
 
@@ -618,7 +645,12 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(2, "retry", { passRetryPrompt: "Again" });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
     let retryCallbackCount = 0;
 
     queue.loadPrompts({ steps: [prompt] });
@@ -660,7 +692,12 @@ suite("EndConditionHandler", () => {
       validationFailure("failure after pass retry"),
       successResult("passing again"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
     const retryPrompts: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -700,7 +737,12 @@ suite("EndConditionHandler", () => {
     });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new EndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined, platform);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
     let retryPromptText = "";
 
     queue.loadPrompts({ steps: [prompt] });

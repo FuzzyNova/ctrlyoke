@@ -316,8 +316,14 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     ]);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
     assert.strictEqual(queue.getState().currentIndex, 2);
-    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.COMPLETED);
-    assert.strictEqual(queue.getState().results[1].status, STEP_STATUS.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(
+      queue.getState().results[1].status,
+      STEP_STATUS.COMPLETED
+    );
   });
 
   test("skips disabled queue steps without sending them to the harness", async () => {

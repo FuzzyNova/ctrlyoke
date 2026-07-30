@@ -314,7 +314,9 @@ export class EndConditionHandler {
     | { handlerResult: EndConditionHandlerResult }
   > {
     if (retryContext.runtime.stopped) {
-      return { handlerResult: this.workflowStopped("Workflow stopped by user") };
+      return {
+        handlerResult: this.workflowStopped("Workflow stopped by user"),
+      };
     }
 
     if (incrementRetryCount) {
@@ -421,9 +423,7 @@ export class EndConditionHandler {
     };
   }
 
-  private workflowStopped(
-    failureReason: string
-  ): EndConditionHandlerResult {
+  private workflowStopped(failureReason: string): EndConditionHandlerResult {
     this.promptQueue.resetRetryCount();
     return { shouldContinue: false, failureReason };
   }

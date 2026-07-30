@@ -791,10 +791,7 @@ suite("PromptQueue State Machine Tests", () => {
         },
       };
       queue.loadPrompts(createPromptFile([prompt]));
-      assert.strictEqual(
-        queue.getEffectivePassRetryPrompt(prompt),
-        "Explicit"
-      );
+      assert.strictEqual(queue.getEffectivePassRetryPrompt(prompt), "Explicit");
     });
 
     test("getEffectivePassRetryPrompt() should use the settings default", () => {

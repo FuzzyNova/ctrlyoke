@@ -91,7 +91,8 @@ function resolveRetrySettings(
 
   const passRetryPrompt =
     (endCondition.passRetryPrompt ??
-      ConfigurationUtils.getDefaultPassRetryPrompt()) || undefined;
+      ConfigurationUtils.getDefaultPassRetryPrompt()) ||
+    undefined;
 
   return { maxRetries, retryPrompt, passRetryPrompt };
 }

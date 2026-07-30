@@ -55,17 +55,17 @@ recipe: keep working while the condition passes, and advance once it fails.
 
 ## Important fields
 
-| Field                  | Meaning                                                   |
-| ---------------------- | --------------------------------------------------------- |
-| `script`               | Command or script path to execute                         |
-| `returns`              | Expected value                                            |
-| `compareSource`        | Compare against `stdout`, `stderr`, `exitCode`, or `auto` |
-| `maxRetries`           | Shared retry limit across pass and failure retries        |
-| `retryPrompt`          | Template sent after validation failure                    |
+| Field                  | Meaning                                                    |
+| ---------------------- | ---------------------------------------------------------- |
+| `script`               | Command or script path to execute                          |
+| `returns`              | Expected value                                             |
+| `compareSource`        | Compare against `stdout`, `stderr`, `exitCode`, or `auto`  |
+| `maxRetries`           | Shared retry limit across pass and failure retries         |
+| `retryPrompt`          | Template sent after validation failure                     |
 | `passRetryPrompt`      | Template sent after validation passes with `onPass: retry` |
-| `resumeSessionOnRetry` | Whether retries stay in the same conversation             |
-| `onPass`               | `continue`, `retry`, or `stopWorkflow`                    |
-| `onFail`               | `continue`, `retry`, or `stopWorkflow`                    |
+| `resumeSessionOnRetry` | Whether retries stay in the same conversation              |
+| `onPass`               | `continue`, `retry`, or `stopWorkflow`                     |
+| `onFail`               | `continue`, `retry`, or `stopWorkflow`                     |
 
 ## Pre-condition
 

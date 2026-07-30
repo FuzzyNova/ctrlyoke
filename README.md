@@ -354,11 +354,11 @@ All settings use the `ctrlyoke.` prefix.
 
 ### Retry and validation
 
-| Setting              | Default      | Description                                             |
-| -------------------- | ------------ | ------------------------------------------------------- |
-| `defaultMaxRetries`  | `3`          | Default retry count for end conditions (-1 = unlimited) |
-| `defaultRetryPrompt` | _(template)_ | Default retry message template with placeholders        |
-| `defaultPassRetryPrompt` | _(template)_ | Default message template for pass retries              |
+| Setting                  | Default      | Description                                             |
+| ------------------------ | ------------ | ------------------------------------------------------- |
+| `defaultMaxRetries`      | `3`          | Default retry count for end conditions (-1 = unlimited) |
+| `defaultRetryPrompt`     | _(template)_ | Default retry message template with placeholders        |
+| `defaultPassRetryPrompt` | _(template)_ | Default message template for pass retries               |
 
 ### Session and context
 

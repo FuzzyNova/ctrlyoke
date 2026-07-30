@@ -60,18 +60,18 @@ Prompt steps also accept the execution fields listed in the workflow-level table
 
 ## End condition fields
 
-| Field                  | Type                                | Notes                       |
-| ---------------------- | ----------------------------------- | --------------------------- |
-| `script`               | string                              | Command or script path      |
-| `returns`              | string                              | Expected result             |
-| `compareSource`        | enum                                | Output source to compare    |
-| `timeout`              | number                              | Milliseconds                |
-| `maxRetries`           | number                              | `-1` for unlimited          |
-| `retryPrompt`          | string                              | Retry template              |
+| Field                  | Type                                | Notes                                             |
+| ---------------------- | ----------------------------------- | ------------------------------------------------- |
+| `script`               | string                              | Command or script path                            |
+| `returns`              | string                              | Expected result                                   |
+| `compareSource`        | enum                                | Output source to compare                          |
+| `timeout`              | number                              | Milliseconds                                      |
+| `maxRetries`           | number                              | `-1` for unlimited                                |
+| `retryPrompt`          | string                              | Retry template                                    |
 | `passRetryPrompt`      | string                              | Template sent when a passing condition is retried |
-| `resumeSessionOnRetry` | boolean                             | Reuse same session on retry |
-| `onPass`               | `continue`, `retry`, `stopWorkflow` | Pass behavior; exhausting pass retries advances |
-| `onFail`               | `continue`, `retry`, `stopWorkflow` | Failure behavior            |
+| `resumeSessionOnRetry` | boolean                             | Reuse same session on retry                       |
+| `onPass`               | `continue`, `retry`, `stopWorkflow` | Pass behavior; exhausting pass retries advances   |
+| `onFail`               | `continue`, `retry`, `stopWorkflow` | Failure behavior                                  |
 
 ## Tool permissions
 

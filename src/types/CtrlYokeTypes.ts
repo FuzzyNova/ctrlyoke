@@ -575,7 +575,7 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
  */
 export type EndConditionCompareSource = CompareSource;
 
-/** Action options for endCondition onFail */
+/** Action options for endCondition onPass/onFail */
 export type EndConditionAction = Exclude<ConditionAction, "skipPrompt">;
 
 /** Action options for preCondition onPass/onFail */

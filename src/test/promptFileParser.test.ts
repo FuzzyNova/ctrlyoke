@@ -186,10 +186,7 @@ suite("PromptFileParser Tests", () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-on-pass-retry-")
       );
-      const filePath = path.join(
-        tempDir,
-        "on-pass-retry.ctrlyoke.json"
-      );
+      const filePath = path.join(tempDir, "on-pass-retry.ctrlyoke.json");
 
       try {
         await fs.writeFile(
