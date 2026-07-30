@@ -562,6 +562,12 @@ export const HARNESS_IDS = {
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
 
+/** Shared dot-notation paths for settings consumed across the extension and webview. */
+export const SETTING_PATHS = {
+  PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
+    "permissions.antigravityStatusLineTracking",
+} as const;
+
 // ============================================================================
 // HARNESS INFO - Display names and labels per harness
 // ============================================================================

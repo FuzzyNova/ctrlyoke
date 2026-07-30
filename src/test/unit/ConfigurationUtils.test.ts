@@ -146,3 +146,43 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     assert.deepStrictEqual(pending, ["/shared/other"]);
   });
 });
+
+suite("ConfigurationUtils — Antigravity statusline tracking", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  test("defaults to enabled", () => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+
+    assert.strictEqual(
+      ConfigurationUtils.shouldTrackAntigravityStatusLine(),
+      true
+    );
+  });
+
+  test("reads the effective value from the config hierarchy", () => {
+    configService.setUserBackend(
+      makeBackend({
+        permissions: { antigravityStatusLineTracking: false },
+      })
+    );
+    configService.setWorkspaceBackend(makeBackend({}));
+    assert.strictEqual(
+      ConfigurationUtils.shouldTrackAntigravityStatusLine(),
+      false
+    );
+
+    configService.setWorkspaceBackend(
+      makeBackend({
+        permissions: { antigravityStatusLineTracking: true },
+      })
+    );
+    assert.strictEqual(
+      ConfigurationUtils.shouldTrackAntigravityStatusLine(),
+      true
+    );
+  });
+});

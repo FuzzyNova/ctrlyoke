@@ -10,6 +10,7 @@ import type { TerminalSettings } from "../types/CtrlYokeSettings";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
+  SETTING_PATHS,
   type HarnessId,
   type PermissionMode,
 } from "../types/DashboardConstants";
@@ -79,6 +80,8 @@ export const CONFIG_KEYS = {
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
   PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS:
     "permissions.allowedExternalFileRoots",
+  PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
+    SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING,
   UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
@@ -686,6 +689,12 @@ export const ConfigurationUtils = {
    */
   getCodexApprovalPolicy(): string {
     return configService.get(CONFIG_KEYS.PERMISSIONS).codexApprovalPolicy;
+  },
+
+  /** Whether the Antigravity statusline wrapper should be installed. */
+  shouldTrackAntigravityStatusLine(): boolean {
+    return configService.get(CONFIG_KEYS.PERMISSIONS)
+      .antigravityStatusLineTracking;
   },
 
   // ============================================================

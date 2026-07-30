@@ -1,6 +1,6 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Step 2 implemented; steps 3–7 remain queued (see "Implementation Steps"
+**Status:** Step 3 implemented; steps 4–7 remain queued (see "Implementation Steps"
 at the bottom)
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
@@ -377,6 +377,13 @@ capability gain) similar to other harness-specific toggles, in case a user's own
 statusline script is fragile enough that wrap-and-forward causes problems, or they
 simply don't want ctrlyoke touching this global file at all.
 
+Implemented in step 3 as `permissions.antigravityStatusLineTracking`, exposed by
+`ConfigurationUtils.shouldTrackAntigravityStatusLine()`. The setting defaults to
+`true` and is available in the dashboard's Advanced Permissions → Antigravity CLI
+section, the platform-agnostic config hierarchy, and VS Code configuration
+contributions. The description calls out that the feature writes to the global
+`~/.gemini/antigravity-cli/settings.json` and wraps any existing statusline command.
+
 ---
 
 ## Session ID Discovery Replacement
@@ -512,8 +519,9 @@ Never `npm run test:harness` (see `test.instructions.md` — it drives live AI C
    snapshot atomically, wrap-and-forwards to a baseline user command with the ~200ms
    timeout, emits the ctrlyoke-branded ANSI line as fallback. Unit tests. (Independent
    of step 1.)
-3. **Settings toggle** (`CtrlYokeSettings.ts`, config service, `package.json`
-   contributions, dashboard settings UI) — must exist before the provider reads it.
+3. **[x] Settings toggle** (`CtrlYokeSettings.ts`, config service, `package.json`
+   contributions, dashboard settings UI). Key: `permissions.antigravityStatusLineTracking`;
+   accessor: `ConfigurationUtils.shouldTrackAntigravityStatusLine()`.
 4. **Provider wiring.** Token generation in `buildCliArgs()`,
    `getHeadlessSpawnEnv()`/`getInteractiveSpawnEnv()`, statusline lease register/
    unregister, `getAdditionalCleanupFilePaths()`, and the `TempFileManager` orphan-sweep

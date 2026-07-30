@@ -305,6 +305,10 @@
           "enum": ["untrusted", "on-request", "never"],
           "description": "Approval policy for Codex CLI tool calls."
         },
+        "antigravityStatusLineTracking": {
+          "type": "boolean",
+          "description": "Enable Antigravity statusline token/context tracking. This writes to the global ~/.gemini/antigravity-cli/settings.json and wraps any statusline command already configured there."
+        },
         "allowedExternalFileRoots": {
           "type": "array",
           "items": { "type": "string" },

@@ -3,7 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES, SETTING_PATHS } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
 import { LocalTextarea } from "../shared/LocalInputs";
@@ -153,6 +153,21 @@ export function AdvancedPermissionsSection({
           --dangerously-skip-permissions, Custom passes --sandbox, and
           individual allow/deny tool patterns are ignored.
         </p>
+        <div className="mt-3">
+          <SettingToggleRow
+            label="Track statusline tokens and context"
+            description="When enabled, ctrlyoke writes to the global ~/.gemini/antigravity-cli/settings.json and wraps any statusline command you already configured so it can collect live token and context-window usage."
+            checked={permissions.antigravityStatusLineTracking}
+            onChange={(v) =>
+              onUpdate(
+                SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING,
+                v
+              )
+            }
+            path={SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING}
+            {...rowProps}
+          />
+        </div>
       </div>
     </div>
   );

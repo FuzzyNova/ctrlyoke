@@ -62,6 +62,8 @@ export interface CtrlYokeGlobalSettings {
     // Codex CLI-specific
     codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
     codexApprovalPolicy: "untrusted" | "on-request" | "never";
+    /** Whether ctrlyoke installs its Antigravity statusline tracking wrapper. */
+    antigravityStatusLineTracking: boolean;
     /**
      * Absolute directory paths outside the workspace that ctrlyoke may read for
      * prompt attachments and open from file links. Workspace files are always
@@ -290,6 +292,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   permissions: {
     codexSandboxMode: "workspace-write",
     codexApprovalPolicy: "on-request",
+    antigravityStatusLineTracking: true,
     allowedExternalFileRoots: [],
   },
   execution: {

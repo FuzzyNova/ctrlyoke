@@ -51,6 +51,29 @@ suite("CtrlYokeConfigService", () => {
       all.enableDiagnosticLogs,
       CTRLYOKE_SETTINGS_DEFAULTS.enableDiagnosticLogs
     );
+    assert.strictEqual(all.permissions.antigravityStatusLineTracking, true);
+  });
+
+  test("resolves the Antigravity statusline setting through the config hierarchy", () => {
+    service.setUserBackend(
+      makeBackend({
+        permissions: { antigravityStatusLineTracking: false },
+      })
+    );
+    assert.strictEqual(
+      service.get("permissions").antigravityStatusLineTracking,
+      false
+    );
+
+    service.setWorkspaceBackend(
+      makeBackend({
+        permissions: { antigravityStatusLineTracking: true },
+      })
+    );
+    assert.strictEqual(
+      service.get("permissions").antigravityStatusLineTracking,
+      true
+    );
   });
 
   test("user backend values override defaults", () => {

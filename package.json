@@ -60,6 +60,12 @@
           "default": "",
           "scope": "window",
           "markdownDescription": "Directory that contains the `.ctrlyoke` folder for this workspace. Leave empty to auto-detect: the folder of the `.code-workspace` file when one is open, otherwise the first workspace folder. Accepts an absolute path or a path relative to the workspace file. Supports `${workspaceFolder}` and `${workspaceFolder:Name}`."
+        },
+        "ctrlyoke.permissions.antigravityStatusLineTracking": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Enable Antigravity statusline token/context tracking. This writes to the GLOBAL `~/.gemini/antigravity-cli/settings.json` and wraps any statusline command you already have configured, forwarding its output unchanged. Disable this if you do not want ctrlyoke to touch that global file or your existing statusline is fragile."
         }
       }
     },
