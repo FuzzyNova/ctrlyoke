@@ -520,15 +520,20 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
 
     const loaded: unknown[] = [];
-    internal.loadRunViewForClient = async (address: unknown) => {
-      loaded.push(address);
+    internal.publishRunViewToClients = async (
+      address: unknown,
+      targets: Array<{ clientId: string }>
+    ) => {
+      loaded.push({ address, clients: targets.map((t) => t.clientId) });
     };
     internal.syncExecutingRunViews({
       id: "instance-1",
       getQueueState: () => ({ workflowKey, runRef }),
     });
 
-    assert.deepStrictEqual(loaded, [{ workflowKey, kind: "run", runRef }]);
+    assert.deepStrictEqual(loaded, [
+      { address: { workflowKey, kind: "run", runRef }, clients: ["client-a"] },
+    ]);
   });
 
   test("binds a switching client to the addressed lineage's resident instance", async () => {
@@ -1593,6 +1598,117 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         !operations.includes("buffered-output"),
         "a historical run view must be described by its snapshot alone"
       );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  // A fan-out reads the addressed view once and hands every client the same
+  // result. Looping `loadRunViewForClient` instead made each additional client
+  // issue a full lineage rescan — a manifest *and* a working file per run — at
+  // the same instant, against a run directory the executor had just created and
+  // was writing its first `_runtime` update into. On a lineage's first run with
+  // two clients on the draft that starved the write until it failed EPERM.
+  test("reads an addressed view once for a whole fan-out and shares it", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-view-fanout-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "Promoted draft",
+          definitionRevision: 1,
+          steps: [{ prompt: "Say adios" }],
+        })
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const workflowKey = "fanout-lineage" as never;
+      const runRef = "run-2026-07-30T14-53-46-070Z" as never;
+      await writeRunTimeline(workspace, workflowKey, runRef, "running");
+
+      let addressedReads = 0;
+      const bound: string[] = [];
+      const received = new Map<string, Record<string, unknown>>();
+
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.viewerRegistry = new Map<string, string | null>();
+      internal.viewAddressRegistry = new Map();
+      internal.viewMessageSinks = new Map();
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.bindClientToAddressedLineage = async (
+        _address: unknown,
+        _send: unknown,
+        clientId: string
+      ) => {
+        // Binding may materialize an instance that loads the addressed file, so
+        // it stays per client and must complete before the shared read.
+        assert.strictEqual(
+          addressedReads,
+          0,
+          "every client must be bound before the shared read"
+        );
+        bound.push(clientId);
+        return null;
+      };
+      internal.resolveAddressFilePath = () => {
+        addressedReads += 1;
+        return workingFilePath;
+      };
+      internal.findExecutionRunRef = () => runRef;
+      internal.getActiveTerminalWorkflowRefs = () => [];
+      internal.replayTerminalSessionsTo = () => undefined;
+      internal.lineageRepository = {
+        readDescriptor: async () => ({ revision: 2 }),
+      };
+
+      const collect = (clientId: string) => (message: unknown) => {
+        const typed = message as Record<string, unknown>;
+        if (typed.type === MESSAGE_TYPES.RUN_VIEW_LOADED) {
+          received.set(clientId, typed);
+        }
+      };
+
+      await internal.publishRunViewToClients(
+        { workflowKey, kind: "run", runRef },
+        [
+          { clientId: "panel", send: collect("panel") },
+          { clientId: "browser:1", send: collect("browser:1") },
+        ]
+      );
+
+      assert.strictEqual(
+        addressedReads,
+        1,
+        "the address-derived read must happen once for the whole fan-out"
+      );
+      assert.deepStrictEqual(bound, ["panel", "browser:1"]);
+      assert.strictEqual(
+        received.size,
+        2,
+        "sharing the read must not cost a client its snapshot"
+      );
+      const [first, second] = [...received.values()];
+      // Reference identity is the contract, not an accident: the shared view is
+      // handed to more than one sink, so no consumer may mutate it.
+      assert.strictEqual(first.runSummaries, second.runSummaries);
+      assert.strictEqual(first.workingFile, second.workingFile);
+      assert.strictEqual(first.descriptorRevision, 2);
+      for (const clientId of ["panel", "browser:1"]) {
+        assert.deepStrictEqual(
+          orchestrator.getViewAddress(clientId),
+          { workflowKey, kind: "run", runRef },
+          "delivery still owns the per-client address and sink registration"
+        );
+        assert.ok(internal.viewMessageSinks.has(clientId));
+      }
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
@@ -3622,7 +3738,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     ]);
     internal.viewMessageSinks = new Map([["client-a", () => undefined]]);
     const loaded: unknown[] = [];
-    internal.loadRunViewForClient = async (address: unknown) => {
+    internal.publishRunViewToClients = async (address: unknown) => {
       loaded.push(address);
     };
 
@@ -3652,7 +3768,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       ["client-a", { workflowKey, kind: "draft" }],
     ]);
     internal.viewMessageSinks = new Map();
-    internal.loadRunViewForClient = async () => {
+    internal.publishRunViewToClients = async () => {
       assert.fail("a client with no sink cannot be published to");
     };
 
@@ -3707,7 +3823,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     });
     internal.viewMessageSinks.set("client-a", () => undefined);
     const loaded: unknown[] = [];
-    internal.loadRunViewForClient = async (address: unknown) => {
+    internal.publishRunViewToClients = async (address: unknown) => {
       loaded.push(address);
     };
 
