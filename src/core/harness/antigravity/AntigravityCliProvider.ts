@@ -399,6 +399,25 @@ export class AntigravityCliProvider implements ICliProvider {
     startTime: Date,
     workspaceRoot?: string
   ): Promise<string | undefined> {
+    if (this.statusLineEnabledForPrompt) {
+      const snapshot = this.getLatestStatuslineSnapshot();
+      const conversationId = snapshot?.conversation_id;
+      const writtenAt = snapshot?._ctrlyoke?.writtenAt;
+
+      // The token-specific sidecar is invocation-scoped, but its file can
+      // survive a crashed process. Require the wrapper's write timestamp to
+      // prove that this snapshot was published after this execution began.
+      if (
+        typeof conversationId === "string" &&
+        conversationId.length > 0 &&
+        typeof writtenAt === "number" &&
+        Number.isFinite(writtenAt) &&
+        writtenAt >= startTime.getTime()
+      ) {
+        return conversationId;
+      }
+    }
+
     if (workspaceRoot) {
       const cachedSessionId =
         await this.logParser.readSessionIdFromLastConversations(workspaceRoot);

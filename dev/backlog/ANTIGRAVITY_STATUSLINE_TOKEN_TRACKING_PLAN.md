@@ -529,8 +529,12 @@ Never `npm run test:harness` (see `test.instructions.md` — it drives live AI C
 5. **[x] Unified sidecar + live context bar.** `ICliProvider.startExecutionSidecar?()` hook
    wired in `CliIntegration.runExecutionSession`; sidecar watches the snapshot and emits
    synthetic `AntigravityLogEvent`s. No `AntigravityLogParser` change needed.
-6. **Session-ID discovery.** Snapshot becomes the primary source in
+6. **[x] Session-ID discovery.** Snapshot is now the primary source in
    `extractSessionIdFromLogs`, ahead of the existing cache/log-scrape fallback.
+   The snapshot's invocation timestamp is checked against execution start time
+   so a leftover file from a crashed run cannot latch a stale conversation.
+   The cache/log-scrape path remains the fallback for disabled tracking and the
+   window before the first snapshot arrives.
 7. **Final/headless usage + docs.** Populate `contextWindowUsedTokens`/
    `contextWindowSize`/`outputTokens` on the completed-response path via
    `augmentParsedOutput()`, plus the per-turn `TokenStats` breakdown from
