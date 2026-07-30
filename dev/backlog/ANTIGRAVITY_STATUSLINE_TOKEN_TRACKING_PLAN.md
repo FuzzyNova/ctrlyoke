@@ -1,6 +1,6 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Step 4 implemented; steps 5–7 remain queued (see "Implementation Steps"
+**Status:** Step 5 implemented; steps 6–7 remain queued (see "Implementation Steps"
 at the bottom)
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
@@ -526,7 +526,7 @@ Never `npm run test:harness` (see `test.instructions.md` — it drives live AI C
    `getHeadlessSpawnEnv()`/`getInteractiveSpawnEnv()`, statusline lease register/
    unregister, `getAdditionalCleanupFilePaths()`, and the `TempFileManager` orphan-sweep
    prefix.
-5. **Unified sidecar + live context bar.** `ICliProvider.startExecutionSidecar?()` hook
+5. **[x] Unified sidecar + live context bar.** `ICliProvider.startExecutionSidecar?()` hook
    wired in `CliIntegration.runExecutionSession`; sidecar watches the snapshot and emits
    synthetic `AntigravityLogEvent`s. No `AntigravityLogParser` change needed.
 6. **Session-ID discovery.** Snapshot becomes the primary source in

@@ -13,9 +13,23 @@ import type {
 } from "../../../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type { HarnessId } from "../../../../types/DashboardConstants";
+import type { CliEvent } from "../../../../types/CliOutputTypes";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
 export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
+
+/** Disposable sidecar that runs for the lifetime of one CLI execution. */
+export interface CliExecutionSidecar {
+  stop(): void;
+}
+
+/** Host callbacks and execution metadata supplied to a provider sidecar. */
+export interface CliExecutionSidecarDeps {
+  workspaceRoot: string;
+  model: string;
+  onStreamingEvents: (events: CliEvent[]) => void;
+  onContextWindowUpdate: (used: number, size: number) => void;
+}
 
 /**
  * Harness configuration (static metadata)
@@ -188,6 +202,17 @@ export interface ICliProvider {
    * @returns Complete arguments array
    */
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[];
+
+  /**
+   * Start a provider-specific sidecar for one execution.
+   *
+   * The sidecar is started for both interactive and headless executions at
+   * their shared integration boundary and is always stopped when that
+   * execution branch completes.
+   */
+  startExecutionSidecar?(
+    deps: CliExecutionSidecarDeps
+  ): CliExecutionSidecar | undefined;
 
   /**
    * Format a file path reference for this CLI.

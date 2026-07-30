@@ -983,12 +983,30 @@ export class CliIntegration extends HarnessIntegration {
       baseArgs.push(...suffixArgs);
     }
 
-    const success = isInteractive
-      ? await this.executionRunner.executeInteractive(session, baseArgs)
-      : await (() => {
-          this.warnIfHeadlessWithoutPermissions(effectiveToolPermissions, mode);
-          return this.executionRunner.executeHeadless(session, baseArgs);
-        })();
+    const executionSidecar = workspaceRoot
+      ? this.provider.startExecutionSidecar?.({
+          workspaceRoot,
+          model: session.resolvedProperties?.model ?? "",
+          onStreamingEvents: (events) => this.emitStreamingEvents(events),
+          onContextWindowUpdate: (used, size) =>
+            this.emitContextWindowUpdate(used, size),
+        })
+      : undefined;
+
+    let success: boolean;
+    try {
+      success = isInteractive
+        ? await this.executionRunner.executeInteractive(session, baseArgs)
+        : await (() => {
+            this.warnIfHeadlessWithoutPermissions(
+              effectiveToolPermissions,
+              mode
+            );
+            return this.executionRunner.executeHeadless(session, baseArgs);
+          })();
+    } finally {
+      executionSidecar?.stop();
+    }
 
     if (!session.effectiveSessionId && session.resolvedSessionId) {
       session.setExtractedSessionId(session.resolvedSessionId);

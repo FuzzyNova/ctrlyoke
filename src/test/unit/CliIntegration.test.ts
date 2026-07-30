@@ -412,6 +412,50 @@ suite("CliIntegration", () => {
     assert.strictEqual(headlessCalled, true);
   });
 
+  test("starts and stops the execution sidecar around both execution branches", async () => {
+    for (const executionMode of [
+      EXECUTION_MODES.INTERACTIVE,
+      EXECUTION_MODES.HEADLESS,
+    ]) {
+      const lifecycle: string[] = [];
+      const integration = createTestIntegration({
+        startExecutionSidecar: (deps) => {
+          lifecycle.push("start");
+          assert.strictEqual(deps.workspaceRoot, process.cwd());
+          assert.strictEqual(deps.model, "test-model");
+          assert.strictEqual(typeof deps.onStreamingEvents, "function");
+          assert.strictEqual(typeof deps.onContextWindowUpdate, "function");
+          return {
+            stop: () => lifecycle.push("stop"),
+          };
+        },
+      });
+
+      (integration as any).sessionResolverAdapter.resolve = () => ({
+        resolvedProperties: {
+          executionMode,
+          model: "test-model",
+        },
+        resolvedSessionId: undefined,
+      });
+      (integration as any).executionRunner[
+        executionMode === EXECUTION_MODES.INTERACTIVE
+          ? "executeInteractive"
+          : "executeHeadless"
+      ] = async () => {
+        lifecycle.push("execute");
+        return true;
+      };
+
+      assert.strictEqual(
+        await integration.sendPrompt({ prompt: executionMode }),
+        true
+      );
+      assert.deepStrictEqual(lifecycle, ["start", "execute", "stop"]);
+      integration.dispose();
+    }
+  });
+
   test("should skip inject mode for a headless session", async () => {
     configService.setCliOverlay({
       defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },

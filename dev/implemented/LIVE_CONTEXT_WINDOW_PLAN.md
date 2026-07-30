@@ -18,6 +18,7 @@ All six CLI log parsers already compute `contextWindowUsedTokens` and `contextWi
 | **Qwen**     | assistant message → `promptTokenCount`                     | YES — per turn                   |
 | **Codex**    | `event_msg` with `payload.type === "token_count"`          | YES — fires during execution     |
 | **OpenCode** | per-step events accumulated by `OpenCodeEventMapper`       | YES — per step                   |
+| **Antigravity** | ctrlyoke statusline snapshot (own sidecar, not agy's log) | **YES** — every ~300ms poll, interactive & headless |
 
 Every harness already emits usage-bearing events during streaming; it's just that `extractResponse` is the only place that reads them. This means **no polling is needed** — we can extract context window data from the same event stream already flowing through `CliLogMonitor.processEvent()`.
 

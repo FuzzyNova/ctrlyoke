@@ -2,7 +2,11 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
 import { createHash, randomUUID } from "crypto";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  type CliExecutionSidecarDeps,
+} from "../shared/interfaces/ICliProvider";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
@@ -30,6 +34,7 @@ import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor";
 import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
+import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
 
 const ANTIGRAVITY_MIN_VERSION = "1.0.15";
 
@@ -94,6 +99,8 @@ export class AntigravityCliProvider implements ICliProvider {
   private statusLineEnabledForPrompt = false;
   /** Baseline user command forwarded by the wrapper, when one existed. */
   private statusLineForwardCommand: string | undefined;
+  /** Sidecar for the current prompt, retained for final snapshot consumers. */
+  private statusLineSidecar: AntigravityStatuslineSidecar | undefined;
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
     // Injected turns do not rebuild CLI arguments or hook registration, and
@@ -120,6 +127,7 @@ export class AntigravityCliProvider implements ICliProvider {
     this.statusLineDirectory = undefined;
     this.statusLineEnabledForPrompt = false;
     this.statusLineForwardCommand = undefined;
+    this.statusLineSidecar = undefined;
 
     if (
       workspaceRoot &&
@@ -190,6 +198,34 @@ export class AntigravityCliProvider implements ICliProvider {
 
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
     return ["--prompt-interactive", promptText, ...baseArgs];
+  }
+
+  startExecutionSidecar(
+    deps: CliExecutionSidecarDeps
+  ): AntigravityStatuslineSidecar | undefined {
+    if (
+      !this.statusLineEnabledForPrompt ||
+      !this.statusLineToken ||
+      !this.statusLineDirectory
+    ) {
+      return undefined;
+    }
+
+    this.statusLineSidecar = new AntigravityStatuslineSidecar({
+      snapshotPath: path.join(
+        this.statusLineDirectory,
+        `agy-statusline-${this.statusLineToken}.json`
+      ),
+      model: deps.model,
+      parser: this.logParser,
+      onContextWindowUpdate: deps.onContextWindowUpdate,
+    });
+    return this.statusLineSidecar;
+  }
+
+  /** Latest valid statusline payload for the current prompt, if one arrived. */
+  getLatestStatuslineSnapshot() {
+    return this.statusLineSidecar?.getLatestSnapshot();
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
