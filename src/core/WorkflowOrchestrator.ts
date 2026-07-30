@@ -4709,15 +4709,26 @@ export class WorkflowOrchestrator {
    * Adopts an instance's own lineage as the view address of every client bound
    * to it, whenever that instance's lineage identity changes.
    *
-   * `loadRunViewForClient` is the only other writer of the address registry, and
-   * it is never involved when an instance creates a lineage for itself (first
-   * property edit or rename on a brand-new workflow). Without this, such a
-   * client keeps the address of whatever it viewed previously, and every
-   * addressed guard then validates revisions of a file the client is not
-   * editing — or a lineage-scoped command reaches into the wrong workflow.
+   * The other writers of the address registry — `loadRunViewForClient` and
+   * `syncExecutingRunViews` — are never involved when an instance creates a
+   * lineage for itself (first property edit or rename on a brand-new
+   * workflow). Without this, such a client keeps the address of whatever it
+   * viewed previously, and every addressed guard then validates revisions of a
+   * file the client is not editing — or a lineage-scoped command reaches into
+   * the wrong workflow.
    *
-   * Browsing an older run does not change the bound instance, so a client
-   * reading history is left alone.
+   * A client already addressed *inside* this lineage is never repointed here,
+   * because a silent registry write is the wrong answer for both clients that
+   * can be in that position when a lineage gains a RunRef:
+   *   - the one holding the lineage draft the promotion just deleted, which
+   *     must be *shown* the new run — {@link syncExecutingRunViews} does that,
+   *     and it can only recognise that client while its address still reads
+   *     `draft`;
+   *   - one deliberately reading an older run of the same lineage, which keeps
+   *     its view (only the run's initiator follows a promotion).
+   * Moving either one here left the backend addressing a run the client had
+   * never been told about, so its next edit or run action was rejected against
+   * an address it was not displaying.
    */
   private adoptInstanceLineageAddress(
     instance: WorkflowInstance,
@@ -4729,15 +4740,36 @@ export class WorkflowOrchestrator {
       if (viewedInstanceId !== instance.id) {
         continue;
       }
+      if (
+        address?.kind === "run" &&
+        this.getViewAddress(clientId)?.workflowKey === address.workflowKey
+      ) {
+        continue;
+      }
       this.getViewAddressRegistry().set(clientId, address);
     }
   }
 
+  /**
+   * Moves every client still holding this lineage's draft onto the run that
+   * replaced it, and publishes that run's view to them.
+   *
+   * The draft file is deleted by the promotion, so this is the only thing that
+   * keeps such a client addressable at all: left on the draft it offers "Run
+   * draft" for a run that has already finished, and every addressed action it
+   * sends is rejected because the backend resolved a file that no longer
+   * exists.
+   */
   private syncExecutingRunViews(instance: WorkflowInstance): void {
     const state = instance.getQueueState();
     if (!state.workflowKey || !state.runRef) {
       return;
     }
+    const address: Extract<WorkflowViewAddress, { kind: "run" }> = {
+      workflowKey: state.workflowKey,
+      kind: "run",
+      runRef: state.runRef,
+    };
 
     for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
       if (viewedInstanceId !== instance.id) {
@@ -4750,19 +4782,18 @@ export class WorkflowOrchestrator {
       ) {
         continue;
       }
-      const send = this.getViewMessageSinks().get(clientId);
+      // Move the address before publishing, not after: the publish is
+      // asynchronous, the draft this client is addressing is already gone, and
+      // RUNNING is emitted repeatedly — an unmoved address would send a fresh
+      // snapshot on every one of them.
+      this.getViewAddressRegistry().set(clientId, address);
+      const send =
+        this.getViewMessageSinks().get(clientId) ??
+        (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
       if (!send) {
         continue;
       }
-      void this.loadRunViewForClient(
-        {
-          workflowKey: state.workflowKey,
-          kind: "run",
-          runRef: state.runRef,
-        },
-        send,
-        clientId
-      ).catch((error) =>
+      void this.loadRunViewForClient(address, send, clientId).catch((error) =>
         Log.warn(
           `[WorkflowOrchestrator] Failed to switch ${clientId} to executing run: ${getErrorMessage(error)}`
         )

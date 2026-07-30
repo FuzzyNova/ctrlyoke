@@ -3543,7 +3543,14 @@ suite("WorkflowOrchestrator client view addressing", () => {
     });
   });
 
-  test("addresses a promoted run rather than the lineage draft", () => {
+  // Regression: `promoteToNewRun` sets the queue's RunRef and emits *while the
+  // queue is still idle*, so this adoption always runs before the RUNNING
+  // transition that calls `syncExecutingRunViews`. Silently repointing the
+  // draft holder here therefore consumed the only evidence that client had not
+  // been shown the run, and the sync — whose guard is `kind === "draft"` —
+  // became unreachable: every promotion in nine sessions of logs pushed zero
+  // run views, leaving the dashboard offering "Run draft" for a finished run.
+  test("leaves a promoted lineage's draft holder addressable for the run-view push", () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
@@ -3558,11 +3565,101 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     internal.adoptInstanceLineageAddress(
       { id: "instance" },
-      {
-        workflowKey,
-        runRef,
-      }
+      { workflowKey, runRef }
     );
+
+    assert.deepStrictEqual(
+      orchestrator.getViewAddress("client-a"),
+      { workflowKey, kind: "draft" },
+      "the draft address must survive adoption so syncExecutingRunViews can recognise this client"
+    );
+  });
+
+  test("keeps a client reading an older run of the promoted lineage on that run", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "promoted-lineage" as never;
+    const olderRun = "run-2026-07-21T09-00-00-000Z" as never;
+    const newRun = "run-2026-07-21T10-00-00-000Z" as never;
+
+    internal.viewerRegistry = new Map([["reader", "instance"]]);
+    internal.viewAddressRegistry = new Map([
+      ["reader", { workflowKey, kind: "run", runRef: olderRun }],
+    ]);
+
+    internal.adoptInstanceLineageAddress(
+      { id: "instance" },
+      { workflowKey, runRef: newRun }
+    );
+
+    assert.deepStrictEqual(
+      orchestrator.getViewAddress("reader"),
+      { workflowKey, kind: "run", runRef: olderRun },
+      "only the run's initiator follows a promotion; a history reader keeps its view"
+    );
+  });
+
+  // The whole promotion sequence, in the order the instance emits it: the
+  // RunRef lands on an idle queue (adoption), then the queue goes RUNNING
+  // (sync). Asserting the two together is what the separate unit tests missed.
+  test("publishes the promoted run to the draft holder across the full emit sequence", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "promoted-lineage" as never;
+    const runRef = "run-2026-07-21T10-00-00-000Z" as never;
+    const instance = {
+      id: "instance",
+      getQueueState: () => ({ workflowKey, runRef }),
+    };
+
+    internal.viewerRegistry = new Map([["client-a", "instance"]]);
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey, kind: "draft" }],
+    ]);
+    internal.viewMessageSinks = new Map([["client-a", () => undefined]]);
+    const loaded: unknown[] = [];
+    internal.loadRunViewForClient = async (address: unknown) => {
+      loaded.push(address);
+    };
+
+    internal.adoptInstanceLineageAddress(instance, { workflowKey, runRef });
+    internal.syncExecutingRunViews(instance);
+    // RUNNING is emitted many times per run; only the first may publish.
+    internal.syncExecutingRunViews(instance);
+
+    assert.deepStrictEqual(loaded, [{ workflowKey, kind: "run", runRef }]);
+    assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
+      workflowKey,
+      kind: "run",
+      runRef,
+    });
+  });
+
+  test("moves a sink-less draft holder off the deleted draft even though it cannot be shown the run", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const workflowKey = "promoted-lineage" as never;
+    const runRef = "run-2026-07-21T10-00-00-000Z" as never;
+
+    internal.viewerRegistry = new Map([["client-a", "instance"]]);
+    internal.viewAddressRegistry = new Map([
+      ["client-a", { workflowKey, kind: "draft" }],
+    ]);
+    internal.viewMessageSinks = new Map();
+    internal.loadRunViewForClient = async () => {
+      assert.fail("a client with no sink cannot be published to");
+    };
+
+    internal.syncExecutingRunViews({
+      id: "instance",
+      getQueueState: () => ({ workflowKey, runRef }),
+    });
 
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
