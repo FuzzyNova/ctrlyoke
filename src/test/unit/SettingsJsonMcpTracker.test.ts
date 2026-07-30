@@ -103,4 +103,177 @@ suite("SettingsJsonMcpTracker", () => {
       }
     );
   });
+
+  test("acquires, shares, and restores a generic single-value lease", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: "user-status", theme: "dark" })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    assert.strictEqual(
+      await tracker.registerValueLease(
+        "wf-1",
+        tmpDir,
+        "statusLine",
+        "ctrlyoke-status"
+      ),
+      "acquired"
+    );
+    assert.strictEqual(
+      await tracker.registerValueLease(
+        "wf-2",
+        tmpDir,
+        "statusLine",
+        "ctrlyoke-status"
+      ),
+      "shared"
+    );
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "ctrlyoke-status"
+    );
+
+    await tracker.unregisterValueLease("wf-1", tmpDir, "statusLine");
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "ctrlyoke-status"
+    );
+    await tracker.unregisterValueLease("wf-2", tmpDir, "statusLine");
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      {
+        statusLine: "user-status",
+        theme: "dark",
+      }
+    );
+  });
+
+  test("keeps leases for different keys independent in one file", async () => {
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    await tracker.registerValueLease("wf-1", tmpDir, "first", "one");
+    await tracker.registerValueLease("wf-2", tmpDir, "second", { value: 2 });
+
+    await tracker.unregisterValueLease("wf-1", tmpDir, "first");
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      {
+        second: { value: 2 },
+      }
+    );
+
+    await tracker.unregisterValueLease("wf-2", tmpDir, "second");
+    await assert.rejects(fs.access(settingsPath), /ENOENT/);
+  });
+
+  test("allows the sole owner to replace a conflicting generic value", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: "baseline" })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    await tracker.registerValueLease("wf-1", tmpDir, "statusLine", "first");
+    assert.strictEqual(
+      await tracker.registerValueLease("wf-1", tmpDir, "statusLine", "second"),
+      "acquired"
+    );
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "second"
+    );
+
+    await tracker.unregisterValueLease("wf-1", tmpDir, "statusLine");
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "baseline"
+    );
+  });
+
+  test("preserves a user edit made to a generic leased value", async () => {
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    await tracker.registerValueLease("wf-1", tmpDir, "statusLine", "owned");
+
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: "user-edited" }, null, 2)
+    );
+    await tracker.unregisterValueLease("wf-1", tmpDir, "statusLine");
+
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "user-edited"
+    );
+  });
+
+  test("prunes a dead owner and restores the on-disk baseline", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(settingsPath, JSON.stringify({ statusLine: "owned" }));
+    const sidecarPath = path.join(
+      settingsDir,
+      ".ctrlyoke-lease-statusLine.json"
+    );
+    await fs.writeFile(
+      sidecarPath,
+      JSON.stringify({
+        baseline: "baseline",
+        baselineHadKey: true,
+        owners: [{ pid: 99999999, workflowKey: "crashed", ts: Date.now() }],
+      })
+    );
+
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    await tracker.pruneDeadOwners(tmpDir, "statusLine");
+
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "baseline"
+    );
+    await assert.rejects(fs.access(sidecarPath), /ENOENT/);
+  });
+
+  test("adopts the sidecar baseline after in-memory state is lost", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: "ctrlyoke-installed-by-crashed-host" })
+    );
+    const sidecarPath = path.join(
+      settingsDir,
+      ".ctrlyoke-lease-statusLine.json"
+    );
+    await fs.writeFile(
+      sidecarPath,
+      JSON.stringify({
+        baseline: "user-status",
+        baselineHadKey: true,
+        owners: [{ pid: process.pid, workflowKey: "wf-1", ts: Date.now() }],
+      })
+    );
+
+    const tracker = SettingsJsonMcpTracker.getInstance("global-settings", {
+      projectConfigPath: () => settingsPath,
+    });
+    assert.strictEqual(
+      await tracker.registerValueLease(
+        "wf-1",
+        path.join(tmpDir, "different-workspace"),
+        "statusLine",
+        "ctrlyoke-current"
+      ),
+      "acquired"
+    );
+    await tracker.unregisterValueLease(
+      "wf-1",
+      path.join(tmpDir, "different-workspace"),
+      "statusLine"
+    );
+
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "user-status"
+    );
+  });
 });

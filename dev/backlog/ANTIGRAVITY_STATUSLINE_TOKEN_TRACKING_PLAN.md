@@ -1,8 +1,7 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Researched and verified / staged for implementation (see "Implementation
-Steps" at the bottom — steps 1–7 queued 2026-07-30; update each step's status there as
-it lands)
+**Status:** Step 1 implemented; steps 2–7 remain queued (see "Implementation Steps"
+at the bottom)
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
 pattern for Claude Code; this plan is the Antigravity equivalent), `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`,
@@ -487,7 +486,7 @@ Each step is one session's work, lands on top of the previous one, and commits i
 Verification gate for every step: `npm run typecheck`, `npm run lint`, `npm test`.
 Never `npm run test:harness` (see `test.instructions.md` — it drives live AI CLIs).
 
-1. **Generic single-key value lease in `SettingsJsonMcpTracker`.** Generalize the
+1. **[x] Generic single-key value lease in `SettingsJsonMcpTracker`.** Generalize the
    permission lease to an arbitrary top-level key; reimplement
    `registerPermissionPolicy`/`unregisterPermissionPolicy` as wrappers over it. Add the
    on-disk owner-state file with dead-PID pruning. Unit tests.

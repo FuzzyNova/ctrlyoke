@@ -61,12 +61,24 @@ export type SettingsJsonPermissionPolicy = Record<
   | Record<string, SettingsJsonPermissionDecision>
 >;
 
-interface PermissionLease {
-  normalizedPolicy: string;
-  owners: Set<string>;
-  baselineHadPermission: boolean;
-  baselinePermission: unknown;
-  appliedPermission: unknown;
+interface ValueLease {
+  normalizedRequestedValue: string;
+  owners: Map<string, string>;
+  baselineHadKey: boolean;
+  baselineValue: unknown;
+  appliedValue: unknown;
+}
+
+interface LeaseOwnerState {
+  pid: number;
+  workflowKey: string;
+  ts: number;
+}
+
+interface LeaseSidecar {
+  baseline: unknown;
+  baselineHadKey: boolean;
+  owners: LeaseOwnerState[];
 }
 
 /**
@@ -183,8 +195,8 @@ export class SettingsJsonMcpTracker {
   /** Values ctrlyoke inserted, used to avoid deleting user edits during cleanup. */
   private managedServerValues = new Map<string, unknown>();
 
-  /** Active permission policy lease per workspace config file. */
-  private permissionLeases = new Map<string, PermissionLease>();
+  /** Active single-value leases keyed by settings path and top-level key. */
+  private valueLeases = new Map<string, ValueLease>();
 
   private constructor(
     private readonly toolName: string,
@@ -462,7 +474,7 @@ export class SettingsJsonMcpTracker {
 
     if (
       this.refCounts.size === 0 &&
-      !this.hasPermissionLeaseForWorkspace(workspaceRoot) &&
+      !this.hasValueLeaseForWorkspace(workspaceRoot) &&
       !this.baselineProjectSettingsFileExisted
     ) {
       await this.deleteCtrlYokeGitignore();
@@ -470,55 +482,70 @@ export class SettingsJsonMcpTracker {
   }
 
   // ============================================================
-  // PERMISSION POLICY LEASE
+  // SINGLE-VALUE LEASE
   // ============================================================
 
   /**
-   * Apply an ownership-aware permission policy to the same project config used
-   * for MCP servers. Identical policies share one lease; a conflicting policy
-   * is rejected without replacing the active workflow's security controls.
+   * Apply an ownership-aware value to the same project config used for MCP
+   * servers. Identical values share one lease; conflicting values are rejected
+   * without replacing another workflow's active controls.
    */
-  async registerPermissionPolicy(
+  async registerValueLease(
     workflowKey: string,
     workspaceRoot: string,
-    policy: SettingsJsonPermissionPolicy
+    key: string,
+    value: unknown,
+    merge: (existing: unknown, requested: unknown) => unknown = (
+      _existing,
+      requested
+    ) => requested
   ): Promise<"acquired" | "shared"> {
     await this.captureBaseline(workspaceRoot);
 
     return this.withLock(async () => {
       const settingsPath = this.projectConfigPath(workspaceRoot);
-      const normalizedPolicy = JSON.stringify(policy);
-      const activeLease = this.permissionLeases.get(settingsPath);
+      const leaseKey = this.getLeaseKey(settingsPath, key);
+      await this.pruneLeaseOwnersLocked(settingsPath, key);
+      const normalizedRequestedValue = JSON.stringify(value);
+      const ownerId = this.getOwnerId(workflowKey);
+      let activeLease = this.valueLeases.get(leaseKey);
 
       if (activeLease) {
-        if (activeLease.normalizedPolicy !== normalizedPolicy) {
-          const otherOwners = [...activeLease.owners].filter(
-            (owner) => owner !== workflowKey
-          );
+        if (activeLease.normalizedRequestedValue !== normalizedRequestedValue) {
+          const otherOwners = [...activeLease.owners.entries()]
+            .filter(([activeOwnerId]) => activeOwnerId !== ownerId)
+            .map(([, activeWorkflowKey]) => activeWorkflowKey);
           if (otherOwners.length > 0) {
+            const conflictDescription =
+              key === "permission"
+                ? "permission policy conflict"
+                : `${key} value conflict`;
             throw new Error(
-              `${this.toolName} permission policy conflict in ${settingsPath}; active owner: ${otherOwners[0]}`
+              `${this.toolName} ${conflictDescription} in ${settingsPath}; active owner: ${otherOwners[0]}`
             );
           }
 
-          this.permissionLeases.delete(settingsPath);
-          await this.restorePermissionLease(settingsPath, activeLease);
+          this.valueLeases.delete(leaseKey);
+          await this.deleteLeaseSidecar(settingsPath, key);
+          await this.restoreValueLease(settingsPath, key, activeLease);
+          activeLease = undefined;
         } else {
-          const wasShared = !activeLease.owners.has(workflowKey);
-          activeLease.owners.add(workflowKey);
+          const wasShared = !activeLease.owners.has(ownerId);
+          activeLease.owners.set(ownerId, workflowKey);
+          await this.writeLeaseSidecar(settingsPath, key, activeLease);
           return wasShared ? "shared" : "acquired";
         }
       }
 
       const settings = await this.readProjectConfig(settingsPath);
-      const baselineHadPermission = "permission" in settings;
-      const baselinePermission = this.cloneJson(settings.permission);
-      const appliedPermission = this.mergePermissionPolicy(
-        settings.permission,
-        policy
-      );
+      const sidecar = await this.readLeaseSidecar(settingsPath, key);
+      const baselineHadKey = sidecar?.baselineHadKey ?? key in settings;
+      const baselineValue = sidecar
+        ? this.cloneJson(sidecar.baseline)
+        : this.cloneJson(settings[key]);
+      const appliedValue = merge(settings[key], value);
 
-      settings.permission = appliedPermission;
+      settings[key] = appliedValue;
       this.addOwnedSchema(settings);
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
@@ -526,74 +553,313 @@ export class SettingsJsonMcpTracker {
         await this.writeGitignore(settingsPath);
       }
 
-      this.permissionLeases.set(settingsPath, {
-        normalizedPolicy,
-        owners: new Set([workflowKey]),
-        baselineHadPermission,
-        baselinePermission,
-        appliedPermission: this.cloneJson(appliedPermission),
-      });
+      const lease: ValueLease = {
+        normalizedRequestedValue,
+        owners: new Map(
+          (sidecar?.owners ?? []).map((owner) => [
+            this.getOwnerId(owner.workflowKey, owner.pid),
+            owner.workflowKey,
+          ])
+        ),
+        baselineHadKey,
+        baselineValue,
+        appliedValue: this.cloneJson(appliedValue),
+      };
+      lease.owners.set(ownerId, workflowKey);
+      this.valueLeases.set(leaseKey, lease);
       Log.debug(
-        `🔐 ${this.toolName} permission policy applied to ${settingsPath}`
+        `🔐 ${this.toolName} ${key} value lease applied to ${settingsPath}`
       );
+      await this.writeLeaseSidecar(settingsPath, key, lease);
       return "acquired";
     });
   }
 
   /**
-   * Release one workflow's permission lease and restore the original permission
-   * value after the final owner exits. User edits made while the workflow was
-   * running are preserved instead of being overwritten.
+   * Release one workflow's value lease and restore the original value after the
+   * final owner exits. User edits made while the workflow was running are
+   * preserved instead of being overwritten.
    */
-  async unregisterPermissionPolicy(
+  async unregisterValueLease(
     workflowKey: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    key: string
   ): Promise<void> {
     const settingsPath = this.projectConfigPath(workspaceRoot);
 
-    await this.withLock(async () => {
-      const lease = this.permissionLeases.get(settingsPath);
-      if (!lease || !lease.owners.delete(workflowKey)) {
-        return;
-      }
-      if (lease.owners.size > 0) {
-        return;
-      }
+    try {
+      await this.withLock(async () => {
+        await this.pruneLeaseOwnersLocked(settingsPath, key);
+        const leaseKey = this.getLeaseKey(settingsPath, key);
+        const lease = this.valueLeases.get(leaseKey);
+        if (!lease) {
+          const sidecar = await this.readLeaseSidecar(settingsPath, key);
+          if (!sidecar) {
+            return;
+          }
+          const remainingOwners = sidecar.owners.filter(
+            (owner) =>
+              this.getOwnerId(owner.workflowKey, owner.pid) !==
+              this.getOwnerId(workflowKey)
+          );
+          if (remainingOwners.length > 0) {
+            await writeFileAtomic(
+              this.getLeaseSidecarPath(settingsPath, key),
+              JSON.stringify({ ...sidecar, owners: remainingOwners }, null, 2)
+            );
+            return;
+          }
 
-      this.permissionLeases.delete(settingsPath);
-      await this.restorePermissionLease(settingsPath, lease);
-    });
+          const settings = await this.readProjectConfig(settingsPath);
+          if (sidecar.baselineHadKey) {
+            settings[key] = this.cloneJson(sidecar.baseline);
+          } else {
+            delete settings[key];
+          }
+          await this.writeOrRemoveManagedConfig(settingsPath, settings);
+          await this.deleteLeaseSidecar(settingsPath, key);
+          return;
+        }
+
+        lease.owners.delete(this.getOwnerId(workflowKey));
+        if (lease.owners.size > 0) {
+          await this.writeLeaseSidecar(settingsPath, key, lease);
+          return;
+        }
+
+        this.valueLeases.delete(leaseKey);
+        await this.deleteLeaseSidecar(settingsPath, key);
+        await this.restoreValueLease(settingsPath, key, lease);
+      });
+    } catch (error) {
+      Log.warn(
+        `${this.toolName} ${key} lease cleanup failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
 
     if (
       this.refCounts.size === 0 &&
-      !this.hasPermissionLeaseForWorkspace(workspaceRoot) &&
+      !this.hasValueLeaseForWorkspace(workspaceRoot) &&
       !this.baselineProjectSettingsFileExisted
     ) {
       await this.deleteCtrlYokeGitignore();
     }
   }
 
-  private async restorePermissionLease(
+  /** Apply the existing permission behavior through the generic lease. */
+  async registerPermissionPolicy(
+    workflowKey: string,
+    workspaceRoot: string,
+    policy: SettingsJsonPermissionPolicy
+  ): Promise<"acquired" | "shared"> {
+    return this.registerValueLease(
+      workflowKey,
+      workspaceRoot,
+      "permission",
+      policy,
+      (existing, requested) =>
+        this.mergePermissionPolicy(
+          existing,
+          requested as SettingsJsonPermissionPolicy
+        )
+    );
+  }
+
+  /** Release the permission policy through the generic lease. */
+  async unregisterPermissionPolicy(
+    workflowKey: string,
+    workspaceRoot: string
+  ): Promise<void> {
+    await this.unregisterValueLease(workflowKey, workspaceRoot, "permission");
+  }
+
+  /** Prune dead owners and restore the baseline when the lease is orphaned. */
+  async pruneDeadOwners(workspaceRoot: string, key: string): Promise<void> {
+    const settingsPath = this.projectConfigPath(workspaceRoot);
+    try {
+      await this.withLock(async () => {
+        await this.pruneLeaseOwnersLocked(settingsPath, key);
+      });
+    } catch (error) {
+      Log.warn(
+        `${this.toolName} ${key} dead-owner cleanup failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  private getLeaseKey(settingsPath: string, key: string): string {
+    return `${settingsPath}::${key}`;
+  }
+
+  private getOwnerId(workflowKey: string, pid = process.pid): string {
+    return `${pid}:${workflowKey}`;
+  }
+
+  private getLeaseSidecarPath(settingsPath: string, key: string): string {
+    const sanitizedKey = key.replace(/[^a-zA-Z0-9._-]/g, "_");
+    return path.join(
+      path.dirname(settingsPath),
+      `.ctrlyoke-lease-${sanitizedKey}.json`
+    );
+  }
+
+  private isProcessAlive(pid: number): boolean {
+    if (pid === process.pid) {
+      return true;
+    }
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "EPERM";
+    }
+  }
+
+  private async readLeaseSidecar(
     settingsPath: string,
-    lease: PermissionLease
+    key: string
+  ): Promise<LeaseSidecar | undefined> {
+    try {
+      const parsed = JSON.parse(
+        await fs.readFile(this.getLeaseSidecarPath(settingsPath, key), "utf-8")
+      ) as Partial<LeaseSidecar>;
+      if (
+        typeof parsed.baselineHadKey !== "boolean" ||
+        !Array.isArray(parsed.owners)
+      ) {
+        throw new Error("invalid lease sidecar shape");
+      }
+      return {
+        baseline: parsed.baseline,
+        baselineHadKey: parsed.baselineHadKey,
+        owners: parsed.owners.filter(
+          (owner): owner is LeaseOwnerState =>
+            !!owner &&
+            typeof owner === "object" &&
+            typeof owner.pid === "number" &&
+            typeof owner.workflowKey === "string" &&
+            typeof owner.ts === "number"
+        ),
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return undefined;
+      }
+      throw new Error(
+        `Cannot safely read lease state for ${settingsPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  private async writeLeaseSidecar(
+    settingsPath: string,
+    key: string,
+    lease: ValueLease
+  ): Promise<void> {
+    const sidecar: LeaseSidecar = {
+      baseline: lease.baselineHadKey
+        ? this.cloneJson(lease.baselineValue)
+        : null,
+      baselineHadKey: lease.baselineHadKey,
+      owners: [...lease.owners.entries()].map(([ownerId, workflowKey]) => {
+        const separator = ownerId.indexOf(":");
+        return {
+          pid: Number(ownerId.slice(0, separator)),
+          workflowKey,
+          ts: Date.now(),
+        };
+      }),
+    };
+    const sidecarPath = this.getLeaseSidecarPath(settingsPath, key);
+    await fs.mkdir(path.dirname(sidecarPath), { recursive: true });
+    await writeFileAtomic(sidecarPath, JSON.stringify(sidecar, null, 2));
+  }
+
+  private async deleteLeaseSidecar(
+    settingsPath: string,
+    key: string
+  ): Promise<void> {
+    await fs
+      .unlink(this.getLeaseSidecarPath(settingsPath, key))
+      .catch(() => {});
+  }
+
+  private async pruneLeaseOwnersLocked(
+    settingsPath: string,
+    key: string
+  ): Promise<void> {
+    const sidecar = await this.readLeaseSidecar(settingsPath, key);
+    if (!sidecar) {
+      return;
+    }
+
+    const liveOwners = sidecar.owners.filter((owner) =>
+      this.isProcessAlive(owner.pid)
+    );
+    if (liveOwners.length > 0) {
+      const lease = this.valueLeases.get(this.getLeaseKey(settingsPath, key));
+      if (lease) {
+        lease.owners = new Map(
+          liveOwners.map((owner) => [
+            this.getOwnerId(owner.workflowKey, owner.pid),
+            owner.workflowKey,
+          ])
+        );
+        await this.writeLeaseSidecar(settingsPath, key, lease);
+      } else if (liveOwners.length !== sidecar.owners.length) {
+        await writeFileAtomic(
+          this.getLeaseSidecarPath(settingsPath, key),
+          JSON.stringify({ ...sidecar, owners: liveOwners }, null, 2)
+        );
+      }
+      return;
+    }
+
+    const leaseKey = this.getLeaseKey(settingsPath, key);
+    const activeLease = this.valueLeases.get(leaseKey);
+    if (activeLease) {
+      this.valueLeases.delete(leaseKey);
+      await this.restoreValueLease(settingsPath, key, activeLease);
+    } else {
+      const settings = await this.readProjectConfig(settingsPath);
+      if (sidecar.baselineHadKey) {
+        settings[key] = this.cloneJson(sidecar.baseline);
+      } else {
+        delete settings[key];
+      }
+      await this.writeOrRemoveManagedConfig(settingsPath, settings);
+    }
+    await this.deleteLeaseSidecar(settingsPath, key);
+  }
+
+  private async restoreValueLease(
+    settingsPath: string,
+    key: string,
+    lease: ValueLease
   ): Promise<void> {
     const settings = await this.readProjectConfig(settingsPath);
-    if (!this.jsonEquals(settings.permission, lease.appliedPermission)) {
+    if (!this.jsonEquals(settings[key], lease.appliedValue)) {
       Log.warn(
-        `${this.toolName} permission cleanup preserved user-modified permission rules in ${settingsPath}`
+        key === "permission"
+          ? `${this.toolName} permission cleanup preserved user-modified permission rules in ${settingsPath}`
+          : `${this.toolName} ${key} cleanup preserved user-modified value in ${settingsPath}`
       );
       return;
     }
 
-    if (lease.baselineHadPermission) {
-      settings.permission = this.cloneJson(lease.baselinePermission);
+    if (lease.baselineHadKey) {
+      settings[key] = this.cloneJson(lease.baselineValue);
     } else {
-      delete settings.permission;
+      delete settings[key];
     }
     await this.writeOrRemoveManagedConfig(settingsPath, settings);
-    Log.debug(
-      `🧹 ${this.toolName} permission policy restored in ${settingsPath}`
-    );
+    Log.debug(`🧹 ${this.toolName} ${key} value restored in ${settingsPath}`);
   }
 
   private mergePermissionPolicy(
@@ -632,8 +898,11 @@ export class SettingsJsonMcpTracker {
     return merged;
   }
 
-  private hasPermissionLeaseForWorkspace(workspaceRoot: string): boolean {
-    return this.permissionLeases.has(this.projectConfigPath(workspaceRoot));
+  private hasValueLeaseForWorkspace(workspaceRoot: string): boolean {
+    const settingsPath = this.projectConfigPath(workspaceRoot);
+    return [...this.valueLeases.keys()].some((leaseKey) =>
+      leaseKey.startsWith(`${settingsPath}::`)
+    );
   }
 
   private async readProjectConfig(
@@ -667,7 +936,10 @@ export class SettingsJsonMcpTracker {
     settings: Record<string, unknown>
   ): Promise<void> {
     const hasManagedState =
-      this.refCounts.size > 0 || this.permissionLeases.has(settingsPath);
+      this.refCounts.size > 0 ||
+      [...this.valueLeases.keys()].some((leaseKey) =>
+        leaseKey.startsWith(`${settingsPath}::`)
+      );
     if (
       !hasManagedState &&
       this.schemaUrl &&
