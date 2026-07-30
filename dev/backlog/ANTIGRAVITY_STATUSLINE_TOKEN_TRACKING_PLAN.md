@@ -1,6 +1,6 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Step 3 implemented; steps 4–7 remain queued (see "Implementation Steps"
+**Status:** Step 4 implemented; steps 5–7 remain queued (see "Implementation Steps"
 at the bottom)
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
@@ -522,7 +522,7 @@ Never `npm run test:harness` (see `test.instructions.md` — it drives live AI C
 3. **[x] Settings toggle** (`CtrlYokeSettings.ts`, config service, `package.json`
    contributions, dashboard settings UI). Key: `permissions.antigravityStatusLineTracking`;
    accessor: `ConfigurationUtils.shouldTrackAntigravityStatusLine()`.
-4. **Provider wiring.** Token generation in `buildCliArgs()`,
+4. **[x] Provider wiring.** Token generation in `buildCliArgs()`,
    `getHeadlessSpawnEnv()`/`getInteractiveSpawnEnv()`, statusline lease register/
    unregister, `getAdditionalCleanupFilePaths()`, and the `TempFileManager` orphan-sweep
    prefix.

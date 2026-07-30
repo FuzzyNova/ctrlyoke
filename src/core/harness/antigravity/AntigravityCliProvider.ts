@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -16,8 +16,12 @@ import type {
   WorkflowStep,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { Log } from "../../../utils/Log";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -51,6 +55,18 @@ export class AntigravityCliProvider implements ICliProvider {
     }
   );
 
+  /**
+   * Statusline settings are global to the Antigravity installation, unlike
+   * MCP settings which are workspace-scoped. Keep a separate tracker so the
+   * two leases cannot interfere with each other's files or baselines.
+   */
+  private static readonly statusLineTracker =
+    SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
+      // Deliberately ignore workspaceRoot: agy reads this file globally.
+      projectConfigPath: () =>
+        path.join(os.homedir(), ".gemini", "antigravity-cli", "settings.json"),
+    });
+
   readonly config: HarnessConfig = {
     name: "agy",
     harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -67,6 +83,17 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityToolPermissionMapper();
   readonly logParser = new AntigravityLogParser();
   readonly headlessSource = "log" as const;
+
+  /** Fresh correlation token for the prompt currently being spawned. */
+  private statusLineToken: string | undefined;
+  /** Snapshot files created by every prompt in this workflow. */
+  private readonly statusLineSnapshotPaths = new Set<string>();
+  /** Workspace temp directory for the current statusline invocation. */
+  private statusLineDirectory: string | undefined;
+  /** Whether the current prompt successfully acquired the statusline lease. */
+  private statusLineEnabledForPrompt = false;
+  /** Baseline user command forwarded by the wrapper, when one existed. */
+  private statusLineForwardCommand: string | undefined;
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
     // Injected turns do not rebuild CLI arguments or hook registration, and
@@ -89,6 +116,22 @@ export class AntigravityCliProvider implements ICliProvider {
     },
     workspaceRoots?: readonly string[]
   ): Promise<string[]> {
+    this.statusLineToken = randomUUID();
+    this.statusLineDirectory = undefined;
+    this.statusLineEnabledForPrompt = false;
+    this.statusLineForwardCommand = undefined;
+
+    if (
+      workspaceRoot &&
+      ConfigurationUtils.shouldTrackAntigravityStatusLine()
+    ) {
+      await this.registerStatusLine(
+        extensionPath,
+        workspaceRoot,
+        workflowContext?.workingFilePath ?? workspaceRoot
+      );
+    }
+
     const args: string[] = [];
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedResumeSession =
@@ -147,6 +190,17 @@ export class AntigravityCliProvider implements ICliProvider {
 
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
     return ["--prompt-interactive", promptText, ...baseArgs];
+  }
+
+  getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
+    return this.buildStatusLineSpawnEnv();
+  }
+
+  getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
+    return {
+      ...CliProviderUtils.buildProcessEnv(),
+      ...this.buildStatusLineSpawnEnv(),
+    };
   }
 
   formatFileReference(relativeFilePath: string): string {
@@ -262,6 +316,14 @@ export class AntigravityCliProvider implements ICliProvider {
       workspaceRoot
     );
 
+    // Release the global statusline value lease. The tracker restores the
+    // user's baseline only after the last workflow releases it.
+    await AntigravityCliProvider.statusLineTracker.unregisterValueLease(
+      workflowKey,
+      workspaceRoot,
+      "statusLine"
+    );
+
     // Remove this workflow's hook group from the global hooks.json.
     const groupName = this.getHookGroupName(workflowKey);
     const hooksPath = this.getGlobalHooksPath();
@@ -274,6 +336,10 @@ export class AntigravityCliProvider implements ICliProvider {
       delete current[groupName];
       await this.writeHooksFile(current);
     });
+  }
+
+  getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
+    return [...this.statusLineSnapshotPaths];
   }
 
   async checkAvailability(): Promise<boolean> {
@@ -373,6 +439,87 @@ export class AntigravityCliProvider implements ICliProvider {
     // MCP config is merged into .agents/mcp_config.json (auto-discovered, not a
     // CLI arg). Cleanup is handled by cleanupWorkspaceArtifacts via the tracker.
     return null;
+  }
+
+  private async registerStatusLine(
+    extensionPath: string,
+    workspaceRoot: string,
+    workflowKey: string
+  ): Promise<void> {
+    const scriptPath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-antigravity-statusline.js"
+    );
+    // agy's statusline runner uses the same naive, unquoted whitespace split
+    // as its hook runner. Passing an empty directory and trimming the result
+    // gives the exact `node <script>` command from the wrapper contract.
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      "",
+      false
+    ).trim();
+    const snapshotDirectory = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const snapshotPath = path.join(
+      snapshotDirectory,
+      `agy-statusline-${this.statusLineToken}.json`
+    );
+    this.statusLineSnapshotPaths.add(snapshotPath);
+
+    try {
+      await AntigravityCliProvider.statusLineTracker.registerValueLease(
+        workflowKey,
+        workspaceRoot,
+        "statusLine",
+        { type: "command", command }
+      );
+      const baseline =
+        AntigravityCliProvider.statusLineTracker.getValueLeaseBaseline(
+          workspaceRoot,
+          "statusLine"
+        );
+      this.statusLineForwardCommand = this.extractStatusLineCommand(baseline);
+      this.statusLineDirectory = snapshotDirectory;
+      this.statusLineEnabledForPrompt = true;
+    } catch (error) {
+      // agy treats a broken statusline as non-fatal. Match that behavior so a
+      // settings-file problem never prevents the harness itself from running.
+      Log.warn(`Failed to register Antigravity statusline: ${error}`);
+    }
+  }
+
+  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
+    if (
+      !this.statusLineEnabledForPrompt ||
+      !this.statusLineToken ||
+      !this.statusLineDirectory
+    ) {
+      return {};
+    }
+
+    const env: NodeJS.ProcessEnv = {
+      CTRLYOKE_AGY_STATUSLINE_TOKEN: this.statusLineToken,
+      CTRLYOKE_AGY_STATUSLINE_DIR: this.statusLineDirectory,
+    };
+    if (this.statusLineForwardCommand) {
+      env.CTRLYOKE_AGY_STATUSLINE_FORWARD = this.statusLineForwardCommand;
+    }
+    return env;
+  }
+
+  private extractStatusLineCommand(value: unknown): string | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+    const command = (value as { command?: unknown }).command;
+    return typeof command === "string" && command.length > 0
+      ? command
+      : undefined;
   }
 
   private validateAndGetModel(requestedModel?: string): string | undefined {

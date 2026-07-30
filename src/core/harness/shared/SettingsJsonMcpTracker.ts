@@ -691,6 +691,22 @@ export class SettingsJsonMcpTracker {
     }
   }
 
+  /**
+   * Return the value captured before the active lease was applied.
+   *
+   * Providers use this to forward a user's pre-existing configuration while
+   * ctrlyoke temporarily owns the setting. Callers should only use the value
+   * after successfully registering a lease.
+   */
+  getValueLeaseBaseline(workspaceRoot: string, key: string): unknown {
+    const settingsPath = this.projectConfigPath(workspaceRoot);
+    const lease = this.valueLeases.get(this.getLeaseKey(settingsPath, key));
+    if (!lease || !lease.baselineHadKey) {
+      return undefined;
+    }
+    return this.cloneJson(lease.baselineValue);
+  }
+
   private getLeaseKey(settingsPath: string, key: string): string {
     return `${settingsPath}::${key}`;
   }
