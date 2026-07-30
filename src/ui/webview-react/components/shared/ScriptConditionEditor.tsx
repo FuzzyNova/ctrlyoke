@@ -49,6 +49,7 @@ export interface ScriptConditionValue {
   // endCondition-only fields
   maxRetries?: number;
   retryPrompt?: string;
+  passRetryPrompt?: string;
   resumeSessionOnRetry?: boolean;
 }
 
@@ -83,7 +84,9 @@ interface ScriptConditionEditorProps {
  *   - Timeout (half-width)
  *
  * endCondition variant additionally renders:
- *   - Max Retries + Retry Prompt (when either onPass or onFail is "retry")
+ *   - Max Retries (when either onPass or onFail is "retry")
+ *   - Pass Retry Prompt (when onPass is "retry")
+ *   - Retry Prompt (when onFail is "retry")
  *   - Resume Session on Retry checkbox
  *
  * preCondition variant uses "Continue / Skip Prompt / Stop Workflow" for action options.
@@ -105,10 +108,11 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         ? PRE_CONDITION_ACTION_OPTIONS
         : SCRIPT_STEP_ACTION_OPTIONS;
 
-  const hasRetry =
-    variant === "endCondition" &&
-    (v.onPass === CONDITION_ACTIONS.RETRY ||
-      v.onFail === CONDITION_ACTIONS.RETRY);
+  const hasPassRetry =
+    variant === "endCondition" && v.onPass === CONDITION_ACTIONS.RETRY;
+  const hasFailRetry =
+    variant === "endCondition" && v.onFail === CONDITION_ACTIONS.RETRY;
+  const hasRetry = hasPassRetry || hasFailRetry;
 
   // Local string state for text fields — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.
@@ -377,34 +381,67 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       {/* endCondition-only: retry fields (shown when retry is an action) */}
       {variant === "endCondition" && hasRetry && (
         <>
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor={`${idPrefix}-retry-prompt`}
-              className="text-xs font-medium text-foreground"
-            >
-              Retry Prompt
-            </label>
-            <CodeMirrorEditor
-              id={`${idPrefix}-retry-prompt`}
-              value={v.retryPrompt ?? ""}
-              onChange={(retryPrompt) => update({ retryPrompt })}
-              placeholder={
-                "Validation failed: expected {expected} but got {actual} from {compareSource}\n\nPlease fix the issues."
-              }
-              affUri={affUri}
-              dicUri={dicUri}
-              readOnly={disabled}
-              mode="endCondition"
-              surface="input"
-              minHeightClassName="min-h-[96px]"
-              maxHeightClassName="max-h-[220px]"
-              className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
-            />
-            <span className="text-xxs text-description-fg">
-              Type {"{"} for retry placeholders like {"{stderr}"} and{" "}
-              {"{stdout}"}.
-            </span>
-          </div>
+          {hasPassRetry && (
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor={`${idPrefix}-pass-retry-prompt`}
+                className="text-xs font-medium text-foreground"
+              >
+                Pass Retry Prompt
+              </label>
+              <CodeMirrorEditor
+                id={`${idPrefix}-pass-retry-prompt`}
+                value={v.passRetryPrompt ?? ""}
+                onChange={(passRetryPrompt) => update({ passRetryPrompt })}
+                placeholder={
+                  "Validation passed, but the condition still holds.\n\nContinue working until it fails."
+                }
+                affUri={affUri}
+                dicUri={dicUri}
+                readOnly={disabled}
+                mode="endCondition"
+                surface="input"
+                minHeightClassName="min-h-[96px]"
+                maxHeightClassName="max-h-[220px]"
+                className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
+              />
+              <span className="text-xxs text-description-fg">
+                Type {"{"} for retry placeholders like {"{actual}"} and{" "}
+                {"{expected}"}.
+              </span>
+            </div>
+          )}
+
+          {hasFailRetry && (
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor={`${idPrefix}-retry-prompt`}
+                className="text-xs font-medium text-foreground"
+              >
+                Retry Prompt
+              </label>
+              <CodeMirrorEditor
+                id={`${idPrefix}-retry-prompt`}
+                value={v.retryPrompt ?? ""}
+                onChange={(retryPrompt) => update({ retryPrompt })}
+                placeholder={
+                  "Validation failed: expected {expected} but got {actual} from {compareSource}\n\nPlease fix the issues."
+                }
+                affUri={affUri}
+                dicUri={dicUri}
+                readOnly={disabled}
+                mode="endCondition"
+                surface="input"
+                minHeightClassName="min-h-[96px]"
+                maxHeightClassName="max-h-[220px]"
+                className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
+              />
+              <span className="text-xxs text-description-fg">
+                Type {"{"} for retry placeholders like {"{stderr}"} and{" "}
+                {"{stdout}"}.
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <input

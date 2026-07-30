@@ -137,6 +137,7 @@ export interface WorkflowProperties {
     timeout?: number;
     maxRetries?: number;
     retryPrompt?: string;
+    passRetryPrompt?: string;
     onPass?: string;
     onFail?: string;
   } | null;

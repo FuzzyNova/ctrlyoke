@@ -45,6 +45,7 @@ export interface EndConditionConfig {
   timeout?: number;
   maxRetries?: number;
   retryPrompt?: string;
+  passRetryPrompt?: string;
   resumeSessionOnRetry?: boolean;
   onPass?: string;
   onFail?: string;
@@ -98,6 +99,7 @@ export const END_CONDITION_DEFAULTS: EndConditionConfig = {
   returns: "",
   maxRetries: 0,
   retryPrompt: "",
+  passRetryPrompt: "",
 };
 
 function normalizePromptErrorBehavior(

@@ -38,6 +38,44 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
 }));
 
 describe("ScriptConditionEditor", () => {
+  it("shows and edits passRetryPrompt only for pass retries", () => {
+    const onChange = vi.fn();
+
+    render(
+      <ScriptConditionEditor
+        variant="endCondition"
+        value={{
+          script: "npm test",
+          returns: "true",
+          onPass: CONDITION_ACTIONS.RETRY,
+          passRetryPrompt: "Keep strengthening the test",
+        }}
+        onChange={onChange}
+        idPrefix="test-condition"
+      />
+    );
+
+    const editor = screen.getByLabelText("Pass Retry Prompt");
+    expect(editor).toHaveAttribute("data-mode", "endCondition");
+    expect(editor).toHaveAttribute("data-surface", "input");
+    expect(editor).toHaveValue("Keep strengthening the test");
+    expect(editor).toHaveAttribute(
+      "placeholder",
+      expect.stringContaining("condition still holds")
+    );
+    expect(screen.queryByLabelText("Retry Prompt")).not.toBeInTheDocument();
+
+    fireEvent.change(editor, {
+      target: { value: "Continue until the condition fails" },
+    });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passRetryPrompt: "Continue until the condition fails",
+      })
+    );
+  });
+
   it("edits retryPrompt through the end condition CodeMirror mode", () => {
     const onChange = vi.fn();
 
