@@ -8,10 +8,13 @@ import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryMana
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
+import { clearRunSummaryCache } from "../../core/orchestration/RunSummaryCache";
 import {
   EXECUTION_STATES,
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
+  HARNESS_IDS,
   OUTPUT_HISTORY_KINDS,
   SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
@@ -24,7 +27,11 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import type { WorkflowKey } from "../../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkflowStep,
+} from "../../types/CtrlYokeTypes";
 
 let nextTestRunOrdinal = 0;
 
@@ -71,7 +78,7 @@ async function initAdditionalRun(
   workflowKey: WorkflowKey,
   runId: number,
   startedAt: number
-): Promise<void> {
+): Promise<RunRef> {
   const runRef = WorkflowPaths.formatRunRef(startedAt + nextTestRunOrdinal++);
   const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
   await recorder.initializeRunAt(
@@ -81,6 +88,7 @@ async function initAdditionalRun(
     startedAt,
     EXECUTION_STATES.COMPLETED
   );
+  return runRef;
 }
 
 suite("OutputHistoryManager timeline-backed storage", () => {
@@ -96,7 +104,93 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
   teardown(async () => {
     await manager.flushPendingIndexRefresh();
+    clearRunSummaryCache();
     await fs.rm(tempWorkspace, { recursive: true, force: true });
+  });
+
+  /**
+   * Client A and client B both view a lineage; B edits one run. The summary
+   * listing is cached per run, so the edit must refresh that run and leave the
+   * other runs' cached records untouched — a lineage-wide invalidation would be
+   * correct but would throw away the whole point.
+   *
+   * Reference identity is the assertion because it is the only thing that can
+   * distinguish "re-read and produced an equal value" from "served from cache".
+   */
+  test("an edit to one run refreshes only that run's cached summary", async () => {
+    const { workflowKey, runRef: oldest } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "cache-granularity"
+    );
+    const base = Date.now() + 100_000;
+    const middle = await initAdditionalRun(
+      recorder,
+      tempWorkspace,
+      workflowKey,
+      2,
+      base
+    );
+    const newest = await initAdditionalRun(
+      recorder,
+      tempWorkspace,
+      workflowKey,
+      3,
+      base + 100_000
+    );
+
+    const writeDefinition = async (runRef: RunRef, harness: string) =>
+      fs.writeFile(
+        WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
+        JSON.stringify(
+          { definitionRevision: 1, steps: [{ prompt: "step", harness }] },
+          null,
+          2
+        )
+      );
+    await writeDefinition(oldest, HARNESS_IDS.COPILOT_CLI);
+    await writeDefinition(middle, HARNESS_IDS.CLAUDE_CLI);
+    await writeDefinition(newest, HARNESS_IDS.CODEX_CLI);
+
+    const before = await manager.getRunSummaries(workflowKey);
+    assert.deepStrictEqual(
+      before.map((summary) => summary.primaryHarness),
+      [HARNESS_IDS.CODEX_CLI, HARNESS_IDS.CLAUDE_CLI, HARNESS_IDS.COPILOT_CLI],
+      "newest first, one summary per run"
+    );
+
+    const descriptor = await new WorkflowLineageRepository().readDescriptor(
+      tempWorkspace,
+      workflowKey
+    );
+    await WorkingFileManager.insertStepAtRun(
+      tempWorkspace,
+      workflowKey,
+      middle,
+      0,
+      { prompt: "appended", harness: HARNESS_IDS.QWEN_CLI } as WorkflowStep,
+      1,
+      descriptor.revision
+    );
+
+    const after = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(
+      after[1].hasMixedHarnesses,
+      true,
+      "the edited run must disclose the harness the appended step added"
+    );
+    assert.notStrictEqual(
+      after[1],
+      before[1],
+      "the edited run must have been re-read"
+    );
+    assert.strictEqual(
+      after[0],
+      before[0],
+      "a run nobody touched must still be served from cache"
+    );
+    assert.strictEqual(after[2], before[2]);
   });
 
   test("initializes new runs as manifest plus events.jsonl storage", async () => {

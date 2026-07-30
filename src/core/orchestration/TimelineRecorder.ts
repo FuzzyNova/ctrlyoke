@@ -13,6 +13,7 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import type { ExecutionState } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { invalidateRunSummaryFor } from "./RunSummaryCache";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -95,11 +96,18 @@ export class TimelineRecorder {
     manifestPath: string,
     manifest: WorkflowRunManifest
   ): Promise<void> {
-    await fs.promises.writeFile(
-      manifestPath,
-      JSON.stringify(manifest, null, 2),
-      "utf8"
-    );
+    try {
+      await fs.promises.writeFile(
+        manifestPath,
+        JSON.stringify(manifest, null, 2),
+        "utf8"
+      );
+    } finally {
+      // The single writer of the manifest half of a run summary. In `finally`
+      // because this is a non-atomic write: a failure can still have changed
+      // the file, so the entry must go either way.
+      invalidateRunSummaryFor(manifestPath);
+    }
   }
 
   async readEvents(manifestPath: string): Promise<WorkflowTimelineEvent[]> {

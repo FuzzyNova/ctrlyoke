@@ -70,6 +70,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
+import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -4546,6 +4547,9 @@ export class WorkflowOrchestrator {
 
     this.statusBarManager.dispose();
     this.endConditionEvaluatorForCommands.dispose();
+    // The run-summary cache is module-level, so nothing else drops it when the
+    // host tears down (workspace close, extension deactivate).
+    clearRunSummaryCache();
     Log.debug("WorkflowOrchestrator disposed");
   }
 

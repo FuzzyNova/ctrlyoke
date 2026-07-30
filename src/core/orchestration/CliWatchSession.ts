@@ -11,6 +11,7 @@ import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { invalidateRunSummaryFor } from "./RunSummaryCache";
 
 /**
  * CliWatchSession
@@ -123,6 +124,12 @@ export class CliWatchSession implements vscode.Disposable {
   }
 
   private async handleWorkingFileChange(retried = false): Promise<void> {
+    // Mechanism 3 of the run-summary cache: the CLI binary is a separate
+    // process, so its writes cannot reach the write-through invalidation, and
+    // it is the one out-of-process writer that writes in a tight loop — fast
+    // enough that two writes can share a timestamp and defeat stamp validation.
+    // This watcher already exists for exactly this file, so it is the signal.
+    invalidateRunSummaryFor(this.workingFilePath);
     try {
       const content = await fs.promises.readFile(this.workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as {

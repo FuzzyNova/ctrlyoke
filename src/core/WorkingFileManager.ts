@@ -19,6 +19,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
+import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   buildDefinitionSnapshot,
@@ -75,6 +76,13 @@ async function writeWorkingFileAtomicTo(
       throw new Error(
         `Failed to write working file: ${getErrorMessage(error)}`
       );
+    } finally {
+      // This function is the single writer of every run/draft working file, so
+      // it is the one place that can keep the run-summary cache honest for
+      // in-process writes. In `finally` because a write whose outcome is
+      // ambiguous must drop the entry, not keep it. Draft/staging paths are
+      // not cached and no-op here.
+      invalidateRunSummaryFor(workingFilePath);
     }
   };
 
@@ -111,6 +119,11 @@ async function restoreSnapshotAtomic(
     throw new Error(
       `Failed to restore pending rewind snapshot: ${getErrorMessage(error)}`
     );
+  } finally {
+    // The second writer of a run's working file — this one replaces it with
+    // recovery bytes rather than reserializing, so it bypasses
+    // `writeWorkingFileAtomicTo` and needs its own invalidation.
+    invalidateRunSummaryFor(workingFilePath);
   }
 }
 

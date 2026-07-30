@@ -36,6 +36,11 @@ import {
   type RunSummary,
 } from "../../types/WorkflowTimelineTypes";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import {
+  lookupRunSummary,
+  stampRunFiles,
+  storeRunSummary,
+} from "./RunSummaryCache";
 
 /** The definitionRevision that produced an attempt, plus the snapshot to commit before its first output. */
 export interface DefinitionRevisionContext {
@@ -75,9 +80,10 @@ const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
 
 /**
  * One run's summary plus the manifest's own lifecycle state, which the resolved
- * summary may have overridden with the working file's. Internal to this class.
+ * summary may have overridden with the working file's. Exported only so
+ * `RunSummaryCache` can type its entries; nothing else should consume it.
  */
-interface RunSummaryRecord {
+export interface RunSummaryRecord {
   summary: RunSummary;
   manifestExecutionState: ExecutionState;
 }
@@ -832,6 +838,26 @@ export class OutputHistoryManager {
     runRef: RunRef
   ): Promise<RunSummaryRecord | null> {
     const historyFilePath = this.getHistoryFilePath(workflowKey, runRef);
+    const runFilePath = WorkflowPaths.runFilePath(
+      this._workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    const runDirectoryPath = WorkflowPaths.runDir(
+      this._workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+
+    // Stamp before reading — see `stampRunFiles`. The executing run stamps
+    // differently on every read and so is a permanent miss, which is correct:
+    // the cache is here for the runs that have stopped changing.
+    const stamp = await stampRunFiles(historyFilePath, runFilePath);
+    const cached = lookupRunSummary(runDirectoryPath, stamp);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const manifest =
         await this.timelineRecorder.readManifest(historyFilePath);
@@ -842,9 +868,9 @@ export class OutputHistoryManager {
         primaryModel,
         hasMixedHarnesses,
         hasMixedModels,
-      } = await this.readRunFileSummaryFields(workflowKey, runRef);
+      } = await this.readRunFileSummaryFields(runFilePath);
 
-      return {
+      const record: RunSummaryRecord = {
         manifestExecutionState: manifest.executionState,
         summary: {
           workflowKey,
@@ -870,7 +896,13 @@ export class OutputHistoryManager {
           hasMixedModels,
         },
       };
+
+      storeRunSummary(runDirectoryPath, stamp, record);
+      return record;
     } catch (error) {
+      // Deliberately not cached: an unreadable manifest means a recovery
+      // candidate, and caching the failure would keep it excluded from the
+      // listing after a recovery pass repaired it.
       Log.warn(
         `[OutputHistoryManager] getRunSummaries: skipping unreadable run ${workflowKey}/${runRef}:`,
         error
@@ -892,10 +924,7 @@ export class OutputHistoryManager {
    * Also returns the run's own lifecycle state, which `readRunSummary` prefers
    * over the manifest's copy — see the divergence note there.
    */
-  private async readRunFileSummaryFields(
-    workflowKey: WorkflowKey,
-    runRef: RunRef
-  ): Promise<{
+  private async readRunFileSummaryFields(runFilePath: string): Promise<{
     executionState?: ExecutionState;
     executionEndTime?: number;
     primaryHarness?: string;
@@ -903,12 +932,6 @@ export class OutputHistoryManager {
     hasMixedHarnesses: boolean;
     hasMixedModels: boolean;
   }> {
-    const runFilePath = WorkflowPaths.runFilePath(
-      this._workspaceFolderPath,
-      workflowKey,
-      runRef
-    );
-
     try {
       const content = await fs.promises.readFile(runFilePath, "utf8");
       const workingFile = JSON.parse(content) as {
