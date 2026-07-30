@@ -48,4 +48,59 @@ suite("SettingsJsonMcpTracker", () => {
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     assert.deepStrictEqual(settings, { theme: "dark" });
   });
+
+  test("shares identical permission policies and rejects conflicting owners", async () => {
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    const policy = {
+      "*": "ask" as const,
+      edit: "allow" as const,
+    };
+
+    assert.strictEqual(
+      await tracker.registerPermissionPolicy("wf-1", tmpDir, policy),
+      "acquired"
+    );
+    assert.strictEqual(
+      await tracker.registerPermissionPolicy("wf-2", tmpDir, policy),
+      "shared"
+    );
+    await assert.rejects(
+      tracker.registerPermissionPolicy("wf-3", tmpDir, {
+        "*": "allow",
+      }),
+      /permission policy conflict/
+    );
+
+    await tracker.unregisterPermissionPolicy("wf-1", tmpDir);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).permission,
+      policy
+    );
+
+    await tracker.unregisterPermissionPolicy("wf-2", tmpDir);
+    await assert.rejects(fs.access(settingsPath), /ENOENT/);
+  });
+
+  test("preserves permission edits made while a lease is active", async () => {
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    await tracker.registerPermissionPolicy("wf-1", tmpDir, {
+      "*": "ask",
+      edit: "allow",
+    });
+
+    const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
+    settings.permission.read = "deny";
+    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+
+    await tracker.unregisterPermissionPolicy("wf-1", tmpDir);
+
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).permission,
+      {
+        "*": "ask",
+        edit: "allow",
+        read: "deny",
+      }
+    );
+  });
 });

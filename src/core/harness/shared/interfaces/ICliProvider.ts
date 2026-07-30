@@ -299,6 +299,19 @@ export interface ICliProvider {
   ): string[];
 
   /**
+   * Apply permission state that must exist before the harness process starts.
+   *
+   * Most harnesses express permissions through CLI arguments and omit this
+   * hook. Config-driven harnesses use it for an ownership-aware workspace-file
+   * mutation after server-level denied tools have been merged.
+   */
+  prepareToolPermissions?(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void>;
+
+  /**
    * Set up ctrlyoke notification hooks for interactive mode completion detection.
    * Called only in interactive mode (when workspaceRoot is defined).
    * Returns additional CLI args to append to baseArgs (e.g. ["--settings", path]).

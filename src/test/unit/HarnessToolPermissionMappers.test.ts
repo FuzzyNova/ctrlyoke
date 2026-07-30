@@ -803,8 +803,14 @@ suite("HarnessToolPermissionMappers", () => {
         );
         const toolsIdx = mixedArgs.indexOf("--allowed-tools");
         const toolsArg = mixedArgs[toolsIdx + 1];
-        assert.ok(!toolsArg.includes("Delete"), "no phantom 'Delete' specifier");
-        assert.ok(toolsArg.includes("WriteFile"), "other patterns still convert");
+        assert.ok(
+          !toolsArg.includes("Delete"),
+          "no phantom 'Delete' specifier"
+        );
+        assert.ok(
+          toolsArg.includes("WriteFile"),
+          "other patterns still convert"
+        );
       });
 
       test("dangerouslyAllowAll does not include approval-mode or tool lists", () => {
@@ -917,6 +923,55 @@ suite("HarnessToolPermissionMappers", () => {
       });
     });
 
+    suite("buildPermissionPolicy", () => {
+      test("none and dangerouslyAllowAll do not mutate opencode.json", () => {
+        assert.strictEqual(
+          mapper.buildPermissionPolicy(cfg(PERMISSION_MODES.NONE)),
+          undefined
+        );
+        assert.strictEqual(
+          mapper.buildPermissionPolicy(
+            cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
+          ),
+          undefined
+        );
+      });
+
+      test("allowAll allows by default and applies deny overrides", () => {
+        assert.deepStrictEqual(
+          mapper.buildPermissionPolicy(
+            cfg(PERMISSION_MODES.ALLOW_ALL, ["write"], ["write", "shell(rm:*)"])
+          ),
+          {
+            "*": "allow",
+            edit: "deny",
+            bash: { "rm *": "deny" },
+          }
+        );
+      });
+
+      test("custom asks by default, translates tools, and applies deny rules last", () => {
+        assert.deepStrictEqual(
+          mapper.buildPermissionPolicy(
+            cfg(
+              PERMISSION_MODES.CUSTOM,
+              ["write", "shell(git:*)", "shell(rm:*)"],
+              ["shell(rm:*)", "web_search"]
+            )
+          ),
+          {
+            "*": "ask",
+            edit: "allow",
+            bash: {
+              "git *": "allow",
+              "rm *": "deny",
+            },
+            websearch: "deny",
+          }
+        );
+      });
+    });
+
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true", () => {
         assert.strictEqual(
@@ -934,26 +989,26 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("custom → true", () => {
+      test("custom → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM)),
-          true
+          false
         );
       });
 
-      test("custom with tools → true", () => {
+      test("custom with tools → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
-          true
+          false
         );
       });
 
-      test("none → true", () => {
+      test("none → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
-          true
+          false
         );
       });
     });
@@ -1014,14 +1069,14 @@ suite("HarnessToolPermissionMappers", () => {
       }
     });
 
-    test("custom mode with deny list only grants full permissions for OpenCode", () => {
+    test("custom mode with deny list is limited for every mapper", () => {
       for (const [name, mapper] of Object.entries(mappers)) {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, [], ["write"])
           ),
-          name === "opencode",
-          `${name}: custom with deny list should match harness-specific approval behavior`
+          false,
+          `${name}: custom with deny list should not report full permissions`
         );
       }
     });

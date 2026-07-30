@@ -1,8 +1,9 @@
 import * as path from "path";
+import * as os from "os";
 import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
+import type { ToolPermissionConfig } from "../shared/interfaces/IToolPermissionMapper";
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
@@ -22,6 +23,9 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+
+const OPENCODE_CONFIG_SCHEMA = "https://opencode.ai/config.json";
 
 /**
  * OpenCode CLI Harness
@@ -71,12 +75,22 @@ export class OpenCodeCliProvider implements ICliProvider {
   private resolvedCurrentModel: string = "anthropic/claude-sonnet-4-6";
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
-  readonly toolPermissionMapper: IToolPermissionMapper =
-    new OpenCodeToolPermissionMapper();
+  readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
   readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
+
+  private get configTracker(): SettingsJsonMcpTracker {
+    return SettingsJsonMcpTracker.getInstance("opencode", {
+      projectConfigPath: (workspaceRoot) =>
+        path.join(workspaceRoot, "opencode.json"),
+      userConfigPath: () =>
+        path.join(os.homedir(), ".config", "opencode", "opencode.json"),
+      mcpServersProperty: "mcp",
+      schemaUrl: OPENCODE_CONFIG_SCHEMA,
+    });
+  }
 
   /** Convert OpenCode's JSONL stdout into the event vocabulary of OpenCodeLogParser. */
   parseHeadlessStdout(stdout: string): BaseCliEvent[] {
@@ -265,10 +279,11 @@ export class OpenCodeCliProvider implements ICliProvider {
   /**
    * Generate MCP server configuration for OpenCode CLI.
    *
-   * OpenCode reads MCP config from .opencode/opencode.json in the project root.
+   * OpenCode reads MCP config from opencode.json in the project root.
    * There is no --mcp-config CLI flag. The file is auto-detected at startup.
    *
-   * Written to {workspaceRoot}/.opencode/opencode.json (merged with existing config).
+   * Written to {workspaceRoot}/opencode.json through the shared tracker so MCP
+   * and permission mutations use the same lock and ownership lifecycle.
    * Supports ctrlyoke server, user-defined MCP servers, or both.
    * Config format (opencode uses "mcp" key with "type": "local"):
    * {
@@ -308,25 +323,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     try {
       const normalizedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
-      const configPath = this.getMcpConfigFilePath(
-        workingFilePath,
-        workspaceRoot
-      )!;
-      await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
-
-      // Merge with existing opencode.json to preserve user settings (theme, models, etc.)
-      let existingConfig: Record<string, unknown> = {};
-      try {
-        const existing = await fs.promises.readFile(configPath, "utf-8");
-        existingConfig = JSON.parse(existing);
-      } catch {
-        // No existing config — start fresh
-      }
-
       // Build the MCP servers object, merging ctrlyoke + user-defined servers
-      const mcpEntries: Record<string, unknown> = {
-        ...(existingConfig.mcp as Record<string, unknown> | undefined),
-      };
+      const mcpEntries: Record<string, unknown> = {};
 
       // ctrlyoke server (when included in mcpServers list)
       if (mcpServerPath) {
@@ -366,19 +364,15 @@ export class OpenCodeCliProvider implements ICliProvider {
         }
       }
 
-      const config = {
-        ...existingConfig,
-        $schema: "https://opencode.ai/config.json",
-        mcp: mcpEntries,
-      };
-
-      await fs.promises.writeFile(
-        configPath,
-        JSON.stringify(config, null, 2),
-        "utf-8"
+      await this.configTracker.registerServers(
+        this.getWorkflowOwnerKey(workingFilePath, workspaceRoot),
+        workspaceRoot,
+        mcpEntries
       );
 
-      Log.debug(`🔧 OpenCode MCP config written to: ${configPath}`);
+      Log.debug(
+        `🔧 OpenCode MCP config written to: ${path.join(workspaceRoot, "opencode.json")}`
+      );
 
       // Return empty array — opencode auto-discovers the file, no CLI arg needed
       return [];
@@ -389,16 +383,14 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   /**
-   * Return the path of the MCP config file written by getMcpConfigArgs.
-   * CliIntegration uses this to delete the file after the workflow finishes.
+   * The MCP config shares the user's project opencode.json, so generic cleanup
+   * must never delete it. cleanupWorkspaceArtifacts releases tracker ownership.
    */
   getMcpConfigFilePath(
     _workingFilePath: string | undefined,
-    workspaceRoot: string
-  ): string | null {
-    // OpenCode auto-discovers only the fixed filename opencode.json.
-    // The suffix-based naming used by other providers does not apply here.
-    return path.join(workspaceRoot, ".opencode", "opencode.json");
+    _workspaceRoot: string
+  ): null {
+    return null;
   }
 
   /**
@@ -411,7 +403,45 @@ export class OpenCodeCliProvider implements ICliProvider {
     );
   }
 
-  async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
+  /**
+   * Apply OpenCode's workspace permission policy before process launch.
+   * `none` and `dangerouslyAllowAll` intentionally acquire no policy lease.
+   */
+  async prepareToolPermissions(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    const ownerKey = this.getWorkflowOwnerKey(workingFilePath, workspaceRoot);
+    const policy = toolPermissions
+      ? this.toolPermissionMapper.buildPermissionPolicy(toolPermissions)
+      : undefined;
+
+    if (policy) {
+      await this.configTracker.registerPermissionPolicy(
+        ownerKey,
+        workspaceRoot,
+        policy
+      );
+    } else {
+      await this.configTracker.unregisterPermissionPolicy(
+        ownerKey,
+        workspaceRoot
+      );
+    }
+  }
+
+  async cleanupWorkspaceArtifacts(
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    const ownerKey = this.getWorkflowOwnerKey(workingFilePath, workspaceRoot);
+    await this.configTracker.unregisterPermissionPolicy(
+      ownerKey,
+      workspaceRoot
+    );
+    await this.configTracker.unregisterWorkflow(ownerKey, workspaceRoot);
+
     const managedArtifacts =
       this.notificationMonitor.getManagedPluginArtifactPaths(workspaceRoot);
     for (const artifactPath of managedArtifacts) {
@@ -452,6 +482,13 @@ export class OpenCodeCliProvider implements ICliProvider {
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
+
+  private getWorkflowOwnerKey(
+    workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): string {
+    return workingFilePath ?? `opencode:${workspaceRoot}`;
+  }
 
   /**
    * Get the model to use, validating format and applying fallback.

@@ -6,6 +6,8 @@ import { suite, test } from "mocha";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
+import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
   test("maps headless stdout like interactive export output without invoking export", async () => {
@@ -264,6 +266,168 @@ suite("OpenCodeCliProvider", () => {
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
       await fs.rm(extensionPath, { recursive: true, force: true });
+    }
+  });
+
+  test("creates, gitignores, and cleans a workspace permission config", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-permissions-")
+    );
+    const provider = new OpenCodeCliProvider();
+    const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
+    SettingsJsonMcpTracker.resetAll();
+
+    try {
+      await provider.prepareToolPermissions(
+        {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: ["write", "shell(git:*)"],
+          deniedTools: ["shell(rm:*)"],
+        },
+        workspaceRoot,
+        workingFilePath
+      );
+
+      const configPath = path.join(workspaceRoot, "opencode.json");
+      const config = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      assert.strictEqual(config.$schema, "https://opencode.ai/config.json");
+      assert.deepStrictEqual(config.permission, {
+        "*": "ask",
+        edit: "allow",
+        bash: {
+          "git *": "allow",
+          "rm *": "deny",
+        },
+      });
+
+      const gitignorePath = path.join(workspaceRoot, ".gitignore");
+      const gitignore = await fs.readFile(gitignorePath, "utf-8");
+      assert.ok(gitignore.includes("opencode.json"));
+      assert.ok(gitignore.includes(".gitignore"));
+
+      await provider.cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath);
+
+      await assert.rejects(fs.access(configPath), /ENOENT/);
+      await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+    } finally {
+      SettingsJsonMcpTracker.resetAll();
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("coordinates MCP and permissions while restoring an existing opencode.json", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-config-")
+    );
+    const provider = new OpenCodeCliProvider();
+    const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
+    const configPath = path.join(workspaceRoot, "opencode.json");
+    const baseline = {
+      theme: "dark",
+      mcp: {
+        existing: {
+          type: "local",
+          command: ["node", "existing.js"],
+        },
+      },
+      permission: {
+        read: "deny",
+        bash: {
+          "git *": "ask",
+        },
+      },
+    };
+    SettingsJsonMcpTracker.resetAll();
+
+    try {
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(baseline, null, 2),
+        "utf-8"
+      );
+
+      await provider.getMcpConfigArgs(
+        undefined,
+        workspaceRoot,
+        workingFilePath,
+        undefined,
+        [
+          {
+            id: "temporary",
+            command: "node",
+            args: ["temporary.js"],
+          },
+        ]
+      );
+      await provider.prepareToolPermissions(
+        {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: ["write", "shell(git:*)"],
+          deniedTools: ["shell(rm:*)"],
+        },
+        workspaceRoot,
+        workingFilePath
+      );
+
+      const active = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      assert.deepStrictEqual(active.mcp.existing, baseline.mcp.existing);
+      assert.deepStrictEqual(active.mcp.temporary, {
+        type: "local",
+        command: ["node", "temporary.js"],
+      });
+      assert.strictEqual(active.permission.read, "deny");
+      assert.strictEqual(active.permission["*"], "ask");
+      assert.strictEqual(active.permission.edit, "allow");
+      assert.deepStrictEqual(active.permission.bash, {
+        "git *": "allow",
+        "rm *": "deny",
+      });
+
+      await provider.cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath);
+
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(configPath, "utf-8")),
+        baseline
+      );
+      await assert.rejects(
+        fs.access(path.join(workspaceRoot, ".gitignore")),
+        /ENOENT/
+      );
+    } finally {
+      SettingsJsonMcpTracker.resetAll();
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("does not overwrite a malformed existing opencode.json", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-invalid-config-")
+    );
+    const provider = new OpenCodeCliProvider();
+    const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
+    const configPath = path.join(workspaceRoot, "opencode.json");
+    const invalidConfig = "{ invalid json";
+    SettingsJsonMcpTracker.resetAll();
+
+    try {
+      await fs.writeFile(configPath, invalidConfig, "utf-8");
+
+      await assert.rejects(
+        provider.prepareToolPermissions(
+          {
+            mode: PERMISSION_MODES.ALLOW_ALL,
+            allowedTools: [],
+            deniedTools: ["write"],
+          },
+          workspaceRoot,
+          workingFilePath
+        ),
+        /Cannot safely update/
+      );
+      assert.strictEqual(await fs.readFile(configPath, "utf-8"), invalidConfig);
+    } finally {
+      SettingsJsonMcpTracker.resetAll();
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 

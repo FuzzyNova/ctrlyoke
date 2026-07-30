@@ -2,6 +2,7 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
 import { Log } from "../../../utils/Log";
+import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 
 /**
  * Simple async mutex for serializing read-modify-write operations on settings.json.
@@ -38,20 +39,40 @@ class AsyncMutex {
  * Options for customizing where a tracker reads/writes its MCP config.
  *
  * Defaults reproduce the Qwen behavior (`.{tool}/settings.json` in the
- * project, `~/.{tool}/settings.json` for the user). Antigravity overrides these
- * to use `.agents/mcp_config.json` (project) and `~/.gemini/config/mcp_config.json`
- * (user), and those files hold a bare `{ "mcpServers": {...} }` object.
+ * project, `~/.{tool}/settings.json` for the user). Antigravity overrides the
+ * paths, while OpenCode overrides the paths and MCP property to coordinate
+ * workspace-root `opencode.json` MCP and permission mutations.
  */
 export interface SettingsJsonMcpTrackerOptions {
   /** Resolve the project-level config file path. Default: `<ws>/.<tool>/settings.json`. */
   projectConfigPath?: (workspaceRoot: string) => string;
   /** Resolve the user-level config file path. Default: `~/.<tool>/settings.json`. */
   userConfigPath?: () => string;
+  /** Property containing MCP server entries. Default: `mcpServers`. */
+  mcpServersProperty?: string;
+  /** Schema URL to add while ctrlyoke owns a mutation, when the file has none. */
+  schemaUrl?: string;
+}
+
+export type SettingsJsonPermissionDecision = "allow" | "ask" | "deny";
+export type SettingsJsonPermissionPolicy = Record<
+  string,
+  | SettingsJsonPermissionDecision
+  | Record<string, SettingsJsonPermissionDecision>
+>;
+
+interface PermissionLease {
+  normalizedPolicy: string;
+  owners: Set<string>;
+  baselineHadPermission: boolean;
+  baselinePermission: unknown;
+  appliedPermission: unknown;
 }
 
 /**
- * Tracks MCP server lifecycle in a JSON config file for Qwen and
- * Antigravity CLIs.
+ * Tracks MCP server lifecycle in a JSON config file for Qwen, Antigravity,
+ * and OpenCode CLIs. It also owns optional permission-policy leases for
+ * config-driven harnesses so permission and MCP writes share one mutex.
  *
  * These CLIs auto-discover MCP servers from a JSON file's `mcpServers` key
  * (`.{tool}/settings.json` for Qwen, `.agents/mcp_config.json` for
@@ -123,11 +144,20 @@ export class SettingsJsonMcpTracker {
   /** Resolves the user-level config file path. */
   private readonly userConfigPath: () => string;
 
+  /** Property containing MCP server entries in this tool's config schema. */
+  private readonly mcpServersProperty: string;
+
+  /** Optional schema URL added only while ctrlyoke owns file mutations. */
+  private readonly schemaUrl: string | undefined;
+
   /** Async mutex for serializing all read-modify-write operations on settings.json. */
   private readonly mutex = new AsyncMutex();
 
   /** MCP server names that existed before ctrlyoke modified anything. */
   private baselineServers = new Set<string>();
+
+  /** Project-level MCP names that cleanup must never remove. */
+  private baselineProjectServers = new Set<string>();
 
   /** Whether baseline capture has completed for this workspace. */
   private baselineCapturedForWorkspace: string | undefined;
@@ -138,6 +168,9 @@ export class SettingsJsonMcpTracker {
   /** Whether the project settings.json originally had an mcpServers property. */
   private baselineProjectHadMcpServers = false;
 
+  /** Whether the project settings file originally had a $schema property. */
+  private baselineProjectHadSchema = false;
+
   /** Path to the temporary .gitignore written for a newly-created config file. */
   private gitignorePath: string | undefined;
 
@@ -146,6 +179,12 @@ export class SettingsJsonMcpTracker {
 
   /** Per-workflow tracking: which server names each workflow registered. */
   private workflowServers = new Map<string, string[]>();
+
+  /** Values ctrlyoke inserted, used to avoid deleting user edits during cleanup. */
+  private managedServerValues = new Map<string, unknown>();
+
+  /** Active permission policy lease per workspace config file. */
+  private permissionLeases = new Map<string, PermissionLease>();
 
   private constructor(
     private readonly toolName: string,
@@ -159,6 +198,8 @@ export class SettingsJsonMcpTracker {
     this.userConfigPath =
       options?.userConfigPath ??
       (() => path.join(os.homedir(), this.settingsSubdir, "settings.json"));
+    this.mcpServersProperty = options?.mcpServersProperty ?? "mcpServers";
+    this.schemaUrl = options?.schemaUrl;
   }
 
   // ============================================================
@@ -207,19 +248,25 @@ export class SettingsJsonMcpTracker {
 
     this.baselineProjectSettingsFileExisted = false;
     this.baselineProjectHadMcpServers = false;
+    this.baselineProjectHadSchema = false;
 
     for (const filePath of [projectSettings, userSettings]) {
       try {
         const content = await fs.readFile(filePath, "utf-8");
+        const settings = JSON.parse(content);
         if (filePath === projectSettings) {
           this.baselineProjectSettingsFileExisted = true;
+          this.baselineProjectHadSchema = "$schema" in settings;
         }
-        const settings = JSON.parse(content);
-        if (settings.mcpServers && typeof settings.mcpServers === "object") {
+        const mcpServers = settings[this.mcpServersProperty];
+        if (mcpServers && typeof mcpServers === "object") {
           if (filePath === projectSettings) {
             this.baselineProjectHadMcpServers = true;
+            for (const name of Object.keys(mcpServers)) {
+              this.baselineProjectServers.add(name);
+            }
           }
-          for (const name of Object.keys(settings.mcpServers)) {
+          for (const name of Object.keys(mcpServers)) {
             this.baselineServers.add(name);
           }
         }
@@ -285,34 +332,29 @@ export class SettingsJsonMcpTracker {
     await this.mutex.acquire();
     try {
       const settingsPath = this.projectConfigPath(workspaceRoot);
-      let settings: Record<string, unknown> = {};
-      try {
-        settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
-      } catch {
-        // Start fresh
-      }
+      const settings = await this.readProjectConfig(settingsPath);
 
       const existingMcp =
-        (settings.mcpServers as Record<string, unknown> | undefined) ?? {};
+        (settings[this.mcpServersProperty] as
+          | Record<string, unknown>
+          | undefined) ?? {};
       let changed = false;
 
       for (const [name, config] of Object.entries(servers)) {
         if (!(name in existingMcp)) {
           existingMcp[name] = config;
+          this.managedServerValues.set(name, this.cloneJson(config));
           changed = true;
         }
       }
 
       if (changed) {
-        settings.mcpServers = existingMcp;
+        settings[this.mcpServersProperty] = existingMcp;
+        this.addOwnedSchema(settings);
         await fs.mkdir(path.dirname(settingsPath), {
           recursive: true,
         });
-        await fs.writeFile(
-          settingsPath,
-          JSON.stringify(settings, null, 2),
-          "utf-8"
-        );
+        await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
         Log.debug(
           `🔧 ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
         );
@@ -359,7 +401,7 @@ export class SettingsJsonMcpTracker {
       if (count <= 0) {
         this.refCounts.delete(name);
         // Only remove from settings if it wasn't a baseline server
-        if (!this.baselineServers.has(name)) {
+        if (!this.baselineProjectServers.has(name)) {
           toRemove.push(name);
         }
       } else {
@@ -378,34 +420,34 @@ export class SettingsJsonMcpTracker {
           const settings = JSON.parse(
             await fs.readFile(settingsPath, "utf-8")
           ) as Record<string, unknown>;
-          const mcpServers = settings.mcpServers as
+          const mcpServers = settings[this.mcpServersProperty] as
             | Record<string, unknown>
             | undefined;
           if (mcpServers) {
             for (const name of toRemove) {
-              delete mcpServers[name];
+              const managedValue = this.managedServerValues.get(name);
+              if (
+                managedValue !== undefined &&
+                this.jsonEquals(mcpServers[name], managedValue)
+              ) {
+                delete mcpServers[name];
+              } else if (managedValue !== undefined) {
+                Log.warn(
+                  `${this.toolName} MCP cleanup preserved user-modified server "${name}"`
+                );
+              }
+              this.managedServerValues.delete(name);
             }
             if (
               Object.keys(mcpServers).length === 0 &&
               !this.baselineProjectHadMcpServers
             ) {
-              delete settings.mcpServers;
+              delete settings[this.mcpServersProperty];
             } else {
-              settings.mcpServers = mcpServers;
+              settings[this.mcpServersProperty] = mcpServers;
             }
 
-            if (
-              !this.baselineProjectSettingsFileExisted &&
-              Object.keys(settings).length === 0
-            ) {
-              await fs.unlink(settingsPath).catch(() => {});
-            } else {
-              await fs.writeFile(
-                settingsPath,
-                JSON.stringify(settings, null, 2),
-                "utf-8"
-              );
-            }
+            await this.writeOrRemoveManagedConfig(settingsPath, settings);
             Log.debug(
               `🧹 ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
             );
@@ -418,9 +460,241 @@ export class SettingsJsonMcpTracker {
       }
     }
 
-    if (this.refCounts.size === 0 && !this.baselineProjectSettingsFileExisted) {
+    if (
+      this.refCounts.size === 0 &&
+      !this.hasPermissionLeaseForWorkspace(workspaceRoot) &&
+      !this.baselineProjectSettingsFileExisted
+    ) {
       await this.deleteCtrlYokeGitignore();
     }
+  }
+
+  // ============================================================
+  // PERMISSION POLICY LEASE
+  // ============================================================
+
+  /**
+   * Apply an ownership-aware permission policy to the same project config used
+   * for MCP servers. Identical policies share one lease; a conflicting policy
+   * is rejected without replacing the active workflow's security controls.
+   */
+  async registerPermissionPolicy(
+    workflowKey: string,
+    workspaceRoot: string,
+    policy: SettingsJsonPermissionPolicy
+  ): Promise<"acquired" | "shared"> {
+    await this.captureBaseline(workspaceRoot);
+
+    return this.withLock(async () => {
+      const settingsPath = this.projectConfigPath(workspaceRoot);
+      const normalizedPolicy = JSON.stringify(policy);
+      const activeLease = this.permissionLeases.get(settingsPath);
+
+      if (activeLease) {
+        if (activeLease.normalizedPolicy !== normalizedPolicy) {
+          const otherOwners = [...activeLease.owners].filter(
+            (owner) => owner !== workflowKey
+          );
+          if (otherOwners.length > 0) {
+            throw new Error(
+              `${this.toolName} permission policy conflict in ${settingsPath}; active owner: ${otherOwners[0]}`
+            );
+          }
+
+          this.permissionLeases.delete(settingsPath);
+          await this.restorePermissionLease(settingsPath, activeLease);
+        } else {
+          const wasShared = !activeLease.owners.has(workflowKey);
+          activeLease.owners.add(workflowKey);
+          return wasShared ? "shared" : "acquired";
+        }
+      }
+
+      const settings = await this.readProjectConfig(settingsPath);
+      const baselineHadPermission = "permission" in settings;
+      const baselinePermission = this.cloneJson(settings.permission);
+      const appliedPermission = this.mergePermissionPolicy(
+        settings.permission,
+        policy
+      );
+
+      settings.permission = appliedPermission;
+      this.addOwnedSchema(settings);
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
+      if (!this.baselineProjectSettingsFileExisted) {
+        await this.writeGitignore(settingsPath);
+      }
+
+      this.permissionLeases.set(settingsPath, {
+        normalizedPolicy,
+        owners: new Set([workflowKey]),
+        baselineHadPermission,
+        baselinePermission,
+        appliedPermission: this.cloneJson(appliedPermission),
+      });
+      Log.debug(
+        `🔐 ${this.toolName} permission policy applied to ${settingsPath}`
+      );
+      return "acquired";
+    });
+  }
+
+  /**
+   * Release one workflow's permission lease and restore the original permission
+   * value after the final owner exits. User edits made while the workflow was
+   * running are preserved instead of being overwritten.
+   */
+  async unregisterPermissionPolicy(
+    workflowKey: string,
+    workspaceRoot: string
+  ): Promise<void> {
+    const settingsPath = this.projectConfigPath(workspaceRoot);
+
+    await this.withLock(async () => {
+      const lease = this.permissionLeases.get(settingsPath);
+      if (!lease || !lease.owners.delete(workflowKey)) {
+        return;
+      }
+      if (lease.owners.size > 0) {
+        return;
+      }
+
+      this.permissionLeases.delete(settingsPath);
+      await this.restorePermissionLease(settingsPath, lease);
+    });
+
+    if (
+      this.refCounts.size === 0 &&
+      !this.hasPermissionLeaseForWorkspace(workspaceRoot) &&
+      !this.baselineProjectSettingsFileExisted
+    ) {
+      await this.deleteCtrlYokeGitignore();
+    }
+  }
+
+  private async restorePermissionLease(
+    settingsPath: string,
+    lease: PermissionLease
+  ): Promise<void> {
+    const settings = await this.readProjectConfig(settingsPath);
+    if (!this.jsonEquals(settings.permission, lease.appliedPermission)) {
+      Log.warn(
+        `${this.toolName} permission cleanup preserved user-modified permission rules in ${settingsPath}`
+      );
+      return;
+    }
+
+    if (lease.baselineHadPermission) {
+      settings.permission = this.cloneJson(lease.baselinePermission);
+    } else {
+      delete settings.permission;
+    }
+    await this.writeOrRemoveManagedConfig(settingsPath, settings);
+    Log.debug(
+      `🧹 ${this.toolName} permission policy restored in ${settingsPath}`
+    );
+  }
+
+  private mergePermissionPolicy(
+    existing: unknown,
+    policy: SettingsJsonPermissionPolicy
+  ): SettingsJsonPermissionPolicy {
+    const merged: SettingsJsonPermissionPolicy =
+      existing && typeof existing === "object" && !Array.isArray(existing)
+        ? (this.cloneJson(existing) as SettingsJsonPermissionPolicy)
+        : {};
+
+    for (const [tool, decision] of Object.entries(policy)) {
+      if (
+        decision &&
+        typeof decision === "object" &&
+        !Array.isArray(decision)
+      ) {
+        const existingTool = merged[tool];
+        const toolRules: Record<string, SettingsJsonPermissionDecision> =
+          existingTool &&
+          typeof existingTool === "object" &&
+          !Array.isArray(existingTool)
+            ? { ...existingTool }
+            : {};
+        for (const [pattern, action] of Object.entries(decision)) {
+          delete toolRules[pattern];
+          toolRules[pattern] = action;
+        }
+        delete merged[tool];
+        merged[tool] = toolRules;
+      } else {
+        delete merged[tool];
+        merged[tool] = decision;
+      }
+    }
+    return merged;
+  }
+
+  private hasPermissionLeaseForWorkspace(workspaceRoot: string): boolean {
+    return this.permissionLeases.has(this.projectConfigPath(workspaceRoot));
+  }
+
+  private async readProjectConfig(
+    settingsPath: string
+  ): Promise<Record<string, unknown>> {
+    try {
+      return JSON.parse(await fs.readFile(settingsPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return {};
+      }
+      throw new Error(
+        `Cannot safely update ${settingsPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  private addOwnedSchema(settings: Record<string, unknown>): void {
+    if (this.schemaUrl && !("$schema" in settings)) {
+      settings.$schema = this.schemaUrl;
+    }
+  }
+
+  private async writeOrRemoveManagedConfig(
+    settingsPath: string,
+    settings: Record<string, unknown>
+  ): Promise<void> {
+    const hasManagedState =
+      this.refCounts.size > 0 || this.permissionLeases.has(settingsPath);
+    if (
+      !hasManagedState &&
+      this.schemaUrl &&
+      !this.baselineProjectHadSchema &&
+      settings.$schema === this.schemaUrl
+    ) {
+      delete settings.$schema;
+    }
+
+    if (
+      !this.baselineProjectSettingsFileExisted &&
+      Object.keys(settings).length === 0
+    ) {
+      await fs.unlink(settingsPath).catch(() => {});
+      return;
+    }
+    await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
+  }
+
+  private cloneJson<T>(value: T): T {
+    return value === undefined
+      ? value
+      : (JSON.parse(JSON.stringify(value)) as T);
+  }
+
+  private jsonEquals(left: unknown, right: unknown): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
   }
 
   /**
@@ -493,5 +767,4 @@ export class SettingsJsonMcpTracker {
     const allowed = new Set([...this.baselineServers, ...promptServerNames]);
     return [...allowed];
   }
-
 }

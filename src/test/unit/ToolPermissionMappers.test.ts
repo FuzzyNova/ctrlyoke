@@ -507,12 +507,12 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("custom → true", () => {
+      test("custom → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
-          true
+          false
         );
       });
     });

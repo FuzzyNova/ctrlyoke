@@ -1,6 +1,6 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Ready for implementation
+> **Status:** In progress
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -13,12 +13,11 @@ engineering sequence, not a release boundary: no stage is deferred past release,
 and the honest-UI stage is built directly on the shared registry rather than as
 a throwaway stopgap.
 
-Capability _classifications_ still change as the sequence progresses. Qwen and
-OpenCode start classified as unsupported for granular lists and advance to
-verified support once their workspace-config implementations and behavioral
-tests land. The interim classification is a correct statement of what is
-enforced at that moment, not a placeholder — which is why it is safe to build
-the real UI against it.
+Capability _classifications_ still change as the sequence progresses. Qwen's
+inline allow/deny flags are supported and manually verified; it does not need a
+workspace settings mutation. OpenCode's workspace-config implementation landed
+on 2026-07-30, with real-CLI behavioral verification still required before its
+capability declaration advances to verified support.
 
 ---
 
@@ -35,10 +34,10 @@ lists are not reliably enforced across the supported harnesses.
 
 Current code overstates support in several places:
 
-- `QwenToolPermissionMapper.buildArgs()` emits `--allowed-tools`,
-  `--exclude-tools`, and `--approval-mode`, but this is not behaviorally
-  verified against the currently supported Qwen CLI and has been observed not to
-  work.
+- Qwen's earlier silent-deny failure was traced to its headless input mode, not
+  to an absence of inline allow/deny support. The canonical tool-name mapping
+  plus `--input-format stream-json` path is manually verified; automated
+  real-harness regression coverage remains to be added.
 - `getPermissionHarnessSupport()` in
   `src/ui/webview-react/components/shared/permissionUtils.ts` classifies only
   Codex, OpenCode, and Antigravity as `mode-only`; every other harness falls
@@ -46,11 +45,10 @@ Current code overstates support in several places:
   UI today, so a user's Denied Tools list is presented as enforced while the
   flags carrying it are unverified. This is the most acute instance of the
   problem and the first thing the honesty work must correct.
-- `OpenCodeToolPermissionMapper` states in its own doc comment that permission
-  overrides are written to `opencode.json` as a side effect of
-  `getMcpConfigArgs()`, but its `buildArgs()` always returns `[]` and
-  `OpenCodeCliProvider.getMcpConfigArgs()` merges only the `mcp` key. No
-  permission block is ever written.
+- OpenCode previously promised an `opencode.json` permission side effect that
+  did not exist. The workspace-root config mutation, MCP coordination, and
+  ownership-aware cleanup are now implemented; behavioral verification against
+  a real OpenCode CLI remains open.
 - Codex and Antigravity are intentionally mode-only, but the caveat is not
   consistently visible across every permissions surface.
 - Mapper unit tests assert generated strings. They do not prove that a harness
@@ -68,8 +66,8 @@ otherwise:
 | --------------- | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
 | Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                  |
 | Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
-| Qwen Code       | Supported                                   | Broken/unverified                 | Warn now; implement workspace config                                                         |
-| OpenCode        | Supported                                   | Not implemented                   | Warn now; implement workspace config                                                         |
+| Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; add automated real-harness regression coverage              |
+| OpenCode        | Supported                                   | Implemented; verification pending | Keep unverified until safe allow/deny calls pass against a pinned real CLI                   |
 | Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
 | Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
 
@@ -136,13 +134,12 @@ CLI (v0.20.1): `write_file` now succeeds (`is_error: false`,
 `permission_denials: []`) with the exact `Write`/`Bash(...)` alias syntax that
 previously failed.
 
-This does not by itself make Qwen's granular lists verified/production-ready
-— see Qwen Implementation below for the remaining workspace-config and formal
-behavioral-test-suite work — but it removes the specific silent-failure mode
-and lets `--input-format stream-json` become the standing invocation shape
-headless Qwen runs use going forward. Interactive mode (`buildInteractiveArgs`,
-the `-i` flag) never sets `--output-format`, so it was never classified
-non-interactive and never hit this gate.
+This establishes that Qwen's granular lists are supported inline; no
+`.qwen/settings.json` permission mutation is needed. Formal real-harness
+regression coverage is still required, but `--input-format stream-json` is the
+standing invocation shape for headless Qwen runs. Interactive mode
+(`buildInteractiveArgs`, the `-i` flag) never sets `--output-format`, so it was
+never classified non-interactive and never hit this gate.
 
 `QwenToolPermissionMapper` was also updated to emit `WriteFile`/`ShellTool`
 instead of `Write`/`Bash` (both alias tables recognize the former; only the
@@ -155,13 +152,10 @@ installed CLI (v0.20.1) with this invocation shape:
 - **deny blocks**: `--exclude-tools "WriteFile,..."` → `write_file` refused
   (`permission_denials` populated with the denied call, file not written).
 - **deny wins over allow**: `--allowed-tools "WriteFile" --exclude-tools
-  "WriteFile"` → refused, same as deny-only.
+"WriteFile"` → refused, same as deny-only.
 
-Not yet covered by this session's manual verification (still required before
-Qwen's capability declaration can advance to verified, per Testing Strategy
-below): automated test-suite coverage of these three behaviors (as opposed to
-one-off manual runs), and the `.qwen/settings.json` restore-after-exit/
-cancellation/startup-failure behavior.
+Not yet covered by this session's manual verification: automated real-harness
+coverage of these three behaviors (as opposed to one-off manual runs).
 
 `QwenToolPermissionMapper`'s `delete`/`remove` pattern handling was also fixed:
 it previously mapped to a literal `"Delete"` specifier, which is a silent
@@ -183,14 +177,16 @@ independently startable parallel plan. Implement it in this order:
 3. complete the honest authoring UI below as Compatibility Phase 1C;
 4. evolve the runtime permission-preparation contract;
 5. implement the shared workspace-policy lease/writer and blocking-conflict UX;
-6. implement and behaviorally verify Qwen;
-7. implement OpenCode and coordinate its config writes with the MCP writer;
+6. retain Qwen's verified inline mapping and add automated behavioral coverage;
+7. behaviorally verify the implemented OpenCode config path and finish its
+   structured conflict/recovery UX;
 8. continue to Compatibility Phase 2 for dry run, CLI/reporting, and MCP
    serialization.
 
-The Codex partial-support investigation follows the verified Qwen/OpenCode
-paths and does not block the permission vertical slice. Antigravity remains an
-explicit unsupported granular-list declaration unless new evidence changes it.
+The Codex partial-support investigation follows the verified Qwen path and the
+implemented OpenCode path; it does not block the permission vertical slice.
+Antigravity remains an explicit unsupported granular-list declaration unless
+new evidence changes it.
 
 **Release-gate boundary.** Stages 1–8 above are the P0 gate. The Codex
 partial-support investigation is explicitly _not_ part of it: it is open-ended
@@ -202,9 +198,9 @@ for categories that then earn a behavioral test.
 
 ## Compatibility Phase 1C — Honest UI
 
-Until a harness has a passing behavioral test, the permissions UI must state that
-Allowed Tools and Denied Tools are currently supported only by Copilot CLI and
-Claude CLI.
+Until a harness has a passing behavioral test, the permissions UI must state
+that Allowed Tools and Denied Tools are currently supported by Copilot CLI,
+Claude CLI, and Qwen Code. OpenCode remains verification-pending.
 
 Update every surface that exposes the lists:
 
@@ -216,8 +212,8 @@ Update every surface that exposes the lists:
 
 Required behavior:
 
-- Qwen must temporarily be classified as unsupported for granular lists despite
-  the existing mapper.
+- Qwen is classified as inline granular support; do not describe it as needing
+  workspace configuration.
 - A harness-specific warning explains whether the lists are ignored,
   unverified, or require workspace configuration.
 - Keep Allowed/Denied Tools editable at workflow, prompt, and defaults scope
@@ -241,17 +237,25 @@ a fallback.
 
 ## Workspace-Configuration Support
 
-Qwen and OpenCode support project-scoped permission configuration:
+OpenCode uses project `opencode.json` permission rules with `allow`, `ask`, and
+`deny` decisions. Qwen remains inline-only in ctrlyoke; do not add a
+`.qwen/settings.json` permission writer.
 
-- Qwen: `.qwen/settings.json`, using `permissions.allow` and
-  `permissions.deny`.
-- OpenCode: project `opencode.json`, using `permission` rules with
-  `allow`, `ask`, and `deny` decisions.
+The first implementation slice landed on 2026-07-30 by extending
+`SettingsJsonMcpTracker`, so OpenCode's MCP and permission mutations share the
+same lock, baseline, reference counting, atomic writer, and cleanup ownership.
+It applies identical policies once for multiple owners, rejects a different
+later policy without changing the active file, restores the original
+permission value on final release, and preserves user edits detected during
+cleanup.
 
-Implement this through one reusable, ownership-aware workspace configuration
-mutation service. Reuse the locking, baseline, reference-counting, and cleanup
-lessons in `SettingsJsonHooksTracker` and `SettingsJsonMcpTracker`
-(`src/core/harness/shared/`); do not create two unrelated ad hoc writers.
+Remaining work in this section:
+
+- persist crash-recovery ownership metadata;
+- return the structured `acquired` / `shared` / `conflict` application
+  contract instead of surfacing a plain provider error;
+- wire disclosure, dry-run details, persisted diagnostics, and blocking
+  conflict UX across dashboard, CLI, and MCP surfaces.
 
 Note how those two existing trackers share a lock: `SettingsJsonMcpTracker` owns
 the `AsyncMutex`, and `SettingsJsonHooksTracker` has no mutex of its own — its
@@ -354,25 +358,18 @@ nonzero with the structured diagnostic; MCP callers receive the same error
 contract. Once the active owner releases the policy, a retry performs a fresh
 atomic acquisition and may proceed.
 
-## Qwen Implementation
+## Qwen Inline Implementation
 
-Replace the unverified CLI-list mapping with project configuration for verified
-versions:
+Retain the inline CLI-list mapping:
 
 - `--input-format stream-json` is now sent for headless runs (see Root Cause
   above), which removes the silent-deny failure mode independent of tool-name
   choice. Still translate ctrlyoke patterns to Qwen's current canonical tool
   names as defense in depth — `WriteFile`/`write_file` and
-  `ShellTool`/`run_shell_command` are recognized by *both* Qwen alias tables,
+  `ShellTool`/`run_shell_command` are recognized by _both_ Qwen alias tables,
   where bare `Write`/`Bash` are only recognized by the newer one — so a future
   Qwen build or an interactive/non-stream-json code path can't reintroduce the
   same class of bug;
-- write `permissions.allow` and `permissions.deny`;
-- preserve existing `permissions.ask`;
-- preserve the documented precedence `deny` > `ask` > `allow`;
-- account for permission arrays merging across Qwen configuration scopes;
-- do not claim an exclusive allowlist if Qwen's semantics only auto-approve
-  matching tools;
 - retain coarse mode arguments only where the installed version accepts them.
 
 Version differences matter because Qwen has changed both its settings schema and
@@ -385,29 +382,33 @@ Behavioral tests must launch Qwen in an isolated fixture workspace and prove tha
 - an allowed harmless tool call proceeds as intended;
 - a denied harmless fixture operation is refused;
 - deny wins when a pattern appears in both lists;
-- the original `.qwen/settings.json` is restored after normal exit, cancellation,
-  and startup failure.
 
 ## OpenCode Implementation
 
-Implement the behavior currently promised by comments in the provider:
+Implementation landed on 2026-07-30:
 
-- merge a `permission` block into the project configuration OpenCode actually
-  discovers;
-- start custom mode from an explicit `"*": "ask"` baseline;
-- translate known ctrlyoke tools to OpenCode permission keys;
-- translate shell argument patterns to OpenCode's wildcard syntax;
-- apply denied rules after allowed rules because OpenCode uses last-match wins;
-- preserve unrelated permission rules and all non-permission config;
-- coordinate the mutation with the existing MCP writer so both features cannot
-  race on the same file.
+- `custom` merges a `permission` block beginning with `"*": "ask"`;
+- `allowAll` begins with `"*": "allow"` and still applies deny overrides;
+- `none` and `dangerouslyAllowAll` do not mutate permissions;
+- known ctrlyoke tools map to OpenCode permission keys, including file-write
+  aliases to `edit`;
+- `shell(command:*)` becomes OpenCode's `bash` wildcard form (`command *`);
+- denied rules are inserted after allowed rules for last-match-wins behavior;
+- the workspace-root `opencode.json` is the single MCP/permission target;
+- unrelated permission rules, MCP entries, and non-permission config survive
+  both application and cleanup;
+- newly created `opencode.json` receives a temporary sibling `.gitignore`
+  (which ignores both files) when no user-owned `.gitignore` exists;
+- malformed existing JSON fails closed and is never overwritten.
 
-Do not delete the entire OpenCode config during workflow cleanup. The current MCP
-cleanup contract must also be corrected/refactored as needed so owned MCP and
-permission entries are removed without destroying pre-existing user settings.
+Unit coverage proves mapping, MCP/permission coordination, baseline restore,
+temporary-file cleanup, identical-policy sharing, conflict rejection, user-edit
+preservation, and malformed-JSON handling. `npm test` passed after this slice
+(2,244 extension tests and 1,237 UI tests).
 
-Behavioral tests must prove allow and deny decisions with safe fixture tools and
-cover a config containing pre-existing MCP and permission entries.
+Still required: behavioral tests against a pinned real OpenCode CLI must prove
+allow and deny decisions with safe fixture tools. Crash recovery and the shared
+structured conflict/disclosure UX remain in Workspace-Configuration Support.
 
 ## Codex Partial Support Investigation
 
@@ -496,7 +497,8 @@ fidelity with verified status.
 ## Acceptance Criteria
 
 - Every permission UI clearly states the current granular-support boundary.
-- Qwen no longer emits unverified tool-list flags as if they were enforced.
+- Qwen retains its canonical inline tool-list mapping and never adds a
+  workspace permission writer.
 - OpenCode no longer claims a permission config side effect it does not perform.
 - Qwen and OpenCode granular policies pass behavioral allow/deny tests before
   their capability declarations advance from unsupported/unverified to the

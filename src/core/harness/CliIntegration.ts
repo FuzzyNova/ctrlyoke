@@ -957,6 +957,13 @@ export class CliIntegration extends HarnessIntegration {
       session.resolvedProperties?.toolPermissions,
       session.resolvedProperties?.mcpServers
     );
+    if (workspaceRoot) {
+      await this.provider.prepareToolPermissions?.(
+        effectiveToolPermissions,
+        workspaceRoot,
+        session.workflowContext?.workingFilePath
+      );
+    }
     const permissionArgs =
       this.provider.buildPermissionArgs?.(
         effectiveToolPermissions,
