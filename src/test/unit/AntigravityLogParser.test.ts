@@ -982,6 +982,63 @@ suite("AntigravityLogParser", () => {
       assert.strictEqual(result.metadata.usage?.contextWindowSize, 10_000);
     });
 
+    test("merges stream-json reasoning while statusline wins context fields", () => {
+      const parser = new AntigravityLogParser();
+      parser.setStatuslineSnapshot({
+        model: { id: "gemini-test" },
+        context_window: {
+          total_input_tokens: 1_000,
+          total_output_tokens: 200,
+          context_window_size: 10_000,
+          current_usage: {
+            input_tokens: 120,
+            output_tokens: 7,
+          },
+        },
+      });
+      parser.setStreamJsonUsage({
+        latestStepUsage: {
+          inputTokens: 800,
+          outputTokens: 12,
+          reasoningOutputTokens: 13,
+          totalTokens: 812,
+        },
+      });
+
+      const result = parser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]);
+
+      assert.strictEqual(result.metadata.usage?.inputTokens, 120);
+      assert.strictEqual(result.metadata.usage?.outputTokens, 7);
+      assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 1_200);
+      assert.strictEqual(result.metadata.usage?.contextWindowSize, 10_000);
+      assert.strictEqual(result.metadata.usage?.reasoningOutputTokens, 13);
+    });
+
+    test("uses stream-json as the per-turn fallback without a statusline", () => {
+      const parser = new AntigravityLogParser();
+      parser.setStreamJsonUsage({
+        latestStepUsage: {
+          inputTokens: 99,
+          outputTokens: 3,
+          reasoningOutputTokens: 2,
+          cachedInputTokens: 11,
+          totalTokens: 102,
+        },
+      });
+
+      const result = parser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]);
+
+      assert.strictEqual(result.metadata.usage?.inputTokens, 99);
+      assert.strictEqual(result.metadata.usage?.outputTokens, 3);
+      assert.strictEqual(result.metadata.usage?.totalTokens, 102);
+      assert.strictEqual(result.metadata.usage?.cachedInputTokens, 11);
+      assert.strictEqual(result.metadata.usage?.reasoningOutputTokens, 2);
+    });
+
     test("does not expose infrastructure log lines as response text", () => {
       const parser = new AntigravityLogParser();
 

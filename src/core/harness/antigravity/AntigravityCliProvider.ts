@@ -36,6 +36,7 @@ import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor
 import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
 import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
+import { AntigravityStreamJsonUsageAccumulator } from "./AntigravityStreamJsonUsage";
 
 const ANTIGRAVITY_MIN_VERSION = "1.0.15";
 
@@ -107,6 +108,8 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityToolPermissionMapper();
   readonly logParser = new AntigravityLogParser();
   readonly headlessSource = "log" as const;
+  private readonly streamJsonUsage =
+    new AntigravityStreamJsonUsageAccumulator();
 
   /** Fresh correlation token for the prompt currently being spawned. */
   private statusLineToken: string | undefined;
@@ -147,7 +150,9 @@ export class AntigravityCliProvider implements ICliProvider {
     this.statusLineEnabledForPrompt = false;
     this.statusLineForwardCommand = undefined;
     this.statusLineSidecar = undefined;
+    this.streamJsonUsage.reset();
     this.logParser.setStatuslineSnapshot();
+    this.logParser.setStreamJsonUsage();
 
     if (
       workspaceRoot &&
@@ -213,7 +218,44 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return ["--print", prompt, ...baseArgs];
+    return ["--print", prompt, "--output-format", "stream-json", ...baseArgs];
+  }
+
+  /** Extract Antigravity's session ID from the headless JSONL clock stream. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    for (const line of chunk.split("\n")) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const event = JSON.parse(line) as {
+          event?: string;
+          conversation_id?: string;
+        };
+        if (
+          event.event === "init" &&
+          typeof event.conversation_id === "string" &&
+          event.conversation_id.length > 0
+        ) {
+          return event.conversation_id;
+        }
+      } catch {
+        // Chunks may contain an incomplete JSONL line; the next chunk retries it.
+      }
+    }
+    return undefined;
+  }
+
+  /** Observe stream-json usage without adding a second event-mapping path. */
+  observeHeadlessStdout(chunk: string): void {
+    if (!ConfigurationUtils.shouldTrackAntigravityStatusLine()) {
+      this.streamJsonUsage.reset();
+      this.logParser.setStreamJsonUsage();
+      return;
+    }
+
+    this.streamJsonUsage.ingest(chunk);
+    this.logParser.setStreamJsonUsage(this.streamJsonUsage.getSnapshot());
   }
 
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {

@@ -381,7 +381,7 @@ export interface TokenUsage {
   cachedInputTokens?: number;
   /** Number of cache-creation input tokens — Claude only */
   cacheCreatedTokens?: number;
-  /** Number of reasoning output tokens — Codex only */
+  /** Number of reasoning output tokens — Codex and Antigravity */
   reasoningOutputTokens?: number;
   /**
    * Total input tokens in the context window for the last API turn.
