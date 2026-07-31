@@ -563,6 +563,10 @@ const WorkflowStepsPanelInner: React.FC<{
     isCLIManaged ||
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
+  // A running final step remains selectable so its prompt can be reviewed and
+  // edited locally. The editor footer prevents updating or deleting it until
+  // execution finishes; only CLI-managed workflows block editor selection.
+  const finalStepSelectionIsReadOnly = isCLIManaged;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -1076,6 +1080,7 @@ const WorkflowStepsPanelInner: React.FC<{
         isExpanded={finalStepFooterExpanded}
         isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isReadOnly={finalStepIsReadOnly}
+        isSelectionReadOnly={finalStepSelectionIsReadOnly}
         isDisabled={finalStep?.enabled === false}
         onSelect={handleFinalStepSelect}
         onToggleExpanded={toggleFinalStepFooterExpanded}

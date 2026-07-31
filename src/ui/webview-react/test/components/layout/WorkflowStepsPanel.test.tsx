@@ -192,6 +192,26 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     );
   });
 
+  it("selects a running final step for editing", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Queued step" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      finalStep: { prompt: "Running final step" },
+      finalStepStatus: STEP_STATUS.RUNNING,
+      finalStepPhase: FINAL_STEP_PHASES.FINAL_STEP,
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    fireEvent.click(screen.getByText("Final Step"));
+
+    expect(useEditorStore.getState().isFinalStepMode()).toBe(true);
+    expect(useEditorStore.getState().promptText).toBe("Running final step");
+  });
+
   it("shows detailed status counts in the header tooltip and keeps the divider unlabeled", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({

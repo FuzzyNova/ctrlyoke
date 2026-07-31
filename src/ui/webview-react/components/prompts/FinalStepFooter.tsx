@@ -27,6 +27,8 @@ interface FinalStepFooterProps {
   phase: FinalStepPhase | null;
   isExpanded: boolean;
   isSelected: boolean;
+  /** Whether selecting this final step in the editor is unavailable. */
+  isSelectionReadOnly?: boolean;
   isReadOnly: boolean;
   isDisabled: boolean;
   onSelect: () => void;
@@ -64,6 +66,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   isExpanded,
   isSelected,
   isReadOnly,
+  isSelectionReadOnly = isReadOnly,
   isDisabled,
   onSelect,
   onToggleExpanded,
@@ -91,16 +94,19 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             isSelected
               ? "bg-list-active-bg text-list-active-fg"
               : "hover:bg-list-hover-bg text-foreground"
-          } ${isReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
+          } ${isSelectionReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
           role="button"
           tabIndex={0}
           onClick={() => {
-            if (!isReadOnly) {
+            if (!isSelectionReadOnly) {
               onSelect();
             }
           }}
           onKeyDown={(e) => {
-            if ((e.key === "Enter" || e.key === " ") && !isReadOnly) {
+            if (
+              (e.key === "Enter" || e.key === " ") &&
+              !isSelectionReadOnly
+            ) {
               e.preventDefault();
               onSelect();
             }
@@ -159,16 +165,19 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           isSelected
             ? "bg-list-active-bg text-list-active-fg"
             : "hover:bg-list-hover-bg text-foreground"
-        } ${isReadOnly ? "opacity-75" : "cursor-pointer"}`}
+        } ${isSelectionReadOnly ? "opacity-75" : "cursor-pointer"}`}
         role="button"
         tabIndex={0}
         onClick={() => {
-          if (!isReadOnly) {
+          if (!isSelectionReadOnly) {
             onSelect();
           }
         }}
         onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && !isReadOnly) {
+          if (
+            (e.key === "Enter" || e.key === " ") &&
+            !isSelectionReadOnly
+          ) {
             e.preventDefault();
             onSelect();
           }

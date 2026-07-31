@@ -1,216 +1,247 @@
 # Automation API & Power User Scripting Plan
 
-## The Question: Do We Need an SDK?
+> **Status: ACTIVE — per-step `--json` results.** Parameterized headless runs
+> are implemented. The remaining work is a stable, detailed JSON result for
+> one completed CLI run. SDK and MCP workflow-launching proposals remain
+> deferred indefinitely; they are not part of this implementation.
 
-Short answer: **not yet, and maybe never** — but two targeted CLI enhancements close the
-gap for almost every automation use case. A Python/JS SDK only makes sense later, built
-thin on top of the MCP server once the standalone server exists.
+## Goal
 
----
-
-## What Power Users Actually Need
-
-The canonical use cases:
-
-1. **Multi-repo batch execution** — run the same security or cleanup workflow against 50
-   repos, collect results, report failures.
-2. **Conditional chaining** — run a research workflow, inspect what it found, then
-   conditionally run a follow-up workflow.
-3. **Parametrized workflows** — same YAML, different target (repo URL, branch, component
-   name, environment).
-4. **CI/CD integration** — trigger ctrlyoke from a GitHub Actions or Jenkins pipeline,
-   fail the build if the AI workflow fails.
-5. **Result inspection** — after a run, programmatically examine which files were changed,
-   what the AI output was, whether end conditions passed.
-
----
-
-## What Already Works
+Make `ctrlyoke run --headless --json` useful as the final operation in a shell,
+Python, JavaScript, or CI script. The command must emit exactly one JSON result
+to stdout after the run, with enough per-queue-step detail to decide what
+happened without parsing terminal text or ctrlyoke's private storage files.
 
 ```bash
-# Run a workflow headlessly
-ctrlyoke run security-scan.ctrlyoke.yaml --headless
-
-# Get JSON output  (--json flag already exists in cli.ts)
-ctrlyoke run security-scan.ctrlyoke.yaml --headless --json
-
-# CI/CD: non-zero exit on failure (already works)
-ctrlyoke run workflow.yaml --headless || echo "workflow failed"
+ctrlyoke run security-scan.ctrlyoke.yaml --headless --json \
+  --var repoPath=/repos/service-a \
+  --var reportDir=./reports/service-a
 ```
 
-The building blocks are already there. The gaps are **parametrization** and **structured
-output richness**.
+This remains a CLI feature. The CLI continues to own execution lifecycle,
+workspace resolution, workflow locks, cancellation, and exit-code semantics.
 
----
+## Current implementation audit
 
-## Why YAML Conditionals/Loops Are the Wrong Answer
+| Capability                                   | Status                  | Current source of truth                                                                                                       |
+| -------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Headless execution and CI exit codes         | **Implemented**         | `src/cli.ts` runs the shared `WorkflowInstance` and maps terminal workflow state to exit codes.                               |
+| Workflow-level `vars:` defaults              | **Implemented**         | `schemas/workflow-schema.json` and `PromptFile.vars`.                                                                         |
+| Repeatable `--var key=value` overrides       | **Implemented**         | `CliRunCommandDefinitions.ts` parses assignments and `cli.ts` merges them over workflow defaults after loading.               |
+| Variable substitution and script environment | **Implemented**         | `VarSubstitutor` resolves supported fields; `EndConditionEvaluator` injects `CTRLYOKE_VAR_<UPPERCASE_KEY>`.                   |
+| Compact JSON result                          | **Implemented**         | `cli.ts` currently emits version, file, selected harness/model, workflow status, and aggregate completed/failed/total counts. |
+| Durable attempt and output history           | **Implemented**         | `OutputHistoryManager` records a per-run JSONL timeline; `RunOutputResolver` reads it in a streaming, bounded-memory pass.    |
+| Per-step JSON result                         | **Missing — this plan** | The current `--json` branch never projects queue results, runtime metadata, attempts, file events, or end-condition detail.   |
 
-Adding `if/then/else` or `loop` constructs to the ctrlyoke YAML schema is tempting but
-creates a mini-language nobody wants. Consider:
+The runtime already supplies the needed data without re-running or scraping a
+harness:
 
-- GitHub Actions YAML expressions (`${{ if condition }}`) are universally hated for
-  anything beyond trivial cases
-- Helm templates (`{{- if .Values.enabled }}`) are notoriously hard to read and debug
-- Ansible's `when:` + `with_items:` + `loop:` grew into a full scripting system nobody
-  can remember the syntax for
+- queue state supplies step order, terminal status, errors, retry count, and
+  workflow/step runtime timestamps;
+- each executed prompt's `_runtime` records selected harness, model, session ID,
+  start time, completion time, and terminal status;
+- the run timeline records every attempt, structured CLI events, response output,
+  script execution output, and terminal attempt state; and
+- `EvaluationResult` contains end-condition verdict, stdout, stderr, exit code,
+  duration, and evaluator errors.
 
-Users already know Python, bash, and JavaScript. The right answer is to give them a
-clean programmatic surface and let them use the tools they already know.
+### Existing variable caveat
 
----
+Substitution runs when the loaded workflow has at least one `vars:` value or a
+CLI `--var` override. A workflow containing placeholders with neither bypasses
+substitution and sends the literal placeholder to the harness. This is a known
+behavioral limitation, not part of the per-step JSON work.
 
-## The Right Answer: Two CLI Enhancements
+## JSON v1 contract
 
-### Enhancement 1 — Variable Substitution (`--var`) - COMPLETED
+`--json` replaces the current compact success payload with the versioned result
+below. This is pre-release, so the current unversioned compact payload does not
+need compatibility preservation. `--json` must continue to suppress all
+headers, streaming chunks, status decorations, and diagnostics on stdout.
 
-Allow `{{varName}}` placeholders anywhere in workflow YAML/JSON (prompt text, model,
-harness, endCondition script path). Pass values from the CLI with `--var key=value`.
-
-```bash
-# Run the same workflow against different repos
-for repo in repos/*.txt; do
-  ctrlyoke run security-scan.yaml \
-    --headless \
-    --var "repoPath=$(cat $repo)" \
-    --var "reportDir=./reports/$(basename $repo .txt)"
-done
-```
-
-```yaml
-# security-scan.ctrlyoke.yaml
-prompts:
-  - name: scan
-    prompt: |
-      Scan the repository at {{repoPath}} for security vulnerabilities.
-      Write a report to {{reportDir}}/security-report.md.
-```
-
-**Implementation:**
-
-- `PropertyResolver` already handles three-tier precedence. A fourth tier — CLI vars —
-  sits at the top (highest precedence).
-- Substitution runs on the resolved prompt text before sending to the AI CLI.
-- `--var` can be passed multiple times: `--var a=1 --var b=2`
-- Vars are also available in `endCondition.script` invocations as env vars
-  (`CTRLYOKE_VAR_REPOPATH`, etc.) so scripts can branch on them.
-- Missing vars with no default: fail fast with a clear error message.
-
-**Schema addition (optional):**
-
-```yaml
-vars:
-  repoPath: "." # workflow-level defaults; overridden by --var at runtime
-  reportDir: "./reports"
-```
-
-### Enhancement 2 — Richer `--json` Output
-
-The `--json` flag already exists. Expand the output schema to include everything a script
-needs to branch and inspect:
-
-```jsonc
+```json
 {
+  "schemaVersion": 1,
   "success": true,
   "workflowFile": "security-scan.ctrlyoke.yaml",
-  "startedAt": "2026-03-23T10:00:00Z",
-  "completedAt": "2026-03-23T10:04:32Z",
+  "workflowKey": "security-scan-2026-07-30T10-00-00-000",
+  "runRef": "run-2026-07-30T10-00-00-000Z",
+  "harness": "codex-cli",
+  "model": "gpt-5",
+  "status": "completed",
+  "startedAt": "2026-07-30T10:00:00.000Z",
+  "completedAt": "2026-07-30T10:04:32.000Z",
   "durationMs": 272000,
-  "vars": { "repoPath": "/home/user/myrepo" },
+  "vars": { "repoPath": "/repos/service-a" },
+  "summary": { "total": 1, "completed": 1, "failed": 0, "skipped": 0 },
   "steps": [
     {
-      "id": "scan",
       "index": 0,
+      "name": "scan",
+      "type": "prompt",
+      "status": "completed",
       "success": true,
       "attempts": 1,
+      "startedAt": "2026-07-30T10:00:02.000Z",
+      "completedAt": "2026-07-30T10:04:30.000Z",
+      "durationMs": 268000,
       "sessionId": "abc-123",
       "filesChanged": ["src/auth.ts", "src/db.ts"],
-      "endCondition": { "passed": true, "script": "npm test", "output": "..." },
-    },
+      "endCondition": {
+        "passed": true,
+        "script": "npm test",
+        "actual": "0",
+        "actualSource": "exitCode",
+        "stdout": "all tests passed",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 4210,
+        "error": null
+      },
+      "error": null
+    }
   ],
-  "error": null, // or { "step": "scan", "message": "...", "attempt": 2 }
+  "error": null
 }
 ```
 
-**In scripts:**
+### Contract rules
 
-```python
-import subprocess, json, sys
+- `success` is `true` only for workflow status `completed`; it is `false` for
+  failed, stopped, interrupted, or unexpected CLI-error results.
+- `status` retains the canonical execution-state value. `steps` contains every
+  queue step in queue order, including disabled, pending, skipped, and failed
+  steps. It does not include `finalStep`: a final step can run an unbounded loop
+  and needs a separately designed loop-oriented result in a future feature.
+- `success` on a step is `true` only for `completed`, `false` for terminal
+  failure, and `null` for pending, disabled, skipped, or stopped work.
+- `attempts` counts all persisted AI/script attempts for that queue step,
+  including retries and resumed attempts. It is `0` when the step never began.
+- Timestamps are ISO-8601 UTC strings; unavailable values are `null`.
+  `durationMs` is `completedAt - startedAt` when both timestamps exist,
+  otherwise `null`.
+- `filesChanged` is a deduplicated, normalized list of paths from observed
+  `FILE_WRITE`, `FILE_EDIT`, and `FILE_DELETE` events across all attempts for a
+  step. It is deliberately **not** a Git diff or a claim of net final changes;
+  harnesses that do not emit structured file events yield an empty list.
+- `endCondition` is `null` if no end condition ran. Otherwise it contains the
+  last evaluation, including an evaluator error or a failed verdict after
+  retries. `stdout` and `stderr` are emitted exactly as produced; no CLI-only
+  truncation is applied.
+- Script steps use the same common fields and set `type: "script"`; their
+  command, stdout, stderr, and exit code are returned in a `script` object.
+  They have `sessionId: null` and `endCondition: null`.
+- `error` on a step is the terminal failure reason or `null`. Top-level `error`
+  is `{ "step": <index>, "message": <string>, "attempt": <number|null> }`
+  for a workflow failure, otherwise `null`.
+- A setup/parse/unexpected error that prevents a queue state from being built
+  emits the same versioned envelope with `success: false`, `status: "error"`,
+  `steps: []`, and `error: { "step": null, "message": ..., "attempt": null }`.
+  The existing exit code `2` remains unchanged.
 
-result = json.loads(subprocess.check_output([
-    "ctrlyoke", "run", "security-scan.yaml",
-    "--headless", "--json", "--quiet",
-    "--var", f"repoPath={repo}"
-]))
+`responseText`, raw CLI event streams, diffs, token usage, and final-step loop
+history are intentionally excluded from JSON v1. They can be large and have
+different retention/privacy needs. `ctrlyoke_read_output` remains the supported
+MCP surface for selected response text.
 
-if not result["success"]:
-    print(f"Scan failed at step {result['error']['step']}")
-    sys.exit(1)
+## Design and implementation plan
 
-changed = [s["filesChanged"] for s in result["steps"]]
-print(f"Modified {sum(len(f) for f in changed)} files")
-```
+### 1. Define a CLI-only result contract and builder
 
-This is ergonomic in bash, Python, JavaScript, or any language that can parse JSON from
-stdout. No SDK required.
+Add `src/cli/CliJsonResultBuilder.ts` with exported TypeScript interfaces and a
+single `buildCliJsonResult(...)` entry point. Keep these types CLI-local: this
+is an external command-output contract, not a dashboard/webview contract.
 
----
+Inputs:
 
-## When Would a Python/JS SDK Be Worth It?
+- final `QueueState` and loaded `PromptFile` (for effective vars);
+- resolved CLI harness/model and original workflow-file reference;
+- workspace root; and
+- the promoted run's `workflowKey` and `runRef`, when available.
 
-A dedicated SDK adds value only when:
+The builder owns ISO timestamp conversion, nullable-field policy, common
+per-step shaping, summary counts, and the top-level error selection. It must
+never write workflow files or mutate queue state.
 
-1. **The programmatic surface is rich enough** — once the standalone server exists, the
-   WebSocket API gives full real-time access to streaming output, mid-workflow events, and
-   interactive control. A Python/JS client for that is genuinely useful.
-2. **Type safety matters** — an SDK with typed response objects (`WorkflowResult`,
-   `StepResult`) is nicer than parsing raw JSON.
-3. **There is user demand** — build the CLI enhancements first, see if users ask for more.
+### 2. Add a one-pass queue-attempt projection
 
-**If built, the SDK should be a thin wrapper over the MCP server or HTTP API** from
-`STANDALONE_SERVER_PLAN.md` — not a reimplementation of workflow execution logic. The
-SDK never runs workflows itself; it communicates with a running ctrlyoke server.
+Extend `src/core/orchestration/RunOutputResolver.ts` with a focused read-only
+projection for selected queue targets. It must consume its existing `stream()`
+API in one pass and return, per queue index:
 
-```python
-# Future SDK (post-standalone-server)
-from ctrlyoke import CtrlYokeClient
+- total attempt count and latest attempt index/terminal state;
+- observed file-change paths aggregated across all attempts; and
+- latest script output where relevant.
 
-async with CtrlYokeClient("http://localhost:3847") as fp:
-    run = await fp.run("security-scan.yaml", vars={"repoPath": repo})
-    async for event in run.events():
-        if event.type == "file_edit":
-            print(f"  Modified {event.data.path}")
-    result = await run.wait()
-```
+Do not call `TimelineRecorder.readEvents()` or resolve each step separately:
+that would materialize or rescan a potentially large JSONL history. Reuse
+`normalizeCliEvents()` and the existing file-event types for path extraction.
 
-This is worth building — but only after the standalone server exists.
+If the run manifest/history cannot be read after a workflow terminal state,
+the builder must log a diagnostic and return the state-derived result with
+`attempts: 0` and empty file lists. JSON reporting must never convert an
+otherwise valid workflow completion into a CLI error.
 
----
+### 3. Preserve the last end-condition evaluation in queue state
 
-## What About the MCP Server?
+Add a typed last-evaluation summary to `PromptResult` in
+`src/types/CtrlYokeTypes.ts`; do not overload the existing boolean
+`endConditionResult` or `scriptOutput` fields. Add a narrow `PromptQueue`
+method to update that summary so result mutation remains queue-owned.
 
-`ctrlyoke-mcp` already exposes `ctrlyoke_queue_status` and `ctrlyoke_append_queue`
-as MCP tools. For users who live in an AI coding assistant, this is already a powerful
-automation API — they can tell their AI to append steps to a running ctrlyoke queue or
-inspect its state.
+Have `EndConditionHandler`/`WorkflowExecutor` record every evaluation,
+including pass, failed verdict, retry result, evaluator error, and the final
+post-retry verdict. The builder exposes only the final record for each step.
+This is required because the current code records successful evaluation stdout
+only and cannot report failed end-condition output accurately.
 
-Enhancements worth adding to the MCP server:
+### 4. Wire the builder into the CLI success and error paths
 
-- `ctrlyoke_run_workflow` — trigger a full workflow run and return structured results
-- `ctrlyoke_get_step_output` — retrieve the output of a specific completed step
-- `ctrlyoke_set_var` — set a runtime variable on a running workflow
+Replace the `options.json` branch in `src/cli.ts` with the builder and one
+`process.stdout.write(JSON.stringify(result) + "\n")` call. Continue to
+calculate and use the existing exit code; JSON does not change exit semantics.
 
----
+Use the same result factory in the surrounding `catch` path so consumers never
+need two unrelated JSON shapes. Keep diagnostics in `Log.initializeCli()` and
+never write a formatting/log line to stdout in JSON mode.
 
-## Recommendation
+### 5. Tests
 
-| Enhancement                        | Priority         | Complexity                             |
-| ---------------------------------- | ---------------- | -------------------------------------- |
-| `--var key=value` CLI substitution | **High**         | Low — PropertyResolver extension       |
-| Richer `--json` output schema      | **High**         | Low — output is already collected      |
-| Workflow-level `vars:` defaults    | Medium           | Low — schema + PropertyResolver        |
-| Python/JS SDK                      | Low              | Medium — build after standalone server |
-| MCP server `ctrlyoke_run_workflow` | Medium           | Low — wraps existing CLI logic         |
-| YAML `if/when/loop` constructs     | **Do not build** | —                                      |
+Add focused tests rather than requiring installed harnesses:
 
-The two high-priority items together give power users everything they need for the
-multi-repo batch, CI/CD, and conditional chaining use cases, with tools they already know.
+1. `CliJsonResultBuilder` unit tests for a completed prompt, failed prompt,
+   skipped/pending step, script step, null timestamps, top-level error, and
+   JSON-safe error envelope.
+2. `RunOutputResolver` unit tests with timeline fixtures proving that retries
+   count correctly, the latest terminal attempt is selected, file paths are
+   deduplicated across `FILE_WRITE`/`FILE_EDIT`/`FILE_DELETE`, and history is
+   streamed once rather than loaded wholesale.
+3. Core tests for recording the final end-condition evaluation on pass, failure,
+   retry exhaustion, and evaluator error.
+4. CLI integration coverage that invokes the JSON writer with a fixture state
+   and asserts stdout is exactly one parseable JSON document with no decorative
+   output.
+
+Run `npm run compile:extension`, `npm run typecheck`, the focused unit/integration
+tests, and `npm run format:check` before moving this plan to `dev/implemented/`.
+
+## Explicitly deferred or rejected scope
+
+| Proposal                                 | Decision                            | Rationale                                                                                                             |
+| ---------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Python or JavaScript SDK                 | **Deferred indefinitely**           | The CLI is sufficient for scripted execution; there is no standalone workflow-control server API to wrap.             |
+| `ctrlyoke_run_workflow` MCP tool         | **Deferred indefinitely**           | It would create a second lifecycle, locking, cancellation, and workspace control plane.                               |
+| `ctrlyoke_get_step_output` MCP tool      | **Implemented under a better name** | `ctrlyoke_read_output` already reads selected queue-step output from promoted runs.                                   |
+| `ctrlyoke_set_var` on a running workflow | **Rejected**                        | Variables are launch-time configuration; mutation mid-run makes resolved prompts and persisted definitions ambiguous. |
+| YAML `if`/`when`/`loop` language         | **Rejected**                        | Callers should use their shell, Python, JavaScript, or CI system for control flow.                                    |
+
+## Completion criteria
+
+- `ctrlyoke run --headless --json` produces the JSON v1 contract for successful,
+  failed, stopped, and unexpected-error runs.
+- Every queue step has a stable row; retries, known file paths, session IDs,
+  timing, errors, script details, and final end-condition evaluation are
+  accurately represented when available.
+- JSON mode remains clean stdout and retains existing exit codes.
+- The implementation uses current queue/runtime/timeline sources only and does
+  not add an MCP execution path, SDK, workflow DSL, or new persistence format.

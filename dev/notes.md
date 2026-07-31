@@ -44,3 +44,5 @@ Make undo modal take up full window space and use diff view used by workspace
 Add animation for output window new messages and fix scroll lock behavior and glitchiness when live events are coming in
 
 add find to output window and make icons bigger
+
+script result string doesn't wrap properly in the OutputSection

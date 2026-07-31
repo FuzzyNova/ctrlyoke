@@ -106,9 +106,10 @@ than reimplementing them.
 7. **Accessibility and semantic testability** — keyboard parity, accessible
    names/states, landmarks, and resilient role-based tests.
    ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
-8. **Automation API structured results** — finish the rich JSON result work in
-   [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md). Variable substitution is
-   already implemented; an SDK remains deferred.
+8. **Automation API structured results** — implement the versioned per-step
+   JSON result contract. Variable substitution and compact JSON are already
+   implemented; SDK and MCP workflow launching remain deferred.
+   ([plan](AUTOMATION_API_PLAN.md))
 9. **Expand capability domains** — phase 3 of the compatibility plan: hooks,
    MCP injection/tool filtering, images, and usage metadata, plus generated
    compatibility documentation.
@@ -326,7 +327,7 @@ criteria matter more than speculative dates.
 | [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) | Infrastructure/content exists; freshness and deployment remain     |
 | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                       | Architecture decided; provider and extension implementation remain |
 | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)       | External cutover work remains                                      |
-| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                 | Variables implemented; rich JSON output remains                    |
+| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                 | Per-step JSON design ready to implement; SDK/MCP launch deferred   |
 
 ### Prioritized backlog
 
