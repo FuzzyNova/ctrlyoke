@@ -7,7 +7,6 @@ import { suite, test } from "mocha";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
@@ -49,7 +48,7 @@ suite("OpenCodeCliProvider", () => {
     }
   });
 
-  test("builds MCP entries identical to the current opencode.json writer", async () => {
+  test("builds MCP entries for inline delivery without writing a workspace file", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-inline-mcp-")
     );
@@ -71,8 +70,6 @@ suite("OpenCodeCliProvider", () => {
       },
     ];
     const provider = new OpenCodeCliProvider();
-    SettingsJsonMcpTracker.resetAll();
-
     try {
       const inlineConfig = provider.buildInlineConfig({
         extensionPath,
@@ -83,7 +80,7 @@ suite("OpenCodeCliProvider", () => {
         userServers,
       });
 
-      await provider.getMcpConfigArgs(
+      const mcpArgs = await provider.getMcpConfigArgs(
         mcpServerPath,
         workspaceRoot,
         workingFilePath,
@@ -91,15 +88,13 @@ suite("OpenCodeCliProvider", () => {
         userServers
       );
 
-      const fileConfig = JSON.parse(
-        await fs.readFile(path.join(workspaceRoot, "opencode.json"), "utf-8")
+      assert.deepStrictEqual(mcpArgs, []);
+      assert.deepStrictEqual(
+        JSON.parse(provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!),
+        { mcp: inlineConfig.mcp, plugin: [] }
       );
-      assert.deepStrictEqual(inlineConfig.mcp, fileConfig.mcp);
+      assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);
     } finally {
-      await provider
-        .cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)
-        .catch(() => {});
-      SettingsJsonMcpTracker.resetAll();
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
@@ -363,164 +358,177 @@ suite("OpenCodeCliProvider", () => {
     }
   });
 
-  test("creates, gitignores, and cleans a workspace permission config", async () => {
+  test("delivers the same inline config to headless and interactive spawns", async () => {
     const workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "opencode-permissions-")
+      path.join(os.tmpdir(), "opencode-inline-env-")
     );
-    const provider = new OpenCodeCliProvider();
+    const extensionPath = path.join(workspaceRoot, "extension");
     const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
-    SettingsJsonMcpTracker.resetAll();
-
-    try {
-      await provider.prepareToolPermissions(
-        {
+    const workflowContext = {
+      promptIndex: 0,
+      allPrompts: [],
+      workingFilePath,
+      resolvedProperties: {
+        mcpServers: [
+          { id: "temporary", command: "node", args: ["temporary.js"] },
+        ],
+        toolPermissions: {
           mode: PERMISSION_MODES.CUSTOM,
           allowedTools: ["write", "shell(git:*)"],
           deniedTools: ["shell(rm:*)"],
         },
+      },
+    } as any;
+
+    try {
+      const headlessProvider = new OpenCodeCliProvider();
+      await headlessProvider.buildCliArgs(
+        { prompt: "headless" },
+        false,
+        extensionPath,
+        workspaceRoot,
+        undefined,
+        workflowContext
+      );
+      await headlessProvider.prepareToolPermissions(
+        workflowContext.resolvedProperties.toolPermissions,
         workspaceRoot,
         workingFilePath
       );
 
-      const configPath = path.join(workspaceRoot, "opencode.json");
-      const config = JSON.parse(await fs.readFile(configPath, "utf-8"));
-      assert.strictEqual(config.$schema, "https://opencode.ai/config.json");
+      const interactiveProvider = new OpenCodeCliProvider();
+      await interactiveProvider.buildCliArgs(
+        { prompt: "interactive" },
+        true,
+        extensionPath,
+        workspaceRoot,
+        undefined,
+        workflowContext
+      );
+      await interactiveProvider.prepareToolPermissions(
+        workflowContext.resolvedProperties.toolPermissions,
+        workspaceRoot,
+        workingFilePath
+      );
+
+      assert.strictEqual(
+        headlessProvider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT,
+        interactiveProvider.getInteractiveSpawnEnv().OPENCODE_CONFIG_CONTENT
+      );
+      const config = JSON.parse(
+        headlessProvider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!
+      );
       assert.deepStrictEqual(config.permission, {
         "*": "ask",
         edit: "allow",
-        bash: {
-          "git *": "allow",
-          "rm *": "deny",
-        },
+        bash: { "git *": "allow", "rm *": "deny" },
       });
-
-      const gitignorePath = path.join(workspaceRoot, ".gitignore");
-      const gitignore = await fs.readFile(gitignorePath, "utf-8");
-      assert.ok(gitignore.includes("opencode.json"));
-      assert.ok(gitignore.includes(".gitignore"));
-
-      await provider.cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath);
-
-      await assert.rejects(fs.access(configPath), /ENOENT/);
-      await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+      assert.deepStrictEqual(config.mcp.temporary, {
+        type: "local",
+        command: ["node", "temporary.js"],
+      });
     } finally {
-      SettingsJsonMcpTracker.resetAll();
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 
-  test("coordinates MCP and permissions while restoring an existing opencode.json", async () => {
+  test("resets inline config between consecutive steps", async () => {
     const workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "opencode-config-")
+      path.join(os.tmpdir(), "opencode-inline-reset-")
     );
     const provider = new OpenCodeCliProvider();
-    const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
-    const configPath = path.join(workspaceRoot, "opencode.json");
-    const baseline = {
-      theme: "dark",
-      mcp: {
-        existing: {
-          type: "local",
-          command: ["node", "existing.js"],
-        },
+    const extensionPath = path.join(workspaceRoot, "extension");
+    const firstContext = {
+      promptIndex: 0,
+      allPrompts: [],
+      resolvedProperties: {
+        mcpServers: [{ id: "first", command: "node", args: ["first.js"] }],
       },
-      permission: {
-        read: "deny",
-        bash: {
-          "git *": "ask",
-        },
-      },
-    };
-    SettingsJsonMcpTracker.resetAll();
+    } as any;
 
     try {
-      await fs.writeFile(
-        configPath,
-        JSON.stringify(baseline, null, 2),
-        "utf-8"
-      );
-
-      await provider.getMcpConfigArgs(
-        undefined,
+      await provider.buildCliArgs(
+        { prompt: "first" },
+        false,
+        extensionPath,
         workspaceRoot,
-        workingFilePath,
         undefined,
-        [
-          {
-            id: "temporary",
-            command: "node",
-            args: ["temporary.js"],
-          },
-        ]
+        firstContext
       );
       await provider.prepareToolPermissions(
         {
           mode: PERMISSION_MODES.CUSTOM,
-          allowedTools: ["write", "shell(git:*)"],
-          deniedTools: ["shell(rm:*)"],
+          allowedTools: ["write"],
+          deniedTools: [],
         },
-        workspaceRoot,
-        workingFilePath
+        workspaceRoot
       );
-
-      const active = JSON.parse(await fs.readFile(configPath, "utf-8"));
-      assert.deepStrictEqual(active.mcp.existing, baseline.mcp.existing);
-      assert.deepStrictEqual(active.mcp.temporary, {
-        type: "local",
-        command: ["node", "temporary.js"],
-      });
-      assert.strictEqual(active.permission.read, "deny");
-      assert.strictEqual(active.permission["*"], "ask");
-      assert.strictEqual(active.permission.edit, "allow");
-      assert.deepStrictEqual(active.permission.bash, {
-        "git *": "allow",
-        "rm *": "deny",
-      });
-
-      await provider.cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath);
-
-      assert.deepStrictEqual(
-        JSON.parse(await fs.readFile(configPath, "utf-8")),
-        baseline
+      const firstConfig = JSON.parse(
+        provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!
       );
-      await assert.rejects(
-        fs.access(path.join(workspaceRoot, ".gitignore")),
-        /ENOENT/
+      assert.ok(firstConfig.mcp.first);
+      assert.ok(firstConfig.permission);
+
+      await provider.buildCliArgs(
+        { prompt: "second" },
+        false,
+        extensionPath,
+        undefined,
+        undefined,
+        {
+          promptIndex: 1,
+          allPrompts: [],
+          resolvedProperties: { mcpServers: [] },
+        } as any
       );
+      const secondConfig = JSON.parse(
+        provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!
+      );
+      assert.strictEqual("mcp" in secondConfig, false);
+      assert.strictEqual("permission" in secondConfig, false);
+      assert.deepStrictEqual(secondConfig.plugin, firstConfig.plugin);
     } finally {
-      SettingsJsonMcpTracker.resetAll();
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 
-  test("does not overwrite a malformed existing opencode.json", async () => {
+  test("does not create opencode.json or other inline config files in the workspace", async () => {
     const workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "opencode-invalid-config-")
+      path.join(os.tmpdir(), "opencode-inline-files-")
     );
     const provider = new OpenCodeCliProvider();
-    const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
-    const configPath = path.join(workspaceRoot, "opencode.json");
-    const invalidConfig = "{ invalid json";
-    SettingsJsonMcpTracker.resetAll();
 
     try {
-      await fs.writeFile(configPath, invalidConfig, "utf-8");
-
-      await assert.rejects(
-        provider.prepareToolPermissions(
-          {
-            mode: PERMISSION_MODES.ALLOW_ALL,
-            allowedTools: [],
-            deniedTools: ["write"],
+      await provider.buildCliArgs(
+        { prompt: "file-free" },
+        false,
+        path.join(workspaceRoot, "extension"),
+        workspaceRoot,
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: {
+            mcpServers: [
+              { id: "temporary", command: "node", args: ["server.js"] },
+            ],
           },
-          workspaceRoot,
-          workingFilePath
-        ),
-        /Cannot safely update/
+        } as any
       );
-      assert.strictEqual(await fs.readFile(configPath, "utf-8"), invalidConfig);
+      await provider.prepareToolPermissions(
+        {
+          mode: PERMISSION_MODES.ALLOW_ALL,
+          allowedTools: [],
+          deniedTools: ["write"],
+        },
+        workspaceRoot
+      );
+
+      assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);
+      assert.ok(
+        JSON.parse(provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!).mcp
+      );
     } finally {
-      SettingsJsonMcpTracker.resetAll();
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });

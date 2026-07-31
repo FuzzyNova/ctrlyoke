@@ -49,58 +49,51 @@ suite("SettingsJsonMcpTracker", () => {
     assert.deepStrictEqual(settings, { theme: "dark" });
   });
 
-  test("shares identical permission policies and rejects conflicting owners", async () => {
+  test("shares identical values and rejects conflicting owners", async () => {
     const tracker = SettingsJsonMcpTracker.getInstance("qwen");
-    const policy = {
-      "*": "ask" as const,
-      edit: "allow" as const,
-    };
+    const value = "ctrlyoke-status";
 
     assert.strictEqual(
-      await tracker.registerPermissionPolicy("wf-1", tmpDir, policy),
+      await tracker.registerValueLease("wf-1", tmpDir, "statusLine", value),
       "acquired"
     );
     assert.strictEqual(
-      await tracker.registerPermissionPolicy("wf-2", tmpDir, policy),
+      await tracker.registerValueLease("wf-2", tmpDir, "statusLine", value),
       "shared"
     );
     await assert.rejects(
-      tracker.registerPermissionPolicy("wf-3", tmpDir, {
-        "*": "allow",
-      }),
-      /permission policy conflict/
+      tracker.registerValueLease("wf-3", tmpDir, "statusLine", "other"),
+      /statusLine value conflict/
     );
 
-    await tracker.unregisterPermissionPolicy("wf-1", tmpDir);
+    await tracker.unregisterValueLease("wf-1", tmpDir, "statusLine");
     assert.deepStrictEqual(
-      JSON.parse(await fs.readFile(settingsPath, "utf-8")).permission,
-      policy
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      value
     );
 
-    await tracker.unregisterPermissionPolicy("wf-2", tmpDir);
+    await tracker.unregisterValueLease("wf-2", tmpDir, "statusLine");
     await assert.rejects(fs.access(settingsPath), /ENOENT/);
   });
 
-  test("preserves permission edits made while a lease is active", async () => {
+  test("preserves user edits made while a value lease is active", async () => {
     const tracker = SettingsJsonMcpTracker.getInstance("qwen");
-    await tracker.registerPermissionPolicy("wf-1", tmpDir, {
-      "*": "ask",
-      edit: "allow",
-    });
+    await tracker.registerValueLease(
+      "wf-1",
+      tmpDir,
+      "statusLine",
+      "ctrlyoke-status"
+    );
 
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
-    settings.permission.read = "deny";
+    settings.statusLine = "user-edit";
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 
-    await tracker.unregisterPermissionPolicy("wf-1", tmpDir);
+    await tracker.unregisterValueLease("wf-1", tmpDir, "statusLine");
 
     assert.deepStrictEqual(
-      JSON.parse(await fs.readFile(settingsPath, "utf-8")).permission,
-      {
-        "*": "ask",
-        edit: "allow",
-        read: "deny",
-      }
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "user-edit"
     );
   });
 

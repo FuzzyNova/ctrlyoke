@@ -40,8 +40,8 @@ export interface OpenCodeInlineConfigBuildOptions {
 /**
  * Build OpenCode MCP entries without performing any file or tracker I/O.
  *
- * The same entry construction is used by the current opencode.json writer and
- * by the Stage 1 inline builder so the two representations cannot drift.
+ * The entry construction is shared by the pure builder and the prompt
+ * accumulator so the inline representation cannot drift between call paths.
  */
 export function buildOpenCodeMcpEntries(
   mcpServerPath: string | undefined,

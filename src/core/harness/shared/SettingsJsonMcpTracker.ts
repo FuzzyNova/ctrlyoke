@@ -10,8 +10,8 @@ import { AsyncMutex } from "./AsyncMutex";
  *
  * Defaults reproduce the Qwen behavior (`.{tool}/settings.json` in the
  * project, `~/.{tool}/settings.json` for the user). Antigravity overrides the
- * paths, while OpenCode overrides the paths and MCP property to coordinate
- * workspace-root `opencode.json` MCP and permission mutations.
+ * paths, while Antigravity overrides the paths and MCP property for its
+ * workspace-discovered MCP config.
  */
 export interface SettingsJsonMcpTrackerOptions {
   /** Resolve the project-level config file path. Default: `<ws>/.<tool>/settings.json`. */
@@ -53,8 +53,8 @@ interface LeaseSidecar {
 
 /**
  * Tracks MCP server lifecycle in a JSON config file for Qwen, Antigravity,
- * and OpenCode CLIs. It also owns optional permission-policy leases for
- * config-driven harnesses so permission and MCP writes share one mutex.
+ * and Antigravity CLIs. It also owns generic single-value leases used by
+ * config-driven state such as Antigravity's statusline registration.
  *
  * These CLIs auto-discover MCP servers from a JSON file's `mcpServers` key
  * (`.{tool}/settings.json` for Qwen, `.agents/mcp_config.json` for
@@ -618,33 +618,6 @@ export class SettingsJsonMcpTracker {
     }
   }
 
-  /** Apply the existing permission behavior through the generic lease. */
-  async registerPermissionPolicy(
-    workflowKey: string,
-    workspaceRoot: string,
-    policy: SettingsJsonPermissionPolicy
-  ): Promise<"acquired" | "shared"> {
-    return this.registerValueLease(
-      workflowKey,
-      workspaceRoot,
-      "permission",
-      policy,
-      (existing, requested) =>
-        this.mergePermissionPolicy(
-          existing,
-          requested as SettingsJsonPermissionPolicy
-        )
-    );
-  }
-
-  /** Release the permission policy through the generic lease. */
-  async unregisterPermissionPolicy(
-    workflowKey: string,
-    workspaceRoot: string
-  ): Promise<void> {
-    await this.unregisterValueLease(workflowKey, workspaceRoot, "permission");
-  }
-
   /** Prune dead owners and restore the baseline when the lease is orphaned. */
   async pruneDeadOwners(workspaceRoot: string, key: string): Promise<void> {
     const settingsPath = this.projectConfigPath(workspaceRoot);
@@ -846,42 +819,6 @@ export class SettingsJsonMcpTracker {
     }
     await this.writeOrRemoveManagedConfig(settingsPath, settings);
     Log.debug(`🧹 ${this.toolName} ${key} value restored in ${settingsPath}`);
-  }
-
-  private mergePermissionPolicy(
-    existing: unknown,
-    policy: SettingsJsonPermissionPolicy
-  ): SettingsJsonPermissionPolicy {
-    const merged: SettingsJsonPermissionPolicy =
-      existing && typeof existing === "object" && !Array.isArray(existing)
-        ? (this.cloneJson(existing) as SettingsJsonPermissionPolicy)
-        : {};
-
-    for (const [tool, decision] of Object.entries(policy)) {
-      if (
-        decision &&
-        typeof decision === "object" &&
-        !Array.isArray(decision)
-      ) {
-        const existingTool = merged[tool];
-        const toolRules: Record<string, SettingsJsonPermissionDecision> =
-          existingTool &&
-          typeof existingTool === "object" &&
-          !Array.isArray(existingTool)
-            ? { ...existingTool }
-            : {};
-        for (const [pattern, action] of Object.entries(decision)) {
-          delete toolRules[pattern];
-          toolRules[pattern] = action;
-        }
-        delete merged[tool];
-        merged[tool] = toolRules;
-      } else {
-        delete merged[tool];
-        merged[tool] = decision;
-      }
-    }
-    return merged;
   }
 
   private hasValueLeaseForWorkspace(workspaceRoot: string): boolean {

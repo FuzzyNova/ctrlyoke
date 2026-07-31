@@ -1,6 +1,6 @@
 # OpenCode Inline Config Migration Plan
 
-> **Status:** Proposed
+> **Status:** Stage 2 complete; Stages 3–5 proposed
 >
 > **Priority:** P0 — blocks the OpenCode half of
 > [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
@@ -11,8 +11,9 @@
 
 Move OpenCode off workspace-root `opencode.json` and off `.opencode/plugin/`
 entirely, and deliver every ctrlyoke-owned setting through the
-`OPENCODE_CONFIG_CONTENT` environment variable at spawn time. ctrlyoke then
-writes **zero files into the user's repository** for an OpenCode run.
+`OPENCODE_CONFIG_CONTENT` environment variable at spawn time. Stage 2 removes
+the workspace-root `opencode.json` writes; the existing `.opencode/plugin/`
+deployment remains until Stage 4.
 
 ---
 
@@ -367,16 +368,21 @@ two items over verbatim.
 the existing mapper output and MCP entry construction into one object. Unit
 tests only; nothing consumes it yet.
 
-**Stage 2 — deliver via env, cut the file writes.** Store the inline config
+**Stage 2 — deliver via env, cut the file writes (complete).** Store the inline config
 built in Stage 1 on the provider during `buildCliArgs` and return it from
 `getHeadlessSpawnEnv()` / `getInteractiveSpawnEnv()`, following
 `AntigravityCliProvider.ts:294-303`. Delete the tracker calls and drop
 `opencode.json` from every code path. Update `OpenCodeCliProvider.test.ts` — `"creates,
 gitignores, and cleans a workspace permission config"` (`:272`), `"coordinates
 MCP and permissions while restoring an existing opencode.json"` (`:318`), and
-`"does not overwrite a malformed existing opencode.json"` (`:402`) all describe
-behavior that no longer exists, and should be replaced by inline-config
-assertions rather than adapted.
+`"does not overwrite a malformed existing opencode.json"` (`:402`) were
+replaced by inline-config assertions. Coverage includes matching headless and
+interactive env values, accumulator reset between steps, and a fixture
+workspace directory check proving no `opencode.json` is created.
+
+Stage 2 was also smoke-tested through a real `node-pty` spawn of
+`opencode debug config`; the child exited successfully and resolved the
+`permission` block from `OPENCODE_CONFIG_CONTENT`.
 
 **Stage 3 — collision-safe key emission.** Resolve the user's effective
 permission key set from `~/.config/opencode/opencode.json`, the `OPENCODE_CONFIG`
@@ -421,9 +427,10 @@ Unit:
   for one step;
 - consecutive steps in one run each get their own config — the prompt-to-prompt
   case, since the integration is reused across prompts within a run;
-- no file is created under the workspace root for any OpenCode run — assert on
-  a fixture workspace's directory listing, which is the actual regression the
-  user hit.
+- no `opencode.json` or inline-config file is created under the workspace root
+  for an OpenCode run — assert on a fixture workspace's directory listing,
+  which is the actual regression the user hit. (Stage 4 separately removes the
+  remaining plugin deployment.)
 
 Real-harness (`npm run test:harness`, on request only — it costs money):
 

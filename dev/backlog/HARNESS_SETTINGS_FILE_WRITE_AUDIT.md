@@ -33,7 +33,7 @@ The important distinction is:
 | Copilot     | Per-prompt `.github/hooks/*.json`; per-execution MCP temp file                                                                         | Hook files are separately auto-discovered and normally coexist                                                       | Medium: path naming and cleanup need run identity; no shared permission file               | Keep files unless a later Copilot inline mechanism is verified                                                  |
 | Antigravity | Workspace `.agents/mcp_config.json`; global `~/.gemini/config/hooks.json`; global `~/.gemini/antigravity-cli/settings.json` statusline | Hook groups are retained; MCP entries are merged but visible to every agy process; identical statusline leases share | High for MCP and statusline; medium for hooks                                              | Keep hooks/statusline files; decide whether MCP needs a lease or an inline alternative                          |
 | Codex       | None for hooks; Codex MCP configuration is already inline                                                                            | Hook and trust overrides are process-local CLI arguments; user project files are untouched                         | Resolved for hooks; MCP remains inline                                                     | Keep the inline hook path and complete the remaining length-guard/diagnostic stages                            |
-| OpenCode    | Workspace `opencode.json`; fixed `.opencode/plugin/*` files                                                                            | `opencode.json` is shared; plugin and hook sidecar paths are fixed                                                   | High for MCP/permission policy and plugin sidecar                                          | [`OPENCODE_INLINE_CONFIG_PLAN.md`](OPENCODE_INLINE_CONFIG_PLAN.md) should remove workspace config/plugin writes |
+| OpenCode    | Fixed `.opencode/plugin/*` files only; MCP, permissions, and plugin registration are also delivered through `OPENCODE_CONFIG_CONTENT` | No workspace `opencode.json` mutation; plugin and hook sidecar paths remain fixed                                 | Plugin sidecar remains shared until Stage 4                                             | Stage 2 complete for inline config; Stage 4 moves the plugin deployment out of the repository                    |
 | Claude      | Per-prompt `.ctrlyoke/temp` hook and MCP files passed explicitly to Claude                                                             | Separate files normally coexist; same-key/default naming can collide                                                 | Low for discovery/pollution; medium for path ownership                                     | No current inline migration required                                                                            |
 
 ## Current write inventory by harness
@@ -120,23 +120,20 @@ Codex remains in this audit to record the completed migration. Its hook setup
 does not require a shared-file lease or workspace cleanup; the remaining Codex
 work is command-line budgeting and diagnostics, not file ownership.
 
-### OpenCode — resolvable by the inline plan
+### OpenCode — Stage 2 inline config complete
 
-Source: [`OpenCodeCliProvider.ts`](../../src/core/harness/opencode/OpenCodeCliProvider.ts), [`OpenCodeNotificationMonitor.ts`](../../src/core/harness/opencode/OpenCodeNotificationMonitor.ts), and [`SettingsJsonMcpTracker.ts`](../../src/core/harness/shared/SettingsJsonMcpTracker.ts).
+Source: [`OpenCodeCliProvider.ts`](../../src/core/harness/opencode/OpenCodeCliProvider.ts), [`OpenCodeNotificationMonitor.ts`](../../src/core/harness/opencode/OpenCodeNotificationMonitor.ts), and [`OpenCodeInlineConfig.ts`](../../src/core/harness/opencode/OpenCodeInlineConfig.ts).
 
 | File                                                                  | What ctrlyoke writes                                                                               | Current parallel behavior                                                                                                                                                                                                                                             | Disposition                                                                                                                                                                                                                                                                                                                                                                                             |
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{workspace}/opencode.json`                                           | MCP entries under `mcp` and, for applicable tool-permission modes, a workspace `permission` policy | Shared project config. MCP entries are ref-counted; permission leases share identical policies and reject different policies within the current tracker instance. OpenCode has no prompt-local MCP allowlist, so active servers are visible to all matching processes | High-priority shared-file concern today. The lease acquisition sequence still needs cross-process atomicity, path-keyed baseline state, step lifetime, and structured conflict handling as specified in `TOOL_PERMISSION_PARITY_PLAN.md`. Mark **resolvable** through [`OPENCODE_INLINE_CONFIG_PLAN.md`](OPENCODE_INLINE_CONFIG_PLAN.md), which moves MCP, permission, and plugin configuration inline. |
-| `{workspace}/opencode.json` sibling `.gitignore`                      | Temporary ignore file when ctrlyoke creates the config                                             | Removed only when managed state is gone; user-owned ignore files are preserved                                                                                                                                                                                        | Goes away for ctrlyoke-owned config after inline migration.                                                                                                                                                                                                                                                                                                                                             |
-| `{workspace}/opencode.json` sibling `.ctrlyoke-lease-permission.json` | Persistent ownership metadata for the permission lease                                             | Used for dead-owner pruning and cleanup                                                                                                                                                                                                                               | This is recovery metadata for the current permission writer, not a user setting. The parity plan still requires atomic cross-process acquisition.                                                                                                                                                                                                                                                       |
+| `OPENCODE_CONFIG_CONTENT`                                             | Per-step `mcp`, `permission`, and `plugin` slices serialized at spawn time                         | Process-local and isolated per provider instance; no workspace-discovered permission or MCP mutation                 | Resolved for Stage 2; collision handling for user config remains Stage 3                                                                 |
 | `{workspace}/.opencode/plugin/ctrlyoke-completion-hook.ts`            | Copied completion plugin                                                                           | Fixed path; concurrent deployments copy over the same file, and cleanup can remove it while another run still needs it                                                                                                                                                | Not unique. The inline plan replaces this repo-local plugin artifact with a `file://` plugin spec outside the repository plus inline config.                                                                                                                                                                                                                                                            |
 | `{workspace}/.opencode/plugin/ctrlyoke-hooks.json`                    | Fixed sidecar containing user hooks                                                                | Last writer wins; one workflow’s sidecar can replace another’s hook list                                                                                                                                                                                              | Not unique and not safely mergeable in the current implementation. Resolvable by the inline plan’s per-process config path, but hook-sidecar handling must preserve the intended notification behavior during implementation.                                                                                                                                                                           |
 | `{workspace}/.opencode/plugin/.gitignore`                             | Temporary ignore file for the two plugin artifacts                                                 | Removed during cleanup when managed artifacts are gone                                                                                                                                                                                                                | Shared cleanup artifact; goes away with the repo-local plugin deployment.                                                                                                                                                                                                                                                                                                                               |
 
-OpenCode’s current configuration writer is the direct consumer of the permission
-lease work. The inline migration should reduce that scope, but the parity plan
-must still describe the remaining Antigravity statusline lease and any other
-file-backed permission writer accurately while migration is incomplete.
+OpenCode no longer consumes the shared permission lease. The remaining
+workspace-file entries below describe only the plugin deployment; the shared
+value lease remains relevant to Antigravity’s statusline.
 
 ### Claude CLI
 
@@ -159,7 +156,7 @@ is expanded.
 `SettingsJsonMcpTracker` currently provides an **in-process async mutex** around
 read-modify-write operations. It also provides MCP reference counting, baseline
 preservation, atomic JSON writes, temporary `.gitignore` handling, and the
-single-value lease used by OpenCode permission policy and Antigravity statusline.
+single-value lease used by Antigravity statusline.
 
 The tracker’s `userConfigPath` is used to read baseline MCP names; it does not
 mean that ctrlyoke writes the user-level MCP file. The current provider writes
@@ -193,18 +190,16 @@ separate ctrlyoke processes.
 
 The current audit supports these classifications:
 
-1. **Permission-policy lease:** OpenCode’s `opencode.json` permission block is a
-   real workspace policy mutation and belongs in the permission lease design
-   until [`OPENCODE_INLINE_CONFIG_PLAN.md`](OPENCODE_INLINE_CONFIG_PLAN.md) is
-   implemented.
+1. **Permission-policy lease:** OpenCode’s permission block is now delivered
+   through `OPENCODE_CONFIG_CONTENT`; it is no longer a workspace mutation or a
+   consumer of the permission lease.
 2. **Statusline value lease:** Antigravity’s global `settings.json` statusline
    is a separate single-value lease. It is not a tool-permission policy, but it
    needs the same cross-process ownership rigor and dead-owner recovery.
-3. **MCP shared-file ownership:** Antigravity and current OpenCode MCP writers
-   merge server definitions into workspace-discovered files. MCP is not
-   permission policy, but it has a stronger pollution risk than hooks. The
-   existing tracker’s reference counting is useful within one process; it does
-   not provide prompt-local isolation for Antigravity or OpenCode.
+3. **MCP shared-file ownership:** Antigravity merges server definitions into a
+   workspace-discovered file. MCP is not permission policy, but it has a
+   stronger pollution risk than hooks. OpenCode now delivers its MCP entries
+   inline, while the existing tracker remains relevant to Antigravity.
 4. **Hook-file coordination:** Qwen and current Codex use merged hook arrays;
    Antigravity uses named groups; Copilot uses separately auto-discovered files.
    These should preserve multiple active workflows where possible. A lease
@@ -228,9 +223,9 @@ The current audit supports these classifications:
   [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md).
 - Implement the Codex inline hook plan and remove Codex’s current hook-file
   entry from the long-term shared-file inventory.
-- Implement the OpenCode inline config plan, then update the permission plan’s
-  remaining scope to emphasize Antigravity statusline and any still-file-backed
-  policy writer.
+- Complete the remaining OpenCode plugin move in Stage 4 of the inline config
+  plan, then keep the permission plan scoped to Antigravity statusline and any
+  still-file-backed policy writer.
 - Add cross-process locking or an equivalent ownership protocol around Qwen’s
   global `trusted_hooks.json` read-modify-write.
 - Give Copilot, Qwen, and Antigravity hook ownership a run-specific identity (or

@@ -44,8 +44,8 @@ const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
  * OpenCode uses config-file-driven permissions, not CLI flags.
  * Default behavior: all operations are allowed without approval.
  *
- * Permission overrides are translated here and written to the workspace-root
- * opencode.json by OpenCodeCliProvider through the shared config tracker.
+ * Permission overrides are translated here and delivered through
+ * OPENCODE_CONFIG_CONTENT by OpenCodeCliProvider.
  *
  * - dangerouslyAllowAll / none: no ctrlyoke permission block
  * - allowAll: `"*": "allow"` plus deny overrides
@@ -59,7 +59,7 @@ export class OpenCodeToolPermissionMapper
    * Build CLI arguments for tool permissions.
    *
    * OpenCode has no CLI flags for tool permissions — always returns empty array.
-   * Permission config is written to opencode.json project config file instead.
+   * Permission config is delivered through OPENCODE_CONFIG_CONTENT instead.
    *
    * @param config Tool permission configuration
    * @returns Empty array (no CLI arguments needed)

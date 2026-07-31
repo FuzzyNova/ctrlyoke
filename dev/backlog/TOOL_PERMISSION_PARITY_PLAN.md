@@ -15,11 +15,10 @@ a throwaway stopgap.
 
 Capability _classifications_ still change as the sequence progresses. Qwen's
 inline allow/deny flags are supported and manually verified; it does not need a
-workspace settings mutation. OpenCode's workspace-config implementation landed
-on 2026-07-30, and its allow/deny behavior was manually verified against a real
-OpenCode CLI on 2026-07-31 — its capability declaration now advances to
-verified support, with automated real-harness regression coverage remaining to
-be added.
+workspace settings mutation. OpenCode's inline-config implementation landed on
+2026-07-31, and its allow/deny behavior was manually verified against a real
+OpenCode CLI — its capability declaration now advances to verified support,
+with automated real-harness regression coverage remaining to be added.
 
 ---
 
@@ -47,10 +46,8 @@ Current code overstates support in several places:
   UI today, so a user's Denied Tools list is presented as enforced while the
   flags carrying it are unverified. This is the most acute instance of the
   problem and the first thing the honesty work must correct.
-- OpenCode previously promised an `opencode.json` permission side effect that
-  did not exist. The workspace-root config mutation, MCP coordination, and
-  ownership-aware cleanup are now implemented and were manually verified
-  against a real OpenCode CLI on 2026-07-31.
+- OpenCode delivers permission and MCP settings through
+  `OPENCODE_CONFIG_CONTENT`; it no longer mutates `opencode.json`.
 - Codex and Antigravity are intentionally mode-only, but the caveat is not
   consistently visible across every permissions surface.
 - Mapper unit tests assert generated strings. They do not prove that a harness
@@ -69,7 +66,7 @@ otherwise:
 | Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                  |
 | Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
 | Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; add automated real-harness regression coverage              |
-| OpenCode        | Supported                                   | Supported (manually verified)     | Retain the workspace-config writer; add automated real-harness regression coverage           |
+| OpenCode        | Supported                                   | Supported (manually verified)     | Retain inline mapping; add automated real-harness regression coverage                         |
 | Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
 | Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
 
@@ -178,10 +175,11 @@ independently startable parallel plan. Implement it in this order:
    analyzer, preflight, and client snapshot);
 3. complete the honest authoring UI below as Compatibility Phase 1C;
 4. evolve the runtime permission-preparation contract;
-5. implement the shared workspace-policy lease/writer and blocking-conflict UX;
+5. implement the shared workspace-policy lease/writer and blocking-conflict UX
+   for any remaining file-backed policy;
 6. retain Qwen's verified inline mapping and add automated behavioral coverage;
-7. retain the behaviorally-verified OpenCode config path and finish its
-   structured conflict/recovery UX;
+7. retain OpenCode's behaviorally verified inline path and finish automated
+   real-harness coverage;
 8. _(post-release)_ continue to Compatibility Phase 2 for dry run,
    CLI/reporting, and MCP serialization.
 
@@ -243,22 +241,19 @@ a fallback.
 
 ## Workspace-Configuration Support
 
-OpenCode uses project `opencode.json` permission rules with `allow`, `ask`, and
-`deny` decisions. Qwen remains inline-only in ctrlyoke; do not add a
-`.qwen/settings.json` permission writer.
+OpenCode no longer participates in workspace-configuration support: its MCP,
+permission, and plugin configuration are accumulated per step and delivered
+through `OPENCODE_CONFIG_CONTENT` at spawn time. It has no permission-policy
+lease, step-scoped release, cross-process conflict contract, blocking conflict
+modal, CLI/MCP conflict exit code, or workspace-mutation disclosure caveat.
 
-The first implementation slice landed on 2026-07-30 by extending
-`SettingsJsonMcpTracker`, so OpenCode's MCP and permission mutations share the
-same lock, baseline, reference counting, atomic writer, and cleanup ownership.
-It applies identical policies once for multiple owners, rejects a different
-later policy without changing the active file, restores the original
-permission value on final release, and preserves user edits detected during
-cleanup.
+The remaining scope of this section is Antigravity's global statusline lease.
+Its generic `registerValueLease` / `unregisterValueLease` /
+`getValueLeaseBaseline` machinery remains in `SettingsJsonMcpTracker` and must
+retain its existing baseline restoration and ownership behavior.
 
-Crash-recovery ownership metadata is implemented: `registerValueLease` writes a
-lease sidecar with PID-keyed owner records, and `pruneLeaseOwnersLocked` /
-`pruneDeadOwners` drop owners whose process is gone. The remaining work is
-listed under "Decided semantics" below.
+<!-- Pre-Stage-2 OpenCode workspace-lease design retained below only as an
+     implementation-history reference; it is no longer active scope.
 
 ### Decided semantics (2026-07-31)
 
@@ -578,6 +573,8 @@ nonzero with the structured diagnostic; MCP callers receive the same error
 contract. Once the active owner releases the policy, a retry performs a fresh
 atomic acquisition and may proceed.
 
+-->
+
 ## Qwen Inline Implementation
 
 Retain the inline CLI-list mapping:
@@ -605,7 +602,7 @@ Behavioral tests must launch Qwen in an isolated fixture workspace and prove tha
 
 ## OpenCode Implementation
 
-Implementation landed on 2026-07-30:
+Implementation landed on 2026-07-30; inline delivery landed on 2026-07-31:
 
 - `custom` merges a `permission` block beginning with `"*": "ask"`;
 - `allowAll` begins with `"*": "allow"` and still applies deny overrides;
@@ -614,25 +611,23 @@ Implementation landed on 2026-07-30:
   aliases to `edit`;
 - `shell(command:*)` becomes OpenCode's `bash` wildcard form (`command *`);
 - denied rules are inserted after allowed rules for last-match-wins behavior;
-- the workspace-root `opencode.json` is the single MCP/permission target;
-- unrelated permission rules, MCP entries, and non-permission config survive
-  both application and cleanup;
-- newly created `opencode.json` receives a temporary sibling `.gitignore`
-  (which ignores both files) when no user-owned `.gitignore` exists;
-- malformed existing JSON fails closed and is never overwritten.
+- `mcp`, `permission`, and `plugin` are serialized into
+  `OPENCODE_CONFIG_CONTENT` per step;
+- no `opencode.json` or permission lease is created by an OpenCode run;
+- the existing `.opencode/plugin/` deployment remains until the inline plan's
+  Stage 4.
 
-Unit coverage proves mapping, MCP/permission coordination, baseline restore,
-temporary-file cleanup, identical-policy sharing, conflict rejection, user-edit
-preservation, and malformed-JSON handling. `npm test` passed after this slice
-(2,244 extension tests and 1,237 UI tests).
+Unit coverage proves mapping, inline MCP/permission composition, matching
+headless and interactive spawn env values, accumulator reset between steps, and
+the absence of workspace `opencode.json` output.
 
 Manually verified against a real OpenCode CLI on 2026-07-31: allow and deny
 decisions were proved correct with safe fixture tools, confirming the
 `getPermissionHarnessSupport()` UI gate for OpenCode in
 `WorkflowPropertiesPanel.tsx` and `PropertiesDrawer.tsx` can open. Automated
-real-harness regression coverage (as opposed to this one-off manual run), crash
-recovery, and the shared structured conflict/disclosure UX remain in
-Workspace-Configuration Support.
+The real-harness regression suite remains future work; a real `node-pty` smoke
+spawn of `opencode debug config` confirmed that the child resolves the inline
+permission block.
 
 ## Codex Partial Support Investigation
 
