@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import { suite, test } from "mocha";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
@@ -10,6 +11,99 @@ import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMc
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
+  test("builds the inline config shape for every permission mode", () => {
+    const provider = new OpenCodeCliProvider();
+    const extensionPath = path.join(os.tmpdir(), "opencode-inline-extension");
+    const pluginPath = pathToFileURL(
+      path.join(extensionPath, "out", "scripts", "ctrlyoke-opencode-plugin.ts")
+    ).href;
+
+    for (const mode of Object.values(PERMISSION_MODES)) {
+      const config = provider.buildInlineConfig({
+        extensionPath,
+        toolPermissions: {
+          mode,
+          allowedTools: ["write"],
+          deniedTools: ["shell(rm:*)"],
+        },
+      });
+
+      assert.deepStrictEqual(config.plugin, [pluginPath]);
+      if (
+        mode === PERMISSION_MODES.NONE ||
+        mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+      ) {
+        assert.strictEqual("permission" in config, false);
+      } else if (mode === PERMISSION_MODES.ALLOW_ALL) {
+        assert.deepStrictEqual(config.permission, {
+          "*": "allow",
+          bash: { "rm *": "deny" },
+        });
+      } else {
+        assert.deepStrictEqual(config.permission, {
+          "*": "ask",
+          edit: "allow",
+          bash: { "rm *": "deny" },
+        });
+      }
+    }
+  });
+
+  test("builds MCP entries identical to the current opencode.json writer", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-inline-mcp-")
+    );
+    const extensionPath = path.join(workspaceRoot, "extension");
+    const mcpServerPath = path.join(extensionPath, "mcp-server.js");
+    const workingFilePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
+    const additionalEnv = { CTRLYOKE_TEST: "true" };
+    const userServers = [
+      {
+        id: "local-server",
+        command: "node",
+        args: ["local-server.js"],
+        env: { LOCAL_TOKEN: "token" },
+      },
+      {
+        id: "remote-server",
+        url: "https://mcp.example.test/server",
+        headers: { Authorization: "Bearer token" },
+      },
+    ];
+    const provider = new OpenCodeCliProvider();
+    SettingsJsonMcpTracker.resetAll();
+
+    try {
+      const inlineConfig = provider.buildInlineConfig({
+        extensionPath,
+        mcpServerPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers,
+      });
+
+      await provider.getMcpConfigArgs(
+        mcpServerPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers
+      );
+
+      const fileConfig = JSON.parse(
+        await fs.readFile(path.join(workspaceRoot, "opencode.json"), "utf-8")
+      );
+      assert.deepStrictEqual(inlineConfig.mcp, fileConfig.mcp);
+    } finally {
+      await provider
+        .cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)
+        .catch(() => {});
+      SettingsJsonMcpTracker.resetAll();
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("maps headless stdout like interactive export output without invoking export", async () => {
     const sessionId = "ses_golden";
     const stdoutEvents = [

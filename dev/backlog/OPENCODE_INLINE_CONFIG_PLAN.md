@@ -362,7 +362,7 @@ two items over verbatim.
 
 ## Stages
 
-**Stage 1 — inline builder, no behavior change.** Add
+**Stage 1 — inline builder, no behavior change (complete).** Add
 `buildInlineConfig(): OpenCodeInlineConfig` to `OpenCodeCliProvider`, composing
 the existing mapper output and MCP entry construction into one object. Unit
 tests only; nothing consumes it yet.

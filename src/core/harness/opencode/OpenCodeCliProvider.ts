@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
+import { pathToFileURL } from "url";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import type { ToolPermissionConfig } from "../shared/interfaces/IToolPermissionMapper";
@@ -24,6 +25,11 @@ import type {
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import {
+  buildOpenCodeMcpEntries,
+  type OpenCodeInlineConfig,
+  type OpenCodeInlineConfigBuildOptions,
+} from "./OpenCodeInlineConfig";
 
 const OPENCODE_CONFIG_SCHEMA = "https://opencode.ai/config.json";
 
@@ -90,6 +96,41 @@ export class OpenCodeCliProvider implements ICliProvider {
       mcpServersProperty: "mcp",
       schemaUrl: OPENCODE_CONFIG_SCHEMA,
     });
+  }
+
+  /**
+   * Build the ctrlyoke-owned OpenCode config without performing any I/O.
+   *
+   * Stage 1 only exposes this builder. The existing tracker-backed file path
+   * remains the active behavior until the inline-config migration is wired in.
+   */
+  buildInlineConfig(
+    options: OpenCodeInlineConfigBuildOptions
+  ): OpenCodeInlineConfig {
+    const permission = options.toolPermissions
+      ? this.toolPermissionMapper.buildPermissionPolicy(
+          options.toolPermissions
+        )
+      : undefined;
+    const mcpEntries = buildOpenCodeMcpEntries(
+      options.mcpServerPath,
+      options.workspaceRoot,
+      options.workingFilePath,
+      options.additionalEnv,
+      options.userServers
+    );
+    const pluginPath = path.join(
+      options.extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-opencode-plugin.ts"
+    );
+
+    return {
+      ...(permission ? { permission } : {}),
+      ...(Object.keys(mcpEntries).length > 0 ? { mcp: mcpEntries } : {}),
+      plugin: [pathToFileURL(pluginPath).href],
+    };
   }
 
   /** Convert OpenCode's JSONL stdout into the event vocabulary of OpenCodeLogParser. */
@@ -321,48 +362,13 @@ export class OpenCodeCliProvider implements ICliProvider {
       return null;
     }
     try {
-      const normalizedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
-
-      // Build the MCP servers object, merging ctrlyoke + user-defined servers
-      const mcpEntries: Record<string, unknown> = {};
-
-      // ctrlyoke server (when included in mcpServers list)
-      if (mcpServerPath) {
-        const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
-        const env: Record<string, string> = {
-          CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
-        };
-        if (workingFilePath) {
-          env["CTRLYOKE_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
-        }
-        if (additionalEnv) {
-          Object.assign(env, additionalEnv);
-        }
-        mcpEntries["ctrlyoke"] = {
-          type: "local",
-          command: ["node", normalizedServerPath],
-          environment: env,
-        };
-      }
-
-      // User-defined MCP servers
-      if (hasUserServers) {
-        for (const server of userServers) {
-          const entry: Record<string, unknown> = server.url
-            ? { type: "remote", url: server.url }
-            : {
-                type: "local",
-                command: [server.command ?? "", ...(server.args ?? [])],
-              };
-          if (!server.url && server.env) {
-            entry["environment"] = server.env;
-          }
-          if (server.url && server.headers) {
-            entry["headers"] = server.headers;
-          }
-          mcpEntries[server.id] = entry;
-        }
-      }
+      const mcpEntries = buildOpenCodeMcpEntries(
+        mcpServerPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers
+      );
 
       await this.configTracker.registerServers(
         this.getWorkflowOwnerKey(workingFilePath, workspaceRoot),
