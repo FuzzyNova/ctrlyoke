@@ -1,0 +1,52 @@
+_templateMeta:
+  name: yoke-driven-loop
+  description: Orchestrator loop. Give it a spec/design doc — it breaks the work into steps, queues them, then reviews and keeps looping until every requirement is satisfied.
+  variables:
+    specFile:
+      type: file
+      fileFilter:
+        - "**/*.md"
+        - "**/*.txt"
+        - "**/*.yaml"
+        - "**/*.json"
+      autoFillFilename: true
+resumeSession: false
+harness: codex-cli
+model: gpt-5.6-luna
+executionMode: headless
+agent: null
+skills:
+  - commit
+steps: []
+finalStep:
+  name: orchestrate
+  harness: claude-cli
+  model: opus
+  agent: spec-orchestrator
+  mcpServers:
+    - ctrlyoke
+  resumeSession: true
+  sessionId: finalStep
+  priorContext: none
+  prompt: |
+    Be my ctrlyoke orchestrator for this specification:
+    @{file:specFile}
+
+    Your first job is to review the spec and the codebase it touches, then use the
+    ctrlyoke_append_queue tool to add one step for each chunk of work that can
+    reasonably be completed in a single session, in the correct staging order.
+    Update the spec first if you find a clear problem with it; if the plan needs more
+    thought than you can give it here, make finalizing the plan the first queued step.
+    Use your judgment on how to split the work — that judgment is the point of this
+    workflow. Every queued step must be self-contained, must keep the planning docs
+    current, and must commit its own work before finishing.
+
+    The next time you see this prompt, all your queued steps will have run. Verify the
+    work is actually complete, inspect it, fix any errors you find, and commit your
+    cleanup. If a large chunk is still missing or wrong, append more steps and let the
+    loop continue. Once everything is done, give me a real summary of what was built
+    and end your turn. `npm test` should be the main gate, and generally follow 
+    @ctrlyoke/.github/instructions/test.instructions.md for testing.
+
+    You don't need to work out whether this is the first time you've seen this prompt —
+    you're resuming your own session, so read the state and act accordingly.
