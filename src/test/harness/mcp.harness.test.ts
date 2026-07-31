@@ -14,6 +14,13 @@
  *   - copilot-cli installed and authenticated
  *
  * Exit code 3 from the CLI = harness not installed → test is skipped.
+ *
+ * opencode-cli was tried as the default here but is not currently usable:
+ * the `opencode` binary appears to keep a global session/project database
+ * (~/.local/share/opencode/opencode.db) and reattaches to a recently-active
+ * project instead of strictly scoping to the spawn's cwd, so it operates
+ * against the real repo instead of each test's isolated tmp dir. Revisit
+ * once that's resolved.
  */
 
 import * as assert from "assert";

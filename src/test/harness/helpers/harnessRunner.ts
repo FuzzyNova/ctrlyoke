@@ -42,7 +42,10 @@ export type HarnessId =
 
 /**
  * Cheapest available model per harness.
- * - copilot-cli / opencode-cli have free-tier models → use them for most tests.
+ * - copilot-cli / opencode-cli have free-tier models.  copilot-cli remains the
+ *   default for tool-execution-dependent tests (see workflow.harness.test.ts /
+ *   mcp.harness.test.ts headers) because opencode-cli currently does not
+ *   reliably scope to the spawn's cwd in this environment.
  * - claude-cli falls back to haiku (cheapest paid tier).
  */
 export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {

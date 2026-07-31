@@ -16,10 +16,19 @@
  * Exit code 3 from the CLI means "harness not installed" — test is skipped.
  * All other non-zero exit codes are treated as test failures.
  *
- * Model selection: copilot-cli (gpt-5-mini, free) and opencode-cli
- * (big-pickle, free) are used wherever possible.  The retry test is
- * copilot-cli only because retry runs are slow and the retry path is
- * harness-agnostic.
+ * Model selection: copilot-cli (gpt-5-mini) is used for these tests.  The
+ * retry test is copilot-cli only because retry runs are slow and the retry
+ * path is harness-agnostic.
+ *
+ * opencode-cli (big-pickle, free) was tried as the default here but is not
+ * currently usable for this suite: the `opencode` binary appears to keep a
+ * global session/project database (~/.local/share/opencode/opencode.db) and
+ * reattaches to a recently-active project instead of strictly scoping to the
+ * spawn's cwd, so it operates against the real repo instead of each test's
+ * isolated tmp dir. ctrlyoke's own cwd propagation (cli.ts -> CliAdapter ->
+ * CliIntegration -> CliTransportCoordinator -> CliProcessManager.spawn) was
+ * verified correct; the issue is on OpenCode's side. Revisit once that's
+ * resolved or a documented way to force project scoping is found.
  */
 
 import * as assert from "assert";
@@ -42,9 +51,8 @@ import {
 
 type TestHarnessId = "copilot-cli";
 
-// opencode-cli excluded: big-pickle model responds without tool use, so it cannot
-// reliably execute bash commands. Only harnesses with proven tool-execution
-// capability belong here.
+// opencode-cli excluded: see file-header note above (global session db causes
+// it to ignore the spawn's cwd in this environment).
 const MULTI_STEP_HARNESSES: TestHarnessId[] = ["copilot-cli"];
 
 // ---------------------------------------------------------------------------
