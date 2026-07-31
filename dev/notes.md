@@ -19,7 +19,7 @@ in "more run dropdown" step 6 context didnt get read by claude automatically bec
 
 ☑️ Bug with new workflow showing draft with 2 runs that don't belong to it.
 
-do a follow up for agy and see if we can get better context window stats
+☑️ do a follow up for agy and see if we can get better context window stats
 
 render all references as chips in output history
 
@@ -31,7 +31,7 @@ commit message generation should use CLI ouput and display the raw output of the
 
 codex hook cleanup
 
-opencode.json gitignore
+☑️ opencode.json gitignore
 
 fix where ctrlyoke right click menu shortcuts show up in vs code (currently doesn't show up in scm)
 
