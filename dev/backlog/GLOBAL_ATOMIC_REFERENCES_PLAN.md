@@ -444,6 +444,13 @@ full-bleed diff layout remain unchanged.
 
 ### Step 6 — Markdown references
 
+- **Status: Complete.** Markdown file-reference nodes now carry sanitized
+  source ranges and authored labels through the existing secure custom-element
+  pipeline. Output rows opt into the shared chip renderer and pass exact find
+  decorations, while workspace-preview callers retain ordinary links by
+  default; image fallbacks use the chip without replacing successful
+  thumbnails.
+
 - Carry descriptor/source-range metadata on `<file-ref>` nodes through the
   existing sanitized custom-element pipeline; add the opt-in prop so
   non-output callers are unchanged; thread exact find decorations for reference

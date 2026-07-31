@@ -208,6 +208,8 @@ const TextOutput: React.FC<{
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
+  findDecorations?: RowFindDecoration;
+  atomicContextReferences?: boolean;
 }> = ({
   text,
   raw = false,
@@ -217,6 +219,8 @@ const TextOutput: React.FC<{
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
+  findDecorations,
+  atomicContextReferences = false,
 }) => (
   <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
@@ -229,6 +233,8 @@ const TextOutput: React.FC<{
         highlightQuery={findQuery}
         highlightCaseSensitive={findCaseSensitive}
         highlightActiveIndex={highlightActiveIndex}
+        findDecorations={findDecorations}
+        atomicContextReferences={atomicContextReferences}
       >
         {text}
       </MarkdownText>
@@ -242,12 +248,16 @@ const ThinkingOutput: React.FC<{
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
+  findDecorations?: RowFindDecoration;
+  atomicContextReferences?: boolean;
 }> = ({
   text,
   label = "Thinking",
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
+  findDecorations,
+  atomicContextReferences = false,
 }) => {
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
@@ -260,6 +270,8 @@ const ThinkingOutput: React.FC<{
           highlightQuery={findQuery}
           highlightCaseSensitive={findCaseSensitive}
           highlightActiveIndex={highlightActiveIndex}
+          findDecorations={findDecorations}
+          atomicContextReferences={atomicContextReferences}
         >
           {text}
         </MarkdownText>
@@ -273,7 +285,16 @@ const UserSteerOutput: React.FC<{
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
-}> = ({ text, findQuery, findCaseSensitive, highlightActiveIndex }) => (
+  findDecorations?: RowFindDecoration;
+  atomicContextReferences?: boolean;
+}> = ({
+  text,
+  findQuery,
+  findCaseSensitive,
+  highlightActiveIndex,
+  findDecorations,
+  atomicContextReferences = false,
+}) => (
   <div className="my-2">
     <div className="text-[length:var(--fp-output-font-size-xs)] text-indicator-info mb-1">
       ● User message
@@ -283,6 +304,8 @@ const UserSteerOutput: React.FC<{
         highlightQuery={findQuery}
         highlightCaseSensitive={findCaseSensitive}
         highlightActiveIndex={highlightActiveIndex}
+        findDecorations={findDecorations}
+        atomicContextReferences={atomicContextReferences}
       >
         {text}
       </MarkdownText>
@@ -478,6 +501,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             findQuery={rawTextOutput ? undefined : findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}
+            findDecorations={{ matches: getFieldMatches("response") }}
+            atomicContextReferences={atomicContextReferences}
           />
         );
       }
@@ -491,6 +516,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}
+            findDecorations={{ matches: getFieldMatches("response") }}
+            atomicContextReferences={atomicContextReferences}
           />
         );
       }
@@ -503,6 +530,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}
+            findDecorations={{ matches: getFieldMatches("response") }}
+            atomicContextReferences={atomicContextReferences}
           />
         );
       }
@@ -1428,6 +1457,8 @@ function OutputRowComponent({
           highlightActiveIndex={responseMatches.findIndex(
             (match) => match.active
           )}
+          findDecorations={{ matches: responseMatches }}
+          atomicContextReferences={atomicContextReferences}
         />
       );
       break;
