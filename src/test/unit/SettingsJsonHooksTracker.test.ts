@@ -116,6 +116,30 @@ suite("SettingsJsonHooksTracker", () => {
     assert.strictEqual(tracker.getActiveWorkflowCount(), 0);
   });
 
+  test("withLock owns concurrent hook registrations", async () => {
+    await Promise.all([
+      SettingsJsonHooksTracker.getInstance("qwen").withLock(async () =>
+        SettingsJsonHooksTracker.getInstance("qwen").registerWorkflow(
+          "wf-a",
+          tmpDir,
+          { Stop: [{ hooks: [{ type: "command", command: "node a.js" }] }] },
+          {}
+        )
+      ),
+      SettingsJsonHooksTracker.getInstance("qwen").withLock(async () =>
+        SettingsJsonHooksTracker.getInstance("qwen").registerWorkflow(
+          "wf-b",
+          tmpDir,
+          { Stop: [{ hooks: [{ type: "command", command: "node b.js" }] }] },
+          {}
+        )
+      ),
+    ]);
+
+    const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
+    assert.strictEqual(settings.hooks.Stop.length, 2);
+  });
+
   test("should handle no existing settings file", async () => {
     // Don't write any settings file
     await fs.rm(settingsPath, { force: true });

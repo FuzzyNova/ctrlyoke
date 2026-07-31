@@ -20,7 +20,7 @@ Shared CLI-harness infrastructure: provider contracts, prompt assembly, response
 </promptAndResponseFlow>
 
 <parallelSafety>
-- `SettingsJsonMcpTracker` and `SettingsJsonHooksTracker` coordinate edits to shared `.{tool}/settings.json` files. Hooks mutations must run under `mcpTracker.withLock()` so MCP and hook writes cannot interleave.
+- `SettingsJsonMcpTracker` coordinates MCP edits to shared `.{tool}/settings.json` files, while `SettingsJsonHooksTracker` owns its hook-mutation mutex. Hook mutations must run under `hooksTracker.withLock()` so hook reads and writes cannot interleave.
 - These trackers preserve a baseline snapshot and ref-count per workflow. Cleanup must unregister only the current workflow; never “reset” the whole file just because one run finished.
 - When ctrlyoke creates a new tool settings file, the tracker may also create a temporary `.gitignore` beside it. That behavior is intentional so provider-owned config files do not appear as untracked workspace noise.
 </parallelSafety>

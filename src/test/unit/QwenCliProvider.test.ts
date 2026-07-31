@@ -4,6 +4,8 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { SettingsJsonHooksTracker } from "../../core/harness/shared/SettingsJsonHooksTracker";
+import { QwenTrustedHooksTracker } from "../../core/harness/shared/QwenTrustedHooksTracker";
 import { Log } from "../../utils/Log";
 import type {
   McpServerConfig,
@@ -29,6 +31,52 @@ function parseMcpConfig(args: string[]): Record<string, unknown> {
 // ============================================================================
 
 suite("QwenCliProvider", () => {
+  suite("hook registration", () => {
+    test("registers workspace hooks with the hooks tracker lock owner", async () => {
+      const workspaceRoot = await createTempWorkspace();
+      const trustedHooksPath = path.join(
+        workspaceRoot,
+        "global",
+        "trusted_hooks.json"
+      );
+      SettingsJsonHooksTracker.resetAll();
+      QwenTrustedHooksTracker.resetAll();
+      const provider = new QwenCliProvider(
+        SettingsJsonHooksTracker.getInstance("qwen"),
+        QwenTrustedHooksTracker.getInstance({ trustedHooksPath })
+      );
+
+      try {
+        await provider.buildNotificationHookArgs(
+          "C:\\extension",
+          workspaceRoot,
+          0,
+          path.join(workspaceRoot, "workflow.yaml"),
+          undefined,
+          []
+        );
+
+        const settings = JSON.parse(
+          await fs.readFile(path.join(workspaceRoot, ".qwen", "settings.json"), "utf-8")
+        ) as { hooks?: Record<string, unknown[]> };
+        assert.ok(settings.hooks?.Stop);
+        assert.ok(
+          (JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<string, string[]>)[
+            workspaceRoot
+          ]
+        );
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          path.join(workspaceRoot, "workflow.yaml")
+        );
+        SettingsJsonHooksTracker.resetAll();
+        QwenTrustedHooksTracker.resetAll();
+        await removeTempWorkspace(workspaceRoot);
+      }
+    });
+  });
+
   suite("MCP configuration", () => {
     test("no MCP input returns no inline argument and does not mutate the workspace", async () => {
       const provider = new QwenCliProvider();

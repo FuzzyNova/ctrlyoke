@@ -141,9 +141,10 @@ migration's security gain is removing a durable, workspace-readable copy.
 Implemented on 2026-07-31. Qwen now receives the prompt's complete MCP set as
 the two-token `--mcp-config <inline-json>` argument, and the provider no longer
 registers or unregisters MCP entries in `.qwen/settings.json`. The tracker is
-temporarily retained only as the hook-registration mutex until Stage 2.
+no longer instantiated by Qwen; hook mutation locking is owned by
+`SettingsJsonHooksTracker`.
 
-## Stage 2 — retain hooks, make global trust writes safe
+## Stage 2 — retain hooks, make global trust writes safe (complete)
 
 Keep `SettingsJsonHooksTracker` and workspace `.qwen/settings.json` hook
 registration. It continues to preserve user hooks and permits simultaneous
@@ -162,11 +163,12 @@ Move the ad hoc read-modify-write of `~/.qwen/trusted_hooks.json` out of
   persistent, but make that persistence explicit in the tracker rather than
   leaving an unguarded provider-local mutation.
 
-`SettingsJsonMcpTracker.withLock()` currently serializes hook mutations only
-because both mutations target the same workspace settings file. After Stage 1,
-give `SettingsJsonHooksTracker` (or a neutral settings-file lock helper) that
-responsibility rather than retaining an otherwise-dead MCP tracker solely as a
-mutex.
+`SettingsJsonHooksTracker` now owns the in-process hook mutation lock, so Qwen
+does not instantiate an otherwise-dead MCP tracker solely as a mutex. The
+global trust tracker uses the shared cross-process file lock and atomic JSON
+replacement. Trust is intentionally persistent because Qwen treats the file
+as an approval store; unregistering a workflow releases only in-memory
+reference ownership and never revokes a trust entry.
 
 ## Stage 3 — extension-backed hooks spike (not committed migration work)
 

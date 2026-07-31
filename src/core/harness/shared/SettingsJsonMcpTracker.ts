@@ -3,37 +3,7 @@ import * as os from "os";
 import * as fs from "fs/promises";
 import { Log } from "../../../utils/Log";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
-
-/**
- * Simple async mutex for serializing read-modify-write operations on settings.json.
- *
- * Node.js is single-threaded, but async gaps between `readFile` and `writeFile`
- * allow interleaving when multiple parallel workflows modify the same file.
- * This mutex ensures at most one read-modify-write cycle runs at a time.
- */
-class AsyncMutex {
-  private queue: Array<() => void> = [];
-  private locked = false;
-
-  async acquire(): Promise<void> {
-    if (!this.locked) {
-      this.locked = true;
-      return;
-    }
-    return new Promise<void>((resolve) => {
-      this.queue.push(resolve);
-    });
-  }
-
-  release(): void {
-    if (this.queue.length > 0) {
-      const next = this.queue.shift()!;
-      next();
-    } else {
-      this.locked = false;
-    }
-  }
-}
+import { AsyncMutex } from "./AsyncMutex";
 
 /**
  * Options for customizing where a tracker reads/writes its MCP config.

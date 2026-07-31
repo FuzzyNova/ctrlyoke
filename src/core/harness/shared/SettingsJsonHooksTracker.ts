@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { Log } from "../../../utils/Log";
+import { AsyncMutex } from "./AsyncMutex";
 
 type WorkflowHookLayers = {
   ctrlyoke: Record<string, unknown[]>;
@@ -18,9 +19,9 @@ export type HookBaselinePolicy = {
  * Parallel safety: hooks injected by workflow A are preserved until A unregisters,
  * regardless of other workflows. Original hooks restored only on last unregister.
  *
- * Coordinates with SettingsJsonMcpTracker via shared mutex — both trackers
- * modify the same settings.json and must not interleave reads/writes.
- * Callers must wrap registerWorkflow/unregisterWorkflow inside mcpTracker.withLock().
+ * Owns the in-process mutex for hook mutations. Callers must wrap
+ * registerWorkflow/unregisterWorkflow inside withLock() so hook reads and
+ * writes cannot interleave with another workflow's mutation.
  */
 export class SettingsJsonHooksTracker {
   private static instances = new Map<string, SettingsJsonHooksTracker>();
@@ -37,6 +38,9 @@ export class SettingsJsonHooksTracker {
 
   /** Per-workflow ctrlyoke hooks + user hooks, keyed by workflowKey. */
   private workflowHooks = new Map<string, WorkflowHookLayers>();
+
+  /** Serializes hook settings read-modify-write operations in this host. */
+  private readonly mutex = new AsyncMutex();
 
   private readonly toolName: string;
   /** Subdirectory under workspace root (e.g. ".qwen") */
@@ -64,9 +68,19 @@ export class SettingsJsonHooksTracker {
     this.instances.clear();
   }
 
+  /** Execute a hook mutation while holding this tracker's in-process lock. */
+  async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    await this.mutex.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.mutex.release();
+    }
+  }
+
   /**
    * Register a workflow's hook injection.
-   * Must be called under mcpTracker.withLock().
+   * Must be called under withLock().
    */
   async registerWorkflow(
     workflowKey: string,
@@ -105,7 +119,7 @@ export class SettingsJsonHooksTracker {
 
   /**
    * Unregister a workflow. Restores baseline when last workflow unregisters.
-   * Must be called under mcpTracker.withLock().
+   * Must be called under withLock().
    */
   async unregisterWorkflow(
     workflowKey: string,

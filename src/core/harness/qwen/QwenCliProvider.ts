@@ -1,6 +1,4 @@
 import * as path from "path";
-import * as os from "os";
-import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -15,8 +13,8 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
+import { QwenTrustedHooksTracker } from "../shared/QwenTrustedHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type {
@@ -56,13 +54,19 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
-  /** Shared singleton tracker used as the temporary mutex for hook mutations. */
-  private static readonly mcpTracker =
-    SettingsJsonMcpTracker.getInstance("qwen");
+  /** Tracker for parallel-safe hooks management in .qwen/settings.json. */
+  private readonly hooksTracker: SettingsJsonHooksTracker;
 
-  /** Shared singleton tracker for parallel-safe hooks management in .qwen/settings.json */
-  private static readonly hooksTracker =
-    SettingsJsonHooksTracker.getInstance("qwen");
+  /** Tracker for Qwen's persistent global hook approvals. */
+  private readonly trustedHooksTracker: QwenTrustedHooksTracker;
+
+  constructor(
+    hooksTracker = SettingsJsonHooksTracker.getInstance("qwen"),
+    trustedHooksTracker = QwenTrustedHooksTracker.getInstance()
+  ) {
+    this.hooksTracker = hooksTracker;
+    this.trustedHooksTracker = trustedHooksTracker;
+  }
 
   readonly config: HarnessConfig = {
     name: "qwen",
@@ -217,7 +221,8 @@ export class QwenCliProvider implements ICliProvider {
 
   /**
    * Set up ctrlyoke notification hooks (Stop hook + user hooks) for interactive mode.
-   * Merges hooks into .qwen/settings.json and pre-trusts them in trusted_hooks.json.
+   * Merges hooks into .qwen/settings.json and pre-trusts them in the global
+   * Qwen trust tracker.
    * Hooks are enabled by default in Qwen — no CLI flag needed.
    */
   async buildNotificationHookArgs(
@@ -360,9 +365,9 @@ export class QwenCliProvider implements ICliProvider {
       wrappedCtrlYokeEvents
     );
 
-    // Register hooks via ref-counted tracker under shared mutex
-    await QwenCliProvider.mcpTracker.withLock(async () => {
-      await QwenCliProvider.hooksTracker.registerWorkflow(
+    // Register hooks via ref-counted tracker under its own mutation lock.
+    await this.hooksTracker.withLock(async () => {
+      await this.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
         ctrlyokeHooksSection,
@@ -370,41 +375,11 @@ export class QwenCliProvider implements ICliProvider {
       );
     });
 
-    // Pre-trust hook commands in ~/.qwen/trusted_hooks.json
-    const globalQwenDir = path.join(os.homedir(), ".qwen");
-    const trustedHooksPath = path.join(globalQwenDir, "trusted_hooks.json");
-
-    let trustedHooks: Record<string, string[]> = {};
-    try {
-      const content = await fs.readFile(trustedHooksPath, "utf-8");
-      trustedHooks = JSON.parse(content);
-    } catch {
-      // File doesn't exist — start fresh
-    }
-
-    if (!trustedHooks[workspaceRoot]) {
-      trustedHooks[workspaceRoot] = [];
-    }
-    for (const ctrlyokeHookKey of ctrlyokeHookKeys) {
-      if (!trustedHooks[workspaceRoot].includes(ctrlyokeHookKey)) {
-        trustedHooks[workspaceRoot].push(ctrlyokeHookKey);
-      }
-    }
-
-    if (userHooks) {
-      for (const uh of userHooks) {
-        const userKey = `:${uh.command}`;
-        if (!trustedHooks[workspaceRoot].includes(userKey)) {
-          trustedHooks[workspaceRoot].push(userKey);
-        }
-      }
-    }
-
-    await fs.mkdir(globalQwenDir, { recursive: true });
-    await fs.writeFile(
-      trustedHooksPath,
-      JSON.stringify(trustedHooks, null, 2),
-      "utf-8"
+    await this.trustedHooksTracker.registerWorkflow(
+      workflowKey,
+      workspaceRoot,
+      ctrlyokeHookKeys,
+      (userHooks ?? []).map((uh) => `:${uh.command}`)
     );
   }
 
@@ -473,12 +448,13 @@ export class QwenCliProvider implements ICliProvider {
   ): Promise<void> {
     // Unregister hooks via ref-counted tracker (serialized to avoid file races)
     const hookKey = workingFilePath ?? workspaceRoot;
-    await QwenCliProvider.mcpTracker.withLock(async () => {
-      await QwenCliProvider.hooksTracker.unregisterWorkflow(
+    await this.hooksTracker.withLock(async () => {
+      await this.hooksTracker.unregisterWorkflow(
         hookKey,
         workspaceRoot
       );
     });
+    await this.trustedHooksTracker.unregisterWorkflow(hookKey);
   }
 
   /**
