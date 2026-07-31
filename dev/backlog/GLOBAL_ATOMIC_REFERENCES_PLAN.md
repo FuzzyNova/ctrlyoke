@@ -431,9 +431,16 @@ serialization, and updated the setting descriptions.
 
 ### Step 5 — Structured file-operation rows
 
+**Status: Complete.** Structured edit/write/read/delete headers now use the
+shared file chip when enabled, with direct path descriptors and row-local find
+projection; the ordinary link path, tool frame, undo/redo controls, and
+full-bleed diff layout remain unchanged.
+
 - Replace `FileOperationOutput.tsx`'s local `FilePath` with the shared chip when
   enabled; keep `ToolCallBlock` presentation-agnostic; preserve `filePath` find
   marks, undo/redo, and full-bleed diff layout.
+- Cover all four operation headers, hidden-path find expansion and active marks,
+  plus the existing generic-body boundary.
 
 ### Step 6 — Markdown references
 

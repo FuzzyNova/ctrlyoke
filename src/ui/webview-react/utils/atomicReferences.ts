@@ -166,6 +166,22 @@ export interface AtomicReferenceChip {
   invalid?: boolean;
 }
 
+/** Build a file-operation descriptor directly from its canonical event path. */
+export function createFileReferenceChip(path: string): AtomicReferenceChip {
+  const directory = path.endsWith("/");
+  return {
+    from: 0,
+    to: path.length,
+    icon: directory ? "folder" : "symbol-file",
+    label: `${referenceBasename(path)}${directory ? "/" : ""}`,
+    title: path,
+    attrs: {
+      "data-type": directory ? "directory" : "file",
+      "data-path": path,
+    },
+  };
+}
+
 /** Build the row-local source/label projection consumed by AtomicReferenceChip. */
 export function createAtomicReferencePresentation(
   descriptor: AtomicReferenceChip,

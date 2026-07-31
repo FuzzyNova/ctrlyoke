@@ -108,6 +108,7 @@ export interface OutputRowFileUndoRequest {
 
 interface StructuredEventContentProps {
   row: StructuredEventRow;
+  atomicContextReferences?: boolean;
   findDecorations?: RowFindDecoration;
   findQuery?: string;
   findCaseSensitive?: boolean;
@@ -339,6 +340,7 @@ function isActiveMatchHidden(
 const StructuredEventContent = memo<StructuredEventContentProps>(
   ({
     row,
+    atomicContextReferences = false,
     findDecorations,
     findQuery,
     findCaseSensitive,
@@ -553,6 +555,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileEditOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}
             oldContent={displayOldContent}
             newContent={data.newContent}
@@ -597,6 +601,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileWriteOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}
             content={data.content}
             error={data.error}
@@ -625,6 +631,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileReadOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}
             error={data.error}
           />
@@ -637,6 +645,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileDeleteOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             success={data.success}
             error={data.error}
             onUndoFile={
@@ -1426,6 +1436,7 @@ function OutputRowComponent({
       content = (
         <StructuredEventContent
           row={row}
+          atomicContextReferences={atomicContextReferences}
           findDecorations={findDecorations}
           findQuery={findQuery}
           findCaseSensitive={findCaseSensitive}
