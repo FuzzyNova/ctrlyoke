@@ -1,6 +1,6 @@
 # Codex Inline Hooks Migration Plan
 
-> **Status:** Proposed
+> **Status:** Stage 1 complete
 >
 > **Priority:** P1 — companion to
 > [`OPENCODE_INLINE_CONFIG_PLAN.md`](OPENCODE_INLINE_CONFIG_PLAN.md); same class

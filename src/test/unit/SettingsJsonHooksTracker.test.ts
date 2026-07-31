@@ -4,6 +4,7 @@ import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
 import { SettingsJsonHooksTracker } from "../../core/harness/shared/SettingsJsonHooksTracker";
+import { serializeCodexInlineTrustOverride } from "../../core/harness/codex/CodexInlineHooksBuilder";
 
 function canonicalizeJson(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -269,7 +270,7 @@ suite("SettingsJsonHooksTracker", () => {
     const settings = JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
     assert.strictEqual(settings.hooks.state, undefined);
     assert.deepStrictEqual(
-      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+      serializeCodexInlineTrustOverride(
         tracker.getCodexTrustState(tmpDir)
       ),
       codexInlineTrustOverride({
@@ -319,7 +320,7 @@ suite("SettingsJsonHooksTracker", () => {
     );
 
     assert.deepStrictEqual(
-      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+      serializeCodexInlineTrustOverride(
         tracker.getCodexTrustState(lowerCaseWorkspaceRoot)
       ),
       codexInlineTrustOverride(
@@ -359,7 +360,7 @@ suite("SettingsJsonHooksTracker", () => {
     );
 
     assert.deepStrictEqual(
-      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+      serializeCodexInlineTrustOverride(
         tracker.getCodexTrustState(tmpDir)
       ),
       codexInlineTrustOverride({
@@ -414,7 +415,7 @@ suite("SettingsJsonHooksTracker", () => {
     const settings = JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
     assert.strictEqual(settings.hooks.state, undefined);
     assert.deepStrictEqual(
-      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+      serializeCodexInlineTrustOverride(
         tracker.getCodexTrustState(tmpDir)
       ),
       codexInlineTrustOverride({

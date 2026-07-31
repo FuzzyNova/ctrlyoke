@@ -12,6 +12,7 @@ import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
+import { serializeCodexInlineTrustOverride } from "./CodexInlineHooksBuilder";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
@@ -390,7 +391,7 @@ export class CodexCliProvider implements ICliProvider {
         workflowUserHooks,
         CodexCliProvider.hookBaselinePolicy
       );
-      trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+      trustArgs = serializeCodexInlineTrustOverride(
         CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
       );
     });
@@ -485,7 +486,7 @@ export class CodexCliProvider implements ICliProvider {
         workflowUserHooks,
         CodexCliProvider.hookBaselinePolicy
       );
-      trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+      trustArgs = serializeCodexInlineTrustOverride(
         CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
       );
     });

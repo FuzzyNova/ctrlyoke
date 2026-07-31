@@ -1,8 +1,11 @@
-import * as crypto from "crypto";
 import * as nodeFs from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { normalizeCodexHookMatcher } from "./CodexHookUtils";
+import {
+  buildCodexHookKey,
+  computeCodexTrustedHash,
+} from "../codex/CodexInlineHooksBuilder";
 import { Log } from "../../../utils/Log";
 
 type HookStateEntry = {
@@ -396,16 +399,6 @@ export class SettingsJsonHooksTracker {
     return this.buildCodexMergedState(settingsPath);
   }
 
-  static serializeCodexInlineTrustOverride(
-    state: Record<string, HookStateEntry>
-  ): string[] {
-    if (Object.keys(state).length === 0) {
-      return [];
-    }
-
-    return ["-c", `hooks.state=${this.toInlineTomlValue(state)}`];
-  }
-
   private parseHookStateEntry(value: unknown): HookStateEntry | null {
     const entry = this.asRecord(value);
     if (!entry) {
@@ -450,9 +443,9 @@ export class SettingsJsonHooksTracker {
 
       for (const settingsPath of settingsPaths) {
         mergedState[
-          this.buildCodexHookKey(settingsPath, event, groupIndex, handlerIndex)
+          buildCodexHookKey(settingsPath, event, groupIndex, handlerIndex)
         ] = {
-          trusted_hash: this.computeCodexTrustedHash(
+          trusted_hash: computeCodexTrustedHash(
             event,
             matcher,
             commandHook.command,
@@ -591,7 +584,7 @@ export class SettingsJsonHooksTracker {
         .map(
           (settingsPath) =>
             baselineState[
-              this.buildCodexHookKey(
+              buildCodexHookKey(
                 settingsPath,
                 event,
                 baselineGroupIndex,
@@ -606,7 +599,7 @@ export class SettingsJsonHooksTracker {
 
       for (const settingsPath of settingsPaths) {
         mergedState[
-          this.buildCodexHookKey(
+          buildCodexHookKey(
             settingsPath,
             event,
             mergedGroupIndex,
@@ -662,117 +655,6 @@ export class SettingsJsonHooksTracker {
       timeout,
       statusMessage,
     };
-  }
-
-  private computeCodexTrustedHash(
-    event: string,
-    matcher: string | undefined,
-    command: string,
-    timeout: number,
-    statusMessage?: string
-  ): string {
-    const identity: Record<string, unknown> = {
-      event_name: this.getCodexEventKeyLabel(event),
-      hooks: [
-        {
-          async: false,
-          command,
-          timeout,
-          type: "command",
-          ...(statusMessage !== undefined ? { statusMessage } : {}),
-        },
-      ],
-      ...(matcher !== undefined ? { matcher } : {}),
-    };
-
-    const canonical = this.canonicalizeJson(identity);
-    const serialized = JSON.stringify(canonical);
-    const hex = crypto
-      .createHash("sha256")
-      .update(serialized, "utf8")
-      .digest("hex");
-    return `sha256:${hex}`;
-  }
-
-  private canonicalizeJson(value: unknown): unknown {
-    if (Array.isArray(value)) {
-      return value.map((item) => this.canonicalizeJson(item));
-    }
-
-    const record = this.asRecord(value);
-    if (!record) {
-      return value;
-    }
-
-    return Object.keys(record)
-      .sort((left, right) => left.localeCompare(right))
-      .reduce<Record<string, unknown>>((sorted, key) => {
-        sorted[key] = this.canonicalizeJson(record[key]);
-        return sorted;
-      }, {});
-  }
-
-  private static toInlineTomlValue(value: unknown): string {
-    if (typeof value === "string") {
-      return JSON.stringify(value);
-    }
-
-    if (typeof value === "boolean") {
-      return value ? "true" : "false";
-    }
-
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? String(value) : "0";
-    }
-
-    if (Array.isArray(value)) {
-      return `[${value.map((item) => this.toInlineTomlValue(item)).join(", ")}]`;
-    }
-
-    if (!value || typeof value !== "object") {
-      return "{}";
-    }
-
-    const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(
-        ([key, entryValue]) =>
-          `${JSON.stringify(key)} = ${this.toInlineTomlValue(entryValue)}`
-      )
-      .join(", ");
-    return `{ ${entries} }`;
-  }
-
-  private buildCodexHookKey(
-    settingsPath: string,
-    event: string,
-    groupIndex: number,
-    handlerIndex: number
-  ): string {
-    return `${settingsPath}:${this.getCodexEventKeyLabel(event)}:${groupIndex}:${handlerIndex}`;
-  }
-
-  private getCodexEventKeyLabel(event: string): string {
-    switch (event) {
-      case "PreToolUse":
-        return "pre_tool_use";
-      case "PermissionRequest":
-        return "permission_request";
-      case "PostToolUse":
-        return "post_tool_use";
-      case "PreCompact":
-        return "pre_compact";
-      case "PostCompact":
-        return "post_compact";
-      case "SessionStart":
-        return "session_start";
-      case "UserPromptSubmit":
-        return "user_prompt_submit";
-      case "Stop":
-        return "stop";
-      default:
-        return event.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
-    }
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {
