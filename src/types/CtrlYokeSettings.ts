@@ -24,7 +24,7 @@ import type {
 } from "./CtrlYokeTypes";
 
 /** Default number of lines shown before a tool result is collapsed. */
-export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 10;
+export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 3;
 
 export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
