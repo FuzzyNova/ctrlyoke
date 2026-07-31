@@ -23,6 +23,9 @@ import type {
   UserHookConfig,
 } from "./CtrlYokeTypes";
 
+/** Default number of lines shown before a tool result is collapsed. */
+export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 10;
+
 export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
   general: {
@@ -125,6 +128,8 @@ export interface CtrlYokeGlobalSettings {
      * is used. 0 = always virtualize, -1 = never virtualize.
      */
     outputVirtualizationRowThreshold: number;
+    /** Number of result lines shown before Bash and generic tool output collapses. */
+    collapsedToolOutputLineCount: number;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
     confirmContinuationDiscardOperations: boolean;
@@ -335,6 +340,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     autoExpandEditorWhenTyping: true,
     useAbsolutePathReferences: false,
     outputVirtualizationRowThreshold: 200,
+    collapsedToolOutputLineCount: DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
     confirmDeleteOperations: true,
     confirmResetOperations: true,
     confirmContinuationDiscardOperations: true,

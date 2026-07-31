@@ -7,6 +7,7 @@ import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { CustomSelect } from "../shared/CustomSelect";
+import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -171,6 +172,27 @@ export function GeneralSection({
           path="ui.useAbsolutePathReferences"
           {...rowProps}
         />
+        <SettingInputRow
+          label="Collapsed tool output lines"
+          description="Number of lines shown for Bash and generic tool results before they collapse."
+          id="ui-collapsed-tool-output-line-count"
+          path="ui.collapsedToolOutputLineCount"
+          {...rowProps}
+        >
+          <LocalNumberInput
+            id="ui-collapsed-tool-output-line-count"
+            min={1}
+            value={ui.collapsedToolOutputLineCount}
+            onCommit={(v) => onUpdate("ui.collapsedToolOutputLineCount", v)}
+            parse={(v) => {
+              const parsed = parseInt(v, 10);
+              return Number.isFinite(parsed)
+                ? Math.max(1, parsed)
+                : DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT;
+            }}
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          />
+        </SettingInputRow>
         <SettingInputRow
           label="Output virtualization row threshold"
           description="Minimum output rows before virtualization is enabled. Use 0 to always virtualize, -1 to never virtualize."

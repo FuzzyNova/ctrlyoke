@@ -210,6 +210,9 @@ const OutputSectionInner: React.FC = () => {
   const outputVirtualizationRowThreshold = useSettingsStore(
     (s) => s.globalSettings.outputVirtualizationRowThreshold
   );
+  const collapsedToolOutputLineCount = useSettingsStore(
+    (s) => s.globalSettings.collapsedToolOutputLineCount
+  );
 
   const [headerRef, isHeaderNarrow] = useElementNarrow(650);
   const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
@@ -338,6 +341,7 @@ const OutputSectionInner: React.FC = () => {
     outputDiffViewType,
     outputFontSize,
     outputContentWidth,
+    collapsedToolOutputLineCount,
     invalidateMeasuredRow: invalidateMeasuredRowForRowModel,
     invalidateMeasuredRowForUserResize:
       invalidateMeasuredRowForUserResizeForRowModel,

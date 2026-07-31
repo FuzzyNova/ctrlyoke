@@ -166,6 +166,7 @@ export interface StructuredEventRow extends OutputRowBase {
   diff?: OutputRowDiffMeta;
   toolCall?: OutputRowToolCallMeta;
   bashExpansion?: OutputRowBashExpansionState;
+  collapsedToolOutputLineCount?: number;
   hideDiff: boolean;
 }
 
@@ -232,6 +233,8 @@ export interface BuildOutputRowsInput {
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
   outputContentWidth?: number;
+  /** Number of result lines shown before Bash and generic tool output collapses. */
+  collapsedToolOutputLineCount?: number;
 }
 
 export interface BuildOutputRowsResult {
@@ -302,7 +305,6 @@ const THINKING_OUTER_VERTICAL_CHROME = 6;
 const STATUS_ROW_VERTICAL_CHROME = 20;
 const HEADER_VERTICAL_CHROME = 11; // pb-spacing-xs(4) + border-b(1) + mb-spacing-sm(6)
 const STATS_VERTICAL_CHROME = 10;
-const BASH_RESULT_MAX_LINES = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
 const BASH_RESULT_MAX_CHARS = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
 /**
  * Horizontal space ToolCallBlock's gutter column takes from its content: the ●
@@ -771,7 +773,8 @@ function estimateBashOutputHeight(
   event: CliEvent,
   outputContentWidth: number | undefined,
   outputFontSize: number,
-  expansion?: OutputRowBashExpansionState
+  expansion?: OutputRowBashExpansionState,
+  maxResultLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES
 ): number {
   const data = event.data as {
     command?: string;
@@ -841,7 +844,7 @@ function estimateBashOutputHeight(
     if (!content || content.trim().length === 0) continue;
     const preview = buildCollapsedOutputPreview(content, {
       expanded,
-      maxLines: BASH_RESULT_MAX_LINES,
+      maxLines: maxResultLines,
       maxChars: BASH_RESULT_MAX_CHARS,
     });
     totalHeight += estimateTextBlockHeight(
@@ -905,7 +908,8 @@ function estimateStructuredTextHeight(
         row.event,
         outputContentWidth,
         outputFontSize,
-        row.bashExpansion
+        row.bashExpansion,
+        row.collapsedToolOutputLineCount
       );
     case CLI_EVENT_TYPES.FILE_EDIT: {
       const data = row.event.data as { path?: string; error?: string };
@@ -1078,7 +1082,8 @@ function estimateToolCallStructuredEventHeight(
     outputFontSize,
     outputContentWidth == null
       ? undefined
-      : outputContentWidth - toolCallGutterWidth(outputFontSize)
+      : outputContentWidth - toolCallGutterWidth(outputFontSize),
+    row.collapsedToolOutputLineCount
   );
 }
 
@@ -1195,6 +1200,8 @@ export function buildOutputRows(
   const lastCliIndexPerStep = new Map<string, number>();
   const uniqueTargets = new Map<string, OutputMessageTarget>();
   const firstRowIndexByTarget = new Map<string, number>();
+  const collapsedToolOutputLineCount =
+    input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
 
   for (const [messageIndex, message] of input.allMessages.entries()) {
     const targetKey = getTargetKey(message.target);
@@ -1416,6 +1423,7 @@ export function buildOutputRows(
               expansion: toolCallExpansion,
               outputFontSize: input.outputFontSize,
               outputContentWidth: toolCallContentWidth,
+              maxResultLines: collapsedToolOutputLineCount,
             })
           : undefined;
 
@@ -1434,6 +1442,7 @@ export function buildOutputRows(
           visibleEvent.event.type === CLI_EVENT_TYPES.BASH_COMMAND
             ? input.bashExpansionState?.get(rowKey)
             : undefined,
+        collapsedToolOutputLineCount,
         diff:
           diffKey && diffStats
             ? {

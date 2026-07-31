@@ -134,6 +134,34 @@ describe("GenericToolCallOutput", () => {
     expect(collapsedOutput?.textContent).not.toContain("x".repeat(1300));
   });
 
+  it("uses the render plan's configured collapsed result line count", () => {
+    const output = Array.from(
+      { length: 8 },
+      (_, index) => `line ${index + 1}`
+    ).join("\n");
+    const expansion = {
+      paramsExpanded: false,
+      outputExpanded: false,
+      errorExpanded: false,
+    } as const;
+
+    render(
+      <GenericToolCallOutput
+        name="read_file"
+        result={{ success: true, output }}
+        expansion={expansion}
+        renderPlan={buildToolCallRenderPlan({
+          result: { success: true, output },
+          expansion,
+          maxResultLines: 4,
+        })}
+      />
+    );
+
+    expect(screen.getByText("[show 4 more lines]")).toBeInTheDocument();
+    expect(screen.queryByText("line 5")).not.toBeInTheDocument();
+  });
+
   it("highlights find matches in the tool name and output", () => {
     const { container } = render(
       <GenericToolCallOutput

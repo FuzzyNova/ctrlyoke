@@ -362,6 +362,7 @@ export interface InitMessageData {
     autoExpandEditorWhenTyping?: boolean;
     atomicContextReferences?: boolean;
     outputVirtualizationRowThreshold?: number;
+    collapsedToolOutputLineCount?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
@@ -1007,6 +1008,7 @@ export interface GlobalSettingsUpdatedMessage {
     autoExpandEditorWhenTyping?: boolean;
     atomicContextReferences?: boolean;
     outputVirtualizationRowThreshold?: number;
+    collapsedToolOutputLineCount?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;

@@ -170,6 +170,7 @@ describe("setGlobalSettings", () => {
       autoExpandEditorWhenTyping: true,
       atomicContextReferences: false,
       outputVirtualizationRowThreshold: 200,
+      collapsedToolOutputLineCount: 10,
       confirmDeleteOperations: false,
       confirmResetOperations: false,
       confirmContinuationDiscardOperations: false,

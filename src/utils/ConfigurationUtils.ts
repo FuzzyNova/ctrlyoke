@@ -78,6 +78,7 @@ export const CONFIG_KEYS = {
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
+  UI_COLLAPSED_TOOL_OUTPUT_LINE_COUNT: "ui.collapsedToolOutputLineCount",
   PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS:
     "permissions.allowedExternalFileRoots",
   PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
@@ -378,6 +379,10 @@ export const ConfigurationUtils = {
 
   getOutputVirtualizationRowThreshold(): number {
     return configService.get(CONFIG_KEYS.UI).outputVirtualizationRowThreshold;
+  },
+
+  getCollapsedToolOutputLineCount(): number {
+    return configService.get(CONFIG_KEYS.UI).collapsedToolOutputLineCount;
   },
 
   /**

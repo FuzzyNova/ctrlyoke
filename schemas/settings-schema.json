@@ -493,6 +493,11 @@
           "minimum": -1,
           "description": "Minimum projected output row count before the Output panel uses virtualization. Use 0 to always virtualize, -1 to never virtualize."
         },
+        "collapsedToolOutputLineCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of lines shown for Bash and generic tool results before they collapse."
+        },
         "confirmDeleteOperations": {
           "type": "boolean",
           "description": "Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."

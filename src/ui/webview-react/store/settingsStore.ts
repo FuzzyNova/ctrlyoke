@@ -25,6 +25,7 @@ import type {
   TerminalSettings,
 } from "@root/types/WebviewMessageTypes";
 import type { EndCondition, ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 
 /**
  * Model option for dropdowns
@@ -102,6 +103,7 @@ export interface GlobalSettings {
   autoExpandEditorWhenTyping: boolean;
   atomicContextReferences: boolean;
   outputVirtualizationRowThreshold: number;
+  collapsedToolOutputLineCount: number;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   confirmContinuationDiscardOperations: boolean;
@@ -329,6 +331,7 @@ const initialGlobalSettings: GlobalSettings = {
   autoExpandEditorWhenTyping: true,
   atomicContextReferences: false,
   outputVirtualizationRowThreshold: 200,
+  collapsedToolOutputLineCount: DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   confirmContinuationDiscardOperations: true,

@@ -85,7 +85,6 @@ import {
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
   GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
-  GENERIC_TOOL_CALL_MAX_RESULT_LINES,
   type ToolCallExpansionSection,
 } from "@utils/toolCallLayout";
 import {
@@ -371,6 +370,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     } = row;
 
     const isActiveRow = activeFindMatch?.rowKey === row.key;
+    const collapsedToolOutputLineCount =
+      row.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
 
     let pendingBashExpand: BashOutputExpansionSection | null = null;
     if (isActiveRow && event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
@@ -397,7 +398,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           data.output ?? "",
           getFieldMatches("response"),
           expansion.outputExpanded,
-          DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+          collapsedToolOutputLineCount,
           DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
@@ -408,7 +409,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           data.error ?? "",
           getFieldMatches("error"),
           expansion.errorExpanded,
-          DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+          collapsedToolOutputLineCount,
           DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
@@ -432,7 +433,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           getToolResultText(data.result),
           getFieldMatches("toolContent"),
           sectionExpanded,
-          GENERIC_TOOL_CALL_MAX_RESULT_LINES,
+          collapsedToolOutputLineCount,
           GENERIC_TOOL_CALL_MAX_RESULT_CHARS
         )
       ) {
@@ -508,6 +509,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             errorFindMatches={getFieldMatches("error")}
             exitCode={data.exitCode}
             status={data.status}
+            maxLines={row.collapsedToolOutputLineCount}
             expansion={bashExpansion}
             onExpansionChange={(section, expanded) =>
               onBashExpansionChange?.(row.key, section, expanded)

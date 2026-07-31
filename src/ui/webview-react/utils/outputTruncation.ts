@@ -1,4 +1,11 @@
-export const DEFAULT_COLLAPSED_OUTPUT_MAX_LINES = 10;
+import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
+
+/**
+ * Shared fallback for direct component consumers. The configurable UI setting
+ * is threaded through output rows for Bash and generic tool results.
+ */
+export const DEFAULT_COLLAPSED_OUTPUT_MAX_LINES =
+  DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT;
 export const DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS = 1200;
 export const DEFAULT_COLLAPSED_COMMAND_MAX_CHARS = 160;
 

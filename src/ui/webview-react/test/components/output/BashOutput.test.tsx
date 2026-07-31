@@ -115,6 +115,23 @@ describe("BashOutput", () => {
     expect(screen.getByText(/show .* more line/i)).toBeInTheDocument();
   });
 
+  it("uses the supplied collapsed result line count", () => {
+    const lines = Array.from({ length: 8 }, (_, i) => `line ${i + 1}`).join(
+      "\n"
+    );
+    render(
+      <BashOutput
+        command="cat"
+        output={lines}
+        status={OPERATION_STATUS.COMPLETED}
+        maxLines={4}
+      />
+    );
+
+    expect(screen.getByText("[show 4 more lines]")).toBeInTheDocument();
+    expect(screen.queryByText("line 5")).not.toBeInTheDocument();
+  });
+
   it("truncates long single-line output by character count", () => {
     const longLine = "x".repeat(1600);
     const { container } = render(

@@ -13,6 +13,90 @@ import {
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
 
+  it("threads the collapsed tool output line count into Bash and generic tool rows", () => {
+    const output = Array.from(
+      { length: 8 },
+      (_, index) => `line ${index + 1}`
+    ).join("\n");
+    const result = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            prompt: "Inspect output",
+            response: "",
+            elapsed: 0,
+            isStreaming: false,
+            structured: {
+              events: [
+                {
+                  type: CLI_EVENT_TYPES.BASH_COMMAND,
+                  data: {
+                    command: "cat output.txt",
+                    output,
+                    status: OPERATION_STATUS.COMPLETED,
+                  },
+                },
+                {
+                  type: CLI_EVENT_TYPES.TOOL_CALL,
+                  data: {
+                    name: "read_file",
+                    parameters: {},
+                    result: { success: true, output },
+                  },
+                },
+              ],
+              metadata: {},
+            },
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      collapsedToolOutputLineCount: 4,
+    });
+
+    const bashRow = result.rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+    );
+    const toolCallRow = result.rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+
+    if (
+      !bashRow ||
+      bashRow.rowKind !== "structured-event" ||
+      !toolCallRow ||
+      toolCallRow.rowKind !== "structured-event"
+    ) {
+      throw new Error("Expected Bash and generic tool output rows");
+    }
+
+    expect(bashRow.collapsedToolOutputLineCount).toBe(4);
+    expect(toolCallRow.toolCall?.renderPlan.output.visibleLineCount).toBe(4);
+  });
+
   it("adds a verdict between the response and stats rows", () => {
     const result = buildOutputRows({
       allMessages: [

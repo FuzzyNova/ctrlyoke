@@ -762,6 +762,8 @@ export class WebviewSettingsSync {
         ConfigurationUtils.shouldTreatReferencesAsAtomic(),
       outputVirtualizationRowThreshold:
         ConfigurationUtils.getOutputVirtualizationRowThreshold(),
+      collapsedToolOutputLineCount:
+        ConfigurationUtils.getCollapsedToolOutputLineCount(),
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),

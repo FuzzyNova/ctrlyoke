@@ -52,6 +52,7 @@ export interface ToolCallRenderPlanInput {
   expansion?: ToolCallExpansionState;
   outputFontSize?: number;
   outputContentWidth?: number;
+  maxResultLines?: number;
 }
 
 export interface ToolCallRenderPlan {
@@ -124,12 +125,13 @@ function buildResultSectionRenderPlan(
   expanded: boolean,
   sectionLineHeight: number,
   outputContentWidth?: number,
-  outputFontSize = DEFAULT_OUTPUT_FONT_SIZE
+  outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
+  maxResultLines = GENERIC_TOOL_CALL_MAX_RESULT_LINES
 ): ToolCallSectionRenderPlan {
   const lineCount = countLines(text);
   const preview = buildCollapsedOutputPreview(text, {
     expanded,
-    maxLines: GENERIC_TOOL_CALL_MAX_RESULT_LINES,
+    maxLines: maxResultLines,
     maxChars: GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
   });
   // When only 1 line would be hidden, buildCollapsedOutputPreview returns the
@@ -195,6 +197,7 @@ export function buildToolCallRenderPlan(
     expansion = DEFAULT_TOOL_CALL_EXPANSION_STATE,
     outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
     outputContentWidth,
+    maxResultLines,
   } = input;
 
   // FS*1.625 = leading-relaxed line height; clamped to 24 for small font sizes.
@@ -230,7 +233,8 @@ export function buildToolCallRenderPlan(
         expansion.outputExpanded,
         sectionLineHeight,
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        maxResultLines
       )
     : getEmptySectionRenderPlan();
   const errorPlan = error
@@ -239,7 +243,8 @@ export function buildToolCallRenderPlan(
         expansion.errorExpanded,
         sectionLineHeight,
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        maxResultLines
       )
     : getEmptySectionRenderPlan();
 
@@ -283,7 +288,8 @@ export function estimateGenericToolCallHeight(
   result: ToolResult | undefined,
   expansion: ToolCallExpansionState,
   outputFontSize: number,
-  outputContentWidth?: number
+  outputContentWidth?: number,
+  maxResultLines?: number
 ): number {
   return buildToolCallRenderPlan({
     parameters,
@@ -291,5 +297,6 @@ export function estimateGenericToolCallHeight(
     expansion,
     outputFontSize,
     outputContentWidth,
+    maxResultLines,
   }).totalHeight;
 }

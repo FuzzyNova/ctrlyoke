@@ -52,6 +52,10 @@ suite("CtrlYokeConfigService", () => {
       CTRLYOKE_SETTINGS_DEFAULTS.enableDiagnosticLogs
     );
     assert.strictEqual(all.permissions.antigravityStatusLineTracking, true);
+    assert.strictEqual(
+      all.ui.collapsedToolOutputLineCount,
+      CTRLYOKE_SETTINGS_DEFAULTS.ui.collapsedToolOutputLineCount
+    );
   });
 
   test("resolves the Antigravity statusline setting through the config hierarchy", () => {

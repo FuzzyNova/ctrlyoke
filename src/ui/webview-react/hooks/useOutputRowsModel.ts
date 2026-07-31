@@ -48,6 +48,7 @@ interface UseOutputRowsModelInput {
   outputDiffViewType: "split" | "unified";
   outputFontSize: number;
   outputContentWidth: number;
+  collapsedToolOutputLineCount: number;
   /** Drops the cached measured height for a row and re-measures it. */
   invalidateMeasuredRow: (rowKey: string) => void;
   /** Like invalidateMeasuredRow, but also re-anchors the viewport to the row
@@ -82,6 +83,7 @@ export function useOutputRowsModel({
   outputDiffViewType,
   outputFontSize,
   outputContentWidth,
+  collapsedToolOutputLineCount,
   invalidateMeasuredRow,
   invalidateMeasuredRowForUserResize,
   onDiffViewReset,
@@ -125,6 +127,7 @@ export function useOutputRowsModel({
           history: isViewingHistory,
           outputContentWidth,
           outputFontSize,
+          collapsedToolOutputLineCount,
         },
         () =>
           buildOutputRows({
@@ -149,6 +152,7 @@ export function useOutputRowsModel({
             diffViewType: outputDiffViewType,
             outputFontSize,
             outputContentWidth,
+            collapsedToolOutputLineCount,
           })
       ),
     [
@@ -172,6 +176,7 @@ export function useOutputRowsModel({
       outputDiffViewType,
       outputFontSize,
       outputContentWidth,
+      collapsedToolOutputLineCount,
     ]
   );
 
