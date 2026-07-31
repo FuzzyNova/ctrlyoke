@@ -9,7 +9,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +55,19 @@ export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
   "antigravity-cli": "gemini-3.6-flash-low",
+};
+
+/**
+ * CLI versions used when the inline-config behavior was verified.
+ *
+ * These are fixture pins, not a runtime upgrade mechanism.  The merge/layer
+ * behavior covered by the tests is partly emergent, so it must be re-verified
+ * whenever one of these harnesses is upgraded.
+ */
+export const PINNED_HARNESS_VERSIONS: Partial<Record<HarnessId, string>> = {
+  "codex-cli": "0.146.0",
+  "opencode-cli": "1.18.10",
+  "qwen-cli": "0.20.1",
 };
 
 // ---------------------------------------------------------------------------
@@ -124,6 +137,112 @@ export function runWorkflowFile(
   };
 }
 
+/**
+ * Invoke a workflow through ctrlyoke's real interactive PTY path.
+ *
+ * The outer runner is still synchronous so each harness test remains isolated;
+ * ctrlyoke creates the child PTY internally for the requested TUI execution.
+ */
+export function runInteractiveWorkflowFile(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string,
+  vars?: Record<string, string>,
+  timeoutMs: number = HARNESS_TIMEOUT_MS
+): RunResult {
+  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
+  fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
+
+  const varArgs: string[] = [];
+  for (const [k, v] of Object.entries(vars ?? {})) {
+    varArgs.push("--var", `${k}=${v}`);
+  }
+
+  const result = spawnSync(
+    "node",
+    [
+      CLI_PATH,
+      "run",
+      workflowFile,
+      "--interactive",
+      "--timeout",
+      "180",
+      ...varArgs,
+    ],
+    {
+      encoding: "utf8",
+      timeout: timeoutMs,
+      cwd: tmpDir,
+    }
+  );
+
+  return {
+    skipped: result.status === 3,
+    exitCode: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
+}
+
+/**
+ * Start a headless workflow without waiting for it, for concurrency fixtures.
+ */
+export function runWorkflowFileAsync(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string,
+  vars?: Record<string, string>,
+  timeoutMs: number = HARNESS_TIMEOUT_MS
+): Promise<RunResult> {
+  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
+  fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
+
+  const varArgs: string[] = [];
+  for (const [k, v] of Object.entries(vars ?? {})) {
+    varArgs.push("--var", `${k}=${v}`);
+  }
+
+  return new Promise<RunResult>((resolve) => {
+    const child = spawn(
+      "node",
+      [
+        CLI_PATH,
+        "run",
+        workflowFile,
+        "--headless",
+        "--timeout",
+        "180",
+        ...varArgs,
+      ],
+      { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"] }
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({
+        skipped: false,
+        exitCode: null,
+        stdout,
+        stderr: String(error),
+      });
+    });
+    child.on("close", (status) => {
+      clearTimeout(timer);
+      resolve({
+        skipped: status === 3,
+        exitCode: status,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Logging / skip helpers
 // ---------------------------------------------------------------------------
@@ -188,5 +307,76 @@ try { count = parseInt(fs.readFileSync(counterFile, "utf8").trim(), 10) || 0; } 
 count++;
 fs.writeFileSync(counterFile, String(count));
 process.stdout.write(count >= threshold ? "true" : "false");
+`;
+}
+
+/**
+ * Source for a hook command that records its logical event immediately.
+ * Permission hooks also emit the native decision payload expected by Codex,
+ * Qwen, and OpenCode.
+ */
+export function buildHookRecorderScript(): string {
+  return `"use strict";
+const fs = require("fs");
+const event = process.argv[2];
+const outputFile = process.argv[3];
+if (!event || !outputFile) process.exit(0);
+fs.appendFileSync(outputFile, JSON.stringify({ event, ts: Date.now() }) + "\\n");
+if (event === "permissionRequest") {
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PermissionRequest",
+      decision: { behavior: "allow" }
+    }
+  }));
+}
+`;
+}
+
+/**
+ * Source for a tiny line-delimited MCP server used by the inline-config
+ * regression cases.  It records each tool call, which lets a test prove that
+ * two concurrent workflows did not expose one another's dynamic tool.
+ */
+export function buildMcpProbeServerScript(): string {
+  return `"use strict";
+const fs = require("fs");
+const readline = require("readline");
+const toolName = process.argv[2];
+const markerFile = process.argv[3];
+function send(id, result) {
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
+}
+const rl = readline.createInterface({ input: process.stdin });
+rl.on("line", (line) => {
+  let request;
+  try { request = JSON.parse(line); } catch { return; }
+  if (request.method === "initialize") {
+    send(request.id, {
+      protocolVersion: "2024-11-05",
+      capabilities: { tools: {} },
+      serverInfo: { name: "ctrlyoke-harness-probe", version: "1.0.0" }
+    });
+    return;
+  }
+  if (request.method === "tools/list") {
+    send(request.id, {
+      tools: [{
+        name: toolName,
+        description: "Record this isolated harness fixture tool call.",
+        inputSchema: { type: "object", properties: {} }
+      }]
+    });
+    return;
+  }
+  if (request.method === "tools/call") {
+    if (request.params && request.params.name === toolName) {
+      fs.appendFileSync(markerFile, toolName + "\\n");
+      send(request.id, { content: [{ type: "text", text: "probe-called" }] });
+    } else {
+      send(request.id, { isError: true, content: [{ type: "text", text: "unknown tool" }] });
+    }
+  }
+});
 `;
 }

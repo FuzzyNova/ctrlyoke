@@ -310,5 +310,4 @@ suite("SettingsJsonHooksTracker", () => {
     const contentAfter = await fs.readFile(gitignorePath, "utf-8");
     assert.strictEqual(contentAfter, existingContent);
   });
-
 });

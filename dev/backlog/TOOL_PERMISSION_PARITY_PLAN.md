@@ -1,6 +1,6 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** In progress
+> **Status:** Remaining scope: Antigravity/Codex parity follow-up
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -13,12 +13,12 @@ engineering sequence, not a release boundary: no stage is deferred past release,
 and the honest-UI stage is built directly on the shared registry rather than as
 a throwaway stopgap.
 
-Capability _classifications_ still change as the sequence progresses. Qwen's
-inline allow/deny flags are supported and manually verified; it does not need a
-workspace settings mutation. OpenCode's inline-config implementation landed on
-2026-07-31, and its allow/deny behavior was manually verified against a real
-OpenCode CLI — its capability declaration now advances to verified support,
-with automated real-harness regression coverage remaining to be added.
+Capability _classifications_ still change only when new behavioral evidence is
+available. Qwen's inline allow/deny flags and OpenCode's inline permission
+mapping are covered by pinned real-harness fixtures in
+`src/test/harness/inline-config.harness.test.ts`; the suite is intentionally
+not run as part of the ordinary gate because it drives live CLIs. Neither
+harness writes a workspace permission configuration on its normal path.
 
 ---
 
@@ -37,8 +37,9 @@ Current code overstates support in several places:
 
 - Qwen's earlier silent-deny failure was traced to its headless input mode, not
   to an absence of inline allow/deny support. The canonical tool-name mapping
-  plus `--input-format stream-json` path is manually verified; automated
-  real-harness regression coverage remains to be added.
+  plus `--input-format stream-json` path is covered by the pinned real-harness
+  fixtures; upgrade verification remains explicit because Qwen's alias tables
+  have drifted across releases.
 - `getPermissionHarnessSupport()` in
   `src/ui/webview-react/components/shared/permissionUtils.ts` classifies only
   Codex, OpenCode, and Antigravity as `mode-only`; every other harness falls
@@ -50,8 +51,9 @@ Current code overstates support in several places:
   `OPENCODE_CONFIG_CONTENT`; it no longer mutates `opencode.json`.
 - Codex and Antigravity are intentionally mode-only, but the caveat is not
   consistently visible across every permissions surface.
-- Mapper unit tests assert generated strings. They do not prove that a harness
-  accepts the configuration or blocks/allows a real tool call.
+- Mapper unit tests assert generated strings. The pinned real-harness fixtures
+  now cover the remaining Qwen/OpenCode allow/deny and inline MCP behavior, but
+  they are not run by `npm test`.
 
 This is a security and trust issue. A denied rule that is silently ignored is
 materially different from an unavailable convenience feature.
@@ -65,8 +67,8 @@ otherwise:
 | --------------- | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
 | Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                  |
 | Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
-| Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; add automated real-harness regression coverage              |
-| OpenCode        | Supported                                   | Supported (manually verified)     | Retain inline mapping; add automated real-harness regression coverage                         |
+| Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; re-verify the pinned fixture on CLI upgrade                 |
+| OpenCode        | Supported                                   | Supported inline                  | Retain collision-safe inline mapping; re-verify the pinned fixture on CLI upgrade            |
 | Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
 | Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
 
@@ -153,8 +155,8 @@ installed CLI (v0.20.1) with this invocation shape:
 - **deny wins over allow**: `--allowed-tools "WriteFile" --exclude-tools
 "WriteFile"` → refused, same as deny-only.
 
-Not yet covered by this session's manual verification: automated real-harness
-coverage of these three behaviors (as opposed to one-off manual runs).
+The automated cases are written in the pinned real-harness fixture; they remain
+outside the ordinary test gate because executing them drives live Qwen CLIs.
 
 `QwenToolPermissionMapper`'s `delete`/`remove` pattern handling was also fixed:
 it previously mapped to a literal `"Delete"` specifier, which is a silent
@@ -177,14 +179,16 @@ independently startable parallel plan. Implement it in this order:
 4. evolve the runtime permission-preparation contract;
 5. implement the shared workspace-policy lease/writer and blocking-conflict UX
    for any remaining file-backed policy;
-6. retain Qwen's verified inline mapping and add automated behavioral coverage;
-7. retain OpenCode's behaviorally verified inline path and finish automated
-   real-harness coverage;
+6. retain Qwen's verified inline mapping and its pinned behavioral fixtures;
+7. retain OpenCode's behaviorally verified inline path and its pinned
+   behavioral fixtures;
 8. _(post-release)_ continue to Compatibility Phase 2 for dry run,
    CLI/reporting, and MCP serialization.
 
 The Codex partial-support investigation follows the verified Qwen and OpenCode
-paths; it does not block the permission vertical slice.
+paths; it does not block the permission vertical slice. The remaining
+workspace-configuration scope is Antigravity's global statusline lease and
+workspace MCP scoping, not an OpenCode permission lease.
 Antigravity remains an explicit unsupported granular-list declaration unless
 new evidence changes it.
 
@@ -613,9 +617,9 @@ Implementation landed on 2026-07-30; inline delivery landed on 2026-07-31:
 - denied rules are inserted after allowed rules for last-match-wins behavior;
 - `mcp`, `permission`, and `plugin` are serialized into
   `OPENCODE_CONFIG_CONTENT` per step;
-- no `opencode.json` or permission lease is created by an OpenCode run;
-- the existing `.opencode/plugin/` deployment remains until the inline plan's
-  Stage 4.
+- no `opencode.json` or permission lease is created by a normal OpenCode run;
+- the completion plugin is delivered from the extension installation, with a
+  warning-backed workspace fallback only when that external path is unusable.
 
 Unit coverage proves mapping, inline MCP/permission composition, matching
 headless and interactive spawn env values, accumulator reset between steps, and
@@ -624,10 +628,10 @@ the absence of workspace `opencode.json` output.
 Manually verified against a real OpenCode CLI on 2026-07-31: allow and deny
 decisions were proved correct with safe fixture tools, confirming the
 `getPermissionHarnessSupport()` UI gate for OpenCode in
-`WorkflowPropertiesPanel.tsx` and `PropertiesDrawer.tsx` can open. Automated
-The real-harness regression suite remains future work; a real `node-pty` smoke
-spawn of `opencode debug config` confirmed that the child resolves the inline
-permission block.
+`WorkflowPropertiesPanel.tsx` and `PropertiesDrawer.tsx` can open. The pinned
+real-harness regression fixture additionally covers collision rewriting, MCP,
+and external-plugin completion in headless and TUI modes; it is intentionally
+not run by `npm test`.
 
 ## Codex Partial Support Investigation
 
@@ -707,7 +711,7 @@ Keep mapper unit tests, but add:
 - workspace writer merge/restore/conflict/crash-recovery tests;
 - harness command/config snapshot tests;
 - UI tests for the relevant fidelity/mechanism/verification combinations;
-- integration tests against pinned harness versions;
+- real-harness fixtures against pinned CLI versions (run only on request);
 - negative behavioral tests that exercise safe denied operations.
 
 An argument/config snapshot is not sufficient evidence for `exact` or `partial`
@@ -719,9 +723,8 @@ fidelity with verified status.
 - Qwen retains its canonical inline tool-list mapping and never adds a
   workspace permission writer.
 - OpenCode no longer claims a permission config side effect it does not perform.
-- Qwen and OpenCode granular policies pass behavioral allow/deny tests before
-  their capability declarations advance from unsupported/unverified to the
-  behaviorally justified fidelity and verified status.
+- Qwen and OpenCode granular policies retain their behaviorally justified
+  inline capability declarations, with pinned fixtures re-run on CLI upgrade.
 - Conflicting workspace permission policies cannot run concurrently without an
   explicit resolution; the later acquisition is rejected without modifying the
   active policy.

@@ -579,10 +579,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // a genuine regression in OpenCode's external path loading.
     await fs.promises.access(sourcePath, fs.constants.R_OK);
     const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
-    const pluginPath = path.join(
-      pluginDir,
-      "ctrlyoke-completion-hook.ts"
-    );
+    const pluginPath = path.join(pluginDir, "ctrlyoke-completion-hook.ts");
     await fs.promises.mkdir(pluginDir, { recursive: true });
     await fs.promises.copyFile(sourcePath, pluginPath);
     this.fallbackPluginArtifactPaths.push(pluginPath);

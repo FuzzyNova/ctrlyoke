@@ -1,19 +1,19 @@
 # OpenCode Inline Config Migration Plan
 
-> **Status:** Stage 3 complete; Stages 4–5 proposed
+> **Status:** Stages 1–5 complete
 >
 > **Priority:** P0 — blocks the OpenCode half of
-> [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
+> [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)
 >
 > **Effect on that plan:** removes OpenCode as a consumer of the workspace
 > permission lease, which deletes most of its "Workspace-Configuration Support"
 > section rather than implementing it.
 
 Move OpenCode off workspace-root `opencode.json` and off `.opencode/plugin/`
-entirely, and deliver every ctrlyoke-owned setting through the
+on its normal path, and deliver every ctrlyoke-owned setting through the
 `OPENCODE_CONFIG_CONTENT` environment variable at spawn time. Stage 2 removes
-the workspace-root `opencode.json` writes; the existing `.opencode/plugin/`
-deployment remains until Stage 4.
+the workspace-root `opencode.json` writes; Stage 4 moves the normal plugin
+delivery outside the workspace and retains only a warning-backed fallback.
 
 ---
 
@@ -421,8 +421,8 @@ minimal `.opencode/plugin/` deployment remains only when the installed plugin
 path cannot be loaded.
 
 **Stage 5 — real-harness regression coverage.** This is the automated coverage
-`TOOL_PERMISSION_PARITY_PLAN.md` still owes for OpenCode; it should now be
-written against the inline path, not the file path.
+`TOOL_PERMISSION_PARITY_PLAN.md` required for OpenCode is now written against
+the inline path, not the file path.
 
 ## Testing
 

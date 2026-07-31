@@ -545,7 +545,9 @@ suite("OpenCodeCliProvider", () => {
       );
 
       assert.ok(
-        warnings.some((warning) => warning.includes("falling back to .opencode/plugin"))
+        warnings.some((warning) =>
+          warning.includes("falling back to .opencode/plugin")
+        )
       );
       assert.deepStrictEqual(
         JSON.parse(

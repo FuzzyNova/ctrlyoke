@@ -234,10 +234,7 @@ suite("CliIntegration", () => {
         "session-existing"
       );
 
-      assert.match(
-        reason ?? "",
-        /current resolved properties are missing/u
-      );
+      assert.match(reason ?? "", /current resolved properties are missing/u);
     });
 
     test("permits inject when the spawn-time snapshot fully matches", () => {

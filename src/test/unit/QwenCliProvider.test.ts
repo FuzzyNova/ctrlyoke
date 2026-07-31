@@ -57,13 +57,19 @@ suite("QwenCliProvider", () => {
         );
 
         const settings = JSON.parse(
-          await fs.readFile(path.join(workspaceRoot, ".qwen", "settings.json"), "utf-8")
+          await fs.readFile(
+            path.join(workspaceRoot, ".qwen", "settings.json"),
+            "utf-8"
+          )
         ) as { hooks?: Record<string, unknown[]> };
         assert.ok(settings.hooks?.Stop);
         assert.ok(
-          (JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<string, string[]>)[
-            workspaceRoot
-          ]
+          (
+            JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<
+              string,
+              string[]
+            >
+          )[workspaceRoot]
         );
       } finally {
         await provider.cleanupWorkspaceArtifacts(

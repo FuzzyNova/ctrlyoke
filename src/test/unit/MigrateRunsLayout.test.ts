@@ -7,7 +7,7 @@ import { suite, test } from "mocha";
 
 const MIGRATION_SCRIPT = path.resolve(
   __dirname,
-  "../../../dev/migrate-runs-layout.mjs"
+  "../../../scripts/migrate-runs-layout.mjs"
 );
 const WORKING_FILE_NAME = "workflow.ctrlyoke.json";
 

@@ -198,7 +198,9 @@ suite("CodexCliProvider", () => {
           (arg) => arg.startsWith("hooks.") && !arg.startsWith("hooks.state=")
         );
         assert.strictEqual(overrides.length, 3);
-        assert.ok(overrides.some((arg) => arg.startsWith("hooks.SessionStart=")));
+        assert.ok(
+          overrides.some((arg) => arg.startsWith("hooks.SessionStart="))
+        );
         assert.ok(
           overrides.some(
             (arg) =>
@@ -265,7 +267,9 @@ suite("CodexCliProvider", () => {
         );
 
         assert.deepStrictEqual(args.slice(0, 2), ["--enable", "hooks"]);
-        assert.ok(args.some((arg) => arg.startsWith("hooks.UserPromptSubmit=")));
+        assert.ok(
+          args.some((arg) => arg.startsWith("hooks.UserPromptSubmit="))
+        );
         assert.ok(args.some((arg) => arg.startsWith("hooks.state=")));
         assert.ok(
           !args.some((arg) => arg.startsWith("hooks.SessionStart=")),

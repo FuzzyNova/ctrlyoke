@@ -449,10 +449,7 @@ export class QwenCliProvider implements ICliProvider {
     // Unregister hooks via ref-counted tracker (serialized to avoid file races)
     const hookKey = workingFilePath ?? workspaceRoot;
     await this.hooksTracker.withLock(async () => {
-      await this.hooksTracker.unregisterWorkflow(
-        hookKey,
-        workspaceRoot
-      );
+      await this.hooksTracker.unregisterWorkflow(hookKey, workspaceRoot);
     });
     await this.trustedHooksTracker.unregisterWorkflow(hookKey);
   }
