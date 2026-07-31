@@ -1,6 +1,6 @@
 # Antigravity Headless `stream-json` Output Plan
 
-**Status:** In progress — steps 1–2 implemented; step 3 queued for implementation.
+**Status:** Implemented — verified July 31, 2026.
 **Created:** July 30, 2026
 **Revised:** July 31, 2026 (pre-implementation review — see "Review corrections" below)
 **Related:** `./ANTIGRAVITY_STATUSLINE_TOKEN_TRACKING_PLAN.md` (implemented; the only
@@ -372,14 +372,52 @@ Permissions settings UI (`AdvancedPermissionsSection.tsx`) now surfaces a
 warning when the toggle is off, explaining that it's required for both
 context-window and token-usage tracking, so this isn't a silent gap.
 
+## Step 3 verification record (July 31, 2026)
+
+The failure path was exercised with the installed agy 1.1.8 binary using the
+required `gemini-3.6-flash-low` model. A `--print-timeout 1ms` run emitted an
+`init` event followed by `result.status: "ERROR"` and `error: "timeout waiting
+for response"`, with exit code `1` and empty stderr. An invalid `--effort` run
+also emitted `result.status: "ERROR"` and exited `1`. Because
+`CliResponseCollector.getHeadlessFailure()` returns a process-exit failure
+before its `stdout.trim() || parsedOutput.events.length > 0` check, the NDJSON
+stdout did not change failure detection. That early return remains harmless
+for exit-code-zero stderr handling because Antigravity's genuine failures
+observed here were non-zero exits.
+
+A successful real headless run returned exit code `0` and
+`result.status: "SUCCESS"`, with conversation ID
+`b4fc19ec-81bb-490f-b812-f106938c2660` in its first stdout line. The matching
+transcript contained a completed
+`PLANNER_RESPONSE` with the full `CodeContent` for the `write_to_file` call,
+while stream-json exposed only its target path. The run also populated
+per-step and terminal token usage, including `thinking_tokens`, confirming the
+transcript remains the content/fidelity source and stdout remains an
+enrichment side-channel. Re-confirming `headlessSource = "log"` and
+`CliTransportCoordinator.executeHeadless()` showed raw NDJSON still goes to
+`HeadlessLogTail` and not `hostCallbacks.onStreamingChunk`; debug raw-output
+logging and stderr sanitization remain diagnostic/failure paths only.
+
+The existing disabled-toggle coverage was re-confirmed: with
+`permissions.antigravityStatusLineTracking: false`,
+`AntigravityCliProvider.observeHeadlessStdout()` clears the stream-json
+snapshot and parsed output has no token/context usage, while statusline
+settings and environment tracking remain untouched. The fill bar therefore
+stays unavailable, as decided above.
+
 ---
 
 ## Open Questions
 
 - What does `result.status` read on a genuine agy-level failure (auth error,
-  quota exhaustion, `--print-timeout` exceeded)? Not exercised — spot-check
-  during implementation rather than blocking on it, since
-  `CliResponseCollector.getHeadlessFailure()` doesn't depend on this field.
+  quota exhaustion, `--print-timeout` exceeded)? **Resolved July 31, 2026:** a
+  real `--print-timeout 1ms` run with `--model gemini-3.6-flash-low` emitted a
+  terminal `result.status` of `"ERROR"` with `error: "timeout waiting for
+  response"` and exited with code `1` (stderr was empty). An invalid `--effort`
+  run with the same required Flash model produced the same `"ERROR"` status
+  and exit code `1`. `CliResponseCollector.getHeadlessFailure()` therefore
+  correctly classifies the failure from the non-zero exit code; it does not
+  depend on the result status or assume prose stdout.
 - Does `--json-schema` interact with `--output-format stream-json` in any way
   ctrlyoke would care about? Out of scope — ctrlyoke doesn't use
   `--json-schema` today and this plan doesn't propose adding it.
@@ -406,12 +444,17 @@ context-window and token-usage tracking, so this isn't a silent gap.
    to `TokenUsage.reasoningOutputTokens`. Unit tests on the parser (real
    captured payloads above as fixtures, including a chunk boundary that splits
    a line) and on the merge precedence. Done July 31, 2026.
-3. **Verify no regression to failure detection or plain-text assumptions.**
-   Confirm `getHeadlessFailure()` and any other stdout consumers tolerate
-   NDJSON instead of prose (expected: yes, per the code-reading above, but
-   verify with a real failing run — e.g. an invalid `--model`). Spot-check the
-   `result.status` open question at the same time, then mark this plan
-   implemented and move it to `dev/implemented/`.
+3. **[x] Verify no regression to failure detection or plain-text assumptions.**
+   `getHeadlessFailure()` remains exit-code/stderr driven: its stdout early
+   return is only reached for exit code `0`, while genuine agy-level failures
+   exit `1`, so NDJSON cannot mask the failure. `CliTransportCoordinator`
+   still routes Antigravity's log-mode stdout only to `HeadlessLogTail`; raw
+   NDJSON is not sent to `hostCallbacks.onStreamingChunk`. Raw-output debug
+   logging remains an intentional diagnostic string, and
+   `sanitizeTerminalOutput` is applied to stderr/failure messages, not used to
+   parse the stream. A real timeout and invalid-effort run both confirmed
+   exit code `1` and `result.status: "ERROR"`; see the resolved question above.
+   Done July 31, 2026.
 4. ~~**(Optional, follow-up) Live text preview**~~ — **rejected**, see
    section 4 above. Do not implement.
 
