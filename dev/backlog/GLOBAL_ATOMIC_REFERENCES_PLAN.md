@@ -393,6 +393,10 @@ palette; repointed editor/output consumers; and relocated the utility tests.
 
 ### Step 2 — Find range projection (pure, no rendering)
 
+**Status: Complete.** Added the pure source-to-label projection and Vitest
+coverage for compact/expanded rendering, hidden matches, active marks, and
+boundary behavior.
+
 - Add the descriptor → render-segments projection: given full source text, its
   row-search range, the sub-ranges the compact label represents, and the row's
   find matches, decide compact vs. find-expanded and return exact mark ranges.

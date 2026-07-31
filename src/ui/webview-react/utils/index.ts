@@ -77,5 +77,14 @@ export {
   type RowFindDecoration,
 } from "./outputFind";
 
+export {
+  projectAtomicReferenceFind,
+  type AtomicReferenceCompactRange,
+  type AtomicReferenceFindMark,
+  type AtomicReferencePresentation,
+  type AtomicReferenceRange,
+  type AtomicReferenceRenderSegment,
+} from "./atomicReferences";
+
 // Tokenizer utilities
 export { countTokens } from "./tokenizer";

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findAtomicReferences,
   findContextReferenceMatches,
+  projectAtomicReferenceFind,
 } from "@utils/atomicReferences";
 
 describe("CodeMirrorEditor context reference parsing", () => {
@@ -167,5 +168,254 @@ describe("atomic reference presentation", () => {
 
   it("leaves the invalid flag undefined when no validity resolver is supplied", () => {
     expect(findAtomicReferences("@b/missing.ts")[0].invalid).toBeUndefined();
+  });
+});
+
+describe("atomic reference find projection", () => {
+  const presentation = (
+    sourceText: string,
+    compactLabel: string,
+    sourceFrom: number,
+    sourceTo: number,
+    labelFrom: number,
+    labelTo: number,
+    rowFrom = 10
+  ) => ({
+    sourceText,
+    rowRange: { from: rowFrom, to: rowFrom + sourceText.length },
+    compactRanges: [
+      {
+        source: { from: sourceFrom, to: sourceTo },
+        label: { from: labelFrom, to: labelTo },
+      },
+    ],
+    compactLabel,
+    selectionText: sourceText,
+  });
+
+  it("keeps a visible-label match compact and marks its label offsets", () => {
+    const source = "@src/deep/codemirrorTheme.ts";
+    const basenameFrom = source.lastIndexOf("codemirrorTheme.ts");
+    expect(
+      projectAtomicReferenceFind(
+        presentation(
+          source,
+          "codemirrorTheme.ts",
+          basenameFrom,
+          source.length,
+          0,
+          "codemirrorTheme.ts".length
+        ),
+        [
+          {
+            start: 10 + basenameFrom + 2,
+            end: 10 + basenameFrom + 10,
+            active: false,
+          },
+        ]
+      )
+    ).toEqual({
+      text: "codemirrorTheme.ts",
+      marks: [{ from: 2, to: 10, active: false }],
+      expanded: false,
+      selectionText: source,
+    });
+  });
+
+  it("expands a hidden directory match and marks the exact source substring", () => {
+    const source = "@ctrlyoke/src/ui/webview-react/utils/codemirrorTheme.ts";
+    const basenameFrom = source.lastIndexOf("codemirrorTheme.ts");
+    const hiddenFrom = source.indexOf("webview-react");
+    const result = projectAtomicReferenceFind(
+      presentation(
+        source,
+        "codemirrorTheme.ts",
+        basenameFrom,
+        source.length,
+        0,
+        "codemirrorTheme.ts".length
+      ),
+      [
+        {
+          start: 10 + hiddenFrom,
+          end: 10 + hiddenFrom + "webview-react".length,
+          active: true,
+        },
+      ]
+    );
+
+    expect(result).toEqual({
+      text: source,
+      marks: [
+        {
+          from: hiddenFrom,
+          to: hiddenFrom + "webview-react".length,
+          active: true,
+        },
+      ],
+      expanded: true,
+      selectionText: source,
+      activeMarkIndex: 0,
+    });
+  });
+
+  it("projects several matches in one reference without changing their order", () => {
+    const source = "@src/webview-react/webview-react.ts";
+    const hiddenFrom = source.indexOf("webview-react");
+    const secondFrom = source.lastIndexOf("webview-react");
+    const result = projectAtomicReferenceFind(
+      presentation(
+        source,
+        "webview-react.ts",
+        secondFrom,
+        source.length,
+        0,
+        "webview-react.ts".length
+      ),
+      [
+        { start: 10 + hiddenFrom, end: 10 + hiddenFrom + 12, active: false },
+        { start: 10 + secondFrom, end: 10 + secondFrom + 12, active: true },
+      ]
+    );
+
+    expect(result.expanded).toBe(true);
+    expect(result.marks).toEqual([
+      { from: hiddenFrom, to: hiddenFrom + 12, active: false },
+      { from: secondFrom, to: secondFrom + 12, active: true },
+    ]);
+    expect(result.activeMarkIndex).toBe(1);
+  });
+
+  it("forwards offsets from either case-sensitive or insensitive searches", () => {
+    const source = "@src/WebView-React/codemirrorTheme.ts";
+    const hiddenFrom = source.indexOf("WebView-React");
+    const descriptor = presentation(
+      source,
+      "codemirrorTheme.ts",
+      source.lastIndexOf("codemirrorTheme.ts"),
+      source.length,
+      0,
+      "codemirrorTheme.ts".length
+    );
+
+    expect(
+      projectAtomicReferenceFind(descriptor, [
+        { start: 10 + hiddenFrom, end: 10 + hiddenFrom + 13, active: false },
+      ]).marks
+    ).toEqual([{ from: hiddenFrom, to: hiddenFrom + 13, active: false }]);
+    expect(
+      projectAtomicReferenceFind(descriptor, [
+        { start: 10 + hiddenFrom + 1, end: 10 + hiddenFrom + 5, active: true },
+      ]).marks
+    ).toEqual([{ from: hiddenFrom + 1, to: hiddenFrom + 5, active: true }]);
+  });
+
+  it("collapses with no matches or when matches only touch visible text", () => {
+    const source = "@src/hidden/codemirrorTheme.ts";
+    const descriptor = presentation(
+      source,
+      "codemirrorTheme.ts",
+      source.lastIndexOf("codemirrorTheme.ts"),
+      source.length,
+      0,
+      "codemirrorTheme.ts".length
+    );
+
+    expect(projectAtomicReferenceFind(descriptor, [])).toMatchObject({
+      text: "codemirrorTheme.ts",
+      marks: [],
+      expanded: false,
+    });
+    expect(
+      projectAtomicReferenceFind(descriptor, [
+        {
+          start: 10 + source.lastIndexOf("codemirror"),
+          end: 10 + source.length,
+          active: false,
+        },
+      ])
+    ).toMatchObject({ text: "codemirrorTheme.ts", expanded: false });
+  });
+
+  it("maps an explicit label and hidden target independently", () => {
+    const source = "theme file src/ui/webview-react/utils/codemirrorTheme.ts";
+    const label = "theme file";
+    const descriptor = {
+      sourceText: source,
+      rowRange: { from: 4, to: 4 + source.length },
+      compactRanges: [
+        {
+          source: { from: 0, to: label.length },
+          label: { from: 0, to: label.length },
+        },
+      ],
+      compactLabel: label,
+      selectionText: label,
+    };
+
+    expect(
+      projectAtomicReferenceFind(descriptor, [
+        {
+          start: 4 + 2,
+          end: 4 + 6,
+          active: false,
+        },
+      ])
+    ).toMatchObject({
+      text: label,
+      expanded: false,
+      marks: [{ from: 2, to: 6, active: false }],
+    });
+
+    const targetFrom = source.indexOf("src/");
+    const hiddenFrom =
+      targetFrom + source.slice(targetFrom).indexOf("webview-react");
+    expect(
+      projectAtomicReferenceFind(descriptor, [
+        {
+          start: 4 + hiddenFrom,
+          end: 4 + hiddenFrom + "webview-react".length,
+          active: true,
+        },
+      ])
+    ).toMatchObject({
+      text: source,
+      expanded: true,
+      marks: [
+        {
+          from: hiddenFrom,
+          to: hiddenFrom + "webview-react".length,
+          active: true,
+        },
+      ],
+    });
+  });
+
+  it("expands when a match spans the compact-label and hidden boundary", () => {
+    const source = "@src/webview-react/codemirrorTheme.ts";
+    const basenameFrom = source.lastIndexOf("codemirrorTheme.ts");
+    const result = projectAtomicReferenceFind(
+      presentation(
+        source,
+        "codemirrorTheme.ts",
+        basenameFrom,
+        source.length,
+        0,
+        "codemirrorTheme.ts".length
+      ),
+      [
+        {
+          start: 10 + basenameFrom - 3,
+          end: 10 + basenameFrom + 5,
+          active: false,
+        },
+      ]
+    );
+
+    expect(result).toMatchObject({
+      text: source,
+      expanded: true,
+      marks: [{ from: basenameFrom - 3, to: basenameFrom + 5, active: false }],
+    });
   });
 });

@@ -6,6 +6,128 @@
  * tolerance, while this parser needs exact source ranges and UI match types.
  */
 
+import { sliceDecorationMatches, type RowFindDecoration } from "./outputFind";
+
+export interface AtomicReferenceRange {
+  from: number;
+  to: number;
+}
+
+/**
+ * Maps a source range represented by the compact label to its label range.
+ * Keeping both sides explicit is important for authored Markdown labels and
+ * labels whose spelling differs slightly from the source (for example a
+ * directory's added trailing slash).
+ */
+export interface AtomicReferenceCompactRange {
+  source: AtomicReferenceRange;
+  label: AtomicReferenceRange;
+}
+
+export interface AtomicReferencePresentation {
+  /** Canonical full source/target text, with offsets relative to this string. */
+  sourceText: string;
+  /** Range of sourceText in the row's canonical find-search segment. */
+  rowRange: AtomicReferenceRange;
+  /** Source portions represented by compactLabel and their label offsets. */
+  compactRanges: AtomicReferenceCompactRange[];
+  compactLabel: string;
+  /** Text used when the user copies the reference from output. */
+  selectionText: string;
+}
+
+export interface AtomicReferenceFindMark {
+  from: number;
+  to: number;
+  active: boolean;
+}
+
+export interface AtomicReferenceRenderSegment {
+  text: string;
+  marks: AtomicReferenceFindMark[];
+  expanded: boolean;
+  selectionText: string;
+  /** Index into marks, when one of the projected matches is active. */
+  activeMarkIndex?: number;
+}
+
+/**
+ * Projects authoritative row-global find decorations onto one atomic
+ * reference. This is deliberately a projection only: the find hook remains
+ * responsible for searching, match count, ordering, and active-match state.
+ */
+export function projectAtomicReferenceFind(
+  presentation: AtomicReferencePresentation,
+  matches: RowFindDecoration["matches"]
+): AtomicReferenceRenderSegment {
+  const sourceMatches = sliceDecorationMatches(
+    { matches },
+    presentation.rowRange.from,
+    presentation.rowRange.to
+  );
+  const compactRanges = presentation.compactRanges.filter(
+    ({ source, label }) =>
+      source.to > source.from &&
+      label.to > label.from &&
+      source.from >= 0 &&
+      source.to <= presentation.sourceText.length &&
+      label.from >= 0 &&
+      label.to <= presentation.compactLabel.length
+  );
+
+  const expanded = sourceMatches.some(
+    (match) => !isRangeCovered(match.start, match.end, compactRanges)
+  );
+  const text = expanded ? presentation.sourceText : presentation.compactLabel;
+  const marks: AtomicReferenceFindMark[] = [];
+
+  for (const match of sourceMatches) {
+    if (expanded) {
+      marks.push({ from: match.start, to: match.end, active: match.active });
+      continue;
+    }
+
+    for (const range of compactRanges) {
+      const from = Math.max(match.start, range.source.from);
+      const to = Math.min(match.end, range.source.to);
+      if (from >= to) continue;
+
+      marks.push({
+        from: range.label.from + (from - range.source.from),
+        to: range.label.from + (to - range.source.from),
+        active: match.active,
+      });
+    }
+  }
+
+  return {
+    text,
+    marks,
+    expanded,
+    selectionText: presentation.selectionText,
+    ...(marks.findIndex((mark) => mark.active) >= 0
+      ? { activeMarkIndex: marks.findIndex((mark) => mark.active) }
+      : {}),
+  };
+}
+
+function isRangeCovered(
+  from: number,
+  to: number,
+  ranges: AtomicReferenceCompactRange[]
+): boolean {
+  let cursor = from;
+  for (const range of [...ranges].sort(
+    (left, right) => left.source.from - right.source.from
+  )) {
+    if (range.source.to <= cursor) continue;
+    if (range.source.from > cursor) return false;
+    cursor = Math.max(cursor, range.source.to);
+    if (cursor >= to) return true;
+  }
+  return cursor >= to;
+}
+
 export type ContextReferenceType =
   | "file"
   | "directory"
