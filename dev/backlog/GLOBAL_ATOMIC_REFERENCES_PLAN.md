@@ -1,6 +1,6 @@
 # Global Atomic Reference Formatting Plan
 
-> **Status:** Proposed
+> **Status:** In progress — staged as seven steps (see Implementation phases)
 >
 > **Priority:** P2 — output readability and consistency
 
@@ -117,7 +117,14 @@ With `ui.atomicContextReferences` enabled inside `OutputPane`:
 
 - echoed ctrlyoke references become chips using their reference type;
 - echoed `$context` references gain the same chip/open behavior they already
-  have in CodeMirror, closing the current prompt-editor/output discrepancy;
+  have in CodeMirror, closing the current prompt-editor/output discrepancy.
+  **Note this is a behavior change, not only a presentation change:** echoed
+  `$context` tokens are not clickable in output today at all, because
+  `PromptReferenceText` calls only `findContextReferenceMatches` and never
+  `findInlinePriorContextRefs`. Gating clickability on a *formatting* setting
+  would be incoherent, so `$context` becomes clickable in **both** states —
+  a plain text link when the setting is off (matching how every other echoed
+  reference renders when off) and a chip when it is on;
 - Markdown auto-linked local paths become file chips;
 - explicit Markdown links with a local-file target become file chips;
 - file edit/write/read/delete header paths become file chips;
@@ -198,13 +205,32 @@ source markup can remain documented.
 
 ### 1. Single-source parsing and presentation metadata
 
-Extend `src/utils/FileReferenceParser.ts` so its public parse results can provide
-the exact matched token, discriminated reference kind, and source offsets needed
-by both runtime and UI consumers. Preserve existing runtime return shapes or
-introduce an explicit adapter so context expansion behavior cannot drift.
+**Scope decision (revised during planning).** An earlier draft called for
+extending `src/utils/FileReferenceParser.ts` so one parser served both runtime
+and UI. That is the wrong trade here and is explicitly **not** part of this work:
 
-Move webview-safe presentation concerns out of `CodeMirrorEditor.tsx` into a
-small utility such as `src/ui/webview-react/utils/atomicReferences.ts`:
+- `FileReferenceParser.ts` is the *runtime* parser. `parseAtReferences()` and
+  friends feed harness context expansion through `HarnessIntegration`; its
+  regexes are tuned for prose tolerance (trailing-punctuation stripping) and it
+  returns `FileReference` objects, not ranged discriminated matches.
+- `findContextReferenceMatches()` in `CodeMirrorEditor.tsx` is the *UI* parser.
+  It needs exact `[from, to)` source ranges, a discriminated `type`, and it
+  covers dialects the runtime parser does not (quoted variants, `~git` refs,
+  inline `$context`).
+
+Merging them would put harness context expansion at risk for no user-visible
+benefit to this feature. The single-source requirement that actually matters —
+and the one the acceptance criteria test — is *one parser shared by the editor
+and output renderers*. That is achieved entirely on the webview side.
+
+So: extract the UI parser and presentation helpers out of
+`CodeMirrorEditor.tsx` verbatim (no behavior change) into
+`src/ui/webview-react/utils/atomicReferences.ts`, and leave the runtime parser
+alone. Document the two-parser boundary and why it exists so a later agent does
+not "helpfully" merge them. If genuinely shared leaf helpers surface during
+extraction (basename/normalization), share those specific functions only.
+
+That utility owns:
 
 - `AtomicReferencePresentation` / `AtomicReferenceRange` types;
 - basename, git-label, and prior-context-label helpers;
@@ -343,39 +369,66 @@ explicit and prevents a later “global” implementation from rewriting code.
 
 ## Implementation phases
 
-### Phase 1 — Extract the shared model
+Staged as seven single-session steps. Each lands independently, keeps `npm test`
+green, and commits its own work. Later steps assume earlier ones are committed.
 
-- Reconcile UI parsing with `FileReferenceParser` and add exact ranged matches.
-- Extract descriptor/label/icon helpers from `CodeMirrorEditor.tsx`.
-- Update CodeMirror to consume the extracted helpers with no behavior change.
-- Move the icon/accent palette to a shared utility consumed by
-  `codemirrorTheme.ts` and output chips.
-- Move parser/presentation unit tests out of the editor component test where
-  appropriate.
+### Step 1 — Extract the shared webview model (no behavior change)
 
-### Phase 2 — Build the output chip and find projection
+- Move `findContextReferenceMatches`, `findInlinePriorContextRefs`,
+  `getFencedBlockRanges`, `isInFencedBlock`, `referenceBasename`,
+  `gitReferenceLabel`, `describeContextReferenceChip`,
+  `describePriorContextChip`, `findAtomicReferences`,
+  `PRIOR_CONTEXT_CHIP_LABELS`, and the `AtomicReferenceChip` type out of
+  `CodeMirrorEditor.tsx` into `src/ui/webview-react/utils/atomicReferences.ts`.
+- Move the `CHART_ACCENT_COLORS` / `SYMBOL_ICON_COLORS` palette out of
+  `codemirrorTheme.ts` into a shared utility that both the generated CodeMirror
+  theme rules and the React chip consume.
+- Repoint `CodeMirrorEditor.tsx` and `OutputRow.tsx` at the new module, deleting
+  `OutputRow`'s component-to-component import of the editor.
+- Relocate the parser/presentation unit tests out of the editor component test.
+- Do **not** touch `FileReferenceParser.ts` (see Architecture §1).
 
-- Add the native-button `AtomicReferenceChip` component.
-- Add shared global chip styles and CodeMirror adapter styles.
-- Implement range projection, hidden-match expansion, case-sensitive matching,
-  and active-mark forwarding.
-- Cover keyboard activation, accessible name, full-reference title, wrapping,
-  selection-copy serialization, and visible/hidden match behavior in component
-  tests.
+### Step 2 — Find range projection (pure, no rendering)
 
-### Phase 3 — Wire every existing output reference surface
+- Add the descriptor → render-segments projection: given full source text, its
+  row-search range, the sub-ranges the compact label represents, and the row's
+  find matches, decide compact vs. find-expanded and return exact mark ranges.
+- Cover case sensitivity, multiple matches in one reference, active-match
+  forwarding, label-only matches, hidden-segment matches, and collapse on clear.
 
-- Gate and render echoed prompt references in `OutputRow.tsx`.
-- Add descriptor/source-range metadata to Markdown local-file nodes and render
-  them through the chip component.
-- Render structured file-operation paths through the chip component while
-  leaving `ToolCallBlock` generic.
-- Thread the output-scoped flag and exact find decorations through
-  `OutputSection`, `OutputPane`, `OutputRow`, and `MarkdownText`.
-- Update setting descriptions.
+### Step 3 — `AtomicReferenceChip` component and shared styles
 
-### Phase 4 — Regression and performance verification
+- Native `<button>` chip: codicon, compact/expanded label, full-reference
+  `title`, `aria-label`, open action, marks from Step 2, copy-text metadata.
+- Move the reusable chip box/icon/hover/focus/high-contrast primitives into
+  global component CSS; leave CodeMirror a thin `.cm-*` adapter.
 
+### Step 4 — Output gate and echoed prompt references
+
+- Read the setting at the output composition boundary and thread an explicit
+  presentation flag to `OutputRow`.
+- Re-render `PromptReferenceText` through descriptors + the chip when enabled,
+  keeping today's plain link path when disabled, and wire `$context` in both
+  states (see Product decisions).
+- Add the capture-phase copy adapter at the output-pane boundary.
+- Update `schemas/settings-schema.json` and `GeneralSection.tsx` descriptions.
+
+### Step 5 — Structured file-operation rows
+
+- Replace `FileOperationOutput.tsx`'s local `FilePath` with the shared chip when
+  enabled; keep `ToolCallBlock` presentation-agnostic; preserve `filePath` find
+  marks, undo/redo, and full-bleed diff layout.
+
+### Step 6 — Markdown references
+
+- Carry descriptor/source-range metadata on `<file-ref>` nodes through the
+  existing sanitized custom-element pipeline; add the opt-in prop so
+  non-output callers are unchanged; thread exact find decorations for reference
+  nodes while ordinary Markdown keeps its query-based remark pass.
+
+### Step 7 — Regression, boundary, and performance verification
+
+- Add the `rdvFindTokens` diff-boundary regression test.
 - Exercise virtualized and non-virtualized output with long wrapped paths.
 - Toggle the setting while output is visible and while rows are off-screen.
 - Search hidden path segments, navigate among several matches in one row and
@@ -466,4 +519,5 @@ explicit and prevents a later “global” implementation from rewriting code.
   virtualization, copy/export, tool-call layout, and undo/redo show no
   regressions.
 - Parsing, labels, icons, accent colors, and open-target metadata each have one
-  source of truth shared by editor and output renderers.
+  source of truth shared by editor and output renderers. (Webview-side, per
+  Architecture §1 — the runtime `FileReferenceParser` stays separate by design.)
