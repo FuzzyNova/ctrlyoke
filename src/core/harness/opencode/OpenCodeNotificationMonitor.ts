@@ -3,7 +3,6 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
-import * as path from "path";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
@@ -12,8 +11,7 @@ import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
  *
  * Completion detection strategy: OpenCode TypeScript plugin system.
  *
- * Before the TUI launches, OpenCodeCliProvider writes a CommonJS plugin to
- * .opencode/plugin/ctrlyoke-completion-hook.ts. The plugin listens for
+ * OpenCodeCliProvider registers the extension plugin through inline config. The plugin listens for
  * session.created, session.idle, and session.busy events, then writes:
  *
  *   {sessionId}-start.json → on session.created (for early session ID capture)
@@ -22,50 +20,18 @@ import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
  * These match the standardized two-file format used by Claude and Copilot harnesses,
  * so all monitoring logic is inherited from NotificationMonitorBase unchanged.
  *
- * buildHookConfig() returns type: "none" because plugin file management is done
- * as a side effect in OpenCodeCliProvider.buildCliArgs() — not via CLI args.
- *
- * getPluginContent(notifyDir) is an opencode-specific method called directly
- * by OpenCodeCliProvider to get the plugin JS content to write to disk.
+ * buildHookConfig() returns type: "none" because plugin registration is done
+ * through OpenCode's inline config — not via CLI args.
  */
 export class OpenCodeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
-  getPluginDirectory(workspaceRoot: string): string {
-    return path.join(workspaceRoot, ".opencode", "plugin");
-  }
-
-  getPluginFilePath(workspaceRoot: string): string {
-    return path.join(
-      this.getPluginDirectory(workspaceRoot),
-      "ctrlyoke-completion-hook.ts"
-    );
-  }
-
-  getPluginHooksFilePath(workspaceRoot: string): string {
-    return path.join(
-      this.getPluginDirectory(workspaceRoot),
-      "ctrlyoke-hooks.json"
-    );
-  }
-
-  getPluginGitignorePath(workspaceRoot: string): string {
-    return path.join(this.getPluginDirectory(workspaceRoot), ".gitignore");
-  }
-
-  getManagedPluginArtifactPaths(workspaceRoot: string): string[] {
-    return [
-      this.getPluginFilePath(workspaceRoot),
-      this.getPluginHooksFilePath(workspaceRoot),
-    ];
-  }
-
   /**
    * Build hook configuration.
    *
-   * Returns type: "none" — OpenCode completion detection uses a plugin file
-   * written to .opencode/plugin/ before execution, not CLI arguments.
+   * Returns type: "none" — OpenCode completion detection uses an inline plugin,
+   * not CLI hook arguments.
    */
   buildHookConfig(
     _scriptPath: string,

@@ -405,7 +405,7 @@ Inline policy is authoritative over the lower-precedence global/project config
 layers only; OpenCode organization/console and managed/MDM layers merge later
 and may override it.
 
-**Stage 4 — move the plugin out of the repo.** Reference
+**Stage 4 — move the plugin out of the repo (complete 2026-07-31).** Reference
 `out/scripts/ctrlyoke-opencode-plugin.ts` directly from the extension
 installation by putting its **absolute path** in `plugin[]` and letting
 `pathToFileURL` handle escaping (`config/plugin.ts:52`). Replace the
@@ -413,6 +413,12 @@ installation by putting its **absolute path** in `plugin[]` and letting
 same JSON (or a path under `.ctrlyoke/temp/`, which is already gitignored).
 Delete `.opencode/` creation, its `.gitignore`, and
 `getAdditionalCleanupFilePaths`'s artifact list.
+
+Implemented: the inline `plugin[]` entry now carries the absolute extension
+installation path, user hooks travel in `CTRLYOKE_OPENCODE_HOOKS`, and normal
+OpenCode runs create no workspace plugin or config files. A warning-backed,
+minimal `.opencode/plugin/` deployment remains only when the installed plugin
+path cannot be loaded.
 
 **Stage 5 — real-harness regression coverage.** This is the automated coverage
 `TOOL_PERMISSION_PARITY_PLAN.md` still owes for OpenCode; it should now be

@@ -9,7 +9,7 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 <buildAndDeployment>
 - `src/scripts/*` is copied verbatim to `out/scripts/*` by the `copy-scripts` esbuild plugin. Do not add imports that require bundling, path rewriting, or transpilation.
 - All stdin-based hooks stay plain CommonJS and depend only on Node built-ins plus `ctrlyoke-hook-utils.js`.
-- `ctrlyoke-opencode-plugin.ts` is the exception: OpenCode only loads `.ts` plugins, so this file must remain TypeScript + ESM and is deployed verbatim to `.opencode/plugin/ctrlyoke-completion-hook.ts`.
+- `ctrlyoke-opencode-plugin.ts` is the exception: it must remain TypeScript + ESM and is loaded from the extension installation through OpenCode's inline `plugin[]` config. A provider-owned `.opencode/plugin/` copy is only a warning-backed compatibility fallback.
 </buildAndDeployment>
 
 <notificationFlow>

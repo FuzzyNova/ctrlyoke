@@ -2,7 +2,6 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { pathToFileURL } from "url";
 import { suite, test } from "mocha";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import {
@@ -11,6 +10,7 @@ import {
 } from "../../core/harness/opencode/OpenCodeInlineConfig";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
+import { Log } from "../../utils/Log";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
@@ -32,9 +32,12 @@ suite("OpenCodeCliProvider", () => {
   test("builds the inline config shape for every permission mode", () => {
     const provider = new OpenCodeCliProvider();
     const extensionPath = path.join(os.tmpdir(), "opencode-inline-extension");
-    const pluginPath = pathToFileURL(
-      path.join(extensionPath, "out", "scripts", "ctrlyoke-opencode-plugin.ts")
-    ).href;
+    const pluginPath = path.resolve(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-opencode-plugin.ts"
+    );
 
     for (const mode of Object.values(PERMISSION_MODES)) {
       const config = provider.buildInlineConfig({
@@ -444,100 +447,87 @@ suite("OpenCodeCliProvider", () => {
     assert.strictEqual(exportCalls, 0);
   });
 
-  test("writes a temporary plugin gitignore and cleans plugin artifacts after a run", async () => {
+  test("passes user hooks through env and leaves both spawn workspaces unchanged", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-provider-")
     );
     const extensionPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-extension-")
     );
-    const provider = new OpenCodeCliProvider();
+    const pluginSourcePath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-opencode-plugin.ts"
+    );
+    const hooks = [
+      { event: "stop", command: "node ./stop-hook.js" },
+      { event: "permissionRequest", command: "node ./permission-hook.js" },
+    ];
 
     try {
-      await fs.mkdir(path.join(extensionPath, "out", "scripts"), {
-        recursive: true,
-      });
-      await fs.writeFile(
-        path.join(
+      await fs.mkdir(path.dirname(pluginSourcePath), { recursive: true });
+      await fs.writeFile(pluginSourcePath, "export default {};\n", "utf8");
+
+      for (const isInteractive of [false, true]) {
+        const provider = new OpenCodeCliProvider();
+        await provider.buildCliArgs(
+          { prompt: "test" },
+          isInteractive,
           extensionPath,
-          "out",
-          "scripts",
-          "ctrlyoke-opencode-plugin.ts"
-        ),
-        "export default {};\n",
-        "utf-8"
-      );
+          workspaceRoot,
+          undefined,
+          {
+            promptIndex: 0,
+            allPrompts: [],
+            resolvedProperties: { hooks },
+          } as any
+        );
 
-      await provider.buildCliArgs(
-        { prompt: "test" },
-        true,
-        extensionPath,
-        workspaceRoot,
-        undefined,
-        {
-          promptIndex: 0,
-          allPrompts: [],
-          resolvedProperties: {
-            hooks: [{ event: "stop", command: "echo cleanup" }],
-          },
-        } as any
-      );
-
-      const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
-      const pluginPath = path.join(pluginDir, "ctrlyoke-completion-hook.ts");
-      const sidecarPath = path.join(pluginDir, "ctrlyoke-hooks.json");
-      const gitignorePath = path.join(pluginDir, ".gitignore");
-
-      const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-      assert.ok(gitignoreContent.includes("ctrlyoke-completion-hook.ts"));
-      assert.ok(gitignoreContent.includes("ctrlyoke-hooks.json"));
-      await fs.access(pluginPath);
-      await fs.access(sidecarPath);
-
-      for (const artifactPath of provider.getAdditionalCleanupFilePaths(
-        workspaceRoot
-      )) {
-        await fs.unlink(artifactPath).catch(() => {});
+        const expectedHooks = JSON.stringify(hooks);
+        const env = isInteractive
+          ? provider.getInteractiveSpawnEnv()
+          : provider.getHeadlessSpawnEnv();
+        assert.strictEqual(env.CTRLYOKE_OPENCODE_HOOKS, expectedHooks);
+        assert.strictEqual(
+          JSON.parse(env.OPENCODE_CONFIG_CONTENT!).plugin[0],
+          path.resolve(pluginSourcePath)
+        );
       }
-      await provider.cleanupWorkspaceArtifacts(workspaceRoot);
 
-      await assert.rejects(fs.access(pluginPath), /ENOENT/);
-      await assert.rejects(fs.access(sidecarPath), /ENOENT/);
-      await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+      assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
       await fs.rm(extensionPath, { recursive: true, force: true });
     }
   });
 
-  test("preserves a user-owned plugin gitignore during cleanup", async () => {
+  test("warns and deploys the minimal workspace fallback when the external plugin fails to load", async () => {
     const workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "opencode-provider-")
+      path.join(os.tmpdir(), "opencode-fallback-workspace-")
     );
     const extensionPath = await fs.mkdtemp(
-      path.join(os.tmpdir(), "opencode-extension-")
+      path.join(os.tmpdir(), "opencode-fallback-extension-")
+    );
+    const sourcePath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-opencode-plugin.ts"
     );
     const provider = new OpenCodeCliProvider();
+    const warnings: string[] = [];
+    const originalWarn = Log.warn;
 
     try {
-      const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
-      await fs.mkdir(pluginDir, { recursive: true });
-      const gitignorePath = path.join(pluginDir, ".gitignore");
-      const userGitignore = "# user-owned\n*.log\n";
-      await fs.writeFile(gitignorePath, userGitignore, "utf-8");
-      await fs.mkdir(path.join(extensionPath, "out", "scripts"), {
-        recursive: true,
+      await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+      await fs.writeFile(sourcePath, "export default {};\n", "utf8");
+      Log.warn = (message: string) => warnings.push(message);
+      Object.defineProperty(provider, "pluginPathIsReadable", {
+        value: async () => {
+          throw new Error("simulated plugin-load failure");
+        },
       });
-      await fs.writeFile(
-        path.join(
-          extensionPath,
-          "out",
-          "scripts",
-          "ctrlyoke-opencode-plugin.ts"
-        ),
-        "export default {};\n",
-        "utf-8"
-      );
 
       await provider.buildCliArgs(
         { prompt: "test" },
@@ -549,23 +539,47 @@ suite("OpenCodeCliProvider", () => {
           promptIndex: 0,
           allPrompts: [],
           resolvedProperties: {
-            hooks: [{ event: "stop", command: "echo cleanup" }],
+            hooks: [{ event: "stop", command: "echo fallback" }],
           },
         } as any
       );
 
-      for (const artifactPath of provider.getAdditionalCleanupFilePaths(
-        workspaceRoot
-      )) {
-        await fs.unlink(artifactPath).catch(() => {});
-      }
-      await provider.cleanupWorkspaceArtifacts(workspaceRoot);
+      assert.ok(
+        warnings.some((warning) => warning.includes("falling back to .opencode/plugin"))
+      );
+      assert.deepStrictEqual(
+        JSON.parse(
+          await fs.readFile(
+            path.join(
+              workspaceRoot,
+              ".opencode",
+              "plugin",
+              "ctrlyoke-hooks.json"
+            ),
+            "utf8"
+          )
+        ),
+        [{ event: "stop", command: "echo fallback" }]
+      );
+      assert.deepStrictEqual(
+        JSON.parse(provider.getInteractiveSpawnEnv().OPENCODE_CONFIG_CONTENT!),
+        { plugin: [] }
+      );
 
-      assert.strictEqual(
-        await fs.readFile(gitignorePath, "utf-8"),
-        userGitignore
+      await provider.cleanupWorkspaceArtifacts(workspaceRoot);
+      await assert.rejects(
+        fs.access(
+          path.join(
+            workspaceRoot,
+            ".opencode",
+            "plugin",
+            "ctrlyoke-completion-hook.ts"
+          )
+        ),
+        /ENOENT/
       );
     } finally {
+      Log.warn = originalWarn;
       await fs.rm(workspaceRoot, { recursive: true, force: true });
       await fs.rm(extensionPath, { recursive: true, force: true });
     }

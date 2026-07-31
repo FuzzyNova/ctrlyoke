@@ -10,7 +10,7 @@ suite("OpenCodeNotificationMonitor", () => {
     monitor = new OpenCodeNotificationMonitor();
   });
 
-  test("buildHookConfig should return none because OpenCode uses a plugin file", () => {
+  test("buildHookConfig should return none because OpenCode uses inline plugin config", () => {
     const config = monitor.buildHookConfig(
       "script.js",
       "notify-dir",

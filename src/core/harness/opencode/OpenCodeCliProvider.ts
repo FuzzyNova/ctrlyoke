@@ -1,6 +1,5 @@
 import * as path from "path";
 import * as fs from "fs";
-import { pathToFileURL } from "url";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import type { ToolPermissionConfig } from "../shared/interfaces/IToolPermissionMapper";
@@ -8,7 +7,6 @@ import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { configService } from "../../../config/CtrlYokeConfigService";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
@@ -21,6 +19,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
+  HookEvent,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
@@ -51,7 +50,7 @@ import {
  *
  * Interactive execution (with plugin for completion detection):
  *   opencode --prompt "prompt text" -m provider/model [-s sessionId]
- *   (plugin file written to .opencode/plugin/ctrlyoke-completion-hook.js beforehand)
+ *   (plugin loaded from the extension installation through inline config)
  *
  * Session management:
  *   -s <sessionId> — resume existing session (both modes)
@@ -90,6 +89,10 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   /** Inline config accumulated while preparing the current prompt. */
   private pendingInlineConfig: OpenCodeInlineConfig = { plugin: [] };
+  /** User hooks serialized for the plugin's process-local environment. */
+  private pendingUserHooksEnv: string | undefined;
+  /** Artifacts created only by the documented fallback path. */
+  private fallbackPluginArtifactPaths: string[] = [];
   private pendingPermissionCollisionContext: OpenCodePermissionCollisionContext =
     { topLevelKeys: new Set(), nestedKeysByTool: new Map() };
 
@@ -115,7 +118,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       options.additionalEnv,
       options.userServers
     );
-    const pluginPath = path.join(
+    const pluginPath = path.resolve(
       options.extensionPath,
       "out",
       "scripts",
@@ -125,7 +128,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     return {
       ...(permission ? { permission } : {}),
       ...(Object.keys(mcpEntries).length > 0 ? { mcp: mcpEntries } : {}),
-      plugin: [pathToFileURL(pluginPath).href],
+      // OpenCode converts absolute paths to file:// URLs itself. Keeping the
+      // path here also avoids having to escape Windows drive letters/spaces.
+      plugin: [pluginPath],
     };
   }
 
@@ -178,6 +183,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // optional MCP or permission preparation so a later prompt cannot inherit
     // either slice when its workspace or policy is absent.
     this.pendingInlineConfig = { plugin: [] };
+    this.pendingUserHooksEnv = undefined;
     this.pendingPermissionCollisionContext =
       await resolveOpenCodePermissionCollisionContext(workspaceRoot);
     this.pendingInlineConfig.plugin = this.buildInlineConfig({
@@ -245,20 +251,10 @@ export class OpenCodeCliProvider implements ICliProvider {
       Log.debug(`🆕 Starting new session`);
     }
 
-    // Deploy the completion plugin for interactive mode (always) and for
-    // headless mode when user hooks are configured. In headless mode the plugin
-    // fires user hook commands via native OpenCode events; CTRLYOKE_NOTIFY_DIR
-    // is only set in interactive mode so notification file writing is skipped.
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
-    const hasUserHooks = (userHooks?.length ?? 0) > 0;
-    const enabledHookNotificationEvents = Object.values(
-      configService.getAll().notifications.events.hookEvents
-    ).some(Boolean);
-    if (
-      workspaceRoot &&
-      (isInteractive || hasUserHooks || enabledHookNotificationEvents)
-    ) {
-      await this.deployCompletionPlugin(
+    this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
+    if (workspaceRoot) {
+      await this.ensureExternalPluginIsLoadable(
         workspaceRoot,
         extensionPath,
         userHooks
@@ -377,16 +373,6 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   /**
-   * Return additional file paths to delete after workflow cleanup.
-   * Used by CliIntegration.cleanupWorkflowArtifacts() to delete the plugin file.
-   */
-  getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
-    return this.notificationMonitor.getManagedPluginArtifactPaths(
-      workspaceRoot
-    );
-  }
-
-  /**
    * Accumulate OpenCode's permission policy before process launch.
    * `none` and `dangerouslyAllowAll` intentionally emit no permission slice.
    */
@@ -410,33 +396,45 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   async cleanupWorkspaceArtifacts(
-    workspaceRoot: string,
+    _workspaceRoot: string,
     _workingFilePath?: string
   ): Promise<void> {
-    const managedArtifacts =
-      this.notificationMonitor.getManagedPluginArtifactPaths(workspaceRoot);
-    for (const artifactPath of managedArtifacts) {
+    for (const artifactPath of this.fallbackPluginArtifactPaths) {
       await fs.promises.unlink(artifactPath).catch(() => {});
     }
+    this.fallbackPluginArtifactPaths = [];
+  }
 
-    const gitignorePath =
-      this.notificationMonitor.getPluginGitignorePath(workspaceRoot);
-    const hasRemainingManagedArtifacts = await Promise.all(
-      managedArtifacts.map((artifactPath) =>
-        fs.promises
-          .access(artifactPath)
-          .then(() => true)
-          .catch(() => false)
-      )
-    ).then((results) => results.some(Boolean));
-    if (!hasRemainingManagedArtifacts) {
-      await this.deleteCtrlYokeGitignore(gitignorePath);
-    }
+  async buildNotificationHookArgs(
+    _extensionPath: string,
+    _workspaceRoot: string,
+    _promptIndex: number,
+    _workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    _enabledNotificationHookEvents: HookEvent[]
+  ): Promise<string[]> {
+    this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
+    return [];
+  }
+
+  async buildHeadlessUserHookArgs(
+    _extensionPath: string,
+    _workspaceRoot: string,
+    _promptIndex: number,
+    _workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    _enabledNotificationHookEvents: HookEvent[]
+  ): Promise<string[]> {
+    this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
+    return [];
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
     return {
       OPENCODE_CONFIG_CONTENT: this.getInlineConfigContent(),
+      ...(this.pendingUserHooksEnv
+        ? { CTRLYOKE_OPENCODE_HOOKS: this.pendingUserHooksEnv }
+        : {}),
     };
   }
 
@@ -444,6 +442,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     return {
       ...CliProviderUtils.buildProcessEnv(),
       OPENCODE_CONFIG_CONTENT: this.getInlineConfigContent(),
+      ...(this.pendingUserHooksEnv
+        ? { CTRLYOKE_OPENCODE_HOOKS: this.pendingUserHooksEnv }
+        : {}),
     };
   }
 
@@ -512,99 +513,95 @@ export class OpenCodeCliProvider implements ICliProvider {
     return "anthropic/claude-sonnet-4-6";
   }
 
+  private serializeUserHooks(userHooks?: UserHookConfig[]): string | undefined {
+    if (!userHooks || userHooks.length === 0) {
+      return undefined;
+    }
+    return JSON.stringify(
+      userHooks.map((hook) => ({ event: hook.event, command: hook.command }))
+    );
+  }
+
   /**
-   * Deploy the ctrlyoke completion plugin to .opencode/plugin/ before launching the TUI.
-   *
-   * Always copies the static ctrlyoke-opencode-plugin.ts file (fully type-checked,
-   * no code generation). When user hooks are configured, a JSON sidecar file is written
-   * alongside the plugin — the plugin reads this at startup to discover what commands to run.
-   *
-   * Sidecar format: {workspaceRoot}/.opencode/plugin/ctrlyoke-hooks.json
-   *   [{"event":"stop","command":"node ./my-script.js"}, ...]
-   *
-   * @param workspaceRoot Workspace root directory
-   * @param extensionPath Extension installation path (used to locate the plugin template)
-   * @param userHooks Optional user-defined hooks to embed via sidecar file
+   * Verify the external plugin before launch. Path-spec plugins are verified in
+   * OpenCode 1.18.10 but undocumented, so retain a small, warning-backed
+   * workspace deployment fallback if the installed plugin cannot be loaded.
    */
-  private async deployCompletionPlugin(
+  private async ensureExternalPluginIsLoadable(
     workspaceRoot: string,
     extensionPath: string,
     userHooks?: UserHookConfig[]
   ): Promise<void> {
+    const sourcePath = path.resolve(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-opencode-plugin.ts"
+    );
     try {
-      const pluginDir =
-        this.notificationMonitor.getPluginDirectory(workspaceRoot);
-      // OpenCode only loads .ts plugins — .js files are silently ignored.
-      const pluginPath =
-        this.notificationMonitor.getPluginFilePath(workspaceRoot);
-      const sourcePath = path.join(
-        extensionPath,
-        "out",
-        "scripts",
-        "ctrlyoke-opencode-plugin.ts"
-      );
-      const sidecarPath =
-        this.notificationMonitor.getPluginHooksFilePath(workspaceRoot);
-
-      await fs.promises.mkdir(pluginDir, { recursive: true });
-      await this.writePluginDirGitignore(workspaceRoot);
-
-      // Always copy the static plugin (type-checked, no code generation).
-      await fs.promises.copyFile(sourcePath, pluginPath);
-
-      // Write or remove the sidecar hooks file.
-      if (userHooks && userHooks.length > 0) {
-        const sidecar = userHooks.map((h) => ({
-          event: h.event,
-          command: h.command,
-        }));
-        await fs.promises.writeFile(
-          sidecarPath,
-          JSON.stringify(sidecar, null, 2),
-          "utf-8"
-        );
-      } else {
-        // Remove any stale sidecar from a prior run that had user hooks.
-        await fs.promises.unlink(sidecarPath).catch(() => {});
-      }
-
-      Log.debug(`🔌 OpenCode completion plugin deployed to: ${pluginPath}`);
-    } catch (error) {
-      // Non-fatal: interactive mode will still work, just won't auto-detect completion
-      Log.warn(`Failed to deploy OpenCode completion plugin: ${error}`);
-    }
-  }
-
-  private async writePluginDirGitignore(workspaceRoot: string): Promise<void> {
-    const gitignorePath =
-      this.notificationMonitor.getPluginGitignorePath(workspaceRoot);
-    try {
-      await fs.promises.access(gitignorePath);
+      await fs.promises.access(sourcePath, fs.constants.R_OK);
+    } catch {
+      // A missing extension artifact is an installation/build problem, not an
+      // OpenCode path-spec regression; leave the workspace untouched here.
       return;
-    } catch {
-      // File doesn't exist — write it
     }
-
-    const content = [
-      "# ctrlyoke temp files (auto-managed, do not commit)",
-      "ctrlyoke-completion-hook.ts",
-      "ctrlyoke-hooks.json",
-      ".gitignore",
-      "",
-    ].join("\n");
-    await fs.promises
-      .writeFile(gitignorePath, content, "utf-8")
-      .catch(() => {});
+    try {
+      await this.pluginPathIsReadable(sourcePath);
+    } catch (error) {
+      Log.warn(
+        `OpenCode external plugin could not be loaded from ${sourcePath}; ` +
+          `falling back to .opencode/plugin/: ${error}`
+      );
+      try {
+        await this.deployCompletionPluginFallback(
+          workspaceRoot,
+          sourcePath,
+          userHooks
+        );
+      } catch (fallbackError) {
+        Log.warn(`OpenCode plugin fallback was unavailable: ${fallbackError}`);
+      }
+    }
   }
 
-  private async deleteCtrlYokeGitignore(gitignorePath: string): Promise<void> {
-    try {
-      const content = await fs.promises.readFile(gitignorePath, "utf-8");
-      if (content.startsWith("# ctrlyoke temp files")) {
-        await fs.promises.unlink(gitignorePath).catch(() => {});
-      }
-    } catch {
-      // File doesn't exist or unreadable — nothing to do
+  private async pluginPathIsReadable(sourcePath: string): Promise<void> {
+    await fs.promises.access(sourcePath, fs.constants.R_OK);
+  }
+
+  /** Minimal compatibility fallback for a future OpenCode regression. */
+  private async deployCompletionPluginFallback(
+    workspaceRoot: string,
+    sourcePath: string,
+    userHooks?: UserHookConfig[]
+  ): Promise<void> {
+    // A missing extension artifact cannot be recovered by copying it into the
+    // workspace. This keeps installation failures file-free and distinct from
+    // a genuine regression in OpenCode's external path loading.
+    await fs.promises.access(sourcePath, fs.constants.R_OK);
+    const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
+    const pluginPath = path.join(
+      pluginDir,
+      "ctrlyoke-completion-hook.ts"
+    );
+    await fs.promises.mkdir(pluginDir, { recursive: true });
+    await fs.promises.copyFile(sourcePath, pluginPath);
+    this.fallbackPluginArtifactPaths.push(pluginPath);
+
+    if (userHooks && userHooks.length > 0) {
+      const sidecarPath = path.join(pluginDir, "ctrlyoke-hooks.json");
+      await fs.promises.writeFile(
+        sidecarPath,
+        this.serializeUserHooks(userHooks)!,
+        "utf8"
+      );
+      this.fallbackPluginArtifactPaths.push(sidecarPath);
     }
+
+    // An auto-scanned fallback plugin must not remain in the inline list.
+    this.pendingInlineConfig.plugin = [];
+    Log.warn(
+      "OpenCode plugin fallback deployed under .opencode/plugin/; " +
+        "this compatibility path writes workspace files"
+    );
   }
 }

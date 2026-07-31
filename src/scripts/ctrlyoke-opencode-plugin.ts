@@ -1,20 +1,17 @@
 // ctrlyoke OpenCode Completion Plugin
 //
 // Source: src/scripts/ctrlyoke-opencode-plugin.ts
-// Deployed by ctrlyoke to: .opencode/plugin/ctrlyoke-completion-hook.ts
+// Loaded by OpenCode from the extension installation through inline config.
 //
-// OpenCode only loads .ts plugins (not .js). This file must remain TypeScript
-// with ESM import/export syntax.
+// This file must remain TypeScript with ESM import/export syntax.
 //
 // ctrlyoke injects environment variables into the OpenCode process:
 //   CTRLYOKE_NOTIFY_DIR      — absolute path to the notification directory
 //   CTRLYOKE_RUN_ID          — per-run UUID for collision-free start file naming
 //   CTRLYOKE_WORKSPACE_ROOT  — workspace root directory
 //
-// User hooks are loaded at startup from a JSON sidecar file written alongside
-// this plugin by ctrlyoke's deployCompletionPlugin():
-//   {workspaceRoot}/.opencode/plugin/ctrlyoke-hooks.json
-//   Format: [{ "event": "stop"|"sessionStart"|..., "command": "node ..." }, ...]
+// User hooks are loaded at startup from CTRLYOKE_OPENCODE_HOOKS.
+// Format: [{ "event": "stop"|"sessionStart"|..., "command": "node ..." }, ...]
 //
 // Plugin behaviour:
 //  - Tracks CHILD sessions (with parentID) via session.created to avoid false stops
@@ -38,7 +35,7 @@
 //  - Enabled when CTRLYOKE_DIAGNOSTIC_LOGS=true
 //  - Logs written to .ctrlyoke/logs/ctrlyoke-opencode-plugin-debug.log
 
-import { writeFileSync, readFileSync, mkdirSync, appendFileSync } from "fs";
+import { writeFileSync, mkdirSync, appendFileSync } from "fs";
 import { execSync, spawnSync } from "child_process";
 import path from "path";
 
@@ -80,7 +77,7 @@ const mainSessions = new Set<string>();
 const startFilesWritten = new Set<string>();
 let hookArtifactCounter = 0;
 
-// Load user hooks from the sidecar JSON file written by ctrlyoke alongside this plugin.
+// Load user hooks from the process-local JSON environment value.
 // Format: [{ event: "stop"|"sessionStart"|"preToolUse"|"postToolUse"|"userPromptSubmit", command: string }]
 interface UserHook {
   event: string;
@@ -88,15 +85,12 @@ interface UserHook {
 }
 let _userHooks: UserHook[] = [];
 try {
-  const hooksPath = path.join(
-    workspaceRoot,
-    ".opencode",
-    "plugin",
-    "ctrlyoke-hooks.json"
-  );
-  _userHooks = JSON.parse(readFileSync(hooksPath, "utf-8")) as UserHook[];
+  const hooksJson = process.env.CTRLYOKE_OPENCODE_HOOKS;
+  if (hooksJson) {
+    _userHooks = JSON.parse(hooksJson) as UserHook[];
+  }
 } catch {
-  /* no sidecar = no user hooks, safe to ignore */
+  /* malformed env = no user hooks, safe to ignore */
 }
 
 function _runUserHooks(event: string): void {
