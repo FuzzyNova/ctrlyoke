@@ -1,6 +1,6 @@
 # Codex Inline Hooks Migration Plan
 
-> **Status:** Stage 2 complete
+> **Status:** Stages 1–4 complete
 >
 > **Priority:** P1 — companion to
 > [`OPENCODE_INLINE_CONFIG_PLAN.md`](OPENCODE_INLINE_CONFIG_PLAN.md); same class
@@ -335,18 +335,19 @@ settings-file behavior. The provider and tracker tests assert inline emission
 and an untouched workspace root.
 
 The Stage 2 implementation is the inline-argument and zero-workspace-write
-baseline for the remaining length-guard, diagnostics, and real-harness work.
+baseline for the remaining real-harness work.
 
-**Stage 3 — length guard and diagnostics.** Add the command-line budget check,
-and — because untrusted hooks fail _silently_ — a startup assertion that the
-number of emitted trust keys equals the number of emitted handlers. Consider
-logging the computed keys at `trace` (as `logCodexTrustState` does today) so a
-future mismatch is diagnosable from a session log alone.
+**Stage 3 — length guard and diagnostics.** **Complete.** Inline emission now
+uses a defensive 16,000-byte hook-argument budget, fails with an actionable
+diagnostic before spawning when the budget is exceeded, asserts that the
+number of emitted trust keys equals the number of emitted handlers, and logs
+the computed keys at `trace` so a future mismatch is diagnosable from a
+session log alone.
 
-**Stage 4 — POSIX key source.** Make the key-source constant platform-aware
-(`C:\<session-flags>\config.toml` on Windows, `/<session-flags>/config.toml`
-elsewhere), derived from the `#[cfg(not(windows))]` branch of
-`synthetic_layer_path` (`discovery.rs:392`).
+**Stage 4 — POSIX key source.** **Complete.** The key-source helper is
+platform-aware (`C:\<session-flags>\config.toml` on Windows,
+`/<session-flags>/config.toml` elsewhere), derived from the
+`#[cfg(not(windows))]` branch of `synthetic_layer_path` (`discovery.rs:392`).
 
 An earlier revision of this plan said non-Windows should "stay behind the
 existing file path" until the POSIX form is confirmed on a Mac or Linux box.
@@ -359,6 +360,10 @@ platform-aware constant from source instead, and treat POSIX confirmation as
 follow-up verification rather than a gate. The trust-key-count assertion from
 Stage 3 is what makes an incorrect POSIX key observable, since an untrusted
 hook otherwise fails silently.
+
+**Outstanding follow-up:** confirm the POSIX synthetic key source on a Mac or
+Linux Codex installation; the current implementation is source-derived but
+has not yet been exercised on either platform.
 
 **Stage 5 — real-harness regression coverage.** Written against the inline
 path: interactive completion detection, headless user hooks, and the

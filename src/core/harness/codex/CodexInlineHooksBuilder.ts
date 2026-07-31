@@ -1,5 +1,6 @@
 import * as crypto from "crypto";
 import { normalizeCodexHookMatcher } from "../shared/CodexHookUtils";
+import { Log } from "../../../utils/Log";
 
 export type CodexHooksSection = Record<string, unknown[]>;
 
@@ -8,15 +9,40 @@ export type CodexHookStateEntry = {
   trusted_hash?: string;
 };
 
-/** The synthetic config.toml source Codex assigns to session -c overrides. */
-export const CODEX_INLINE_HOOK_SOURCE_PATH =
-  process.platform === "win32"
+/**
+ * The defensive portion of CreateProcess's command-line budget reserved for
+ * inline hooks. The remaining Windows command-line space is shared with MCP
+ * overrides, --add-dir entries, and the prompt itself.
+ */
+export const CODEX_INLINE_HOOK_COMMAND_LINE_BUDGET = 16_000;
+
+/**
+ * Return the synthetic config.toml source Codex assigns to session -c
+ * overrides. The POSIX spelling is derived from Codex's `synthetic_layer_path`
+ * source, but has not yet been confirmed on a Mac or Linux box. The trust-key
+ * count assertion below makes an incorrect POSIX source observable.
+ */
+export function getCodexInlineHookSourcePath(
+  platform: NodeJS.Platform = process.platform
+): string {
+  return platform === "win32"
     ? String.raw`C:\<session-flags>\config.toml`
     : "/<session-flags>/config.toml";
+}
+
+/** The synthetic config.toml source for the current platform. */
+export const CODEX_INLINE_HOOK_SOURCE_PATH = getCodexInlineHookSourcePath();
 
 export type CodexInlineHooksArgs = {
   hookArgs: string[];
   trustArgs: string[];
+};
+
+export type CodexInlineHooksBuildOptions = {
+  /** Injectable for platform-specific tests; production defaults to the host. */
+  platform?: NodeJS.Platform;
+  /** Injectable for deterministic budget tests; production uses the guard above. */
+  maxCommandLineLength?: number;
 };
 
 /**
@@ -24,10 +50,13 @@ export type CodexInlineHooksArgs = {
  * using the indices in the inline hook source's own array space.
  */
 export function buildCodexInlineHooks(
-  hooks: CodexHooksSection
+  hooks: CodexHooksSection,
+  options: CodexInlineHooksBuildOptions = {}
 ): CodexInlineHooksArgs {
   const trustState: Record<string, CodexHookStateEntry> = {};
   const hookArgs: string[] = [];
+  let emittedHandlerCount = 0;
+  const keySource = getCodexInlineHookSourcePath(options.platform);
 
   for (const event of Object.keys(hooks).sort(compareByteOrder)) {
     const groups = hooks[event];
@@ -39,18 +68,14 @@ export function buildCodexInlineHooks(
         getHookGroupMatcher(group)
       );
       getHookHandlers(group).forEach((handler, handlerIndex) => {
+        emittedHandlerCount++;
         const commandHook = parseCodexCommandHook(handler);
         if (!commandHook) {
           return;
         }
 
         trustState[
-          buildCodexHookKey(
-            CODEX_INLINE_HOOK_SOURCE_PATH,
-            event,
-            groupIndex,
-            handlerIndex
-          )
+          buildCodexHookKey(keySource, event, groupIndex, handlerIndex)
         ] = {
           trusted_hash: computeCodexTrustedHash(
             event,
@@ -64,10 +89,41 @@ export function buildCodexInlineHooks(
     });
   }
 
-  return {
+  const trustKeyCount = Object.keys(trustState).length;
+  if (trustKeyCount !== emittedHandlerCount) {
+    const message =
+      `Codex inline hook trust state mismatch: emitted ${emittedHandlerCount} ` +
+      `handlers but computed ${trustKeyCount} trust keys. ` +
+      "Check the emitted hook shape and Codex event mapping before spawning.";
+    Log.error(message);
+    throw new Error(message);
+  }
+
+  const result = {
     hookArgs,
     trustArgs: serializeCodexInlineTrustOverride(trustState),
   };
+
+  Log.trace(
+    `Codex inline hook trust keys (${trustKeyCount}): ${JSON.stringify(Object.keys(trustState))}`
+  );
+
+  const commandLineLength = Buffer.byteLength(
+    [...result.hookArgs, ...result.trustArgs].join(" "),
+    "utf8"
+  );
+  const maxCommandLineLength =
+    options.maxCommandLineLength ?? CODEX_INLINE_HOOK_COMMAND_LINE_BUDGET;
+  if (commandLineLength > maxCommandLineLength) {
+    const message =
+      `Codex inline hook arguments require ${commandLineLength} bytes, exceeding ` +
+      `the ${maxCommandLineLength}-byte safety budget. Reduce the number or ` +
+      "length of Codex hooks before retrying.";
+    Log.error(message);
+    throw new Error(message);
+  }
+
+  return result;
 }
 
 export function computeCodexTrustedHash(

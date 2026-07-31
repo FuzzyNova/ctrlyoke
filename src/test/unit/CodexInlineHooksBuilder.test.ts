@@ -2,8 +2,10 @@ import * as assert from "assert";
 import {
   buildCodexInlineHooks,
   canonicalizeJson,
+  CODEX_INLINE_HOOK_COMMAND_LINE_BUDGET,
   computeCodexTrustedHash,
   CODEX_INLINE_HOOK_SOURCE_PATH,
+  getCodexInlineHookSourcePath,
   getCodexEventKeyLabel,
 } from "../../core/harness/codex/CodexInlineHooksBuilder";
 
@@ -127,6 +129,53 @@ suite("CodexInlineHooksBuilder", () => {
         0,
         computeCodexTrustedHash("SessionStart", "^start$", "start.js", 600)
       )
+    );
+  });
+
+  test("asserts when an emitted handler has no trust key", () => {
+    assert.throws(
+      () =>
+        buildCodexInlineHooks({
+          Stop: [
+            {
+              hooks: [{ type: "unsupported", command: "stop.js" }],
+            },
+          ],
+        }),
+      /emitted 1 handlers but computed 0 trust keys/
+    );
+  });
+
+  test("uses the platform-specific synthetic key source", () => {
+    assert.strictEqual(
+      getCodexInlineHookSourcePath("win32"),
+      String.raw`C:\<session-flags>\config.toml`
+    );
+    assert.strictEqual(
+      getCodexInlineHookSourcePath("linux"),
+      "/<session-flags>/config.toml"
+    );
+
+    const result = buildCodexInlineHooks(
+      { Stop: [{ hooks: [commandHook("stop.js")] }] },
+      { platform: "linux" }
+    );
+    assert.ok(
+      result.trustArgs[1].includes(
+        '"/<session-flags>/config.toml:stop:0:0" = {'
+      )
+    );
+  });
+
+  test("rejects inline hooks that exceed the command-line safety budget", () => {
+    assert.ok(CODEX_INLINE_HOOK_COMMAND_LINE_BUDGET < 32_767);
+    assert.throws(
+      () =>
+        buildCodexInlineHooks(
+          { Stop: [{ hooks: [commandHook("x".repeat(200))] }] },
+          { maxCommandLineLength: 100 }
+        ),
+      /exceeding the 100-byte safety budget.*Reduce the number or length of Codex hooks/
     );
   });
 

@@ -3,7 +3,11 @@ import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
 import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
-import { MESSAGE_TYPES, SESSION_KINDS } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  MESSAGE_TYPES,
+  SESSION_KINDS,
+} from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 
@@ -17,7 +21,7 @@ async function resolveCommand(command: string, args: string[]) {
 }
 
 suite("CliTransportCoordinator", () => {
-  test("should preserve headless prompt text and emit prompt-ready info", async () => {
+  test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
       | { promptArgument: string; cliCommand: string }
       | undefined;
@@ -32,6 +36,7 @@ suite("CliTransportCoordinator", () => {
           terminalName: "Test",
           installHint: "",
           shouldStreamHeadlessOutput: true,
+          harnessId: HARNESS_IDS.CODEX_CLI,
         },
         notificationMonitor: {
           supportsSessionIdInFilename: true,
@@ -58,7 +63,11 @@ suite("CliTransportCoordinator", () => {
           args: string[],
           options?: { onStdout?: (chunk: string) => void; shell?: boolean }
         ) => {
-          assert.strictEqual(args[0], "line one\nline two");
+          assert.ok(
+            args.some((arg) => arg.includes("<session-flags>")),
+            "the regression fixture must contain Codex's synthetic key"
+          );
+          assert.strictEqual(args[args.length - 1], "line one\nline two");
           assert.strictEqual(options?.shell, false);
           options?.onStdout?.("chunk");
           return { stdout: "stdout", stderr: "", exitCode: 0 };
@@ -89,7 +98,10 @@ suite("CliTransportCoordinator", () => {
     });
 
     const success = await coordinator.executeHeadless(
-      [],
+      [
+        "-c",
+        String.raw`hooks.state={"C:\<session-flags>\config.toml:stop:0:0" = {}}`,
+      ],
       "line one\nline two",
       ["temp-a.md"],
       async (result) => {
@@ -105,7 +117,8 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(success, true);
     assert.deepStrictEqual(preparedCommand, {
       promptArgument: "line one\nline two",
-      cliCommand: "test-cli line one\nline two",
+      cliCommand: String.raw`test-cli -c hooks.state={"C:\<session-flags>\config.toml:stop:0:0" = {}} line one
+line two`,
     });
     assert.deepStrictEqual(streamedChunks, ["chunk"]);
     assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
