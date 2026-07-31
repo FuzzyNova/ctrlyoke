@@ -167,6 +167,14 @@ export function AdvancedPermissionsSection({
             path={SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING}
             {...rowProps}
           />
+          {!permissions.antigravityStatusLineTracking && (
+            <p className="text-xs text-warning-fg mt-2">
+              This is the only source of token usage and context-window data
+              for Antigravity — in both interactive and headless mode. With it
+              off, ctrlyoke shows no context-window bar and no token counts
+              for antigravity-cli runs.
+            </p>
+          )}
         </div>
       </div>
     </div>

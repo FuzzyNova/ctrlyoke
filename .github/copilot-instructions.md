@@ -48,13 +48,15 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 ### Testing
 
-| Command                    | Purpose                                                                      |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `npm test`                 | Run all tests (extension + UI)                                               |
-| `npm run test:ui`          | Run React dashboard UI tests only                                            |
-| `npm run test:harness`     | Run harness integration tests                                                |
-| `npm run test:coverage`    | Extension-host coverage report (`coverage/extension/index.html`)             |
-| `npm run test:ui:coverage` | React dashboard coverage report (`src/ui/webview-react/coverage/index.html`) |
+| Command                    | Purpose                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `npm test`                 | Run all tests (extension + UI)                                                  |
+| `npm run test:ui`          | Run React dashboard UI tests only                                               |
+| `npm run test:harness`     | Run harness integration tests (NEVER CALL THIS UNLESS EXPLICITLY TOLD TO DO SO) |
+| `npm run test:coverage`    | Extension-host coverage report (`coverage/extension/index.html`)                |
+| `npm run test:ui:coverage` | React dashboard coverage report (`src/ui/webview-react/coverage/index.html`)    |
+
+NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow (30+ minutes). Never run this command unless explicitly told to do so. Use `npm test` which invokes all extension, integration, and UI tests, but does not run the harness tests.
 
 ### Code Quality
 
@@ -127,6 +129,6 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 - **SOLID principles**: Separation of concerns, always look for opportunities to single source code and follow the DRY principle.
 - **DRY (SINGLE SOURCE)**: Never duplicate code that can be single sourced in a helper function or base class.
 - **TypeScript strict mode**: Comprehensive type safety
-- **Single source of truth**: No hardcoded string duplication across files
+- **No hardcoded strings for flow control**: If a string is used with `==`, `!=`, or `switch/case`, it should be a constant or enum value in DashboardConstants.ts or CtrlYokeTypes.ts. This ensures that the string is single-sourced and avoids typos.
 - **Security first**: Workspace-scoped operations, process isolation for scripts
 </codingPrinciples>>

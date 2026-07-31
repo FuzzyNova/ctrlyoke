@@ -42,8 +42,9 @@ harness:
   start time, completion time, and terminal status;
 - the run timeline records every attempt, structured CLI events, response output,
   script execution output, and terminal attempt state; and
-- `EvaluationResult` contains end-condition verdict, stdout, stderr, exit code,
-  duration, and evaluator errors.
+- `EvaluationResult` and `ScriptExecutionReporter` contain pre-condition,
+  end-condition, and script-step verdicts, stdout, stderr, exit code, duration,
+  and evaluator errors.
 
 ### Existing variable caveat
 
@@ -72,21 +73,50 @@ headers, streaming chunks, status decorations, and diagnostics on stdout.
   "startedAt": "2026-07-30T10:00:00.000Z",
   "completedAt": "2026-07-30T10:04:32.000Z",
   "durationMs": 272000,
-  "vars": { "repoPath": "/repos/service-a" },
+  "varNames": ["repoPath"],
   "summary": { "total": 1, "completed": 1, "failed": 0, "skipped": 0 },
   "steps": [
     {
       "index": 0,
       "name": "scan",
       "type": "prompt",
+      "enabled": true,
+      "harness": "codex-cli",
+      "model": "gpt-5",
+      "executionMode": "headless",
       "status": "completed",
       "success": true,
       "attempts": 1,
+      "lastAttempt": {
+        "number": 1,
+        "startReason": "initial",
+        "terminalState": "completed",
+        "reason": null
+      },
       "startedAt": "2026-07-30T10:00:02.000Z",
       "completedAt": "2026-07-30T10:04:30.000Z",
       "durationMs": 268000,
       "sessionId": "abc-123",
-      "filesChanged": ["src/auth.ts", "src/db.ts"],
+      "preCondition": {
+        "passed": true,
+        "action": "continue",
+        "script": "test -d src",
+        "actual": "0",
+        "actualSource": "exitCode",
+        "stdout": "",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 4,
+        "error": null
+      },
+      "filesChanged": [
+        {
+          "path": "src/auth.ts",
+          "scope": "workspace",
+          "operations": ["modified"]
+        },
+        { "path": "src/db.ts", "scope": "workspace", "operations": ["created"] }
+      ],
       "endCondition": {
         "passed": true,
         "script": "npm test",
@@ -98,9 +128,11 @@ headers, streaming chunks, status decorations, and diagnostics on stdout.
         "durationMs": 4210,
         "error": null
       },
+      "failureKind": null,
       "error": null
     }
   ],
+  "finalStep": null,
   "error": null
 }
 ```
@@ -111,8 +143,9 @@ headers, streaming chunks, status decorations, and diagnostics on stdout.
   failed, stopped, interrupted, or unexpected CLI-error results.
 - `status` retains the canonical execution-state value. `steps` contains every
   queue step in queue order, including disabled, pending, skipped, and failed
-  steps. It does not include `finalStep`: a final step can run an unbounded loop
-  and needs a separately designed loop-oriented result in a future feature.
+  steps. `enabled` distinguishes a disabled step from an enabled step that has
+  not yet run. `harness`, `model`, and `executionMode` are the effective values
+  used for that step, not merely workflow defaults.
 - `success` on a step is `true` only for `completed`, `false` for terminal
   failure, and `null` for pending, disabled, skipped, or stopped work.
 - `attempts` counts all persisted AI/script attempts for that queue step,
@@ -120,29 +153,53 @@ headers, streaming chunks, status decorations, and diagnostics on stdout.
 - Timestamps are ISO-8601 UTC strings; unavailable values are `null`.
   `durationMs` is `completedAt - startedAt` when both timestamps exist,
   otherwise `null`.
-- `filesChanged` is a deduplicated, normalized list of paths from observed
-  `FILE_WRITE`, `FILE_EDIT`, and `FILE_DELETE` events across all attempts for a
-  step. It is deliberately **not** a Git diff or a claim of net final changes;
-  harnesses that do not emit structured file events yield an empty list.
+- `lastAttempt` describes the latest started attempt using a public 1-based
+  number, start reason, terminal state, and terminal reason. `attempts` is the
+  total count across initial, retry, and resumed attempts.
+- `filesChanged` is a deduplicated list of observed `FILE_WRITE`, `FILE_EDIT`,
+  and `FILE_DELETE` event paths across all attempts for a step. Each entry
+  records the distinct observed operations and whether the path is inside the
+  workspace or an approved external root. Workspace paths are normalized to be
+  workspace-relative; external paths are explicitly marked rather than silently
+  leaking an unlabelled machine-specific absolute path. This is deliberately
+  **not** a Git diff or a claim of net final changes; harnesses that do not emit
+  structured file events yield an empty list.
+- `preCondition` is `null` when no pre-condition ran. Otherwise it contains the
+  last evaluation before the step's latest attempt, including the resolved
+  `continue`, `skipPrompt`, or `stopWorkflow` action. This makes a skipped or
+  stopped prompt explainable without reading logs.
 - `endCondition` is `null` if no end condition ran. Otherwise it contains the
   last evaluation, including an evaluator error or a failed verdict after
-  retries. `stdout` and `stderr` are emitted exactly as produced; no CLI-only
-  truncation is applied.
+  retries. Both condition objects contain the script, verdict, stdout, stderr,
+  exit code, duration, and error. Output is emitted exactly as produced; no
+  CLI-only truncation is applied.
 - Script steps use the same common fields and set `type: "script"`; their
   command, stdout, stderr, and exit code are returned in a `script` object.
-  They have `sessionId: null` and `endCondition: null`.
-- `error` on a step is the terminal failure reason or `null`. Top-level `error`
-  is `{ "step": <index>, "message": <string>, "attempt": <number|null> }`
+  They have `sessionId: null`, `preCondition: null`, and `endCondition: null`.
+- `failureKind` is the runtime failure classification (`timeout`, `processExit`,
+  `harnessError`, and so on) or `null`. `error` on a step is the terminal
+  failure reason or `null`. Top-level `error` is
+  `{ "step": <index|"finalStep">, "loop": <number|null>, "message": <string>, "attempt": <number|null> }`
   for a workflow failure, otherwise `null`.
+- `varNames` lists effective workflow-variable keys but never their values.
+  Values can contain credentials and stdout is commonly retained in CI logs.
+- `finalStep` is `null` when absent. Otherwise it is a separate summary rather
+  than a queue row: it reports type, effective execution metadata, terminal
+  status, success, total loops, total attempts, aggregate timing/file changes,
+  error/failure kind, and `lastLoop`. `lastLoop` has the same attempt,
+  condition, script-output, and session fields as the corresponding queue step.
+  This reports final-step failures without making an unbounded loop inflate the
+  ordinary queue-step array.
 - A setup/parse/unexpected error that prevents a queue state from being built
   emits the same versioned envelope with `success: false`, `status: "error"`,
   `steps: []`, and `error: { "step": null, "message": ..., "attempt": null }`.
   The existing exit code `2` remains unchanged.
 
-`responseText`, raw CLI event streams, diffs, token usage, and final-step loop
-history are intentionally excluded from JSON v1. They can be large and have
-different retention/privacy needs. `ctrlyoke_read_output` remains the supported
-MCP surface for selected response text.
+`responseText`, raw CLI event streams, diffs, token usage, agent/skill/hook/MCP
+configuration, full tool-permission configuration, expanded `priorContext`, and
+complete final-step loop history are intentionally excluded from JSON v1. They
+can be large, configuration-oriented, or privacy-sensitive. `ctrlyoke_read_output`
+remains the supported MCP surface for selected response text.
 
 ## Design and implementation plan
 
@@ -159,19 +216,23 @@ Inputs:
 - workspace root; and
 - the promoted run's `workflowKey` and `runRef`, when available.
 
-The builder owns ISO timestamp conversion, nullable-field policy, common
-per-step shaping, summary counts, and the top-level error selection. It must
-never write workflow files or mutate queue state.
+The builder owns ISO timestamp conversion, nullable-field policy, effective
+execution metadata, scoped file-path shaping, common per-step/final-step
+shaping, summary counts, and the top-level error selection. It must never write
+workflow files or mutate queue state.
 
 ### 2. Add a one-pass queue-attempt projection
 
 Extend `src/core/orchestration/RunOutputResolver.ts` with a focused read-only
-projection for selected queue targets. It must consume its existing `stream()`
-API in one pass and return, per queue index:
+projection for selected queue and final-step targets. It must consume its
+existing `stream()` API in one pass and return, per target:
 
-- total attempt count and latest attempt index/terminal state;
-- observed file-change paths aggregated across all attempts; and
-- latest script output where relevant.
+- total attempt count, latest public attempt number/start reason/terminal state;
+- observed, scope-classified file-change paths aggregated across all attempts;
+- latest pre-condition, end-condition, and script-step output where relevant;
+  and
+- the final-step loop count and latest loop summary without materializing every
+  loop in the public result.
 
 Do not call `TimelineRecorder.readEvents()` or resolve each step separately:
 that would materialize or rescan a potentially large JSONL history. Reuse
@@ -182,18 +243,25 @@ the builder must log a diagnostic and return the state-derived result with
 `attempts: 0` and empty file lists. JSON reporting must never convert an
 otherwise valid workflow completion into a CLI error.
 
-### 3. Preserve the last end-condition evaluation in queue state
+### 3. Preserve effective runtime and final condition evaluations
 
-Add a typed last-evaluation summary to `PromptResult` in
+Add typed pre-condition and end-condition summaries to `PromptResult` in
 `src/types/CtrlYokeTypes.ts`; do not overload the existing boolean
-`endConditionResult` or `scriptOutput` fields. Add a narrow `PromptQueue`
-method to update that summary so result mutation remains queue-owned.
+`endConditionResult` or `scriptOutput` fields. Add narrow `PromptQueue` methods
+to update those summaries so result mutation remains queue-owned. Add the
+matching final-loop condition summary to `FinalStepRuntimeState`.
 
-Have `EndConditionHandler`/`WorkflowExecutor` record every evaluation,
-including pass, failed verdict, retry result, evaluator error, and the final
-post-retry verdict. The builder exposes only the final record for each step.
-This is required because the current code records successful evaluation stdout
-only and cannot report failed end-condition output accurately.
+Have `WorkflowExecutor` record every pre-condition report from
+`ScriptExecutionReporter`, including its resolved action, evaluator error, and
+the final report before a retry or terminal decision. Have
+`EndConditionHandler`/`WorkflowExecutor` similarly record every end-condition
+evaluation, including pass, failed verdict, retry result, evaluator error, and
+the final post-retry verdict. The builder exposes only the final record of each
+kind for a step. This is required because the current code records successful
+end-condition stdout only and does not retain pre-condition output in the queue
+result. Persist the actual effective `executionMode` with the existing prompt
+runtime harness/model metadata so JSON reports what ran, not a later-resolved
+default.
 
 ### 4. Wire the builder into the CLI success and error paths
 
@@ -210,14 +278,17 @@ never write a formatting/log line to stdout in JSON mode.
 Add focused tests rather than requiring installed harnesses:
 
 1. `CliJsonResultBuilder` unit tests for a completed prompt, failed prompt,
-   skipped/pending step, script step, null timestamps, top-level error, and
+   pre-condition-skipped/pending step, script step, per-step overrides, null
+   timestamps, top-level error, external file paths, final-step summary, and
    JSON-safe error envelope.
 2. `RunOutputResolver` unit tests with timeline fixtures proving that retries
    count correctly, the latest terminal attempt is selected, file paths are
-   deduplicated across `FILE_WRITE`/`FILE_EDIT`/`FILE_DELETE`, and history is
-   streamed once rather than loaded wholesale.
-3. Core tests for recording the final end-condition evaluation on pass, failure,
-   retry exhaustion, and evaluator error.
+   deduplicated and scope-classified across `FILE_WRITE`/`FILE_EDIT`/`FILE_DELETE`,
+   final-step loops reduce to the required summary, and history is streamed once
+   rather than loaded wholesale.
+3. Core tests for recording pre-condition output/action and the final
+   end-condition evaluation on pass, failure, retry exhaustion, and evaluator
+   error, plus script-step stdout/stderr/exit code projection.
 4. CLI integration coverage that invokes the JSON writer with a fixture state
    and asserts stdout is exactly one parseable JSON document with no decorative
    output.
@@ -240,8 +311,10 @@ tests, and `npm run format:check` before moving this plan to `dev/implemented/`.
 - `ctrlyoke run --headless --json` produces the JSON v1 contract for successful,
   failed, stopped, and unexpected-error runs.
 - Every queue step has a stable row; retries, known file paths, session IDs,
-  timing, errors, script details, and final end-condition evaluation are
-  accurately represented when available.
+  effective execution metadata, timing, failure classification, errors,
+  pre-condition results/actions, script details, and final end-condition
+  evaluation are accurately represented when available. Final-step terminal
+  state and latest-loop detail are represented separately.
 - JSON mode remains clean stdout and retains existing exit codes.
 - The implementation uses current queue/runtime/timeline sources only and does
   not add an MCP execution path, SDK, workflow DSL, or new persistence format.
