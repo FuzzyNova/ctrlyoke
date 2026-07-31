@@ -1,6 +1,6 @@
 # Antigravity Headless `stream-json` Output Plan
 
-**Status:** In progress — steps 1–3 queued for implementation.
+**Status:** In progress — step 1 implemented; steps 2–3 queued for implementation.
 **Created:** July 30, 2026
 **Revised:** July 31, 2026 (pre-implementation review — see "Review corrections" below)
 **Related:** `./ANTIGRAVITY_STATUSLINE_TOKEN_TRACKING_PLAN.md` (implemented; the only
@@ -321,6 +321,24 @@ implements.
   stream-json only makes the session ID available sooner, it doesn't change
   how the transcript itself is found or read.
 
+## Step 1 implementation record (July 31, 2026)
+
+Step 1 is complete. Antigravity headless arguments now unconditionally include
+`--output-format stream-json`; interactive arguments remain unchanged. The
+provider extracts only the first valid `conversation_id` from an `init` event,
+while malformed or non-JSON lines are ignored. `headlessSource` remains
+`"log"`, so `HeadlessLogTail` still uses stdout only for the early session-ID
+lookup and the transcript for response/events.
+
+The required live verification used `gemini-3.6-flash-low`. The first stdout
+line carried `conversation_id`
+`fdf30699-cc25-456b-bfb6-64cbc4ec7a34`, and the matching
+`brain/<conversation-id>/.system_generated/logs/transcript_full.jsonl` contained
+completed `USER_INPUT`, `PLANNER_RESPONSE`, and baseline `CHECKPOINT` records.
+This confirmed the faster stdout session-ID path without changing the
+transcript-sourced event path. Nothing in the run contradicted the plan; the
+`result.status` failure behavior remains an open question for step 3.
+
 ---
 
 ## Decision: fill bar stays statusline-only
@@ -360,10 +378,11 @@ context-window and token-usage tracking, so this isn't a silent gap.
 
 ## Implementation Steps (proposed order)
 
-1. **`buildHeadlessArgs` flag + stdout session-ID.** Add `--output-format
+1. **[x] `buildHeadlessArgs` flag + stdout session-ID.** Add `--output-format
    stream-json`; implement `extractSessionIdFromStdout`. Verify against a
    real headless run that `HeadlessLogTail` picks up the session ID from the
-   first stdout tick and that transcript-sourced events are unaffected.
+   first stdout tick and that transcript-sourced events are unaffected. Done
+   July 31, 2026; the live run confirmed both paths.
 2. **Stream-json usage side-channel.** New `AntigravityStreamJsonUsage.ts`
    (pure line parser + stateful chunk accumulator); add
    `ICliProvider.observeHeadlessStdout` and

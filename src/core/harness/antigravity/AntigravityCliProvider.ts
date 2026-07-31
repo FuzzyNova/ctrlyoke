@@ -213,7 +213,32 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return ["--print", prompt, ...baseArgs];
+    return ["--print", prompt, "--output-format", "stream-json", ...baseArgs];
+  }
+
+  /** Extract Antigravity's session ID from the headless JSONL clock stream. */
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    for (const line of chunk.split("\n")) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const event = JSON.parse(line) as {
+          event?: string;
+          conversation_id?: string;
+        };
+        if (
+          event.event === "init" &&
+          typeof event.conversation_id === "string" &&
+          event.conversation_id.length > 0
+        ) {
+          return event.conversation_id;
+        }
+      } catch {
+        // Chunks may contain an incomplete JSONL line; the next chunk retries it.
+      }
+    }
+    return undefined;
   }
 
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {

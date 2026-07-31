@@ -147,6 +147,75 @@ suite("AntigravityCliProvider", () => {
     assert.ok(provider.extractSessionIdFromLogs);
   });
 
+  test("uses stream-json only for headless arguments", () => {
+    const provider = new AntigravityCliProvider();
+
+    assert.deepStrictEqual(
+      provider.buildHeadlessArgs(["--model", "gemini-3.6-flash-low"], "prompt"),
+      [
+        "--print",
+        "prompt",
+        "--output-format",
+        "stream-json",
+        "--model",
+        "gemini-3.6-flash-low",
+      ]
+    );
+    assert.deepStrictEqual(
+      provider.buildInteractiveArgs(
+        ["--model", "gemini-3.6-flash-low"],
+        "prompt"
+      ),
+      ["--prompt-interactive", "prompt", "--model", "gemini-3.6-flash-low"]
+    );
+  });
+
+  suite("extractSessionIdFromStdout", () => {
+    const initEvent = JSON.stringify({
+      event: "init",
+      conversation_id: "73b9d054-1234-5678-9abc-0123456789ab",
+      init: {
+        model: "gemini-3.6-flash-low",
+        cwd: "C:/workspace",
+        tools: ["run_command"],
+        permission_mode: "default",
+      },
+    });
+
+    test("returns the init event conversation ID", () => {
+      const provider = new AntigravityCliProvider();
+      const capturedAgentResponseEvent =
+        '{"event":"step_update","step_update":{"conversation_id":"73b9d054-...","step_index":2,"state":"DONE","step_type":"agent_response","text_delta":"\\n","duration_seconds":0.7197045,"usage":{"input_tokens":17831,"output_tokens":1,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":17832}}}';
+
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout?.(
+          `${capturedAgentResponseEvent}\n${initEvent}`
+        ),
+        "73b9d054-1234-5678-9abc-0123456789ab"
+      );
+    });
+
+    test("returns undefined for a truncated JSON line", () => {
+      const provider = new AntigravityCliProvider();
+
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout?.(initEvent.slice(0, -4)),
+        undefined
+      );
+    });
+
+    test("tolerates interleaved non-JSON noise", () => {
+      const provider = new AntigravityCliProvider();
+
+      assert.strictEqual(
+        provider.extractSessionIdFromStdout?.(
+          `warning from agy\nnot-json\n${initEvent}\nprogress`
+        ),
+        "73b9d054-1234-5678-9abc-0123456789ab"
+      );
+    });
+  });
+
   test("regenerates the token for every prompt and forwards it to both spawn modes", async () => {
     const provider = new AntigravityCliProvider();
     const inheritedKey = "CTRLYOKE_AGY_PROVIDER_TEST_ENV";
