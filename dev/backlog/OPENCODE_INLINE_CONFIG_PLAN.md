@@ -269,8 +269,30 @@ and all three spawn sites consume them: `CliTransportCoordinator.ts:125`
 `AntigravityCliProvider.ts:294–303` is the existing precedent — it stashes
 per-prompt state during `buildCliArgs` and serves it from those hooks.
 
-Both hooks are parameterless, so the value must be computed during
-`buildCliArgs`/`prepareToolPermissions` and held on the provider instance.
+Both hooks are parameterless, so the value must be held on the provider
+instance. It cannot be built in one place: `CliIntegration.runExecutionSession`
+calls `buildCliArgs` (`CliIntegration.ts:886`) — which is where MCP entries and
+the plugin/hooks payload are resolved — and only calls
+`prepareToolPermissions` (`:961`) afterwards, so the permission block does not
+exist yet when `buildCliArgs` returns. Both run before either spawn-env hook is
+consulted.
+
+So the provider must **accumulate parts and serialize lazily**: keep a
+`pendingInlineConfig` accumulator, have `getMcpConfigArgs` and the plugin/hooks
+path populate their slices during `buildCliArgs`, have `prepareToolPermissions`
+populate the `permission` slice, and `JSON.stringify` the whole object inside
+`getHeadlessSpawnEnv()` / `getInteractiveSpawnEnv()`.
+
+**Reset the accumulator at the top of `buildCliArgs`.** The integration is
+reused across prompts within a run (`WorkflowInstance.ts:220-222`), so without
+an explicit per-prompt reset a step that configures no MCP servers or no
+permission policy silently inherits the previous step's — which for the
+`permission` block means a step intended to run unrestricted would carry a
+stale policy, or worse, a step intended to be restricted would carry a laxer
+one if the order were reversed. `prepareToolPermissions` is also skipped
+entirely when `workspaceRoot` is undefined, which is a second path to stale
+state. Reset unconditionally, and cover it with the consecutive-steps test
+listed under Testing.
 
 **Provider instance state is safe here — this is the Antigravity pattern, and
 it is correct.** Execution integrations are created **per workflow run**, not

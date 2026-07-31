@@ -340,9 +340,22 @@ number of emitted trust keys equals the number of emitted handlers. Consider
 logging the computed keys at `trace` (as `logCodexTrustState` does today) so a
 future mismatch is diagnosable from a session log alone.
 
-**Stage 4 — POSIX key source.** Confirm `/<session-flags>/config.toml` on macOS
-or Linux and make the key-source constant platform-aware. Until confirmed,
-Codex inline hooks should stay behind the existing file path on non-Windows.
+**Stage 4 — POSIX key source.** Make the key-source constant platform-aware
+(`C:\<session-flags>\config.toml` on Windows, `/<session-flags>/config.toml`
+elsewhere), derived from the `#[cfg(not(windows))]` branch of
+`synthetic_layer_path` (`discovery.rs:392`).
+
+An earlier revision of this plan said non-Windows should "stay behind the
+existing file path" until the POSIX form is confirmed on a Mac or Linux box.
+That is not implementable alongside Stage 2, which deletes the file path
+outright — keeping it as a platform fallback would mean retaining
+`hookBaselinePolicy`, the tracker calls, `cleanupWorkspaceArtifacts`, and the
+entire Codex half of `SettingsJsonHooksTracker` that Stage 2 exists to remove,
+and would leave two divergent hook paths to maintain. Implement the
+platform-aware constant from source instead, and treat POSIX confirmation as
+follow-up verification rather than a gate. The trust-key-count assertion from
+Stage 3 is what makes an incorrect POSIX key observable, since an untrusted
+hook otherwise fails silently.
 
 **Stage 5 — real-harness regression coverage.** Written against the inline
 path: interactive completion detection, headless user hooks, and the
