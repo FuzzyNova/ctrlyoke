@@ -1,7 +1,8 @@
 # Antigravity Headless `stream-json` Output Plan
 
-**Status:** Proposed — not started.
+**Status:** In progress — steps 1–3 queued for implementation.
 **Created:** July 30, 2026
+**Revised:** July 31, 2026 (pre-implementation review — see "Review corrections" below)
 **Related:** `./ANTIGRAVITY_STATUSLINE_TOKEN_TRACKING_PLAN.md` (implemented; the only
 current Antigravity token/context-window source, and remains necessary — see
 "What this does NOT replace" below), `dev/implemented/ANTIGRAVITY_TRANSCRIPT_PARSER_PLAN.md`
@@ -178,6 +179,55 @@ technical blocker — see "Decision needed" below.
 
 ---
 
+## Review corrections (July 31, 2026)
+
+Four corrections found by reading the code this plan touches. They change the
+design in section 1–3 below; the verdict and empirical findings above are
+unchanged and were re-confirmed (`agy --version` → 1.1.8, `agy --help` still
+documents `--output-format ... (text, json, stream-json)`).
+
+1. **No new `thinkingTokens` field — map `thinking_tokens` onto the existing
+   `TokenUsage.reasoningOutputTokens`** (`src/types/CliOutputTypes.ts:385`).
+   That field already exists for exactly this concept (currently documented
+   "Codex only", set by `CodexLogParser`). Adding a parallel `thinkingTokens`
+   would duplicate a shared contract field. Update the doc comment to name
+   both harnesses. Note honestly: nothing in `src/ui/` reads
+   `reasoningOutputTokens` today, so this captures the value into the shared
+   contract without adding a UI surface — that is the intended scope.
+2. **The stdout side-channel must buffer partial lines; a pure
+   `parseStreamJsonLine(line)` alone is not sufficient.** stdout arrives in
+   arbitrary chunks (`CliTransportCoordinator.executeHeadless`'s `onStdout`
+   forwards raw chunk strings), so NDJSON lines split across chunk
+   boundaries. The `result` line carrying cumulative usage is the last and
+   longest line of the stream and is therefore the most likely to be split —
+   a stateless per-chunk split would silently drop it. The module needs a
+   small stateful accumulator that retains the trailing incomplete line
+   between chunks, plus a `flush()`/reset. Because `AntigravityCliProvider`
+   instances are reused across prompts within one workflow (same reason
+   `statusLineToken`/`statusLineSidecar` are reset there), the accumulator
+   must be reset in `buildCliArgs()` alongside the other per-prompt state.
+3. **The seam needs a matching `ICliProvider` member, not just a
+   `HeadlessLogTailOptions` field.** `HeadlessLogTail` is constructed by
+   `CliExecutionRunner.createHeadlessStreamingSource()`, which builds its
+   options exclusively from `ICliProvider` members (`extractSessionIdFromStdout`,
+   `extractSessionIdFromLogs`, …). So this resolves the third Open Question:
+   add optional `ICliProvider.observeHeadlessStdout?(chunk: string): void`,
+   bound through the runner into a new
+   `HeadlessLogTailOptions.onStdoutChunkObserved?: (chunk: string) => void`,
+   invoked from `HeadlessLogTail.onStdoutChunk`. It must fire for **every**
+   chunk — unlike `captureSessionId`, which is deliberately skipped once a
+   session ID is known.
+4. **Confirmed: flipping the stdout format cannot leak NDJSON into the UI.**
+   `CliTransportCoordinator.executeHeadless()` routes `onStdout` to
+   `source.logTail.onStdoutChunk(chunk)` whenever `source.mode === "log"`, and
+   only calls `hostCallbacks.onStreamingChunk(chunk)` in the no-source branch.
+   Antigravity always gets a log-mode source (`headlessSource = "log"` plus a
+   non-null `logParser`), so its raw headless stdout is already used purely as
+   a clock and never rendered — despite `config.shouldStreamHeadlessOutput`
+   being `true`. This is the specific path the section-1 claim depends on.
+
+---
+
 ## Proposed Design
 
 ### 1. Add the flag, gated as an enrichment source only
@@ -212,11 +262,16 @@ resolution order, not a replacement of the fallback chain itself.
 
 ### 3. Usage: a new stdout-parsed side-channel, additive to the statusline
 
-New small parser, e.g. `AntigravityStreamJsonUsage.ts`, with one pure function:
+New small module `AntigravityStreamJsonUsage.ts` exposing a pure
 `parseStreamJsonLine(line: string): { conversationId?: string; usage?: {...};
-textDelta?: string; stepType?: string } | undefined`. `HeadlessLogTailOptions`
-gains an optional callback (name TBD, e.g. `onStdoutSideEvents?: (chunk:
-string) => void`) invoked from `onStdoutChunk` alongside the existing
+stepType?: string } | undefined` **plus** a stateful accumulator class that
+owns the partial-line buffer and the latest-usage state (see review
+correction 2 — a pure per-chunk function loses lines split across chunk
+boundaries). `HeadlessLogTailOptions` gains
+`onStdoutChunkObserved?: (chunk: string) => void`, bound by
+`CliExecutionRunner` from the new optional
+`ICliProvider.observeHeadlessStdout?(chunk)` (review correction 3) and
+invoked from `onStdoutChunk` alongside the existing
 `captureSessionId` call — a narrow, provider-specific hook, not a general
 "parse stdout for content" escape hatch, so it must not become a second event
 mapping (`PARSER_UNIFICATION_PLAN.md`'s core invariant). Antigravity's
@@ -234,8 +289,9 @@ not," rather than leaving a confusing partial state where turning it off
 still shows some numbers. When enabled, precedence between the two sources
 for a given prompt: statusline snapshot's `current_usage` wins for
 `contextWindowUsedTokens`/`contextWindowSize` (self-reported, includes the
-live window size); stream-json's usage wins for `thinkingTokens` (new field,
-statusline doesn't have it) and as the fallback per-turn breakdown for any
+live window size); stream-json's usage is the sole source for
+`reasoningOutputTokens` (from `thinking_tokens` — the statusline doesn't have
+it; see review correction 1) and is the fallback per-turn breakdown for any
 prompt where the statusline sidecar hasn't produced a snapshot yet (e.g. the
 very first poll tick of a short run).
 
@@ -295,8 +351,10 @@ context-window and token-usage tracking, so this isn't a silent gap.
 - Does `--json-schema` interact with `--output-format stream-json` in any way
   ctrlyoke would care about? Out of scope — ctrlyoke doesn't use
   `--json-schema` today and this plan doesn't propose adding it.
-- Exact name/shape of the new `HeadlessLogTailOptions` side-channel callback
-  (step 3) — a naming/API decision for implementation, not research.
+- ~~Exact name/shape of the new `HeadlessLogTailOptions` side-channel callback
+  (step 3)~~ — **resolved** by review correction 3:
+  `ICliProvider.observeHeadlessStdout?(chunk)` →
+  `HeadlessLogTailOptions.onStdoutChunkObserved`.
 
 ---
 
@@ -306,17 +364,23 @@ context-window and token-usage tracking, so this isn't a silent gap.
    stream-json`; implement `extractSessionIdFromStdout`. Verify against a
    real headless run that `HeadlessLogTail` picks up the session ID from the
    first stdout tick and that transcript-sourced events are unaffected.
-2. **Stream-json usage side-channel.** New parser module; extend
-   `HeadlessLogTailOptions` with the additive stdout-usage hook; wire into
-   `AntigravityLogParser.extractTokenUsage()`'s merge point per the
-   precedence rule in section 3. Unit tests on the parser (real captured
-   payloads above as fixtures) and on the merge precedence.
+2. **Stream-json usage side-channel.** New `AntigravityStreamJsonUsage.ts`
+   (pure line parser + stateful chunk accumulator); add
+   `ICliProvider.observeHeadlessStdout` and
+   `HeadlessLogTailOptions.onStdoutChunkObserved` and bind them in
+   `CliExecutionRunner`; wire into `AntigravityLogParser.extractTokenUsage()`'s
+   merge point per the precedence rule in section 3, mapping `thinking_tokens`
+   to `TokenUsage.reasoningOutputTokens`. Unit tests on the parser (real
+   captured payloads above as fixtures, including a chunk boundary that splits
+   a line) and on the merge precedence.
 3. **Verify no regression to failure detection or plain-text assumptions.**
    Confirm `getHeadlessFailure()` and any other stdout consumers tolerate
    NDJSON instead of prose (expected: yes, per the code-reading above, but
-   verify with a real failing run — e.g. an invalid `--model`).
-4. **(Optional, follow-up) Live text preview** — only if step 1–3 ship cleanly
-   and there's appetite for the de-dup design in section 4.
+   verify with a real failing run — e.g. an invalid `--model`). Spot-check the
+   `result.status` open question at the same time, then mark this plan
+   implemented and move it to `dev/implemented/`.
+4. ~~**(Optional, follow-up) Live text preview**~~ — **rejected**, see
+   section 4 above. Do not implement.
 
 Verification gate for every step: `npm run typecheck`, `npm run lint`,
 `npm test`. Never `npm run test:harness` without asking (spends real harness
