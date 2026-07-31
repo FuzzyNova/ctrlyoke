@@ -20,7 +20,6 @@ export function getPermissionHarnessSupport(
 ): PermissionHarnessSupport {
   switch (harnessId) {
     case HARNESS_IDS.CODEX_CLI:
-    case HARNESS_IDS.OPENCODE_CLI:
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return "mode-only";
     default:

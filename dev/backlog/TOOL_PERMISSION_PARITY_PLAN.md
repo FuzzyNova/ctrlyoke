@@ -16,8 +16,10 @@ a throwaway stopgap.
 Capability _classifications_ still change as the sequence progresses. Qwen's
 inline allow/deny flags are supported and manually verified; it does not need a
 workspace settings mutation. OpenCode's workspace-config implementation landed
-on 2026-07-30, with real-CLI behavioral verification still required before its
-capability declaration advances to verified support.
+on 2026-07-30, and its allow/deny behavior was manually verified against a real
+OpenCode CLI on 2026-07-31 — its capability declaration now advances to
+verified support, with automated real-harness regression coverage remaining to
+be added.
 
 ---
 
@@ -47,8 +49,8 @@ Current code overstates support in several places:
   problem and the first thing the honesty work must correct.
 - OpenCode previously promised an `opencode.json` permission side effect that
   did not exist. The workspace-root config mutation, MCP coordination, and
-  ownership-aware cleanup are now implemented; behavioral verification against
-  a real OpenCode CLI remains open.
+  ownership-aware cleanup are now implemented and were manually verified
+  against a real OpenCode CLI on 2026-07-31.
 - Codex and Antigravity are intentionally mode-only, but the caveat is not
   consistently visible across every permissions surface.
 - Mapper unit tests assert generated strings. They do not prove that a harness
@@ -67,7 +69,7 @@ otherwise:
 | Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                  |
 | Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
 | Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; add automated real-harness regression coverage              |
-| OpenCode        | Supported                                   | Implemented; verification pending | Keep unverified until safe allow/deny calls pass against a pinned real CLI                   |
+| OpenCode        | Supported                                   | Supported (manually verified)     | Retain the workspace-config writer; add automated real-harness regression coverage           |
 | Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
 | Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
 
@@ -178,13 +180,13 @@ independently startable parallel plan. Implement it in this order:
 4. evolve the runtime permission-preparation contract;
 5. implement the shared workspace-policy lease/writer and blocking-conflict UX;
 6. retain Qwen's verified inline mapping and add automated behavioral coverage;
-7. behaviorally verify the implemented OpenCode config path and finish its
+7. retain the behaviorally-verified OpenCode config path and finish its
    structured conflict/recovery UX;
 8. _(post-release)_ continue to Compatibility Phase 2 for dry run,
    CLI/reporting, and MCP serialization.
 
-The Codex partial-support investigation follows the verified Qwen path and the
-implemented OpenCode path; it does not block the permission vertical slice.
+The Codex partial-support investigation follows the verified Qwen and OpenCode
+paths; it does not block the permission vertical slice.
 Antigravity remains an explicit unsupported granular-list declaration unless
 new evidence changes it.
 
@@ -204,7 +206,7 @@ for categories that then earn a behavioral test.
 
 Until a harness has a passing behavioral test, the permissions UI must state
 that Allowed Tools and Denied Tools are currently supported by Copilot CLI,
-Claude CLI, and Qwen Code. OpenCode remains verification-pending.
+Claude CLI, Qwen Code, and OpenCode.
 
 Update every surface that exposes the lists:
 
@@ -278,18 +280,21 @@ resolved config file path.
 The rule: _a ctrlyoke-owned settings file exists only while ctrlyoke is actively
 running a step._ Acquire before every step; release on step completion.
 
-This includes injected prompts. A retained interactive TUI can outlive the step
-and the user can type into it directly; ctrlyoke does not try to govern that
-(see decision 6). But every step ctrlyoke itself starts — fresh process launch
-_or_ injection into a live session — must re-apply the settings file first, or
-fail with the conflict result if another workflow holds the lease.
+A retained interactive TUI can outlive the step and the user can type into it
+directly; ctrlyoke does not try to govern that (see decision 6).
 
-This is a real change to the current call sites. `prepareToolPermissions` is
-invoked from `CliIntegration.ts:961` during CLI argument construction, so it
-runs only on process launch; the inject path never rebuilds args and so never
-re-acquires. Release currently happens in `cleanupWorkspaceArtifacts`
-(`OpenCodeCliProvider.ts:439`) at workflow teardown, not per step. Both ends
-move to the step boundary.
+Injected steps are the exception, and they need _less_ work rather than more:
+because OpenCode caches config at spawn (see "Resolved: OpenCode caches config
+at process start"), an injected prompt runs under the policy the live session
+already cached, and ctrlyoke restarts instead of injecting whenever that policy
+would differ. An injecting step therefore writes no config file, acquires no
+lease, and cannot conflict.
+
+The change to current call sites is at the release end. `prepareToolPermissions`
+is invoked from `CliIntegration.ts:961` during CLI argument construction, which
+is already the launch boundary and is where acquisition belongs. Release
+currently happens in `cleanupWorkspaceArtifacts` (`OpenCodeCliProvider.ts:439`)
+at workflow teardown; it moves to step completion.
 
 **3. Owner identity is PID plus a per-process random token.** `getOwnerId()`
 currently returns `${pid}:${workflowKey}`. A recycled PID makes a dead owner
@@ -316,34 +321,64 @@ or work around it; this is a standing known limitation of every workspace-scoped
 mechanism, not a gap in this plan. Disclose it (see "Required disclosure") and
 do not add machinery that pretends to solve it.
 
-### Open items created by decision 2
+### Resolved: OpenCode caches config at process start
 
-**OPEN — blocks the inject path. Does re-writing the config actually affect a
-live session?** Under investigation as of 2026-07-31. Decision 2 assumes that
-re-applying `opencode.json` before injecting into a running TUI changes the
-policy that session enforces. That is only true if OpenCode re-reads the file per
-turn or per permission check. If it caches config at process start, re-applying
-before injection is a no-op for that process and the injected step silently runs
-under whatever policy was active at launch — which would be a real enforcement
-hole hiding behind a correct-looking write.
+**Verified manually 2026-07-31.** Editing `opencode.json` between prompts of a
+running TUI has no effect: the session keeps enforcing the permission settings
+present at launch and ignores mid-session changes.
 
-Resolve this behaviorally before building the inject path, and record the
-evidence here. Until then, assume the caching case. If OpenCode does cache at
-startup, the options are to hold the lease for the interactive process lifetime
-(contradicting the step-scoped rule for interactive mode only) or to declare
-workspace-config permissions unsupported for retained interactive sessions. Do
-not ship the inject re-apply as if it were enforcement without evidence.
+**This removes the inject re-apply work entirely rather than complicating it.**
+The config file only governs a harness process at spawn time, so:
 
-**PROPOSED DEFAULT — not yet confirmed. Mid-run acquisition failure is a new
-state.** Under per-workflow leases a
-conflict could only happen at start. Under step-scoped leases, workflow A can
-release after step 1, workflow B can acquire, and A's step 2 then fails mid-run.
-Handle it as a blocking `error` diagnostic that stops the workflow at that step,
-leaving it resumable once the other owner releases. Explicitly exclude conflicts
-from `errorBehavior` retry: a conflict is not a transient harness failure, and
-retrying it produces nondeterministic behavior that depends on another
-workflow's timing. The alternative not chosen here is a bounded wait before
-failing; confirm the preference before implementing.
+- **identical policy → inject.** The live TUI already cached exactly that
+  policy at launch. Nothing needs to be written, and the injected step needs
+  neither the file nor a lease.
+- **different policy → fresh process.** ctrlyoke already restarts rather than
+  injects when spawn-time config changes, so the file is written and leased at
+  the launch that consumes it.
+
+The invariant that makes this safe is `getInjectIncompatibilityReason`
+(`CliIntegration.ts:467`), which refuses inject and forces a restart when
+`resolvedProperties.toolPermissions` or `.mcpServers` differ from the stored
+`spawnedWith` snapshot. Two consequences:
+
+1. **That comparison is now security-critical, not a convenience.** If it ever
+   stops catching a permission difference, ctrlyoke injects into a session
+   enforcing a stale cached policy — silent under-enforcement with no error and
+   no diagnostic. Add explicit regression tests that a changed `toolPermissions`
+   and a changed `mcpServers` each force a restart.
+2. **Its no-snapshot branch currently fails open.** `CliIntegration.ts:490`
+   returns `null` ("allow inject") when `spawnedWith` is absent. For
+   permission-bearing config the safe default is the opposite: with no snapshot
+   to compare, restart. Change that branch to fail closed.
+
+Because an injecting step touches no config file, two workflows with different
+policies may legitimately run concurrently while one of them is injecting. That
+is correct, not a gap in the gate: the file does not govern an already-running
+process.
+
+The same caching argument applies to the `mcpServers` block in the same file, so
+MCP registration follows the same step-scoped rule and the same restart-on-change
+invariant. Today `unregisterWorkflow` runs only at workflow cleanup
+(`OpenCodeCliProvider.ts:443`); align it with the step boundary.
+
+**Lease window.** Config is consumed only at spawn, so in principle the lease
+could be released as soon as the process has read it. There is no observable
+"config consumed" signal, and releasing immediately after spawn would let another
+workflow rewrite the file before OpenCode reads it. Keep release at step
+completion per decision 2 — it costs nothing and closes that race. Releasing at a
+startup-ready signal is a possible later optimization, not a requirement.
+
+### Mid-run acquisition failure
+
+**Decided 2026-07-31: fail with an error, not a bounded wait.** Under
+per-workflow leases a conflict could only happen at start. Under step-scoped
+leases, workflow A can release after step 1, workflow B can acquire, and A's
+step 2 then fails mid-run. Handle it as a blocking `error` diagnostic that stops
+the workflow at that step, leaving it resumable once the other owner releases.
+Explicitly exclude conflicts from `errorBehavior` retry: a conflict is not a
+transient harness failure, and retrying it produces nondeterministic behavior
+that depends on another workflow's timing.
 
 Note that step-scoped leases narrow the product promise in a way that is
 _more_ precise, not weaker: conflicting workflows may interleave between steps,
@@ -420,14 +455,18 @@ interface PermissionPolicyConflict {
 ### Remaining work in this section
 
 - key all baseline state by config file path (decision 1);
-- move acquire/release to the step boundary and add re-acquisition to the inject
-  path (decision 2);
+- move lease release to step completion, for both the permission lease and MCP
+  registration (decision 2);
+- make `getInjectIncompatibilityReason`'s missing-snapshot branch fail closed,
+  and add regression tests that changed `toolPermissions` and changed
+  `mcpServers` each force a restart instead of an inject;
 - add the per-process random token to owner identity (decision 3);
 - add the dead-PID pruning regression test (decision 4);
 - replace the conflict throw with the structured result (decision 5);
 - wrap acquisition in `withFileLock` so the ownership check and write are atomic
   across processes;
-- behaviorally verify whether OpenCode re-reads config for an injected turn;
+- surface a mid-run conflict as a blocking error that stops the workflow and is
+  excluded from `errorBehavior` retry;
 - wire disclosure, dry-run details, persisted diagnostics, and blocking
   conflict UX across dashboard, CLI, and MCP surfaces.
 
@@ -456,11 +495,11 @@ documented in a comment.
 - Persist enough recovery metadata to remove stale ctrlyoke-owned values after a
   crash without replacing the user's whole file.
 - Use atomic writes and the existing workspace-scoped path/security guards.
-- Hold the configuration for the duration of the step, releasing on step
-  completion, and re-acquire before every subsequent ctrlyoke-started step
-  including injected prompts (see decision 2). This supersedes the earlier
-  "hold for the lifetime of the harness process" rule, which is revisited only
-  if injection into a live session proves unable to change the enforced policy.
+- Hold the configuration for the duration of the step and release on step
+  completion (decision 2). This supersedes the earlier "hold for the lifetime of
+  the harness process" rule. Steps that inject into a live session acquire
+  nothing, because the harness cached its policy at spawn and ctrlyoke restarts
+  rather than injects when that policy would change.
 
 ### Required disclosure
 
@@ -589,9 +628,13 @@ temporary-file cleanup, identical-policy sharing, conflict rejection, user-edit
 preservation, and malformed-JSON handling. `npm test` passed after this slice
 (2,244 extension tests and 1,237 UI tests).
 
-Still required: behavioral tests against a pinned real OpenCode CLI must prove
-allow and deny decisions with safe fixture tools. Crash recovery and the shared
-structured conflict/disclosure UX remain in Workspace-Configuration Support.
+Manually verified against a real OpenCode CLI on 2026-07-31: allow and deny
+decisions were proved correct with safe fixture tools, confirming the
+`getPermissionHarnessSupport()` UI gate for OpenCode in
+`WorkflowPropertiesPanel.tsx` and `PropertiesDrawer.tsx` can open. Automated
+real-harness regression coverage (as opposed to this one-off manual run), crash
+recovery, and the shared structured conflict/disclosure UX remain in
+Workspace-Configuration Support.
 
 ## Codex Partial Support Investigation
 
