@@ -18,6 +18,8 @@ import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
+import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
+import type { ResolvedProperties } from "../../utils/PropertyResolver";
 
 class MockVsCodePlatform
   implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
@@ -165,6 +167,44 @@ function createTestIntegration(
   );
 }
 
+function createResolvedProperties(
+  overrides: Partial<ResolvedProperties> = {}
+): ResolvedProperties {
+  return {
+    harness: HARNESS_IDS.CLAUDE_CLI,
+    model: "test-model",
+    executionMode: EXECUTION_MODES.INTERACTIVE,
+    resumeSession: true,
+    mcpServers: null,
+    hooks: null,
+    toolPermissions: null,
+    ...overrides,
+  };
+}
+
+function createInteractiveInjectContext(
+  spawnedWith?: ResolvedProperties
+): InteractiveInjectContext {
+  return {
+    logPath: "session.log",
+    sessionId: "session-existing",
+    spawnedWith,
+    spawnedWithSessionId: "session-existing",
+  };
+}
+
+function getInjectIncompatibilityReason(
+  ctx: InteractiveInjectContext,
+  curr: ResolvedProperties | undefined,
+  currSessionId: string | undefined
+): string | null {
+  return (CliIntegration as any).getInjectIncompatibilityReason(
+    ctx,
+    curr,
+    currSessionId
+  );
+}
+
 suite("CliIntegration", () => {
   setup(() => {
     configService.setCliOverlay({
@@ -174,6 +214,44 @@ suite("CliIntegration", () => {
 
   teardown(() => {
     configService.setCliOverlay({});
+  });
+
+  suite("inject compatibility", () => {
+    test("forces a restart when the spawnedWith snapshot is missing", () => {
+      const reason = getInjectIncompatibilityReason(
+        createInteractiveInjectContext(),
+        createResolvedProperties(),
+        "session-existing"
+      );
+
+      assert.match(reason ?? "", /spawnedWith snapshot is missing/u);
+    });
+
+    test("forces a restart when current resolved properties are missing", () => {
+      const reason = getInjectIncompatibilityReason(
+        createInteractiveInjectContext(createResolvedProperties()),
+        undefined,
+        "session-existing"
+      );
+
+      assert.match(
+        reason ?? "",
+        /current resolved properties are missing/u
+      );
+    });
+
+    test("permits inject when the spawn-time snapshot fully matches", () => {
+      const properties = createResolvedProperties();
+
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(properties),
+          properties,
+          "session-existing"
+        ),
+        null
+      );
+    });
   });
 
   test("should delegate retained artifact policy to the CLI provider", () => {

@@ -480,15 +480,18 @@ export class CliIntegration extends HarnessIntegration {
       return `explicit sessionId "${currSessionId}" differs from running session`;
     }
 
+    if (!prev) {
+      return "spawnedWith snapshot is missing — cannot verify spawn-time configuration";
+    }
+    if (!curr) {
+      return "current resolved properties are missing — cannot verify spawn-time configuration";
+    }
+
     // Inject mode keeps the TUI alive and continues the existing conversation,
     // which is semantically equivalent to resumeSession: true. If the prompt
     // requests a fresh session, we must spawn a new process instead.
-    if (!curr?.resumeSession) {
+    if (!curr.resumeSession) {
       return "resumeSession is false — fresh session required";
-    }
-
-    if (!prev || !curr) {
-      return null; // no stored config to compare against — allow inject
     }
 
     if (curr.model !== prev.model) {

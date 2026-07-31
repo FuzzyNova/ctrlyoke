@@ -347,10 +347,11 @@ The invariant that makes this safe is `getInjectIncompatibilityReason`
    enforcing a stale cached policy — silent under-enforcement with no error and
    no diagnostic. Add explicit regression tests that a changed `toolPermissions`
    and a changed `mcpServers` each force a restart.
-2. **Its no-snapshot branch currently fails open.** `CliIntegration.ts:490`
-   returns `null` ("allow inject") when `spawnedWith` is absent. For
-   permission-bearing config the safe default is the opposite: with no snapshot
-   to compare, restart. Change that branch to fail closed.
+2. **Missing snapshots fail closed (landed 2026-07-31).**
+   `getInjectIncompatibilityReason` now returns distinct restart reasons when
+   either the `spawnedWith` snapshot or the current resolved properties are
+   missing. `shouldUseInjectMode` logs the reason and uses the existing restart
+   path, and unit coverage protects both cases plus a fully matching snapshot.
 
 Because an injecting step touches no config file, two workflows with different
 policies may legitimately run concurrently while one of them is injecting. That
@@ -457,9 +458,6 @@ interface PermissionPolicyConflict {
 - key all baseline state by config file path (decision 1);
 - move lease release to step completion, for both the permission lease and MCP
   registration (decision 2);
-- make `getInjectIncompatibilityReason`'s missing-snapshot branch fail closed,
-  and add regression tests that changed `toolPermissions` and changed
-  `mcpServers` each force a restart instead of an inject;
 - add the per-process random token to owner identity (decision 3);
 - add the dead-PID pruning regression test (decision 4);
 - replace the conflict throw with the structured result (decision 5);

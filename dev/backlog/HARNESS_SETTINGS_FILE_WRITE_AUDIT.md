@@ -215,15 +215,15 @@ The current audit supports these classifications:
 
 ## Recommended follow-up order
 
-- **Shared prerequisite for all three inline migrations:** make
-  `CliIntegration.getInjectIncompatibilityReason`'s missing-snapshot branch
-  (`CliIntegration.ts:490` — `if (!prev || !curr) return null`) fail closed.
-  Every inline mechanism fixes its configuration at spawn time (environment for
-  OpenCode, `argv` for Codex and Qwen), so reusing a running process whose spawn
-  configuration cannot be compared can silently execute a step under the
-  previous step's permission policy, MCP set, or hooks. This is already owned by
-  [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md), and it
-  should land before, not after, the migrations that depend on it.
+- **Shared prerequisite for all three inline migrations (landed 2026-07-31):**
+  `CliIntegration.getInjectIncompatibilityReason` now fails closed with
+  distinct reasons when the `spawnedWith` snapshot or current resolved
+  properties are unavailable. Every inline mechanism fixes its configuration at
+  spawn time (environment for OpenCode, `argv` for Codex and Qwen), so reusing a
+  running process whose spawn configuration cannot be compared can silently
+  execute a step under the previous step's permission policy, MCP set, or
+  hooks. The restart path logs the reason and is covered by unit tests; see
+  [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md).
 - Implement the Codex inline hook plan and remove Codex’s current hook-file
   entry from the long-term shared-file inventory.
 - Implement the OpenCode inline config plan, then update the permission plan’s
