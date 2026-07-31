@@ -1,6 +1,6 @@
 # Qwen Inline MCP and Hook Isolation Plan
 
-> **Status:** Proposed
+> **Status:** Stage 1 complete; Stage 2 proposed
 >
 > **Priority:** P1 for inline MCP; exploratory for extension-backed hooks
 >
@@ -8,8 +8,8 @@
 
 ## Recommendation
 
-Make one focused production change now: deliver Qwen MCP servers through its
-native per-invocation `--mcp-config` argument. This removes ctrlyoke's writes
+Stage 1 delivers Qwen MCP servers through its native per-invocation
+`--mcp-config` argument. This removes ctrlyoke's writes
 to `{workspace}/.qwen/settings.json` for MCP and makes concurrent workflows
 independent without an MCP tracker, ref counts, baseline restoration, or an
 `--allowed-mcp-server-names` isolation workaround.
@@ -99,7 +99,7 @@ those commands from a process-local payload without changing hook output
 semantics, or the extension route must remain unavailable when user hooks are
 configured. This is why it is not a drop-in replacement today.
 
-## Stage 1 — migrate MCP to `--mcp-config`
+## Stage 1 — migrate MCP to `--mcp-config` (complete)
 
 In `QwenCliProvider`:
 
@@ -137,6 +137,11 @@ test snapshots. The existing `QwenCliProvider.buildCliArgs()` full-argument
 debug logging must redact `--mcp-config`'s following value before this change
 ships. The value is necessarily visible to the child process command line; the
 migration's security gain is removing a durable, workspace-readable copy.
+
+Implemented on 2026-07-31. Qwen now receives the prompt's complete MCP set as
+the two-token `--mcp-config <inline-json>` argument, and the provider no longer
+registers or unregisters MCP entries in `.qwen/settings.json`. The tracker is
+temporarily retained only as the hook-registration mutex until Stage 2.
 
 ## Stage 2 — retain hooks, make global trust writes safe
 

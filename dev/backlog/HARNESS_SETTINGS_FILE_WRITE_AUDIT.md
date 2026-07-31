@@ -29,7 +29,7 @@ The important distinction is:
 
 | Harness     | Current shared configuration writes                                                                                                    | Two concurrent runs with different workflow keys                                                                     | Lease / conflict priority                                                                  | Future direction                                                                                                |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Qwen        | Workspace `.qwen/settings.json`; global `~/.qwen/trusted_hooks.json`                                                                   | Hook groups are retained in the shared file; MCP entries are merged and ref-counted in-process                       | High for MCP visibility; medium for hooks; high for the unguarded global trust-file update | Move MCP to `--mcp-config`; retain hooks pending an extension-backed hook spike                                 |
+| Qwen        | Workspace `.qwen/settings.json` hooks; global `~/.qwen/trusted_hooks.json`                                                             | Hook groups are retained in the shared file; MCP is passed per invocation through `--mcp-config`                     | MCP shared-file pollution resolved; medium for hooks; high for the unguarded global trust-file update | MCP inline migration complete; retain hooks pending an extension-backed hook spike                              |
 | Copilot     | Per-prompt `.github/hooks/*.json`; per-execution MCP temp file                                                                         | Hook files are separately auto-discovered and normally coexist                                                       | Medium: path naming and cleanup need run identity; no shared permission file               | Keep files unless a later Copilot inline mechanism is verified                                                  |
 | Antigravity | Workspace `.agents/mcp_config.json`; global `~/.gemini/config/hooks.json`; global `~/.gemini/antigravity-cli/settings.json` statusline | Hook groups are retained; MCP entries are merged but visible to every agy process; identical statusline leases share | High for MCP and statusline; medium for hooks                                              | Keep hooks/statusline files; decide whether MCP needs a lease or an inline alternative                          |
 | Codex       | None for hooks; Codex MCP configuration is already inline                                                                            | Hook and trust overrides are process-local CLI arguments; user project files are untouched                         | Resolved for hooks; MCP remains inline                                                     | Keep the inline hook path and complete the remaining length-guard/diagnostic stages                            |
@@ -42,12 +42,12 @@ The important distinction is:
 
 Source: [`QwenCliProvider.ts`](../../src/core/harness/qwen/QwenCliProvider.ts), [`SettingsJsonMcpTracker.ts`](../../src/core/harness/shared/SettingsJsonMcpTracker.ts), and [`SettingsJsonHooksTracker.ts`](../../src/core/harness/shared/SettingsJsonHooksTracker.ts).
 
-| File                                   | What ctrlyoke writes                                                                   | Visibility and cleanup                                                                                                                                                                                                       | Parallel behavior                                                                                                                                                                                                                    |
-| -------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `{workspace}/.qwen/settings.json`      | Hook groups under `hooks`; MCP servers under `mcpServers`                              | Qwen auto-discovers it. `SettingsJsonHooksTracker` restores the hook baseline on final unregister; `SettingsJsonMcpTracker` removes only unreferenced ctrlyoke-added servers and may create a temporary sibling `.gitignore` | Both trackers are keyed by `workflowKey` and use the Qwen MCP tracker’s in-process mutex. Different keys are merged. Re-registering the same key replaces that key’s tracked layer, so same-key concurrent runs are not independent. |
-| `~/.qwen/trusted_hooks.json`           | Adds `:<command>` entries under the workspace path for ctrlyoke and user hook commands | Global and persistent; current code adds entries but does not remove them                                                                                                                                                    | The keys are set-like, so identical commands deduplicate and different commands can coexist. The read-modify-write at `QwenCliProvider.ts:391-423` has no file lock, so concurrent processes can lose each other’s additions.        |
-| `{workspace}/.qwen/.gitignore`         | Temporary ignore file when the settings file is newly created                          | Removed by the hooks/MCP tracker when its owned state is gone, unless a user-owned file already existed                                                                                                                      | Shared directory artifact; cleanup checks tracker state, not a distributed cross-process lease.                                                                                                                                      |
-| `{workspace}/.qwen/settings.json.orig` | Created by Qwen itself when it reads settings; ctrlyoke only removes it during cleanup | Not a ctrlyoke settings write, but cleanup assumes it was temporary                                                                                                                                                          | Its lifecycle is owned by Qwen, so it should not be treated as a ctrlyoke ownership record.                                                                                                                                          |
+| File                                   | What ctrlyoke writes                                                                   | Visibility and cleanup                                                                                                                                                                                      | Parallel behavior                                                                                                                                                                                                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{workspace}/.qwen/settings.json`      | Hook groups under `hooks`; no ctrlyoke MCP entries                                     | Qwen auto-discovers the hooks. `SettingsJsonHooksTracker` restores the hook baseline on final unregister and may create a temporary sibling `.gitignore`; MCP configuration is passed inline per invocation | Hook layers are keyed by `workflowKey` and use the Qwen MCP tracker’s in-process mutex. Different keys are merged. Re-registering the same key replaces that key’s tracked layer, so same-key concurrent runs are not independent; inline MCP values are process-local. |
+| `~/.qwen/trusted_hooks.json`           | Adds `:<command>` entries under the workspace path for ctrlyoke and user hook commands | Global and persistent; current code adds entries but does not remove them                                                                                                                                   | The keys are set-like, so identical commands deduplicate and different commands can coexist. The read-modify-write at `QwenCliProvider.ts:391-423` has no file lock, so concurrent processes can lose each other’s additions.                                           |
+| `{workspace}/.qwen/.gitignore`         | Temporary ignore file when the settings file is newly created                          | Removed by the hooks tracker when its owned state is gone, unless a user-owned file already existed                                                                                                         | Shared directory artifact; cleanup checks tracker state, not a distributed cross-process lease.                                                                                                                                                                         |
+| `{workspace}/.qwen/settings.json.orig` | Created by Qwen itself when it reads settings; ctrlyoke leaves it untouched          | Not a ctrlyoke settings write; cleanup leaves this user-owned Qwen backup in place                                                                                                                          | Its lifecycle is owned by Qwen, so it should not be treated as a ctrlyoke ownership record.                                                                                                                                                                             |
 
 #### Qwen hooks
 
@@ -63,14 +63,14 @@ has a separate race because it is not covered by the settings tracker lock.
 
 #### Qwen MCP
 
-Qwen’s `--allowed-mcp-server-names` argument restricts each ctrlyoke prompt to
-its configured server names plus baseline names, which reduces cross-workflow
-server use by Qwen itself. The workspace file still contains the union of active
-servers, however, and a manually launched Qwen process has no such ctrlyoke
-prompt-local restriction. This is a shared-file pollution concern, not a
-permission-policy mutation: the tool-permission plan correctly keeps Qwen’s
-Allowed/Denied Tools mapping inline and must not add a `.qwen/settings.json`
-permission writer.
+Qwen now receives each prompt’s selected MCP servers through its native
+two-token `--mcp-config <inline-json>` argument. The serialized object uses the
+same Qwen-shaped entries as the former settings-file export, including server
+environment values, but no longer creates or mutates `.qwen/settings.json`, its
+sibling `.gitignore`, or `settings.json.orig`. Each provider invocation owns an
+independent MCP object, so the former shared-file union and
+`--allowed-mcp-server-names` workaround are no longer needed. Qwen’s user-owned
+settings and `.mcp.json` continue to follow Qwen’s normal precedence rules.
 
 ### Copilot CLI
 
@@ -198,8 +198,8 @@ The current audit supports these classifications:
 2. **Statusline value lease:** Antigravity’s global `settings.json` statusline
    is a separate single-value lease. It is not a tool-permission policy, but it
    needs the same cross-process ownership rigor and dead-owner recovery.
-3. **MCP shared-file ownership:** Qwen, Antigravity, and current OpenCode MCP
-   writers merge server definitions into workspace-discovered files. MCP is not
+3. **MCP shared-file ownership:** Antigravity and current OpenCode MCP writers
+   merge server definitions into workspace-discovered files. MCP is not
    permission policy, but it has a stronger pollution risk than hooks. The
    existing tracker’s reference counting is useful within one process; it does
    not provide prompt-local isolation for Antigravity or OpenCode.
@@ -234,8 +234,9 @@ The current audit supports these classifications:
 - Give Copilot, Qwen, and Antigravity hook ownership a run-specific identity (or
   explicitly document that same-workflow concurrent runs are unsupported) before
   claiming that two concurrent runs are independent.
-- Decide separately whether Antigravity and Qwen MCP need a step-scoped lease,
-  a prompt-local isolation mechanism, or an inline/config alternative. Do not
+- Keep Qwen MCP on its per-invocation inline configuration. Decide separately
+  whether Antigravity MCP needs a step-scoped lease, a prompt-local isolation
+  mechanism, or an inline/config alternative. Do not
   reuse the permission-policy conflict semantics for hooks without considering
   the different duplicate-hook behavior.
 - Keep Claude’s and Copilot’s direct-input temp files in the lower-risk category,

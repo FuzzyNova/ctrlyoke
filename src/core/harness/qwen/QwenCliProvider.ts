@@ -56,7 +56,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
-  /** Shared singleton tracker for parallel-safe MCP management in .qwen/settings.json */
+  /** Shared singleton tracker used as the temporary mutex for hook mutations. */
   private static readonly mcpTracker =
     SettingsJsonMcpTracker.getInstance("qwen");
 
@@ -150,21 +150,7 @@ export class QwenCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      Log.debug("🔧 ctrlyoke MCP config written for Qwen");
-    }
-
-    // Parallel workflow isolation: restrict MCP server access so prompts in
-    // one workflow can't accidentally use another workflow's servers from the
-    // shared .qwen/settings.json.
-    if (workspaceRoot) {
-      const promptMcpNames = this.getPromptMcpServerNames(
-        workflowContext?.resolvedProperties?.mcpServers
-      );
-      const allowed =
-        QwenCliProvider.mcpTracker.getAllowedServerNames(promptMcpNames);
-      if (allowed) {
-        args.push("--allowed-mcp-server-names", ...allowed);
-      }
+      Log.debug("🔧 ctrlyoke MCP config added inline for Qwen");
     }
 
     // Note: Headless-specific flags (--output-format) are added by
@@ -211,22 +197,22 @@ export class QwenCliProvider implements ICliProvider {
     // NOTE: buildHeadlessUserHookArgs returns ["--experimental-hooks"] for Qwen headless.
     // Permission args are similarly dispatched via buildPermissionArgs() — not here.
 
-    Log.debug(`🔧 Qwen CLI arguments: ${JSON.stringify(args)}`);
+    Log.debug(
+      `🔧 Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
+    );
 
     return args;
   }
 
-  /**
-   * Extract MCP server names configured for this prompt.
-   * Used for `--allowed-mcp-server-names` parallel workflow isolation.
-   */
-  private getPromptMcpServerNames(
-    mcpServers?: Array<string | McpServerConfig> | null
-  ): string[] {
-    if (!mcpServers) {
-      return [];
+  private redactMcpConfigArgs(args: string[]): string[] {
+    const redactedArgs = [...args];
+    for (let index = 0; index < redactedArgs.length - 1; index++) {
+      if (redactedArgs[index] === "--mcp-config") {
+        redactedArgs[index + 1] = "[REDACTED]";
+        index++;
+      }
     }
-    return mcpServers.map((s) => (typeof s === "string" ? s : s.id));
+    return redactedArgs;
   }
 
   /**
@@ -474,27 +460,17 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Clean up workflow artifacts from .qwen/settings.json.
+   * Clean up workflow hook artifacts from .qwen/settings.json.
    *
-   * Two independent cleanup steps:
-   * 1. MCP servers: unregister via tracker (ref-counted, parallel-safe)
-   * 2. Hooks: unregister via tracker (ref-counted, restores baseline on last unregister)
+   * Hooks remain workspace-backed until Qwen provides an inline hook mechanism.
    *
    * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Unique workflow key for MCP tracker
+   * @param workingFilePath Unique workflow key for the hooks tracker
    */
   async cleanupWorkspaceArtifacts(
     workspaceRoot: string,
     workingFilePath?: string
   ): Promise<void> {
-    // Unregister MCP servers (ref-counted — only removes when no other workflow needs them)
-    if (workingFilePath) {
-      await QwenCliProvider.mcpTracker.unregisterWorkflow(
-        workingFilePath,
-        workspaceRoot
-      );
-    }
-
     // Unregister hooks via ref-counted tracker (serialized to avoid file races)
     const hookKey = workingFilePath ?? workspaceRoot;
     await QwenCliProvider.mcpTracker.withLock(async () => {
@@ -503,11 +479,6 @@ export class QwenCliProvider implements ICliProvider {
         workspaceRoot
       );
     });
-
-    // Qwen Code CLI creates settings.json.orig as its own backup when it reads our
-    // settings.json. Clean it up since the user didn't have it before we ran.
-    const origPath = path.join(workspaceRoot, ".qwen", "settings.json.orig");
-    await fs.unlink(origPath).catch(() => {});
   }
 
   /**
@@ -591,13 +562,11 @@ export class QwenCliProvider implements ICliProvider {
   /**
    * Generate MCP server configuration for Qwen Code CLI.
    *
-   * Qwen CLI auto-discovers MCP servers from `.qwen/settings.json` in the project root.
-   * This method registers servers with the shared SettingsJsonMcpTracker which handles:
-   * - Reference counting for parallel workflow safety
-   * - Idempotent adds (skip if server already in settings.json)
-   * - Cleanup via unregisterWorkflow() in cleanupWorkspaceArtifacts()
+   * Qwen CLI accepts a per-invocation inline JSON object through `--mcp-config`.
+   * The shared settings-entry builder keeps this schema aligned with Qwen's
+   * native settings format without writing a workspace settings file.
    *
-   * @returns Empty array (config is auto-discovered from settings.json, no CLI args needed)
+   * @returns Two tokens (`--mcp-config` and its JSON value), or null without MCP
    */
   async getMcpConfigArgs(
     mcpServerPath: string | undefined,
@@ -610,37 +579,19 @@ export class QwenCliProvider implements ICliProvider {
       return null;
     }
 
-    try {
-      // Build MCP server entries using shared helper
-      const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
-        mcpServerPath,
-        workspaceRoot,
-        workingFilePath,
-        additionalEnv,
-        userServers
-      );
+    const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
 
-      // Register with tracker (ref-counted, idempotent adds to settings.json)
-      const workflowKey = workingFilePath ?? "default";
-      await QwenCliProvider.mcpTracker.registerServers(
-        workflowKey,
-        workspaceRoot,
-        mcpEntries
-      );
-
-      Log.debug(`🔧 Qwen MCP servers registered via tracker`);
-
-      // Return empty array — Qwen auto-discovers settings.json, no CLI arg needed
-      return [];
-    } catch (error) {
-      Log.warn(`Failed to register Qwen MCP servers: ${error}`);
-      return null;
-    }
+    return ["--mcp-config", JSON.stringify({ mcpServers: mcpEntries })];
   }
 
   /**
-   * Return null — MCP config is merged into .qwen/settings.json (not a separate file).
-   * Cleanup is handled by cleanupWorkspaceArtifacts() which restores from backup.
+   * Return null — inline MCP config does not have a file path to clean up.
    */
   getMcpConfigFilePath(
     _workingFilePath: string | undefined,
