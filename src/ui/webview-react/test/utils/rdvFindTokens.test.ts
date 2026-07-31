@@ -90,4 +90,20 @@ describe("markFindTokens", () => {
       { type: "mark", markType: "edit", value: "alpha" },
     ]);
   });
+
+  it("marks path-like text in diff tokens without creating reference-chip metadata", () => {
+    const input = tokens(
+      [[{ type: "string", value: "@ctrlyoke/src/ui/webview-react/utils/codemirrorTheme.ts" }]],
+      []
+    );
+
+    const result = markFindTokens(input, "webview-react", false);
+
+    expect(result!.old[0]).toEqual([
+      { type: "string", value: "@ctrlyoke/src/ui/" },
+      { type: "mark", markType: "find", value: "webview-react" },
+      { type: "string", value: "/utils/codemirrorTheme.ts" },
+    ]);
+    expect(result!.old[0].some((token) => "attrs" in token)).toBe(false);
+  });
 });

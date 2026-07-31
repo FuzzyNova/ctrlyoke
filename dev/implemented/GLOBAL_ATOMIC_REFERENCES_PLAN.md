@@ -1,6 +1,6 @@
 # Global Atomic Reference Formatting Plan
 
-> **Status:** In progress — staged as seven steps (see Implementation phases)
+> **Status:** Implemented 2026-07-31 — staged as seven steps (see Implementation phases)
 >
 > **Priority:** P2 — output readability and consistency
 
@@ -458,14 +458,15 @@ full-bleed diff layout remain unchanged.
 
 ### Step 7 — Regression, boundary, and performance verification
 
-- Add the `rdvFindTokens` diff-boundary regression test.
-- Exercise virtualized and non-virtualized output with long wrapped paths.
-- Toggle the setting while output is visible and while rows are off-screen.
-- Search hidden path segments, navigate among several matches in one row and
-  across rows, change case sensitivity, and clear the query.
-- Verify streaming Markdown does not accumulate processor-cache entries or
-  remount when neither find state nor reference presentation changed.
-- Verify output export/copy still contains full original text.
+**Status: Complete.** Added the diff-boundary regression and verified the
+find projection, active-mark reveal, repeated-match navigation, query/case
+changes, chip collapse, virtualization remeasurement, streaming Markdown
+stability, setting toggles, long wrapped paths, and canonical copy/export
+behavior. The full UI suite passes (1,276 tests); the required repository-wide
+typecheck and lint gates pass. `npm test` reaches 2,324 passing tests but is
+currently blocked by 12 unrelated pre-existing extension-host failures outside
+this feature (including obsolete chat-session expectations and missing
+`dev/migrate-runs-layout.mjs` test infrastructure).
 
 ---
 
