@@ -67,7 +67,7 @@ import {
   getFencedBlockRanges,
   isInFencedBlock,
   type ContextReferenceMatch,
-} from "../editor/CodeMirrorEditor";
+} from "@utils/atomicReferences";
 import { openContextReference } from "@utils/contextReferenceActions";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";

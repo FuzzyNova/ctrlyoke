@@ -374,6 +374,9 @@ green, and commits its own work. Later steps assume earlier ones are committed.
 
 ### Step 1 — Extract the shared webview model (no behavior change)
 
+**Status: Complete.** Extracted the shared parser, presentation metadata, and
+palette; repointed editor/output consumers; and relocated the utility tests.
+
 - Move `findContextReferenceMatches`, `findInlinePriorContextRefs`,
   `getFencedBlockRanges`, `isInFencedBlock`, `referenceBasename`,
   `gitReferenceLabel`, `describeContextReferenceChip`,

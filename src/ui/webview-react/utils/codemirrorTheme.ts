@@ -1,75 +1,7 @@
 import { EditorView } from "@codemirror/view";
+import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
 
 type ThemeSurface = "editor" | "input";
-
-// The 5 chart accent colors are the only saturated, mutually-distinct accent
-// colors verified present in every sampled VS Code theme (see
-// dev/scripts/build-vscode-css-vars-union.mjs and its
-// dev/reference/vscode-css-vars-union.json output) — unlike most badge/status
-// colors, which turned out to be aliases of one another across themes. Used
-// to give each atomic-reference chip type (folder/file/selection/git/prior-
-// context) a distinct, always-available accent, reused for both the chip's
-// icon (via SYMBOL_ICON_COLORS below) and its border accent (via
-// buildChipAccentShadowRules below) so the two never drift apart.
-const CHART_ACCENT_COLORS = {
-  blue: "var(--vscode-charts-blue, #59a4f9)",
-  green: "var(--vscode-charts-green, #89d185)",
-  purple: "var(--vscode-charts-purple, #b180d7)",
-  red: "var(--vscode-charts-red, #f14c4c)",
-  yellow: "var(--vscode-charts-yellow, #cca700)",
-} as const;
-
-// Maps codicon names (the same names produced by COMPLETION_KIND_ICONS in
-// CodeMirrorEditor.tsx, e.g. "symbol-class", "folder", "source-control") to the VS
-// Code symbolIcon theme variable that colors that icon, with the Dark+ theme's
-// default value as the CSS fallback (see dev/reference/vscode-css-vars-darkplus.json).
-// Single source for both the completions dropdown icon and the atomic-reference chip
-// icon — generated into selectors for each by buildSymbolIconColorRules() below, so a
-// kind's color can never drift between the two surfaces.
-//
-// folder/symbol-file/list-selection/source-control/book are pinned to
-// CHART_ACCENT_COLORS rather than their symbolIcon var: those are the fixed
-// icons for the folder/file/selection/git/prior-context chip types (see
-// describeContextReferenceChip/describePriorContextChip in
-// CodeMirrorEditor.tsx), and their symbolIcon vars resolve to near-identical
-// grays across themes, which defeated the point of giving each chip type a
-// distinguishable color.
-const SYMBOL_ICON_COLORS: Record<string, string> = {
-  "symbol-text": "var(--vscode-symbolIcon-textForeground, #cccccc)",
-  "symbol-method": "var(--vscode-symbolIcon-methodForeground, #b180d7)",
-  "symbol-function": "var(--vscode-symbolIcon-functionForeground, #b180d7)",
-  "symbol-constructor":
-    "var(--vscode-symbolIcon-constructorForeground, #b180d7)",
-  "symbol-field": "var(--vscode-symbolIcon-fieldForeground, #75beff)",
-  "symbol-variable": "var(--vscode-symbolIcon-variableForeground, #75beff)",
-  "symbol-class": "var(--vscode-symbolIcon-classForeground, #ee9d28)",
-  "symbol-interface": "var(--vscode-symbolIcon-interfaceForeground, #75beff)",
-  "symbol-module": "var(--vscode-symbolIcon-moduleForeground, #cccccc)",
-  "symbol-property": "var(--vscode-symbolIcon-propertyForeground, #cccccc)",
-  "symbol-value": "var(--vscode-symbolIcon-constantForeground, #cccccc)",
-  "symbol-enum": "var(--vscode-symbolIcon-enumeratorForeground, #ee9d28)",
-  "symbol-keyword": "var(--vscode-symbolIcon-keywordForeground, #cccccc)",
-  "symbol-snippet": "var(--vscode-symbolIcon-snippetForeground, #cccccc)",
-  "symbol-color": "var(--vscode-symbolIcon-colorForeground, #cccccc)",
-  "symbol-file": CHART_ACCENT_COLORS.blue,
-  folder: CHART_ACCENT_COLORS.yellow,
-  "symbol-enum-member":
-    "var(--vscode-symbolIcon-enumeratorMemberForeground, #75beff)",
-  "symbol-constant": "var(--vscode-symbolIcon-constantForeground, #cccccc)",
-  "symbol-struct": "var(--vscode-symbolIcon-structForeground, #cccccc)",
-  "symbol-event": "var(--vscode-symbolIcon-eventForeground, #ee9d28)",
-  "symbol-operator": "var(--vscode-symbolIcon-operatorForeground, #cccccc)",
-  "symbol-type-parameter":
-    "var(--vscode-symbolIcon-typeParameterForeground, #cccccc)",
-  // Not real SymbolKinds — repurposed markers (see COMPLETION_KIND_ICONS in
-  // CodeMirrorEditor.tsx) — but still colored so they don't look unstyled
-  // next to every other completion/chip icon.
-  "list-selection": CHART_ACCENT_COLORS.purple,
-  "source-control": CHART_ACCENT_COLORS.green,
-  // Prior-context chip icon (see describePriorContextChip in
-  // CodeMirrorEditor.tsx) — not a completion kind, only ever shown on chips.
-  book: CHART_ACCENT_COLORS.red,
-};
 
 // Expands SYMBOL_ICON_COLORS into the two selector shapes that actually need the
 // color: the completions dropdown icon (`.cm-completion-<kind> .cm-completionIcon`,
