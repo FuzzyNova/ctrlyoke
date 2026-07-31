@@ -25,9 +25,7 @@ import type {
   PromptEditorInsertRequest,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
-import type {
-  WorkspaceSnapshot,
-} from "../types/OutputHistoryTypes";
+import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";

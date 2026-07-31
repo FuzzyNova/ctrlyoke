@@ -43,7 +43,9 @@ function loadShim(): { api: any; sockets: FakeSocket[] } {
   const sockets: FakeSocket[] = [];
 
   class FakeWebSocket
-    implements FakeSocket, Pick<WebSocket, "addEventListener" | "send" | "close">
+    implements
+      FakeSocket,
+      Pick<WebSocket, "addEventListener" | "send" | "close">
   {
     static readonly CONNECTING = 0;
     static readonly OPEN = 1;

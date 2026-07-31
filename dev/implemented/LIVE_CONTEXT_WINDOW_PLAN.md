@@ -10,15 +10,15 @@
 
 The six log-based CLI parsers already compute `contextWindowUsedTokens` and `contextWindowSize` — but only inside `extractResponse()`, which runs once at completion. Antigravity receives the same values from ctrlyoke's statusline sidecar because agy's own logs do not contain token accounting.
 
-| Harness      | Context source event                                       | Fires mid-stream?                |
-| ------------ | ---------------------------------------------------------- | -------------------------------- |
-| **Copilot**  | `session.truncation` → `postTruncationTokensInMessages`    | **YES** — every turn             |
-| **Claude**   | `assistant` event → `message.usage.input_tokens + cache_*` | YES — per-turn assistant message |
-| **Gemini**   | `gemini` message event → `tokens.input`                    | YES — per response chunk         |
-| **Qwen**     | assistant message → `promptTokenCount`                     | YES — per turn                   |
-| **Codex**    | `event_msg` with `payload.type === "token_count"`          | YES — fires during execution     |
-| **OpenCode** | per-step events accumulated by `OpenCodeEventMapper`       | YES — per step                   |
-| **Antigravity** | ctrlyoke statusline snapshot (own sidecar, not agy's log) | **YES** — every ~300ms poll, interactive & headless |
+| Harness         | Context source event                                       | Fires mid-stream?                                   |
+| --------------- | ---------------------------------------------------------- | --------------------------------------------------- |
+| **Copilot**     | `session.truncation` → `postTruncationTokensInMessages`    | **YES** — every turn                                |
+| **Claude**      | `assistant` event → `message.usage.input_tokens + cache_*` | YES — per-turn assistant message                    |
+| **Gemini**      | `gemini` message event → `tokens.input`                    | YES — per response chunk                            |
+| **Qwen**        | assistant message → `promptTokenCount`                     | YES — per turn                                      |
+| **Codex**       | `event_msg` with `payload.type === "token_count"`          | YES — fires during execution                        |
+| **OpenCode**    | per-step events accumulated by `OpenCodeEventMapper`       | YES — per step                                      |
+| **Antigravity** | ctrlyoke statusline snapshot (own sidecar, not agy's log)  | **YES** — every ~300ms poll, interactive & headless |
 
 The six log-based harnesses already emit usage-bearing events during streaming; it's just that `extractResponse` is the only place that reads them. Antigravity is the exception: its statusline snapshot is polled by ctrlyoke about every 300ms and routed through the same live-context callback. The completed-response path also consumes the sidecar's last snapshot so interactive and headless output agree.
 

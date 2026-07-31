@@ -274,8 +274,8 @@ to reject scripts inside the sibling worktree.
 
 ### ctrlyoke asset discovery
 
-The split above assigns where the harness *runs*. It must also state where
-user-authored ctrlyoke assets are *found*, because the two answers differ and the
+The split above assigns where the harness _runs_. It must also state where
+user-authored ctrlyoke assets are _found_, because the two answers differ and the
 difference is currently accidental rather than chosen.
 
 **Decision for the first release: assets resolve from `stateRoot`; scripts resolve
@@ -328,8 +328,8 @@ structural rule:
 **A multi-root workspace is not disqualified by being multi-root.** A monorepo
 opened as several workspace folders passes: `discoverRepos` collapses roots sharing
 a Git toplevel to one entry, every root is contained in that repository, and each
-one remaps into the worktree independently. What is refused is *multiple
-repositories*, and roots that fall outside the sole repository.
+one remaps into the worktree independently. What is refused is _multiple
+repositories_, and roots that fall outside the sole repository.
 
 Refuse worktree mode when:
 
@@ -370,14 +370,14 @@ Lifecycle:
 6. Acquire an exclusive execution lease for that worktree.
 7. Seed `.ctrlyoke/.gitignore` into the worktree before any harness write.
 8. Run the configured setup command once.
-8. Persist active worktree runtime metadata through `WorkingFileManager`.
-9. Run every workflow phase there.
-10. On terminal settlement, stop integrations and clean provider artifacts.
-11. Auto-commit all tracked/untracked, non-ignored changes.
-12. Optionally merge when explicitly requested.
-13. Remove the worktree directory unless `keep: true` or safe finalization
+9. Persist active worktree runtime metadata through `WorkingFileManager`.
+10. Run every workflow phase there.
+11. On terminal settlement, stop integrations and clean provider artifacts.
+12. Auto-commit all tracked/untracked, non-ignored changes.
+13. Optionally merge when explicitly requested.
+14. Remove the worktree directory unless `keep: true` or safe finalization
     failed.
-14. Leave the branch and ownership record for review/cleanup.
+15. Leave the branch and ownership record for review/cleanup.
 
 Terminal settlement includes successful completion, cancellation, stopped
 execution, and handled execution failure. Partial work is still data and must be
@@ -963,7 +963,7 @@ long as:
 `UndoRedoCoordinator` routes every undo and redo through
 `snapshotService.undoFiles(...)` (`src/ui/UndoRedoCoordinator.ts:163`), which writes
 stored before-content back to resolved paths. No revert, reset, or checkout path
-exists. Git participates only as a *source of before-content* when a snapshot's
+exists. Git participates only as a _source of before-content_ when a snapshot's
 base source is `GIT_HEAD` — never as the mechanism that performs the undo.
 
 So after a managed directory is removed there is no "git-based undo" to fall back
@@ -979,7 +979,7 @@ After a managed directory is removed:
 
 **Disabling the button is not sufficient.** `applySnapshotEntries` resolves paths
 against `getVsCodeNamedWorkspaceRoots()` (`src/ui/UndoRedoCoordinator.ts:155`) —
-the *current window's* roots, not the roots the run actually executed against. Any
+the _current window's_ roots, not the roots the run actually executed against. Any
 undo entry belonging to a worktree run would therefore resolve into the source
 checkout and write there. The coordinator itself needs a guard that refuses to
 apply an entry whose recorded execution workspace is absent or does not match, so
@@ -1145,24 +1145,24 @@ path-routing coverage belongs in unit/integration tests.
 
 The exact diff may evolve, but the implementation must cover these areas.
 
-| Area                      | Files / responsibility                                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Workflow contracts        | `src/types/CtrlYokeTypes.ts`, `src/types/WorkflowContextTypes.ts`                                              |
-| Shared constants/messages | `DashboardConstants.ts`, `WebviewMessageTypes.ts`, output/status contracts                                     |
-| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, config/settings UI; user-scope `worktrees.root`, no `.enabled` |
-| Schema/parser             | `schemas/workflow-schema.json`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                   |
-| Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                              |
-| Execution roots           | `IntegrationFactory.ts`, `CliIntegration.ts`, transport/runner/prompt/MCP helpers                              |
-| Scripts/conditions        | `WorkflowExecutor.ts`, `EndConditionEvaluator.ts`                                                              |
-| Git/worktrees             | `GitUtils.ts`, new `WorktreeManager.ts`, ownership record helper                                               |
-| Worktree scaffolding      | `WorkspaceInitializer.ts` — seed `.ctrlyoke/.gitignore` into a new worktree before first write                 |
-| Concurrency               | new `ExecutionRootLeaseManager.ts`; extract shared lease primitives from `WorkflowLockManager`                 |
+| Area                      | Files / responsibility                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Workflow contracts        | `src/types/CtrlYokeTypes.ts`, `src/types/WorkflowContextTypes.ts`                                                |
+| Shared constants/messages | `DashboardConstants.ts`, `WebviewMessageTypes.ts`, output/status contracts                                       |
+| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, config/settings UI; user-scope `worktrees.root`, no `.enabled`   |
+| Schema/parser             | `schemas/workflow-schema.json`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                     |
+| Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                                |
+| Execution roots           | `IntegrationFactory.ts`, `CliIntegration.ts`, transport/runner/prompt/MCP helpers                                |
+| Scripts/conditions        | `WorkflowExecutor.ts`, `EndConditionEvaluator.ts`                                                                |
+| Git/worktrees             | `GitUtils.ts`, new `WorktreeManager.ts`, ownership record helper                                                 |
+| Worktree scaffolding      | `WorkspaceInitializer.ts` — seed `.ctrlyoke/.gitignore` into a new worktree before first write                   |
+| Concurrency               | new `ExecutionRootLeaseManager.ts`; extract shared lease primitives from `WorkflowLockManager`                   |
 | Snapshots/repos           | `WorkspaceSnapshotService.ts`, `WorkspaceRepoDiscovery.ts`, `UndoRedoCoordinator.ts` (execution-workspace guard) |
-| Runtime file trust        | new session registry plus file-access callers; do not persist into `ExternalRootsTrustStore`                   |
-| Recovery/status           | `WorkspaceSessionManager.ts`, activation recovery, `mcp-server.ts`                                             |
-| UI actions                | router/sink/message handler/store plus workflow status/steps components                                        |
-| VS Code commands          | Open Worktree, View Diff, Merge, Manage Worktrees                                                              |
-| Tests                     | focused Git, manager, lease, persistence, lifecycle, snapshot/undo, UI, and provider-routing tests             |
+| Runtime file trust        | new session registry plus file-access callers; do not persist into `ExternalRootsTrustStore`                     |
+| Recovery/status           | `WorkspaceSessionManager.ts`, activation recovery, `mcp-server.ts`                                               |
+| UI actions                | router/sink/message handler/store plus workflow status/steps components                                          |
+| VS Code commands          | Open Worktree, View Diff, Merge, Manage Worktrees                                                                |
+| Tests                     | focused Git, manager, lease, persistence, lifecycle, snapshot/undo, UI, and provider-routing tests               |
 
 Dynamic completion of discovered branch names is optional ergonomics and should
 not be claimed as a schema capability. Static schema completion covers the
@@ -1360,7 +1360,7 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
     `executionRoot`.** Accepted inconsistency for the first release, asserted by
     tests; parameterizing agent/skill discovery is deferred.
 12. **A monorepo spanning several workspace roots is supported.** Eligibility
-    refuses *multiple repositories* and roots outside the sole repository — not
+    refuses _multiple repositories_ and roots outside the sole repository — not
     multi-root workspaces as such.
 
 ---

@@ -171,7 +171,8 @@ function collectMethodCandidates(sourceFile, checker) {
     for (const member of classNode.members) {
       const isMethod = ts.isMethodDeclaration(member);
       const isAccessor =
-        ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member);
+        ts.isGetAccessorDeclaration(member) ||
+        ts.isSetAccessorDeclaration(member);
       if (!isMethod && !isAccessor) continue;
       if (!member.body) continue; // abstract/ambient
       if (!member.name || !ts.isIdentifier(member.name)) continue; // skip computed names
@@ -186,7 +187,10 @@ function collectMethodCandidates(sourceFile, checker) {
         methodName,
         fileName: sourceFile.fileName,
         pos: member.name.getStart(sourceFile),
-        line: sourceFile.getLineAndCharacterOfPosition(member.name.getStart(sourceFile)).line + 1,
+        line:
+          sourceFile.getLineAndCharacterOfPosition(
+            member.name.getStart(sourceFile)
+          ).line + 1,
       });
     }
   }
@@ -222,7 +226,9 @@ function main() {
     .filter(
       (sf) =>
         !sf.isDeclarationFile &&
-        path.resolve(sf.fileName).startsWith(path.resolve(ROOT, "src") + path.sep)
+        path
+          .resolve(sf.fileName)
+          .startsWith(path.resolve(ROOT, "src") + path.sep)
     );
 
   let candidateCount = 0;

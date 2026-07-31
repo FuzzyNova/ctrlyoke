@@ -34,9 +34,10 @@ class FakeStorage implements Pick<Storage, "setItem" | "removeItem"> {
   }
 }
 
-class FakeWebSocket
-  implements Pick<WebSocket, "addEventListener" | "send" | "close">
-{
+class FakeWebSocket implements Pick<
+  WebSocket,
+  "addEventListener" | "send" | "close"
+> {
   static readonly OPEN = 1;
   readonly readyState = FakeWebSocket.OPEN;
 

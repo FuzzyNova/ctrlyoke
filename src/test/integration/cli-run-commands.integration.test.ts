@@ -123,8 +123,9 @@ suite("CLI run-scoped command parser", () => {
 
 suite("CLI run command parser", () => {
   test("defaults harness and leaves resumeSession unset when neither flag is passed", async () => {
-    const calls: { run?: { file: string | undefined; options: RunCommandOptions } } =
-      {};
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
     await createRunProgram(calls).parseAsync(
       ["run", "workflow.ctrlyoke.json"],
       { from: "user" }
@@ -159,8 +160,9 @@ suite("CLI run command parser", () => {
   });
 
   test("parses repeatable --var assignments into a key/value record", async () => {
-    const calls: { run?: { file: string | undefined; options: RunCommandOptions } } =
-      {};
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
     await createRunProgram(calls).parseAsync(
       ["run", "--var", "foo=bar", "--var", "baz=qux"],
       { from: "user" }
@@ -169,8 +171,9 @@ suite("CLI run command parser", () => {
   });
 
   test("parses repeatable --allow-tool/--deny-tool and negatable --no-color", async () => {
-    const calls: { run?: { file: string | undefined; options: RunCommandOptions } } =
-      {};
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
     await createRunProgram(calls).parseAsync(
       [
         "run",
@@ -190,8 +193,9 @@ suite("CLI run command parser", () => {
   });
 
   test("parses --harness, --model, --prompt, and --session-id overrides", async () => {
-    const calls: { run?: { file: string | undefined; options: RunCommandOptions } } =
-      {};
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
     await createRunProgram(calls).parseAsync(
       [
         "run",

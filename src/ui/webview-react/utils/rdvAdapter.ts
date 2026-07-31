@@ -110,10 +110,7 @@ export interface RenderedDiffRun {
   removedLines: number;
 }
 
-type DiffGapExpansionModel =
-  | "none"
-  | "exact"
-  | "base-only-missing-old-content";
+type DiffGapExpansionModel = "none" | "exact" | "base-only-missing-old-content";
 
 export interface DiffGapExpansionPlanState {
   model: DiffGapExpansionModel;

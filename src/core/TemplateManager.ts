@@ -757,5 +757,4 @@ export class TemplateManager {
 
     return templates;
   }
-
 }

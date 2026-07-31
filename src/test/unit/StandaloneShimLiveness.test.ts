@@ -74,9 +74,10 @@ interface FakeSocketEvent {
   currentTarget?: FakeWebSocket;
 }
 
-class FakeWebSocket
-  implements Pick<WebSocket, "addEventListener" | "send" | "close">
-{
+class FakeWebSocket implements Pick<
+  WebSocket,
+  "addEventListener" | "send" | "close"
+> {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSING = 2;
@@ -85,10 +86,7 @@ class FakeWebSocket
 
   readyState = FakeWebSocket.CONNECTING;
   readonly sent: Array<Record<string, unknown>> = [];
-  private readonly listeners = new Map<
-    string,
-    Array<WebSocketEventListener>
-  >();
+  private readonly listeners = new Map<string, Array<WebSocketEventListener>>();
 
   constructor(readonly url: string) {
     FakeWebSocket.instances.push(this);

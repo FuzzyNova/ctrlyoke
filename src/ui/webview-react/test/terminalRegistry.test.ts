@@ -6,19 +6,16 @@ import type { WebglAddon } from "@xterm/addon-webgl";
 let terminalConstructCount = 0;
 
 vi.mock("@xterm/xterm", () => {
-  class MockTerminal
-    implements
-      Pick<
-        Terminal,
-        | "loadAddon"
-        | "open"
-        | "resize"
-        | "write"
-        | "scrollLines"
-        | "refresh"
-        | "onData"
-      >
-  {
+  class MockTerminal implements Pick<
+    Terminal,
+    | "loadAddon"
+    | "open"
+    | "resize"
+    | "write"
+    | "scrollLines"
+    | "refresh"
+    | "onData"
+  > {
     element: HTMLElement | undefined;
     options: Record<string, unknown>;
     cols = 80;
@@ -60,9 +57,7 @@ vi.mock("@xterm/xterm", () => {
 });
 
 vi.mock("@xterm/addon-fit", () => {
-  class MockFitAddon
-    implements Pick<FitAddon, "fit" | "proposeDimensions">
-  {
+  class MockFitAddon implements Pick<FitAddon, "fit" | "proposeDimensions"> {
     fit() {}
 
     proposeDimensions(): ITerminalDimensions {
