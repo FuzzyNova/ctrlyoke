@@ -195,8 +195,11 @@ export function toInlineTomlValue(value: unknown): string {
     return "{}";
   }
 
+  // Byte order, not localeCompare: TOML key order does not change the parsed
+  // value, but locale-dependent emission would make the rendered args differ
+  // between machines and defeat argument-level test fixtures.
   const entries = Object.entries(value as Record<string, unknown>)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareByteOrder(left, right))
     .map(
       ([key, entryValue]) =>
         `${JSON.stringify(key)} = ${toInlineTomlValue(entryValue)}`

@@ -121,10 +121,15 @@ export interface ICliProvider {
   readonly headlessSource?: "stdout" | "log";
 
   /**
-   * Do not retain headless stderr. OpenCode can echo OPENCODE_CONFIG_CONTENT
-   * on parse errors, and inline MCP entries may contain credentials.
+   * Strip secret-bearing content from headless stderr before it is logged,
+   * surfaced as a failure message, or written to output history.
+   *
+   * Prefer this over dropping stderr wholesale: an unreadable failure message
+   * costs every diagnosis, while only specific substrings are ever sensitive.
+   * OpenCode implements it because a malformed inline config makes the CLI echo
+   * the offending `OPENCODE_CONFIG_CONTENT` — which carries MCP credentials.
    */
-  readonly suppressHeadlessStderr?: boolean;
+  redactHeadlessStderr?(stderr: string): string;
 
   /**
    * Convert headless stdout into the event vocabulary understood by this

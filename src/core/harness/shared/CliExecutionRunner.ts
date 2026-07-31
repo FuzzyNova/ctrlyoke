@@ -717,9 +717,13 @@ export class CliExecutionRunner {
         Log.debug(
           `[${this.deps.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
         );
-        if (result.stderr && !this.deps.provider.suppressHeadlessStderr) {
+        const redact = this.deps.provider.redactHeadlessStderr;
+        const stderr = redact
+          ? redact.call(this.deps.provider, result.stderr)
+          : result.stderr;
+        if (stderr) {
           Log.debug(
-            `[${this.deps.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
+            `[${this.deps.provider.config.displayName} FINAL STDERR${label}]:\n${stderr}`
           );
         }
       }

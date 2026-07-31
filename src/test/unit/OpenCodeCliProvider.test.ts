@@ -315,6 +315,59 @@ suite("OpenCodeCliProvider", () => {
     }
   });
 
+  test("redacts echoed inline config and MCP credentials from stderr", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-redact-")
+    );
+    const extensionPath = path.join(workspaceRoot, "extension");
+    try {
+      const provider = new OpenCodeCliProvider();
+      await provider.getMcpConfigArgs(
+        undefined,
+        workspaceRoot,
+        undefined,
+        undefined,
+        [
+          {
+            id: "local-server",
+            command: "node",
+            args: ["server.js"],
+            env: { API_KEY: "sk-super-secret-value" },
+          },
+          {
+            id: "remote-server",
+            url: "https://mcp.example.test/server",
+            headers: { Authorization: "Bearer remote-secret" },
+          },
+        ]
+      );
+      const configContent =
+        provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!;
+
+      const redacted = provider.redactHeadlessStderr(
+        `JSONC parse error in OPENCODE_CONFIG_CONTENT\n${configContent}\n` +
+          `env leak: sk-super-secret-value / Bearer remote-secret`
+      );
+
+      assert.ok(!redacted.includes("sk-super-secret-value"));
+      assert.ok(!redacted.includes("Bearer remote-secret"));
+      assert.ok(!redacted.includes(configContent));
+      // The surrounding diagnostic must survive — suppressing all stderr would
+      // leave every ordinary OpenCode failure undiagnosable.
+      assert.ok(redacted.includes("JSONC parse error"));
+      assert.ok(redacted.includes("env leak:"));
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+      assert.ok(extensionPath);
+    }
+  });
+
+  test("leaves ordinary OpenCode stderr untouched", () => {
+    const provider = new OpenCodeCliProvider();
+    const stderr = "error: unknown option '--bogus'\nTry 'opencode --help'.";
+    assert.strictEqual(provider.redactHeadlessStderr(stderr), stderr);
+  });
+
   test("maps headless stdout like interactive export output without invoking export", async () => {
     const sessionId = "ses_golden";
     const stdoutEvents = [

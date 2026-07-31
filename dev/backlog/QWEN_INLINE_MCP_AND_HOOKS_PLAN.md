@@ -1,6 +1,8 @@
 # Qwen Inline MCP and Hook Isolation Plan
 
-> **Status:** Stage 1 complete; Stage 2 proposed
+> **Status:** Stages 1 and 2 complete; Stage 3 is an uncommitted spike. This
+> plan stays in `dev/backlog/` rather than moving to `dev/implemented/` because
+> the extension-backed hook route remains an open design question.
 >
 > **Priority:** P1 for inline MCP; exploratory for extension-backed hooks
 >

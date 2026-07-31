@@ -10,7 +10,8 @@ import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 /**
  * Codex CLI Notification Monitor
  *
- * Hook configuration: Written to .codex/hooks.json in workspace.
+ * Hook configuration: emitted as inline `-c hooks.<Event>=[…]` CLI overrides by
+ * CodexInlineHooksBuilder. ctrlyoke writes no hook file into the workspace.
  * Requires --enable hooks flag to activate the hook system.
  * Notification directory: .ctrlyoke/temp/codex-notifications/
  * Notification script: ctrlyoke-codex-notify.js
@@ -43,7 +44,8 @@ export class CodexNotificationMonitor
   /**
    * Build hook configuration for Codex CLI.
    *
-   * Returns a JSON object that CodexCliProvider writes to .codex/hooks.json.
+   * Returns a JSON object that CodexCliProvider serializes into inline `-c`
+   * overrides via CodexInlineHooksBuilder.
    * Uses Codex's matcher-based format: { matcher: "", hooks: [{...}] }
    * Registers SessionStart and Stop for ctrlyoke's completion detection.
    *

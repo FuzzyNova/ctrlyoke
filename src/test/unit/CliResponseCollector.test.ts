@@ -226,13 +226,14 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.error, "process crashed");
   });
 
-  test("should suppress secret-bearing stderr when the provider opts in", async () => {
+  test("should redact secret-bearing stderr while keeping the diagnostic", async () => {
     const secret = "Bearer super-secret-token";
     const loggedResponses: string[] = [];
     const result = await new CliResponseCollector({
       provider: {
         ...createProvider({ events: [], metadata: {} }),
-        suppressHeadlessStderr: true,
+        redactHeadlessStderr: (stderr: string) =>
+          stderr.split(secret).join("[redacted]"),
       },
       hostCallbacks: {
         logResponse: (response) => loggedResponses.push(response),
@@ -246,8 +247,26 @@ suite("CliResponseCollector", () => {
       executionStartTime: new Date(),
     });
 
-    assert.strictEqual(result.failureMessage, "Process exited with code 1");
+    // The secret is gone, but the reason for the failure survives — a bare
+    // "Process exited with code 1" would be undiagnosable.
+    assert.ok(!result.failureMessage?.includes(secret));
+    assert.strictEqual(
+      result.failureMessage,
+      "Failed to parse config: [redacted]"
+    );
     assert.ok(loggedResponses.every((response) => !response.includes(secret)));
+  });
+
+  test("should preserve stderr for providers with no redaction hook", async () => {
+    const result = await createCollector({}).collectHeadlessResponse({
+      stdout: "",
+      stderr: "error: unknown option '--nope'",
+      exitCode: 1,
+      promptForSessionLog: "prompt",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.failureMessage, "error: unknown option '--nope'");
   });
 
   test("should route parsed stdout through the log parser mapping", async () => {

@@ -22,7 +22,7 @@ export interface CliResponseCollectorDeps {
     | "extractSessionIdFromLogs"
     | "extractSessionIdFromStdout"
     | "headlessSource"
-    | "suppressHeadlessStderr"
+    | "redactHeadlessStderr"
     | "parseHeadlessStdout"
     | "logParser"
   >;
@@ -96,11 +96,7 @@ export class CliResponseCollector {
     const statistics = CliOutputFormatter.formatStatistics(
       parsedOutput.metadata
     );
-    const failure = this.getHeadlessFailure(
-      params,
-      parsedOutput,
-      this.deps.provider.suppressHeadlessStderr === true
-    );
+    const failure = this.getHeadlessFailure(params, parsedOutput);
     const succeeded = failure === undefined;
     const resultResponse = responseText || failure?.message || "";
 
@@ -185,12 +181,13 @@ export class CliResponseCollector {
 
   private getHeadlessFailure(
     params: { stdout: string; stderr: string; exitCode: number },
-    parsedOutput: UniversalCliOutput,
-    suppressStderr: boolean
+    parsedOutput: UniversalCliOutput
   ): { kind: FailureKind; message: string } | undefined {
-    const stderr = suppressStderr
-      ? ""
-      : sanitizeTerminalOutput(params.stderr).trim();
+    const redact = this.deps.provider.redactHeadlessStderr;
+    const rawStderr = redact
+      ? redact.call(this.deps.provider, params.stderr)
+      : params.stderr;
+    const stderr = sanitizeTerminalOutput(rawStderr).trim();
 
     if (params.exitCode !== 0) {
       return {
