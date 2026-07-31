@@ -213,6 +213,9 @@ const OutputSectionInner: React.FC = () => {
   const collapsedToolOutputLineCount = useSettingsStore(
     (s) => s.globalSettings.collapsedToolOutputLineCount
   );
+  const atomicContextReferences = useSettingsStore(
+    (s) => s.globalSettings.atomicContextReferences
+  );
 
   const [headerRef, isHeaderNarrow] = useElementNarrow(650);
   const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
@@ -1150,6 +1153,7 @@ const OutputSectionInner: React.FC = () => {
           findDecorations={rowDecorations}
           findQuery={findState.isOpen ? findState.query : undefined}
           findCaseSensitive={findState.caseSensitive}
+          atomicContextReferences={atomicContextReferences}
           hasOutput={hasOutput}
           isExecutionActive={isExecutionActive}
           isNavigationTargetVirtualized={isNavigationTargetVirtualized}

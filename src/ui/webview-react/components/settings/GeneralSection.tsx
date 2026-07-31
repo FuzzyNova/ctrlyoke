@@ -153,7 +153,7 @@ export function GeneralSection({
         />
         <SettingToggleRow
           label="Atomic context references"
-          description="Treat @file, #symbol, ~git, and $context references as single units in the prompt editor: arrow keys skip over them and Backspace/Delete removes the whole reference at once. Clicking or long-pressing a reference still opens it. When off, references edit character by character."
+          description="In the prompt editor, treat @file, #symbol, ~git, and $context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links."
           checked={ui.atomicContextReferences}
           onChange={(v) => onUpdate("ui.atomicContextReferences", v)}
           path="ui.atomicContextReferences"

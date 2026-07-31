@@ -133,7 +133,8 @@ export type ContextReferenceType =
   | "directory"
   | "lineRange"
   | "symbol"
-  | "git";
+  | "git"
+  | "priorContext";
 
 export interface ContextReferenceMatch {
   from: number;
@@ -144,6 +145,7 @@ export interface ContextReferenceMatch {
   lineStart?: string;
   lineEnd?: string;
   symbolName?: string;
+  ref?: string;
 }
 
 export interface AtomicReferenceChip {
@@ -162,6 +164,64 @@ export interface AtomicReferenceChip {
    * resolve. Undefined until validated, so a freshly-typed chip isn't flagged.
    */
   invalid?: boolean;
+}
+
+/** Build the row-local source/label projection consumed by AtomicReferenceChip. */
+export function createAtomicReferencePresentation(
+  descriptor: AtomicReferenceChip,
+  sourceText: string
+): AtomicReferencePresentation {
+  const label = descriptor.label;
+  const type = descriptor.attrs["data-type"];
+  const compactStart = (() => {
+    switch (type) {
+      case "directory":
+      case "file":
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(
+            referenceBasename(descriptor.attrs["data-path"] ?? "")
+          )
+        );
+      case "lineRange":
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(
+            `${referenceBasename(descriptor.attrs["data-path"] ?? "")}:${descriptor.attrs["data-line-start"] ?? ""}-${descriptor.attrs["data-line-end"] ?? ""}`
+          )
+        );
+      case "symbol":
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(descriptor.attrs["data-symbol-name"] ?? label)
+        );
+      case "git":
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(descriptor.attrs["data-git-ref"] ?? label)
+        );
+      case "priorContext":
+        return sourceText.startsWith("$") ? 1 : 0;
+      default:
+        return 0;
+    }
+  })();
+
+  return {
+    sourceText,
+    rowRange: { from: descriptor.from, to: descriptor.to },
+    compactRanges: [
+      {
+        source: {
+          from: compactStart,
+          to: Math.min(sourceText.length, compactStart + label.length),
+        },
+        label: { from: 0, to: label.length },
+      },
+    ],
+    compactLabel: label,
+    selectionText: sourceText,
+  };
 }
 
 export const DEFAULT_COMPLETION_ICON = "symbol-misc";

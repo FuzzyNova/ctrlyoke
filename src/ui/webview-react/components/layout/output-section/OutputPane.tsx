@@ -37,6 +37,7 @@ interface OutputPaneProps {
   findDecorations?: Map<string, RowFindDecoration>;
   findQuery?: string;
   findCaseSensitive?: boolean;
+  atomicContextReferences: boolean;
   minimapSteps: MinimapStep[];
   nonVirtualRows: OutputRenderRow[];
   nonVirtualSpacerHeight: number;
@@ -101,6 +102,7 @@ function renderOutputRow(
     | "findDecorations"
     | "findQuery"
     | "findCaseSensitive"
+    | "atomicContextReferences"
     | "isExecutionActive"
     | "onBackToLive"
     | "onBashExpansionChange"
@@ -120,6 +122,7 @@ function renderOutputRow(
       findDecorations={props.findDecorations?.get(row.key)}
       findQuery={props.findQuery}
       findCaseSensitive={props.findCaseSensitive}
+      atomicContextReferences={props.atomicContextReferences}
       activeFindMatch={
         props.activeMatch?.rowKey === row.key ? props.activeMatch : null
       }
@@ -173,6 +176,40 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     onWheel,
   } = props;
 
+  const handleCopyCapture = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const chips = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        "[data-atomic-reference-copy-text]"
+      )
+    );
+    const selectedChips = chips.filter((chip) => {
+      try {
+        return range.intersectsNode(chip);
+      } catch {
+        return false;
+      }
+    });
+    if (selectedChips.length === 0) return;
+
+    const fragment = range.cloneContents();
+    fragment.querySelectorAll<HTMLElement>(
+      "[data-atomic-reference-copy-text]"
+    ).forEach((chip) => {
+      chip.replaceWith(
+        document.createTextNode(
+          chip.getAttribute("data-atomic-reference-copy-text") ??
+            chip.textContent ??
+            ""
+        )
+      );
+    });
+    event.clipboardData.setData("text/plain", fragment.textContent ?? "");
+    event.preventDefault();
+  };
+
   return (
     <div
       aria-hidden={activeOutputTab !== "output" || isOutputCollapsed}
@@ -197,6 +234,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchCancel}
+        onCopyCapture={handleCopyCapture}
         onContextMenu={(e) => {
           e.preventDefault();
           onContextMenuOpen(e.clientX, e.clientY, e.currentTarget);

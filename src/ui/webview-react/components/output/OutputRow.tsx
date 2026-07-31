@@ -63,9 +63,12 @@ import {
   TOOL_RESULT_STANDALONE_INDENT,
 } from "./outputStyles";
 import {
-  findContextReferenceMatches,
-  getFencedBlockRanges,
-  isInFencedBlock,
+  AtomicReferenceChip,
+} from "./AtomicReferenceChip";
+import {
+  createAtomicReferencePresentation,
+  findAtomicReferences,
+  type AtomicReferenceChip as AtomicReferenceDescriptor,
   type ContextReferenceMatch,
 } from "@utils/atomicReferences";
 import { openContextReference } from "@utils/contextReferenceActions";
@@ -139,6 +142,7 @@ interface OutputRowProps {
   findDecorations?: RowFindDecoration;
   findQuery?: string;
   findCaseSensitive?: boolean;
+  atomicContextReferences?: boolean;
   activeFindMatch?: OutputFindMatch | null;
   isExecutionActive: boolean;
   onBackToLive?: () => void;
@@ -1129,6 +1133,8 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
       return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
     case "symbol":
       return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
+    case "priorContext":
+      return `Open ${ref.ref ?? "context"}`;
     default:
       return `Open ${ref.path ?? ""}`;
   }
@@ -1147,16 +1153,29 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
 const PromptReferenceText: React.FC<{
   text: string;
   matches: RowFindDecoration["matches"];
-}> = ({ text, matches }) => {
+  atomicContextReferences: boolean;
+}> = ({ text, matches, atomicContextReferences }) => {
   const vscode = getVsCodeApi();
   // Skip references inside ``` fenced blocks — they aren't expanded when the
   // prompt runs, so CodeMirror doesn't decorate them either; match that here.
-  const refs = useMemo(() => {
-    const fencedRanges = getFencedBlockRanges(text);
-    return findContextReferenceMatches(text).filter(
-      (ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges)
-    );
-  }, [text]);
+  const atomicRefs = useMemo(
+    () => findAtomicReferences(text),
+    [text]
+  );
+
+  const allRefs = useMemo<ContextReferenceMatch[]>(() => {
+    return atomicRefs.map((ref) => ({
+      from: ref.from,
+      to: ref.to,
+      type: ref.attrs["data-type"] as ContextReferenceMatch["type"],
+      path: ref.attrs["data-path"],
+      gitRef: ref.attrs["data-git-ref"],
+      lineStart: ref.attrs["data-line-start"],
+      lineEnd: ref.attrs["data-line-end"],
+      symbolName: ref.attrs["data-symbol-name"],
+      ref: ref.attrs["data-ref"],
+    }));
+  }, [atomicRefs]);
 
   // Rebase the row-relative find matches onto a [start,end) sub-slice so find
   // highlighting still lands correctly inside both plain text and link spans.
@@ -1171,7 +1190,7 @@ const PromptReferenceText: React.FC<{
 
   const nodes: React.ReactNode[] = [];
   let cursor = 0;
-  for (const ref of refs) {
+  for (const ref of allRefs) {
     // References are sorted and non-overlapping; skip any that would run
     // backwards so a stray match can't corrupt the slicing.
     if (ref.from < cursor) continue;
@@ -1185,27 +1204,44 @@ const PromptReferenceText: React.FC<{
         </React.Fragment>
       );
     }
-    nodes.push(
-      <span
-        key={`ref-${ref.from}`}
-        role="link"
-        tabIndex={0}
-        className="cursor-pointer text-link-fg hover:text-link-active-fg hover:underline"
-        title={promptReferenceTooltip(ref)}
-        onClick={() => openContextReference(ref, vscode)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            openContextReference(ref, vscode);
-          }
-        }}
-      >
-        {highlightText(
-          text.slice(ref.from, ref.to),
-          sliceMatches(ref.from, ref.to)
-        )}
-      </span>
-    );
+    if (atomicContextReferences) {
+      const descriptor = atomicRefs.find(
+        (candidate) => candidate.from === ref.from && candidate.to === ref.to
+      );
+      if (descriptor) {
+        nodes.push(
+          <AtomicPromptReference
+            key={`ref-${ref.from}`}
+            descriptor={descriptor}
+            text={text.slice(ref.from, ref.to)}
+            matches={matches}
+            vscode={vscode}
+          />
+        );
+      }
+    } else {
+      nodes.push(
+        <span
+          key={`ref-${ref.from}`}
+          role="link"
+          tabIndex={0}
+          className="cursor-pointer text-link-fg hover:text-link-active-fg hover:underline"
+          title={promptReferenceTooltip(ref)}
+          onClick={() => openContextReference(ref, vscode)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openContextReference(ref, vscode);
+            }
+          }}
+        >
+          {highlightText(
+            text.slice(ref.from, ref.to),
+            sliceMatches(ref.from, ref.to)
+          )}
+        </span>
+      );
+    }
     cursor = ref.to;
   }
   if (cursor < text.length) {
@@ -1225,11 +1261,38 @@ const PromptReferenceText: React.FC<{
   );
 };
 
+const AtomicPromptReference: React.FC<{
+  descriptor: AtomicReferenceDescriptor;
+  text: string;
+  matches: RowFindDecoration["matches"];
+  vscode: ReturnType<typeof getVsCodeApi>;
+}> = ({ descriptor, text, matches, vscode }) => (
+  <AtomicReferenceChip
+    descriptor={descriptor}
+    presentation={createAtomicReferencePresentation(descriptor, text)}
+    findMatches={matches}
+    onOpen={() =>
+      openContextReference(
+        {
+          type: descriptor.attrs["data-type"],
+          path: descriptor.attrs["data-path"],
+          gitRef: descriptor.attrs["data-git-ref"],
+          lineStart: descriptor.attrs["data-line-start"],
+          lineEnd: descriptor.attrs["data-line-end"],
+          ref: descriptor.attrs["data-ref"],
+        },
+        vscode
+      )
+    }
+  />
+);
+
 function OutputRowComponent({
   row,
   findDecorations,
   findQuery,
   findCaseSensitive,
+  atomicContextReferences = false,
   activeFindMatch,
   isExecutionActive,
   onBackToLive,
@@ -1302,6 +1365,7 @@ function OutputRowComponent({
         <PromptReferenceText
           text={row.text}
           matches={getFieldMatches("prompt")}
+          atomicContextReferences={atomicContextReferences}
         />
       );
       break;

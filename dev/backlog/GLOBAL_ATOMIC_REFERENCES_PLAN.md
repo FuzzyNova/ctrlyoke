@@ -417,6 +417,10 @@ single-line adapter remaining.
 
 ### Step 4 — Output gate and echoed prompt references
 
+**Status: Complete.** Scoped the setting to `OutputPane`, added shared-chip
+rendering and `$context` links for echoed prompts, canonical selection copy
+serialization, and updated the setting descriptions.
+
 - Read the setting at the output composition boundary and thread an explicit
   presentation flag to `OutputRow`.
 - Re-render `PromptReferenceText` through descriptors + the chip when enabled,
