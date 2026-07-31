@@ -75,9 +75,25 @@ NDJSON on stdout, one `{"event": "...", ...}` object per line:
   `state` (`ACTIVE` while running, `DONE` on completion), `step_type`
   (`user_input`, `unknown` — an unlabeled internal step present in every run,
   `agent_response`, `tool`, `checkpoint`), plus type-specific fields below.
-- **`result`** (once, last line): `status` (`"SUCCESS"` in every captured
-  run — no failure case was exercised; see Open Questions), `response` (final
-  text), `duration_seconds`, `num_turns`, cumulative `usage`.
+- **`result`** (once, last line): every field is nested under a `result`
+  object — `result.conversation_id`, `result.status` (`"SUCCESS"` in every
+  captured run), `result.response` (final text), `result.duration_seconds`,
+  `result.num_turns`, and cumulative `result.usage`. **The nesting is
+  load-bearing**: an earlier revision of this section listed these as
+  top-level fields, and the step-2 implementation duly read `event.usage`,
+  which is always `undefined` — the terminal cumulative usage was silently
+  never captured, and the unit fixture (written from this prose rather than
+  from the wire) passed anyway. Corrected during review against agy 1.1.8:
+
+```json
+{"event":"result","result":{"conversation_id":"01a4f023-...","status":"SUCCESS","response":"pong\n","duration_seconds":1.6169349,"num_turns":1,"usage":{"input_tokens":9780,"output_tokens":4,"thinking_tokens":0,"cache_read_tokens":8140,"total_tokens":9784}}}
+```
+
+  Note the contrast that made this easy to get wrong: `init` really does carry
+  `conversation_id` at the **top** level, while `result` carries it nested.
+  Also verified: agy terminates stdout with a trailing newline, so the final
+  line always arrives complete — the accumulator's `flush()` is a safety net
+  for truncated output, not a hot path.
 
 Real `agent_response` step (trivial "reply with pong" prompt):
 

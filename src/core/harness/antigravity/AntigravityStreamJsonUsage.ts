@@ -85,8 +85,20 @@ export function parseStreamJsonLine(line: string):
   }
 
   if (event.event === STREAM_JSON_EVENTS.RESULT) {
-    const usage = parseUsage(event.usage);
-    return usage ? { usage } : undefined;
+    // agy nests the terminal payload under `result` — `{"event":"result",
+    // "result":{"status":...,"usage":{...}}}` — verified against agy 1.1.8.
+    // The top-level fallback only guards against wire-format drift.
+    const result = isRecord(event.result) ? event.result : undefined;
+    const usage = parseUsage(result?.usage) ?? parseUsage(event.usage);
+    const conversationId =
+      typeof result?.conversation_id === "string" &&
+      result.conversation_id.length > 0
+        ? result.conversation_id
+        : undefined;
+    if (!usage && !conversationId) {
+      return undefined;
+    }
+    return { conversationId, usage };
   }
 
   if (event.event !== STREAM_JSON_EVENTS.STEP_UPDATE) {
