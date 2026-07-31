@@ -1197,24 +1197,27 @@ const PromptReferenceText: React.FC<{
   const vscode = getVsCodeApi();
   // Skip references inside ``` fenced blocks — they aren't expanded when the
   // prompt runs, so CodeMirror doesn't decorate them either; match that here.
-  const atomicRefs = useMemo(
-    () => findAtomicReferences(text),
+  // One pass, one array: each entry pairs the chip descriptor with the
+  // ContextReferenceMatch that drives the plain-text (setting off) path, so the
+  // two presentations can never disagree about which token is at which offset.
+  const refs = useMemo(
+    () =>
+      findAtomicReferences(text).map((descriptor) => ({
+        descriptor,
+        match: {
+          from: descriptor.from,
+          to: descriptor.to,
+          type: descriptor.attrs["data-type"] as ContextReferenceMatch["type"],
+          path: descriptor.attrs["data-path"],
+          gitRef: descriptor.attrs["data-git-ref"],
+          lineStart: descriptor.attrs["data-line-start"],
+          lineEnd: descriptor.attrs["data-line-end"],
+          symbolName: descriptor.attrs["data-symbol-name"],
+          ref: descriptor.attrs["data-ref"],
+        } satisfies ContextReferenceMatch,
+      })),
     [text]
   );
-
-  const allRefs = useMemo<ContextReferenceMatch[]>(() => {
-    return atomicRefs.map((ref) => ({
-      from: ref.from,
-      to: ref.to,
-      type: ref.attrs["data-type"] as ContextReferenceMatch["type"],
-      path: ref.attrs["data-path"],
-      gitRef: ref.attrs["data-git-ref"],
-      lineStart: ref.attrs["data-line-start"],
-      lineEnd: ref.attrs["data-line-end"],
-      symbolName: ref.attrs["data-symbol-name"],
-      ref: ref.attrs["data-ref"],
-    }));
-  }, [atomicRefs]);
 
   // Rebase the row-relative find matches onto a [start,end) sub-slice so find
   // highlighting still lands correctly inside both plain text and link spans.
@@ -1229,7 +1232,7 @@ const PromptReferenceText: React.FC<{
 
   const nodes: React.ReactNode[] = [];
   let cursor = 0;
-  for (const ref of allRefs) {
+  for (const { descriptor, match: ref } of refs) {
     // References are sorted and non-overlapping; skip any that would run
     // backwards so a stray match can't corrupt the slicing.
     if (ref.from < cursor) continue;
@@ -1244,20 +1247,15 @@ const PromptReferenceText: React.FC<{
       );
     }
     if (atomicContextReferences) {
-      const descriptor = atomicRefs.find(
-        (candidate) => candidate.from === ref.from && candidate.to === ref.to
+      nodes.push(
+        <AtomicPromptReference
+          key={`ref-${ref.from}`}
+          descriptor={descriptor}
+          text={text.slice(ref.from, ref.to)}
+          matches={matches}
+          vscode={vscode}
+        />
       );
-      if (descriptor) {
-        nodes.push(
-          <AtomicPromptReference
-            key={`ref-${ref.from}`}
-            descriptor={descriptor}
-            text={text.slice(ref.from, ref.to)}
-            matches={matches}
-            vscode={vscode}
-          />
-        );
-      }
     } else {
       nodes.push(
         <span
