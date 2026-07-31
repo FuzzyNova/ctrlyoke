@@ -36,6 +36,10 @@ import {
   type AntigravityCurrentUsage,
   type AntigravityStatuslineSnapshot,
 } from "./AntigravityStatuslineSidecar";
+import type {
+  AntigravityStreamJsonUsage,
+  AntigravityStreamJsonUsageSnapshot,
+} from "./AntigravityStreamJsonUsage";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -96,12 +100,18 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   });
   private backgroundStateSessionId?: string;
   private latestStatuslineUsage?: TokenUsage;
+  private latestStreamJsonUsage?: AntigravityStreamJsonUsageSnapshot;
 
   /** Reset the sidecar-derived usage before a new prompt starts. */
   setStatuslineSnapshot(snapshot?: AntigravityStatuslineSnapshot): void {
     this.latestStatuslineUsage = snapshot
       ? this.extractTokenUsageFromStatuslineSnapshot(snapshot)
       : undefined;
+  }
+
+  /** Reset or update the stdout-derived usage enrichment for the current prompt. */
+  setStreamJsonUsage(usage?: AntigravityStreamJsonUsageSnapshot): void {
+    this.latestStreamJsonUsage = usage;
   }
 
   /** Map the statusline's per-turn and cumulative fields to the shared usage contract. */
@@ -888,42 +898,63 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       .find(
         (candidate) => typeof candidate.contextWindowUsedTokens === "number"
       );
-    if (!event) {
-      return this.latestStatuslineUsage;
+    const streamJsonUsage = this.getLatestStreamJsonUsage();
+
+    // The statusline is the authoritative source for context occupancy and
+    // model window size. Stream-json adds reasoning tokens without replacing
+    // those self-reported fields.
+    if (this.latestStatuslineUsage) {
+      return {
+        ...this.latestStatuslineUsage,
+        reasoningOutputTokens:
+          streamJsonUsage?.reasoningOutputTokens ??
+          this.latestStatuslineUsage.reasoningOutputTokens,
+      };
     }
 
-    const currentUsage =
-      event.currentUsage ?? this.getLatestCurrentUsageFromSnapshot();
-    const outputTokens = currentUsage?.outputTokens ?? event.outputTokens ?? 0;
-    const contextWindowSize =
-      event.contextWindowSize ??
-      getAntigravityContextWindowSize(event.model ?? this.resolvedModel);
+    if (!event && !streamJsonUsage) {
+      return undefined;
+    }
+
+    const currentUsage = event?.currentUsage;
+    const outputTokens =
+      streamJsonUsage?.outputTokens ??
+      currentUsage?.outputTokens ??
+      event?.outputTokens ??
+      0;
     const inputTokens =
+      streamJsonUsage?.inputTokens ??
       currentUsage?.inputTokens ??
-      Math.max(event.contextWindowUsedTokens! - outputTokens, 0);
+      (event?.contextWindowUsedTokens !== undefined
+        ? Math.max(event.contextWindowUsedTokens - outputTokens, 0)
+        : 0);
+    const totalTokens =
+      streamJsonUsage?.totalTokens ?? inputTokens + outputTokens;
+    const contextWindowSize = event
+      ? (event.contextWindowSize ??
+        getAntigravityContextWindowSize(event.model ?? this.resolvedModel))
+      : undefined;
     return {
       inputTokens,
       outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      cachedInputTokens: currentUsage?.cacheReadInputTokens,
+      totalTokens,
+      cachedInputTokens:
+        streamJsonUsage?.cachedInputTokens ??
+        currentUsage?.cacheReadInputTokens,
       cacheCreatedTokens: currentUsage?.cacheCreationInputTokens,
-      contextWindowUsedTokens: event.contextWindowUsedTokens,
+      reasoningOutputTokens: streamJsonUsage?.reasoningOutputTokens,
+      contextWindowUsedTokens: event?.contextWindowUsedTokens,
       contextWindowSize,
     };
   }
 
-  private getLatestCurrentUsageFromSnapshot():
-    | AntigravityCurrentUsage
-    | undefined {
-    if (!this.latestStatuslineUsage) {
+  private getLatestStreamJsonUsage(): AntigravityStreamJsonUsage | undefined {
+    const latestStepUsage = this.latestStreamJsonUsage?.latestStepUsage;
+    const terminalUsage = this.latestStreamJsonUsage?.terminalUsage;
+    if (!latestStepUsage && !terminalUsage) {
       return undefined;
     }
-    return {
-      inputTokens: this.latestStatuslineUsage.inputTokens,
-      outputTokens: this.latestStatuslineUsage.outputTokens,
-      cacheCreationInputTokens: this.latestStatuslineUsage.cacheCreatedTokens,
-      cacheReadInputTokens: this.latestStatuslineUsage.cachedInputTokens,
-    };
+    return { ...terminalUsage, ...latestStepUsage };
   }
 
   private getSnapshotModel(

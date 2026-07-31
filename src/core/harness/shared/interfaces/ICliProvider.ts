@@ -142,6 +142,13 @@ export interface ICliProvider {
   extractSessionIdFromStdout?(chunk: string): string | undefined;
 
   /**
+   * Observe raw headless stdout for narrow provider-specific enrichment.
+   * This must not become a second event-mapping path; headless events still
+   * come from the provider's selected stdout or session-log source.
+   */
+  observeHeadlessStdout?(chunk: string): void;
+
+  /**
    * Classify a process-spawn error that should trigger a retry without the
    * resume flag. Providers that do not implement this method default to
    * false; this belongs on the provider because it classifies transport

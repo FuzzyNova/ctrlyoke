@@ -321,4 +321,27 @@ suite("HeadlessLogTail", () => {
       "thread-from-stdout"
     );
   });
+
+  test("observes every stdout chunk after the session ID is known", async () => {
+    const fake = createParser({ discoveries: ["session.log"] });
+    const observed: string[] = [];
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: () => "thread-from-stdout",
+      onStdoutChunkObserved: (chunk) => observed.push(chunk),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk("init event");
+    tail.onStdoutChunk("terminal result event");
+    await tail.finish();
+
+    assert.deepStrictEqual(observed, ["init event", "terminal result event"]);
+  });
 });

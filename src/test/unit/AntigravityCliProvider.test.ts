@@ -311,6 +311,45 @@ suite("AntigravityCliProvider", () => {
       provider.getInteractiveSpawnEnv().CTRLYOKE_AGY_STATUSLINE_DIR,
       undefined
     );
+
+    provider.observeHeadlessStdout(
+      '{"event":"step_update","step_update":{"step_type":"agent_response","usage":{"input_tokens":1,"output_tokens":2,"thinking_tokens":3,"total_tokens":3}}}\n'
+    );
+    assert.strictEqual(
+      provider.logParser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]).metadata.usage,
+      undefined
+    );
+  });
+
+  test("resets stream-json usage for each prompt", async () => {
+    const provider = new AntigravityCliProvider();
+    const streamEvent =
+      '{"event":"step_update","step_update":{"step_type":"agent_response","usage":{"input_tokens":1,"output_tokens":2,"thinking_tokens":3,"total_tokens":3}}}\n';
+
+    provider.observeHeadlessStdout(streamEvent);
+    assert.strictEqual(
+      provider.logParser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]).metadata.usage?.reasoningOutputTokens,
+      3
+    );
+
+    try {
+      await buildArgs(provider);
+      assert.strictEqual(
+        provider.logParser.extractResponse([
+          { type: "response.text", line: "next answer" },
+        ]).metadata.usage,
+        undefined
+      );
+    } finally {
+      await provider.cleanupWorkspaceArtifacts(
+        workspaceRoot,
+        path.join(workspaceRoot, "workflow.md")
+      );
+    }
   });
 
   suite("augmentParsedOutput", () => {

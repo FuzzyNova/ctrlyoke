@@ -1,6 +1,6 @@
 # Antigravity Headless `stream-json` Output Plan
 
-**Status:** In progress — step 1 implemented; steps 2–3 queued for implementation.
+**Status:** In progress — steps 1–2 implemented; step 3 queued for implementation.
 **Created:** July 30, 2026
 **Revised:** July 31, 2026 (pre-implementation review — see "Review corrections" below)
 **Related:** `./ANTIGRAVITY_STATUSLINE_TOKEN_TRACKING_PLAN.md` (implemented; the only
@@ -339,6 +339,20 @@ This confirmed the faster stdout session-ID path without changing the
 transcript-sourced event path. Nothing in the run contradicted the plan; the
 `result.status` failure behavior remains an open question for step 3.
 
+## Step 2 implementation record (July 31, 2026)
+
+Step 2 is complete. Headless stdout now feeds a provider-specific usage
+observer while the transcript remains the sole event/content source. The
+observer runs synchronously for every stdout chunk, and the accumulator keeps
+the trailing partial NDJSON line so a split terminal `result` event cannot be
+lost. Its normalized snapshot retains both the latest per-step usage and the
+terminal cumulative usage; the latest step wins field-by-field when both are
+available, with the terminal result filling missing fields. The parser receives
+that snapshot through an explicit setter, and `thinking_tokens` maps to the
+existing `TokenUsage.reasoningOutputTokens` field. The statusline toggle gates
+the complete usage side-channel and per-prompt reset clears both accumulator
+and parser state. No live `text_delta` preview was added.
+
 ---
 
 ## Decision: fill bar stays statusline-only
@@ -383,7 +397,7 @@ context-window and token-usage tracking, so this isn't a silent gap.
    real headless run that `HeadlessLogTail` picks up the session ID from the
    first stdout tick and that transcript-sourced events are unaffected. Done
    July 31, 2026; the live run confirmed both paths.
-2. **Stream-json usage side-channel.** New `AntigravityStreamJsonUsage.ts`
+2. **[x] Stream-json usage side-channel.** New `AntigravityStreamJsonUsage.ts`
    (pure line parser + stateful chunk accumulator); add
    `ICliProvider.observeHeadlessStdout` and
    `HeadlessLogTailOptions.onStdoutChunkObserved` and bind them in
@@ -391,7 +405,7 @@ context-window and token-usage tracking, so this isn't a silent gap.
    merge point per the precedence rule in section 3, mapping `thinking_tokens`
    to `TokenUsage.reasoningOutputTokens`. Unit tests on the parser (real
    captured payloads above as fixtures, including a chunk boundary that splits
-   a line) and on the merge precedence.
+   a line) and on the merge precedence. Done July 31, 2026.
 3. **Verify no regression to failure detection or plain-text assumptions.**
    Confirm `getHeadlessFailure()` and any other stdout consumers tolerate
    NDJSON instead of prose (expected: yes, per the code-reading above, but

@@ -837,6 +837,9 @@ export class CliExecutionRunner {
             this.deps.provider.extractSessionIdFromStdout?.bind(
               this.deps.provider
             ),
+          onStdoutChunkObserved: this.deps.provider.observeHeadlessStdout?.bind(
+            this.deps.provider
+          ),
           extractSessionIdFromLogs:
             this.deps.provider.extractSessionIdFromLogs?.bind(
               this.deps.provider

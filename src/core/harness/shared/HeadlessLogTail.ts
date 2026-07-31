@@ -16,6 +16,8 @@ export interface HeadlessLogTailOptions {
   workspaceRoot?: string;
   model?: string;
   extractSessionIdFromStdout?: (chunk: string) => string | undefined;
+  /** Provider-specific enrichment observer; never affects source selection. */
+  onStdoutChunkObserved?: (chunk: string) => void;
   extractSessionIdFromLogs?: (
     promptText: string,
     startTime: Date,
@@ -139,6 +141,14 @@ export class HeadlessLogTail {
   onStdoutChunk(chunk: string): void {
     if (this.finished) {
       return;
+    }
+
+    try {
+      // Unlike session-ID capture, this observer remains active after a
+      // session ID is known so it can see the terminal usage event too.
+      this.options.onStdoutChunkObserved?.(chunk);
+    } catch (error) {
+      Log.debug(`[HeadlessLogTail] stdout observer failed: ${String(error)}`);
     }
 
     void this.enqueueTick("stdout", chunk);
