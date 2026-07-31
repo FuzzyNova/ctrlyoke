@@ -31,9 +31,10 @@ import {
 } from "./AntigravityTranscriptReader";
 import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
-import type {
-  AntigravityStatuslineSnapshot,
-  SnapshotCurrentUsage,
+import {
+  parseStatuslineCurrentUsage,
+  type AntigravityCurrentUsage,
+  type AntigravityStatuslineSnapshot,
 } from "./AntigravityStatuslineSidecar";
 
 interface AntigravityLogEvent extends BaseCliEvent {
@@ -62,13 +63,6 @@ interface AntigravityLogEvent extends BaseCliEvent {
   contextWindowSize?: number;
   outputTokens?: number;
   currentUsage?: AntigravityCurrentUsage;
-}
-
-interface AntigravityCurrentUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  cacheCreationInputTokens?: number;
-  cacheReadInputTokens?: number;
 }
 
 const SESSION_ID_REGEX =
@@ -125,7 +119,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return undefined;
     }
 
-    const currentUsage = this.parseCurrentUsage(contextWindow?.current_usage);
+    const currentUsage = parseStatuslineCurrentUsage(
+      contextWindow?.current_usage
+    );
     const inputTokens = currentUsage?.inputTokens ?? totalInputTokens;
     const outputTokens = currentUsage?.outputTokens ?? totalOutputTokens;
     const contextWindowSize =
@@ -928,28 +924,6 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       cacheCreationInputTokens: this.latestStatuslineUsage.cacheCreatedTokens,
       cacheReadInputTokens: this.latestStatuslineUsage.cachedInputTokens,
     };
-  }
-
-  private parseCurrentUsage(
-    usage: SnapshotCurrentUsage | undefined
-  ): AntigravityCurrentUsage | undefined {
-    if (!usage || typeof usage !== "object") {
-      return undefined;
-    }
-    const current = usage as Record<string, unknown>;
-    const parsed: AntigravityCurrentUsage = {
-      inputTokens: this.asFiniteNumber(current.input_tokens),
-      outputTokens: this.asFiniteNumber(current.output_tokens),
-      cacheCreationInputTokens: this.asFiniteNumber(
-        current.cache_creation_input_tokens
-      ),
-      cacheReadInputTokens: this.asFiniteNumber(
-        current.cache_read_input_tokens
-      ),
-    };
-    return Object.values(parsed).some((value) => value !== undefined)
-      ? parsed
-      : undefined;
   }
 
   private getSnapshotModel(

@@ -73,6 +73,24 @@ export class AntigravityCliProvider implements ICliProvider {
         path.join(os.homedir(), ".gemini", "antigravity-cli", "settings.json"),
     });
 
+  /** Top-level key ctrlyoke leases in agy's global settings file. */
+  private static readonly STATUS_LINE_KEY = "statusLine";
+
+  /**
+   * Restore a statusline left installed by a ctrlyoke process that died before
+   * releasing its lease.
+   *
+   * The lease's own register/unregister paths already prune dead owners, so
+   * this only makes recovery happen sooner — at host startup rather than at the
+   * next Antigravity run. Safe to call when no lease exists.
+   */
+  static async pruneOrphanedStatusLine(workspaceRoot: string): Promise<void> {
+    await AntigravityCliProvider.statusLineTracker.pruneDeadOwners(
+      workspaceRoot,
+      AntigravityCliProvider.STATUS_LINE_KEY
+    );
+  }
+
   readonly config: HarnessConfig = {
     name: "agy",
     harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -410,7 +428,7 @@ export class AntigravityCliProvider implements ICliProvider {
     await AntigravityCliProvider.statusLineTracker.unregisterValueLease(
       workflowKey,
       workspaceRoot,
-      "statusLine"
+      AntigravityCliProvider.STATUS_LINE_KEY
     );
 
     // Remove this workflow's hook group from the global hooks.json.
@@ -583,13 +601,13 @@ export class AntigravityCliProvider implements ICliProvider {
       await AntigravityCliProvider.statusLineTracker.registerValueLease(
         workflowKey,
         workspaceRoot,
-        "statusLine",
+        AntigravityCliProvider.STATUS_LINE_KEY,
         { type: "command", command }
       );
       const baseline =
         AntigravityCliProvider.statusLineTracker.getValueLeaseBaseline(
           workspaceRoot,
-          "statusLine"
+          AntigravityCliProvider.STATUS_LINE_KEY
         );
       this.statusLineForwardCommand = this.extractStatusLineCommand(baseline);
       this.statusLineDirectory = snapshotDirectory;

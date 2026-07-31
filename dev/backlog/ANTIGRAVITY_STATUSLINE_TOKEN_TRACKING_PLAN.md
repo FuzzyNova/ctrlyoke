@@ -1,8 +1,12 @@
 # Antigravity Statusline Token/Context-Window Tracking Plan
 
-**Status:** Fully implemented (steps 1–7 complete). The completed-response path now
-uses the sidecar's final snapshot, including the shared per-turn cache fields; no
-planned scope was deliberately left out.
+**Status:** Fully implemented (steps 1–7 complete) and reviewed. The completed-response
+path uses the sidecar's final snapshot, including the shared per-turn cache fields; no
+planned scope was deliberately left out. Review pass added the activation-time prune
+call, single-sourced the `current_usage` mapping as
+`parseStatuslineCurrentUsage()` in `AntigravityStatuslineSidecar.ts` (it had been
+implemented twice), and replaced the repeated `"statusLine"` key literal with
+`AntigravityCliProvider.STATUS_LINE_KEY`.
 **Created:** July 30, 2026
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md` (proposes the same status-line-as-collector
 pattern for Claude Code; this plan is the Antigravity equivalent), `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`,
@@ -16,9 +20,9 @@ seventh — see "Live Context Window Integration" below)
 
 Antigravity (`agy`) is the only harness in `HARNESS_IDS` with no working context-window
 signal. `AntigravityLogParser` already has the plumbing — `AntigravityLogEvent.contextWindowUsedTokens`/
-`contextWindowSize`/`outputTokens` fields exist and are *consumed* (lines 358–366,
+`contextWindowSize`/`outputTokens` fields exist and are _consumed_ (lines 358–366,
 838–857) to build `TokenUsage` — but nothing in `src/core/harness/antigravity/` ever
-*assigns* `contextWindowUsedTokens`. There is no log source it can be scraped from:
+_assigns_ `contextWindowUsedTokens`. There is no log source it can be scraped from:
 unlike Copilot's OTel exporter, Codex's `token_count` rollout events, or Claude's
 transcript `message.usage`, agy's `transcript_full.jsonl`/`cli-*.log` carry no
 per-turn token accounting today. Every agy run in ctrlyoke shows an empty/zero
@@ -49,7 +53,7 @@ just from docs.
 - No project/workspace-scoped variant was found. Binary string search for
   `.agents/settings`, "project settings.json", "workspace settings" found nothing tying
   those to statusline; the only project-scoped settings.json references in the binary
-  are about *permission* persistence, unrelated to statusLine.
+  are about _permission_ persistence, unrelated to statusLine.
 
 ### Single value only — confirmed two ways
 
@@ -74,9 +78,15 @@ Captured a real payload from a live `agy --prompt-interactive` run against
 
 ```json
 {
-  "cwd": "...", "session_id": "...", "conversation_id": "...",
+  "cwd": "...",
+  "session_id": "...",
+  "conversation_id": "...",
   "transcript_path": "...\\brain\\<id>\\.system_generated\\logs\\transcript.jsonl",
-  "model": { "id": "Gemini 3.6 Flash (Low)", "display_name": "...", "effort": "low" },
+  "model": {
+    "id": "Gemini 3.6 Flash (Low)",
+    "display_name": "...",
+    "effort": "low"
+  },
   "workspace": { "current_dir": "...", "project_dir": "..." },
   "version": "1.1.8",
   "context_window": {
@@ -86,15 +96,25 @@ Captured a real payload from a live `agy --prompt-interactive` run against
     "used_percentage": 0.0144,
     "remaining_percentage": 99.986,
     "current_usage": {
-      "input_tokens": 17826, "output_tokens": 1,
-      "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0
+      "input_tokens": 17826,
+      "output_tokens": 1,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
     }
   },
   "exceeds_200k_tokens": false,
   "product": "antigravity",
   "quota": {
-    "3p-weekly": { "remaining_fraction": 0.991, "reset_time": "...", "reset_in_seconds": 283900 },
-    "gemini-weekly": { "remaining_fraction": 1, "reset_time": "...", "reset_in_seconds": 604800 }
+    "3p-weekly": {
+      "remaining_fraction": 0.991,
+      "reset_time": "...",
+      "reset_in_seconds": 283900
+    },
+    "gemini-weekly": {
+      "remaining_fraction": 1,
+      "reset_time": "...",
+      "reset_in_seconds": 604800
+    }
   },
   "agent_state": "initializing",
   "sandbox": { "enabled": false },
@@ -183,7 +203,7 @@ it on every launch.
 long-running headless `agy --print` call (a ~5.5s, 15-poll run), and while it was
 confirmed still executing (background PID alive), rewrote `settings.json`'s
 `statusLine.command` mid-flight to point at a second test script. All 15 payloads for
-that run landed in the *original* script's log; the second script's log file was never
+that run landed in the _original_ script's log; the second script's log file was never
 even created. **agy reads and caches `statusLine.command` once at process startup and
 never re-reads it for that process's lifetime** — a second, concurrently-running agy
 process rewriting the file does not affect an already-running process's already-loaded
@@ -199,7 +219,7 @@ ctrlyoke writers via the tracker's mutex (section 1). No irreducible race remain
 
 `SettingsJsonMcpTracker` already solves "shared mutable global JSON file, multiple
 parallel workflows, baseline preservation, atomic writes, async mutex" — but its data
-shape is a *named/keyed* collection (`mcpServers`), and `statusLine` is a single
+shape is a _named/keyed_ collection (`mcpServers`), and `statusLine` is a single
 un-keyed field. Its existing `registerPermissionPolicy`/`unregisterPermissionPolicy`
 pair already does almost exactly what's needed (capture baseline value, apply while ≥1
 owner, restore when the last owner releases, warn-and-preserve if the user hand-edited
@@ -214,11 +234,11 @@ duplicated lease machinery, no behavior change for OpenCode/Qwen.
 **This requires a second tracker instance, not a second lease on the existing one.**
 `SettingsJsonMcpTracker.getInstance("antigravity")` is already bound to
 `.agents/mcp_config.json` (`AntigravityCliProvider.ts:44`). The statusline lease targets
-the *global* `~/.gemini/antigravity-cli/settings.json`, so it needs its own singleton —
+the _global_ `~/.gemini/antigravity-cli/settings.json`, so it needs its own singleton —
 e.g. `getInstance("antigravity-cli-settings", { projectConfigPath: () => <that global
 path> })`, whose `projectConfigPath` ignores its `workspaceRoot` argument because the file
 is global. Note the consequence: the lease is process-global across workspaces, so two
-workflows in *different* workspaces share one lease and one owner set. That is correct —
+workflows in _different_ workspaces share one lease and one owner set. That is correct —
 the file itself is global — but the owner keys must stay workflow-scoped so ref-counting
 still works across workspaces.
 
@@ -246,13 +266,19 @@ Lifecycle:
   written under the same tracker mutex. On **every** register and unregister, prune owner
   entries whose PID is no longer alive (`process.kill(pid, 0)`); when the pruned owner set
   is empty, restore the baseline. This self-heals in whichever host runs next, with no
-  host-specific hook. An extension-activation-time prune call is still worth adding as a
-  belt-and-braces early trigger, but it is not the mechanism.
+  host-specific hook.
+
+  **As implemented:** `SettingsJsonMcpTracker.pruneDeadOwners(workspaceRoot, key)` is the
+  public entry point, and it also runs as a belt-and-braces early trigger at extension
+  activation via `AntigravityCliProvider.pruneOrphanedStatusLine()` (called next to
+  `TempFileManager.cleanupOrphanedFiles()` in `src/extension.ts`). That activation call is
+  only an optimization — recovery still happens without it on the next register/unregister
+  in any host.
 
 ### 2. Correlation token, not `conversation_id`, for the snapshot filename
 
 The snapshot file can't be keyed by `conversation_id` because ctrlyoke doesn't know
-that value until the *first* statusline payload arrives — which is exactly the value
+that value until the _first_ statusline payload arrives — which is exactly the value
 we want to bootstrap session-ID discovery from (see "Session ID Discovery
 Replacement" below). And keying by `workspace.current_dir`/`cwd` alone is ambiguous
 when two ctrlyoke workflows launch `agy` concurrently in the same workspace root
@@ -277,13 +303,13 @@ instance, and return it from `getHeadlessSpawnEnv()` **and** `getInteractiveSpaw
 Both call sites already exist and merge provider env (`CliTransportCoordinator.ts:570` for
 headless, `:125`/`:225` for the two interactive spawn paths). `AntigravityCliProvider`
 currently implements neither method, so both must be added. Note that provider/parser
-instances are reused across prompts *within* a workflow but are fresh per workflow
+instances are reused across prompts _within_ a workflow but are fresh per workflow
 execution (`IntegrationFactory`), so the token must be regenerated in `buildCliArgs()` on
 every prompt — the same rule that already applies to Copilot's OTel path.
 
 The wrapper script reads its own token from `process.env.CTRLYOKE_AGY_STATUSLINE_TOKEN`
 and writes to `.ctrlyoke/temp/agy-statusline-<token>.json` — a filename ctrlyoke knows
-*before* spawning, so it can watch for that exact path (`fs.watch` on the directory, or
+_before_ spawning, so it can watch for that exact path (`fs.watch` on the directory, or
 a short poll loop) instead of discovering it after the fact.
 
 ### 3. ctrlyoke's own statusline script as a wrap-and-forward proxy
@@ -442,11 +468,11 @@ before the process even starts:
   `CliLogEventPump` calls it under. Making it reach into a file would break that contract
   for every other caller. Instead the **sidecar converts each snapshot into a synthetic
   `AntigravityLogEvent`** carrying `contextWindowUsedTokens` (= `context_window.total_input_tokens`
-  + `total_output_tokens`), `contextWindowSize` (= `context_window.context_window_size`),
-  `outputTokens`, and `model`, and feeds it through the normal event path. The existing
-  `extractLiveContextWindow` then maps it unchanged, and `LIVE_CONTEXT_WINDOW_PLAN.md`
-  Layers 3–7 (pump wiring, webview message, store, `WorkflowStepItem` bar) are reused
-  verbatim.
+  - `total_output_tokens`), `contextWindowSize` (= `context_window.context_window_size`),
+    `outputTokens`, and `model`, and feeds it through the normal event path. The existing
+    `extractLiveContextWindow` then maps it unchanged, and `LIVE_CONTEXT_WINDOW_PLAN.md`
+    Layers 3–7 (pump wiring, webview message, store, `WorkflowStepItem` bar) are reused
+    verbatim.
 - Add a row for Antigravity to that plan's "Current State" harness table once
   implemented: `Antigravity | ctrlyoke statusline snapshot (own sidecar, not agy's log) | YES — every ~300ms poll, both interactive & headless`.
 

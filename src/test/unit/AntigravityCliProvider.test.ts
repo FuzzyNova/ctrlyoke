@@ -111,10 +111,7 @@ suite("AntigravityCliProvider", () => {
     assert.ok(token);
     assert.ok(directory);
 
-    const snapshotPath = path.join(
-      directory,
-      `agy-statusline-${token}.json`
-    );
+    const snapshotPath = path.join(directory, `agy-statusline-${token}.json`);
     await fs.mkdir(directory, { recursive: true });
     await fs.writeFile(
       snapshotPath,
@@ -412,7 +409,11 @@ suite("AntigravityCliProvider", () => {
 
     test("rejects a snapshot written before execution and uses recovery", async () => {
       const provider = new AntigravityCliProvider();
-      const calls = stubSessionRecovery(provider, "cached-session-id", "log-id");
+      const calls = stubSessionRecovery(
+        provider,
+        "cached-session-id",
+        "log-id"
+      );
 
       try {
         await buildArgs(provider);
@@ -448,7 +449,11 @@ suite("AntigravityCliProvider", () => {
         makeBackend({ permissions: { antigravityStatusLineTracking: false } })
       );
       const provider = new AntigravityCliProvider();
-      const calls = stubSessionRecovery(provider, "cached-session-id", "log-id");
+      const calls = stubSessionRecovery(
+        provider,
+        "cached-session-id",
+        "log-id"
+      );
       let snapshotConsulted = false;
       provider.getLatestStatuslineSnapshot = () => {
         snapshotConsulted = true;
@@ -472,6 +477,56 @@ suite("AntigravityCliProvider", () => {
           path.join(workspaceRoot, "workflow.md")
         );
       }
+    });
+  });
+
+  suite("pruneOrphanedStatusLine", () => {
+    test("restores the baseline left by a dead ctrlyoke process", async () => {
+      const settingsDir = path.dirname(settingsPath());
+      await fs.mkdir(settingsDir, { recursive: true });
+      await fs.writeFile(
+        settingsPath(),
+        JSON.stringify({
+          statusLine: {
+            type: "command",
+            command: "node ctrlyoke-installed.js",
+          },
+        })
+      );
+      const leasePath = path.join(
+        settingsDir,
+        ".ctrlyoke-lease-statusLine.json"
+      );
+      await fs.writeFile(
+        leasePath,
+        JSON.stringify({
+          baseline: { type: "command", command: "node user-statusline.js" },
+          baselineHadKey: true,
+          // A PID that cannot be alive, standing in for a crashed host.
+          owners: [{ pid: 99999999, workflowKey: "crashed", ts: Date.now() }],
+        })
+      );
+
+      await AntigravityCliProvider.pruneOrphanedStatusLine(workspaceRoot);
+
+      const restored = JSON.parse(await fs.readFile(settingsPath(), "utf-8"));
+      assert.deepStrictEqual(restored.statusLine, {
+        type: "command",
+        command: "node user-statusline.js",
+      });
+      await assert.rejects(fs.access(leasePath), /ENOENT/);
+    });
+
+    test("is a no-op when no lease state exists", async () => {
+      await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+      await fs.writeFile(settingsPath(), JSON.stringify({ other: "value" }));
+
+      await AntigravityCliProvider.pruneOrphanedStatusLine(workspaceRoot);
+
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(settingsPath(), "utf-8")),
+        { other: "value" }
+      );
     });
   });
 

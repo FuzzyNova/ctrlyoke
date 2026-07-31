@@ -38,6 +38,7 @@ import {
 } from "./core/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
+import { AntigravityCliProvider } from "./core/harness/antigravity/AntigravityCliProvider";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
@@ -405,6 +406,15 @@ export async function activate(context: vscode.ExtensionContext) {
             );
           }
         });
+
+        // Restore agy's statusline if a previous ctrlyoke process died holding
+        // the lease. The lease prunes dead owners on its own register/
+        // unregister paths too; this just recovers sooner than the next run.
+        AntigravityCliProvider.pruneOrphanedStatusLine(workspaceRoot).catch(
+          (err) => {
+            Log.warn("ctrlyoke: Antigravity statusline cleanup failed:", err);
+          }
+        );
       } else {
         // Not yet initialized — remember the root so we can set the pending
         // flag on the orchestrator once it is created below.

@@ -19,6 +19,47 @@ export interface SnapshotCurrentUsage {
   cache_read_input_tokens?: unknown;
 }
 
+/** Last-turn usage breakdown, normalized to ctrlyoke's camelCase naming. */
+export interface AntigravityCurrentUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * Map the statusline payload's `context_window.current_usage` block to
+ * ctrlyoke's naming.
+ *
+ * Single source of truth for this mapping: both the sidecar (building synthetic
+ * live events) and `AntigravityLogParser` (deriving final `TokenUsage` from a
+ * raw snapshot) consume the same four snake_case fields, so the translation
+ * must not be reimplemented per call site.
+ */
+export function parseStatuslineCurrentUsage(
+  usage: SnapshotCurrentUsage | undefined
+): AntigravityCurrentUsage | undefined {
+  if (!usage || typeof usage !== "object") {
+    return undefined;
+  }
+
+  const parsed: AntigravityCurrentUsage = {
+    inputTokens: toFiniteNumber(usage.input_tokens),
+    outputTokens: toFiniteNumber(usage.output_tokens),
+    cacheCreationInputTokens: toFiniteNumber(usage.cache_creation_input_tokens),
+    cacheReadInputTokens: toFiniteNumber(usage.cache_read_input_tokens),
+  };
+  return Object.values(parsed).some((value) => value !== undefined)
+    ? parsed
+    : undefined;
+}
+
 interface SnapshotMetadata {
   sequence?: unknown;
   writtenAt?: unknown;
@@ -199,7 +240,7 @@ export class AntigravityStatuslineSidecar {
       contextWindowUsedTokens: inputTokens + outputTokens,
       contextWindowSize,
       outputTokens,
-      currentUsage: this.getCurrentUsage(contextWindow?.current_usage),
+      currentUsage: parseStatuslineCurrentUsage(contextWindow?.current_usage),
     } as BaseCliEvent;
     const context = this.parser.extractLiveContextWindow(event, this.model);
     if (context && !this.stopped) {
@@ -230,29 +271,6 @@ export class AntigravityStatuslineSidecar {
       return typeof id === "string" && id.length > 0 ? id : undefined;
     }
     return undefined;
-  }
-
-  private getCurrentUsage(
-    usage: SnapshotCurrentUsage | undefined
-  ): Record<string, number> | undefined {
-    if (!usage || typeof usage !== "object") {
-      return undefined;
-    }
-
-    const values: Record<string, number> = {};
-    const fields: Record<string, unknown> = {
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
-      cacheCreationInputTokens: usage.cache_creation_input_tokens,
-      cacheReadInputTokens: usage.cache_read_input_tokens,
-    };
-    for (const [key, value] of Object.entries(fields)) {
-      const number = this.asFiniteNumber(value);
-      if (number !== undefined) {
-        values[key] = number;
-      }
-    }
-    return Object.keys(values).length > 0 ? values : undefined;
   }
 
   private asFiniteNumber(value: unknown): number | undefined {
