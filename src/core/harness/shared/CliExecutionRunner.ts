@@ -717,7 +717,7 @@ export class CliExecutionRunner {
         Log.debug(
           `[${this.deps.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
         );
-        if (result.stderr) {
+        if (result.stderr && !this.deps.provider.suppressHeadlessStderr) {
           Log.debug(
             `[${this.deps.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
           );

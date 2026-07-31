@@ -226,6 +226,30 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.error, "process crashed");
   });
 
+  test("should suppress secret-bearing stderr when the provider opts in", async () => {
+    const secret = "Bearer super-secret-token";
+    const loggedResponses: string[] = [];
+    const result = await new CliResponseCollector({
+      provider: {
+        ...createProvider({ events: [], metadata: {} }),
+        suppressHeadlessStderr: true,
+      },
+      hostCallbacks: {
+        logResponse: (response) => loggedResponses.push(response),
+        onResponseComplete: (response) => loggedResponses.push(response),
+      },
+    }).collectHeadlessResponse({
+      stdout: "",
+      stderr: `Failed to parse config: ${secret}`,
+      exitCode: 1,
+      promptForSessionLog: "prompt",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.failureMessage, "Process exited with code 1");
+    assert.ok(loggedResponses.every((response) => !response.includes(secret)));
+  });
+
   test("should route parsed stdout through the log parser mapping", async () => {
     const parsedEvents = [{ type: "stdout-event" }];
     const mappedOutput = createParsedOutput({

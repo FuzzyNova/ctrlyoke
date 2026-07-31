@@ -5,11 +5,30 @@ import * as path from "path";
 import { pathToFileURL } from "url";
 import { suite, test } from "mocha";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import {
+  resolveOpenCodePermissionCollisionContext,
+  type OpenCodePermissionCollisionContext,
+} from "../../core/harness/opencode/OpenCodeInlineConfig";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
+  function collisionContext(
+    topLevelKeys: string[],
+    nestedKeysByTool: Record<string, string[]> = {}
+  ): OpenCodePermissionCollisionContext {
+    return {
+      topLevelKeys: new Set(topLevelKeys),
+      nestedKeysByTool: new Map(
+        Object.entries(nestedKeysByTool).map(([tool, keys]) => [
+          tool,
+          new Set(keys),
+        ])
+      ),
+    };
+  }
+
   test("builds the inline config shape for every permission mode", () => {
     const provider = new OpenCodeCliProvider();
     const extensionPath = path.join(os.tmpdir(), "opencode-inline-extension");
@@ -45,6 +64,200 @@ suite("OpenCodeCliProvider", () => {
           bash: { "rm *": "deny" },
         });
       }
+    }
+  });
+
+  test("rewrites colliding top-level and nested keys until they are novel", () => {
+    const provider = new OpenCodeCliProvider();
+    const config = provider.buildInlineConfig({
+      extensionPath: "extension",
+      permissionCollisionContext: collisionContext(
+        ["*", "bash", "bash*", "bash**"],
+        { bash: ["foo *", "foo **"] }
+      ),
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(foo:*)"],
+        deniedTools: [],
+      },
+    });
+
+    assert.deepStrictEqual(config.permission, {
+      "**": "ask",
+      "bash***": { "foo ***": "allow" },
+    });
+  });
+
+  test("avoids scalar/object type mismatches by rewriting the tool key", () => {
+    const provider = new OpenCodeCliProvider();
+    const config = provider.buildInlineConfig({
+      extensionPath: "extension",
+      permissionCollisionContext: collisionContext(["*", "bash"]),
+      toolPermissions: {
+        mode: PERMISSION_MODES.ALLOW_ALL,
+        allowedTools: [],
+        deniedTools: ["shell"],
+      },
+    });
+
+    assert.strictEqual(config.permission?.bash, undefined);
+    assert.strictEqual(config.permission?.["bash*"], "deny");
+  });
+
+  test("skips a rule and emits a diagnostic when collision rewriting is exhausted", () => {
+    const takenKeys = Array.from({ length: 1001 }, (_, index) =>
+      "*".repeat(index + 1)
+    );
+    const provider = new OpenCodeCliProvider();
+    const config = provider.buildInlineConfig({
+      extensionPath: "extension",
+      permissionCollisionContext: collisionContext(takenKeys),
+      toolPermissions: {
+        mode: PERMISSION_MODES.ALLOW_ALL,
+        allowedTools: [],
+        deniedTools: [],
+      },
+    });
+
+    assert.deepStrictEqual(config.permission, {});
+  });
+
+  test("does not pass OpenCode substitution tokens through permission or MCP values", () => {
+    const provider = new OpenCodeCliProvider();
+    const config = provider.buildInlineConfig({
+      extensionPath: "extension",
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(echo {env:SECRET} *)"],
+        deniedTools: [],
+      },
+      userServers: [
+        {
+          id: "unsafe",
+          url: "https://example.test/{file:secret.txt}",
+          headers: { Authorization: "Bearer {env:TOKEN}" },
+        },
+        {
+          id: "safe",
+          command: "node",
+          args: ["server.js"],
+          env: { SAFE: "value" },
+        },
+      ],
+    });
+
+    const serialized = JSON.stringify(config);
+    assert.ok(!serialized.includes("{env:"));
+    assert.ok(!serialized.includes("{file:"));
+    assert.deepStrictEqual(config.mcp?.safe, {
+      type: "local",
+      command: ["node", "server.js"],
+      environment: { SAFE: "value" },
+    });
+    assert.strictEqual(config.mcp?.unsafe, undefined);
+  });
+
+  test("refuses to expose an oversized inline config", async () => {
+    const provider = new OpenCodeCliProvider();
+    await provider.prepareToolPermissions(
+      {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [],
+        deniedTools: Array.from(
+          { length: 2500 },
+          (_, index) => `shell(command-${index}:*)`
+        ),
+      },
+      "workspace"
+    );
+
+    assert.throws(
+      () => provider.getHeadlessSpawnEnv(),
+      /exceeds the 32768-byte defensive limit/
+    );
+  });
+
+  test("resolves project permission keys before preparing inline permissions", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-inline-collision-")
+    );
+    const provider = new OpenCodeCliProvider();
+    try {
+      await fs.writeFile(
+        path.join(workspaceRoot, "opencode.json"),
+        JSON.stringify({ permission: { bash: { "foo *": "allow" } } }),
+        "utf8"
+      );
+      await provider.buildCliArgs(
+        { prompt: "test" },
+        false,
+        path.join(workspaceRoot, "extension"),
+        workspaceRoot,
+        undefined,
+        { promptIndex: 0, allPrompts: [] }
+      );
+      await provider.prepareToolPermissions(
+        {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: [],
+          deniedTools: ["shell(foo:*)"],
+        },
+        workspaceRoot
+      );
+
+      const config = JSON.parse(
+        provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!
+      );
+      assert.deepStrictEqual(config.permission, {
+        "*": "ask",
+        "bash*": { "foo **": "deny" },
+      });
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves the OPENCODE_CONFIG file alongside global and project layers", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-inline-config-layers-")
+    );
+    const configuredPath = path.join(workspaceRoot, "configured.json");
+    const previousConfiguredPath = process.env.OPENCODE_CONFIG;
+    try {
+      await fs.writeFile(
+        configuredPath,
+        JSON.stringify({
+          permission: {
+            "config-layer-tool": { "from config": "allow" },
+          },
+        }),
+        "utf8"
+      );
+      await fs.writeFile(
+        path.join(workspaceRoot, "opencode.json"),
+        JSON.stringify({
+          permission: {
+            "config-layer-tool": { "from project": "deny" },
+          },
+        }),
+        "utf8"
+      );
+      process.env.OPENCODE_CONFIG = configuredPath;
+
+      const context =
+        await resolveOpenCodePermissionCollisionContext(workspaceRoot);
+      assert.ok(context.topLevelKeys.has("config-layer-tool"));
+      assert.deepStrictEqual(
+        [...context.nestedKeysByTool.get("config-layer-tool")!].sort(),
+        ["from config", "from project"]
+      );
+    } finally {
+      if (previousConfiguredPath === undefined) {
+        delete process.env.OPENCODE_CONFIG;
+      } else {
+        process.env.OPENCODE_CONFIG = previousConfiguredPath;
+      }
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 

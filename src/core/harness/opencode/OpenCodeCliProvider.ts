@@ -25,8 +25,11 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   buildOpenCodeMcpEntries,
+  OPENCODE_INLINE_CONFIG_MAX_BYTES,
+  resolveOpenCodePermissionCollisionContext,
   type OpenCodeInlineConfig,
   type OpenCodeInlineConfigBuildOptions,
+  type OpenCodePermissionCollisionContext,
 } from "./OpenCodeInlineConfig";
 
 /**
@@ -78,6 +81,8 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
+  /** OpenCode may echo malformed inline config, which can contain MCP secrets. */
+  readonly suppressHeadlessStderr = true;
   readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
@@ -85,6 +90,8 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   /** Inline config accumulated while preparing the current prompt. */
   private pendingInlineConfig: OpenCodeInlineConfig = { plugin: [] };
+  private pendingPermissionCollisionContext: OpenCodePermissionCollisionContext =
+    { topLevelKeys: new Set(), nestedKeysByTool: new Map() };
 
   /**
    * Build the ctrlyoke-owned OpenCode config without performing any I/O.
@@ -96,7 +103,10 @@ export class OpenCodeCliProvider implements ICliProvider {
     options: OpenCodeInlineConfigBuildOptions
   ): OpenCodeInlineConfig {
     const permission = options.toolPermissions
-      ? this.toolPermissionMapper.buildPermissionPolicy(options.toolPermissions)
+      ? this.toolPermissionMapper.buildPermissionPolicy(
+          options.toolPermissions,
+          options.permissionCollisionContext
+        )
       : undefined;
     const mcpEntries = buildOpenCodeMcpEntries(
       options.mcpServerPath,
@@ -168,6 +178,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     // optional MCP or permission preparation so a later prompt cannot inherit
     // either slice when its workspace or policy is absent.
     this.pendingInlineConfig = { plugin: [] };
+    this.pendingPermissionCollisionContext =
+      await resolveOpenCodePermissionCollisionContext(workspaceRoot);
     this.pendingInlineConfig.plugin = this.buildInlineConfig({
       extensionPath,
     }).plugin;
@@ -384,7 +396,10 @@ export class OpenCodeCliProvider implements ICliProvider {
     _workingFilePath?: string
   ): Promise<void> {
     const policy = toolPermissions
-      ? this.toolPermissionMapper.buildPermissionPolicy(toolPermissions)
+      ? this.toolPermissionMapper.buildPermissionPolicy(
+          toolPermissions,
+          this.pendingPermissionCollisionContext
+        )
       : undefined;
 
     if (policy) {
@@ -421,15 +436,29 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
     return {
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(this.pendingInlineConfig),
+      OPENCODE_CONFIG_CONTENT: this.getInlineConfigContent(),
     };
   }
 
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
       ...CliProviderUtils.buildProcessEnv(),
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(this.pendingInlineConfig),
+      OPENCODE_CONFIG_CONTENT: this.getInlineConfigContent(),
     };
+  }
+
+  private getInlineConfigContent(): string {
+    const content = JSON.stringify(this.pendingInlineConfig);
+    const size = Buffer.byteLength(content, "utf8");
+    if (size > OPENCODE_INLINE_CONFIG_MAX_BYTES) {
+      Log.warn(
+        `OpenCode inline config is ${size} bytes; refusing to launch above the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
+      );
+      throw new Error(
+        `OpenCode inline config exceeds the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
+      );
+    }
+    return content;
   }
 
   /**

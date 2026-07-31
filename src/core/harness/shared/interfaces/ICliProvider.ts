@@ -121,6 +121,12 @@ export interface ICliProvider {
   readonly headlessSource?: "stdout" | "log";
 
   /**
+   * Do not retain headless stderr. OpenCode can echo OPENCODE_CONFIG_CONTENT
+   * on parse errors, and inline MCP entries may contain credentials.
+   */
+  readonly suppressHeadlessStderr?: boolean;
+
+  /**
    * Convert headless stdout into the event vocabulary understood by this
    * provider's log parser.
    *

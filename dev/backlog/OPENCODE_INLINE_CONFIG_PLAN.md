@@ -1,6 +1,6 @@
 # OpenCode Inline Config Migration Plan
 
-> **Status:** Stage 2 complete; Stages 3–5 proposed
+> **Status:** Stage 3 complete; Stages 4–5 proposed
 >
 > **Priority:** P0 — blocks the OpenCode half of
 > [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
@@ -384,7 +384,7 @@ Stage 2 was also smoke-tested through a real `node-pty` spawn of
 `opencode debug config`; the child exited successfully and resolved the
 `permission` block from `OPENCODE_CONFIG_CONTENT`.
 
-**Stage 3 — collision-safe key emission.** Resolve the user's effective
+**Stage 3 — collision-safe key emission (complete).** Resolve the user's effective
 permission key set from `~/.config/opencode/opencode.json`, the `OPENCODE_CONFIG`
 file when that variable is set, and project `opencode.json`. For every key
 ctrlyoke emits — the top-level catch-all, top-level tool names, and nested
@@ -396,6 +396,14 @@ on last-match-wins. Two rules:
   the merge replaces wholesale in that case;
 - when a collision cannot be made novel, degrade to a diagnostic rather than
   emitting a rule whose position is wrong.
+
+The implementation also rejects `{env:...}` and `{file:...}` substitutions in
+ctrlyoke-emitted permission/MCP values, enforces a defensive 32 KiB serialized
+config limit, and keeps OpenCode stderr out of history and telemetry because
+parse failures echo the complete inline config (including MCP credentials).
+Inline policy is authoritative over the lower-precedence global/project config
+layers only; OpenCode organization/console and managed/MDM layers merge later
+and may override it.
 
 **Stage 4 — move the plugin out of the repo.** Reference
 `out/scripts/ctrlyoke-opencode-plugin.ts` directly from the extension
