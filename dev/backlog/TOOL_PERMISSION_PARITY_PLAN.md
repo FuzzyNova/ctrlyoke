@@ -180,16 +180,20 @@ independently startable parallel plan. Implement it in this order:
 6. retain Qwen's verified inline mapping and add automated behavioral coverage;
 7. behaviorally verify the implemented OpenCode config path and finish its
    structured conflict/recovery UX;
-8. continue to Compatibility Phase 2 for dry run, CLI/reporting, and MCP
-   serialization.
+8. _(post-release)_ continue to Compatibility Phase 2 for dry run,
+   CLI/reporting, and MCP serialization.
 
 The Codex partial-support investigation follows the verified Qwen path and the
 implemented OpenCode path; it does not block the permission vertical slice.
 Antigravity remains an explicit unsupported granular-list declaration unless
 new evidence changes it.
 
-**Release-gate boundary.** Stages 1–8 above are the P0 gate. The Codex
-partial-support investigation is explicitly _not_ part of it: it is open-ended
+**Release-gate boundary.** Stages 1–7 above are the P0 gate. Stage 8
+(Compatibility Phase 2) was descoped to P1 on 2026-07-31: dry run, the
+portability report, and CLI/MCP serialization make existing truth more visible
+rather than preventing a dishonest support claim or an unsafe workspace
+mutation. The Codex partial-support investigation is also explicitly _not_ part
+of the gate: it is open-ended
 research whose outcome may be "no safe general mapping exists," and a release
 must never wait on a question that can legitimately answer no. Codex ships with
 its derived mode-only summary and a non-blocking warning, which is already
@@ -249,11 +253,181 @@ later policy without changing the active file, restores the original
 permission value on final release, and preserves user edits detected during
 cleanup.
 
-Remaining work in this section:
+Crash-recovery ownership metadata is implemented: `registerValueLease` writes a
+lease sidecar with PID-keyed owner records, and `pruneLeaseOwnersLocked` /
+`pruneDeadOwners` drop owners whose process is gone. The remaining work is
+listed under "Decided semantics" below.
 
-- persist crash-recovery ownership metadata;
-- return the structured `acquired` / `shared` / `conflict` application
-  contract instead of surfacing a plain provider error;
+### Decided semantics (2026-07-31)
+
+These six questions are now answered. Implement to these decisions.
+
+**1. The conflict domain is the config file path, uniformly.** Not "the
+workspace." Value leases are already keyed by `settingsPath::key`, which is
+correct and makes separate worktrees independent by construction. The MCP
+baseline is **not** keyed this way and must be fixed: `baselineServers`,
+`baselineProjectServers`, and the three `baselineProject*` booleans are
+per-tool-singleton fields, and `captureBaseline()` resets only the booleans when
+`baselineCapturedForWorkspace` changes — it never clears the Sets. One process
+serving two roots (multi-root VS Code, two worktrees, or the hosted server)
+therefore accumulates a union baseline, and worktree B treats worktree A's MCP
+servers as pre-existing and never cleans them up. Key all baseline state by
+resolved config file path.
+
+**2. Lease lifetime is the step, not the workflow or the harness process.**
+The rule: _a ctrlyoke-owned settings file exists only while ctrlyoke is actively
+running a step._ Acquire before every step; release on step completion.
+
+This includes injected prompts. A retained interactive TUI can outlive the step
+and the user can type into it directly; ctrlyoke does not try to govern that
+(see decision 6). But every step ctrlyoke itself starts — fresh process launch
+_or_ injection into a live session — must re-apply the settings file first, or
+fail with the conflict result if another workflow holds the lease.
+
+This is a real change to the current call sites. `prepareToolPermissions` is
+invoked from `CliIntegration.ts:961` during CLI argument construction, so it
+runs only on process launch; the inject path never rebuilds args and so never
+re-acquires. Release currently happens in `cleanupWorkspaceArtifacts`
+(`OpenCodeCliProvider.ts:439`) at workflow teardown, not per step. Both ends
+move to the step boundary.
+
+**3. Owner identity is PID plus a per-process random token.** `getOwnerId()`
+currently returns `${pid}:${workflowKey}`. A recycled PID makes a dead owner
+look alive and can block indefinitely. Generate one random token per ctrlyoke
+process at startup and include it in the owner record and sidecar, so liveness
+is `isProcessAlive(pid) && token matches`.
+
+**4. Dead owners are pruned, with an explicit regression test.** Pruning exists;
+the test does not. Add a test that writes a sidecar naming a dead PID, then
+proves a fresh acquisition succeeds rather than reporting a false conflict.
+Cover the same-`workflowKey` case: re-running a workflow after a crash must not
+be blocked by its own stale lease.
+
+**5. Conflict becomes a structured result instead of a thrown error.** Accepted:
+`registerValueLease` returns a discriminated `PolicyLeaseResult` whose `conflict`
+outcome carries a structured diagnostic, and exceptions are reserved for genuine
+I/O and parse failures. Contract and rationale in "Conflict result contract"
+below.
+
+**6. Harnesses launched outside ctrlyoke are out of scope, permanently.** A user
+who runs OpenCode manually in the same workspace, or `--resume`s a session
+ctrlyoke is driving, can defeat any of this. ctrlyoke does not detect, prevent,
+or work around it; this is a standing known limitation of every workspace-scoped
+mechanism, not a gap in this plan. Disclose it (see "Required disclosure") and
+do not add machinery that pretends to solve it.
+
+### Open items created by decision 2
+
+**OPEN — blocks the inject path. Does re-writing the config actually affect a
+live session?** Under investigation as of 2026-07-31. Decision 2 assumes that
+re-applying `opencode.json` before injecting into a running TUI changes the
+policy that session enforces. That is only true if OpenCode re-reads the file per
+turn or per permission check. If it caches config at process start, re-applying
+before injection is a no-op for that process and the injected step silently runs
+under whatever policy was active at launch — which would be a real enforcement
+hole hiding behind a correct-looking write.
+
+Resolve this behaviorally before building the inject path, and record the
+evidence here. Until then, assume the caching case. If OpenCode does cache at
+startup, the options are to hold the lease for the interactive process lifetime
+(contradicting the step-scoped rule for interactive mode only) or to declare
+workspace-config permissions unsupported for retained interactive sessions. Do
+not ship the inject re-apply as if it were enforcement without evidence.
+
+**PROPOSED DEFAULT — not yet confirmed. Mid-run acquisition failure is a new
+state.** Under per-workflow leases a
+conflict could only happen at start. Under step-scoped leases, workflow A can
+release after step 1, workflow B can acquire, and A's step 2 then fails mid-run.
+Handle it as a blocking `error` diagnostic that stops the workflow at that step,
+leaving it resumable once the other owner releases. Explicitly exclude conflicts
+from `errorBehavior` retry: a conflict is not a transient harness failure, and
+retrying it produces nondeterministic behavior that depends on another
+workflow's timing. The alternative not chosen here is a bounded wait before
+failing; confirm the preference before implementing.
+
+Note that step-scoped leases narrow the product promise in a way that is
+_more_ precise, not weaker: conflicting workflows may interleave between steps,
+because the config file only governs a harness process while that process is
+consuming it. What must never happen is two conflicting policies overlapping
+during execution.
+
+### Cross-process acquisition must be atomic
+
+`withLock()` (`SettingsJsonMcpTracker.ts:231`) acquires only the in-process
+`AsyncMutex`, despite its doc comment describing it as "the settings.json file
+lock." Correct that comment and the mechanism.
+
+The sidecar makes ownership _visible_ across processes, but acquisition is not
+_atomic_ across them. Two ctrlyoke processes in one worktree — a CLI run plus the
+extension host, or two CLI runs — can both prune, both read the sidecar, both see
+no conflict, and both write. The later policy silently replaces the earlier one,
+which is precisely the failure this section exists to prevent.
+
+`withFileLock()` in `src/utils/FileLockUtils.ts:73` is the existing cross-process
+primitive and already guards working files. The whole prune → read → conflict
+check → write → sidecar sequence must run inside it, not merely the write. The
+in-process mutex stays as the inner guard so a single process does not
+self-interleave while awaiting the file lock.
+
+### Conflict result contract
+
+`registerValueLease` currently returns `"acquired" | "shared"` and throws a
+prose `Error` on conflict (`SettingsJsonMcpTracker.ts:523`). Replace the throw
+with a discriminated result. Reserve exceptions for genuine I/O and parse
+failures.
+
+The throw is wrong for four reasons:
+
+- a conflict is programmatically indistinguishable from a disk error, a
+  malformed config, or a permissions failure — callers can only match on message
+  text;
+- the message embeds the absolute config path and another workflow's key, and
+  flows wherever errors flow, against this plan's telemetry rules;
+- the required surfaces (blocking modal naming the active workflow/harness/file
+  with a **View active workflow** action, nonzero CLI exit with a structured
+  diagnostic, the same contract for MCP callers, and a persisted diagnostic code
+  in status/output) cannot be built from prose; and
+- with decision 2, conflicts now occur mid-run and would otherwise enter the
+  `errorBehavior` retry path as if they were transient harness failures.
+
+The shape should be equivalent to:
+
+```typescript
+type PolicyLeaseResult =
+  | { outcome: "acquired" | "shared" }
+  | { outcome: "conflict"; diagnostic: PermissionPolicyConflict };
+
+interface PermissionPolicyConflict {
+  /** Stable diagnostic code shared by dashboard, CLI, and MCP. */
+  code: string;
+  harnessId: HarnessId;
+  /** Absolute path; surfaces render it workspace-relative. */
+  configPath: string;
+  key: string;
+  activeOwner: {
+    workflowKey: WorkflowKey;
+    runRef?: RunRef;
+    pid: number;
+    workflowName?: string;
+  };
+}
+```
+
+`prepareToolPermissions` returns the `ToolPermissionApplication` contract from
+"Interface Changes" carrying this diagnostic, and the executor converts a
+`conflict` outcome into the blocking error described below.
+
+### Remaining work in this section
+
+- key all baseline state by config file path (decision 1);
+- move acquire/release to the step boundary and add re-acquisition to the inject
+  path (decision 2);
+- add the per-process random token to owner identity (decision 3);
+- add the dead-PID pruning regression test (decision 4);
+- replace the conflict throw with the structured result (decision 5);
+- wrap acquisition in `withFileLock` so the ownership check and write are atomic
+  across processes;
+- behaviorally verify whether OpenCode re-reads config for an injected turn;
 - wire disclosure, dry-run details, persisted diagnostics, and blocking
   conflict UX across dashboard, CLI, and MCP surfaces.
 
@@ -282,8 +456,11 @@ documented in a comment.
 - Persist enough recovery metadata to remove stale ctrlyoke-owned values after a
   crash without replacing the user's whole file.
 - Use atomic writes and the existing workspace-scoped path/security guards.
-- Hold the configuration for the lifetime of the harness process that consumes
-  it, including a retained interactive session.
+- Hold the configuration for the duration of the step, releasing on step
+  completion, and re-acquire before every subsequent ctrlyoke-started step
+  including injected prompts (see decision 2). This supersedes the earlier
+  "hold for the lifetime of the harness process" rule, which is revisited only
+  if injection into a live session proves unable to change the enforced policy.
 
 ### Required disclosure
 
@@ -297,6 +474,11 @@ workspace. While ctrlyoke's injected permission policy is active, it can affect:
 Show this caveat before execution and in dry-run output. The caveat should name
 the exact file and whether ctrlyoke will restore its owned changes. This is a
 non-blocking warning and does not add a confirmation gate.
+
+A harness the user launches manually in the same workspace is explicitly out of
+scope (decision 6). ctrlyoke cannot detect or prevent it, and the same exposure
+already exists for manually resuming a session ctrlyoke is driving. Disclose the
+window honestly and add no machinery that implies the case is handled.
 
 ### Conflict decision — reject the later acquisition
 
@@ -315,7 +497,8 @@ A file mutex is still required, but it is not itself a conflict strategy: it
 prevents two read-modify-write operations from interleaving while still
 allowing a later write to replace the first policy immediately after the lock
 is released unless the ownership check and acquisition happen atomically under
-that lock.
+that lock. The current implementation does not satisfy this — see
+"Cross-process acquisition must be atomic" above.
 
 The public application contract represents `acquired`, `shared`, and `conflict`
 outcomes. Do not add a dormant `waiting` state or make the workflow appear

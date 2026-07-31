@@ -7,10 +7,18 @@
 > **First implementation consumer:**
 > [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
 
-Phases 1 and 2 are implemented before 0.1.0 ships, together with the full
-permission plan. Phase 3 (expanding capability domains beyond permissions)
-remains post-release: it adds new domains rather than correcting a dishonest
-support claim.
+**Phase 1 only is the 0.1.0 release gate**, together with the permission plan.
+Phase 1 is what prevents ctrlyoke from claiming enforcement it does not perform.
+
+Phases 2 and 3 are post-release (decided 2026-07-31). Phase 2 (dry run,
+portability report, CLI/MCP serialization) makes existing truth more visible; it
+does not prevent a dishonest support claim or an unsafe workspace mutation, so it
+does not gate the release. Phase 3 adds new capability domains.
+
+Acceptance criteria below that describe dry-run output, the portability report,
+or MCP capability serialization therefore belong to Phase 2 and are not release
+gates. Criteria covering the registry, analyzer, effective-property resolution,
+authoring diagnostics, and behavioral permission verification are.
 
 ---
 
@@ -640,6 +648,10 @@ the diagnostic in status/output. The workspace-permission conflict behavior is
 defined in `TOOL_PERMISSION_PARITY_PLAN.md`. This does not depend on toast
 unification and must work identically in the VS Code webview and hosted browser.
 
+Note that permission-policy leases are **step-scoped**, not workflow-scoped (see
+that plan's "Decided semantics"). A conflict can therefore surface mid-run, not
+only at start, and the same blocking-result treatment applies at that step.
+
 ## Product Surfaces
 
 ### Workflow and prompt authoring
@@ -856,6 +868,9 @@ After Phase 1C, continue with the permission plan in this order:
 4. implement OpenCode and coordinate its writes with the existing MCP writer.
 
 ### Phase 2 — Dry run and complete workflow report
+
+> **Post-release (P1).** Not a 0.1.0 gate — see the status note at the top of
+> this plan.
 
 Begin this phase after the permission plan's Qwen/OpenCode preparation paths
 exist, so preview reports the actual translation and side effects rather than a

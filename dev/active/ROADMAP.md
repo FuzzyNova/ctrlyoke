@@ -59,39 +59,58 @@ to drive.
 4. Close release-critical accessibility, security, and regression gaps. Use
    [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md) as generated input, not as a
    percentage target that blocks forever.
-5. Complete harness compatibility and tool-permission parity **in full**:
-   phases 1–2 of
+5. Complete harness compatibility and tool-permission parity: **phase 1** of
    [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
    plus all of
    [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md).
    ctrlyoke must not ship claiming granular Allowed/Denied Tools support that a
-   harness does not enforce — today the dashboard reports full support for Qwen
-   while its permission flags are unverified. This is deliberately a
+   harness does not enforce, and must not silently replace one running
+   workflow's security policy with another's. This remains a
    full-implementation gate rather than an honest-messaging slice, so the
-   capability registry and behavioral verification land before launch instead of
-   the interim wording becoming the shipped behavior.
+   capability registry, the cross-process permission-lease gate, and behavioral
+   verification land before launch instead of the interim wording becoming the
+   shipped behavior. Compatibility phase 2 (dry run, portability report,
+   CLI/MCP serialization) was descoped to P1 on 2026-07-31: it makes existing
+   truth more visible rather than preventing a dishonest claim or an unsafe
+   mutation.
+6. **Automation API structured results** — implement the versioned per-step JSON
+   result contract in [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md).
+   Promoted from P1 because the CLI is now the _only_ sanctioned automation
+   surface: the MCP lifecycle control surface was rejected on the explicit
+   grounds that `ctrlyoke run --headless --json` already serves external
+   automation. Shipping without the per-step contract would remove the
+   alternative without delivering the replacement, leaving scripted callers to
+   parse terminal text or ctrlyoke's private run storage — the exact coupling
+   the rejection assumed they would not need.
 
 ### P1 — Stabilize and complete the automation foundation
 
 These are the best post-launch investments. They improve the workflows users
 already have instead of introducing new execution models.
 
-Harness compatibility and tool-permission parity were previously listed here;
+Tool-permission parity and compatibility **phase 1** were previously listed here;
 both are now P0 release gates (see above). Their capability registry, shared
 compatibility analyzer, and pure effective-property resolver therefore already
 exist for the items below — dry-run preview in particular consumes them rather
-than reimplementing them.
+than reimplementing them. Compatibility **phase 2** is descoped to this list.
 
-1. **Complete MCP lifecycle control** — start, list, inspect, pause, resume, and
-   cancel workflows through one shared application service.
-   ([plan](../backlog/MCP_CONTROL_SURFACE_PLAN.md))
-2. **Secrets and redaction** — runtime secret references plus centralized
+MCP lifecycle control was previously listed first here; it is now rejected (see
+"Rejected and Removed Scope"). External automation is served by
+`ctrlyoke run --headless --json`, and sub-workflow composition by
+[`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md).
+
+1. **Secrets and redaction** — runtime secret references plus centralized
    redaction across logs, history, previews, exports, and remote transports.
    ([plan](../backlog/SECRETS_AND_REDACTION_PLAN.md))
-3. **Dry-run preview** — show the categorized payload, provider translation,
+2. **Dry-run preview** — show the categorized payload, provider translation,
    compatibility diagnostics, workspace side effects, and command without
    invoking a harness.
    ([plan](../backlog/DRY_RUN_PREVIEW_PLAN.md))
+3. **Compatibility phase 2** — integrate the shipped analyzer with dry-run
+   preview and CLI validation, add the installed-harness portability report, and
+   serialize capability data for MCP consumers. Descoped from P0 on 2026-07-31;
+   pairs with dry-run preview above.
+   ([plan](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
 4. **Template required variables + Feature-Driven Loop** — fix unresolved
    optional placeholders, validate required template input, and add the
    idea-to-plan orchestrator template without arbitrary setup scripts.
@@ -106,11 +125,7 @@ than reimplementing them.
 7. **Accessibility and semantic testability** — keyboard parity, accessible
    names/states, landmarks, and resilient role-based tests.
    ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
-8. **Automation API structured results** — implement the versioned per-step
-   JSON result contract. Variable substitution and compact JSON are already
-   implemented; SDK and MCP workflow launching remain deferred.
-   ([plan](AUTOMATION_API_PLAN.md))
-9. **Expand capability domains** — phase 3 of the compatibility plan: hooks,
+8. **Expand capability domains** — phase 3 of the compatibility plan: hooks,
    MCP injection/tool filtering, images, and usage metadata, plus generated
    compatibility documentation.
    ([plan](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
@@ -196,16 +211,18 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 ### Remaining ship gates
 
-| Gate                                                                      | Status                                        | Source                                                                                                             |
-| ------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Harness capability registry and compatibility diagnostics (phases 1–2)    | Not implemented                               | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
-| Tool-permission honesty, Qwen/OpenCode parity, behavioral verification    | Not implemented                               | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
-| Final release artifact audit                                              | In progress                                   | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
-| Landing/docs production deployment and DNS verification                   | In progress                                   | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
-| Pro license provider, entitlement service, activation, and feature gating | Not implemented                               | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
-| Rebrand/external identity cutover                                         | In progress                                   | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                       |
-| Marketplace/Open VSX publisher authentication and publish                 | Not done                                      | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
-| Separate npm CLI packaging                                                | Deferred unless required for launch messaging | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
+| Gate                                                                      | Status                                         | Source                                                                                                             |
+| ------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Harness capability registry and compatibility diagnostics (phase 1)       | Not implemented                                | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
+| Tool-permission honesty, Qwen/OpenCode parity, behavioral verification    | Not implemented                                | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
+| Cross-process permission-lease gate (step-scoped, atomic acquisition)     | Partial — lease exists, acquisition not atomic | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
+| Per-step CLI `--json` result contract                                     | Not implemented                                | [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                                                                 |
+| Final release artifact audit                                              | In progress                                    | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
+| Landing/docs production deployment and DNS verification                   | In progress                                    | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
+| Pro license provider, entitlement service, activation, and feature gating | Not implemented                                | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
+| Rebrand/external identity cutover                                         | In progress                                    | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                       |
+| Marketplace/Open VSX publisher authentication and publish                 | Not done                                       | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
+| Separate npm CLI packaging                                                | Deferred unless required for launch messaging  | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
 
 ### Launch sequence
 
@@ -253,16 +270,17 @@ confidence as other harnesses.
 Rejected plans remain in `dev/rejected/` so decisions and prior research are not
 lost.
 
-| Removed item                                                                   | Reason                                                                                                                 |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| [BMAD templates](../rejected/BMAD_FOR_CTRLYOKE.md)                             | Built-in linear and orchestrator templates cover the patterns without third-party methodology/trademark coupling.      |
-| [Raw prompt mode](../rejected/RAW_PROMPT_MODE_PLAN.md)                         | A bypass execution path weakens consistent preparation; fenced suppression and dry-run preview address the real needs. |
-| [Template setup scripts](../rejected/TEMPLATE_SETUP_SCRIPTS.md)                | Arbitrary template code creates avoidable trust and portability costs; typed variables are sufficient.                 |
-| [AGENTS.md generation/injection](../rejected/AGENTS_MD_GENERATION.md)          | Risks duplicate harness-native instructions; generation can remain a template/workflow concern.                        |
-| [Additional instructions channel](../rejected/ADDITIONAL_INSTRUCTIONS_PLAN.md) | Duplicates agents, skills, workflow defaults, and project instruction files.                                           |
-| [Native mobile app](../rejected/NATIVE_MOBILE_APP.md)                          | The responsive hosted dashboard is the mobile client.                                                                  |
-| [Conditional steps](../rejected/CONDITIONAL_STEPS_PLAN.md)                     | External scripts and programmatic orchestration avoid a workflow expression language.                                  |
-| [Mobile header redesign](../rejected/MOBILE_HEADER_REDESIGN_PLAN.md)           | Superseded by the implemented mobile layout.                                                                           |
+| Removed item                                                                   | Reason                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [BMAD templates](../rejected/BMAD_FOR_CTRLYOKE.md)                             | Built-in linear and orchestrator templates cover the patterns without third-party methodology/trademark coupling.                                                                                                                                                          |
+| [Raw prompt mode](../rejected/RAW_PROMPT_MODE_PLAN.md)                         | A bypass execution path weakens consistent preparation; fenced suppression and dry-run preview address the real needs.                                                                                                                                                     |
+| [Template setup scripts](../rejected/TEMPLATE_SETUP_SCRIPTS.md)                | Arbitrary template code creates avoidable trust and portability costs; typed variables are sufficient.                                                                                                                                                                     |
+| [AGENTS.md generation/injection](../rejected/AGENTS_MD_GENERATION.md)          | Risks duplicate harness-native instructions; generation can remain a template/workflow concern.                                                                                                                                                                            |
+| [Additional instructions channel](../rejected/ADDITIONAL_INSTRUCTIONS_PLAN.md) | Duplicates agents, skills, workflow defaults, and project instruction files.                                                                                                                                                                                               |
+| [Native mobile app](../rejected/NATIVE_MOBILE_APP.md)                          | The responsive hosted dashboard is the mobile client.                                                                                                                                                                                                                      |
+| [Conditional steps](../rejected/CONDITIONAL_STEPS_PLAN.md)                     | External scripts and programmatic orchestration avoid a workflow expression language.                                                                                                                                                                                      |
+| [Mobile header redesign](../rejected/MOBILE_HEADER_REDESIGN_PLAN.md)           | Superseded by the implemented mobile layout.                                                                                                                                                                                                                               |
+| [MCP lifecycle control surface](../rejected/MCP_CONTROL_SURFACE_PLAN.md)       | The built-in MCP server is blanket auto-approved and scoped to its own run; auto-approved start/cancel/pause would be an unbounded spawn and DoS primitive and duplicate the CLI's control plane. Cursor-based output paging was harvested to `MCP_OUTPUT_PAGING_PLAN.md`. |
 
 AI-generated workflow scaffolding is also removed as a separate roadmap feature:
 the built-in workflow-composer/spec-orchestrator agents and
@@ -319,24 +337,23 @@ criteria matter more than speculative dates.
 
 ### Active
 
-| Plan                                                               | Current outcome                                                    |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)                     | Canonical external launch checklist                                |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               | Marketplace/package release work                                   |
-| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                     | Implementation mostly complete; production verification remains    |
-| [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) | Infrastructure/content exists; freshness and deployment remain     |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                       | Architecture decided; provider and extension implementation remain |
-| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)       | External cutover work remains                                      |
-| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                 | Per-step JSON design ready to implement; SDK/MCP launch deferred   |
+| Plan                                                               | Current outcome                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)                     | Canonical external launch checklist                                            |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               | Marketplace/package release work                                               |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                     | Implementation mostly complete; production verification remains                |
+| [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) | Infrastructure/content exists; freshness and deployment remain                 |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                       | Architecture decided; provider and extension implementation remain             |
+| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)       | External cutover work remains                                                  |
+| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                 | **P0 release gate.** Per-step JSON ready to implement; SDK/MCP launch rejected |
 
 ### Prioritized backlog
 
 | Plan                                                                                                | Priority                  |
 | --------------------------------------------------------------------------------------------------- | ------------------------- |
 | [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                           | P2 (reduced scope)        |
-| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0 phases 1–2; P1 phase 3 |
+| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0 phase 1; P1 phases 2–3 |
 | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                       | P0                        |
-| [`MCP_CONTROL_SURFACE_PLAN.md`](../backlog/MCP_CONTROL_SURFACE_PLAN.md)                             | P1                        |
 | [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                         | P1                        |
 | [`DRY_RUN_PREVIEW_PLAN.md`](../backlog/DRY_RUN_PREVIEW_PLAN.md)                                     | P1                        |
 | [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)             | P1                        |
@@ -347,6 +364,7 @@ criteria matter more than speculative dates.
 | [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                 | P2                        |
 | [`STANDALONE_SERVER_PLAN.md`](../backlog/STANDALONE_SERVER_PLAN.md)                                 | P2                        |
 | [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                             | P2                        |
+| [`MCP_OUTPUT_PAGING_PLAN.md`](../backlog/MCP_OUTPUT_PAGING_PLAN.md)                                 | P2                        |
 | [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md)                                       | P2                        |
 | [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../backlog/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                        |
 | [`HARNESS_USAGE_TRACKING_PLAN.md`](../backlog/HARNESS_USAGE_TRACKING_PLAN.md)                       | P2                        |
