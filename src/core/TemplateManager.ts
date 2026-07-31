@@ -10,13 +10,22 @@ import { getCtrlYokeUserTemplateDir } from "../utils/HarnessDirectoryUtils";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
   DISCOVERY_SOURCES,
+  WORKFLOW_FILE_FORMATS,
   type DiscoverySource,
+  type WorkflowFileFormat,
 } from "../types/DashboardConstants";
 import { PromptFileParser } from "./PromptFileParser";
 import type { PromptFile } from "../types/CtrlYokeTypes";
 
 /** Scope for a custom (non-built-in) template: where it's stored and read from. */
 export type TemplateScope = "user" | "workspace";
+
+const TEMPLATE_STARTER_ID = "template-starter";
+const CUSTOM_TEMPLATE_EXTENSIONS = [
+  ".ctrlyoke.yaml",
+  ".ctrlyoke.yml",
+  ".ctrlyoke.json",
+] as const;
 
 /**
  * A single template variable — name plus optional UI metadata.
@@ -108,6 +117,7 @@ export class TemplateManager {
   // All others are self-describing via _templateMeta in their YAML files.
   private readonly BUILT_IN_TEMPLATE_IDS = [
     "blank",
+    TEMPLATE_STARTER_ID,
     "simple-feature",
     "fix-tests",
     "full-feature",
@@ -315,6 +325,29 @@ export class TemplateManager {
     return { scope, name };
   }
 
+  /** Resolve a custom template regardless of whether it is authored as YAML or JSON. */
+  private async findCustomTemplatePath(
+    scope: TemplateScope,
+    name: string
+  ): Promise<string | undefined> {
+    const customPath = this.getTemplatesPathForScope(scope);
+    if (!customPath) return undefined;
+
+    for (const extension of CUSTOM_TEMPLATE_EXTENSIONS) {
+      const candidate = path.join(customPath, `${name}${extension}`);
+      if (await this.pathExists(candidate)) return candidate;
+    }
+    return undefined;
+  }
+
+  private getCustomTemplateExtension(
+    format: WorkflowFileFormat
+  ): (typeof CUSTOM_TEMPLATE_EXTENSIONS)[number] {
+    if (format === WORKFLOW_FILE_FORMATS.YAML) return ".ctrlyoke.yaml";
+    if (format === WORKFLOW_FILE_FORMATS.JSON) return ".ctrlyoke.json";
+    throw new Error(`Unsupported template format: ${String(format)}`);
+  }
+
   /**
    * Get all available templates (built-in + custom + action).
    *
@@ -381,11 +414,10 @@ export class TemplateManager {
     // Check if it's a custom template (starts with "custom:")
     if (templateId.startsWith("custom:")) {
       const { scope, name } = this.parseCustomTemplateId(templateId);
-      const customPath = this.getTemplatesPathForScope(scope);
-      if (!customPath) {
-        throw new Error("No workspace folder available");
+      const templatePath = await this.findCustomTemplatePath(scope, name);
+      if (!templatePath) {
+        throw new Error(`Custom template not found: ${name}`);
       }
-      const templatePath = path.join(customPath, `${name}.ctrlyoke.json`);
       return await fs.promises.readFile(templatePath, "utf-8");
     }
 
@@ -485,7 +517,7 @@ export class TemplateManager {
       throw new Error("No workspace folder available");
     }
 
-    // Get template content (built-ins are YAML; custom templates are JSON)
+    // Get template content (built-ins are YAML; custom templates may be YAML or JSON)
     const templateContent = await this.getTemplateContent(templateId);
 
     // Apply declared defaults for any variable the caller left blank or absent,
@@ -550,7 +582,8 @@ export class TemplateManager {
    */
   private async prepareCustomTemplatePath(
     templateName: string,
-    scope: TemplateScope
+    scope: TemplateScope,
+    format: WorkflowFileFormat
   ): Promise<string> {
     this.validateTemplateName(templateName);
 
@@ -563,85 +596,81 @@ export class TemplateManager {
       await fs.promises.mkdir(customPath, { recursive: true });
     }
 
-    const fullPath = path.join(customPath, `${templateName}.ctrlyoke.json`);
-
-    if (await this.pathExists(fullPath)) {
+    if (await this.findCustomTemplatePath(scope, templateName)) {
       throw new Error(`Template already exists: ${templateName}`);
     }
 
-    return fullPath;
+    return path.join(
+      customPath,
+      `${templateName}${this.getCustomTemplateExtension(format)}`
+    );
+  }
+
+  private serializeTemplate(
+    template: Record<string, unknown>,
+    format: WorkflowFileFormat
+  ): string {
+    if (format === WORKFLOW_FILE_FORMATS.YAML) {
+      return jsYaml.dump(template, {
+        lineWidth: -1,
+        noRefs: true,
+        quoteStyle: "double",
+      });
+    }
+    return JSON.stringify(template, null, 2);
   }
 
   /**
-   * Create a new custom template with a feature-demonstrating starter.
-   * The starter declares one variable of every type (file, text, select,
-   * directory, harness) so users can see every variable-metadata field,
-   * and every UI control it renders to, in context.
+   * Create a custom template by cloning an existing template. Keeping the base
+   * in the normal template registry means every available template — built-in
+   * or custom — can be used as a starting point without an inline special case.
    *
    * @param templateName Name for the new template
    * @param scope Where to store the template: "workspace" (.ctrlyoke/templates)
    *   or "user" (~/.ctrlyoke/templates, machine-wide)
+   * @param format Serialization format for the custom template
+   * @param baseTemplateId Existing built-in or custom template to clone
    * @returns Path to created template file
    */
   async createCustomTemplate(
     templateName: string,
-    scope: TemplateScope = "workspace"
+    scope: TemplateScope = "workspace",
+    format: WorkflowFileFormat = WORKFLOW_FILE_FORMATS.YAML,
+    baseTemplateId: string = TEMPLATE_STARTER_ID
   ): Promise<string> {
-    const fullPath = await this.prepareCustomTemplatePath(templateName, scope);
+    const fullPath = await this.prepareCustomTemplatePath(
+      templateName,
+      scope,
+      format
+    );
+    const baseInfo = await this.getTemplateInfo(baseTemplateId);
+    if (!baseInfo) {
+      throw new Error(`Base template not found: ${baseTemplateId}`);
+    }
+    const baseContent = await this.getTemplateContent(baseTemplateId);
+    const parsed = jsYaml.load(baseContent);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`Template has invalid content: ${baseTemplateId}`);
+    }
 
-    const starter = {
+    const base = parsed as Record<string, unknown>;
+    const existingMeta =
+      base["_templateMeta"] &&
+      typeof base["_templateMeta"] === "object" &&
+      !Array.isArray(base["_templateMeta"])
+        ? (base["_templateMeta"] as Record<string, unknown>)
+        : {};
+    const template = {
+      ...base,
       _templateMeta: {
+        ...existingMeta,
         name: templateName,
-        description: "Describe what this template does",
-        variables: {
-          specFile: {
-            type: "file",
-            fileFilter: ["**/*.md", "**/*.txt"],
-            autoFillFilename: true,
-          },
-          constraints: {
-            type: "text",
-            default: "Follow existing patterns; keep changes minimal.",
-            description:
-              "Extra guidance applied while planning and implementing.",
-            multiline: true,
-          },
-          reviewDepth: {
-            type: "select",
-            options: ["quick", "thorough"],
-            default: "thorough",
-            description: "How much detail to put into the plan.",
-          },
-          outputDir: {
-            type: "directory",
-            description:
-              "Where implementation artifacts should be written (optional).",
-          },
-          harness: {
-            type: "harness",
-            default: "claude-cli",
-            description: "Which harness runs the implementation step.",
-          },
-        },
       },
-      steps: [
-        {
-          name: "plan",
-          prompt:
-            "Review the following spec and create a {reviewDepth} implementation plan:\n@{file:specFile}\n\nConstraints: {text:constraints}\n\nIf useful, write any plan artifacts under {outputDir}.",
-        },
-        {
-          name: "implement",
-          prompt: "Implement the plan you just created.",
-          resumeSession: true,
-          harness: "{harness}",
-        },
-      ],
     };
 
     await fs.promises.writeFile(
       fullPath,
-      JSON.stringify(starter, null, 2),
+      this.serializeTemplate(template, format),
       "utf-8"
     );
 
@@ -660,14 +689,20 @@ export class TemplateManager {
    * @param scope Where to store the template: "workspace" (.ctrlyoke/templates)
    *   or "user" (~/.ctrlyoke/templates, machine-wide)
    * @param workflowContent Cleaned workflow object (steps/finalStep/vars/etc.)
+   * @param format Serialization format for the custom template
    * @returns Path to created template file
    */
   async saveWorkflowAsTemplate(
     templateName: string,
     scope: TemplateScope,
-    workflowContent: Record<string, unknown>
+    workflowContent: Record<string, unknown>,
+    format: WorkflowFileFormat = WORKFLOW_FILE_FORMATS.YAML
   ): Promise<string> {
-    const fullPath = await this.prepareCustomTemplatePath(templateName, scope);
+    const fullPath = await this.prepareCustomTemplatePath(
+      templateName,
+      scope,
+      format
+    );
 
     const template = {
       _templateMeta: {
@@ -679,7 +714,7 @@ export class TemplateManager {
 
     await fs.promises.writeFile(
       fullPath,
-      JSON.stringify(template, null, 2),
+      this.serializeTemplate(template, format),
       "utf-8"
     );
 
@@ -706,7 +741,7 @@ export class TemplateManager {
   }
 
   /**
-   * Discover all `*.ctrlyoke.json` custom templates in a single directory.
+   * Discover all YAML and JSON custom templates in a single directory.
    * @param dirPath Directory to scan (null = skip silently, e.g. no workspace open)
    * @param source Scope label attached to each discovered template
    */
@@ -722,11 +757,20 @@ export class TemplateManager {
 
     try {
       const files = await fs.promises.readdir(dirPath);
-      for (const file of files) {
-        if (file.endsWith(".ctrlyoke.json")) {
+      const seenNames = new Set<string>();
+      for (const extension of CUSTOM_TEMPLATE_EXTENSIONS) {
+        for (const file of files.filter((candidate) =>
+          candidate.endsWith(extension)
+        )) {
           const fullPath = path.join(dirPath, file);
-          const name = file.replace(".ctrlyoke.json", "");
+          const name = file.slice(0, -extension.length);
 
+          if (seenNames.has(name)) {
+            Log.warn(
+              `Ignoring duplicate custom template basename in ${dirPath}: ${file}`
+            );
+            continue;
+          }
           try {
             const content = await fs.promises.readFile(fullPath, "utf-8");
             const meta = this.parseTemplateMeta(content);
@@ -746,6 +790,7 @@ export class TemplateManager {
               isBuiltIn: false,
               source,
             });
+            seenNames.add(name);
           } catch (error) {
             Log.warn(`Failed to read custom template: ${file}`, error);
           }

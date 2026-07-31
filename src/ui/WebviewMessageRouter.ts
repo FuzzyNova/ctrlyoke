@@ -935,6 +935,8 @@ export class WebviewMessageRouter {
         .handleCreateCustomTemplate(
           message.name,
           message.scope,
+          message.format,
+          message.baseTemplateId,
           ctx.postMessage
         )
         .catch((err) => Log.warn(`CREATE_CUSTOM_TEMPLATE failed: ${err}`));
@@ -1195,6 +1197,7 @@ export class WebviewMessageRouter {
         message.address,
         message.name,
         message.scope,
+        message.format,
         ctx.postMessage,
         ctx.clientId
       );

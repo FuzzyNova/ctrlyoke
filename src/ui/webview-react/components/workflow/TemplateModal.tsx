@@ -10,10 +10,16 @@ import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES, HARNESS_IDS } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  HARNESS_IDS,
+  WORKFLOW_FILE_FORMATS,
+  type WorkflowFileFormat,
+} from "../../types/messages";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
+import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -102,13 +108,21 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   >(null);
   const [newTemplateScope, setNewTemplateScope] =
     useState<TemplateScope>("workspace");
+  const [newTemplateFormat, setNewTemplateFormat] =
+    useState<WorkflowFileFormat>(WORKFLOW_FILE_FORMATS.YAML);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
   // Initialize form state when modal opens
   const prevIsOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
-      const initId = defaultTemplateId || "blank";
+      const requestedId = defaultTemplateId || "blank";
+      const template =
+        templates.find((candidate) => candidate.id === requestedId) ??
+        templates.find((candidate) => candidate.id === "blank") ??
+        templates[0] ??
+        null;
+      const initId = template?.id ?? "";
       setSelectedTemplateId(initId);
       setFilename("");
       setFilenameError(null);
@@ -117,10 +131,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setNewTemplateName("");
       setNewTemplateNameError(null);
       setNewTemplateScope("workspace");
+      setNewTemplateFormat(WORKFLOW_FILE_FORMATS.YAML);
       setIsCreatingTemplate(false);
 
       // Sync currentTemplate to match the default selection and seed its defaults
-      const template = templates.find((t) => t.id === initId) ?? null;
       setVariables(seedVariableDefaults(template));
       setCurrentTemplate(template);
     }
@@ -204,8 +218,16 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       type: MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE,
       name: newTemplateName.trim(),
       scope: newTemplateScope,
+      format: newTemplateFormat,
+      baseTemplateId: selectedTemplateId,
     });
-  }, [vscode, newTemplateName, newTemplateScope]);
+  }, [
+    vscode,
+    newTemplateName,
+    newTemplateScope,
+    newTemplateFormat,
+    selectedTemplateId,
+  ]);
 
   // Consume the result of CREATE_CUSTOM_TEMPLATE (sent back via CUSTOM_TEMPLATE_CREATED)
   useEffect(() => {
@@ -486,6 +508,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 )}
               </div>
 
+              <p className="text-xs text-description-fg">
+                Starts from {currentTemplate?.name ?? "the selected template"}.
+                Its workflow structure, metadata, and variables will be copied.
+              </p>
+
               <div className="flex items-center gap-2">
                 <span className="text-sm text-foreground">Location</span>
                 <ScopeToggle
@@ -493,6 +520,16 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                   value={newTemplateScope}
                   onChange={setNewTemplateScope}
                   options={TEMPLATE_SCOPE_OPTIONS}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-foreground">Format</span>
+                <ScopeToggle
+                  ariaLabel="Template format"
+                  value={newTemplateFormat}
+                  onChange={setNewTemplateFormat}
+                  options={TEMPLATE_FORMAT_OPTIONS}
                 />
               </div>
 

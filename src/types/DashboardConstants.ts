@@ -13,6 +13,15 @@ import {
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 
+/** File formats supported when authoring workflows and templates. */
+export const WORKFLOW_FILE_FORMATS = {
+  YAML: "yaml",
+  JSON: "json",
+} as const;
+
+export type WorkflowFileFormat =
+  (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -122,7 +131,7 @@ export const MESSAGE_TYPES = {
   TEMPLATE_SELECTED: "templateSelected",
   SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
   CREATE_WORKFLOW: "createWorkflow",
-  CREATE_CUSTOM_TEMPLATE: "createCustomTemplate", // { name, scope } — fully webview-driven, no native VS Code UI
+  CREATE_CUSTOM_TEMPLATE: "createCustomTemplate", // { name, scope, format, baseTemplateId } — fully webview-driven, no native VS Code UI
   BROWSE_TEMPLATE_FILE: "browseTemplateFile", // Request OS file picker for a template variable
 
   // New Workflow Modal - Extension -> Webview
@@ -179,7 +188,7 @@ export const MESSAGE_TYPES = {
   SAVE_WORKFLOW: "saveWorkflow", // Webview -> Extension: { filePath, format } confirmed by user
   WORKFLOW_SAVED: "workflowSaved", // Extension -> Webview: { filePath } success
   WORKFLOW_SAVE_FAILED: "workflowSaveFailed", // Extension -> Webview: { error } failure
-  SAVE_WORKFLOW_AS_TEMPLATE: "saveWorkflowAsTemplate", // Webview -> Extension: { name, scope } — snapshot current workflow as a custom template
+  SAVE_WORKFLOW_AS_TEMPLATE: "saveWorkflowAsTemplate", // Webview -> Extension: { name, scope, format } — snapshot current workflow as a custom template
   WORKFLOW_SAVED_AS_TEMPLATE: "workflowSavedAsTemplate", // Extension -> Webview: { templates, templateId } success (failure reuses WORKFLOW_SAVE_FAILED)
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }

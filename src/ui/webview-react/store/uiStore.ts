@@ -5,6 +5,7 @@ import type {
   WorkflowSummary,
   HarnessId,
   ExecutionState,
+  WorkflowFileFormat,
 } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
@@ -137,7 +138,7 @@ export interface SaveWorkflowDialogData {
   address: WorkflowViewAddress;
   title: string;
   defaultPath: string;
-  defaultFormat: "yaml" | "json";
+  defaultFormat: WorkflowFileFormat;
 }
 
 /** Transient, request-addressed save-path preflight state. */

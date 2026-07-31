@@ -334,9 +334,7 @@ export class WorkflowCommandHandler {
     }
   }
 
-  /**
-   * Create a new custom template with a feature-demonstrating starter
-   */
+  /** Create a new custom template from the built-in Template Starter. */
   async createNewTemplate(): Promise<void> {
     try {
       let scope: TemplateScope = "user";
@@ -391,7 +389,7 @@ export class WorkflowCommandHandler {
       await vscode.window.showTextDocument(doc);
 
       vscode.window.showInformationMessage(
-        `✅ Created custom template: ${templateName.trim()}.ctrlyoke.json`
+        `✅ Created custom template: ${path.basename(templatePath)}`
       );
     } catch (error) {
       const errorMsg = getErrorMessage(error);

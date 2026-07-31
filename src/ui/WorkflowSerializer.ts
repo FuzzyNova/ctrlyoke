@@ -7,6 +7,8 @@ import {
   EXECUTION_STATES,
   PROMPT_PROPERTIES,
   PANEL_CLIENT_ID,
+  WORKFLOW_FILE_FORMATS,
+  type WorkflowFileFormat,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -470,7 +472,7 @@ export class WorkflowSerializer {
     requestId: string,
     address: WorkflowViewAddress,
     filePath: string,
-    format: "yaml" | "json",
+    format: WorkflowFileFormat,
     postMessage?: PostMessageFn,
     clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
@@ -500,7 +502,7 @@ export class WorkflowSerializer {
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
 
       let serialized: string;
-      if (format === "yaml") {
+      if (format === WORKFLOW_FILE_FORMATS.YAML) {
         serialized = yaml.dump(clean, {
           lineWidth: -1,
           noRefs: true,
@@ -549,6 +551,7 @@ export class WorkflowSerializer {
     address: WorkflowViewAddress,
     name: string,
     scope: TemplateScope,
+    format: WorkflowFileFormat,
     postMessage?: PostMessageFn,
     clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
@@ -577,7 +580,8 @@ export class WorkflowSerializer {
       const templatePath = await this.templateManager.saveWorkflowAsTemplate(
         name,
         scope,
-        clean
+        clean,
+        format
       );
 
       const templates = await this.templateManager.getAvailableTemplates();
@@ -777,13 +781,17 @@ export class WorkflowSerializer {
   async handleCreateCustomTemplate(
     name: string,
     scope: TemplateScope,
+    format: WorkflowFileFormat,
+    baseTemplateId: string,
     postMessage?: PostMessageFn
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     try {
       const templatePath = await this.templateManager.createCustomTemplate(
         name,
-        scope
+        scope,
+        format,
+        baseTemplateId
       );
 
       // Best-effort editor convenience for desktop VS Code users; irrelevant to

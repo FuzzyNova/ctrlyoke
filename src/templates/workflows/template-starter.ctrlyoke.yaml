@@ -1,0 +1,44 @@
+_templateMeta:
+  name: Template Starter
+  description: Demonstrates every template variable type and its available metadata.
+  variables:
+    specFile:
+      type: file
+      fileFilter:
+        - "**/*.md"
+        - "**/*.txt"
+      autoFillFilename: true
+    constraints:
+      type: text
+      default: Follow existing patterns; keep changes minimal.
+      description: Extra guidance applied while planning and implementing.
+      multiline: true
+    reviewDepth:
+      type: select
+      options:
+        - quick
+        - thorough
+      default: thorough
+      description: How much detail to put into the plan.
+    outputDir:
+      type: directory
+      description: Where implementation artifacts should be written (optional).
+    harness:
+      type: harness
+      default: claude-cli
+      description: Which harness runs the implementation step.
+
+steps:
+  - name: plan
+    prompt: |
+      Review the following spec and create a {reviewDepth} implementation plan:
+      @{file:specFile}
+
+      Constraints: {text:constraints}
+
+      If useful, write any plan artifacts under {outputDir}.
+
+  - name: implement
+    prompt: Implement the plan you just created.
+    resumeSession: true
+    harness: "{harness}"

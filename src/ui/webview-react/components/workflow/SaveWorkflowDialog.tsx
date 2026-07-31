@@ -2,9 +2,14 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, ScopeToggle, SettingToggleRow } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_FILE_FORMATS,
+  type WorkflowFileFormat,
+} from "../../types/messages";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
+import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
 
 /**
  * Split a full save path into its directory (`location`) and basename
@@ -24,7 +29,7 @@ function splitSavePath(fullPath: string): { location: string; name: string } {
 function joinSavePath(
   location: string,
   name: string,
-  format: "yaml" | "json"
+  format: WorkflowFileFormat
 ): string {
   const trimmedLocation = location.replace(/\/$/, "");
   const fileName = `${name}.ctrlyoke.${format}`;
@@ -35,7 +40,8 @@ function joinSavePath(
  * SaveWorkflowDialog
  *
  * Modal dialog for saving the current workflow as a .ctrlyoke.yaml or
- * .ctrlyoke.json file. Runtime fields (_runtime, status, id, etc.) are
+ * .ctrlyoke.yaml or .ctrlyoke.json file. Runtime fields (_runtime, status,
+ * id, etc.) are
  * stripped by the extension before writing.
  *
  * Flow:
@@ -47,7 +53,7 @@ function joinSavePath(
  *   → useMessageHandler closes dialog (on success) or shows toast error (on failure)
  *
  * Toggling "Save as Template" swaps the location/name/format fields for a
- * template name + scope picker and posts SAVE_WORKFLOW_AS_TEMPLATE instead —
+ * template name + scope + format picker and posts SAVE_WORKFLOW_AS_TEMPLATE instead —
  * the extension snapshots the current values (no {placeholder} conversion)
  * into a new custom template and replies with WORKFLOW_SAVED_AS_TEMPLATE or
  * (reused) WORKFLOW_SAVE_FAILED.
@@ -79,7 +85,9 @@ export const SaveWorkflowDialog: React.FC = () => {
   const [location, setLocation] = useState("");
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
-  const [format, setFormat] = useState<"yaml" | "json">("yaml");
+  const [format, setFormat] = useState<WorkflowFileFormat>(
+    WORKFLOW_FILE_FORMATS.YAML
+  );
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateNameError, setTemplateNameError] = useState<string | null>(
@@ -87,6 +95,9 @@ export const SaveWorkflowDialog: React.FC = () => {
   );
   const [templateScope, setTemplateScope] =
     useState<TemplateScope>("workspace");
+  const [templateFormat, setTemplateFormat] = useState<WorkflowFileFormat>(
+    WORKFLOW_FILE_FORMATS.YAML
+  );
 
   // Reset local state whenever the dialog is opened with new data.
   useEffect(() => {
@@ -102,6 +113,7 @@ export const SaveWorkflowDialog: React.FC = () => {
       setTemplateName("");
       setTemplateNameError(null);
       setTemplateScope("workspace");
+      setTemplateFormat(WORKFLOW_FILE_FORMATS.YAML);
     }
   }, [saveWorkflowDialogOpen, saveWorkflowDialogData]);
 
@@ -212,6 +224,7 @@ export const SaveWorkflowDialog: React.FC = () => {
         address: saveWorkflowDialogData?.address,
         name: templateName.trim(),
         scope: templateScope,
+        format: templateFormat,
       });
       return;
     }
@@ -235,6 +248,7 @@ export const SaveWorkflowDialog: React.FC = () => {
     saveAsTemplate,
     templateName,
     templateScope,
+    templateFormat,
     saveWorkflowDialogData,
     workflowPreviewPath,
   ]);
@@ -254,7 +268,7 @@ export const SaveWorkflowDialog: React.FC = () => {
   const templateDirPreview =
     templateScope === "user" ? "~/.ctrlyoke/templates" : ".ctrlyoke/templates";
   const previewPath = saveAsTemplate
-    ? `${templateDirPreview}/${templateName.trim() || "…"}.ctrlyoke.json`
+    ? `${templateDirPreview}/${templateName.trim() || "…"}.ctrlyoke.${templateFormat}`
     : workflowPreviewPath;
 
   const handleKeyDown = useCallback(
@@ -316,7 +330,7 @@ export const SaveWorkflowDialog: React.FC = () => {
               aria-labelledby="format-label"
               className="inline-flex rounded border border-btn-border overflow-hidden"
             >
-              {(["yaml", "json"] as const).map((fmt) => (
+              {Object.values(WORKFLOW_FILE_FORMATS).map((fmt) => (
                 <button
                   key={fmt}
                   type="button"
@@ -367,6 +381,15 @@ export const SaveWorkflowDialog: React.FC = () => {
                 value={templateScope}
                 onChange={setTemplateScope}
                 options={TEMPLATE_SCOPE_OPTIONS}
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-sm text-foreground">Format</span>
+              <ScopeToggle
+                ariaLabel="Template format"
+                value={templateFormat}
+                onChange={setTemplateFormat}
+                options={TEMPLATE_FORMAT_OPTIONS}
               />
             </div>
           </div>

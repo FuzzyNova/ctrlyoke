@@ -34,6 +34,7 @@ import {
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
+  type WorkflowFileFormat,
 } from "./DashboardConstants";
 import type {
   ErrorBehavior,
@@ -790,6 +791,15 @@ export interface OpenNewWorkflowModalMessage {
   defaultTemplateId?: string;
 }
 
+/** Webview → Extension: clone the selected base into a custom template. */
+export interface CreateCustomTemplateMessage {
+  type: typeof MESSAGE_TYPES.CREATE_CUSTOM_TEMPLATE;
+  name: string;
+  scope: "user" | "workspace";
+  format: WorkflowFileFormat;
+  baseTemplateId: string;
+}
+
 /**
  * Recent workflows message (extension -> webview)
  */
@@ -845,7 +855,7 @@ export interface SaveWorkflowDialogDataMessage {
   /** User-facing framing for the addressed draft/run. */
   title: string;
   defaultPath: string;
-  defaultFormat: "yaml" | "json";
+  defaultFormat: WorkflowFileFormat;
 }
 
 /** Webview → Extension: non-mutating overwrite/security preflight for an export path. */
@@ -878,7 +888,7 @@ export interface SaveWorkflowMessage {
   requestId: string;
   address: WorkflowViewAddress;
   filePath: string;
-  format: "yaml" | "json";
+  format: WorkflowFileFormat;
 }
 
 /**
@@ -908,6 +918,7 @@ export interface SaveWorkflowAsTemplateMessage {
   address: WorkflowViewAddress;
   name: string;
   scope: "user" | "workspace";
+  format: WorkflowFileFormat;
 }
 
 /**

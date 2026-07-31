@@ -1,6 +1,11 @@
 import * as assert from "assert";
-import { suite, test } from "mocha";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import * as jsYaml from "js-yaml";
+import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
+import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
 
 // parseTemplateMeta and mergeVariablesWithMeta are private but pure — they operate
 // only on strings/objects and never touch the ExtensionContext — so we construct a
@@ -9,6 +14,20 @@ import { TemplateManager } from "../../core/TemplateManager";
 function makeManager(): any {
   return new TemplateManager({} as never);
 }
+
+const tempDirs: string[] = [];
+
+function makeTempDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-template-test-"));
+  tempDirs.push(dir);
+  return dir;
+}
+
+teardown(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 suite("TemplateManager variable metadata", () => {
   suite("parseTemplateMeta", () => {
@@ -225,6 +244,126 @@ suite("TemplateManager variable metadata", () => {
       const tm = makeManager();
       assert.throws(() => tm.parseCustomTemplateId("custom:no-scope-here"));
       assert.throws(() => tm.parseCustomTemplateId("custom:bogus-scope:name"));
+    });
+  });
+
+  suite("custom template persistence", () => {
+    test("clones the selected base as YAML and renames its metadata", async () => {
+      const tm = makeManager();
+      const templateDir = makeTempDir();
+      tm.getTemplatesPathForScope = () => templateDir;
+      tm.getTemplateInfo = async () => ({ id: "base" });
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  name: Base",
+          "  description: Keep me",
+          "  variables:",
+          "    feature:",
+          "      type: text",
+          "steps:",
+          "  - prompt: Build {feature}",
+          "",
+        ].join("\n");
+
+      const createdPath = await tm.createCustomTemplate(
+        "My Copy",
+        "workspace",
+        WORKFLOW_FILE_FORMATS.YAML,
+        "base"
+      );
+
+      assert.strictEqual(
+        createdPath,
+        path.join(templateDir, "My Copy.ctrlyoke.yaml")
+      );
+      const parsed = jsYaml.load(
+        await fs.promises.readFile(createdPath, "utf-8")
+      ) as any;
+      assert.strictEqual(parsed._templateMeta.name, "My Copy");
+      assert.strictEqual(parsed._templateMeta.description, "Keep me");
+      assert.strictEqual(parsed._templateMeta.variables.feature.type, "text");
+      assert.strictEqual(parsed.steps[0].prompt, "Build {feature}");
+    });
+
+    test("saves a workflow snapshot as JSON when requested", async () => {
+      const tm = makeManager();
+      const templateDir = makeTempDir();
+      tm.getTemplatesPathForScope = () => templateDir;
+
+      const createdPath = await tm.saveWorkflowAsTemplate(
+        "Snapshot",
+        "workspace",
+        { steps: [{ prompt: "Ship it" }] },
+        WORKFLOW_FILE_FORMATS.JSON
+      );
+
+      assert.strictEqual(
+        createdPath,
+        path.join(templateDir, "Snapshot.ctrlyoke.json")
+      );
+      const parsed = JSON.parse(
+        await fs.promises.readFile(createdPath, "utf-8")
+      );
+      assert.strictEqual(parsed._templateMeta.name, "Snapshot");
+      assert.strictEqual(parsed.steps[0].prompt, "Ship it");
+    });
+
+    test("discovers YAML, YML, and JSON templates", async () => {
+      const tm = makeManager();
+      const templateDir = makeTempDir();
+      await Promise.all([
+        fs.promises.writeFile(
+          path.join(templateDir, "yaml-template.ctrlyoke.yaml"),
+          "steps:\n  - prompt: yaml\n",
+          "utf-8"
+        ),
+        fs.promises.writeFile(
+          path.join(templateDir, "yml-template.ctrlyoke.yml"),
+          "steps:\n  - prompt: yml\n",
+          "utf-8"
+        ),
+        fs.promises.writeFile(
+          path.join(templateDir, "json-template.ctrlyoke.json"),
+          JSON.stringify({ steps: [{ prompt: "json" }] }),
+          "utf-8"
+        ),
+      ]);
+
+      const templates = await tm.discoverTemplatesInDir(
+        templateDir,
+        "workspace"
+      );
+
+      assert.deepStrictEqual(
+        templates.map((template: { id: string }) => template.id).sort(),
+        [
+          "custom:workspace:json-template",
+          "custom:workspace:yaml-template",
+          "custom:workspace:yml-template",
+        ]
+      );
+    });
+
+    test("rejects a duplicate basename even when the formats differ", async () => {
+      const tm = makeManager();
+      const templateDir = makeTempDir();
+      tm.getTemplatesPathForScope = () => templateDir;
+      await fs.promises.writeFile(
+        path.join(templateDir, "taken.ctrlyoke.json"),
+        "{}",
+        "utf-8"
+      );
+
+      await assert.rejects(
+        tm.saveWorkflowAsTemplate(
+          "taken",
+          "workspace",
+          { steps: [] },
+          WORKFLOW_FILE_FORMATS.YAML
+        ),
+        /Template already exists/
+      );
     });
   });
 });

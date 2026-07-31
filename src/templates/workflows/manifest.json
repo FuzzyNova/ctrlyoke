@@ -3,6 +3,14 @@
   "description": "ctrlyoke workflow templates for common automation patterns",
   "workflows": [
     {
+      "id": "template-starter",
+      "label": "Template Starter",
+      "description": "Demonstrates every template variable type and its available metadata",
+      "file": "template-starter.ctrlyoke.yaml",
+      "tags": ["template-authoring", "variables", "starter"],
+      "icon": "$(file-code)"
+    },
+    {
       "id": "simple-feature",
       "label": "Simple Feature Workflow",
       "description": "Plan → Implement → Commit in same session",

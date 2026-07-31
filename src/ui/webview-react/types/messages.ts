@@ -9,6 +9,7 @@
 // Re-export all constants from DashboardConstants
 export {
   MESSAGE_TYPES,
+  WORKFLOW_FILE_FORMATS,
   LOG_LEVELS,
   EXECUTION_STATES,
   STEP_STATUS,
@@ -87,6 +88,7 @@ export {
   type DiscoverySource,
   type HarnessFileType,
   type FooterPicker,
+  type WorkflowFileFormat,
 } from "@root/types/DashboardConstants";
 
 // Re-export all message and data types from WebviewMessageTypes
@@ -115,6 +117,7 @@ export {
   type SkillsUpdateMessage,
   type WorkflowPropertiesUpdateMessage,
   type OpenNewWorkflowModalMessage,
+  type CreateCustomTemplateMessage,
   type RecentWorkflowsMessage,
   type ActiveTerminalWorkflowRef,
   type ActiveTerminalWorkflowsMessage,

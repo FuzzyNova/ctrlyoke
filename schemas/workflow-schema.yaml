@@ -6,6 +6,45 @@ description: >-
   (e.g., @path/to/file, @path/to/dir/, #file:path, #selection:path:line-line, #sym:path:symbol:line)
   included directly in the prompt text. ctrlyoke expands these references into inline file/symbol
   content before sending to the AI.
+properties:
+  _templateMeta:
+    $ref: '#/definitions/templateMetadata'
+allOf:
+  - if:
+      not:
+        required:
+          - _templateMeta
+    then:
+      properties:
+        harness:
+          $ref: '#/definitions/harnessId'
+        _runtime:
+          type: object
+          properties:
+            harness:
+              $ref: '#/definitions/harnessId'
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              harness:
+                $ref: '#/definitions/harnessId'
+              _runtime:
+                type: object
+                properties:
+                  harness:
+                    $ref: '#/definitions/harnessId'
+        finalStep:
+          type: object
+          properties:
+            harness:
+              $ref: '#/definitions/harnessId'
+            _runtime:
+              type: object
+              properties:
+                harness:
+                  $ref: '#/definitions/harnessId'
 oneOf:
   - title: Single Step
     $ref: '#/definitions/workflowStep'
@@ -45,6 +84,77 @@ oneOf:
         required:
           - steps
 definitions:
+  harnessId:
+    type: string
+    enum:
+      - copilot-cli
+      - claude-cli
+      - codex-cli
+      - opencode-cli
+      - qwen-cli
+      - antigravity-cli
+  templatePlaceholder:
+    type: string
+    pattern: ^\{[a-z][a-zA-Z0-9]*\}$
+    description: >-
+      A template variable placeholder such as {harness}. Only accepted in authoring files that
+      declare _templateMeta.
+  templateMetadata:
+    type: object
+    description: >-
+      Authoring metadata for a reusable workflow template. Removed when the template is
+      instantiated.
+    properties:
+      name:
+        type: string
+        description: Display name shown in the template picker.
+      description:
+        type: string
+        description: Short explanation shown in the template picker.
+      variables:
+        type: object
+        description: Metadata for placeholders used by this template, keyed by variable name.
+        propertyNames:
+          pattern: ^[a-z][a-zA-Z0-9]*$
+        additionalProperties:
+          $ref: '#/definitions/templateVariableMetadata'
+    additionalProperties: false
+  templateVariableMetadata:
+    type: object
+    properties:
+      type:
+        type: string
+        enum:
+          - text
+          - file
+          - directory
+          - select
+          - harness
+        description: Control used to collect this variable in the template dialog.
+      fileFilter:
+        type: array
+        items:
+          type: string
+        description: File-picker glob patterns used by file variables.
+      options:
+        type: array
+        items:
+          type: string
+        minItems: 1
+        description: Available values for a select variable.
+      autoFillFilename:
+        type: boolean
+        description: Use the selected file or directory basename as the initial workflow name.
+      description:
+        type: string
+        description: Help text shown below the variable control.
+      default:
+        type: string
+        description: Initial value used when the user leaves the variable unchanged.
+      multiline:
+        type: boolean
+        description: Render a text variable as a multiline input.
+    additionalProperties: false
   workflowRunAddress:
     type: object
     additionalProperties: false
@@ -68,17 +178,12 @@ definitions:
       overrides, and runtime metadata
     properties:
       harness:
-        type: string
         description: >-
           Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional -
           defaults to ctrlyoke.harness setting.
-        enum:
-          - copilot-cli
-          - claude-cli
-          - codex-cli
-          - opencode-cli
-          - qwen-cli
-          - antigravity-cli
+        oneOf:
+          - $ref: '#/definitions/harnessId'
+          - $ref: '#/definitions/templatePlaceholder'
       model:
         type: string
         description: >-
