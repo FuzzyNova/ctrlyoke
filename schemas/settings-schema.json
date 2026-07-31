@@ -496,7 +496,7 @@
         "collapsedToolOutputLineCount": {
           "type": "integer",
           "minimum": 1,
-          "description": "Number of lines shown for Bash and generic tool results before they collapse."
+          "description": "Approximate number of wrapped lines shown for Bash and generic tool results before they collapse."
         },
         "confirmDeleteOperations": {
           "type": "boolean",

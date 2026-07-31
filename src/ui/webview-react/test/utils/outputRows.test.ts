@@ -71,6 +71,8 @@ describe("outputRows", () => {
       toolCallExpansionState: new Map(),
       defaultDiffCollapsed: false,
       collapsedToolOutputLineCount: 4,
+      outputContentWidth: 320,
+      outputFontSize: 13,
     });
 
     const bashRow = result.rows.find(
@@ -94,7 +96,9 @@ describe("outputRows", () => {
     }
 
     expect(bashRow.collapsedToolOutputLineCount).toBe(4);
+    expect(bashRow.collapsedToolOutputMaxCharacters).toBeLessThan(1200);
     expect(toolCallRow.toolCall?.renderPlan.output.visibleLineCount).toBe(4);
+    expect(toolCallRow.toolCall?.renderPlan.maxResultChars).toBeLessThan(1200);
   });
 
   it("adds a verdict between the response and stats rows", () => {

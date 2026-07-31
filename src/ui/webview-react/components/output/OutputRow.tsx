@@ -399,7 +399,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           getFieldMatches("response"),
           expansion.outputExpanded,
           collapsedToolOutputLineCount,
-          DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
+          row.collapsedToolOutputMaxCharacters ??
+            DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
         pendingBashExpand = "output";
@@ -410,7 +411,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           getFieldMatches("error"),
           expansion.errorExpanded,
           collapsedToolOutputLineCount,
-          DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
+          row.collapsedToolOutputMaxCharacters ??
+            DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
         pendingBashExpand = "error";
@@ -434,7 +436,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           getFieldMatches("toolContent"),
           sectionExpanded,
           collapsedToolOutputLineCount,
-          GENERIC_TOOL_CALL_MAX_RESULT_CHARS
+          row.toolCall?.renderPlan.maxResultChars ??
+            GENERIC_TOOL_CALL_MAX_RESULT_CHARS
         )
       ) {
         pendingToolCallExpand = toolContentIsError ? "error" : "output";
@@ -510,6 +513,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             exitCode={data.exitCode}
             status={data.status}
             maxLines={row.collapsedToolOutputLineCount}
+            maxCharacters={row.collapsedToolOutputMaxCharacters}
             expansion={bashExpansion}
             onExpansionChange={(section, expanded) =>
               onBashExpansionChange?.(row.key, section, expanded)

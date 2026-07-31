@@ -6,8 +6,44 @@ import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSe
  */
 export const DEFAULT_COLLAPSED_OUTPUT_MAX_LINES =
   DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT;
+/** Fallback when output geometry is unavailable (for example direct component use). */
 export const DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS = 1200;
+/** Hard ceiling for a collapsed preview, even when the configured line count is high. */
+export const MAX_COLLAPSED_OUTPUT_MAX_CHARS = 100_000;
 export const DEFAULT_COLLAPSED_COMMAND_MAX_CHARS = 160;
+
+export interface CollapsedOutputCharacterLimitOptions {
+  maxLines: number;
+  contentWidth?: number;
+  outputFontSize: number;
+  horizontalChrome?: number;
+  charWidthMultiplier?: number;
+}
+
+/**
+ * Converts a requested visible-line count into a width-aware character budget.
+ * Logical newlines are still capped separately by buildCollapsedOutputPreview.
+ */
+export function getCollapsedOutputMaxChars({
+  maxLines,
+  contentWidth,
+  outputFontSize,
+  horizontalChrome = 0,
+  charWidthMultiplier = 0.6,
+}: CollapsedOutputCharacterLimitOptions): number {
+  if (contentWidth == null || contentWidth <= 0) {
+    return DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
+  }
+
+  const charWidth = Math.max(5.5, outputFontSize * charWidthMultiplier);
+  const availableWidth = Math.max(80, contentWidth - horizontalChrome);
+  const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
+  const lineCount = Number.isFinite(maxLines)
+    ? Math.max(1, Math.floor(maxLines))
+    : DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+
+  return Math.min(MAX_COLLAPSED_OUTPUT_MAX_CHARS, lineCount * charsPerLine);
+}
 
 export interface CollapsedOutputPreview {
   fullLineCount: number;

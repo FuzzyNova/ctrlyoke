@@ -128,7 +128,7 @@ export interface CtrlYokeGlobalSettings {
      * is used. 0 = always virtualize, -1 = never virtualize.
      */
     outputVirtualizationRowThreshold: number;
-    /** Number of result lines shown before Bash and generic tool output collapses. */
+    /** Approximate number of wrapped result lines shown before Bash and generic tool output collapses. */
     collapsedToolOutputLineCount: number;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;

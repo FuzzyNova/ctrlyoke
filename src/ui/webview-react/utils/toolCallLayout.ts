@@ -3,6 +3,7 @@ import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedOutputPreview,
+  getCollapsedOutputMaxChars,
 } from "./outputTruncation";
 
 export interface ToolCallExpansionState {
@@ -69,6 +70,7 @@ export interface ToolCallRenderPlan {
   paramsLineCount: number;
   outputLineCount: number;
   errorLineCount: number;
+  maxResultChars: number;
   isOutputTruncated: boolean;
   isErrorTruncated: boolean;
 }
@@ -126,13 +128,14 @@ function buildResultSectionRenderPlan(
   sectionLineHeight: number,
   outputContentWidth?: number,
   outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
-  maxResultLines = GENERIC_TOOL_CALL_MAX_RESULT_LINES
+  maxResultLines = GENERIC_TOOL_CALL_MAX_RESULT_LINES,
+  maxResultChars = GENERIC_TOOL_CALL_MAX_RESULT_CHARS
 ): ToolCallSectionRenderPlan {
   const lineCount = countLines(text);
   const preview = buildCollapsedOutputPreview(text, {
     expanded,
     maxLines: maxResultLines,
-    maxChars: GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
+    maxChars: maxResultChars,
   });
   // When only 1 line would be hidden, buildCollapsedOutputPreview returns the
   // full text (isTruncated=false). Use expanded || isTruncated so the
@@ -199,6 +202,15 @@ export function buildToolCallRenderPlan(
     outputContentWidth,
     maxResultLines,
   } = input;
+  const resolvedMaxResultLines =
+    maxResultLines ?? GENERIC_TOOL_CALL_MAX_RESULT_LINES;
+  const maxResultChars = getCollapsedOutputMaxChars({
+    maxLines: resolvedMaxResultLines,
+    contentWidth: outputContentWidth,
+    outputFontSize: Math.max(10, outputFontSize - 1),
+    horizontalChrome: TOOL_RESULT_HORIZONTAL_CHROME,
+    charWidthMultiplier: TOOL_RESULT_SM_FONT_CHAR_RATIO,
+  });
 
   // FS*1.625 = leading-relaxed line height; clamped to 24 for small font sizes.
   const summaryLineHeight = Math.max(24, outputFontSize * 1.625);
@@ -234,7 +246,8 @@ export function buildToolCallRenderPlan(
         sectionLineHeight,
         outputContentWidth,
         outputFontSize,
-        maxResultLines
+        resolvedMaxResultLines,
+        maxResultChars
       )
     : getEmptySectionRenderPlan();
   const errorPlan = error
@@ -244,7 +257,8 @@ export function buildToolCallRenderPlan(
         sectionLineHeight,
         outputContentWidth,
         outputFontSize,
-        maxResultLines
+        resolvedMaxResultLines,
+        maxResultChars
       )
     : getEmptySectionRenderPlan();
 
@@ -263,6 +277,7 @@ export function buildToolCallRenderPlan(
     paramsLineCount: params.lineCount,
     outputLineCount: outputPlan.lineCount,
     errorLineCount: errorPlan.lineCount,
+    maxResultChars,
     isOutputTruncated: outputPlan.isTruncated,
     isErrorTruncated: errorPlan.isTruncated,
   };

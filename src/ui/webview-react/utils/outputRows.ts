@@ -46,6 +46,7 @@ import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
+  getCollapsedOutputMaxChars,
 } from "./outputTruncation";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import type { DiffRenderPlan } from "./rdvAdapter";
@@ -167,6 +168,8 @@ export interface StructuredEventRow extends OutputRowBase {
   toolCall?: OutputRowToolCallMeta;
   bashExpansion?: OutputRowBashExpansionState;
   collapsedToolOutputLineCount?: number;
+  /** Width-aware character budget backing the collapsed Bash preview. */
+  collapsedToolOutputMaxCharacters?: number;
   hideDiff: boolean;
 }
 
@@ -233,7 +236,7 @@ export interface BuildOutputRowsInput {
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
   outputContentWidth?: number;
-  /** Number of result lines shown before Bash and generic tool output collapses. */
+  /** Approximate number of wrapped result lines shown before Bash and generic tool output collapses. */
   collapsedToolOutputLineCount?: number;
 }
 
@@ -774,7 +777,8 @@ function estimateBashOutputHeight(
   outputContentWidth: number | undefined,
   outputFontSize: number,
   expansion?: OutputRowBashExpansionState,
-  maxResultLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES
+  maxResultLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  maxResultCharacters = BASH_RESULT_MAX_CHARS
 ): number {
   const data = event.data as {
     command?: string;
@@ -845,7 +849,7 @@ function estimateBashOutputHeight(
     const preview = buildCollapsedOutputPreview(content, {
       expanded,
       maxLines: maxResultLines,
-      maxChars: BASH_RESULT_MAX_CHARS,
+      maxChars: maxResultCharacters,
     });
     totalHeight += estimateTextBlockHeight(
       preview.visibleText,
@@ -909,7 +913,8 @@ function estimateStructuredTextHeight(
         outputContentWidth,
         outputFontSize,
         row.bashExpansion,
-        row.collapsedToolOutputLineCount
+        row.collapsedToolOutputLineCount,
+        row.collapsedToolOutputMaxCharacters
       );
     case CLI_EVENT_TYPES.FILE_EDIT: {
       const data = row.event.data as { path?: string; error?: string };
@@ -1365,6 +1370,12 @@ export function buildOutputRows(
         ? input.outputContentWidth -
           toolCallGutterWidth(input.outputFontSize ?? 13)
         : undefined;
+    const collapsedToolOutputMaxCharacters = getCollapsedOutputMaxChars({
+      maxLines: collapsedToolOutputLineCount,
+      contentWidth: toolCallContentWidth,
+      outputFontSize: Math.max(10, (input.outputFontSize ?? 13) - 1),
+      horizontalChrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+    });
     const streamingChunk = getStreamingChunk(input, target, message.phase);
     const visibleEvents = getVisibleStructuredEvents(output.structured?.events);
     const hasStructuredEvents = visibleEvents.length > 0;
@@ -1443,6 +1454,10 @@ export function buildOutputRows(
             ? input.bashExpansionState?.get(rowKey)
             : undefined,
         collapsedToolOutputLineCount,
+        collapsedToolOutputMaxCharacters:
+          visibleEvent.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+            ? collapsedToolOutputMaxCharacters
+            : undefined,
         diff:
           diffKey && diffStats
             ? {

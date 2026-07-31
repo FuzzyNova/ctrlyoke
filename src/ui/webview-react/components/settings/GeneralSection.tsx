@@ -174,7 +174,7 @@ export function GeneralSection({
         />
         <SettingInputRow
           label="Collapsed tool output lines"
-          description="Number of lines shown for Bash and generic tool results before they collapse."
+          description="Approximate number of wrapped lines shown for Bash and generic tool results before they collapse."
           id="ui-collapsed-tool-output-line-count"
           path="ui.collapsedToolOutputLineCount"
           {...rowProps}
