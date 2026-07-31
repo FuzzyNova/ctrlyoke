@@ -10,9 +10,10 @@ import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
-import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
-import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
-import { serializeCodexInlineTrustOverride } from "./CodexInlineHooksBuilder";
+import {
+  buildCodexInlineHooks,
+  type CodexInlineHooksArgs,
+} from "./CodexInlineHooksBuilder";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
@@ -35,7 +36,7 @@ const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
  * Codex CLI Harness
  *
  * Implements all Codex-specific logic using composition pattern:
- * - hooks.json monitoring and hooks system for completion detection
+ * - hook monitoring and hooks system for completion detection
  * - Session-log event parsing with event-based streaming
  * - Mode-based permissions (no granular tool patterns)
  * - MCP server configuration with inline TOML format
@@ -47,7 +48,7 @@ const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
  *
  * Codex CLI-specific features:
  * - Uses JSONL output format (multiple {"type": "..."} events)
- * - Hook-based completion via --enable hooks + .codex/hooks.json
+ * - Hook-based completion via --enable hooks + inline config overrides
  * - OpenAI token format in usage metadata
  * - Completion detection via {"type": "turn.completed"} events
  * - Supports --resume flag for session continuation
@@ -60,35 +61,6 @@ const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
  * ```
  */
 export class CodexCliProvider implements ICliProvider {
-  private static readonly hookBaselinePolicy = {
-    discardHookGroup: (group: unknown): boolean => {
-      if (!group || Array.isArray(group) || typeof group !== "object") {
-        return false;
-      }
-      const handlers = (group as Record<string, unknown>).hooks;
-      return (
-        Array.isArray(handlers) &&
-        handlers.length > 0 &&
-        handlers.every((handler) => {
-          if (
-            !handler ||
-            Array.isArray(handler) ||
-            typeof handler !== "object"
-          ) {
-            return false;
-          }
-          const command = (handler as Record<string, unknown>).command;
-          return (
-            typeof command === "string" &&
-            command
-              .toLowerCase()
-              .includes(CODEX_NOTIFICATION_SCRIPT_NAME.toLowerCase())
-          );
-        })
-      );
-    },
-  };
-
   private buildToolApprovalOverrideArgs(server: McpServerConfig): string[] {
     if (!Array.isArray(server.autoApprove) || server.autoApprove.length === 0) {
       return [];
@@ -99,17 +71,6 @@ export class CodexCliProvider implements ICliProvider {
       `mcp_servers.${server.id}.tools.${toolName}.approval_mode='approve'`,
     ]);
   }
-
-  /**
-   * Shared singleton tracker for parallel-safe hooks management in .codex/hooks.json.
-   * SettingsJsonMcpTracker("codex") is used solely as a mutex provider — Codex does
-   * not write MCP config to settings files, but we need a lock to serialize
-   * concurrent read-modify-write operations on hooks.json.
-   */
-  private static readonly hooksTracker =
-    SettingsJsonHooksTracker.getInstance("codex");
-  private static readonly lockProvider =
-    SettingsJsonMcpTracker.getInstance("codex");
 
   readonly config: HarnessConfig = {
     name: "codex",
@@ -161,7 +122,7 @@ export class CodexCliProvider implements ICliProvider {
    * - Workspace directories (--add-dir)
    * - Session management (resume subcommand with session ID)
    * - Tool permissions (sandbox mode, approval policy, Auto preset flags)
-   * - Hook settings (interactive mode only: --enable hooks + .codex/hooks.json)
+   * - Hook settings (interactive mode only: --enable hooks + inline overrides)
    *
    * @param prompt The prompt item with model/agent/session settings
    * @param isInteractive Whether this is interactive TUI or headless mode
@@ -303,11 +264,7 @@ export class CodexCliProvider implements ICliProvider {
 
   /**
    * Set up ctrlyoke notification hooks (SessionStart + Stop + user hooks) for interactive mode.
-   * Writes hooks to .codex/hooks.json and enables the Codex hook system.
-   *
-   * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Codex tracks trust in hooks.state. ctrlyoke passes inline trusted hashes
-   * for the ctrlyoke-managed hook entries so Codex does not prompt for review.
+   * Enables the Codex hook system and supplies hooks plus trusted hashes inline.
    *
    * @returns Hook activation args plus trust config overrides.
    */
@@ -315,11 +272,10 @@ export class CodexCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
-    workingFilePath: string | undefined,
+    _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    const workflowKey = workingFilePath ?? workspaceRoot;
     const hookEvents = [
       ...new Set<HookEvent>([
         "sessionStart",
@@ -327,17 +283,16 @@ export class CodexCliProvider implements ICliProvider {
         ...enabledNotificationHookEvents,
       ]),
     ];
-    const trustArgs = await this.writeCodexHooks(
+    const { hookArgs, trustArgs } = this.writeCodexHooks(
       extensionPath,
       workspaceRoot,
-      workflowKey,
       userHooks,
       hookEvents
     );
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
-    return [...CODEX_HOOK_ARGS, ...trustArgs];
+    return [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs];
   }
 
   /**
@@ -350,53 +305,18 @@ export class CodexCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
-    workingFilePath: string | undefined,
+    _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    const workflowKey = workingFilePath ?? workspaceRoot;
-    const ctrlyokeHooksSection =
-      enabledNotificationHookEvents.length > 0
-        ? (() => {
-            const hookConfig = this.notificationMonitor.buildHookConfig(
-              path.join(
-                extensionPath,
-                "out",
-                "scripts",
-                CODEX_NOTIFICATION_SCRIPT_NAME
-              ),
-              this.notificationMonitor.getNotificationDirectory(workspaceRoot),
-              workspaceRoot,
-              userHooks,
-              enabledNotificationHookEvents
-            );
-            if (hookConfig.type !== "json") {
-              throw new Error("Unexpected hook config type for Codex CLI");
-            }
-            return (
-              hookConfig.config as Record<string, Record<string, unknown[]>>
-            ).hooks;
-          })()
-        : {};
-    const workflowUserHooks = this.buildUserHooksSection(
+    const { hookArgs, trustArgs } = this.writeCodexHooks(
+      extensionPath,
+      workspaceRoot,
       userHooks,
       enabledNotificationHookEvents
     );
-    let trustArgs: string[] = [];
-    await CodexCliProvider.lockProvider.withLock(async () => {
-      await CodexCliProvider.hooksTracker.registerWorkflow(
-        workflowKey,
-        workspaceRoot,
-        ctrlyokeHooksSection,
-        workflowUserHooks,
-        CodexCliProvider.hookBaselinePolicy
-      );
-      trustArgs = serializeCodexInlineTrustOverride(
-        CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
-      );
-    });
     Log.debug(`🔔 Configured user hooks for Codex headless mode`);
-    return [...CODEX_HOOK_ARGS, ...trustArgs];
+    return [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs];
   }
 
   /**
@@ -436,16 +356,15 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Write ctrlyoke hooks into .codex/hooks.json for completion detection.
-   * Shared implementation for buildNotificationHookArgs.
+   * Build ctrlyoke and user hooks as inline Codex config overrides.
+   * Shared implementation for interactive and headless hook setup.
    */
-  private async writeCodexHooks(
+  private writeCodexHooks(
     extensionPath: string,
     workspaceRoot: string,
-    workflowKey: string,
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
-  ): Promise<string[]> {
+  ): CodexInlineHooksArgs {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -476,45 +395,16 @@ export class CodexCliProvider implements ICliProvider {
       ctrlyokeEvents
     );
 
-    // Register hooks via ref-counted tracker under lock
-    let trustArgs: string[] = [];
-    await CodexCliProvider.lockProvider.withLock(async () => {
-      await CodexCliProvider.hooksTracker.registerWorkflow(
-        workflowKey,
-        workspaceRoot,
-        ctrlyokeHooksSection,
-        workflowUserHooks,
-        CodexCliProvider.hookBaselinePolicy
-      );
-      trustArgs = serializeCodexInlineTrustOverride(
-        CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
-      );
-    });
+    const hooks: Record<string, unknown[]> = { ...ctrlyokeHooksSection };
+    for (const [event, groups] of Object.entries(workflowUserHooks)) {
+      hooks[event] = [...(hooks[event] ?? []), ...groups];
+    }
 
-    return trustArgs;
+    return buildCodexInlineHooks(hooks);
   }
 
   /**
-   * Clean up .codex/hooks.json entries written by this workflow.
-   *
-   * Unregisters via ref-counted tracker — restores baseline only when
-   * the last active workflow unregisters.
-   */
-  async cleanupWorkspaceArtifacts(
-    workspaceRoot: string,
-    workingFilePath?: string
-  ): Promise<void> {
-    const hookKey = workingFilePath ?? workspaceRoot;
-    await CodexCliProvider.lockProvider.withLock(async () => {
-      await CodexCliProvider.hooksTracker.unregisterWorkflow(
-        hookKey,
-        workspaceRoot
-      );
-    });
-  }
-
-  /**
-   * Convert ctrlyoke user hooks to the Codex hooks.json section format.
+   * Convert ctrlyoke user hooks to the Codex inline hooks section format.
    * Codex uses matcher-based entries: { matcher: "", hooks: [{type, command}] }
    */
   private buildUserHooksSection(

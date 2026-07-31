@@ -1,6 +1,6 @@
 # Codex Inline Hooks Migration Plan
 
-> **Status:** Stage 1 complete
+> **Status:** Stage 2 complete
 >
 > **Priority:** P1 — companion to
 > [`OPENCODE_INLINE_CONFIG_PLAN.md`](OPENCODE_INLINE_CONFIG_PLAN.md); same class
@@ -319,20 +319,23 @@ arise.
 
 ## Stages
 
-**Stage 1 — inline builder, no behavior change.** Add a
+**Stage 1 — inline builder, no behavior change.** **Complete.** The
 `CodexInlineHooksBuilder` (new module under `src/core/harness/codex/`) that
 takes the `hooks` section `buildHookConfig` already produces and returns
-`{ hookArgs: string[]; trustArgs: string[] }`. Move the surviving hash/TOML
-helpers here from `SettingsJsonHooksTracker`. Unit tests only; nothing consumes
-it yet. Include the byte-order-sort fix for `canonicalizeJson`.
+`{ hookArgs: string[]; trustArgs: string[] }` now owns the surviving hash/TOML
+helpers moved from `SettingsJsonHooksTracker`, with unit coverage and the
+byte-order-sort fix for `canonicalizeJson`.
 
-**Stage 2 — deliver via `-c`, cut the file writes.** Rewrite
-`buildNotificationHookArgs` (`:313`) and `buildHeadlessUserHookArgs` (`:348`)
-to return `[...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs]` from the Stage 1
-builder. Delete the tracker calls, `hookBaselinePolicy`, and
-`cleanupWorkspaceArtifacts`. `CodexCliProvider.test.ts:213` and `:266` assert
-on a `.codex` directory that will no longer exist — replace them with
-inline-argument assertions rather than adapting them.
+**Stage 2 — deliver via `-c`, cut the file writes.** **Complete.**
+`buildNotificationHookArgs` and `buildHeadlessUserHookArgs` now return
+`[...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs]` from the inline builder.
+The provider no longer writes `.codex/hooks.json`, calls the shared Codex
+tracker, or performs Codex cleanup. The tracker retains only its Qwen-facing
+settings-file behavior. The provider and tracker tests assert inline emission
+and an untouched workspace root.
+
+The Stage 2 implementation is the inline-argument and zero-workspace-write
+baseline for the remaining length-guard, diagnostics, and real-harness work.
 
 **Stage 3 — length guard and diagnostics.** Add the command-line budget check,
 and — because untrusted hooks fail _silently_ — a startup assertion that the

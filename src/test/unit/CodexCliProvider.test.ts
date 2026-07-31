@@ -171,19 +171,21 @@ suite("CodexCliProvider", () => {
   suite("buildNotificationHookArgs", () => {
     const provider = new CodexCliProvider();
 
-    test("enables hooks with inline trust state and no bypass flag", async () => {
+    test("emits notification and user hooks as inline trusted overrides", async () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "codex-hook-args-")
       );
-      const workingFilePath = path.join(workspaceRoot, ".ctrlyoke", "wf.json");
 
       try {
         const args = await provider.buildNotificationHookArgs(
           "/ext",
           workspaceRoot,
           0,
-          workingFilePath,
           undefined,
+          [
+            { event: "stop", command: "node user-stop.js" },
+            { event: "userPromptSubmit", command: "node prompt-check.js" },
+          ],
           []
         );
 
@@ -192,44 +194,35 @@ suite("CodexCliProvider", () => {
           !args.includes("--dangerously-bypass-hook-trust"),
           "hook trust bypass should not be emitted when inline trust state is present"
         );
+        const overrides = args.filter(
+          (arg) => arg.startsWith("hooks.") && !arg.startsWith("hooks.state=")
+        );
+        assert.strictEqual(overrides.length, 3);
+        assert.ok(overrides.some((arg) => arg.startsWith("hooks.SessionStart=")));
         assert.ok(
-          args.includes("-c"),
-          "inline hooks.state trust override should remain for compatibility"
+          overrides.some(
+            (arg) =>
+              arg.startsWith("hooks.Stop=") &&
+              arg.includes("ctrlyoke-codex-notify.js") &&
+              arg.includes("user-stop.js")
+          )
         );
+        assert.ok(
+          overrides.some(
+            (arg) =>
+              arg.startsWith("hooks.UserPromptSubmit=") &&
+              arg.includes("prompt-check.js")
+          )
+        );
+        assert.ok(args.some((arg) => arg.startsWith("hooks.state=")));
       } finally {
-        await provider.cleanupWorkspaceArtifacts(
-          workspaceRoot,
-          workingFilePath
-        );
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
 
-    test("does not preserve stale ctrlyoke notification hooks as the baseline", async () => {
+    test("does not create files or directories under the workspace root", async () => {
       const workspaceRoot = await fs.mkdtemp(
-        path.join(os.tmpdir(), "codex-stale-hook-baseline-")
-      );
-      const workingFilePath = path.join(workspaceRoot, ".ctrlyoke", "wf.json");
-      const codexDir = path.join(workspaceRoot, ".codex");
-      const hooksPath = path.join(codexDir, "hooks.json");
-      await fs.mkdir(codexDir, { recursive: true });
-      await fs.writeFile(
-        hooksPath,
-        JSON.stringify({
-          hooks: {
-            Stop: [
-              {
-                hooks: [
-                  {
-                    type: "command",
-                    command:
-                      'node "/old/out/scripts/ctrlyoke-codex-notify.js" "/old/notifications"',
-                  },
-                ],
-              },
-            ],
-          },
-        })
+        path.join(os.tmpdir(), "codex-inline-workspace-")
       );
 
       try {
@@ -237,80 +230,48 @@ suite("CodexCliProvider", () => {
           "/ext",
           workspaceRoot,
           0,
-          workingFilePath,
+          undefined,
           undefined,
           []
         );
-        const activeHooks = JSON.parse(await fs.readFile(hooksPath, "utf8"));
-        assert.strictEqual(activeHooks.hooks.Stop.length, 1);
+        await provider.buildHeadlessUserHookArgs(
+          "/ext",
+          workspaceRoot,
+          0,
+          undefined,
+          [{ event: "stop", command: "node user-stop.js" }],
+          []
+        );
 
-        await provider.cleanupWorkspaceArtifacts(
-          workspaceRoot,
-          workingFilePath
-        );
-        await assert.rejects(fs.access(hooksPath), /ENOENT/);
+        assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);
       } finally {
-        await provider.cleanupWorkspaceArtifacts(
-          workspaceRoot,
-          workingFilePath
-        );
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
 
-    test("preserves user-owned Codex hooks while discarding stale ctrlyoke groups", async () => {
+    test("emits headless user hooks inline without notification hooks", async () => {
       const workspaceRoot = await fs.mkdtemp(
-        path.join(os.tmpdir(), "codex-mixed-hook-baseline-")
-      );
-      const workingFilePath = path.join(workspaceRoot, ".ctrlyoke", "wf.json");
-      const codexDir = path.join(workspaceRoot, ".codex");
-      const hooksPath = path.join(codexDir, "hooks.json");
-      const userGroup = {
-        matcher: "",
-        hooks: [{ type: "command", command: "echo user-hook" }],
-      };
-      await fs.mkdir(codexDir, { recursive: true });
-      await fs.writeFile(
-        hooksPath,
-        JSON.stringify({
-          hooks: {
-            Stop: [
-              {
-                hooks: [
-                  {
-                    type: "command",
-                    command:
-                      'node "/old/out/scripts/ctrlyoke-codex-notify.js" "/old/notifications"',
-                  },
-                ],
-              },
-              userGroup,
-            ],
-          },
-        })
+        path.join(os.tmpdir(), "codex-headless-hook-args-")
       );
 
       try {
-        await provider.buildNotificationHookArgs(
+        const args = await provider.buildHeadlessUserHookArgs(
           "/ext",
           workspaceRoot,
           0,
-          workingFilePath,
           undefined,
+          [{ event: "userPromptSubmit", command: "node prompt-check.js" }],
           []
         );
-        await provider.cleanupWorkspaceArtifacts(
-          workspaceRoot,
-          workingFilePath
-        );
 
-        const restored = JSON.parse(await fs.readFile(hooksPath, "utf8"));
-        assert.deepStrictEqual(restored.hooks.Stop, [userGroup]);
-      } finally {
-        await provider.cleanupWorkspaceArtifacts(
-          workspaceRoot,
-          workingFilePath
+        assert.deepStrictEqual(args.slice(0, 2), ["--enable", "hooks"]);
+        assert.ok(args.some((arg) => arg.startsWith("hooks.UserPromptSubmit=")));
+        assert.ok(args.some((arg) => arg.startsWith("hooks.state=")));
+        assert.ok(
+          !args.some((arg) => arg.startsWith("hooks.SessionStart=")),
+          "headless mode should not add notification hooks"
         );
+      } finally {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
