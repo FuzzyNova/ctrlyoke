@@ -405,6 +405,11 @@ boundary behavior.
 
 ### Step 3 — `AtomicReferenceChip` component and shared styles
 
+**Status: Complete.** Added the standalone native-button chip, projected find
+marks, canonical copy/source metadata, and shared global chip primitives. The
+CodeMirror widget now uses those primitives with only its editor-specific
+single-line adapter remaining.
+
 - Native `<button>` chip: codicon, compact/expanded label, full-reference
   `title`, `aria-label`, open action, marks from Step 2, copy-text metadata.
 - Move the reusable chip box/icon/hover/focus/high-contrast primitives into

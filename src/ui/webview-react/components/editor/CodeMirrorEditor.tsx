@@ -1570,7 +1570,7 @@ class AtomicReferenceWidget extends WidgetType {
     // cm-link + the data-* attributes let the shared click/tap handler open
     // the reference while recognizing this element's button-like chip UX.
     const chip = document.createElement("span");
-    chip.className = "cm-link cm-atomic-ref";
+    chip.className = "cm-link atomic-reference-chip cm-atomic-ref";
     // Warning-colored border when validation found the reference unresolvable —
     // the chip's counterpart to the lint squiggle (which a chip replaces). The
     // native title (full reference text on hover) is suppressed while invalid so
@@ -1591,11 +1591,11 @@ class AtomicReferenceWidget extends WidgetType {
     }
     if (this.chip.icon) {
       const icon = document.createElement("span");
-      icon.className = `cm-atomic-ref-icon codicon codicon-${this.chip.icon}`;
+      icon.className = `cm-atomic-ref-icon atomic-reference-chip-icon codicon codicon-${this.chip.icon}`;
       chip.appendChild(icon);
     }
     const label = document.createElement("span");
-    label.className = "cm-atomic-ref-label";
+    label.className = "cm-atomic-ref-label atomic-reference-chip-label";
     label.textContent = this.chip.label;
     chip.appendChild(label);
     return chip;
@@ -1738,62 +1738,11 @@ function createPromptDecorationThemeExtension() {
     // file/folder name (or short git/prior-context label). Placed after
     // `.cm-link` so its non-underlined, boxed styling wins the cascade even
     // though the chip also carries the cm-link class (for click handling).
+    // CodeMirror-only adapter: editor widgets stay on one line even though
+    // output chips may wrap long find-expanded references.
     ".cm-atomic-ref": {
-      display: "inline-flex",
-      alignItems: "baseline",
-      gap: "3px",
-      padding: "0 5px",
-      margin: "0 1px",
-      border:
-        "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
-      borderRadius: "4px",
-      // editorActionList-background/foreground are the closest VS Code vars to a "chip" look,
-      // while still contrasting with colors we pick in the symbol icon color map.
-      backgroundColor: "var(--vscode-editorActionList-background)",
-      color: "var(--vscode-editorActionList-foreground)",
-      fontFamily: "var(--vscode-editor-font-family)",
-      fontSize: "0.92em",
-      lineHeight: "1.35",
-      textDecoration: "none",
       whiteSpace: "nowrap",
       verticalAlign: "baseline",
-      cursor: "pointer",
-    },
-    // Per-kind left+bottom accent lives in codemirrorTheme.ts
-    // (buildChipAccentShadowRules), keyed off the same SYMBOL_ICON_COLORS map
-    // that colors the chip's icon.
-    ".cm-atomic-ref:hover": {
-      color: "var(--vscode-editorActionList-foreground)",
-      borderColor: "var(--vscode-focusBorder)",
-      fontWeight: "bold",
-    },
-    // Unresolvable reference: warning-colored border matching the lint squiggle
-    // (which uses `orange`, see createLinterThemeExtension's cm-lintRange-warning).
-    // Kept orange even on hover so the not-found signal isn't lost to the focus
-    // border; the lint tooltip on hover explains why. Placed after the base and
-    // :hover rules so it wins the cascade.
-    ".cm-atomic-ref-invalid": {
-      borderColor: "orange",
-    },
-    ".cm-atomic-ref-invalid:hover": {
-      borderColor: "orange",
-    },
-    // Compound with .codicon (rather than relying on cascade order against the
-    // global .codicon rule in globals.css, which sets a flat 16px/line-height:1)
-    // so the shrink deterministically wins. Without it, the icon's 16px box
-    // became the tallest child of the inline-flex chip, inflating that line's
-    // height wherever a chip appeared — the icon must render no taller than
-    // the chip's own text to avoid that.
-    ".cm-atomic-ref-icon.codicon": {
-      fontSize: "0.85em !important",
-      lineHeight: "1 !important",
-      opacity: "0.85",
-    },
-    ".cm-atomic-ref-label": {
-      // No max-width/ellipsis: the label already dropped the directory
-      // portion of the path (see referenceBasename), so the remaining
-      // basename/symbol/selection text is short enough to show in full —
-      // truncating it further would hide useful info like line numbers.
     },
   });
 }
