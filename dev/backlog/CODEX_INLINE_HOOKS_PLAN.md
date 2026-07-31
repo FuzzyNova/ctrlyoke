@@ -24,14 +24,14 @@ interactive notification hooks (`CodexCliProvider.ts:441`, via
 
 1. **ctrlyoke mutates a file the user is expected to commit.** Unlike
    OpenCode's `opencode.json` — which lands untracked — `.codex/hooks.json` is
-   a *documented project-level config file* that repos are meant to check in,
+   a _documented project-level config file_ that repos are meant to check in,
    alongside `.codex/config.toml`. When the file already exists,
    `rebuildAndWriteSettings` (`SettingsJsonHooksTracker.ts:251`) rewrites it in
    place for the duration of the run and `restoreBaseline` (`:314`) puts it
    back afterwards. A crash, a kill, or a lost lock between those two points
    leaves ctrlyoke's generated hooks sitting in the user's tracked file. The
    `hookBaselinePolicy.discardHookGroup` machinery
-   (`CodexCliProvider.ts:62-89`) exists *only* to detect and discard exactly
+   (`CodexCliProvider.ts:62-89`) exists _only_ to detect and discard exactly
    that leftover state on the next run — it is a scar from this failure mode,
    not a feature.
 
@@ -76,7 +76,7 @@ The [hooks docs](https://learn.chatgpt.com/docs/hooks) document
 They do **not** mention that `-c` overrides count as a config layer for this
 purpose — but they do. Codex models session `-c` flags as a
 `ConfigLayerSource::SessionFlags` layer, and `load_toml_hooks_from_layer`
-(`discovery.rs:350`) reads `hooks` from *every* layer including that one.
+(`discovery.rs:350`) reads `hooks` from _every_ layer including that one.
 
 Confirmed by real run: a single
 `-c 'hooks.Stop=[{hooks=[{type="command", command="node …"}]}]'` fired the hook
@@ -118,10 +118,10 @@ no ordering hazard, no last-match-wins subtlety, and nothing to rewrite.
 and `synthetic_layer_path` (`:392`) resolves it against `C:\` on Windows and
 `/` elsewhere. So the `key_source` component is **platform-dependent**:
 
-| Platform | `key_source` |
-| --- | --- |
-| Windows | `C:\<session-flags>\config.toml` |
-| macOS / Linux | `/<session-flags>/config.toml` |
+| Platform      | `key_source`                     |
+| ------------- | -------------------------------- |
+| Windows       | `C:\<session-flags>\config.toml` |
+| macOS / Linux | `/<session-flags>/config.toml`   |
 
 Full key remains `{key_source}:{event_label}:{groupIndex}:{handlerIndex}`
 (`lib.rs:105`), e.g. `C:\<session-flags>\config.toml:stop:0:0`. Confirmed
@@ -137,7 +137,12 @@ identity shapes against a `currentHash` read from `hooks/list`: the matching
 shape is precisely what ctrlyoke builds today —
 
 ```json
-{"event_name":"stop","hooks":[{"async":false,"command":"…","timeout":600,"type":"command"}]}
+{
+  "event_name": "stop",
+  "hooks": [
+    { "async": false, "command": "…", "timeout": 600, "type": "command" }
+  ]
+}
 ```
 
 canonicalized with sorted keys, `JSON.stringify`d, SHA-256, `sha256:`-prefixed.
@@ -190,7 +195,7 @@ usable as a **fallback**, not as the primary path.
 layers — "Project, managed, and plugin layers can discover hooks, but they do
 not get to write user hook state."
 
-So `-c hooks.state=…` is not merely *a* way to pass trust, it is the **only**
+So `-c hooks.state=…` is not merely _a_ way to pass trust, it is the **only**
 way ctrlyoke can assert trust without writing to the user's `~/.codex/config.toml`.
 ctrlyoke already does this (`serializeCodexInlineTrustOverride`, `:399`) and
 that mechanism carries over unchanged.
@@ -265,7 +270,7 @@ One method builds the whole ctrlyoke-owned hook payload per step, returning the
 Events ctrlyoke does not own are simply absent, so the user's global, project,
 and plugin hooks still apply — and now genuinely untouched.
 
-The hook *content* is already built in the right shape:
+The hook _content_ is already built in the right shape:
 `CodexNotificationMonitor.buildHookConfig` (`CodexNotificationMonitor.ts:54`)
 returns `{ type: "json", config: { hooks } }` whose `hooks` section is exactly
 the `Record<event, MatcherGroup[]>` this needs. Stage 1 is therefore mostly a
@@ -330,7 +335,7 @@ on a `.codex` directory that will no longer exist — replace them with
 inline-argument assertions rather than adapting them.
 
 **Stage 3 — length guard and diagnostics.** Add the command-line budget check,
-and — because untrusted hooks fail *silently* — a startup assertion that the
+and — because untrusted hooks fail _silently_ — a startup assertion that the
 number of emitted trust keys equals the number of emitted handlers. Consider
 logging the computed keys at `trace` (as `logCodexTrustState` does today) so a
 future mismatch is diagnosable from a session log alone.

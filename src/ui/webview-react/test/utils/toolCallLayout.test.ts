@@ -32,6 +32,10 @@ describe("toolCallLayout", () => {
         errorExpanded: false,
       },
       outputFontSize: 13,
+      // Pinned rather than inherited: this case is about the collapse mechanics
+      // (truncation vs. the single-hidden-line passthrough), which need a limit
+      // that sits between the 11- and 12-line fixtures.
+      maxResultLines: 10,
     });
 
     expect(renderPlan.summaryHeight).toBeGreaterThan(0);

@@ -10,6 +10,13 @@ import * as DiffLib from "diff";
 import { parseDiff } from "react-diff-view";
 import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
 import { normalizeStructuredPatch } from "./diffUtils";
+import {
+  DEFAULT_OUTPUT_CONTENT_WIDTH,
+  DEFAULT_OUTPUT_FONT_SIZE,
+  MIN_OUTPUT_CONTENT_WIDTH as MIN_DIFF_CONTENT_WIDTH,
+  OUTPUT_RELAXED_LINE_HEIGHT,
+  toolCallLineHeight,
+} from "./outputLineMetrics";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
 
 // ── Multi-file unified diff parsing ──────────────────────────────────────────
@@ -143,11 +150,20 @@ export interface DiffRenderPlanOptions {
   hunks?: readonly HunkData[];
   layoutMode?: "file-edit" | "standalone";
   gapExpansion?: DiffGapExpansionPlanState;
+  /**
+   * Wrapped line count of the `● Edited <path>` header this diff hangs under.
+   * A long path wraps to a second line, and that line is a third of a collapsed
+   * diff row's total height — leaving it at 1 makes every such row miss by a
+   * full line height.
+   */
+  toolHeaderLines?: number;
 }
 
-const DEFAULT_OUTPUT_FONT_SIZE = 13;
-const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
-const MIN_DIFF_CONTENT_WIDTH = 240;
+/**
+ * DiffView's own frame around the summary line: `my-2` (16, of which the bottom
+ * half collapses into ToolCallBlock's) plus the header's `mb-1` (4) and the
+ * expanded diff container's 1px border top and bottom (2).
+ */
 const DIFF_VERTICAL_CHROME_HEIGHT = 28;
 const STANDALONE_DIFF_HEIGHT = 72;
 const UNIFIED_DIFF_HORIZONTAL_CHROME = 168;
@@ -449,8 +465,13 @@ export function buildDiffRenderPlanFromStats(
     };
   }
 
-  const toolLineHeight = Math.max(22, outputFontSize * 1.7);
-  const headerHeight = Math.max(24, outputFontSize * 1.9);
+  // The ● header the diff hangs under, and DiffView's own "Show diff" summary
+  // line (xs font, one line — its content never wraps in practice). Both
+  // inherit `leading-relaxed` from TOOL_CALL_TERMINAL.
+  const toolLineHeight =
+    Math.max(1, options.toolHeaderLines ?? 1) *
+    toolCallLineHeight(outputFontSize);
+  const headerHeight = (outputFontSize - 2) * OUTPUT_RELAXED_LINE_HEIGHT;
   const lineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
   const decorationHeight = DIFF_VERTICAL_CHROME_HEIGHT;
   const visualRenderedRows =

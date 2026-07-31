@@ -46,11 +46,11 @@ don't overlap with what stream-json provides:
   window **size**, a cumulative **occupancy** total, or `used_percentage` —
   only per-call `input_tokens`/`output_tokens`/`thinking_tokens`/
   `cache_read_tokens`/`total_tokens`. The statusline's `context_window.
-  context_window_size` is Antigravity self-reporting its own live window size;
+context_window_size` is Antigravity self-reporting its own live window size;
   losing that means falling back to ctrlyoke's static `getAntigravityContextWindowSize()`
   model-lookup table, which goes stale the moment Google ships a model this
   table doesn't know about. See "Context-window fill bar" below for the
-  narrower thing stream-json *can* approximate.
+  narrower thing stream-json _can_ approximate.
 
 So this plan is additive: a new, small stdout-derived enrichment path
 alongside the existing transcript pipeline and the existing statusline
@@ -86,14 +86,30 @@ NDJSON on stdout, one `{"event": "...", ...}` object per line:
   from the wire) passed anyway. Corrected during review against agy 1.1.8:
 
 ```json
-{"event":"result","result":{"conversation_id":"01a4f023-...","status":"SUCCESS","response":"pong\n","duration_seconds":1.6169349,"num_turns":1,"usage":{"input_tokens":9780,"output_tokens":4,"thinking_tokens":0,"cache_read_tokens":8140,"total_tokens":9784}}}
+{
+  "event": "result",
+  "result": {
+    "conversation_id": "01a4f023-...",
+    "status": "SUCCESS",
+    "response": "pong\n",
+    "duration_seconds": 1.6169349,
+    "num_turns": 1,
+    "usage": {
+      "input_tokens": 9780,
+      "output_tokens": 4,
+      "thinking_tokens": 0,
+      "cache_read_tokens": 8140,
+      "total_tokens": 9784
+    }
+  }
+}
 ```
 
-  Note the contrast that made this easy to get wrong: `init` really does carry
-  `conversation_id` at the **top** level, while `result` carries it nested.
-  Also verified: agy terminates stdout with a trailing newline, so the final
-  line always arrives complete — the accumulator's `flush()` is a safety net
-  for truncated output, not a hot path.
+Note the contrast that made this easy to get wrong: `init` really does carry
+`conversation_id` at the **top** level, while `result` carries it nested.
+Also verified: agy terminates stdout with a trailing newline, so the final
+line always arrives complete — the accumulator's `flush()` is a safety net
+for truncated output, not a hot path.
 
 Real `agent_response` step (trivial "reply with pong" prompt):
 
@@ -120,11 +136,11 @@ This is the load-bearing finding against using stream-json as the content
 source. Compared directly against the transcript for the **same
 conversation** (`brain/<id>/.system_generated/logs/transcript_full.jsonl`):
 
-| Tool call                | stream-json `tool_info.parameters`                        | Transcript `PLANNER_RESPONSE.tool_calls[].args`                                              |
-| ------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `write_to_file`           | `{"TargetFile": "..."}`  — **no content field at all**      | `{"CodeContent": "hello world", "Overwrite": true, "TargetFile": "...", "Description": "..."}` |
-| `replace_file_content`    | `{"TargetFile": "..."}`  — **no replacement chunks**         | Full structured replacement content (consumed by `AntigravityToolEventBuilder.ts:231`'s `CodeContent`/`content`/`file_text` lookup) |
-| `run_command` (failing)   | `{"CommandLine": "..."}` in, `{"output": "<merged stdout+stderr text>"}` out — **no exit code field**, error folded into free text | Transcript entries carry richer structured status the mapper uses for `BASH_COMMAND` success/failure |
+| Tool call               | stream-json `tool_info.parameters`                                                                                                 | Transcript `PLANNER_RESPONSE.tool_calls[].args`                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `write_to_file`         | `{"TargetFile": "..."}` — **no content field at all**                                                                              | `{"CodeContent": "hello world", "Overwrite": true, "TargetFile": "...", "Description": "..."}`                                      |
+| `replace_file_content`  | `{"TargetFile": "..."}` — **no replacement chunks**                                                                                | Full structured replacement content (consumed by `AntigravityToolEventBuilder.ts:231`'s `CodeContent`/`content`/`file_text` lookup) |
+| `run_command` (failing) | `{"CommandLine": "..."}` in, `{"output": "<merged stdout+stderr text>"}` out — **no exit code field**, error folded into free text | Transcript entries carry richer structured status the mapper uses for `BASH_COMMAND` success/failure                                |
 
 `AntigravityToolEventBuilder.ts:231` reads `CodeContent` (aliased to
 `content`/`file_text`) directly from the planner's `tool_calls[].args` — a
@@ -143,10 +159,10 @@ and the transcript is unambiguously richer for content.**
 
 Timestamped capture (`echo streaming-test-line-1 && echo streaming-test-line-2`):
 
-```
+````
 20:14:44.590  step_index 5 ACTIVE  text_delta: "The command has been executed successfully.\n\n**Output:**\n```\nstreaming-test-line-1\ns"
 20:14:44.787  step_index 5 DONE    text_delta: "treaming-test-line-2\n```\n"
-```
+````
 
 The word "streaming" is split mid-token across two deltas 197ms apart — this
 is real incremental generation, not two full copies of the same text. This is
@@ -327,7 +343,7 @@ implements.
 
 - The statusline lease, wrapper script, and sidecar
   (`ANTIGRAVITY_STATUSLINE_TOKEN_TRACKING_PLAN.md`) — still the only signal
-  for interactive mode, and still the only *self-reporting* source for the
+  for interactive mode, and still the only _self-reporting_ source for the
   model's actual context window size in headless mode.
 - The transcript as the event/content source — `headlessSource` stays `"log"`;
   `AntigravityLogParser.extractStructuredEventsFromEvent()`,
@@ -429,7 +445,7 @@ stays unavailable, as decided above.
   quota exhaustion, `--print-timeout` exceeded)? **Resolved July 31, 2026:** a
   real `--print-timeout 1ms` run with `--model gemini-3.6-flash-low` emitted a
   terminal `result.status` of `"ERROR"` with `error: "timeout waiting for
-  response"` and exited with code `1` (stderr was empty). An invalid `--effort`
+response"` and exited with code `1` (stderr was empty). An invalid `--effort`
   run with the same required Flash model produced the same `"ERROR"` status
   and exit code `1`. `CliResponseCollector.getHeadlessFailure()` therefore
   correctly classifies the failure from the non-zero exit code; it does not
@@ -447,7 +463,7 @@ stays unavailable, as decided above.
 ## Implementation Steps (proposed order)
 
 1. **[x] `buildHeadlessArgs` flag + stdout session-ID.** Add `--output-format
-   stream-json`; implement `extractSessionIdFromStdout`. Verify against a
+stream-json`; implement `extractSessionIdFromStdout`. Verify against a
    real headless run that `HeadlessLogTail` picks up the session ID from the
    first stdout tick and that transcript-sourced events are unaffected. Done
    July 31, 2026; the live run confirmed both paths.

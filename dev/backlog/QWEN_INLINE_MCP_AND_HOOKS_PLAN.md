@@ -108,11 +108,12 @@ In `QwenCliProvider`:
    server entries, but serialize them as:
 
    ```ts
-   ["--mcp-config", JSON.stringify({ mcpServers: entries })]
+   ["--mcp-config", JSON.stringify({ mcpServers: entries })];
    ```
 
    Rename the helper in a later cleanup only if its remaining callers can move
    together; it is still the shared Qwen/Antigravity entry-schema builder.
+
 2. Return `null` only when neither ctrlyoke's dynamic server nor prompt-level
    user servers exist. Do not create `.qwen/`, `settings.json`, a sibling
    `.gitignore`, or `settings.json.orig`.

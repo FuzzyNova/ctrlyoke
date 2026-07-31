@@ -103,10 +103,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             }
           }}
           onKeyDown={(e) => {
-            if (
-              (e.key === "Enter" || e.key === " ") &&
-              !isSelectionReadOnly
-            ) {
+            if ((e.key === "Enter" || e.key === " ") && !isSelectionReadOnly) {
               e.preventDefault();
               onSelect();
             }
@@ -174,10 +171,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           }
         }}
         onKeyDown={(e) => {
-          if (
-            (e.key === "Enter" || e.key === " ") &&
-            !isSelectionReadOnly
-          ) {
+          if ((e.key === "Enter" || e.key === " ") && !isSelectionReadOnly) {
             e.preventDefault();
             onSelect();
           }

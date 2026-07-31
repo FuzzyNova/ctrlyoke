@@ -5,6 +5,11 @@ import {
   buildCollapsedOutputPreview,
   getCollapsedOutputMaxChars,
 } from "./outputTruncation";
+import {
+  DEFAULT_OUTPUT_FONT_SIZE,
+  toolCallLineHeight,
+  toolResultLineHeight,
+} from "./outputLineMetrics";
 
 export interface ToolCallExpansionState {
   paramsExpanded: boolean;
@@ -26,7 +31,6 @@ export const GENERIC_TOOL_CALL_MAX_RESULT_LINES =
 export const GENERIC_TOOL_CALL_MAX_RESULT_CHARS =
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
 
-const DEFAULT_OUTPUT_FONT_SIZE = 13;
 const TOOL_CALL_SUMMARY_BOTTOM_GAP = 10;
 const TOOL_CALL_PARAMS_BOTTOM_GAP = 8;
 const TOOL_CALL_RESULT_BOTTOM_GAP = 10;
@@ -212,11 +216,8 @@ export function buildToolCallRenderPlan(
     charWidthMultiplier: TOOL_RESULT_SM_FONT_CHAR_RATIO,
   });
 
-  // FS*1.625 = leading-relaxed line height; clamped to 24 for small font sizes.
-  const summaryLineHeight = Math.max(24, outputFontSize * 1.625);
-  // (FS-1)*1.625 ≈ FS*1.55 — matches sm-font leading-relaxed line height at FS≥15.
-  // Clamped to 22 for very small font sizes (clamp fires at FS≤14).
-  const sectionLineHeight = Math.max(22, outputFontSize * 1.55);
+  const summaryLineHeight = toolCallLineHeight(outputFontSize);
+  const sectionLineHeight = toolResultLineHeight(outputFontSize);
   const summaryHeight = summaryLineHeight + TOOL_CALL_SUMMARY_BOTTOM_GAP;
   const paramsText = getGenericToolCallParamsText(parameters);
   const { output, error } = getGenericToolCallOutput(result);

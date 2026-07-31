@@ -60,7 +60,7 @@ every conflict. In source, `config.ts:468` reads `process.env.OPENCODE_CONFIG_CO
 and merges it in `loadInstanceState` after global config, the `OPENCODE_CONFIG`
 file, project `opencode.json`, and the `.opencode/` directory scan.
 
-`OPENCODE_CONFIG` is **not** a substitute — it loads *below* project config, so
+`OPENCODE_CONFIG` is **not** a substitute — it loads _below_ project config, so
 a user's `opencode.json` would still override ctrlyoke. Inline is the only
 option that is authoritative.
 
@@ -84,7 +84,7 @@ accident of implementation:
   from the model's toolset entirely ("I don't have a shell/Bash tool
   available"), input tokens dropped accordingly.
 - `{"permission":{"*":"ask","bash":{"*":"allow","echo *":"allow"}}}` → `echo
-  hello-from-bash` executed, `exit: 0`.
+hello-from-bash` executed, `exit: 0`.
 - `{"mcp":{"inline-test":{"type":"local","command":[...],"environment":{...}}}}`
   → `opencode mcp list` showed the server registered and attempting connection,
   alongside the user's global `cclsp` server.
@@ -97,7 +97,7 @@ No `opencode.json` existed in the workspace for any of these.
 `permission requested: bash (echo ask-test); auto-rejecting` and returned
 `"The user rejected permission to use this specific tool call."` In the TUI,
 `ask` prompts. This matters for the ordering hazard below: a degraded rule is
-never *more* permissive than intended in headless mode.
+never _more_ permissive than intended in headless mode.
 
 ### The merge is per-key and order-sensitive — this is the sharp edge
 
@@ -111,10 +111,10 @@ semantics preserve the target's key positions and append new source keys, and
 `mergeDeep` recurses only into plain objects, so a type mismatch replaces.
 Measured behavior:
 
-| Case | Result |
-| --- | --- |
-| Key exists only in inline config | **Appended after** all lower-precedence keys, in inline emission order |
-| Key exists in both | Keeps the **project file's position**, takes the **inline value** |
+| Case                                                        | Result                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Key exists only in inline config                            | **Appended after** all lower-precedence keys, in inline emission order    |
+| Key exists in both                                          | Keeps the **project file's position**, takes the **inline value**         |
 | Types differ (user scalar vs inline object, or the reverse) | Inline **replaces wholesale**; the user's rules for that tool are dropped |
 
 The second row is the hazard. Given a project `opencode.json` of
@@ -178,7 +178,7 @@ and MCP values at the mapper layer, and warn rather than pass them through.
 
 `merge()` (`config.ts:351`) is purely order-dependent; its `kind` argument
 affects plugin scoping only, not value precedence. The org/console config
-(`config.ts:504`) and managed/MDM configs merge *after* inline and therefore
+(`config.ts:504`) and managed/MDM configs merge _after_ inline and therefore
 override it. For an enterprise user with an active OpenCode org account,
 administrator policy wins over ctrlyoke's permission block. That is the correct
 outcome, but ctrlyoke must not claim its policy is unconditionally authoritative.
@@ -243,9 +243,13 @@ One method builds the whole ctrlyoke-owned config object per step:
 
 ```jsonc
 {
-  "permission": { /* from OpenCodeToolPermissionMapper.buildPermissionPolicy */ },
-  "mcp":        { /* ctrlyoke + user-defined servers */ },
-  "plugin":     ["file:///<extensionPath>/out/scripts/ctrlyoke-opencode-plugin.ts"]
+  "permission": {
+    /* from OpenCodeToolPermissionMapper.buildPermissionPolicy */
+  },
+  "mcp": {
+    /* ctrlyoke + user-defined servers */
+  },
+  "plugin": ["file:///<extensionPath>/out/scripts/ctrlyoke-opencode-plugin.ts"],
 }
 ```
 
@@ -326,7 +330,7 @@ and the workspace-mutation disclosure caveat. What remains of that section
 applies only to Antigravity's statusline lease against a **user-global** file —
 lower stakes than a security policy, and reasonably demotable from P0 to P1.
 
-**What does *not* go away:** the harness still caches config at process start,
+**What does _not_ go away:** the harness still caches config at process start,
 because environment is fixed at spawn. So the parity plan's restart-on-change
 invariant is unchanged and still security-critical:
 `getInjectIncompatibilityReason` (`CliIntegration.ts:467`) must keep forcing a

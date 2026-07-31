@@ -49,6 +49,18 @@ import {
   getCollapsedOutputMaxChars,
 } from "./outputTruncation";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import {
+  OUTPUT_ROW_HORIZONTAL_PADDING,
+  TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME,
+  TOOL_CALL_BLOCK_VERTICAL_CHROME,
+  estimateFileOperationHeaderLines,
+  outputRowGroupPadding,
+  resolveOutputContentWidth,
+  toolCallGutterWidth,
+  toolCallLineHeight,
+  toolResultLineHeight,
+  toolResultPrefixWidth,
+} from "./outputLineMetrics";
 import type { DiffRenderPlan } from "./rdvAdapter";
 
 export interface OutputRowPromptUndoAction {
@@ -295,13 +307,18 @@ function getStreamingChunk(
       ] || "";
 }
 
-const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
-const MIN_OUTPUT_CONTENT_WIDTH = 240;
+/**
+ * Calibrated horizontal allowance for *prose* rows (markdown, plain responses,
+ * thinking, status). It is deliberately much larger than the row's real
+ * padding: it also absorbs markdown's own block indents and the
+ * proportional-glyph error left over from estimating rendered text by character
+ * count. Rows inside a ● block have exact geometry instead — use
+ * OUTPUT_ROW_HORIZONTAL_PADDING there, not this.
+ */
 const OUTPUT_ROW_HORIZONTAL_CHROME = 72;
 const HEADER_HORIZONTAL_CHROME = 140;
 const STATS_HORIZONTAL_CHROME = 96;
 const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
-const TERMINAL_LINE_VERTICAL_CHROME = 12;
 const THINKING_LABEL_HEIGHT = 18;
 const THINKING_CONTENT_VERTICAL_CHROME = 14;
 const THINKING_OUTER_VERTICAL_CHROME = 6;
@@ -309,15 +326,6 @@ const STATUS_ROW_VERTICAL_CHROME = 20;
 const HEADER_VERTICAL_CHROME = 11; // pb-spacing-xs(4) + border-b(1) + mb-spacing-sm(6)
 const STATS_VERTICAL_CHROME = 10;
 const BASH_RESULT_MAX_CHARS = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
-/**
- * Horizontal space ToolCallBlock's gutter column takes from its content: the ●
- * glyph plus the `gap-x-2` separator. Everything in the content column (header
- * text, ⎿ result/error lines, tool parameters) is narrower by this much.
- * Diffs are exempt — they render full-bleed, spanning the gutter.
- */
-function toolCallGutterWidth(outputFontSize: number): number {
-  return Math.max(5.5, outputFontSize * 0.6) + 8;
-}
 
 function normalizeTextForLayout(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\t/g, "    ");
@@ -327,11 +335,7 @@ function resolveContentWidth(
   outputContentWidth?: number,
   chrome = OUTPUT_ROW_HORIZONTAL_CHROME
 ): number {
-  const baseWidth =
-    outputContentWidth && outputContentWidth > 0
-      ? outputContentWidth
-      : DEFAULT_OUTPUT_CONTENT_WIDTH;
-  return Math.max(MIN_OUTPUT_CONTENT_WIDTH, baseWidth - chrome);
+  return resolveOutputContentWidth(outputContentWidth, chrome);
 }
 
 function estimateWrappedLineCount(
@@ -712,24 +716,29 @@ function estimateStatsRowHeight(
   );
 }
 
+/**
+ * Height of a ● header line (or a short one-line block that renders like one).
+ * Uses the ● block's real geometry: `leading-relaxed` at the base font size
+ * over `my-2`, with only the row's own `px-[var(--spacing-md)]` taken out
+ * horizontally — ToolCallBlock adds no padding of its own.
+ */
 function estimateTerminalSummaryHeight(
   text: string,
   outputContentWidth: number | undefined,
   outputFontSize: number,
-  verticalChrome = TERMINAL_LINE_VERTICAL_CHROME
+  verticalChrome = TOOL_CALL_BLOCK_VERTICAL_CHROME
 ): number {
   const lineCount = estimateWrappedLineCount(
     text,
     outputContentWidth,
     outputFontSize,
     {
-      chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+      chrome: OUTPUT_ROW_HORIZONTAL_PADDING,
       charWidthMultiplier: 0.6,
     }
   );
   return (
-    Math.max(1, lineCount) * Math.max(18, outputFontSize * 1.55) +
-    verticalChrome
+    Math.max(1, lineCount) * toolCallLineHeight(outputFontSize) + verticalChrome
   );
 }
 
@@ -740,35 +749,24 @@ function estimateFileOperationHeaderHeight(
   outputFontSize: number,
   error?: string
 ): number {
-  const availableWidth = resolveContentWidth(
-    outputContentWidth,
-    OUTPUT_ROW_HORIZONTAL_CHROME
-  );
-  const charWidth = Math.max(5.5, outputFontSize * 0.6);
-  const lineHeight = Math.max(18, outputFontSize * 1.55);
-  const gapWidth = Math.max(4, outputFontSize * 0.35);
-  // The ● is no longer inline — it lives in ToolCallBlock's gutter, which the
-  // caller has already subtracted from outputContentWidth. Only the action
-  // label ("Edited", "Wrote (N bytes)", …) still shares the path's first line.
-  const actionWidth = actionLabel.length * charWidth;
-  const prefixWidth = actionWidth + gapWidth;
-  const pathWidth = Math.max(64, availableWidth - prefixWidth);
-  const pathCharsPerLine = Math.max(8, Math.floor(pathWidth / charWidth));
-  const pathLineCount = Math.max(1, Math.ceil(path.length / pathCharsPerLine));
-  const errorLineCount = error
-    ? Math.max(
-        1,
-        estimateWrappedLineCount(error, outputContentWidth, outputFontSize, {
-          chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
-          charWidthMultiplier: 0.6,
-        })
-      )
-    : 0;
-
   return (
-    pathLineCount * lineHeight +
-    errorLineCount * lineHeight +
-    TERMINAL_LINE_VERTICAL_CHROME
+    estimateFileOperationHeaderLines(
+      actionLabel,
+      path,
+      outputContentWidth,
+      outputFontSize
+    ) *
+      toolCallLineHeight(outputFontSize) +
+    (error
+      ? Math.max(
+          1,
+          estimateWrappedLineCount(error, outputContentWidth, outputFontSize, {
+            chrome: OUTPUT_ROW_HORIZONTAL_PADDING,
+            charWidthMultiplier: 0.6,
+          })
+        ) * toolResultLineHeight(outputFontSize)
+      : 0) +
+    TOOL_CALL_BLOCK_VERTICAL_CHROME
   );
 }
 
@@ -802,7 +800,7 @@ function estimateBashOutputHeight(
     commandPreview.visibleText,
     outputContentWidth,
     outputFontSize,
-    8
+    TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME
   );
 
   const isCompleted =
@@ -810,7 +808,7 @@ function estimateBashOutputHeight(
     data.status === "completed" ||
     data.status === "failed";
   if (!isCompleted) {
-    return totalHeight;
+    return totalHeight + TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME;
   }
 
   // Match BashOutput.tsx duplicate detection: when output and error are
@@ -851,24 +849,25 @@ function estimateBashOutputHeight(
       maxLines: maxResultLines,
       maxChars: maxResultCharacters,
     });
-    totalHeight += estimateTextBlockHeight(
-      preview.visibleText,
-      outputContentWidth,
-      outputFontSize,
-      {
-        charWidthMultiplier: 0.6,
-        // TOOL_RESULT_LINE uses sm font (FS-1) with leading-relaxed (1.625).
-        // 1.55 × FS approximates max(16, (FS-1) × 1.625) for the valid FS range.
-        lineHeightMultiplier: 1.55,
-        verticalChrome: 8, // my-2 bottom half (see command chrome above)
-      }
-    );
-    if (preview.isTruncated) {
-      totalHeight += Math.max(16, outputFontSize * 1.4);
-    }
+    // The "[show N more lines]" toggle is an inline <button> appended to the
+    // last visible line, not a block of its own — it only costs a line when it
+    // happens to wrap. Charging it a full line unconditionally was the single
+    // largest bias on this row kind.
+    totalHeight +=
+      estimateWrappedLineCount(
+        preview.visibleText,
+        outputContentWidth,
+        outputFontSize - 1,
+        {
+          chrome:
+            OUTPUT_ROW_HORIZONTAL_PADDING +
+            toolResultPrefixWidth(outputFontSize),
+          charWidthMultiplier: 0.6,
+        }
+      ) * toolResultLineHeight(outputFontSize);
   }
 
-  return totalHeight;
+  return totalHeight + TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME;
 }
 
 function estimateStructuredTextHeight(
@@ -1097,9 +1096,24 @@ export function estimateOutputRowHeight(
   outputFontSize = 13,
   outputContentWidth?: number
 ): number {
+  // Rows at a CLI group's edges get extra padding from OutputRow's wrapper.
+  // Only rows that carry the flags are wrapped, so this is safe to add
+  // unconditionally — and it is the whole story behind the persistent bias on
+  // `stats` (always a group's last row) and `cli-header` (always its first).
+  return (
+    estimateOutputRowContentHeight(row, outputFontSize, outputContentWidth) +
+    outputRowGroupPadding(row)
+  );
+}
+
+function estimateOutputRowContentHeight(
+  row: OutputRenderRow,
+  outputFontSize: number,
+  outputContentWidth?: number
+): number {
   switch (row.rowKind) {
     case "history-banner":
-      return 44;
+      return 38;
     case "step-anchor":
       return 1;
     case "final-step-label":
@@ -1370,11 +1384,17 @@ export function buildOutputRows(
         ? input.outputContentWidth -
           toolCallGutterWidth(input.outputFontSize ?? 13)
         : undefined;
+    // Must use the ⎿ line's real geometry, not the prose allowance: this budget
+    // decides how much text BashOutput actually renders, so any disagreement
+    // with estimateBashOutputHeight's width shows up directly as measurement
+    // drift when the row is realized.
     const collapsedToolOutputMaxCharacters = getCollapsedOutputMaxChars({
       maxLines: collapsedToolOutputLineCount,
       contentWidth: toolCallContentWidth,
       outputFontSize: Math.max(10, (input.outputFontSize ?? 13) - 1),
-      horizontalChrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+      horizontalChrome:
+        OUTPUT_ROW_HORIZONTAL_PADDING +
+        toolResultPrefixWidth(input.outputFontSize ?? 13),
     });
     const streamingChunk = getStreamingChunk(input, target, message.phase);
     const visibleEvents = getVisibleStructuredEvents(output.structured?.events);

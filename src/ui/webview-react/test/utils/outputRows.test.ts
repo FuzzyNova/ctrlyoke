@@ -4,6 +4,14 @@ import { buildOutputRows, estimateOutputRowHeight } from "@utils/outputRows";
 import type { OutputMessage } from "@utils/outputProjection";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import {
+  OUTPUT_ROW_GROUP_END_PADDING,
+  OUTPUT_ROW_GROUP_START_PADDING,
+  TOOL_CALL_BLOCK_VERTICAL_CHROME,
+  toolCallLineHeight,
+  toolResultLineHeight,
+} from "@utils/outputLineMetrics";
+import { DEFAULT_COLLAPSED_OUTPUT_MAX_LINES } from "@utils/outputTruncation";
+import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
   SCRIPT_OUTPUT_SOURCES,
@@ -842,8 +850,13 @@ describe("outputRows", () => {
       estimateOutputRowHeight(toolRow)
     );
     expect(baseToolRow.toolCall.renderPlan.params.visibleLineCount).toBe(0);
-    expect(baseToolRow.toolCall.renderPlan.output.visibleLineCount).toBe(10);
-    expect(baseToolRow.toolCall.renderPlan.output.hiddenLineCount).toBe(2);
+    // Collapsed to DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT of the 12 lines.
+    expect(baseToolRow.toolCall.renderPlan.output.visibleLineCount).toBe(
+      DEFAULT_COLLAPSED_OUTPUT_MAX_LINES
+    );
+    expect(baseToolRow.toolCall.renderPlan.output.hiddenLineCount).toBe(
+      12 - DEFAULT_COLLAPSED_OUTPUT_MAX_LINES
+    );
     expect(baseToolRow.toolCall.renderPlan.totalHeight).toBe(
       estimateOutputRowHeight(baseToolRow)
     );
@@ -1054,7 +1067,15 @@ describe("outputRows", () => {
       throw new Error("Expected bash structured-event row");
     }
 
-    expect(bashRow.estimateSize).toBeGreaterThan(120);
+    // A ● block's height is exactly my-2 plus whole header and ⎿ result lines —
+    // profiler measurements land on this grid with zero residual. In particular
+    // there is no extra line for the "[show N more lines]" toggle: it is an
+    // inline <button> on the last visible line, not a block of its own.
+    expect(bashRow.estimateSize).toBe(
+      TOOL_CALL_BLOCK_VERTICAL_CHROME +
+        toolCallLineHeight(13) +
+        DEFAULT_COLLAPSED_OUTPUT_MAX_LINES * toolResultLineHeight(13)
+    );
   });
 
   it("uses collapsed character-limited bash previews in row estimates", () => {
@@ -1396,5 +1417,145 @@ describe("outputRows", () => {
     );
     expect(wideDiff.diff?.renderPlan.totalHeight).toBe(wideDiff.estimateSize);
     expect(narrowDiff.diff?.renderPlan.renderedRows).toBe(2);
+  });
+
+  it("grows a collapsed diff row by one header line when its path wraps", () => {
+    const buildDiffRow = (path: string) => {
+      const rows = buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "Apply edit",
+              response: "",
+              elapsed: 0.5,
+              isStreaming: false,
+              structured: {
+                events: [
+                  {
+                    type: CLI_EVENT_TYPES.FILE_EDIT,
+                    data: {
+                      path,
+                      status: OPERATION_STATUS.COMPLETED,
+                      structuredPatch: [
+                        {
+                          oldStart: 1,
+                          oldLines: 1,
+                          newStart: 1,
+                          newLines: 1,
+                          lines: ["-before", "+after"],
+                        },
+                      ],
+                    },
+                  },
+                ],
+                metadata: {},
+              },
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: true,
+        diffViewType: "unified",
+        outputFontSize: 13,
+        outputContentWidth: 480,
+      }).rows;
+
+      const row = rows.find((entry) => entry.rowKind === "structured-event");
+      if (!row || row.rowKind !== "structured-event" || !row.diff) {
+        throw new Error("Expected a collapsed diff structured-event row");
+      }
+      return row;
+    };
+
+    const short = buildDiffRow("src/example.ts");
+    const wrapped = buildDiffRow(
+      `src/${"deeply-nested-segment/".repeat(3)}example.ts`
+    );
+
+    expect(short.diff?.isCollapsed).toBe(true);
+    expect(wrapped.diff?.isCollapsed).toBe(true);
+    // The `● Edited <path>` header the diff hangs under wraps to a second line;
+    // that line is worth a third of a collapsed row's height, so leaving the
+    // plan's tool header at a flat single line put every long-path diff row off
+    // by exactly this much.
+    expect(wrapped.estimateSize - short.estimateSize).toBe(
+      toolCallLineHeight(13)
+    );
+  });
+
+  it("adds group-boundary padding to a CLI group's first and last rows", () => {
+    const { rows } = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            prompt: "Summarize",
+            response: "done",
+            elapsed: 0.5,
+            isStreaming: false,
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputFontSize: 13,
+      outputContentWidth: 760,
+    });
+
+    const header = rows.find((row) => row.rowKind === "cli-header");
+    const stats = rows.find((row) => row.rowKind === "stats");
+    if (!header || !stats) {
+      throw new Error("Expected cli-header and stats rows");
+    }
+
+    // OutputRow's CLI-group wrapper adds pt-[--spacing-sm] to a group's first
+    // row and pb-[--spacing-sm] + border-b to its last. cli-header and stats are
+    // always those two rows, which is the whole story behind their long-standing
+    // +6 / +7 estimate bias.
+    expect(header.groupStart).toBe(true);
+    expect(stats.groupEnd).toBe(true);
+    expect(header.estimateSize).toBe(
+      estimateOutputRowHeight({ ...header, groupStart: false }, 13, 760) +
+        OUTPUT_ROW_GROUP_START_PADDING
+    );
+    expect(stats.estimateSize).toBe(
+      estimateOutputRowHeight({ ...stats, groupEnd: false }, 13, 760) +
+        OUTPUT_ROW_GROUP_END_PADDING
+    );
   });
 });

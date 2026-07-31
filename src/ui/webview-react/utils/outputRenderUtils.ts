@@ -28,6 +28,12 @@ import {
   extractCliOutputText,
   isStructuredPatchMalformed,
 } from "./outputUtils";
+import {
+  DEFAULT_OUTPUT_FONT_SIZE,
+  FILE_EDIT_ACTION_LABEL,
+  estimateFileOperationHeaderLines,
+  toolCallGutterWidth,
+} from "./outputLineMetrics";
 import type { OutputMessageTarget } from "./outputProjection";
 
 export interface VisibleStructuredEvent {
@@ -68,6 +74,7 @@ function buildOutputDiffStats(
     hunks,
     gapExpansion,
     layoutMode = "file-edit",
+    toolHeaderLines,
   }: {
     viewType: ViewType;
     collapsed: boolean;
@@ -76,6 +83,7 @@ function buildOutputDiffStats(
     hunks?: readonly HunkData[];
     gapExpansion?: DiffGapExpansionPlanState;
     layoutMode?: "file-edit" | "standalone";
+    toolHeaderLines?: number;
   }
 ): OutputDiffStats {
   return {
@@ -88,6 +96,7 @@ function buildOutputDiffStats(
       hunks,
       layoutMode,
       gapExpansion,
+      toolHeaderLines,
     }),
   };
 }
@@ -218,6 +227,19 @@ export function computeOutputDiffStats(
 
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const data = event.data as FileEditData;
+    // A file-edit diff hangs under the same `● Edited <path>` header a plain
+    // file-edit row renders, so the plan has to account for that header
+    // wrapping. outputContentWidth is the full pane width — the header sits
+    // inside ToolCallBlock's gutter, the diff below it does not.
+    const resolvedFontSize = outputFontSize ?? DEFAULT_OUTPUT_FONT_SIZE;
+    const toolHeaderLines = estimateFileOperationHeaderLines(
+      FILE_EDIT_ACTION_LABEL,
+      data.path ?? "file",
+      outputContentWidth != null
+        ? outputContentWidth - toolCallGutterWidth(resolvedFontSize)
+        : undefined,
+      resolvedFontSize
+    );
     const structuredPatch = data.path
       ? getDisplayStructuredPatch(
           data.path,
@@ -245,6 +267,7 @@ export function computeOutputDiffStats(
           outputContentWidth,
           hunks: expandedDiff.hunks,
           gapExpansion: expandedDiff.gapExpansion,
+          toolHeaderLines,
         }
       );
     }
@@ -264,6 +287,7 @@ export function computeOutputDiffStats(
           outputContentWidth,
           hunks: expandedDiff.hunks,
           gapExpansion: expandedDiff.gapExpansion,
+          toolHeaderLines,
         }
       );
     }

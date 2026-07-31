@@ -169,10 +169,10 @@ export function AdvancedPermissionsSection({
           />
           {!permissions.antigravityStatusLineTracking && (
             <p className="text-xs text-warning-fg mt-2">
-              This is the only source of token usage and context-window data
-              for Antigravity — in both interactive and headless mode. With it
-              off, ctrlyoke shows no context-window bar and no token counts
-              for antigravity-cli runs.
+              This is the only source of token usage and context-window data for
+              Antigravity — in both interactive and headless mode. With it off,
+              ctrlyoke shows no context-window bar and no token counts for
+              antigravity-cli runs.
             </p>
           )}
         </div>

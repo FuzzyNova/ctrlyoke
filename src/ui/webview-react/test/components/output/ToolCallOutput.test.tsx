@@ -3,12 +3,23 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GenericToolCallOutput } from "@components/output/ToolCallOutput";
 import { buildToolCallRenderPlan } from "@utils/toolCallLayout";
+import { DEFAULT_COLLAPSED_OUTPUT_MAX_LINES } from "@utils/outputTruncation";
 
 describe("GenericToolCallOutput", () => {
+  // 12-line fixtures: enough that the collapsed preview always hides more than
+  // one line (a single hidden line renders in full, with no toggle at all).
+  const FIXTURE_LINES = 12;
+  const HIDDEN_LINES = FIXTURE_LINES - DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+  const showMoreLabel = new RegExp(
+    `\\[show ${HIDDEN_LINES} more lines\\]`,
+    "i"
+  );
+  const lastVisibleLine = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+
   it("preserves uncontrolled expansion behavior by default", async () => {
     const user = userEvent.setup();
     const output = Array.from(
-      { length: 12 },
+      { length: FIXTURE_LINES },
       (_, index) => `line ${index + 1}`
     ).join("\n");
 
@@ -26,9 +37,7 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedOutput = screen.getByText(
-      /\[show 2 more lines\]/i
-    ).parentElement;
+    const collapsedOutput = screen.getByText(showMoreLabel).parentElement;
 
     expect(
       screen.queryByText("detail: lift expansion state")
@@ -38,8 +47,10 @@ describe("GenericToolCallOutput", () => {
         /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
       )
     ).toBeInTheDocument();
-    expect(collapsedOutput?.textContent).toContain("line 10");
-    expect(collapsedOutput?.textContent).not.toContain("line 11");
+    expect(collapsedOutput?.textContent).toContain(`line ${lastVisibleLine}`);
+    expect(collapsedOutput?.textContent).not.toContain(
+      `line ${lastVisibleLine + 1}`
+    );
 
     await user.click(screen.getByTitle("Show all parameters"));
     expect(screen.getByTitle("Hide parameters")).toBeInTheDocument();
@@ -56,11 +67,13 @@ describe("GenericToolCallOutput", () => {
       )
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByText(/\[show 2 more lines\]/i));
+    await user.click(screen.getByText(showMoreLabel));
     const expandedOutput = screen.getByText(/\[show less\]/i).parentElement;
     expect(screen.getByText(/\[show less\]/i)).toBeInTheDocument();
-    expect(expandedOutput?.textContent).toContain("line 11");
-    expect(expandedOutput?.textContent).toContain("line 12");
+    expect(expandedOutput?.textContent).toContain(
+      `line ${lastVisibleLine + 1}`
+    );
+    expect(expandedOutput?.textContent).toContain(`line ${FIXTURE_LINES}`);
   });
 
   it("emits controlled expansion intent without mutating local state", async () => {
@@ -71,10 +84,8 @@ describe("GenericToolCallOutput", () => {
       outputExpanded: false,
       errorExpanded: false,
     } as const;
-    // 12 lines so 2 remain hidden when collapsed — a single hidden line is
-    // shown in full (no toggle), which would not exercise the toggle path.
     const error = Array.from(
-      { length: 12 },
+      { length: FIXTURE_LINES },
       (_, index) => `error ${index + 1}`
     ).join("\n");
 
@@ -96,15 +107,15 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedError = screen.getByText(
-      /\[show 2 more lines\]/i
-    ).parentElement;
+    const collapsedError = screen.getByText(showMoreLabel).parentElement;
 
-    expect(collapsedError?.textContent).toContain("error 10");
-    expect(collapsedError?.textContent).not.toContain("error 11");
+    expect(collapsedError?.textContent).toContain(`error ${lastVisibleLine}`);
+    expect(collapsedError?.textContent).not.toContain(
+      `error ${lastVisibleLine + 1}`
+    );
 
     await user.click(screen.getByTitle("Show all parameters"));
-    await user.click(screen.getByText(/\[show 2 more lines\]/i));
+    await user.click(screen.getByText(showMoreLabel));
 
     expect(onExpansionChange).toHaveBeenNthCalledWith(1, "params", true);
     expect(onExpansionChange).toHaveBeenNthCalledWith(2, "error", true);
@@ -113,7 +124,9 @@ describe("GenericToolCallOutput", () => {
     expect(
       screen.queryByText("subject: output-layout")
     ).not.toBeInTheDocument();
-    expect(collapsedError?.textContent).not.toContain("error 11");
+    expect(collapsedError?.textContent).not.toContain(
+      `error ${lastVisibleLine + 1}`
+    );
   });
 
   it("uses a neutral toggle label for character-truncated single-line output", () => {
