@@ -1742,6 +1742,59 @@ suite("CopilotLogParser", () => {
     });
   });
 
+  suite("classifyUserEvent", () => {
+    test("classifies the dispatched idle message as an injected prompt", () => {
+      const prompt = "Please inspect the terminal resize behavior.";
+      const event: BaseCliEvent = {
+        type: "user.message",
+        data: {
+          content: prompt,
+          delivery: "idle",
+        },
+      };
+
+      assert.strictEqual(
+        parser.classifyUserEvent(event, { dispatchedPromptText: prompt }),
+        "injected-prompt"
+      );
+    });
+
+    test("ignores source-system user messages even when they carry text", () => {
+      const event: BaseCliEvent = {
+        type: "user.message",
+        data: {
+          content: "Deferred tool definitions were updated.",
+          transformedContent: "<system_reminder>...</system_reminder>",
+          source: "system",
+          delivery: "steering",
+        },
+      };
+
+      assert.strictEqual(parser.classifyUserEvent(event, {}), "other");
+      assert.strictEqual(parser.extractUserSteerText(event), undefined);
+    });
+
+    test("classifies a genuine delivery-steering message as a human steer", () => {
+      const text =
+        "Another agent is working on command handling; keep their changes.";
+      const event: BaseCliEvent = {
+        type: "user.message",
+        data: {
+          content: text,
+          delivery: "steering",
+        },
+      };
+
+      assert.strictEqual(
+        parser.classifyUserEvent(event, {
+          dispatchedPromptText: "Fix the terminal viewport.",
+        }),
+        "human-steer"
+      );
+      assert.strictEqual(parser.extractUserSteerText(event), text);
+    });
+  });
+
   suite("isComplete", () => {
     test("should always return false (uses hooks for completion detection)", () => {
       // CopilotLogParser intentionally returns false for all events
@@ -1875,6 +1928,77 @@ suite("CopilotLogParser", () => {
         assert.strictEqual(thirdRead.length, 1);
         assert.strictEqual(thirdRead[0].type, "assistant.turn_end");
       } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("retains a partially written user message until the next append", async () => {
+      const event = {
+        type: "user.message",
+        data: {
+          content: "Do not revert the other agent's changes.",
+          delivery: "steering",
+        },
+      };
+      const serialized = JSON.stringify(event);
+      const filePath = createTempJsonlFile([]);
+
+      try {
+        fs.writeFileSync(filePath, serialized.slice(0, -8), "utf8");
+        assert.deepStrictEqual(await parser.readNewLines(filePath), []);
+
+        fs.appendFileSync(filePath, serialized.slice(-8) + "\n", "utf8");
+        const completed = await parser.readNewLines(filePath);
+        assert.deepStrictEqual(completed, [event]);
+        assert.strictEqual(
+          parser.classifyUserEvent(completed[0], {}),
+          "human-steer"
+        );
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("tails user messages appended after the watcher starts", async () => {
+      const filePath = createTempJsonlFile([
+        { type: "session.start", data: { sessionId: "tail-session" } },
+      ]);
+      parser.seekToEnd(filePath);
+      let watcher: fs.FSWatcher | undefined;
+
+      try {
+        const observed = new Promise<BaseCliEvent>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("Copilot user-message tail timed out")),
+            2_000
+          );
+          watcher = parser.watchLogFile(
+            filePath,
+            (event) => {
+              if (event.type === "user.message") {
+                clearTimeout(timeout);
+                resolve(event);
+              }
+            },
+            new Date(0)
+          );
+        });
+
+        const event = {
+          type: "user.message",
+          timestamp: new Date().toISOString(),
+          data: {
+            content: "Please keep following this session.",
+            delivery: "steering",
+          },
+        };
+        fs.appendFileSync(filePath, "\n" + JSON.stringify(event), "utf8");
+
+        const tailed = await observed;
+        assert.deepStrictEqual(tailed, event);
+        assert.strictEqual(parser.classifyUserEvent(tailed, {}), "human-steer");
+      } finally {
+        watcher?.close();
         cleanupTempFile(filePath);
       }
     });

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { StringDecoder } from "string_decoder";
 import {
   BaseCliEvent,
   ILogParser,
@@ -64,6 +65,11 @@ export abstract class BaseLogParser implements ILogParser {
    * - Persists across multiple readNewLines() calls
    */
   protected lastReadPosition = 0;
+
+  /** Incomplete trailing JSONL text retained until a later append completes it. */
+  private pendingLogText = "";
+  /** Preserves UTF-8 characters whose bytes straddle incremental reads. */
+  private logDecoder = new StringDecoder("utf8");
 
   // ========================================================================
   // Abstract Methods (HarnessId-Specific Implementation Required)
@@ -270,6 +276,7 @@ export abstract class BaseLogParser implements ILogParser {
       if (fs.existsSync(filePath)) {
         const stats = fs.statSync(filePath);
         this.lastReadPosition = stats.size;
+        this.resetIncrementalLineState();
         Log.debug(
           `[BaseLogParser] Seeked to end of file (${stats.size} bytes): ${filePath}`
         );
@@ -382,6 +389,7 @@ export abstract class BaseLogParser implements ILogParser {
       // If file was truncated or rotated, reset position
       if (currentSize < this.lastReadPosition) {
         this.lastReadPosition = 0;
+        this.resetIncrementalLineState();
       }
 
       // If no new content, return empty array
@@ -401,9 +409,17 @@ export abstract class BaseLogParser implements ILogParser {
       // Update read position
       this.lastReadPosition = currentSize;
 
-      // Parse JSONL format (one JSON object per line)
-      const content = buffer.toString("utf8");
-      const lines = content.split("\n");
+      // Parse JSONL format (one JSON object per line). fs.watch may fire while
+      // the writer is between chunks of the same line; keep an incomplete tail
+      // instead of advancing past it permanently.
+      const content = this.pendingLogText + this.logDecoder.write(buffer);
+      this.pendingLogText = "";
+      const lines = content.split(/\r?\n/);
+      const hasTrailingNewline = /\r?\n$/.test(content);
+      const trailingLine = hasTrailingNewline ? undefined : lines.pop();
+      if (hasTrailingNewline) {
+        lines.pop();
+      }
 
       const entries: BaseCliEvent[] = [];
       for (const line of lines) {
@@ -424,11 +440,28 @@ export abstract class BaseLogParser implements ILogParser {
         }
       }
 
+      // A valid final JSON value does not require a newline (for example a
+      // completed static log fixture). Only retain the tail when parsing proves
+      // that the writer has not finished it yet.
+      const trailingText = trailingLine?.trim();
+      if (trailingText) {
+        try {
+          entries.push(JSON.parse(trailingText) as BaseCliEvent);
+        } catch {
+          this.pendingLogText = trailingLine!;
+        }
+      }
+
       return entries;
     } catch (error) {
       // File read errors are thrown (caller should handle)
       throw new Error(`Failed to read log file: ${getErrorMessage(error)}`);
     }
+  }
+
+  private resetIncrementalLineState(): void {
+    this.pendingLogText = "";
+    this.logDecoder = new StringDecoder("utf8");
   }
 
   /**

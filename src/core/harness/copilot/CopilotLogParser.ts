@@ -93,6 +93,9 @@ type CopilotPendingTool = {
   timestamp: number;
 };
 
+/** Copilot records injected system reminders as user.message events too. */
+const COPILOT_SYSTEM_USER_MESSAGE_SOURCE = "system";
+
 export class CopilotLogParser extends BaseLogParser {
   /**
    * Event buffer for multi-event responses
@@ -656,11 +659,10 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   /**
-   * Classify a `user.message` log event. Unlike Claude, Copilot never reuses
-   * this event type for tool results or resume signals (those are
-   * `tool.execution_complete` and `system.notification` respectively — see
-   * `hasPendingBackgroundWork`), so the only two possibilities are ctrlyoke's
-   * own injected prompt echoed back, or genuine text typed into the live TUI.
+   * Classify a `user.message` log event. Copilot also records injected system
+   * reminders with `source: "system"`; those are neither prompts nor human
+   * steers. For ordinary user messages, distinguish ctrlyoke's echoed prompt
+   * from genuine text typed into the live TUI.
    */
   override classifyUserEvent(
     event: BaseCliEvent,
@@ -671,8 +673,7 @@ export class CopilotLogParser extends BaseLogParser {
       return "other";
     }
 
-    const text =
-      typeof e.data?.content === "string" ? e.data.content.trim() : "";
+    const text = this.extractHumanUserMessageText(e);
     if (!text) {
       return "other";
     }
@@ -697,11 +698,20 @@ export class CopilotLogParser extends BaseLogParser {
 
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as CopilotProviderEvent;
-    if (e.type !== "user.message") {
+    return this.extractHumanUserMessageText(e);
+  }
+
+  private extractHumanUserMessageText(
+    event: CopilotProviderEvent
+  ): string | undefined {
+    if (
+      event.type !== "user.message" ||
+      event.data?.source === COPILOT_SYSTEM_USER_MESSAGE_SOURCE
+    ) {
       return undefined;
     }
     const text =
-      typeof e.data?.content === "string" ? e.data.content.trim() : "";
+      typeof event.data?.content === "string" ? event.data.content.trim() : "";
     return text || undefined;
   }
 
