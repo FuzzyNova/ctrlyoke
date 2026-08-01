@@ -124,7 +124,12 @@ suite("migrate-runs-layout", () => {
       assert.strictEqual(result.status, 0, result.stderr);
       assert.match(result.stdout, /1 historical definition approximate/);
 
-      const lineage = path.join(workspace, ".ctrlyoke", ".runs", legacyId);
+      const lineage = path.join(
+        workspace,
+        ".ctrlyoke",
+        ".runs",
+        legacyId.toLowerCase()
+      );
       const descriptor = JSON.parse(
         await fs.readFile(path.join(lineage, "workflow.json"), "utf8")
       ) as { latestRunRef: string; nextRunId: number };
@@ -200,9 +205,10 @@ suite("migrate-runs-layout", () => {
         fs.access(path.join(workspace, ".ctrlyoke", ".runs"))
       );
 
-      await fs.mkdir(path.join(workspace, ".ctrlyoke", ".runs", legacyId), {
-        recursive: true,
-      });
+      await fs.mkdir(
+        path.join(workspace, ".ctrlyoke", ".runs", legacyId.toLowerCase()),
+        { recursive: true }
+      );
       const collision = runMigration(workspace);
       assert.strictEqual(collision.status, 0, collision.stderr);
       assert.match(collision.stdout, /SKIP/);
@@ -321,7 +327,12 @@ suite("migrate-runs-layout", () => {
 
       const result = runMigration(workspace);
       assert.strictEqual(result.status, 0, result.stderr);
-      const lineage = path.join(workspace, ".ctrlyoke", ".runs", legacyId);
+      const lineage = path.join(
+        workspace,
+        ".ctrlyoke",
+        ".runs",
+        legacyId.toLowerCase()
+      );
       const [runRef] = (await listDirectories(lineage)).filter((name) =>
         name.startsWith("run-")
       );

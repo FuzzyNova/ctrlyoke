@@ -525,8 +525,8 @@ suite("HostedWorkspaceViewerService", function () {
 
       commitFile(root, "tracked.txt", "one\n", "initial commit");
       runGit(root, "push", "-u", "origin", "HEAD");
-      // Mirrors the origin/HEAD symbolic ref created for /security-review:
-      // git log --decorate then reports both "origin/main" and "origin/HEAD"
+      const branch = runGit(root, "branch", "--show-current");
+      // git log --decorate then reports both the remote branch and "origin/HEAD"
       // on the same commit.
       runGit(root, "remote", "set-head", "origin", "-a");
 
@@ -542,7 +542,7 @@ suite("HostedWorkspaceViewerService", function () {
         1,
         `expected exactly one remoteBranch pill, got: ${JSON.stringify(remoteBranchRefs)}`
       );
-      assert.strictEqual(remoteBranchRefs[0].name, "origin/main");
+      assert.strictEqual(remoteBranchRefs[0].name, `origin/${branch}`);
     });
 
     test("flags merge commits via isMerge", async () => {
