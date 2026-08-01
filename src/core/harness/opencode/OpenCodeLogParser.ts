@@ -1,6 +1,5 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { EventEmitter } from "events";
 import type * as fs from "fs";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
@@ -24,6 +23,7 @@ import {
 } from "./OpenCodeEventMapper";
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
+import { PollingFsWatcher } from "../shared/FsWatcherHandles";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,34 +47,6 @@ async function runOpenCodeExport(sessionId: string): Promise<string> {
     windowsVerbatimArguments: command.requiresShellVerbatimArgs,
   });
   return stdout;
-}
-
-/**
- * Minimal fs.FSWatcher shim backed by a polling interval.
- *
- * CliLogMonitor only needs close() and EventEmitter methods (on/off/emit).
- * This shim satisfies the fs.FSWatcher interface without touching the file system.
- */
-class PollingWatcher extends EventEmitter implements fs.FSWatcher {
-  private readonly _cleanup: () => void;
-
-  constructor(cleanup: () => void) {
-    super();
-    this._cleanup = cleanup;
-  }
-
-  close(): void {
-    this._cleanup();
-    this.emit("close");
-  }
-
-  ref(): this {
-    return this;
-  }
-
-  unref(): this {
-    return this;
-  }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -175,7 +147,7 @@ export class OpenCodeLogParser extends BaseLogParser {
    * @param sessionId The "log path" — actually the session ID for this harness
    * @param callback  Called for each new BaseCliEvent
    * @param startTime Only emit events with timestamps >= startTime
-   * @returns A PollingWatcher (implements fs.FSWatcher); call .close() to stop
+   * @returns A PollingFsWatcher (implements fs.FSWatcher); call .close() to stop
    */
   watchLogFile(
     sessionId: string,
@@ -197,7 +169,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       }
     }, EXPORT_POLL_INTERVAL_MS);
 
-    return new PollingWatcher(() => clearInterval(interval));
+    return new PollingFsWatcher(interval);
   }
 
   /** Running total from the most recent step_finish token event — updated in extractLiveContextWindow. */

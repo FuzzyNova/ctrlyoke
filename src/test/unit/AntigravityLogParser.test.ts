@@ -143,6 +143,68 @@ suite("AntigravityLogParser", () => {
       }
     });
 
+    test("tails follow-ups from the transcript when the discovered Go log stays stale", async () => {
+      await withAntigravityTranscriptSession(
+        [terminalPlannerResponse("The workflow response.")],
+        async ({ parser, logPath, appendTranscript }) => {
+          const originalLogSize = fs.statSync(logPath).size;
+          const observed: BaseCliEvent[] = [];
+          const watcher = parser.watchLogFile(
+            logPath,
+            (event) => observed.push(event),
+            new Date(0)
+          );
+
+          try {
+            appendTranscript(
+              {
+                source: "USER_EXPLICIT",
+                type: "USER_INPUT",
+                status: "DONE",
+                content:
+                  "<USER_REQUEST>\nDid the first MCP call fail?\n</USER_REQUEST>",
+              },
+              terminalPlannerResponse("Yes, then the MCP call succeeded.")
+            );
+
+            const deadline = Date.now() + 2_000;
+            while (
+              observed.filter((event) => event.type !== "log.line").length <
+                2 &&
+              Date.now() < deadline
+            ) {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+
+            assert.strictEqual(
+              fs.statSync(logPath).size,
+              originalLogSize,
+              "the discovered Go log must remain untouched"
+            );
+            assert.deepStrictEqual(
+              observed.map((event) => event.type),
+              ["user_input", "transcript.planner"]
+            );
+            assert.strictEqual(
+              parser.extractUserSteerText(observed[0]),
+              "Did the first MCP call fail?"
+            );
+            assert.strictEqual(
+              (
+                parser.extractStructuredEventsFromEvent(observed[1])[0]
+                  .data as {
+                  text: string;
+                }
+              ).text,
+              "Yes, then the MCP call succeeded."
+            );
+          } finally {
+            watcher.close();
+          }
+        }
+      );
+    });
+
     test("uses transcript_full as the sole authoritative user-input source", async () => {
       await withTemporaryHome(async (homeDir) => {
         const parser = new AntigravityLogParser();

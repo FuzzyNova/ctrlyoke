@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import { StringDecoder } from "string_decoder";
+import { PollingFsWatcher } from "../shared/FsWatcherHandles";
 import {
   AntigravityTranscriptEntry,
   isAntigravityTranscriptEntry,
@@ -7,6 +8,20 @@ import {
 
 /** Bytes of the file head retained to detect a same-path rewrite. */
 const PREFIX_BYTE_LENGTH = 128;
+
+/**
+ * Antigravity can append a human follow-up to the transcript without touching
+ * the Go log that ctrlyoke originally discovered. Poll the authoritative
+ * transcript cheaply so those appends still drive an incremental read.
+ */
+const TRANSCRIPT_CHANGE_POLL_INTERVAL_MS = 250;
+
+interface TranscriptFileSnapshot {
+  path: string;
+  identity: string;
+  size: number;
+  modifiedAt: number;
+}
 
 interface TranscriptReadState {
   offset: number;
@@ -38,6 +53,28 @@ export class AntigravityTranscriptReader {
   ): Promise<AntigravityTranscriptEntry[]> {
     const records = await this.readRecords(transcriptPath);
     return records.map((record) => record.entry);
+  }
+
+  /**
+   * Watch whichever transcript path is currently authoritative. The resolver
+   * is evaluated on every poll so a transcript created after monitor startup,
+   * or a later promotion from the compact fallback to transcript_full.jsonl,
+   * starts driving reads without reattaching the session watcher.
+   */
+  watchForChanges(
+    resolveTranscriptPath: () => string | undefined,
+    onChange: () => void
+  ): fs.FSWatcher {
+    let snapshot = this.readSnapshot(resolveTranscriptPath);
+    const interval = setInterval(() => {
+      const nextSnapshot = this.readSnapshot(resolveTranscriptPath);
+      if (this.sameSnapshot(snapshot, nextSnapshot)) {
+        return;
+      }
+      snapshot = nextSnapshot;
+      onChange();
+    }, TRANSCRIPT_CHANGE_POLL_INTERVAL_MS);
+    return new PollingFsWatcher(interval);
   }
 
   /**
@@ -187,6 +224,41 @@ export class AntigravityTranscriptReader {
       prefix: Buffer.alloc(0),
       nextLineNumber: 0,
     };
+  }
+
+  private readSnapshot(
+    resolveTranscriptPath: () => string | undefined
+  ): TranscriptFileSnapshot | undefined {
+    const transcriptPath = resolveTranscriptPath();
+    if (!transcriptPath) {
+      return undefined;
+    }
+    try {
+      const stats = fs.statSync(transcriptPath);
+      return {
+        path: transcriptPath,
+        identity: `${stats.dev}:${stats.ino}`,
+        size: stats.size,
+        modifiedAt: stats.mtimeMs,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private sameSnapshot(
+    previous: TranscriptFileSnapshot | undefined,
+    current: TranscriptFileSnapshot | undefined
+  ): boolean {
+    if (!previous || !current) {
+      return previous === current;
+    }
+    return (
+      previous.path === current.path &&
+      previous.identity === current.identity &&
+      previous.size === current.size &&
+      previous.modifiedAt === current.modifiedAt
+    );
   }
 
   private async readPrefix(

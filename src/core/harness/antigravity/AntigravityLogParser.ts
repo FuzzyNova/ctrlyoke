@@ -40,6 +40,8 @@ import type {
   AntigravityStreamJsonUsage,
   AntigravityStreamJsonUsageSnapshot,
 } from "./AntigravityStreamJsonUsage";
+import { Log } from "../../../utils/Log";
+import { CompositeFsWatcher } from "../shared/FsWatcherHandles";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -231,6 +233,28 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     } catch {
       return await this.readNewTranscriptEvents();
     }
+  }
+
+  /**
+   * Tail both Antigravity sources. The Go log discovered for a resumed session
+   * may belong to the previous CLI process, while the conversation transcript
+   * remains stable across that restart. Watching the transcript independently
+   * prevents later human follow-ups from waiting forever for activity on the
+   * stale Go log.
+   */
+  override watchLogFile(
+    filePath: string,
+    callback: (entry: BaseCliEvent) => void,
+    startTime: Date
+  ): fs.FSWatcher {
+    const logWatcher = super.watchLogFile(filePath, callback, startTime);
+    const transcriptWatcher = this.transcriptReader.watchForChanges(
+      () => this.resolveAuthoritativeTranscriptPath(),
+      () => {
+        void this.forwardNewTranscriptEvents(callback, startTime);
+      }
+    );
+    return new CompositeFsWatcher([logWatcher, transcriptWatcher]);
   }
 
   extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
@@ -438,12 +462,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * provider-local events. The raw entry and stable event ID remain attached
    * for the later tool-result pairing phase.
    *
-   * Only reached when `readNewLines` runs, which is itself only triggered by
-   * `fs.watch` activity on the tailed cli log (see class doc — this parser
-   * does not override `watchLogFile`). A steer typed while the cli log is
-   * otherwise quiet is picked up on the next cli-log write rather than
-   * instantly; a dedicated transcript poll would close that gap but hasn't
-   * been needed for the confirmed background-task-hold scenario.
+   * Reached both by ordinary Go-log reads and by the transcript-specific
+   * watcher. `AntigravityTranscriptReader` serializes overlapping calls, so a
+   * Go-log change racing a transcript poll still emits each record only once.
    */
   private async readNewTranscriptEvents(): Promise<AntigravityLogEvent[]> {
     const sessionId =
@@ -462,6 +483,36 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       events.push(...this.mapTranscriptRecord(record, sessionId));
     }
     return events;
+  }
+
+  private resolveAuthoritativeTranscriptPath(): string | undefined {
+    const sessionId =
+      this.cachedSessionId ?? this.cachedLastConversationsSessionId;
+    return sessionId
+      ? this.getAuthoritativeTranscriptPath(sessionId)
+      : undefined;
+  }
+
+  private async forwardNewTranscriptEvents(
+    callback: (entry: BaseCliEvent) => void,
+    startTime: Date
+  ): Promise<void> {
+    try {
+      const events = await this.readNewTranscriptEvents();
+      for (const event of events) {
+        const entryTime = this.extractTimestamp(event);
+        if (entryTime && entryTime < startTime) {
+          continue;
+        }
+        try {
+          callback(event);
+        } catch (error) {
+          Log.error("[AntigravityLogParser] Transcript callback error:", error);
+        }
+      }
+    } catch (error) {
+      Log.error("[AntigravityLogParser] Transcript tail read failed:", error);
+    }
   }
 
   private mapTranscriptRecord(

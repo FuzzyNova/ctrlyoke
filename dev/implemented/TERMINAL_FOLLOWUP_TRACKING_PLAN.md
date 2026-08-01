@@ -77,6 +77,10 @@ on truncation/replacement, and skips malformed or unknown entries without
 re-emitting already consumed events. The mapper emits planner, tool, checkpoint,
 error, and user events as they arrive, so the final response is assembled from
 the mapped stream rather than from a completion-time “latest response” scan.
+The session watcher tails that authoritative transcript independently of the Go
+log. This matters when resuming a conversation starts a new CLI process: the
+originally discovered `cli-*.log` can become permanently stale while the same
+conversation continues appending follow-ups to `transcript_full.jsonl`.
 
 Planner `tool_calls` are paired with their result on the adjacent transcript
 line (file order), not by arithmetic on sparse or non-monotonic `step_index`
