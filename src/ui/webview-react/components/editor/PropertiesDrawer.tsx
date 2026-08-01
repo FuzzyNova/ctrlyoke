@@ -1034,8 +1034,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 const effectivePermMode = resolvedPermMode;
                 const isInheriting = properties.toolPermissions === undefined;
                 const allowedDisabled =
-                  isInheriting ||
-                  effectivePermMode !== PERMISSION_MODES.CUSTOM;
+                  isInheriting || effectivePermMode !== PERMISSION_MODES.CUSTOM;
                 const deniedDisabled =
                   isInheriting ||
                   effectivePermMode ===
@@ -1052,7 +1051,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         <label
                           htmlFor="prop-allowed-tools"
                           className="text-xs font-semibold uppercase text-description-fg"
-                          title="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
+                          title="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
                         >
                           Allowed Tools
                         </label>
@@ -1104,7 +1103,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         <label
                           htmlFor="prop-denied-tools"
                           className="text-xs font-semibold uppercase text-description-fg"
-                          title="Tool patterns to deny (one per line, takes precedence over allow list)."
+                          title="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
                         >
                           Denied Tools
                         </label>

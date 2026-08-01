@@ -10,6 +10,7 @@ import { LocalTextarea } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { Button } from "../shared/Button";
+import { PermissionCapabilitySummary } from "../shared/PermissionCapabilitySummary";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -51,6 +52,27 @@ export function AdvancedPermissionsSection({
 
   return (
     <div className="space-y-4">
+      <div>
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
+          Tool Permission Compatibility
+        </h3>
+        <p className="text-xs text-description-fg mb-2">
+          Allowed Tools and Denied Tools are currently supported by Copilot CLI,
+          Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular
+          support; OpenCode uses{" "}
+          <code className="font-mono">OPENCODE_CONFIG_CONTENT</code>
+          and does not write a workspace{" "}
+          <code className="font-mono">opencode.json</code>.
+        </p>
+        <PermissionCapabilitySummary
+          id="advanced-allowed-tools-diagnostic"
+          field="allowedTools"
+        />
+        <PermissionCapabilitySummary
+          id="advanced-denied-tools-diagnostic"
+          field="deniedTools"
+        />
+      </div>
       <div>
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           External File Roots

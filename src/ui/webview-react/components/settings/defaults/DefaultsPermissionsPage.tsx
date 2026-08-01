@@ -6,6 +6,7 @@ import type {
 import { CustomSelect } from "../../shared/CustomSelect";
 import { LocalTextarea } from "../../shared/LocalInputs";
 import { SettingInputRow } from "../../shared/SettingInputRow";
+import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -67,6 +68,10 @@ export function DefaultsPermissionsPage({
           placeholder={"read\nglob\ngrep"}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
         />
+        <PermissionCapabilitySummary
+          id="defaults-allowed-tools-diagnostic"
+          field="allowedTools"
+        />
       </SettingInputRow>
       <SettingInputRow
         label="Denied tools (one per line)"
@@ -89,6 +94,10 @@ export function DefaultsPermissionsPage({
           }
           placeholder={"shell(rm:*)\nwrite"}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
+        />
+        <PermissionCapabilitySummary
+          id="defaults-denied-tools-diagnostic"
+          field="deniedTools"
         />
       </SettingInputRow>
     </div>

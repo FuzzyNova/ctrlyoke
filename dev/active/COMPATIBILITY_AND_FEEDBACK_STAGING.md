@@ -60,8 +60,10 @@ Detail lives in each plan's status header. The summary that drives sequencing:
 - **Permission parity — provider work landed.** Qwen's stream-json input-format
   fix, OpenCode's inline config, and the pinned real-harness fixtures are all
   in. `getPermissionHarnessSupport()` has already dropped OpenCode.
-- **Compatibility — nothing built.** No registry, descriptor, or analyzer
-  module exists in `src/`. Fully greenfield.
+- **Compatibility — Phases 1A–1C complete.** The registry, analyzer, client
+  snapshot, honest permission surfaces, and hosted-browser transport coverage
+  are in place. Runtime permission preparation and post-release portability
+  reporting remain queued.
 - **Browser feedback — Phase 1 built.** The bounded toast queue and viewport
   are in, while the Phase 2.5 Site 1 and Site 2 deletions remain complete.
   `USER_FEEDBACK` transport and the broader `show*Message` migration remain
@@ -113,12 +115,13 @@ Order is prescribed by the plans themselves and is not negotiable at the
 margins: the honest UI is built directly on the registry, and adding a
 temporary harness switch while waiting for it is explicitly forbidden.
 
-1. **Compatibility Phase 1A** — shared contracts and the pure
+1. **[x] Compatibility Phase 1A** — shared contracts and the pure
    effective-property resolver.
-2. **Compatibility Phase 1B** — permission descriptors, registry assembly,
+2. **[x] Compatibility Phase 1B** — permission descriptors, registry assembly,
    analyzer, preflight, client snapshot.
-3. **Compatibility Phase 1C** — honest permission UI across every authoring
-   surface (`TOOL_PERMISSION_PARITY_PLAN.md` "Compatibility Phase 1C").
+3. **[x] Compatibility Phase 1C** — honest permission UI across every
+   authoring surface (`TOOL_PERMISSION_PARITY_PLAN.md` "Compatibility Phase
+   1C"). **Done 2026-08-01.**
 4. **Permission plan stages 4–7** — the runtime preparation contract, then the
    remaining Antigravity statusline-lease scope, then Qwen/OpenCode fixture
    retention.

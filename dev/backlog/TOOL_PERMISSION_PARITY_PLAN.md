@@ -1,11 +1,11 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Provider work, Compatibility Phases 1A–1B, and Compatibility
-> Phase 1C(i) honest permission UI in the workflow and prompt editors have
-> landed. The shared analyzer now drives persistent mixed-harness diagnostics;
-> authored tool lists remain editable under mode-only harnesses. Remaining
-> scope is the defaults/advanced authoring surfaces and the Antigravity/Codex
-> parity follow-up.
+> **Status:** Provider work and Compatibility Phases 1A–1C are complete. The
+> shared analyzer now drives persistent mixed-harness diagnostics across the
+> workflow, prompt, defaults, and advanced permission surfaces; authored tool
+> lists remain editable under mode-only harnesses. Remaining work is the
+> runtime preparation contract and the post-release Antigravity/Codex parity
+> follow-up.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >

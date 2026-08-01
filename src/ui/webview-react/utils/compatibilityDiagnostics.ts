@@ -25,6 +25,56 @@ export function diagnosticsForPermissionField(
   return diagnostics.filter((diagnostic) => diagnostic.capability === field);
 }
 
+export function permissionCapabilitySummary(
+  snapshot: HarnessCapabilityRegistrySnapshot,
+  field: Exclude<PermissionField, "mode">
+): Pick<CompatibilityDiagnostic, "severity" | "message">[] {
+  const supported: string[] = [];
+  const notEnforced: string[] = [];
+
+  for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
+    const state = snapshot.harnesses[harnessId]?.effective?.permissions[field];
+    const label =
+      harnessId === HARNESS_IDS.CLAUDE_CLI
+        ? "Claude CLI"
+        : (HARNESS_INFO[harnessId]?.name ?? harnessId);
+
+    if (state?.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
+      notEnforced.push(label);
+    } else {
+      supported.push(label);
+    }
+  }
+
+  const label =
+    field === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+      ? "Allowed Tools"
+      : "Denied Tools";
+  const diagnostics: Pick<CompatibilityDiagnostic, "severity" | "message">[] =
+    [];
+
+  if (supported.length > 0) {
+    diagnostics.push({
+      severity: "info",
+      message: `${label} are currently supported by ${joinLabels(supported)}.`,
+    });
+  }
+  if (notEnforced.length > 0) {
+    diagnostics.push({
+      severity: "warning",
+      message: `${joinLabels(notEnforced)} provide a derived mode-only summary; ${label} are NOT ENFORCED by these harnesses.`,
+    });
+  }
+
+  return diagnostics;
+}
+
+function joinLabels(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels[0] ?? "no harnesses";
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
 export function toFieldDiagnostic(
   diagnostic: CompatibilityDiagnostic,
   sourceLabel?: string
@@ -36,9 +86,7 @@ export function toFieldDiagnostic(
     .join(harnessName);
   return {
     severity: diagnostic.severity,
-    message: sourceLabel
-      ? `${message} ${sourceLabel}`
-      : message,
+    message: sourceLabel ? `${message} ${sourceLabel}` : message,
   };
 }
 
@@ -54,9 +102,7 @@ export function formatCompatibilitySource(
   return undefined;
 }
 
-function isLossy(
-  state: { fidelity: string; verification: string }
-): boolean {
+function isLossy(state: { fidelity: string; verification: string }): boolean {
   return (
     state.fidelity !== CAPABILITY_FIDELITIES.EXACT ||
     state.verification !== CAPABILITY_VERIFICATION_STATUSES.VERIFIED
@@ -89,18 +135,17 @@ export function workflowPermissionDiagnostic(
   capabilities: HarnessCapabilityRegistrySnapshot
 ): Pick<CompatibilityDiagnostic, "severity" | "message"> | undefined {
   const relevant = targets.filter(
-    (target) => (target.resolved.properties.toolPermissions?.[field]?.length ?? 0) > 0
+    (target) =>
+      (target.resolved.properties.toolPermissions?.[field]?.length ?? 0) > 0
   );
   if (relevant.length === 0) return undefined;
 
-  const grouped = new Map<
-    HarnessId,
-    { supported: number; affected: number }
-  >();
+  const grouped = new Map<HarnessId, { supported: number; affected: number }>();
   for (const target of relevant) {
     const harnessId = target.resolved.properties.harness;
     const group = grouped.get(harnessId) ?? { supported: 0, affected: 0 };
-    const state = capabilities.harnesses[harnessId]?.effective?.permissions[field];
+    const state =
+      capabilities.harnesses[harnessId]?.effective?.permissions[field];
     if (state && !isLossy(state)) group.supported += 1;
     else group.affected += 1;
     grouped.set(harnessId, group);

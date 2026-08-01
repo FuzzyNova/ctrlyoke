@@ -138,8 +138,8 @@ Properties follow a three-tier precedence: **prompt-level → workflow-level →
 | `name`            | `string`                                | Display label for this step                                                     |
 | `harness`         | harness ID                              | Override the active harness for this prompt                                     |
 | `model`           | `string`                                | Model to use (harness-specific format)                                          |
-| `agent`           | `string`                                | Path to a `.agent.md` file; content injected into the prompt                    |
-| `skills`          | `string[]`                              | Skill file names; content injected into the prompt                              |
+| `agent`           | `string`                                | Portable ctrlyoke prompt attachment; resolved into a categorized prompt reference with `<agentInstructions>` |
+| `skills`          | `string[]`                              | Portable ctrlyoke prompt attachments resolved into categorized prompt references |
 | `resumeSession`   | `boolean`                               | Continue the previous prompt's conversation session                             |
 | `sessionId`       | `string \| number`                      | Resume a session by ID or by prior prompt index                                 |
 | `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"ctrlyoke"` enables dynamic queue extension             |
@@ -330,6 +330,13 @@ All settings use the `ctrlyoke.` prefix.
 | `cliDeniedTools`     | _(rm, del, sudo, git push/reset, etc.)_ | Deny patterns — take precedence over allow                   |
 
 ### Agents and skills
+
+Workflow `agent` and `skills` fields are portable ctrlyoke prompt attachments,
+resolved by `CliPromptPreparer.createCategorizedPromptFiles()` and supplied as
+prompt references. Agent content is wrapped in `<agentInstructions>` tags.
+The Agents & Skills settings page separately manages optional harness-native
+discovery directories; native discovery behavior varies by harness and does
+not determine workflow field support.
 
 | Setting                       | Default | Description                                                  |
 | ----------------------------- | ------- | ------------------------------------------------------------ |

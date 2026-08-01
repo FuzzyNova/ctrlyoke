@@ -78,12 +78,12 @@
         },
         "agent": {
           "type": "string",
-          "description": "Default agent to use in new workflows."
+          "description": "Default portable ctrlyoke workflow agent attachment for new workflows. Native harness agent discovery is managed separately by the Agents & Skills settings page."
         },
         "skills": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Default skills to include in new workflows."
+          "description": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support."
         },
         "executionMode": {
           "type": "string",
@@ -164,7 +164,7 @@
         },
         "toolPermissions": {
           "type": "object",
-          "description": "Default tool permission settings for prompt execution.",
+          "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity provide a derived mode-only summary and do NOT ENFORCE these lists.",
           "additionalProperties": false,
           "properties": {
             "mode": {
@@ -175,12 +175,12 @@
             "allowedTools": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "Explicitly allowed tools (used when mode is 'custom')."
+              "description": "Explicitly allowed tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity."
             },
             "deniedTools": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "Explicitly denied tools (used when mode is 'custom')."
+              "description": "Explicitly denied tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity."
             }
           }
         },

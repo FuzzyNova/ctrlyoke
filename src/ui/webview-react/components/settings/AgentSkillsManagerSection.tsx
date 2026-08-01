@@ -647,9 +647,9 @@ export function AgentSkillsManagerSection({
 
   const getContextDescription = (): string => {
     if (activeType === HARNESS_FILE_TYPES.AGENT) {
-      return "Built-in ctrlyoke agents are always available to workflows. Save a copy to ctrlyoke to customize one, or to a harness directory to enable native subagent spawning.";
+      return "Workflow agent fields are portable ctrlyoke prompt attachments: content is resolved into categorized prompt references and wrapped in <agentInstructions>. This page separately manages optional harness-native discovery; native discovery does not determine workflow agent support. Built-in ctrlyoke agents are always available to workflows.";
     }
-    return "Save skills to a harness directory to make that skill always available for that harness, regardless of what ctrlyoke attaches.";
+    return "Workflow skills are portable ctrlyoke prompt attachments resolved into categorized prompt references. This page separately manages optional harness-native skill discovery, whose behavior varies by harness and does not determine workflow skills support.";
   };
 
   return (

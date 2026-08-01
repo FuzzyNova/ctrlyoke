@@ -1585,7 +1585,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <FormField
                     label="Allowed Tools"
                     htmlFor="settings-allowed-tools"
-                    description="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
+                    description="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
                     className="flex-1 min-h-0"
                     setAsDefaultButton={
                       <SetAsDefaultButton
@@ -1617,9 +1617,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           deniedTools: effectiveDeniedTools,
                         });
                       }}
-                      disabled={
-                        permMode !== PERMISSION_MODES.CUSTOM
-                      }
+                      disabled={permMode !== PERMISSION_MODES.CUSTOM}
                       aria-describedby={
                         allowedFieldDiagnostics.length > 0
                           ? "settings-allowed-tools-diagnostic"
@@ -1650,7 +1648,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <FormField
                     label="Denied Tools"
                     htmlFor="settings-denied-tools"
-                    description="Tool patterns to deny (one per line, takes precedence over allow list)."
+                    description="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
                     className="flex-1 min-h-0"
                     setAsDefaultButton={
                       <SetAsDefaultButton

@@ -260,12 +260,13 @@ definitions:
             pattern: ^[a-zA-Z0-9-_]+$
           - type: 'null'
         description: >-
-          Custom agent to use for this prompt. Specify ONLY the agent name without file extensions
-          (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). The
-          agent's instructions will be prepended to your prompt using <agentInstructions> tags.
-          Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory.
-          Works with all harnesses (Copilot CLI, Claude CLI, Codex CLI, etc.). Use null to
-          explicitly disable inherited agent selection.
+          Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions
+          (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md').
+          CliPromptPreparer.createCategorizedPromptFiles() resolves the content into prompt
+          references and wraps agent content in <agentInstructions> tags. Native harness agent
+          discovery is managed separately in the Agents & Skills settings page and does not
+          determine workflow agent support. Use null to explicitly disable inherited agent
+          selection.
       resumeSession:
         type: boolean
         description: >-
@@ -321,11 +322,12 @@ definitions:
               pattern: ^[a-zA-Z0-9-_]+$
           - type: 'null'
         description: >-
-          List of skill names to attach to this prompt. Only the skill frontmatter is attached
-          (progressive disclosure) — the harness reads the full SKILL.md when using the skill.
-          Skills are discovered from .claude/skills/ directories (workspace and user home).
-          Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly
-          disable inherited skills.
+          Portable ctrlyoke prompt attachments. CliPromptPreparer.createCategorizedPromptFiles()
+          resolves the selected skill content into categorized prompt references. The Agents &
+          Skills settings page separately manages optional harness-native discovery directories
+          whose behavior varies by harness; native discovery does not determine workflow skills
+          support. Prompt-level skills replace workflow-level skills (no merging). Use null to
+          explicitly disable inherited skills.
       endCondition:
         oneOf:
           - $ref: '#/definitions/endCondition'
@@ -413,16 +415,21 @@ definitions:
                 items:
                   type: string
                 description: >-
-                  Tool patterns to allow (used in custom mode). Uses Copilot CLI format —
-                  auto-converted for Claude/Qwen. Ignored by Codex, OpenCode, and Antigravity
-                  (mode-only harnesses).
+                  Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI,
+                  Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode
+                  delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace
+                  opencode.json. Codex and Antigravity provide a derived mode-only summary; Allowed
+                  Tools are NOT ENFORCED by those harnesses.
               deniedTools:
                 type: array
                 items:
                   type: string
                 description: >-
-                  Tool patterns to deny (takes precedence over allow list). Ignored by Codex,
-                  OpenCode, and Antigravity (mode-only harnesses).
+                  Tool patterns to deny (takes precedence over allow list). Currently supported by
+                  Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular
+                  support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes
+                  no workspace opencode.json. Codex and Antigravity provide a derived mode-only
+                  summary; Denied Tools are NOT ENFORCED by those harnesses.
             additionalProperties: false
           - type: 'null'
         description: >-

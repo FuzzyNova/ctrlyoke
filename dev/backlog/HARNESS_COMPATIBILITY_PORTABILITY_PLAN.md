@@ -1,6 +1,6 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Phases 1A–1B and Compatibility Phase 1C(i) are complete. Shared
+> **Status:** Phases 1A–1B and Compatibility Phase 1C are complete. Shared
 > contracts, the pure effective-property resolver, harness-owned permission
 > descriptors, and the backend capability registry have landed in
 > [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
@@ -23,6 +23,10 @@
 > The workflow properties panel and prompt properties drawer now consume those
 > facts for persistent, accessible permission diagnostics, mixed-harness
 > aggregation, and warning tab indicators without disabling authored values.
+> Defaults and advanced permission settings now render the same capability
+> summary, and hosted-browser transport parity is covered by the standalone
+> shim tests. Customer docs distinguish portable workflow attachments from
+> optional harness-native discovery.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >

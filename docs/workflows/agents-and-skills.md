@@ -2,6 +2,13 @@
 
 Agents and skills let you add reusable instruction layers without copying the same guidance into every workflow.
 
+Workflow `agent` and `skills` fields are portable ctrlyoke prompt attachments.
+`CliPromptPreparer.createCategorizedPromptFiles()` resolves their content into
+categorized prompt references; agent content is wrapped in
+`<agentInstructions>` tags before the reference is supplied to the harness.
+These fields are supported independently of any harness-native discovery
+feature.
+
 ## Agent
 
 `agent` selects one custom agent by name.
@@ -23,6 +30,14 @@ skills:
 ```
 
 Prompt-level skills replace workflow-level skills rather than merging with them.
+
+## Agents & Skills settings
+
+The Agents & Skills settings page manages a separate, optional path: copying
+agent and skill files into harness-native discovery directories. Native
+discovery can enable ambient skills or native subagent spawning, and its
+behavior varies by harness. It does not determine whether workflow `agent` or
+`skills` attachments are supported.
 
 ## Disabling inherited values
 

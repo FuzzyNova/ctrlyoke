@@ -39,8 +39,13 @@ type WebSocketEventListenerOptions = Parameters<
  * `window.vscodeApi`. Returns the sockets it opened so a test can drive the
  * connect/reconnect lifecycle by hand.
  */
-function loadShim(): { api: any; sockets: FakeSocket[] } {
+function loadShim(): {
+  api: any;
+  sockets: FakeSocket[];
+  dispatched: any[];
+} {
   const sockets: FakeSocket[] = [];
+  const dispatched: any[] = [];
 
   class FakeWebSocket
     implements
@@ -95,7 +100,9 @@ function loadShim(): { api: any; sockets: FakeSocket[] } {
       constructor(
         public type: string,
         public init: any
-      ) {}
+      ) {
+        Object.assign(this, init);
+      }
     },
     localStorage: makeStorage(),
     sessionStorage: makeStorage(),
@@ -122,13 +129,16 @@ function loadShim(): { api: any; sockets: FakeSocket[] } {
   };
   context.window = context;
   context.window.addEventListener = noop;
-  context.window.dispatchEvent = noop;
+  context.window.dispatchEvent = (event: { type: string; data: unknown }) => {
+    dispatched.push({ type: event.type, data: event.data });
+    return true;
+  };
   context.window.setTimeout = context.setTimeout;
   context.window.clearTimeout = context.clearTimeout;
   context.window.setInterval = context.setInterval;
 
   vm.runInNewContext(buildHostedStandaloneShimScript(), context);
-  return { api: context.window.vscodeApi, sockets };
+  return { api: context.window.vscodeApi, sockets, dispatched };
 }
 
 /** Brings the shim's current socket to OPEN, which flushes pendingOutbound. */
@@ -210,6 +220,54 @@ suite("HostedStandaloneShimScript", () => {
       sockets[0].sent.some(
         (message) => message.type === MESSAGE_TYPES.SEED_NEW_RUN
       )
+    );
+  });
+
+  test("preserves capability snapshots and harness changes across the hosted WebSocket", () => {
+    const { api, sockets, dispatched } = loadShim();
+    openSocket(sockets[0]);
+    api.postMessage({ type: MESSAGE_TYPES.READY });
+
+    const capabilitySnapshot = {
+      schemaVersion: 1,
+      enabledDomains: ["permissions"],
+      harnesses: {
+        "copilot-cli": { available: true },
+        "claude-cli": { available: true },
+        "codex-cli": { available: true },
+        "opencode-cli": { available: true },
+        "qwen-cli": { available: true },
+        "antigravity-cli": { available: true },
+      },
+    };
+    const snapshotMessage = {
+      type: MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT,
+      data: { snapshot: capabilitySnapshot },
+    };
+
+    api.postMessage({
+      type: MESSAGE_TYPES.CHANGE_HARNESS,
+      harness: "claude-cli",
+    });
+    assert.ok(
+      sockets[0].sent.some(
+        (message) =>
+          message.type === MESSAGE_TYPES.CHANGE_HARNESS &&
+          message.harness === "claude-cli"
+      )
+    );
+
+    sockets[0].emit("message", {
+      currentTarget: sockets[0],
+      data: JSON.stringify(snapshotMessage),
+    });
+    assert.deepStrictEqual(dispatched, [
+      { type: "message", data: snapshotMessage },
+    ]);
+    assert.deepStrictEqual(
+      dispatched[0].data.data.snapshot,
+      capabilitySnapshot,
+      "hosted clients receive the same capability snapshot used by the VS Code webview"
     );
   });
 });

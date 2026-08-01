@@ -19,8 +19,8 @@ finalStep:
 | ----------------- | ------------------- | ----------------------------------------------- |
 | `harness`         | string              | One of the supported harness IDs                |
 | `model`           | string              | Harness-specific model name                     |
-| `agent`           | string or `null`    | Custom agent name                               |
-| `skills`          | string[] or `null`  | Skill names                                     |
+| `agent`           | string or `null`    | Portable ctrlyoke prompt attachment; resolved into categorized prompt references and wrapped in `<agentInstructions>` |
+| `skills`          | string[] or `null`  | Portable ctrlyoke prompt attachments resolved into categorized prompt references |
 | `resumeSession`   | boolean             | Default session behavior                        |
 | `sessionId`       | string or number    | Exact session, step reference, or `"finalStep"` |
 | `mcpServers`      | array or `null`     | Include `"ctrlyoke"` for dynamic queue support  |
@@ -80,5 +80,11 @@ Prompt steps also accept the execution fields listed in the workflow-level table
 - `mode`: `dangerouslyAllowAll`, `allowAll`, `custom`, or `passthrough`
 - `allowedTools`: allow-list patterns
 - `deniedTools`: deny-list patterns
+
+Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude
+CLI, Qwen Code, and OpenCode. Qwen is inline granular support. OpenCode
+delivers permissions through `OPENCODE_CONFIG_CONTENT` and writes no workspace
+`opencode.json`. Codex and Antigravity provide a derived mode-only summary;
+their Allowed Tools and Denied Tools lists are **NOT ENFORCED**.
 
 Use `passthrough` when you want ctrlyoke to omit its permission flags and rely on the harness's own local configuration.
