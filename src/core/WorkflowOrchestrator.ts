@@ -4,6 +4,7 @@ import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
+import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { WorkflowInstance } from "./WorkflowInstance";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
@@ -298,6 +299,7 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   private readonly dashboardBroadcastHub = new DashboardBroadcastHub();
   private readonly integrationFactory: IntegrationFactory;
+  private readonly compatibilityRegistry: HarnessCapabilityRegistry;
   private readonly statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
 
@@ -378,6 +380,7 @@ export class WorkflowOrchestrator {
     this.integrationFactory = new IntegrationFactory(
       new VsCodeAdapter(context)
     );
+    this.compatibilityRegistry = new HarnessCapabilityRegistry();
 
     // Create the shared CLI harness integrations
     this.copilotCliIntegration = this.integrationFactory.createCopilotCli();
@@ -4547,6 +4550,7 @@ export class WorkflowOrchestrator {
 
     this.statusBarManager.dispose();
     this.endConditionEvaluatorForCommands.dispose();
+    this.compatibilityRegistry.dispose();
     // The run-summary cache is module-level, so nothing else drops it when the
     // host tears down (workspace close, extension deactivate).
     clearRunSummaryCache();
@@ -4749,7 +4753,9 @@ export class WorkflowOrchestrator {
       (name: string | undefined) =>
         this.propagateWorkflowNameToIntegrations(name),
       () => this.updateStatusBar(),
-      this.currentWorkspaceFolder?.uri.fsPath
+      this.currentWorkspaceFolder?.uri.fsPath,
+      true,
+      this.compatibilityRegistry
     );
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);

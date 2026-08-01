@@ -8,9 +8,27 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
+  PERMISSION_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
 } from "./DashboardConstants";
+
+export const COMPATIBILITY_DIAGNOSTIC_CODES = {
+  HARNESS_UNAVAILABLE: "compatibility.harness.unavailable",
+  PERMISSION_MODE_UNSUPPORTED: "compatibility.permissions.mode.unsupported",
+  PERMISSION_MODE_PARTIAL: "compatibility.permissions.mode.partial",
+  PERMISSION_MODE_UNVERIFIED: "compatibility.permissions.mode.unverified",
+  ALLOWED_TOOLS_NOT_ENFORCED:
+    "compatibility.permissions.allowedTools.notEnforced",
+  ALLOWED_TOOLS_PARTIAL: "compatibility.permissions.allowedTools.partial",
+  ALLOWED_TOOLS_UNVERIFIED:
+    "compatibility.permissions.allowedTools.unverified",
+  DENIED_TOOLS_NOT_ENFORCED:
+    "compatibility.permissions.deniedTools.notEnforced",
+  DENIED_TOOLS_PARTIAL: "compatibility.permissions.deniedTools.partial",
+  DENIED_TOOLS_UNVERIFIED:
+    "compatibility.permissions.deniedTools.unverified",
+} as const;
 
 export type CapabilityFidelity =
   (typeof CAPABILITY_FIDELITIES)[keyof typeof CAPABILITY_FIDELITIES];
@@ -122,4 +140,42 @@ export interface CompatibilityDiagnostic {
   state: EffectiveCapabilityState;
   message: string;
   remediation?: string;
+}
+
+export interface CompatibilityDiagnosticMessageContext {
+  harnessId: HarnessId;
+  capability: string;
+}
+
+/** Shared user-facing prose for compatibility diagnostics. */
+export function getCompatibilityDiagnosticMessage(
+  code: string,
+  context: CompatibilityDiagnosticMessageContext
+): string {
+  const capabilityLabel =
+    context.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+      ? "Allowed Tools"
+      : "Denied Tools";
+
+  switch (code) {
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
+      return `The ${context.harnessId} harness is unavailable for this execution target.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
+      return `Permission mode is not supported by the ${context.harnessId} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
+      return `Permission mode is only partially translated by the ${context.harnessId} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNVERIFIED:
+      return `Permission mode support is unverified for the installed ${context.harnessId} version.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED:
+      return `${capabilityLabel} are NOT ENFORCED by the ${context.harnessId} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
+      return `${capabilityLabel} are only partially translated by the ${context.harnessId} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
+      return `${capabilityLabel} support is unverified for the installed ${context.harnessId} version.`;
+    default:
+      return `Compatibility for ${context.capability} is unavailable for the ${context.harnessId} harness.`;
+  }
 }

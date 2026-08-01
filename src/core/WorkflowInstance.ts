@@ -45,7 +45,8 @@ import {
   QUEUE_POSITION,
   RUNNER_IDS,
   SESSION_KINDS,
-  STATUS_MESSAGE_SEVERITY,
+      STATUS_MESSAGE_SEVERITY,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -78,6 +79,12 @@ import {
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
+import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
+import {
+  analyzeCompatibility,
+  enumerateCompatibilityTargets,
+} from "../types/CompatibilityAnalyzer";
+import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
   OutputExecutionTarget,
@@ -332,7 +339,8 @@ export class WorkflowInstance {
     /** Callback so status bar in orchestrator stays in sync with queue state */
     private readonly onStatusBarUpdate: () => void,
     private readonly workspaceFolderPath: string | undefined,
-    private readonly hostCanProvidePty: boolean = true
+    private readonly hostCanProvidePty: boolean = true,
+    private readonly compatibilityRegistry?: HarnessCapabilityRegistry
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
@@ -365,7 +373,9 @@ export class WorkflowInstance {
     this.promptFileLoader = new PromptFileLoader(
       this.promptFileParser,
       this.promptQueue,
-      () => this.dashboardSink
+      () => this.dashboardSink,
+      (workflow) => this.analyzeWorkflowCompatibility(workflow),
+      (diagnostics) => this.reportCompatibilityDiagnostics(diagnostics)
     );
     this.promptFileWatcher = new PromptFileWatcher(
       this.promptQueue,
@@ -396,6 +406,51 @@ export class WorkflowInstance {
     this.workflowRuntime.onDidAttemptTransition(
       this.onAttemptTransition.bind(this)
     );
+  }
+
+  private async analyzeWorkflowCompatibility(
+    workflow: PromptFile
+  ): Promise<CompatibilityDiagnostic[]> {
+    if (!this.compatibilityRegistry) {
+      return [];
+    }
+
+    const workflowForAnalysis: PromptFile = {
+      ...workflow,
+      steps: workflow.steps ?? [],
+    };
+    const targets = enumerateCompatibilityTargets(
+      workflowForAnalysis,
+      (prompt, resolvedWorkflow) =>
+        PropertyResolver.resolveTarget(prompt, resolvedWorkflow, {
+          hostCanProvidePty: this.hostCanProvidePty,
+        })
+    );
+    return analyzeCompatibility({
+      workflow: workflowForAnalysis,
+      executionTargets: targets,
+      capabilities: await this.compatibilityRegistry.getSnapshot(),
+      workspace: {
+        workspaceRoot: this.workspaceFolderPath,
+      },
+    });
+  }
+
+  private reportCompatibilityDiagnostics(
+    diagnostics: readonly CompatibilityDiagnostic[]
+  ): void {
+    for (const diagnostic of diagnostics) {
+      const stepIndex =
+        diagnostic.consumer?.kind === FINAL_STEP_PHASES.QUEUE
+          ? diagnostic.consumer.stepIndex
+          : 0;
+      this.dashboardSink?.updateStatusMessage(
+        stepIndex,
+        diagnostic.message,
+        diagnostic.severity,
+        this.id
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1185,6 +1240,29 @@ export class WorkflowInstance {
 
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
+
+      // Compatibility is authoritative at execution time. Resolve only the
+      // consumers that exist in the current queue/definition so a workflow
+      // default never stands in for a step-level harness override.
+      const compatibilityDiagnostics =
+        await this.analyzeWorkflowCompatibility({
+          ...this.promptQueue.getWorkflowFile(),
+          steps: this.promptQueue.getState().steps,
+        });
+      this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
+      const compatibilityErrors = compatibilityDiagnostics.filter(
+        (diagnostic) =>
+          diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      );
+      if (compatibilityErrors.length > 0) {
+        Log.error(
+          "ctrlyoke: Compatibility preflight failed:",
+          compatibilityErrors.map((diagnostic) => diagnostic.message).join(" ")
+        );
+        this.workflowRuntime.fail();
+        await this.promptQueue.commitRuntimeTransition();
+        return;
+      }
 
       // Pre-flight: use the DETECTOR singleton (already initialized at startup).
       // If the harness is still initializing or polling, wait until it settles

@@ -7,6 +7,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
+import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 
 const WORKFLOW_PROPERTY_KEYS = [
   "harness",
@@ -40,11 +41,23 @@ const WORKFLOW_PROPERTY_KEYS = [
  * - Validation and error handling
  */
 export class PromptFileLoader {
+  private lastCompatibilityDiagnostics: CompatibilityDiagnostic[] = [];
+
   constructor(
     private promptFileParser: PromptFileParser,
     private promptQueue: PromptQueue,
-    private getDashboard: () => IDashboardSink | undefined = () => undefined
+    private getDashboard: () => IDashboardSink | undefined = () => undefined,
+    private validateCompatibility?: (
+      workflow: PromptFile
+    ) => Promise<CompatibilityDiagnostic[]>,
+    private onCompatibilityDiagnostics?: (
+      diagnostics: CompatibilityDiagnostic[]
+    ) => void
   ) {}
+
+  getLastCompatibilityDiagnostics(): readonly CompatibilityDiagnostic[] {
+    return this.lastCompatibilityDiagnostics;
+  }
 
   /**
    * Load a prompt file into the queue without executing
@@ -139,6 +152,8 @@ export class PromptFileLoader {
       vscode.window.showErrorMessage(`ctrlyoke: Validation failed:\n${errors}`);
       return undefined;
     }
+
+    await this.validateAndReportCompatibility(promptFile);
 
     // Create the lineage's draft under .ctrlyoke/.runs/<workflowKey>/draft/
     let workingFilePath: string | undefined;
@@ -250,6 +265,8 @@ export class PromptFileLoader {
         }
       }
 
+      await this.validateAndReportCompatibility(workingFile);
+
       const queueState = this.promptQueue.getState();
       const isIdle = queueState.status === EXECUTION_STATES.IDLE;
 
@@ -323,6 +340,19 @@ export class PromptFileLoader {
       // Re-throw so caller knows the operation failed
       throw error;
     }
+  }
+
+  private async validateAndReportCompatibility(
+    workflow: PromptFile
+  ): Promise<void> {
+    if (!this.validateCompatibility) {
+      this.lastCompatibilityDiagnostics = [];
+      return;
+    }
+    this.lastCompatibilityDiagnostics = await this.validateCompatibility(
+      workflow
+    );
+    this.onCompatibilityDiagnostics?.(this.lastCompatibilityDiagnostics);
   }
 
   /**

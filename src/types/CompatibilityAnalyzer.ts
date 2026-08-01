@@ -1,0 +1,287 @@
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  COMPATIBILITY_SOURCE_TIERS,
+  FINAL_STEP_PHASES,
+  PERMISSION_CAPABILITY_KEYS,
+  STEP_TYPES,
+  type HarnessId,
+} from "./DashboardConstants";
+import type {
+  PromptFile,
+  PromptStep,
+  WorkflowStep,
+} from "./CtrlYokeTypes";
+import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
+import type {
+  CompatibilityConsumerTarget,
+  CompatibilityDiagnostic,
+  EffectiveCapabilityState,
+  HarnessCapabilityRegistrySnapshot,
+} from "./CompatibilityTypes";
+import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
+  getCompatibilityDiagnosticMessage,
+} from "./CompatibilityTypes";
+
+export interface CompatibilityExecutionTarget {
+  consumer: CompatibilityConsumerTarget;
+  resolved: ResolvedExecutionTarget;
+}
+
+/** Reserved for future workspace-scoped compatibility domains. */
+export interface CompatibilityWorkspaceState {
+  readonly workspaceRoot?: string;
+}
+
+export interface CompatibilityAnalyzerInput {
+  workflow: PromptFile;
+  executionTargets: readonly CompatibilityExecutionTarget[];
+  capabilities: HarnessCapabilityRegistrySnapshot;
+  workspace?: CompatibilityWorkspaceState;
+}
+
+export type CompatibilityTargetResolver = (
+  prompt: PromptStep,
+  workflow: PromptFile
+) => ResolvedExecutionTarget;
+
+/**
+ * Enumerate only the AI consumers that currently exist in the definition.
+ * The caller supplies the shared resolver; this helper owns no precedence
+ * rules and therefore cannot drift from execution.
+ */
+export function enumerateCompatibilityTargets(
+  workflow: PromptFile,
+  resolveTarget: CompatibilityTargetResolver
+): CompatibilityExecutionTarget[] {
+  const targets: CompatibilityExecutionTarget[] = [];
+  for (const [stepIndex, step] of (workflow.steps ?? []).entries()) {
+    if (step.enabled === false || isScriptWorkflowStep(step)) {
+      continue;
+    }
+    targets.push({
+      consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+      resolved: resolveTarget(step, workflow),
+    });
+  }
+
+  const finalStep = workflow.finalStep;
+  if (finalStep && finalStep.enabled !== false && !isScriptWorkflowStep(finalStep)) {
+    targets.push({
+      consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
+      resolved: resolveTarget(finalStep, workflow),
+    });
+  }
+  return targets;
+}
+
+/** Analyze the enabled permissions consumers in a parsed workflow. */
+export function analyzeCompatibility({
+  workflow,
+  executionTargets,
+  capabilities,
+  workspace,
+}: CompatibilityAnalyzerInput): CompatibilityDiagnostic[] {
+  void workflow;
+  void workspace;
+  const diagnostics: CompatibilityDiagnostic[] = [];
+
+  for (const target of executionTargets) {
+    const harnessId = target.resolved.properties.harness;
+    const installed = capabilities.harnesses[harnessId];
+    if (!installed?.available) {
+      diagnostics.push(
+        createDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE,
+          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+          harnessId,
+          "harness",
+          target,
+          installed?.effective?.permissions.mode ?? unknownCapabilityState(),
+          undefined
+        )
+      );
+      continue;
+    }
+
+    const permissions = target.resolved.properties.toolPermissions;
+    if (!permissions) {
+      continue;
+    }
+
+    const effective = installed.effective?.permissions;
+    if (!effective) {
+      continue;
+    }
+
+    const sourceTier = target.resolved.sources.toolPermissions;
+    const permissionFields: Array<{
+      key: "mode" | "allowedTools" | "deniedTools";
+      used: boolean;
+      state: EffectiveCapabilityState;
+    }> = [
+      {
+        key: PERMISSION_CAPABILITY_KEYS.MODE,
+        used: true,
+        state: effective.mode,
+      },
+      {
+        key: PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
+        used: permissions.allowedTools.length > 0,
+        state: effective.allowedTools,
+      },
+      {
+        key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+        used: permissions.deniedTools.length > 0,
+        state: effective.deniedTools,
+      },
+    ];
+
+    for (const field of permissionFields) {
+      if (!field.used) {
+        continue;
+      }
+      for (const diagnostic of diagnosticsForPermissionField(
+        field.key,
+        field.state,
+        harnessId,
+        target,
+        sourceTier
+      )) {
+        diagnostics.push(diagnostic);
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
+function diagnosticsForPermissionField(
+  key: "mode" | "allowedTools" | "deniedTools",
+  state: EffectiveCapabilityState,
+  harnessId: HarnessId,
+  target: CompatibilityExecutionTarget,
+  sourceTier: ResolvedExecutionTarget["sources"]["toolPermissions"]
+): CompatibilityDiagnostic[] {
+  const diagnostics: CompatibilityDiagnostic[] = [];
+  const base = {
+    harnessId,
+    capability: key,
+    target,
+    sourceTier,
+    state,
+  };
+
+  if (state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
+    diagnostics.push(
+      createDiagnostic(
+        key === PERMISSION_CAPABILITY_KEYS.MODE
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED
+          : key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED
+            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        base.harnessId,
+        base.capability,
+        base.target,
+        base.state,
+        base.sourceTier,
+        key
+      )
+    );
+  } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
+    diagnostics.push(
+      createDiagnostic(
+        key === PERMISSION_CAPABILITY_KEYS.MODE
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
+          : key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
+            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        base.harnessId,
+        base.capability,
+        base.target,
+        base.state,
+        base.sourceTier,
+        key
+      )
+    );
+  }
+
+  if (state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN) {
+    diagnostics.push(
+      createDiagnostic(
+        key === PERMISSION_CAPABILITY_KEYS.MODE
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNVERIFIED
+          : key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED
+            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        base.harnessId,
+        base.capability,
+        base.target,
+        base.state,
+        base.sourceTier,
+        key
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function createDiagnostic(
+  code: string,
+  severity: CompatibilityDiagnostic["severity"],
+  harnessId: HarnessId,
+  capability: string,
+  target: CompatibilityExecutionTarget,
+  state: EffectiveCapabilityState,
+  sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"],
+  permissionKey?: "mode" | "allowedTools" | "deniedTools"
+): CompatibilityDiagnostic {
+  const pointerBase =
+    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${target.consumer.stepIndex}`
+      : "/finalStep";
+  return {
+    code,
+    severity,
+    harnessId,
+    capability,
+    consumer: target.consumer,
+    ...(sourceTier ? { sourceTier } : {}),
+    ...(sourceTier &&
+    sourceTier !== COMPATIBILITY_SOURCE_TIERS.DEFAULTS &&
+    permissionKey
+      ? {
+          propertyPointer:
+            sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
+              ? `${pointerBase}/toolPermissions/${permissionKey}`
+              : `/toolPermissions/${permissionKey}`,
+        }
+      : {}),
+    state,
+    message: getCompatibilityDiagnosticMessage(code, {
+      harnessId,
+      capability,
+    }),
+  };
+}
+
+function unknownCapabilityState(): EffectiveCapabilityState {
+  return {
+    fidelity: CAPABILITY_FIDELITIES.EXACT,
+    mechanism: CAPABILITY_MECHANISMS.NONE,
+    verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+  };
+}
+
+function isScriptWorkflowStep(
+  step: WorkflowStep
+): step is Exclude<WorkflowStep, PromptStep> {
+  return step.type === STEP_TYPES.SCRIPT;
+}

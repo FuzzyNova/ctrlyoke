@@ -1,6 +1,6 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Phase 1A and Compatibility Phase 1B(i) are complete. Shared
+> **Status:** Phase 1A and Compatibility Phase 1B(i)–(ii) are complete. Shared
 > contracts, the pure effective-property resolver, harness-owned permission
 > descriptors, and the backend capability registry have landed in
 > [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
@@ -15,7 +15,9 @@
 > Phase 1B(i) enables only `permissions`, validates all six harnesses and all
 > three permission leaves, caches installed availability/version detection, and
 > derives version-aware verification independently per leaf (verified
-> 2026-08-01). The analyzer and client snapshot message remain to be built.
+> 2026-08-01). The shared pure analyzer is wired into workflow validation and
+> authoritative execution preflight; the client snapshot message remains to be
+> built.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
