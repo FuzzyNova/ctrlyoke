@@ -1,11 +1,37 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Remaining scope: Antigravity/Codex parity follow-up
+> **Status:** Provider work landed. Remaining scope is the honest-UI stage
+> (Compatibility Phase 1C) plus the Antigravity/Codex parity follow-up.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
 > **Parent architecture:**
 > [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+>
+> **Implementation order:**
+> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
+>
+> **No dependency on**
+> [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md). Every user
+> surface this plan needs already exists: `components/shared/Modal.tsx` for
+> blocking results, and the `warning` prop / `dropdownValidation.ts` helpers
+> shipped by `DROPDOWN_VALIDATION_STYLING_PLAN.md` for field diagnostics.
+> Nothing here routes through toast.
+
+**Code state verified 2026-08-01.** What has landed:
+
+- Qwen sends `--input-format stream-json` in `QwenCliProvider.buildHeadlessArgs()`
+  (`QwenCliProvider.ts` ~line 500), which is the fix for the silent-deny gate.
+- OpenCode delivers `mcp`/`permission`/`plugin` through `OPENCODE_CONFIG_CONTENT`
+  (`OpenCodeCliProvider.ts:434,444`); no workspace `opencode.json` is written.
+- `src/test/harness/inline-config.harness.test.ts` exists and is excluded from
+  the ordinary gate.
+- `getPermissionHarnessSupport()` has already dropped OpenCode and now returns
+  `mode-only` for Codex and Antigravity only.
+
+What has **not** landed: the capability registry, the analyzer, the
+`prepare()` interface change (`IToolPermissionMapper` still exposes
+`buildArgs()`), and the honest-UI stage below.
 
 This plan is implemented in full before 0.1.0 ships, not split into a pre-launch
 honesty slice and a post-launch parity slice. The staging below is therefore an
@@ -40,13 +66,6 @@ Current code overstates support in several places:
   plus `--input-format stream-json` path is covered by the pinned real-harness
   fixtures; upgrade verification remains explicit because Qwen's alias tables
   have drifted across releases.
-- `getPermissionHarnessSupport()` in
-  `src/ui/webview-react/components/shared/permissionUtils.ts` classifies only
-  Codex, OpenCode, and Antigravity as `mode-only`; every other harness falls
-  through to `"full"`. Qwen therefore reports **full granular support** in the
-  UI today, so a user's Denied Tools list is presented as enforced while the
-  flags carrying it are unverified. This is the most acute instance of the
-  problem and the first thing the honesty work must correct.
 - OpenCode delivers permission and MCP settings through
   `OPENCODE_CONFIG_CONTENT`; it no longer mutates `opencode.json`.
 - Codex and Antigravity are intentionally mode-only, but the caveat is not
@@ -54,6 +73,31 @@ Current code overstates support in several places:
 - Mapper unit tests assert generated strings. The pinned real-harness fixtures
   now cover the remaining Qwen/OpenCode allow/deny and inline MCP behavior, but
   they are not run by `npm test`.
+
+The remaining UI defects are narrower than when this plan was written, because
+the Qwen and OpenCode provider fixes landed and `getPermissionHarnessSupport()`
+was corrected for OpenCode. What is still wrong in
+`src/ui/webview-react/components/shared/permissionUtils.ts` and its two
+consumers:
+
+- **The tool-list fields are disabled, not annotated.** A `mode-only`
+  `harnessSupport` feeds the `disabled` prop and an
+  `opacity-50 cursor-not-allowed`
+  class for both textareas in `WorkflowPropertiesPanel.tsx` (~lines 1569, 1574,
+  1618, 1624) and via `allowedDisabled` / `deniedDisabled` in
+  `PropertiesDrawer.tsx:996–1005`. This directly contradicts the parent plan's
+  "Editing remains available" rule: a workflow-level list that a Claude override
+  step would enforce cannot be typed at all when the workflow default is Codex.
+  Removing this is the single highest-value fix in the honest-UI stage.
+- **Support is resolved from one harness, not per consumer.** Both call sites
+  pass a single `effectiveHarness` / `effectivePermHarness`, so a Codex-default
+  workflow is classified wholesale as Codex regardless of step overrides.
+- **The caveat is styled as information, not warning.** Both surfaces render an
+  `ℹ️` paragraph in `text-description-fg`. The plan requires warning treatment
+  and the words "not enforced".
+- **The prose is hardcoded per harness in both components.** Two near-duplicate
+  ternaries over `HARNESS_IDS.CODEX_CLI` / `ANTIGRAVITY_CLI` with a generic
+  fallback branch.
 
 This is a security and trust issue. A denied rule that is silently ignored is
 materially different from an unavailable convenience feature.
@@ -242,6 +286,12 @@ This stage requires Compatibility Phases 1A and 1B. Implement it directly
 against the shared registry/analyzer and remove the existing helper switch in
 the same change. Do not add a temporary support table or leave the old helper as
 a fallback.
+
+Deleting `getPermissionHarnessSupport()` is not the whole change: its
+`"mode-only"` return value is also wired into the `disabled` props and
+`opacity-50 cursor-not-allowed` classes enumerated in the Problem section
+above. Those must come out in the same change, or the analyzer will produce
+correct diagnostics for fields the user still cannot edit.
 
 ## Workspace-Configuration Support
 

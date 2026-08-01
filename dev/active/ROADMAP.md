@@ -67,12 +67,14 @@ to drive.
    harness does not enforce, and must not silently replace one running
    workflow's security policy with another's. This remains a
    full-implementation gate rather than an honest-messaging slice, so the
-   capability registry, the cross-process permission-lease gate, and behavioral
-   verification land before launch instead of the interim wording becoming the
-   shipped behavior. Compatibility phase 2 (dry run, portability report,
-   CLI/MCP serialization) was descoped to P1 on 2026-07-31: it makes existing
-   truth more visible rather than preventing a dishonest claim or an unsafe
-   mutation.
+   capability registry and behavioral verification land before launch instead
+   of the interim wording becoming the shipped behavior. Compatibility phase 2
+   (dry run, portability report, CLI/MCP serialization) was descoped to P1 on
+   2026-07-31: it makes existing truth more visible rather than preventing a
+   dishonest claim or an unsafe mutation. Implementation order — including why
+   [`BROWSER_USER_FEEDBACK_PLAN.md`](../backlog/BROWSER_USER_FEEDBACK_PLAN.md)
+   is _not_ a prerequisite — is in
+   [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](COMPATIBILITY_AND_FEEDBACK_STAGING.md).
 6. **Automation API structured results** — implement the versioned per-step JSON
    result contract in [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md).
    Promoted from P1 because the CLI is now the _only_ sanctioned automation
@@ -211,25 +213,26 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 ### Remaining ship gates
 
-| Gate                                                                      | Status                                         | Source                                                                                                             |
-| ------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Harness capability registry and compatibility diagnostics (phase 1)       | Not implemented                                | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
-| Tool-permission honesty, Qwen/OpenCode parity, behavioral verification    | Not implemented                                | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
-| Cross-process permission-lease gate (step-scoped, atomic acquisition)     | Partial — lease exists, acquisition not atomic | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
-| Per-step CLI `--json` result contract                                     | Not implemented                                | [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                                                                 |
-| Final release artifact audit                                              | In progress                                    | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
-| Landing/docs production deployment and DNS verification                   | In progress                                    | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
-| Pro license provider, entitlement service, activation, and feature gating | Not implemented                                | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
-| Rebrand/external identity cutover                                         | In progress                                    | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                       |
-| Marketplace/Open VSX publisher authentication and publish                 | Not done                                       | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
-| Separate npm CLI packaging                                                | Deferred unless required for launch messaging  | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
+| Gate                                                                      | Status                                        | Source                                                                                                             |
+| ------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Harness capability registry and compatibility diagnostics (phase 1)       | Not implemented                               | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
+| Qwen/OpenCode permission parity and behavioral verification               | Implemented — pinned fixtures, run on request | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
+| Tool-permission honesty UI (compatibility phase 1C)                       | Not implemented                               | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
+| Cross-process permission-lease gate                                       | Retired — OpenCode moved to inline config     | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
+| Per-step CLI `--json` result contract                                     | Not implemented                               | [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                                                                 |
+| Final release artifact audit                                              | In progress                                   | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
+| Landing/docs production deployment and DNS verification                   | In progress                                   | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
+| Pro license provider, entitlement service, activation, and feature gating | Not implemented                               | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
+| Rebrand/external identity cutover                                         | In progress                                   | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                       |
+| Marketplace/Open VSX publisher authentication and publish                 | Not done                                      | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
+| Separate npm CLI packaging                                                | Deferred unless required for launch messaging | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
 
 ### Launch sequence
 
 1. Decide commercial launch versus free public beta.
 2. Finish or explicitly defer Pro activation/gating based on that decision.
-3. Land the capability registry and permission parity gates, including
-   behavioral allow/deny verification for Qwen and OpenCode.
+3. Land the capability registry, analyzer, and honest permission UI. Behavioral
+   allow/deny verification for Qwen and OpenCode is already done.
 4. Correct CHANGELOG, README, supported-harness claims, screenshots, and demo.
 5. Deploy and verify `ctrlyoke.dev` plus `/docs/`.
 6. Build the final VSIX, repeat the short smoke matrix, publish to Marketplace
@@ -337,15 +340,16 @@ criteria matter more than speculative dates.
 
 ### Active
 
-| Plan                                                               | Current outcome                                                                |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)                     | Canonical external launch checklist                                            |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               | Marketplace/package release work                                               |
-| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                     | Implementation mostly complete; production verification remains                |
-| [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) | Infrastructure/content exists; freshness and deployment remain                 |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                       | Architecture decided; provider and extension implementation remain             |
-| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)       | External cutover work remains                                                  |
-| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                 | **P0 release gate.** Per-step JSON ready to implement; SDK/MCP launch rejected |
+| Plan                                                                             | Current outcome                                                                    |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)                                   | Canonical external launch checklist                                                |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                             | Marketplace/package release work                                                   |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                   | Implementation mostly complete; production verification remains                    |
+| [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md)               | Infrastructure/content exists; freshness and deployment remain                     |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                     | Architecture decided; provider and extension implementation remain                 |
+| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                     | External cutover work remains                                                      |
+| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                               | **P0 release gate.** Per-step JSON ready to implement; SDK/MCP launch rejected     |
+| [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](COMPATIBILITY_AND_FEEDBACK_STAGING.md) | Implementation order for the compatibility, permission, and browser-feedback plans |
 
 ### Prioritized backlog
 

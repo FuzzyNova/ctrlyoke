@@ -1,11 +1,24 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Ready for implementation
+> **Status:** Ready for implementation. Nothing in this plan has been built yet
+> (verified 2026-08-01: no capability registry, descriptor, or analyzer module
+> exists anywhere in `src/`).
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
 > **First implementation consumer:**
 > [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
+>
+> **Implementation order:**
+> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
+>
+> **No dependency on**
+> [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md) — see
+> "Toasts are not the authoring surface". The two plans touch disjoint UI:
+> compatibility renders persistent field diagnostics and (for blocking
+> preflight results) the existing `components/shared/Modal.tsx`; the feedback
+> plan builds a transient toast queue. Neither blocks the other in either
+> direction.
 
 **Phase 1 only is the 0.1.0 release gate**, together with the permission plan.
 Phase 1 is what prevents ctrlyoke from claiming enforcement it does not perform.
@@ -452,6 +465,15 @@ disabled when permission mode itself is not `custom`. Harness compatibility,
 however, only annotates the best-effort coverage. It never grays out or prevents
 editing the authored value.
 
+**The shipped code violates this rule today.** `getPermissionHarnessSupport()`
+returning `"mode-only"` is OR-ed into the `disabled` prop and an
+`opacity-50 cursor-not-allowed` class for the Allowed/Denied Tools textareas in
+both `WorkflowPropertiesPanel.tsx` and `PropertiesDrawer.tsx`. Phase 1C is
+therefore a behavior change, not just a message change: a Codex-default
+workflow currently cannot author the lists that its Claude override steps would
+enforce. The per-consumer aggregation described below is what makes that field
+meaningful again.
+
 ### Pure effective-property resolver
 
 Property precedence must remain single-sourced across execution, compatibility
@@ -629,13 +651,20 @@ The compatibility feature does not require a new toast system and must not call
 There is a separate platform-parity gap worth its own audit:
 
 - backend code still contains many direct VS Code notification calls;
-- `uiStore` contains in-app toast state and several message handlers populate
-  it, but the React application currently has no mounted toast renderer;
+- `uiStore` contains in-app toast state and roughly twenty call sites populate
+  it, but the React application still has no mounted toast renderer
+  (re-verified 2026-08-01);
 - [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](../implemented/DROPDOWN_VALIDATION_STYLING_PLAN.md)
   already identifies a broader runtime diagnostics gap.
 
-That work may become a dashboard notification/runtime-diagnostics plan, but it
-is not a prerequisite for author-time compatibility. Runtime compatibility
+That gap is now specified as
+[`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md), and it is
+**not** a prerequisite for author-time compatibility. Everything this plan
+renders already exists: `CustomSelect`/`MultiCheckboxDropdown`/`SkillsSelect`
+accept a `warning` prop, `utils/dropdownValidation.ts` exports
+`dropdownBorderClass`/`dropdownWarningClass`, and
+`components/shared/Modal.tsx` is the shared blocking-result primitive for both
+hosts. Do not sequence this plan behind the toast work. Runtime compatibility
 warnings should use the existing dashboard status/output message path until a
 broader diagnostics surface replaces it. Any warning that requires a user
 choice must use a shared React modal so hosted-browser users can respond; a
