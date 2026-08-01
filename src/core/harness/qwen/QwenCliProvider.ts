@@ -4,6 +4,8 @@ import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
+  PermissionContext,
+  ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
@@ -199,7 +201,7 @@ export class QwenCliProvider implements ICliProvider {
     // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
     // NOTE: buildHeadlessUserHookArgs returns ["--experimental-hooks"] for Qwen headless.
-    // Permission args are similarly dispatched via buildPermissionArgs() — not here.
+    // Permission preparation is similarly dispatched by CliIntegration — not here.
 
     Log.debug(
       `🔧 Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
@@ -331,19 +333,19 @@ export class QwenCliProvider implements ICliProvider {
    * Build CLI arguments for tool permissions.
    * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
    */
-  buildPermissionArgs(
-    toolPermissions: ToolPermissionConfig | null | undefined
-  ): string[] {
+  async prepareToolPermissions(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     if (toolPermissions === null) {
-      // none mode — skip permission flags entirely
-      return [];
+      return { cliArgs: [], diagnostics: [] };
     }
     const config = toolPermissions ?? {
       mode: ConfigurationUtils.getCliToolPermissions(),
       allowedTools: ConfigurationUtils.getCliAllowedTools(),
       deniedTools: ConfigurationUtils.getCliDeniedTools(),
     };
-    return this.toolPermissionMapper.buildArgs(config);
+    return this.toolPermissionMapper.prepare(config, context);
   }
 
   /**

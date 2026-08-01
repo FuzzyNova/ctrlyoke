@@ -29,7 +29,11 @@ import {
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
-import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
+import type {
+  PermissionContext,
+  ToolPermissionApplication,
+  ToolPermissionConfig,
+} from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
 import {
   CliExecutionSession,
@@ -951,8 +955,8 @@ export class CliIntegration extends HarnessIntegration {
       }
     }
 
-    // Dispatch permission args at the integration layer so providers don't have to
-    // limit permissions to headless-only in buildCliArgs().
+    // Prepare permissions through one contract so CLI args, workspace mutations,
+    // and lossy-translation diagnostics cannot be separated by the call path.
     // Use session.resolvedProperties (prompt > workflow > settings) so prompt-level
     // overrides take precedence over workflow-level defaults.
     // Merge any server-level deniedTools from McpServerConfig objects before dispatching.
@@ -960,19 +964,36 @@ export class CliIntegration extends HarnessIntegration {
       session.resolvedProperties?.toolPermissions,
       session.resolvedProperties?.mcpServers
     );
-    if (workspaceRoot) {
-      await this.provider.prepareToolPermissions?.(
-        effectiveToolPermissions,
-        workspaceRoot,
-        session.workflowContext?.workingFilePath
-      );
+    const permissionContext: PermissionContext = {
+      isInteractive,
+      workspaceRoot,
+      workingFilePath: session.workflowContext?.workingFilePath,
+    };
+    const permissionApplication: ToolPermissionApplication = this.provider
+      .prepareToolPermissions
+      ? await this.provider.prepareToolPermissions(
+          effectiveToolPermissions,
+          permissionContext
+        )
+      : effectiveToolPermissions === null ||
+          typeof this.provider.toolPermissionMapper.prepare !== "function"
+        ? { cliArgs: [], diagnostics: [] }
+        : await this.provider.toolPermissionMapper.prepare(
+            effectiveToolPermissions ?? {
+              mode: ConfigurationUtils.getCliToolPermissions(),
+              allowedTools: ConfigurationUtils.getCliAllowedTools(),
+              deniedTools: ConfigurationUtils.getCliDeniedTools(),
+            },
+            permissionContext
+          );
+
+    if (permissionApplication.workspaceMutation) {
+      await permissionApplication.workspaceMutation.apply();
     }
-    const permissionArgs =
-      this.provider.buildPermissionArgs?.(
-        effectiveToolPermissions,
-        isInteractive
-      ) ?? [];
-    baseArgs.push(...permissionArgs);
+    for (const diagnostic of permissionApplication.diagnostics) {
+      Log.warn(`[PermissionCompatibility] ${diagnostic.message}`);
+    }
+    baseArgs.push(...permissionApplication.cliArgs);
 
     // Append suffix args last — these are args that must follow ALL global flags.
     // Used by Codex for "resume <session-id>": a subcommand that must come after
@@ -1223,7 +1244,7 @@ export class CliIntegration extends HarnessIntegration {
    *
    * Each McpServerConfig may declare bare tool names to deny (e.g. `["ctrlyoke_append_queue"]`).
    * These are translated to `mcp__<id>__<tool>` patterns and appended to the resolved deny list
-   * before the harness-specific `buildPermissionArgs` call.
+   * before the harness-specific permission preparation call.
    *
    * Returns the original config unchanged when no server specifies `deniedTools`, keeping the
    * fast path free of allocation overhead. Returns `null` as-is (none mode — no permission flags).

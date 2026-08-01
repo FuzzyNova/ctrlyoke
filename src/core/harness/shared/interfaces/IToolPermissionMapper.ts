@@ -1,11 +1,54 @@
-import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
-import type { PermissionCapabilityDescriptor } from "../../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  PERMISSION_CAPABILITY_KEYS,
+  PERMISSION_MODES,
+  type HarnessId,
+} from "../../../../types/DashboardConstants";
+import type {
+  CompatibilityDiagnostic,
+  PermissionCapabilityDescriptor,
+} from "../../../../types/CompatibilityTypes";
+import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
+  getCompatibilityDiagnosticMessage,
+} from "../../../../types/CompatibilityTypes";
 import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTypes";
 
 export type {
   ToolPermissionConfig,
   ToolPermissionMode,
 } from "../../../../types/ExecutionPropertyTypes";
+
+/** Context needed to prepare one harness-specific permission application. */
+export interface PermissionContext {
+  readonly isInteractive?: boolean;
+  readonly workspaceRoot?: string;
+  readonly workingFilePath?: string;
+  /** Codex-only mode settings, supplied by the provider. */
+  readonly sandboxMode?: string;
+  readonly approvalPolicy?: string;
+  /** Existing permission keys used by config-driven harnesses for collision safety. */
+  readonly permissionCollisionContext?: {
+    readonly topLevelKeys: ReadonlySet<string>;
+    readonly nestedKeysByTool: ReadonlyMap<string, ReadonlySet<string>>;
+  };
+}
+
+/** A workspace-side effect to apply before launching the harness. */
+export interface WorkspacePermissionMutation {
+  readonly path: string;
+  readonly apply: () => Promise<void>;
+  readonly restore?: () => Promise<void>;
+}
+
+/** Complete result of preparing one permission policy for one harness launch. */
+export interface ToolPermissionApplication {
+  readonly cliArgs: string[];
+  readonly workspaceMutation?: WorkspacePermissionMutation;
+  readonly diagnostics: CompatibilityDiagnostic[];
+}
 
 /**
  * Tool permission mapper interface
@@ -19,15 +62,20 @@ export type {
  * - Codex: `shell(git:*)` → MCP tool configuration
  */
 export interface IToolPermissionMapper {
-  /** Static permission facts owned by this harness adapter. */
+  /**
+   * Static permission facts owned by this harness mapper and referenced by the
+   * harness descriptor. The backend registry evaluates these declarations
+   * against the installed version.
+   */
   readonly capabilities: PermissionCapabilityDescriptor;
 
   /**
-   * Build CLI arguments for tool permissions
-   * @param config Tool permission configuration
-   * @returns CLI arguments array
+   * Prepare the complete permission application for one harness launch.
    */
-  buildArgs(config: ToolPermissionConfig): string[];
+  prepare(
+    config: ToolPermissionConfig,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication>;
 
   /**
    * Check if headless execution can proceed without interactive approval prompts.
@@ -48,7 +96,81 @@ export interface IToolPermissionMapper {
  */
 export abstract class ToolPermissionMapperBase implements IToolPermissionMapper {
   abstract readonly capabilities: PermissionCapabilityDescriptor;
-  abstract buildArgs(config: ToolPermissionConfig): string[];
+  abstract prepare(
+    config: ToolPermissionConfig,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication>;
+
+  /**
+   * Produce runtime diagnostics when a configured tool list is not represented
+   * by the mapper's declared capability. Version verification remains owned by
+   * HarnessCapabilityRegistry; this only reports a lossy application.
+   */
+  protected getToolTranslationDiagnostics(
+    config: ToolPermissionConfig,
+    harnessId: HarnessId
+  ): CompatibilityDiagnostic[] {
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    for (const [key, patterns] of [
+      [PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS, config.allowedTools],
+      [PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS, config.deniedTools],
+    ] as const) {
+      if (patterns.length === 0) {
+        continue;
+      }
+      const declaration = this.capabilities[key];
+      if (declaration.fidelity === CAPABILITY_FIDELITIES.EXACT) {
+        continue;
+      }
+      const unsupported = key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS;
+      const code = unsupported
+        ? declaration.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED
+          : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
+        : declaration.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED
+          : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL;
+      diagnostics.push({
+        code,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId,
+        capability: key,
+        state: {
+          fidelity: declaration.fidelity,
+          mechanism: declaration.mechanism,
+          verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+        },
+        message: getCompatibilityDiagnosticMessage(code, {
+          harnessId,
+          capability: key,
+        }),
+      });
+    }
+    return diagnostics;
+  }
+
+  protected createLossyTranslationDiagnostic(
+    harnessId: HarnessId,
+    capability: "allowedTools" | "deniedTools"
+  ): CompatibilityDiagnostic {
+    const declaration = this.capabilities[capability];
+    const code = COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY;
+    return {
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      harnessId,
+      capability,
+      state: {
+        fidelity: declaration.fidelity,
+        mechanism: declaration.mechanism,
+        verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+      },
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId,
+        capability,
+      }),
+    };
+  }
 
   /**
    * Default headless-safety check shared by permission-aware CLI harnesses.

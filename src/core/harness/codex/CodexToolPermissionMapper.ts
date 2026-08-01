@@ -1,11 +1,16 @@
 import {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionConfig,
   ToolPermissionMapperBase,
+  ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../../types/DashboardConstants";
 
 const CODEX_PERMISSION_VERIFICATION = {
   kind: "manual",
@@ -79,8 +84,22 @@ export class CodexToolPermissionMapper
    * @param config Tool permission configuration
    * @returns CLI arguments array
    */
-  buildArgs(config: ToolPermissionConfig): string[] {
-    return this.buildCodexSpecificArgs(config);
+  async prepare(
+    config: ToolPermissionConfig,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
+    return {
+      cliArgs: this.buildCodexSpecificArgs(
+        config,
+        context.sandboxMode,
+        context.approvalPolicy,
+        context.isInteractive
+      ),
+      diagnostics: this.getToolTranslationDiagnostics(
+        config,
+        HARNESS_IDS.CODEX_CLI
+      ),
+    };
   }
 
   /**
@@ -115,7 +134,7 @@ export class CodexToolPermissionMapper
 
     // --ask-for-approval / -a is an interactive-only flag: not recognised by `codex exec`.
     // Only suppress it when isInteractive is explicitly false (headless exec mode).
-    // When undefined (e.g. buildArgs() or tests that don't pass the flag), behave as before.
+    // When undefined (e.g. tests that don't pass the flag), behave as before.
     const includeApprovalFlag = isInteractive !== false;
 
     switch (config.mode) {

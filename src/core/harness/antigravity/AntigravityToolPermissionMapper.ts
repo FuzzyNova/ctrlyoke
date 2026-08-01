@@ -1,10 +1,15 @@
 import {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionConfig,
   ToolPermissionMapperBase,
+  ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../../types/DashboardConstants";
 
 const ANTIGRAVITY_PERMISSION_VERIFICATION = {
   kind: "manual",
@@ -37,17 +42,31 @@ export class AntigravityToolPermissionMapper
 {
   readonly capabilities = ANTIGRAVITY_PERMISSION_CAPABILITIES;
 
-  buildArgs(config: ToolPermissionConfig): string[] {
+  async prepare(
+    config: ToolPermissionConfig,
+    _context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
+    let cliArgs: string[];
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
       case PERMISSION_MODES.ALLOW_ALL:
-        return ["--dangerously-skip-permissions"];
+        cliArgs = ["--dangerously-skip-permissions"];
+        break;
       case PERMISSION_MODES.CUSTOM:
-        return ["--sandbox"];
+        cliArgs = ["--sandbox"];
+        break;
       case PERMISSION_MODES.NONE:
       default:
-        return [];
+        cliArgs = [];
+        break;
     }
+    return {
+      cliArgs,
+      diagnostics: this.getToolTranslationDiagnostics(
+        config,
+        HARNESS_IDS.ANTIGRAVITY_CLI
+      ),
+    };
   }
 
   override hasFullPermissions(config: ToolPermissionConfig): boolean {

@@ -10,6 +10,8 @@ import {
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
+  PermissionContext,
+  ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { HARNESS_IDS, type HookEvent } from "../../../types/DashboardConstants";
@@ -356,18 +358,19 @@ export class AntigravityCliProvider implements ICliProvider {
     return relativeFilePath;
   }
 
-  buildPermissionArgs(
-    toolPermissions: ToolPermissionConfig | null | undefined
-  ): string[] {
+  async prepareToolPermissions(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     if (toolPermissions === null) {
-      return [];
+      return { cliArgs: [], diagnostics: [] };
     }
     const config = toolPermissions ?? {
       mode: ConfigurationUtils.getCliToolPermissions(),
       allowedTools: ConfigurationUtils.getCliAllowedTools(),
       deniedTools: ConfigurationUtils.getCliDeniedTools(),
     };
-    return this.toolPermissionMapper.buildArgs(config);
+    return this.toolPermissionMapper.prepare(config, context);
   }
 
   async buildNotificationHookArgs(

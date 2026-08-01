@@ -3,9 +3,9 @@
 > **Status:** Provider work and Compatibility Phases 1A–1C are complete. The
 > shared analyzer now drives persistent mixed-harness diagnostics across the
 > workflow, prompt, defaults, and advanced permission surfaces; authored tool
-> lists remain editable under mode-only harnesses. Remaining work is the
-> runtime preparation contract and the post-release Antigravity/Codex parity
-> follow-up.
+> lists remain editable under mode-only harnesses. The runtime preparation
+> contract is landed; remaining work is the workspace permission writer and
+> the post-release Antigravity/Codex parity follow-up.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -33,9 +33,11 @@
 - The old per-harness permission UI switch has been removed; compatibility is
   now resolved per execution target by the shared analyzer.
 
-What has **not** landed: the `prepare()` interface change
-(`IToolPermissionMapper` still exposes `buildArgs()`), and the remaining
-defaults/advanced honest-UI surfaces below.
+The runtime preparation contract has landed: `IToolPermissionMapper.prepare()`
+now returns CLI arguments, optional workspace mutations, and compatibility
+diagnostics through one application object. The remaining work is the
+workspace permission writer and the post-release Antigravity/Codex parity
+follow-up described below.
 
 This plan is implemented in full before 0.1.0 ships, not split into a pre-launch
 honesty slice and a post-launch parity slice. The staging below is therefore an

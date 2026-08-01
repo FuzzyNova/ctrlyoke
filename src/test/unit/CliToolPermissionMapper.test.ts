@@ -4,8 +4,27 @@ import {
   CliToolPermissionMapper,
   COPILOT_TO_CLAUDE_MAP,
 } from "../../core/harness/shared/CliToolPermissionMapper";
+import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("CliToolPermissionMapper", () => {
+  suite("permission preparation contract", () => {
+    test("returns arguments and diagnostics through prepare()", async () => {
+      const application = await new CopilotToolPermissionMapper().prepare(
+        {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: ["write"],
+          deniedTools: [],
+        },
+        {}
+      );
+
+      assert.deepStrictEqual(application.cliArgs, ["--allow-tool", "write"]);
+      assert.deepStrictEqual(application.diagnostics, []);
+      assert.strictEqual(application.workspaceMutation, undefined);
+    });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   suite("parsePattern", () => {
     test("parses simple tool name", () => {

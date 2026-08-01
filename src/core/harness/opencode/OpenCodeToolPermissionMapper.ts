@@ -1,11 +1,16 @@
 import {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionConfig,
   ToolPermissionMapperBase,
+  ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../../types/DashboardConstants";
 import type {
   SettingsJsonPermissionDecision,
   SettingsJsonPermissionPolicy,
@@ -89,16 +94,11 @@ export class OpenCodeToolPermissionMapper
 {
   readonly capabilities = OPENCODE_PERMISSION_CAPABILITIES;
 
-  /**
-   * Build CLI arguments for tool permissions.
-   *
-   * OpenCode has no CLI flags for tool permissions — always returns empty array.
-   * Permission config is delivered through OPENCODE_CONFIG_CONTENT instead.
-   *
-   * @param config Tool permission configuration
-   * @returns Empty array (no CLI arguments needed)
-   */
-  buildArgs(config: ToolPermissionConfig): string[] {
+  /** Prepare OpenCode's process-local permission policy. */
+  async prepare(
+    config: ToolPermissionConfig,
+    _context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     if (
       config.mode === PERMISSION_MODES.CUSTOM &&
       (config.allowedTools.length > 0 || config.deniedTools.length > 0)
@@ -107,7 +107,15 @@ export class OpenCodeToolPermissionMapper
         "OpenCode: custom tool permissions are config-file driven, not via CLI flags"
       );
     }
-    return [];
+    return {
+      cliArgs: [],
+      diagnostics: this.getToolTranslationDiagnostics(
+        config,
+        HARNESS_IDS.OPENCODE_CLI
+      ),
+      // OpenCode consumes this application through OPENCODE_CONFIG_CONTENT;
+      // the provider applies the policy to its per-step accumulator.
+    };
   }
 
   /**

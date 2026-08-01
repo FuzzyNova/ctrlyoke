@@ -1,11 +1,16 @@
 import {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionMapperBase,
   ToolPermissionConfig,
+  ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../../types/DashboardConstants";
 
 const QWEN_PERMISSION_VERIFICATION = {
   kind: "behavioral-test",
@@ -69,8 +74,12 @@ export class QwenToolPermissionMapper
    * @param config Tool permission configuration
    * @returns CLI arguments array
    */
-  buildArgs(config: ToolPermissionConfig): string[] {
+  async prepare(
+    config: ToolPermissionConfig,
+    _context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     const args: string[] = [];
+    const lossyPatterns: { capability: "allowedTools" | "deniedTools" }[] = [];
 
     Log.debug(
       `[QwenPermissionMapper] Building args: mode=${config.mode}, allowed=${config.allowedTools.length}, denied=${config.deniedTools.length}`
@@ -92,7 +101,8 @@ export class QwenToolPermissionMapper
       // commit message generation: mcp__ctrlyoke-commit__*).
       if (config.deniedTools.length > 0) {
         const deniedArgs = this.convertCtrlYokePatternsToQwenTools(
-          config.deniedTools
+          config.deniedTools,
+          () => lossyPatterns.push({ capability: "deniedTools" })
         );
         if (deniedArgs.length > 0) {
           args.push("--exclude-tools", deniedArgs.join(","));
@@ -107,7 +117,8 @@ export class QwenToolPermissionMapper
       // Add allowed tools if specified
       if (config.allowedTools.length > 0) {
         const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
-          config.allowedTools
+          config.allowedTools,
+          () => lossyPatterns.push({ capability: "allowedTools" })
         );
         if (allowedArgs.length > 0) {
           args.push("--allowed-tools", allowedArgs.join(","));
@@ -118,7 +129,8 @@ export class QwenToolPermissionMapper
       // Add denied tools if specified (takes precedence over allowed)
       if (config.deniedTools.length > 0) {
         const deniedArgs = this.convertCtrlYokePatternsToQwenTools(
-          config.deniedTools
+          config.deniedTools,
+          () => lossyPatterns.push({ capability: "deniedTools" })
         );
         if (deniedArgs.length > 0) {
           args.push("--exclude-tools", deniedArgs.join(","));
@@ -127,7 +139,18 @@ export class QwenToolPermissionMapper
       }
     }
 
-    return args;
+    return {
+      cliArgs: args,
+      diagnostics: [
+        ...this.getToolTranslationDiagnostics(config, HARNESS_IDS.QWEN_CLI),
+        ...lossyPatterns.map(({ capability }) =>
+          this.createLossyTranslationDiagnostic(
+            HARNESS_IDS.QWEN_CLI,
+            capability
+          )
+        ),
+      ],
+    };
   }
 
   /**
@@ -164,12 +187,16 @@ export class QwenToolPermissionMapper
    * @param patterns ctrlyoke tool patterns
    * @returns Qwen tool specifiers array (deduplicated)
    */
-  private convertCtrlYokePatternsToQwenTools(patterns: string[]): string[] {
+  private convertCtrlYokePatternsToQwenTools(
+    patterns: string[],
+    onLossyPattern?: () => void
+  ): string[] {
     const qwenTools = new Set<string>();
 
     for (const pattern of patterns) {
       const parsed = this.parsePattern(pattern);
       if (!parsed) {
+        onLossyPattern?.();
         Log.warn(
           `[QwenPermissionMapper] Invalid tool pattern: ${pattern}, skipping`
         );
@@ -212,6 +239,7 @@ export class QwenToolPermissionMapper
         Log.warn(
           `[QwenPermissionMapper] Qwen has no delete/remove tool equivalent; pattern "${pattern}" has no effect and was skipped. Use a shell(rm:*) rule to control file deletion on Qwen.`
         );
+        onLossyPattern?.();
       } else if (
         normalizedToolName === "web_search" ||
         normalizedToolName === "search" ||

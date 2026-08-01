@@ -1,8 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import {
-  HarnessCapabilityRegistry,
-} from "../../core/HarnessCapabilityRegistry";
+import { HarnessCapabilityRegistry } from "../../core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "../../core/HarnessCapabilityRegistry";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
@@ -10,10 +8,13 @@ import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPer
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
-import type { IToolPermissionMapper } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import type {
-  HarnessConfig,
-} from "../../core/harness/shared/interfaces/ICliProvider";
+  IToolPermissionMapper,
+  PermissionContext,
+  ToolPermissionApplication,
+  ToolPermissionConfig,
+} from "../../core/harness/shared/interfaces/IToolPermissionMapper";
+import type { HarnessConfig } from "../../core/harness/shared/interfaces/ICliProvider";
 import {
   CAPABILITY_DOMAINS,
   HARNESS_IDS,
@@ -27,8 +28,11 @@ type CapabilityProvider = HarnessCapabilitySource["provider"];
 class DescriptorMapper implements IToolPermissionMapper {
   constructor(readonly capabilities: PermissionCapabilityDescriptor) {}
 
-  buildArgs(): string[] {
-    return [];
+  async prepare(
+    _config: ToolPermissionConfig,
+    _context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
+    return { cliArgs: [], diagnostics: [] };
   }
 
   hasFullPermissions(): boolean {
@@ -108,17 +112,24 @@ function makeRegistry(
         ? versionByHarness[harnessId]
         : "1.0.0";
       return {
-        provider: new StubProvider(
-          harnessId,
-          effectiveMapper,
-          version
-        ),
+        provider: new StubProvider(harnessId, effectiveMapper, version),
       };
     },
   });
 }
 
 suite("HarnessCapabilityRegistry", () => {
+  test("registry descriptors reference each mapper capability object", async () => {
+    const registry = makeRegistry();
+    for (const harnessId of HARNESS_ID_LIST) {
+      const installed = await registry.getInstalledCapabilities(harnessId);
+      assert.strictEqual(
+        installed.descriptor.permissions,
+        mapperFor(harnessId).capabilities
+      );
+    }
+  });
+
   test("requires all three permission leaves for every HarnessId", async () => {
     const snapshot = await makeRegistry().getSnapshot();
 
@@ -187,7 +198,10 @@ suite("HarnessCapabilityRegistry", () => {
       { [HARNESS_IDS.QWEN_CLI]: descriptor }
     ).getInstalledCapabilities(HARNESS_IDS.QWEN_CLI);
 
-    assert.strictEqual(snapshot.effective?.permissions.mode.verification, "verified");
+    assert.strictEqual(
+      snapshot.effective?.permissions.mode.verification,
+      "verified"
+    );
     assert.strictEqual(
       snapshot.effective?.permissions.allowedTools.verification,
       "verified"
@@ -196,7 +210,10 @@ suite("HarnessCapabilityRegistry", () => {
       snapshot.effective?.permissions.deniedTools.verification,
       "unknown"
     );
-    assert.strictEqual(snapshot.effective?.permissions.deniedTools.fidelity, "exact");
+    assert.strictEqual(
+      snapshot.effective?.permissions.deniedTools.fidelity,
+      "exact"
+    );
   });
 
   test("does not produce states for unmodeled domains", async () => {
@@ -210,7 +227,9 @@ suite("HarnessCapabilityRegistry", () => {
       undefined
     );
     const snapshot = await registry.getSnapshot();
-    assert.deepStrictEqual(snapshot.enabledDomains, [CAPABILITY_DOMAINS.PERMISSIONS]);
+    assert.deepStrictEqual(snapshot.enabledDomains, [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+    ]);
   });
 
   test("round-trips the schema-versioned snapshot with independent dimensions", async () => {
@@ -221,7 +240,10 @@ suite("HarnessCapabilityRegistry", () => {
 
     assert.strictEqual(snapshot.schemaVersion, 1);
     assert.strictEqual(qwen.descriptor.permissions?.mode.fidelity, "exact");
-    assert.strictEqual(qwen.descriptor.permissions?.mode.mechanism, "translated-cli");
+    assert.strictEqual(
+      qwen.descriptor.permissions?.mode.mechanism,
+      "translated-cli"
+    );
     assert.strictEqual(
       qwen.effective?.permissions.mode.verification,
       "verified"

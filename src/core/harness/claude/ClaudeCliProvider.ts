@@ -5,6 +5,8 @@ import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
+  PermissionContext,
+  ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
@@ -261,7 +263,7 @@ export class ClaudeCliProvider implements ICliProvider {
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
     // NOTE: For headless Claude, CliIntegration prepends hook args to baseArgs so that
     // --settings appears before --disallowedTools (which is variadic and would consume it).
-    // Permission args are similarly dispatched via buildPermissionArgs() — not here.
+    // Permission preparation is similarly dispatched by CliIntegration — not here.
     // IMPORTANT: CliIntegration appends permission args last, so --disallowedTools (variadic)
     // is always the final group of flags and cannot accidentally consume other flags.
 
@@ -435,19 +437,19 @@ export class ClaudeCliProvider implements ICliProvider {
    * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
    * Permission args are appended last so --disallowedTools (variadic) is always final.
    */
-  buildPermissionArgs(
-    toolPermissions: ToolPermissionConfig | null | undefined
-  ): string[] {
+  async prepareToolPermissions(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     if (toolPermissions === null) {
-      // none mode — skip permission flags entirely
-      return [];
+      return { cliArgs: [], diagnostics: [] };
     }
     const config = toolPermissions ?? {
       mode: ConfigurationUtils.getCliToolPermissions(),
       allowedTools: ConfigurationUtils.getCliAllowedTools(),
       deniedTools: ConfigurationUtils.getCliDeniedTools(),
     };
-    return this.toolPermissionMapper.buildArgs(config);
+    return this.toolPermissionMapper.prepare(config, context);
   }
 
   /**

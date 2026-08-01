@@ -1,6 +1,8 @@
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type {
   IToolPermissionMapper,
+  PermissionContext,
+  ToolPermissionApplication,
   ToolPermissionConfig,
 } from "./IToolPermissionMapper";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
@@ -328,31 +330,17 @@ export interface ICliProvider {
   cleanupPreviousPromptHooks?(workspaceRoot: string): Promise<void>;
 
   /**
-   * Build CLI arguments for tool permissions.
-   * Called for both interactive and headless modes.
-   * For undefined toolPermissions, falls back to global ConfigurationUtils settings.
-   * For null toolPermissions (none mode), returns [] — no permission flags injected.
-   * Returns permission args to append to baseArgs after all other args.
-   * isInteractive is passed so providers can omit flags unsupported in headless/exec mode
-   * (e.g. Codex: --ask-for-approval / -a is interactive-only, not valid for `codex exec`).
-   */
-  buildPermissionArgs?(
-    toolPermissions: ToolPermissionConfig | null | undefined,
-    isInteractive?: boolean
-  ): string[];
-
-  /**
-   * Apply permission state that must exist before the harness process starts.
+   * Prepare permission arguments, workspace mutations, and compatibility
+   * diagnostics before the harness process starts.
    *
-   * Most harnesses express permissions through CLI arguments and omit this
-   * hook. Config-driven harnesses use it for an ownership-aware workspace-file
-   * mutation after server-level denied tools have been merged.
+   * Providers may add harness-specific preparation around their mapper (for
+   * example OpenCode's process-local inline configuration), but all permission
+   * outputs must be returned through this application contract.
    */
   prepareToolPermissions?(
     toolPermissions: ToolPermissionConfig | null | undefined,
-    workspaceRoot: string,
-    workingFilePath?: string
-  ): Promise<void>;
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication>;
 
   /**
    * Set up ctrlyoke notification hooks for interactive mode completion detection.

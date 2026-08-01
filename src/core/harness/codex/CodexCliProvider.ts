@@ -3,6 +3,8 @@ import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
+  PermissionContext,
+  ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
@@ -327,32 +329,26 @@ export class CodexCliProvider implements ICliProvider {
    * Note: --ask-for-approval / -a is only valid in interactive mode (not `codex exec`).
    * isInteractive is forwarded to the mapper so it can omit unsupported flags.
    */
-  buildPermissionArgs(
+  async prepareToolPermissions(
     toolPermissions: ToolPermissionConfig | null | undefined,
-    isInteractive?: boolean
-  ): string[] {
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     if (toolPermissions === null) {
       // none mode — skip permission flags entirely
-      return [];
+      return { cliArgs: [], diagnostics: [] };
     }
     const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
     const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
-    const args: string[] = [];
     const config = toolPermissions ?? {
       mode: ConfigurationUtils.getCliToolPermissions(),
       allowedTools: ConfigurationUtils.getCliAllowedTools(),
       deniedTools: ConfigurationUtils.getCliDeniedTools(),
     };
-    const permissionArgs = (
-      this.toolPermissionMapper as CodexToolPermissionMapper
-    ).buildCodexSpecificArgs(
-      config,
+    return this.toolPermissionMapper.prepare(config, {
+      ...context,
       sandboxMode,
       approvalPolicy,
-      isInteractive
-    );
-    args.push(...permissionArgs);
-    return args;
+    });
   }
 
   /**

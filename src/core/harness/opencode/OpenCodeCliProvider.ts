@@ -2,7 +2,11 @@ import * as path from "path";
 import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import type { ToolPermissionConfig } from "../shared/interfaces/IToolPermissionMapper";
+import type {
+  PermissionContext,
+  ToolPermissionApplication,
+  ToolPermissionConfig,
+} from "../shared/interfaces/IToolPermissionMapper";
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
@@ -378,13 +382,17 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   async prepareToolPermissions(
     toolPermissions: ToolPermissionConfig | null | undefined,
-    _workspaceRoot: string,
-    _workingFilePath?: string
-  ): Promise<void> {
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
+    if (toolPermissions === null || toolPermissions === undefined) {
+      delete this.pendingInlineConfig.permission;
+      return { cliArgs: [], diagnostics: [] };
+    }
     const policy = toolPermissions
       ? this.toolPermissionMapper.buildPermissionPolicy(
           toolPermissions,
-          this.pendingPermissionCollisionContext
+          context.permissionCollisionContext ??
+            this.pendingPermissionCollisionContext
         )
       : undefined;
 
@@ -393,6 +401,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     } else {
       delete this.pendingInlineConfig.permission;
     }
+    return this.toolPermissionMapper.prepare(toolPermissions, context);
   }
 
   async cleanupWorkspaceArtifacts(

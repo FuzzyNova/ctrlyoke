@@ -21,13 +21,12 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   ALLOWED_TOOLS_NOT_ENFORCED:
     "compatibility.permissions.allowedTools.notEnforced",
   ALLOWED_TOOLS_PARTIAL: "compatibility.permissions.allowedTools.partial",
-  ALLOWED_TOOLS_UNVERIFIED:
-    "compatibility.permissions.allowedTools.unverified",
+  ALLOWED_TOOLS_UNVERIFIED: "compatibility.permissions.allowedTools.unverified",
   DENIED_TOOLS_NOT_ENFORCED:
     "compatibility.permissions.deniedTools.notEnforced",
   DENIED_TOOLS_PARTIAL: "compatibility.permissions.deniedTools.partial",
-  DENIED_TOOLS_UNVERIFIED:
-    "compatibility.permissions.deniedTools.unverified",
+  DENIED_TOOLS_UNVERIFIED: "compatibility.permissions.deniedTools.unverified",
+  PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
 } as const;
 
 export type CapabilityFidelity =
@@ -175,6 +174,8 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
       return `${capabilityLabel} support is unverified for the installed ${context.harnessId} version.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
+      return `${capabilityLabel} include rules that are only partially represented by the ${context.harnessId} harness.`;
     default:
       return `Compatibility for ${context.capability} is unavailable for the ${context.harnessId} harness.`;
   }

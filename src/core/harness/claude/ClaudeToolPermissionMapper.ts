@@ -1,16 +1,22 @@
 import {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionConfig,
   ToolPermissionMapperBase,
+  ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../../types/DashboardConstants";
 
 const CLAUDE_PERMISSION_VERIFICATION = {
   kind: "manual",
-  reference: "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+  reference:
+    "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
   basis: "cli-version",
   verifiedVersions: [">=2.1.17 <3.0.0"],
 } as const;
@@ -69,35 +75,45 @@ export class ClaudeToolPermissionMapper
    * @param config Tool permission configuration
    * @returns CLI arguments array
    */
-  buildArgs(config: ToolPermissionConfig): string[] {
+  async prepare(
+    config: ToolPermissionConfig,
+    _context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
+    let args: string[];
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      return ["--dangerously-skip-permissions"];
-    }
-
-    // Both allowAll and custom modes use --permission-mode bypassPermissions
-    const args: string[] = ["--permission-mode", "bypassPermissions"];
-
-    if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
-      args.push("--tools", "default");
+      args = ["--dangerously-skip-permissions"];
     } else {
-      const convertedAllowTools = this.convertUnique(config.allowedTools, (t) =>
+      // Both allowAll and custom modes use --permission-mode bypassPermissions
+      args = ["--permission-mode", "bypassPermissions"];
+
+      if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
+        args.push("--tools", "default");
+      } else {
+        const convertedAllowTools = this.convertUnique(
+          config.allowedTools,
+          (t) => this.convertToClaudeFormat(t)
+        );
+        if (convertedAllowTools.length > 0) {
+          args.push("--allowedTools", ...convertedAllowTools);
+          Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        }
+      }
+
+      const convertedDenyTools = this.convertUnique(config.deniedTools, (t) =>
         this.convertToClaudeFormat(t)
       );
-      if (convertedAllowTools.length > 0) {
-        args.push("--allowedTools", ...convertedAllowTools);
-        Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+      if (convertedDenyTools.length > 0) {
+        args.push("--disallowedTools", ...convertedDenyTools);
+        Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
-
-    const convertedDenyTools = this.convertUnique(config.deniedTools, (t) =>
-      this.convertToClaudeFormat(t)
-    );
-    if (convertedDenyTools.length > 0) {
-      args.push("--disallowedTools", ...convertedDenyTools);
-      Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
-    }
-
-    return args;
+    return {
+      cliArgs: args,
+      diagnostics: this.getToolTranslationDiagnostics(
+        config,
+        HARNESS_IDS.CLAUDE_CLI
+      ),
+    };
   }
 
   // ============================================================

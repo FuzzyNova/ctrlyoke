@@ -51,7 +51,7 @@ function createProvider(): ICliProvider {
     },
     toolPermissionMapper: {
       capabilities: new CopilotToolPermissionMapper().capabilities,
-      buildArgs: () => [],
+      prepare: async () => ({ cliArgs: [], diagnostics: [] }),
       hasFullPermissions: () => true,
     },
     buildCliArgs: async () => [],

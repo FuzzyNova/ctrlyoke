@@ -171,7 +171,7 @@ suite("OpenCodeCliProvider", () => {
           (_, index) => `shell(command-${index}:*)`
         ),
       },
-      "workspace"
+      { workspaceRoot: "workspace" }
     );
 
     assert.throws(
@@ -205,7 +205,7 @@ suite("OpenCodeCliProvider", () => {
           allowedTools: [],
           deniedTools: ["shell(foo:*)"],
         },
-        workspaceRoot
+        { workspaceRoot }
       );
 
       const config = JSON.parse(
@@ -674,8 +674,7 @@ suite("OpenCodeCliProvider", () => {
       );
       await headlessProvider.prepareToolPermissions(
         workflowContext.resolvedProperties.toolPermissions,
-        workspaceRoot,
-        workingFilePath
+        { workspaceRoot, workingFilePath }
       );
 
       const interactiveProvider = new OpenCodeCliProvider();
@@ -689,8 +688,7 @@ suite("OpenCodeCliProvider", () => {
       );
       await interactiveProvider.prepareToolPermissions(
         workflowContext.resolvedProperties.toolPermissions,
-        workspaceRoot,
-        workingFilePath
+        { workspaceRoot, workingFilePath }
       );
 
       assert.strictEqual(
@@ -743,7 +741,7 @@ suite("OpenCodeCliProvider", () => {
           allowedTools: ["write"],
           deniedTools: [],
         },
-        workspaceRoot
+        { workspaceRoot }
       );
       const firstConfig = JSON.parse(
         provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!
@@ -803,7 +801,7 @@ suite("OpenCodeCliProvider", () => {
           allowedTools: [],
           deniedTools: ["write"],
         },
-        workspaceRoot
+        { workspaceRoot }
       );
 
       assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);

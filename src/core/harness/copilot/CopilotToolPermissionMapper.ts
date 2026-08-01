@@ -1,15 +1,21 @@
 import {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionConfig,
   ToolPermissionMapperBase,
+  ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
 import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../../types/DashboardConstants";
 
 const COPILOT_PERMISSION_VERIFICATION = {
   kind: "manual",
-  reference: "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+  reference:
+    "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
   basis: "cli-version",
   verifiedVersions: [">=0.0.384 <2.0.0"],
 } as const;
@@ -79,7 +85,10 @@ export class CopilotToolPermissionMapper
    * @param config Tool permission configuration
    * @returns CLI arguments array
    */
-  buildArgs(config: ToolPermissionConfig): string[] {
+  async prepare(
+    config: ToolPermissionConfig,
+    _context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     const args: string[] = [];
     const filteredTools: string[] = [];
 
@@ -117,7 +126,13 @@ export class CopilotToolPermissionMapper
       );
     }
 
-    return args;
+    return {
+      cliArgs: args,
+      diagnostics: this.getToolTranslationDiagnostics(
+        config,
+        HARNESS_IDS.COPILOT_CLI
+      ),
+    };
   }
 
   /**
