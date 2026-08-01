@@ -62,7 +62,8 @@ Detail lives in each plan's status header. The summary that drives sequencing:
   in. `getPermissionHarnessSupport()` has already dropped OpenCode.
 - **Compatibility — nothing built.** No registry, descriptor, or analyzer
   module exists in `src/`. Fully greenfield.
-- **Browser feedback — nothing built** except the Phase 2.5 Site 1 deletion.
+- **Browser feedback — nothing built** except the Phase 2.5 Site 1 and Site 2
+  deletions.
   No `USER_FEEDBACK_SEVERITY`, no `USER_FEEDBACK` message type, no toast
   component.
 
@@ -86,13 +87,14 @@ Neither item is a release gate, and neither touches a file Stage 1 touches
 (the only overlap is additive constants in `DashboardConstants.ts`). Both fix
 defects in what is shipping today.
 
-1. **Delete `handleMaxRetriesExhausted`** — browser feedback Phase 2.5 Site 2.
+1. **[x] Delete `handleMaxRetriesExhausted`** — browser feedback Phase 2.5 Site
+   2. **Done 2026-08-01.**
    Under default settings (`maxRetries: 0`, `onFail: stopWorkflow`) _every_
    end-condition failure raises a host-only modal that contradicts the declared
    policy and hangs any remotely driven run. Report the expected/actual values
    through the existing status/output path now; upgrade to `USER_FEEDBACK` when
    Stage 2 lands.
-2. **Browser feedback Phase 1** — the toast queue, `ToastViewport`, and the
+2. **[ ] Browser feedback Phase 1** — the toast queue, `ToastViewport`, and the
    `isStandalone` gate on `NOTIFICATION_EVENT`. Small, self-contained, and the
    panel-double-notification regression it risks is already specified with a
    prescribed test.
@@ -100,11 +102,11 @@ defects in what is shipping today.
 **If you would rather keep the release gate clean, defer both.** Nothing in
 Stage 1 changes either way.
 
-**Decided 2026-08-01: both are in.** They are the two items here that fix
-defects in already-shipped behavior rather than adding surface, they are the
-smallest work in the document, and they touch no file Stage 1 touches. Doing
-them first costs the gate nothing and removes a run-hanging modal from remotely
-driven workflows before any of the registry work starts.
+**Decided 2026-08-01: Stage 0 item 1 is in.** It fixes a defect in
+already-shipped behavior rather than adding surface, is small, and touches no
+file Stage 1 touches. Landing it early costs the gate nothing and removes a
+run-hanging modal from remotely driven workflows before any of the registry
+work starts.
 
 ### Stage 1 — the P0 release gate
 
@@ -159,7 +161,7 @@ strictly ordered: each builds only on what has already landed.
 
 | #   | Stage       | Scope                                                                                                    |
 | --- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| 1   | Stage 0.1   | Delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy                   |
+| 1   | Stage 0.1   | **Done** — delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy            |
 | 2   | Stage 0.2   | Browser feedback Phase 1 — toast queue, `ToastViewport`, `isStandalone` gate                             |
 | 3   | Phase 1A(i) | Shared capability + diagnostic contracts and their constants                                             |
 | 4   | Phase 1A(ii)| Pure effective-property resolver extracted from `PropertyResolver` (own commit, highest risk)            |
@@ -185,8 +187,7 @@ Its own Decision section gives two arguments for urgency. Both have weakened:
   ([`RELEASE_PLAN.md`](RELEASE_PLAN.md) §2.11), so this creates no release
   pressure.
 - _"Two `showChoice()` sites block execution on a modal a remote user cannot
-  see."_ One is already deleted; the other is Stage 0 item 1, which needs none
-  of the transport work.
+  see."_ Both are now deleted, independently of the transport work.
 
 What remains — 63 reusable `show*Message` sites invisible to hosted-browser
 users — is a genuine parity gap, but it is a gap in an already-shipped surface

@@ -20,13 +20,6 @@ import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { IDashboardSink } from "../types/IDashboardSink";
 
-/** Dialog action labels used in error/retry dialogs (single-sourced to prevent typo drift) */
-const DIALOG_ACTIONS = {
-  STOP_WORKFLOW: "Stop Workflow",
-  CONTINUE_ANYWAY: "Continue Anyway",
-  RETRY_ONCE_MORE: "Retry Once More",
-} as const;
-
 /**
  * Context needed to handle retry prompts
  */
@@ -75,8 +68,6 @@ export interface EndConditionHandlerResult {
   shouldContinue: boolean;
   /** Failure reason if shouldContinue is false (for dashboard/logging) */
   failureReason?: string;
-  /** Internal: user requested one more retry attempt despite max retries being exhausted */
-  retryOnceMore?: boolean;
   /** An internal evaluator failure that must be routed by the executor. */
   errorResult?: EvaluationResult;
   /** Attempt index at which errorResult occurred. */
@@ -168,7 +159,6 @@ export class EndConditionHandler {
     const onFail: EndConditionAction =
       prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
     let evaluationResult = initialEvaluationResult;
-    let manualRetryRequested = false;
     let currentAttemptIndex = retryContext.attemptIndex;
 
     while (true) {
@@ -209,8 +199,7 @@ export class EndConditionHandler {
               retryContext,
               sendRetryPrompt,
               currentAttemptIndex,
-              "pass",
-              true
+              "pass"
             );
             if ("handlerResult" in retryResult) {
               return retryResult.handlerResult;
@@ -251,18 +240,29 @@ export class EndConditionHandler {
         return { shouldContinue: true };
       }
 
-      if (!manualRetryRequested && !this.promptQueue.canRetry(prompt)) {
-        const exhaustedResult = await this.handleMaxRetriesExhausted(
-          prompt,
-          evaluationResult,
-          retryContext,
-          currentAttemptIndex
+      if (!this.promptQueue.canRetry(prompt)) {
+        const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
+        const retryCount = this.promptQueue.getCurrentRetryCount();
+        const failureReason =
+          maxRetries > 0
+            ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
+            : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
+
+        Log.error(
+          `❌ End condition failed after ${retryCount} retries (max: ${maxRetries})`
         );
-        if (exhaustedResult.retryOnceMore) {
-          manualRetryRequested = true;
-          continue;
-        }
-        return exhaustedResult;
+        this.getDashboard()?.updateStatusMessage(
+          this.promptQueue.getState().currentIndex,
+          failureReason,
+          STATUS_MESSAGE_SEVERITY.ERROR
+        );
+        this.promptQueue.resetRetryCount();
+        retryContext.runtime.failAttempt(
+          retryContext.attemptTarget,
+          currentAttemptIndex,
+          failureReason
+        );
+        return { shouldContinue: false, failureReason };
       }
 
       const retryResult = await this.sendRetryPromptAndEvaluate(
@@ -271,10 +271,8 @@ export class EndConditionHandler {
         retryContext,
         sendRetryPrompt,
         currentAttemptIndex,
-        "failure",
-        !manualRetryRequested
+        "failure"
       );
-      manualRetryRequested = false;
       if ("handlerResult" in retryResult) {
         return retryResult.handlerResult;
       }
@@ -307,8 +305,7 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback,
     currentAttemptIndex: number,
-    retryKind: "pass" | "failure",
-    incrementRetryCount: boolean
+    retryKind: "pass" | "failure"
   ): Promise<
     | { evaluationResult: EvaluationResult; attemptIndex: number }
     | { handlerResult: EndConditionHandlerResult }
@@ -319,9 +316,7 @@ export class EndConditionHandler {
       };
     }
 
-    if (incrementRetryCount) {
-      this.promptQueue.incrementRetryCount();
-    }
+    this.promptQueue.incrementRetryCount();
 
     const currentRetry = this.promptQueue.getCurrentRetryCount();
     const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
@@ -435,60 +430,6 @@ export class EndConditionHandler {
       currentResult.endConditionResult = true;
       currentResult.scriptOutput = evaluationResult.stdout;
     }
-  }
-
-  /**
-   * Handle max retries exhausted
-   * @returns Result object with shouldContinue and optional failureReason
-   */
-  async handleMaxRetriesExhausted(
-    prompt: PromptStep,
-    evaluationResult: EvaluationResult,
-    retryContext: RetryContext,
-    attemptIndex: number
-  ): Promise<EndConditionHandlerResult> {
-    const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
-    const retryCount = this.promptQueue.getCurrentRetryCount();
-
-    Log.error(
-      `❌ End condition failed after ${retryCount} retries (max: ${maxRetries})`
-    );
-
-    const message =
-      maxRetries > 0
-        ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
-        : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}`;
-
-    const action = await this.platform?.showChoice(
-      `ctrlyoke: ${message}`,
-      DIALOG_ACTIONS.STOP_WORKFLOW,
-      DIALOG_ACTIONS.CONTINUE_ANYWAY,
-      DIALOG_ACTIONS.RETRY_ONCE_MORE
-    );
-
-    if (action === DIALOG_ACTIONS.CONTINUE_ANYWAY) {
-      Log.info("⏭️ Continuing despite validation failure");
-      this.promptQueue.resetRetryCount();
-      retryContext.runtime.completeAttempt(
-        retryContext.attemptTarget,
-        attemptIndex
-      );
-      return { shouldContinue: true };
-    } else if (action === DIALOG_ACTIONS.RETRY_ONCE_MORE) {
-      // Allow one more retry — signal the iterative loop to perform
-      // one additional attempt without incrementing the retry counter
-      Log.info("🔄 Manual retry requested");
-      return { shouldContinue: false, retryOnceMore: true };
-    }
-
-    // Default: stop workflow
-    this.promptQueue.resetRetryCount();
-    retryContext.runtime.failAttempt(
-      retryContext.attemptTarget,
-      attemptIndex,
-      message
-    );
-    return { shouldContinue: false, failureReason: message };
   }
 
   /**

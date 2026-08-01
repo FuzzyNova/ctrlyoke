@@ -24,8 +24,11 @@ import {
   WORKFLOW_ATTEMPT_COMMANDS,
   HARNESS_IDS,
 } from "../../types/DashboardConstants";
+import type { StatusMessageSeverity } from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
+  choiceCallCount = 0;
+
   constructor(private readonly choice?: string) {}
 
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -53,6 +56,7 @@ class MockPlatform implements PlatformAdapter {
     _message: string,
     ..._options: string[]
   ): Promise<string | undefined> {
+    this.choiceCallCount++;
     return this.choice;
   }
 
@@ -350,10 +354,24 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(0);
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
+    const dashboardMessages: Array<{
+      stepIndex: number;
+      message: string;
+      severity?: StatusMessageSeverity;
+    }> = [];
+    const dashboard = {
+      updateStatusMessage: (
+        stepIndex: number,
+        message: string,
+        severity?: StatusMessageSeverity
+      ) => {
+        dashboardMessages.push({ stepIndex, message, severity });
+      },
+    } as IDashboardSink;
     const handler = new EndConditionHandler(
       evaluator,
       queue,
-      () => undefined,
+      () => dashboard,
       platform
     );
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
@@ -364,6 +382,57 @@ suite("EndConditionHandler", () => {
         command: transition.command,
         attemptIndex: transition.current.attemptIndex,
       });
+    });
+
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      validationFailure("actual-result"),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => {
+        throw new Error("retry callback should not be invoked");
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, false);
+    assert.deepStrictEqual(transitions, [
+      { command: WORKFLOW_ATTEMPT_COMMANDS.FAIL, attemptIndex: 0 },
+    ]);
+    assert.strictEqual(platform.choiceCallCount, 0);
+    assert.deepStrictEqual(dashboardMessages, [
+      {
+        stepIndex: 0,
+        message:
+          "End condition validation failed.\n\nExpected: ok\nActual: actual-result\n\nScript output:\nactual-result",
+        severity: "error",
+      },
+    ]);
+  });
+
+  test("continues the workflow when onFail is continue after exhaustion", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(0, "continue", { onFail: "continue" });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform),
+      queue,
+      () => undefined,
+      platform
+    );
+    const transitions: string[] = [];
+
+    queue.loadPrompts({ steps: [prompt] });
+    runtime.onDidAttemptTransition((transition) => {
+      transitions.push(transition.command);
     });
 
     const result = await handler.handleEndConditionResult(
@@ -383,10 +452,9 @@ suite("EndConditionHandler", () => {
       }
     );
 
-    assert.strictEqual(result.shouldContinue, false);
-    assert.deepStrictEqual(transitions, [
-      { command: WORKFLOW_ATTEMPT_COMMANDS.FAIL, attemptIndex: 0 },
-    ]);
+    assert.strictEqual(result.shouldContinue, true);
+    assert.deepStrictEqual(transitions, [WORKFLOW_ATTEMPT_COMMANDS.COMPLETE]);
+    assert.strictEqual(platform.choiceCallCount, 0);
   });
 
   test("aborts retries when the runtime is stopped before queue state sync catches up", async () => {

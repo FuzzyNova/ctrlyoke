@@ -4,8 +4,8 @@
 already has transient toast state and receives structured workflow-completion
 notification events, but there is no mounted toast renderer and ordinary
 `vscode.window.show*Message()` calls never reach hosted browser clients.
-Nothing in this plan has been implemented apart from the Phase 2.5 Site 1
-deletion; there is no `USER_FEEDBACK_SEVERITY` constant, no `USER_FEEDBACK`
+Nothing in this plan has been implemented apart from the Phase 2.5 deletions;
+there is no `USER_FEEDBACK_SEVERITY` constant, no `USER_FEEDBACK`
 message type, and no toast component anywhere in `src/ui/webview-react/`.
 
 **Related plans:**
@@ -39,8 +39,8 @@ purely optional ordering**, for two reasons found during review:
 1. Two `platform.showChoice()` sites in `EndConditionHandler` blocked workflow
    execution on a modal a remote browser user cannot see — one of them on every
    end-condition failure under default settings. Both are deleted rather than
-   ported (Phase 2.5); the first is already gone, and deleting the second is
-   cheaper than the toast work and independently worth doing.
+   ported (Phase 2.5); both deletions are complete and were cheaper than the
+   toast work.
 2. Narrowing `PlatformAdapter` is a prerequisite for the standalone
    `StandaloneServerAdapter` to compile at all, so this work gates
    `STANDALONE_SERVER_PLAN.md` Phase 5 regardless of sequencing preference.
@@ -111,11 +111,10 @@ Counts re-verified against `src/` on 2026-08-01:
 | Adapter method                 | Call sites | Where                                                                                                              |
 | ------------------------------ | ---------: | ------------------------------------------------------------------------------------------------------------------ |
 | `log()` / `warn()` / `error()` |         18 | `WorkflowInstance` ×9, `WorkflowExecutor` ×3, `PromptFileParser` ×4, `CliIntegration` ×1, `EndConditionHandler` ×1 |
-| `showChoice()`                 |          2 | `EndConditionHandler` ×1, `CliIntegration` ×1                                                                      |
+| `showChoice()`                 |          1 | `CliIntegration` ×1                                                                                                 |
 
-`showChoice()` dropped from three sites to two when Phase 2.5 Site 1 was
-deleted. `PromptFileParser` has four adapter-UI calls, not three, and
-`EndConditionHandler` has one of its own that the original table missed.
+`showChoice()` dropped from three sites to one when both Phase 2.5 sites were
+deleted. `PromptFileParser` has four adapter-UI calls, not three.
 
 Consequences:
 
@@ -135,13 +134,13 @@ Consequences:
 ### Execution-blocking interactions are the worst parity failure
 
 `EndConditionHandler` called `platform.showChoice()` at two points that **halt
-workflow execution until a human answers**. One remains:
+workflow execution until a human answers**. Both are now gone:
 
 - ~~end-condition script failure → `Stop Workflow` / `Skip Condition` /
   `Open Script`~~ — **deleted; verified absent 2026-08-01** (Phase 2.5 Site 1);
 - end-condition validation failure after retries → `Stop Workflow` /
-  `Continue Anyway` / `Retry Once More` — now
-  `EndConditionHandler.ts:462`, inside `handleMaxRetriesExhausted` at line 444.
+  `Continue Anyway` / `Retry Once More` — **deleted; verified absent
+  2026-08-01** (Phase 2.5 Site 2).
 
 In the VS Code-hosted server these render as native modals **on the host
 machine only**. A browser or phone user driving a workflow remotely sees the run
@@ -157,9 +156,9 @@ under default settings. Neither should exist, in any host. They remain the
 strongest argument for auditing this area — just not for building an
 interaction protocol.
 
-Because Site 1 is deleted, **the remaining execution-blocking surface is one
-call site**, and its deletion (Phase 2.5 Site 2) does not depend on any of the
-toast transport work. It can be taken as a standalone change at any time.
+Because both sites are deleted, **no execution-blocking adapter prompt remains
+in `EndConditionHandler`**. The deletion did not depend on any of the toast
+transport work.
 
 The original AST scan could not see these at all — it looked only for
 `vscode.window.show*Message`, so adapter-mediated prompts were invisible. They
@@ -390,7 +389,7 @@ is enqueued when `isStandalone` is false.
 
 ## Action-Bearing Messages
 
-Nine action-bearing calls currently live in reusable code — seven direct, two
+Eight action-bearing calls currently live in reusable code — seven direct, one
 adapter-mediated:
 
 Direct (`vscode.window.show*Message` with actions):
@@ -403,18 +402,14 @@ Direct (`vscode.window.show*Message` with actions):
 - post-workspace-initialization action;
 - clear-all-workflows confirmation.
 
-Adapter-mediated (`platform.showChoice`) — see Phase 2.5, where the first is
-**deleted rather than migrated**:
+Adapter-mediated (`platform.showChoice`):
 
-- end-condition validation failure (`EndConditionHandler.ts:462`) — contradicts
-  declared `endCondition.onFail` / `maxRetries`;
 - harness warning "don't show again" (`CliIntegration.ts:1373`) — migrate
   normally.
 
-(The third, end-condition script failure, was dead code and has already been
-deleted.)
+(The two end-condition dialogs were deleted rather than migrated in Phase 2.5.)
 
-So seven of the nine need an interaction contract, not nine — and the
+So seven of the eight need an interaction contract, not eight — and the
 duplicate-running-workflow choice in the direct list above should be re-examined
 against the same policy-conflict test.
 
@@ -573,11 +568,12 @@ step."_ — so internal errors already route to `errorBehavior.onError`
 its `Open Script` / `looksLikeFilePath` / `openTextFile` support code are
 unreachable.
 
-#### Site 2 — `handleMaxRetriesExhausted` (`EndConditionHandler.ts:444`, `showChoice` at 462)
+#### Site 2 — `handleMaxRetriesExhausted` — DONE
 
-Live, reached from `handleEndConditionIterative` (private, line 160; call at
-line 255) when `promptQueue.canRetry(prompt)` is false. It prompts
-`Stop Workflow` / `Continue Anyway` / `Retry Once More`.
+**Implemented 2026-08-01; method and `showChoice` call deleted.** The live
+exhaustion path now honors the resolved `endCondition.onFail` / `maxRetries`
+policy and reports expected, actual, and script output through the existing
+dashboard status/output path.
 
 **The surrounding code has been refactored since this plan was written.**
 `handleValidationFailureIterative` (line 290) is now a thin
@@ -602,15 +598,9 @@ to `stopWorkflow`. So in the default configuration **every end-condition failure
 raises a blocking modal** that offers to contradict the default policy. This is
 not an edge case.
 
-Action: delete the prompt and honor the resolved `onFail` policy directly. Emit
-a `USER_FEEDBACK` error carrying the expected/actual values and script output
-that the modal used to display — that is the part with real user value, and it
-reaches every surface. The `retryOnceMore` branch becomes dead with the modal;
-removing it also retires the `manualRetryRequested` local in
-`handleEndConditionIterative` (lines 171, 254, 262, 275, 277) and lets the
-`isFirstAttempt`-style argument it feeds to `sendRetryPromptAndEvaluate` become
-a constant. Remove all of it unless the affordance is re-driven from a
-dashboard control.
+The `retryOnceMore` branch and `manualRetryRequested` local were removed with
+the modal. Retry bookkeeping now uses one incrementing path for both retry
+directions.
 
 If the "nudge a stuck run" affordance is still wanted, it belongs in the
 dashboard as a **non-blocking action on an already-stopped workflow**, not as a
