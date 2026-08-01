@@ -7,7 +7,7 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.ctrlyoke",
+        "--disable-extension=fuzzynova.ctrlyoke",
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
@@ -19,7 +19,7 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.ctrlyoke",
+        "--disable-extension=fuzzynova.ctrlyoke",
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
@@ -31,7 +31,7 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.ctrlyoke",
+        "--disable-extension=fuzzynova.ctrlyoke",
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
@@ -44,7 +44,7 @@
       "args": [
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.ctrlyoke",
+        "--disable-extension=fuzzynova.ctrlyoke",
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],

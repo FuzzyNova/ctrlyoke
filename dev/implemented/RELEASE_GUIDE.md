@@ -81,7 +81,7 @@ code --install-extension flightpath-0.1.0.vsix
 To remove the locally installed extension:
 
 - Via UI: Right-click the extension in Extensions view → Uninstall
-- Via CLI: `code --uninstall-extension nhickster.flightpath`
+- Via CLI: `code --uninstall-extension fuzzynova.flightpath`
 
 ---
 
