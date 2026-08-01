@@ -63,6 +63,14 @@ interface FitSessionResult {
   mode: "controller" | "viewer";
 }
 
+interface FitRegistryTarget {
+  term: Terminal;
+  fitAddon: FitAddon;
+  domEl: HTMLElement;
+  controllerCols?: number;
+  controllerRows?: number;
+}
+
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
 
@@ -81,6 +89,8 @@ const registry = new Map<string, RegistryEntry>();
  * feeds this for the active workflow, so the two never double up.
  */
 const orphanOutput = new Map<string, string[]>();
+
+let viewportMeasurementEntry: FitRegistryTarget | null = null;
 
 let currentTerminalSettings: TerminalSettings = {
   fontSize: 14,
@@ -111,15 +121,50 @@ function makeKey(workflowId: string, sessionId: string): string {
  * element stays top-aligned vertically so scrolling from the top always works
  * (auto top/bottom margins would clip the top in an overflow container).
  */
-function applyViewerLetterbox(entry: RegistryEntry): void {
+function applyViewerLetterbox(entry: FitRegistryTarget): void {
   entry.domEl.style.width = "fit-content";
   entry.domEl.style.height = "fit-content";
   entry.domEl.style.marginLeft = "auto";
   entry.domEl.style.marginRight = "auto";
 }
 
+function readTerminalFontFamily(): string {
+  return (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--vscode-editor-font-family")
+      .trim() || '"Cascadia Code", "Courier New", monospace'
+  );
+}
+
+function createTerminalOptions(theme: ITheme, settings: TerminalSettings) {
+  return {
+    theme,
+    scrollback: settings.scrollback,
+    fontFamily: readTerminalFontFamily(),
+    fontSize: settings.fontSize,
+    lineHeight: settings.lineHeight,
+    letterSpacing: 0,
+    allowTransparency: false,
+    cursorStyle: settings.cursorStyle,
+    cursorBlink: settings.cursorBlink,
+    macOptionIsMeta: settings.macOptionIsMeta,
+    wordSeparator: settings.wordSeparators,
+  };
+}
+
+function applyTerminalSettings(term: Terminal, settings: TerminalSettings): void {
+  term.options.scrollback = settings.scrollback;
+  term.options.lineHeight = settings.lineHeight;
+  term.options.cursorStyle = settings.cursorStyle;
+  term.options.cursorBlink = settings.cursorBlink;
+  term.options.macOptionIsMeta = settings.macOptionIsMeta;
+  term.options.wordSeparator = settings.wordSeparators;
+  term.options.fontSize = settings.fontSize;
+  term.options.fontFamily = readTerminalFontFamily();
+}
+
 function fitRegistryEntry(
-  entry: RegistryEntry,
+  entry: FitRegistryTarget,
   mode: "controller" | "viewer"
 ): FitSessionResult {
   const dims = entry.fitAddon.proposeDimensions();
@@ -165,6 +210,31 @@ function fitRegistryEntry(
 
 function getFitMode(entry: RegistryEntry): "controller" | "viewer" {
   return entry.controllerCols != null ? "viewer" : "controller";
+}
+
+function ensureViewportMeasurementEntry(): FitRegistryTarget {
+  if (viewportMeasurementEntry) {
+    applyTerminalSettings(viewportMeasurementEntry.term, currentTerminalSettings);
+    return viewportMeasurementEntry;
+  }
+
+  const term = new Terminal(
+    createTerminalOptions(readVsCodeTheme(), currentTerminalSettings)
+  );
+  const fitAddon = new FitAddon();
+  term.loadAddon(fitAddon);
+
+  const domEl = document.createElement("div");
+  domEl.style.cssText =
+    "position:absolute;inset:0;width:100%;height:100%;visibility:hidden;pointer-events:none;overflow:hidden;";
+
+  viewportMeasurementEntry = {
+    term,
+    fitAddon,
+    domEl,
+  };
+
+  return viewportMeasurementEntry;
 }
 
 function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
@@ -254,25 +324,7 @@ export const terminalRegistry = {
     // await — concurrent callers can't interleave, hence no pending-create dedup.
     const theme = readVsCodeTheme();
     const settings = this.getTerminalSettings();
-    // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
-    // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
-    const fontFamily =
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--vscode-editor-font-family")
-        .trim() || '"Cascadia Code", "Courier New", monospace';
-    const term = new Terminal({
-      theme,
-      scrollback: settings.scrollback,
-      fontFamily,
-      fontSize: settings.fontSize,
-      lineHeight: settings.lineHeight,
-      letterSpacing: 0,
-      allowTransparency: false,
-      cursorStyle: settings.cursorStyle,
-      cursorBlink: settings.cursorBlink,
-      macOptionIsMeta: settings.macOptionIsMeta,
-      wordSeparator: settings.wordSeparators,
-    });
+    const term = new Terminal(createTerminalOptions(theme, settings));
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -439,18 +491,15 @@ export const terminalRegistry = {
   updateTerminalOptions(settings: TerminalSettings): void {
     currentTerminalSettings = { ...settings };
     for (const entry of registry.values()) {
-      entry.term.options.scrollback = settings.scrollback;
-      entry.term.options.lineHeight = settings.lineHeight;
-      entry.term.options.cursorStyle = settings.cursorStyle;
-      entry.term.options.cursorBlink = settings.cursorBlink;
-      entry.term.options.macOptionIsMeta = settings.macOptionIsMeta;
-      entry.term.options.wordSeparator = settings.wordSeparators;
-      entry.term.options.fontSize = settings.fontSize;
+      applyTerminalSettings(entry.term, settings);
       try {
         entry.fitAddon.fit();
       } catch {
         // Ignore — terminal may not be attached
       }
+    }
+    if (viewportMeasurementEntry) {
+      applyTerminalSettings(viewportMeasurementEntry.term, settings);
     }
   },
 
@@ -471,6 +520,35 @@ export const terminalRegistry = {
         // Ignore — terminal may not be attached
       }
     }
+    if (viewportMeasurementEntry) {
+      viewportMeasurementEntry.term.options.fontSize = size;
+    }
+  },
+
+  measureViewportContainer(container: HTMLElement): FitSessionResult | null {
+    if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+      return null;
+    }
+
+    const entry = ensureViewportMeasurementEntry();
+    if (!entry.term.element) {
+      container.appendChild(entry.domEl);
+      entry.term.open(entry.domEl);
+    } else if (entry.domEl.parentElement !== container) {
+      container.appendChild(entry.domEl);
+    }
+
+    const fitResult = fitRegistryEntry(entry, "controller");
+    WebviewLog.debug(
+      `[terminalRegistry.measureViewportContainer] size=${container.offsetWidth}x${container.offsetHeight} ` +
+        `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
+        `actual=${fitResult.cols}x${fitResult.rows}`
+    );
+    return fitResult;
+  },
+
+  releaseViewportMeasurement(): void {
+    viewportMeasurementEntry?.domEl.remove();
   },
 
   /**

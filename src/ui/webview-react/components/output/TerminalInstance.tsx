@@ -81,6 +81,57 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     [workflowId, sessionId]
   );
 
+  const syncControllerTerminalSize = useCallback(
+    (
+      reason: string,
+      options?: {
+        forceResize?: boolean;
+      }
+    ) => {
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      const container = containerRef.current;
+      if (
+        !entry ||
+        !container ||
+        container.offsetWidth === 0 ||
+        container.offsetHeight === 0
+      ) {
+        return null;
+      }
+
+      const previousCols = entry.term.cols;
+      const previousRows = entry.term.rows;
+      const fitResult = terminalRegistry.fitSessionToContainer(
+        workflowId,
+        sessionId,
+        "controller"
+      );
+      const cols = fitResult?.cols ?? entry.term.cols;
+      const rows = fitResult?.rows ?? entry.term.rows;
+      const changed = cols !== previousCols || rows !== previousRows;
+      const shouldSendResize = options?.forceResize === true || changed;
+
+      if (shouldSendResize) {
+        WebviewLog.debug(
+          `[TerminalInstance] controller → TERMINAL_RESIZE (${reason}) wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+            `container=${container.offsetWidth}x${container.offsetHeight}px ` +
+            `proposed=${fitResult?.proposedCols ?? "none"}x${fitResult?.proposedRows ?? "none"} ` +
+            `previous=${previousCols}x${previousRows} xtermRendered=${entry.term.cols}x${entry.term.rows} ` +
+            `sending=${cols}x${rows} changed=${changed} forced=${options?.forceResize === true}`
+        );
+        sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
+          workflowId,
+          sessionId,
+          cols,
+          rows,
+        });
+      }
+      sendViewportHint(cols, rows);
+      return { fitResult, cols, rows, changed };
+    },
+    [workflowId, sessionId, sendViewportHint]
+  );
+
   useEffect(() => {
     WebviewLog.debug(
       `[TerminalInstance] visibility wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
@@ -433,32 +484,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
               .sessions[workflowId]?.find((s) => s.id === sessionId);
             const isCtrl = sessNow?.isController;
             if (isCtrl !== false) {
-              // Controller: fit to container, then report new dimensions to PTY
-              const fitResult = terminalRegistry.fitSessionToContainer(
-                workflowId,
-                sessionId,
-                "controller"
-              );
-              const cols = fitResult?.cols ?? entry.term.cols;
-              const rows = fitResult?.rows ?? entry.term.rows;
-              // Correlates with PtyProcessManager.resizeSession's PTY-side log:
-              // this is the width xterm actually rendered to at the moment we tell
-              // the harness. If the harness first-render wrapped wrong, compare this
-              // cols against the PTY's spawn width (DEFAULT_COLS) and the elapsed ms.
-              WebviewLog.debug(
-                `[TerminalInstance] controller → TERMINAL_RESIZE wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
-                  `container=${container.offsetWidth}x${container.offsetHeight}px ` +
-                  `proposed=${fitResult?.proposedCols ?? "none"}x${fitResult?.proposedRows ?? "none"} ` +
-                  `xtermRendered=${entry.term.cols}x${entry.term.rows} sending=${cols}x${rows}`
-              );
-              sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
-                workflowId,
-                sessionId,
-                cols,
-                rows,
-              });
-              // Also record this viewport as the spawn size for the next PTY.
-              sendViewportHint(cols, rows);
+              // Controller: fit to container, then report changed dimensions to PTY.
+              syncControllerTerminalSize("resize-observer");
             } else if (entry.controllerCols != null) {
               // Viewer: keep cols fixed at controller's width, let rows adapt to
               // the local container height so the terminal fills vertically.
@@ -517,7 +544,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       touchEl?.removeEventListener("touchend", handleTouchEnd);
       touchEl?.removeEventListener("touchcancel", handleTouchCancel);
     };
-  }, [workflowId, sessionId, sendViewportHint]);
+  }, [workflowId, sessionId, sendViewportHint, syncControllerTerminalSize]);
 
   // When isController changes from false→true (viewer claiming control), re-register onData
   // and restore fit-to-container sizing.
@@ -544,28 +571,15 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     if (wasViewer && !entry.frozen) {
       requestAnimationFrame(() => {
         try {
-          const fitResult = terminalRegistry.fitSessionToContainer(
-            workflowId,
-            sessionId,
-            "controller"
-          );
-          const cols = fitResult?.cols ?? entry.term.cols;
-          const rows = fitResult?.rows ?? entry.term.rows;
-          sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
-            workflowId,
-            sessionId,
-            cols,
-            rows,
-          });
           // A viewer taking control may fit to a different width than the old
-          // controller — record it as the next spawn size too.
-          sendViewportHint(cols, rows);
+          // controller — force a resize so the PTY and every viewer re-sync.
+          syncControllerTerminalSize("controller-claim", { forceResize: true });
         } catch {
           // Ignore — terminal may not be visible
         }
       });
     }
-  }, [controllerCols, isController, workflowId, sessionId, sendViewportHint]);
+  }, [controllerCols, isController, workflowId, sessionId, syncControllerTerminalSize]);
 
   // When isController changes from true→false (control claimed by another client),
   // dispose onData and apply the controller's known column width.
@@ -636,17 +650,16 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       try {
         const isViewerFit =
           activeEntry.controllerCols != null && isController === false;
-        const fitResult = terminalRegistry.fitSessionToContainer(
-          workflowId,
-          sessionId,
-          isViewerFit ? "viewer" : "controller"
-        );
+        const fitResult = isViewerFit
+          ? terminalRegistry.fitSessionToContainer(
+              workflowId,
+              sessionId,
+              "viewer"
+            )
+          : syncControllerTerminalSize(`visible-refresh-${phase}`, {
+              forceResize: phase === "raf2",
+            })?.fitResult;
         activeEntry.term.refresh(0, Math.max(0, activeEntry.term.rows - 1));
-        // On show, a controller may find the panel was resized while hidden —
-        // record the fitted size as the next spawn size.
-        if (!isViewerFit) {
-          sendViewportHint(activeEntry.term.cols, activeEntry.term.rows);
-        }
         WebviewLog.debug(
           `[TerminalInstance] visible refresh ${phase} wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `containerSize=${activeContainer.offsetWidth}x${activeContainer.offsetHeight} ` +
@@ -682,7 +695,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     isVisible,
     workflowId,
     sessionId,
-    sendViewportHint,
+    syncControllerTerminalSize,
   ]);
 
   return (

@@ -18,6 +18,7 @@ import { useTerminalContextMenu } from "@hooks/useTerminalContextMenu";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import {
   MESSAGE_TYPES,
@@ -32,6 +33,7 @@ import { SEPARATOR_VERTICAL } from "../../constants";
 import { TerminalSessionIcon } from "./TerminalSessionIcon";
 import { getShellCompactLabel } from "@utils/terminalPresentation";
 import { WebviewLog } from "@utils/logger";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -156,10 +158,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   );
   const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
   const setTerminalRailSizePx = useUiStore((s) => s.setTerminalRailSizePx);
+  const terminalFontSize = useSettingsStore(
+    (s) => s.globalSettings.terminal?.fontSize ?? 14
+  );
+  const terminalLineHeight = useSettingsStore(
+    (s) => s.globalSettings.terminal?.lineHeight ?? 1.2
+  );
 
   const [railCollapsed, setRailCollapsed] = useState(terminalRailCollapsed);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const terminalCanvasRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<PanelImperativeHandle>(null);
+  const lastViewportHintRef = useRef<{ cols: number; rows: number } | null>(
+    null
+  );
   // Snapshot persisted values once on mount — defaultSize must not change after mount
   // or react-resizable-panels will re-apply it, overriding user drag interactions.
   const initialRailSizePx = useRef(terminalRailSizePx);
@@ -201,6 +213,65 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     activeSessionId,
     activeSession?.isController,
     activeSession?.status,
+  ]);
+
+  useEffect(() => {
+    const container = terminalCanvasRef.current;
+    if (!container || sessions.length > 0) {
+      terminalRegistry.releaseViewportMeasurement();
+      return;
+    }
+
+    lastViewportHintRef.current = null;
+
+    const sendMeasuredViewportHint = () => {
+      const activeContainer = terminalCanvasRef.current;
+      if (
+        !activeContainer ||
+        activeContainer.offsetWidth === 0 ||
+        activeContainer.offsetHeight === 0
+      ) {
+        return;
+      }
+
+      const fitResult = terminalRegistry.measureViewportContainer(activeContainer);
+      if (!fitResult) {
+        return;
+      }
+
+      const { cols, rows } = fitResult;
+      const last = lastViewportHintRef.current;
+      if (last && last.cols === cols && last.rows === rows) {
+        return;
+      }
+      lastViewportHintRef.current = { cols, rows };
+      sendMessage(MESSAGE_TYPES.TERMINAL_VIEWPORT_HINT, {
+        workflowId,
+        cols,
+        rows,
+      });
+      WebviewLog.debug(
+        `[TerminalView] empty-pane viewport hint wf=${workflowId.slice(0, 8)} ` +
+          `container=${activeContainer.offsetWidth}x${activeContainer.offsetHeight}px ` +
+          `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
+          `sending=${cols}x${rows}`
+      );
+    };
+
+    sendMeasuredViewportHint();
+    const { observer, disconnect } =
+      createAnimationFrameResizeObserver(sendMeasuredViewportHint);
+    observer.observe(container);
+
+    return () => {
+      disconnect();
+      terminalRegistry.releaseViewportMeasurement();
+    };
+  }, [
+    workflowId,
+    sessions.length,
+    terminalFontSize,
+    terminalLineHeight,
   ]);
 
   const handleCloseSession = useCallback(
@@ -291,6 +362,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
           <div className="h-full flex flex-col bg-terminal-bg">
             {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
             <div
+              ref={terminalCanvasRef}
               className="flex-1 min-h-0 relative"
               onContextMenu={(e) => {
                 e.preventDefault();

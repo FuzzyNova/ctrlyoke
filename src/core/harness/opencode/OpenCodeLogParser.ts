@@ -44,6 +44,7 @@ async function runOpenCodeExport(sessionId: string): Promise<string> {
     encoding: "utf8",
     timeout: 10_000,
     windowsHide: true,
+    windowsVerbatimArguments: command.requiresShellVerbatimArgs,
   });
   return stdout;
 }

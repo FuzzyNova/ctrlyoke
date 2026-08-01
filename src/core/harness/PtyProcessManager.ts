@@ -245,7 +245,16 @@ export interface SpawnPtyOptions {
    */
   sessionId?: string;
   command: string;
-  args: string[];
+  /**
+   * Argv entries, or — when the launcher required a cmd.exe-escaped verbatim
+   * payload (`CliResolvedCommand.requiresShellVerbatimArgs`) — a single
+   * pre-escaped command-line string. node-pty's `spawn()` treats a string
+   * `args` as an already-formed command line and appends it after `command`
+   * without further quoting (see node-pty's `argsToCommandLine`), which is
+   * exactly what a verbatim payload needs; passing it as an array would
+   * re-quote (and thus corrupt) the already-escaped text.
+   */
+  args: string[] | string;
   cwd: string;
   env?: NodeJS.ProcessEnv;
   /** Called for every chunk of PTY output */

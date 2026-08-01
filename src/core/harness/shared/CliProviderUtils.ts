@@ -76,6 +76,7 @@ export class CliProviderUtils {
       const { stdout } = await execFileAsync(resolved.command, resolved.args, {
         encoding: "utf8",
         timeout: timeoutMs,
+        windowsVerbatimArguments: resolved.requiresShellVerbatimArgs,
       });
       return typeof stdout === "string" ? stdout.trim() : String(stdout).trim();
     };

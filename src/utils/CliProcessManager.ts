@@ -10,6 +10,13 @@ export interface SpawnOptions {
   onStdout?: (chunk: string) => void;
   shell?: boolean | string;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Set when `args` is already a cmd.exe-escaped verbatim payload (see
+   * `CliResolvedCommand.requiresShellVerbatimArgs` /
+   * `WindowsCmdEscaping.buildCmdExeVerbatimArgs`) so Node does not apply a
+   * second layer of Win32 argv quoting on top of it.
+   */
+  windowsVerbatimArguments?: boolean;
 }
 
 /**
@@ -75,6 +82,7 @@ export class CliProcessManager {
         // hidden. This method is the headless transport; interactive launches
         // use spawnInteractive() below and retain their terminal behavior.
         windowsHide: true,
+        windowsVerbatimArguments: options.windowsVerbatimArguments,
       });
 
       this.currentProcess = child;
@@ -195,12 +203,16 @@ export class CliProcessManager {
    * @param command Executable path or command name
    * @param args Raw argv entries passed to the executable
    * @param workingDirectory Working directory for the child process
+   * @param env Environment overrides for the child process
+   * @param windowsVerbatimArguments Set when `args` is already a cmd.exe-escaped
+   *   verbatim payload (see `SpawnOptions.windowsVerbatimArguments`)
    */
   async spawnInteractive(
     command: string,
     args: string[],
     workingDirectory: string,
-    env?: NodeJS.ProcessEnv
+    env?: NodeJS.ProcessEnv,
+    windowsVerbatimArguments?: boolean
   ): Promise<void> {
     return new Promise<void>((resolve) => {
       this.logger?.(`📤 Spawning interactive: ${command} ${args.join(" ")}`);
@@ -209,6 +221,7 @@ export class CliProcessManager {
         cwd: workingDirectory,
         stdio: "inherit",
         shell: false,
+        windowsVerbatimArguments,
         ...(env ? { env } : {}),
       });
 

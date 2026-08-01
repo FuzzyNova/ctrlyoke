@@ -133,7 +133,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           command.command,
           command.args,
           workingDir,
-          interactiveEnv
+          interactiveEnv,
+          command.requiresShellVerbatimArgs
         )
         .finally(() => {
           processExited = true;
@@ -257,7 +258,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           harnessId,
           sessionId: preSessionId,
           command: command.command,
-          args: command.args,
+          // A verbatim payload must reach node-pty as a single pre-escaped
+          // string, not an array — see SpawnPtyOptions.args.
+          args: command.requiresShellVerbatimArgs
+            ? command.args.join(" ")
+            : command.args,
           cwd,
           env: mergedEnv,
           onData: (ptySession, chunk) => {
@@ -396,6 +401,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       const result = await this.spawnProcess(command.command, command.args, {
         timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
         env,
+        windowsVerbatimArguments: command.requiresShellVerbatimArgs,
         onStdout: shouldStream
           ? (chunk) => {
               if (ConfigurationUtils.shouldLogRawCliOutput()) {
@@ -565,6 +571,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       timeout?: number;
       env?: Record<string, string>;
       onStdout?: (chunk: string) => void;
+      windowsVerbatimArguments?: boolean;
     } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const headlessEnvOverrides = this.deps.provider.getHeadlessSpawnEnv?.();
@@ -582,6 +589,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           timeout: options.timeout,
           onStdout: options.onStdout,
           shell: false,
+          windowsVerbatimArguments: options.windowsVerbatimArguments,
           env,
         })
     );

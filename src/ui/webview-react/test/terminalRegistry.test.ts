@@ -192,3 +192,40 @@ describe("terminalRegistry orphan output buffer", () => {
     expect((entry.term as unknown as { writes: string[] }).writes).toEqual([]);
   });
 });
+
+describe("terminalRegistry viewport measurement", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    terminalConstructCount = 0;
+    document.body.innerHTML = "";
+  });
+
+  it("measures an empty terminal container with the hidden probe terminal", async () => {
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const container = document.createElement("div");
+    Object.defineProperty(container, "offsetWidth", {
+      configurable: true,
+      get: () => 640,
+    });
+    Object.defineProperty(container, "offsetHeight", {
+      configurable: true,
+      get: () => 360,
+    });
+    document.body.appendChild(container);
+
+    const fitResult = terminalRegistry.measureViewportContainer(container);
+
+    expect(fitResult).toMatchObject({
+      cols: 80,
+      rows: 24,
+      proposedCols: 80,
+      proposedRows: 24,
+      mode: "controller",
+    });
+    expect(container.children).toHaveLength(1);
+
+    terminalRegistry.releaseViewportMeasurement();
+    expect(container.children).toHaveLength(0);
+  });
+});
