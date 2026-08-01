@@ -51,10 +51,9 @@ export {
 } from "./McpServerForm";
 export {
   PERMISSION_MODE_OPTIONS,
-  getPermissionHarnessSupport,
   buildPermissionsDefaultLabel,
-  type PermissionHarnessSupport,
 } from "./permissionUtils";
+export { FieldDiagnostic, CompatibilitySummary } from "./FieldDiagnostic";
 export { type TabIconOverride } from "./tabBadgeUtils";
 export {
   ScriptConditionEditor,

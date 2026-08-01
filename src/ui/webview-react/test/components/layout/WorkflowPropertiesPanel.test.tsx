@@ -7,6 +7,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
   EXECUTION_MODES,
+  HARNESS_IDS,
   PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -46,6 +47,45 @@ describe("WorkflowPropertiesPanel permissions", () => {
     expect(
       screen.getByText("Dangerously Allow All (yolo)")
     ).toBeInTheDocument();
+  });
+
+  it("keeps authored tool lists editable for a mode-only harness", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.CODEX_CLI);
+    useSettingsStore.getState().updateWorkflowProperty("toolPermissions", {
+      mode: PERMISSION_MODES.CUSTOM,
+      allowedTools: ["shell(git:*)"],
+      deniedTools: ["shell(rm:*)"],
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+
+    expect(screen.getByLabelText("Allowed Tools")).not.toBeDisabled();
+    expect(screen.getByLabelText("Denied Tools")).not.toBeDisabled();
+  });
+
+  it("preserves authored lists when the workflow harness changes", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.CODEX_CLI);
+    useSettingsStore.getState().updateWorkflowProperty("toolPermissions", {
+      mode: PERMISSION_MODES.CUSTOM,
+      allowedTools: ["shell(git:*)"],
+      deniedTools: ["shell(rm:*)"],
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+    expect(screen.getByLabelText("Allowed Tools")).toHaveValue("shell(git:*)");
+
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.ANTIGRAVITY_CLI);
+
+    expect(screen.getByLabelText("Allowed Tools")).toHaveValue("shell(git:*)");
+    expect(screen.getByLabelText("Denied Tools")).toHaveValue("shell(rm:*)");
   });
 });
 

@@ -61,6 +61,8 @@ interface CustomSelectProps extends HideableProps {
   inline?: boolean;
   /** Soft validation message for a value unavailable in the current workspace. */
   warning?: string;
+  /** Id of the message that explains the warning to assistive technology. */
+  warningId?: string;
 }
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -94,6 +96,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   dropdownMaxHeight = "60vh",
   inline = false,
   warning,
+  warningId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -291,6 +294,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
+        aria-describedby={warning ? warningId : undefined}
         title={triggerTitle}
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
@@ -301,8 +305,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       </button>
       {warning && (
         <span
-          className={`text-xxs mt-0.5 block ${dropdownWarningClass(warning)}`}
+          id={warningId}
+          className={`text-xxs mt-0.5 flex items-start gap-1 ${dropdownWarningClass(warning)}`}
         >
+          <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
           {warning}
         </span>
       )}

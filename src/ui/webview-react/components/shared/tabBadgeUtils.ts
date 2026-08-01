@@ -23,8 +23,18 @@ export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
  * permission mode. None returns undefined (use default styling).
  */
 export function getPermissionTabOverride(
-  mode: string
+  mode: string,
+  hasCompatibilityWarning = false
 ): TabIconOverride | undefined {
+  if (hasCompatibilityWarning) {
+    return {
+      codicon: "warning",
+      color: "text-warning-fg",
+      hoverColor: "hover:text-terminal-ansiBrightYellow",
+      activeColor: "text-terminal-ansiBrightYellow",
+    };
+  }
+
   switch (mode) {
     case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
       return {

@@ -3,7 +3,9 @@ import { isStandalone } from "@hooks/useVsCodeApi";
 import { useCompatibilityStore } from "@store/compatibilityStore";
 import { useSettingsStore, type WorkflowProperties } from "@store/settingsStore";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
+import type { PropertyValues, EditorSelectionTarget } from "@store/editorStore";
 import {
+  FINAL_STEP_PHASES,
   STEP_TYPES,
   type HarnessId,
 } from "@root/types/DashboardConstants";
@@ -19,11 +21,20 @@ import type {
   WorkflowStep as CoreWorkflowStep,
 } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
+import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
 
 export interface UseCompatibilityDiagnosticsResult {
   diagnostics: CompatibilityDiagnostic[];
+  executionTargets: CompatibilityExecutionTarget[];
+  capabilitySnapshot: ReturnType<typeof useCompatibilityStore.getState>["capabilitySnapshot"];
   isChecking: boolean;
   snapshotStatus: "checking" | "ready";
+}
+
+export interface UseCompatibilityDiagnosticsOptions {
+  /** Unsaved prompt properties to evaluate for the selected target. */
+  promptProperties?: PropertyValues;
+  promptTarget?: EditorSelectionTarget;
 }
 
 function toCorePromptStep(step: Exclude<WorkflowStep, CoreScriptStep>): CorePromptStep {
@@ -54,6 +65,31 @@ function toCoreStep(step: WorkflowStep): CoreWorkflowStep {
   return step.type === STEP_TYPES.SCRIPT
     ? (step as CoreScriptStep)
     : toCorePromptStep(step);
+}
+
+function applyPromptProperties(
+  step: WorkflowStep,
+  properties: PropertyValues
+): CorePromptStep {
+  const coreStep = toCorePromptStep(step as Exclude<WorkflowStep, CoreScriptStep>);
+  return {
+    ...coreStep,
+    harness: properties.harness as HarnessId | undefined,
+    model: properties.model,
+    executionMode: properties.executionMode,
+    agent: properties.agent,
+    skills: properties.skills,
+    resumeSession: properties.resumeSession,
+    sessionId: properties.sessionId || undefined,
+    mcpServers: properties.mcpServers as CorePromptStep["mcpServers"],
+    hooks: properties.hooks as CorePromptStep["hooks"],
+    errorBehavior: properties.errorBehavior as CorePromptStep["errorBehavior"],
+    endCondition: properties.endCondition as CorePromptStep["endCondition"],
+    preCondition: properties.preCondition,
+    priorContext: properties.priorContext,
+    additionalArgs: properties.additionalArgs,
+    toolPermissions: properties.toolPermissions,
+  };
 }
 
 function toCoreWorkflow(
@@ -108,13 +144,17 @@ function createDefaults(
  * The backend snapshot is the only capability input; no harness implementation
  * or version probe is reachable from this hook.
  */
-export function useCompatibilityDiagnostics(): UseCompatibilityDiagnosticsResult {
+export function useCompatibilityDiagnostics(
+  options: UseCompatibilityDiagnosticsOptions = {}
+): UseCompatibilityDiagnosticsResult {
   const steps = useWorkflowStore((state) => state.steps);
   const finalStep = useWorkflowStore((state) => state.finalStep);
   const globalSettings = useSettingsStore((state) => state.globalSettings);
   const workflowProperties = useSettingsStore(
     (state) => state.workflowProperties
   );
+  const promptProperties = options.promptProperties;
+  const promptTarget = options.promptTarget;
   const capabilitySnapshot = useCompatibilityStore(
     (state) => state.capabilitySnapshot
   );
@@ -122,12 +162,36 @@ export function useCompatibilityDiagnostics(): UseCompatibilityDiagnosticsResult
     (state) => state.capabilitySnapshotStatus
   );
 
-  const diagnostics = useMemo(() => {
+  const analysis = useMemo(() => {
     if (snapshotStatus !== "ready" || !capabilitySnapshot) {
-      return [];
+      return { diagnostics: [], executionTargets: [] };
     }
 
-    const workflow = toCoreWorkflow(steps, finalStep, workflowProperties);
+    let workflow = toCoreWorkflow(steps, finalStep, workflowProperties);
+    if (promptProperties && promptTarget) {
+      if (
+        promptTarget.kind === FINAL_STEP_PHASES.QUEUE &&
+        steps[promptTarget.index]
+      ) {
+        workflow = {
+          ...workflow,
+          steps: (workflow.steps ?? []).map((step, index) =>
+            index === promptTarget.index && step.type !== STEP_TYPES.SCRIPT
+              ? applyPromptProperties(steps[index], promptProperties)
+              : step
+          ),
+        };
+      } else if (
+        promptTarget.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+        finalStep &&
+        finalStep.type !== STEP_TYPES.SCRIPT
+      ) {
+        workflow = {
+          ...workflow,
+          finalStep: applyPromptProperties(finalStep, promptProperties),
+        };
+      }
+    }
     const context = {
       defaults: createDefaults(globalSettings),
       hostCanProvidePty: !isStandalone,
@@ -138,12 +202,15 @@ export function useCompatibilityDiagnostics(): UseCompatibilityDiagnosticsResult
         resolveExecutionProperties(prompt, resolvedWorkflow, context)
     );
 
-    return analyzeCompatibility({
+    return {
+      diagnostics: analyzeCompatibility({
       workflow,
       executionTargets,
       capabilities: capabilitySnapshot,
       workspace: { workspaceRoot: globalSettings.workspaceRoot },
-    });
+      }),
+      executionTargets,
+    };
   }, [
     capabilitySnapshot,
     finalStep,
@@ -151,11 +218,15 @@ export function useCompatibilityDiagnostics(): UseCompatibilityDiagnosticsResult
     isStandalone,
     snapshotStatus,
     steps,
+    promptProperties,
+    promptTarget,
     workflowProperties,
   ]);
 
   return {
-    diagnostics,
+    diagnostics: analysis.diagnostics,
+    executionTargets: analysis.executionTargets,
+    capabilitySnapshot,
     isChecking: snapshotStatus === "checking",
     snapshotStatus,
   };

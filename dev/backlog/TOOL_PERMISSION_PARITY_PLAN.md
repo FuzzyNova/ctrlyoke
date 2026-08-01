@@ -1,10 +1,11 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Provider work and Compatibility Phase 1B(i) landed. Each harness
-> now owns its permission capability descriptor, and the backend registry
-> assembles the six declarations with version-aware verification. Remaining
-> scope is the analyzer/client snapshot and honest-UI stage (Compatibility
-> Phases 1B(ii)–1C) plus the Antigravity/Codex parity follow-up.
+> **Status:** Provider work, Compatibility Phases 1A–1B, and Compatibility
+> Phase 1C(i) honest permission UI in the workflow and prompt editors have
+> landed. The shared analyzer now drives persistent mixed-harness diagnostics;
+> authored tool lists remain editable under mode-only harnesses. Remaining
+> scope is the defaults/advanced authoring surfaces and the Antigravity/Codex
+> parity follow-up.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -29,12 +30,12 @@
   (`OpenCodeCliProvider.ts:434,444`); no workspace `opencode.json` is written.
 - `src/test/harness/inline-config.harness.test.ts` exists and is excluded from
   the ordinary gate.
-- `getPermissionHarnessSupport()` has already dropped OpenCode and now returns
-  `mode-only` for Codex and Antigravity only.
+- The old per-harness permission UI switch has been removed; compatibility is
+  now resolved per execution target by the shared analyzer.
 
-What has **not** landed: the analyzer, the client snapshot message, the
-`prepare()` interface change (`IToolPermissionMapper` still exposes
-`buildArgs()`), and the honest-UI stage below.
+What has **not** landed: the `prepare()` interface change
+(`IToolPermissionMapper` still exposes `buildArgs()`), and the remaining
+defaults/advanced honest-UI surfaces below.
 
 This plan is implemented in full before 0.1.0 ships, not split into a pre-launch
 honesty slice and a post-launch parity slice. The staging below is therefore an

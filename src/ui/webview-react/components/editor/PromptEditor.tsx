@@ -4,6 +4,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
+import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -97,6 +98,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
   );
+  const handleCompatibilityReview = useCallback(
+    (page: DrawerPage, focusId: string) => {
+      setDrawerActivePage(page);
+      window.requestAnimationFrame(() => {
+        document.getElementById(focusId)?.focus();
+      });
+    },
+    []
+  );
 
   // Reset to first tab when drawer opens for a new prompt
   useEffect(() => {
@@ -108,11 +118,16 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const drawerCurrentHarness = (properties.harness ??
     workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
+  const promptCompatibility = useCompatibilityDiagnostics({
+    promptProperties: properties,
+    promptTarget: selectionTarget,
+  });
 
   const drawerTabOverrides = useDrawerTabOverrides(
     workflowProperties,
     globalSettings,
-    properties
+    properties,
+    promptCompatibility.diagnostics.length > 0
   );
 
   const vscode = getVsCodeApi();
@@ -826,6 +841,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             isOpen={propertiesDrawerOpen}
             onClose={closePropertiesDrawer}
             activePage={drawerActivePage}
+            onRequestPage={handleCompatibilityReview}
           />
         </div>
       )}

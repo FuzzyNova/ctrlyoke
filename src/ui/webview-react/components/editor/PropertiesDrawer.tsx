@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import {
   useEditorStore,
   END_CONDITION_DEFAULTS,
@@ -9,7 +10,6 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import {
-  HARNESS_IDS,
   CONDITION_ACTIONS,
   type HarnessId,
   type ToolPermissionsOverride,
@@ -20,6 +20,7 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
+  PERMISSION_CAPABILITY_KEYS,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
 import {
@@ -43,7 +44,8 @@ import {
   buildMcpDefaultLabel,
   type McpServersValue,
   PERMISSION_MODE_OPTIONS,
-  getPermissionHarnessSupport,
+  FieldDiagnostic,
+  CompatibilitySummary,
   buildPermissionsDefaultLabel,
   ErrorBehaviorEditor,
   ScriptConditionEditor,
@@ -58,6 +60,13 @@ import {
   modelWarning,
   skillsWarning,
 } from "@utils/dropdownValidation";
+import { fieldValidationBorderClass } from "@utils/fieldValidation";
+import {
+  diagnosticsForPermissionField,
+  firstCompatibilityProperty,
+  formatCompatibilitySource,
+  toFieldDiagnostic,
+} from "@utils/compatibilityDiagnostics";
 import { HooksEditor } from "./HooksEditor";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -66,6 +75,7 @@ interface PropertiesDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   activePage: DrawerPage;
+  onRequestPage?: (page: DrawerPage, focusId: string) => void;
 }
 
 /**
@@ -82,6 +92,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   isOpen,
   onClose,
   activePage,
+  onRequestPage,
 }) => {
   const {
     properties,
@@ -89,6 +100,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setEndCondition,
     clearEndCondition,
     selectedPromptIndex,
+    selectionTarget,
   } = useEditorStore();
 
   const {
@@ -259,10 +271,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.toolPermissions,
     globalSettings.toolPermissions as ToolPermissionsOverride
   );
-  const effectivePermHarness = (properties.harness ??
-    workflowProperties.harness ??
-    globalSettings.harness) as HarnessId;
-  const permHarnessSupport = getPermissionHarnessSupport(effectivePermHarness);
+  const compatibility = useCompatibilityDiagnostics({
+    promptProperties: properties,
+    promptTarget: selectionTarget,
+  });
+  const permissionDiagnostics = compatibility.diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.MODE ||
+      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
+      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+  );
+  const allowedDiagnostics = diagnosticsForPermissionField(
+    permissionDiagnostics,
+    "allowedTools"
+  );
+  const deniedDiagnostics = diagnosticsForPermissionField(
+    permissionDiagnostics,
+    "deniedTools"
+  );
+  const modeDiagnostics = diagnosticsForPermissionField(
+    permissionDiagnostics,
+    "mode"
+  );
+  const reviewCompatibility = () => {
+    const focusId = firstCompatibilityProperty(permissionDiagnostics, "prop");
+    onRequestPage?.(DRAWER_PAGES.PERMISSIONS, focusId);
+  };
   // Resolved permission mode (prompt → workflow fallback) used for tab icon styling
   const resolvedPermMode =
     properties.toolPermissions === undefined
@@ -482,6 +516,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onUnhideOption={(v) =>
                     unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                   }
+                />
+                <CompatibilitySummary
+                  diagnostics={permissionDiagnostics}
+                  onReview={reviewCompatibility}
                 />
               </div>
 
@@ -986,6 +1024,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     { value: "default", label: defaultPermissionsLabel },
                     ...PERMISSION_MODE_OPTIONS,
                   ]}
+                  warning={modeDiagnostics[0]?.message}
+                  warningId="prop-permission-mode-diagnostic"
                 />
               </div>
 
@@ -995,28 +1035,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 const isInheriting = properties.toolPermissions === undefined;
                 const allowedDisabled =
                   isInheriting ||
-                  permHarnessSupport === "mode-only" ||
                   effectivePermMode !== PERMISSION_MODES.CUSTOM;
                 const deniedDisabled =
                   isInheriting ||
-                  permHarnessSupport === "mode-only" ||
                   effectivePermMode ===
                     PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                   effectivePermMode === PERMISSION_MODES.NONE;
 
                 return (
                   <div className="flex-1 flex flex-col min-h-0 mt-2">
-                    {/* Mode-only harness warning */}
-                    {permHarnessSupport === "mode-only" && (
-                      <p className="text-xxs text-description-fg mb-2">
-                        {effectivePermHarness === HARNESS_IDS.CODEX_CLI
-                          ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
-                          : effectivePermHarness === HARNESS_IDS.ANTIGRAVITY_CLI
-                            ? "ℹ️ Antigravity CLI uses permission modes only. Tool pattern lists are ignored."
-                            : "ℹ️ This harness uses permission modes only. Tool pattern lists are ignored."}
-                      </p>
-                    )}
-
                     <div
                       className={`flex-1 flex min-h-0 gap-2 ${isNarrow ? "flex-col" : "flex-row"}`}
                     >
@@ -1049,12 +1076,26 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                             });
                           }}
                           disabled={allowedDisabled}
+                          aria-describedby={
+                            allowedDiagnostics.length > 0
+                              ? "prop-allowed-tools-diagnostic"
+                              : undefined
+                          }
                           placeholder={"read\nglob\ngrep"}
-                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                             allowedDisabled
                               ? " opacity-50 cursor-not-allowed"
                               : ""
                           }`}
+                        />
+                        <FieldDiagnostic
+                          id="prop-allowed-tools-diagnostic"
+                          diagnostics={allowedDiagnostics.map((diagnostic) =>
+                            toFieldDiagnostic(
+                              diagnostic,
+                              formatCompatibilitySource(diagnostic.sourceTier)
+                            )
+                          )}
                         />
                       </div>
 
@@ -1087,12 +1128,26 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                             });
                           }}
                           disabled={deniedDisabled}
+                          aria-describedby={
+                            deniedDiagnostics.length > 0
+                              ? "prop-denied-tools-diagnostic"
+                              : undefined
+                          }
                           placeholder={"shell(rm:*)\nwrite"}
-                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                             deniedDisabled
                               ? " opacity-50 cursor-not-allowed"
                               : ""
                           }`}
+                        />
+                        <FieldDiagnostic
+                          id="prop-denied-tools-diagnostic"
+                          diagnostics={deniedDiagnostics.map((diagnostic) =>
+                            toFieldDiagnostic(
+                              diagnostic,
+                              formatCompatibilitySource(diagnostic.sourceTier)
+                            )
+                          )}
                         />
                       </div>
                     </div>

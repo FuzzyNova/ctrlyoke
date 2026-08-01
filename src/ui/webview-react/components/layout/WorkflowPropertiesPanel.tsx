@@ -10,11 +10,11 @@ import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
+import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
-  HARNESS_IDS,
   CONDITION_ACTIONS,
   type PriorContext,
   type HarnessId,
@@ -38,7 +38,8 @@ import {
   McpServersEditor,
   type McpServersValue,
   PERMISSION_MODE_OPTIONS,
-  getPermissionHarnessSupport,
+  FieldDiagnostic,
+  CompatibilitySummary,
   ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
@@ -52,6 +53,7 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
+  PERMISSION_CAPABILITY_KEYS,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
@@ -60,6 +62,14 @@ import {
   modelWarning,
   skillsWarning,
 } from "@utils/dropdownValidation";
+import { fieldValidationBorderClass } from "@utils/fieldValidation";
+import {
+  diagnosticsForPermissionField,
+  firstCompatibilityProperty,
+  formatCompatibilitySource,
+  toFieldDiagnostic,
+  workflowPermissionDiagnostic,
+} from "@utils/compatibilityDiagnostics";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
@@ -239,6 +249,46 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveHooks = getEffectiveHooks();
   const effectivePriorContext = getEffectivePriorContext();
   const effectiveAdditionalArgs = getEffectiveAdditionalArgs();
+
+  const compatibility = useCompatibilityDiagnostics();
+  const permissionDiagnostics = compatibility.diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.MODE ||
+      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
+      diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+  );
+  const allowedDiagnostics = diagnosticsForPermissionField(
+    compatibility.diagnostics,
+    "allowedTools"
+  );
+  const deniedDiagnostics = diagnosticsForPermissionField(
+    compatibility.diagnostics,
+    "deniedTools"
+  );
+  const modeDiagnostics = diagnosticsForPermissionField(
+    compatibility.diagnostics,
+    "mode"
+  );
+  const allowedAggregate = compatibility.capabilitySnapshot
+    ? workflowPermissionDiagnostic(
+        "allowedTools",
+        compatibility.executionTargets,
+        compatibility.capabilitySnapshot
+      )
+    : undefined;
+  const deniedAggregate = compatibility.capabilitySnapshot
+    ? workflowPermissionDiagnostic(
+        "deniedTools",
+        compatibility.executionTargets,
+        compatibility.capabilitySnapshot
+      )
+    : undefined;
+  const allowedFieldDiagnostics = allowedAggregate
+    ? [allowedAggregate]
+    : allowedDiagnostics;
+  const deniedFieldDiagnostics = deniedAggregate
+    ? [deniedAggregate]
+    : deniedDiagnostics;
 
   // Local input state for Additional Args — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.
@@ -831,7 +881,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   const tabOverrides = useDrawerTabOverrides(
     workflowProperties,
-    globalSettings
+    globalSettings,
+    undefined,
+    permissionDiagnostics.length > 0
   );
 
   const handleResetAllToDefault = useCallback(() => {
@@ -879,6 +931,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // the panel is a full-screen overlay and has its own close button.
   const isMobileMode = Boolean(onRequestClose);
 
+  const reviewCompatibility = useCallback(() => {
+    setActivePage(DRAWER_PAGES.PERMISSIONS);
+    window.requestAnimationFrame(() => {
+      const firstProperty = firstCompatibilityProperty(permissionDiagnostics);
+      document.getElementById(firstProperty)?.focus();
+    });
+  }, [permissionDiagnostics]);
+
   function handleToggle() {
     if (isMobileMode) return;
     triggerPanelAnimation();
@@ -911,9 +971,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
   const effectiveDeniedTools =
     toolPerms?.deniedTools ?? globalSettings.toolPermissions.deniedTools;
-  const harnessSupport = getPermissionHarnessSupport(
-    effectiveHarness as HarnessId
-  );
 
   return (
     <div
@@ -1006,6 +1063,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     onUnhideOption={(v) =>
                       unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                     }
+                  />
+                  <CompatibilitySummary
+                    diagnostics={permissionDiagnostics}
+                    onReview={reviewCompatibility}
                   />
                 </FormField>
 
@@ -1514,22 +1575,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       });
                     }}
                     options={PERMISSION_MODE_OPTIONS}
+                    warning={modeDiagnostics[0]?.message}
+                    warningId="settings-permission-mode-diagnostic"
                   />
                 </FormField>
 
                 {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
                 <div className="flex-1 flex flex-col gap-2 min-h-0 mt-2">
-                  {/* Mode-only harness warning */}
-                  {harnessSupport === "mode-only" && (
-                    <p className="text-xxs text-description-fg">
-                      {effectiveHarness === HARNESS_IDS.CODEX_CLI
-                        ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
-                        : effectiveHarness === HARNESS_IDS.ANTIGRAVITY_CLI
-                          ? "ℹ️ Antigravity CLI uses permission modes only. Tool pattern lists are ignored."
-                          : "ℹ️ This harness uses permission modes only. Tool pattern lists are ignored."}
-                    </p>
-                  )}
-
                   <FormField
                     label="Allowed Tools"
                     htmlFor="settings-allowed-tools"
@@ -1566,16 +1618,32 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         });
                       }}
                       disabled={
-                        harnessSupport === "mode-only" ||
                         permMode !== PERMISSION_MODES.CUSTOM
                       }
+                      aria-describedby={
+                        allowedFieldDiagnostics.length > 0
+                          ? "settings-allowed-tools-diagnostic"
+                          : undefined
+                      }
                       placeholder={"read\nglob\ngrep"}
-                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
-                        harnessSupport === "mode-only" ||
+                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                         permMode !== PERMISSION_MODES.CUSTOM
                           ? " opacity-50 cursor-not-allowed"
                           : ""
                       }`}
+                    />
+                    <FieldDiagnostic
+                      id="settings-allowed-tools-diagnostic"
+                      diagnostics={
+                        allowedAggregate
+                          ? [allowedAggregate]
+                          : allowedDiagnostics.map((diagnostic) =>
+                              toFieldDiagnostic(
+                                diagnostic,
+                                formatCompatibilitySource(diagnostic.sourceTier)
+                              )
+                            )
+                      }
                     />
                   </FormField>
 
@@ -1615,18 +1683,34 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         });
                       }}
                       disabled={
-                        harnessSupport === "mode-only" ||
                         permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                         permMode === PERMISSION_MODES.NONE
                       }
+                      aria-describedby={
+                        deniedFieldDiagnostics.length > 0
+                          ? "settings-denied-tools-diagnostic"
+                          : undefined
+                      }
                       placeholder={"shell(rm:*)\nwrite"}
-                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
-                        harnessSupport === "mode-only" ||
+                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                         permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                         permMode === PERMISSION_MODES.NONE
                           ? " opacity-50 cursor-not-allowed"
                           : ""
                       }`}
+                    />
+                    <FieldDiagnostic
+                      id="settings-denied-tools-diagnostic"
+                      diagnostics={
+                        deniedAggregate
+                          ? [deniedAggregate]
+                          : deniedDiagnostics.map((diagnostic) =>
+                              toFieldDiagnostic(
+                                diagnostic,
+                                formatCompatibilitySource(diagnostic.sourceTier)
+                              )
+                            )
+                      }
                     />
                   </FormField>
                 </div>

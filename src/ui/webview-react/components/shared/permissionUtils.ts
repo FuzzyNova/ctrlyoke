@@ -1,4 +1,3 @@
-import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 import type { ToolPermissionsOverride } from "../../types/messages";
 import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 
@@ -12,20 +11,6 @@ export const PERMISSION_MODE_OPTIONS = [
   { value: PERMISSION_MODES.CUSTOM, label: "Custom" },
   { value: PERMISSION_MODES.NONE, label: "None" },
 ];
-
-export type PermissionHarnessSupport = "full" | "mode-only";
-
-export function getPermissionHarnessSupport(
-  harnessId: HarnessId
-): PermissionHarnessSupport {
-  switch (harnessId) {
-    case HARNESS_IDS.CODEX_CLI:
-    case HARNESS_IDS.ANTIGRAVITY_CLI:
-      return "mode-only";
-    default:
-      return "full";
-  }
-}
 
 /**
  * Build the "Default (X)" label for the Permissions dropdown in PropertiesDrawer.

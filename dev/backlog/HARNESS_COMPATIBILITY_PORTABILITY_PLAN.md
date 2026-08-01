@@ -1,6 +1,6 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Phase 1A and Compatibility Phase 1B are complete. Shared
+> **Status:** Phases 1A–1B and Compatibility Phase 1C(i) are complete. Shared
 > contracts, the pure effective-property resolver, harness-owned permission
 > descriptors, and the backend capability registry have landed in
 > [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
@@ -20,6 +20,9 @@
 > message, the `useCompatibilityStore` capability-snapshot slice, and the
 > `useCompatibilityDiagnostics` render-time hook now provide the same
 > installed-version-aware facts and analyzer path to the React dashboard.
+> The workflow properties panel and prompt properties drawer now consume those
+> facts for persistent, accessible permission diagnostics, mixed-harness
+> aggregation, and warning tab indicators without disabling authored values.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >

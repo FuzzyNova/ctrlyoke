@@ -1,15 +1,18 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";
+import { PROPERTY_DEFAULTS, type PropertyValues } from "@store/editorStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
   CAPABILITY_DOMAINS,
+  FINAL_STEP_PHASES,
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
 import { analyzeCompatibility, enumerateCompatibilityTargets } from "@root/types/CompatibilityAnalyzer";
+import { workflowPermissionDiagnostic } from "@utils/compatibilityDiagnostics";
 import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolver";
 import type { HarnessCapabilityRegistrySnapshot } from "@root/types/CompatibilityTypes";
 import type { PromptFile } from "@root/types/CtrlYokeTypes";
@@ -176,6 +179,97 @@ describe("useCompatibilityDiagnostics", () => {
     expect(result.current.diagnostics.map(projectDiagnostic)).toEqual(
       backendDiagnostics.map(projectDiagnostic)
     );
+  });
+
+  it("aggregates mixed harness coverage and re-evaluates only inherited targets", () => {
+    const snapshot = makeSnapshot();
+    const unsupported = {
+      fidelity: "unsupported" as const,
+      mechanism: "none" as const,
+      verification: "verified" as const,
+    };
+    snapshot.harnesses[HARNESS_IDS.ANTIGRAVITY_CLI].effective!.permissions = {
+      mode: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
+      allowedTools: unsupported,
+      deniedTools: unsupported,
+    };
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+    });
+    useSettingsStore.getState().setWorkflowProperties({
+      harness: HARNESS_IDS.CODEX_CLI,
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(git:*)"],
+        deniedTools: ["shell(rm:*)"],
+      },
+    });
+    useWorkflowStore.setState({
+      steps: [
+        { prompt: "Claude override", harness: HARNESS_IDS.CLAUDE_CLI },
+        { prompt: "Inherited Codex" },
+      ],
+    });
+    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+
+    const { result } = renderHook(() => useCompatibilityDiagnostics());
+    const aggregate = workflowPermissionDiagnostic(
+      "allowedTools",
+      result.current.executionTargets,
+      snapshot
+    );
+
+    expect(aggregate?.message).toContain("Enforced for 1 Claude Code step");
+    expect(aggregate?.message).toContain("Ignored by 1 Codex step");
+    expect(result.current.diagnostics.every((item) => item.harnessId === HARNESS_IDS.CODEX_CLI)).toBe(true);
+
+    act(() => {
+      useSettingsStore
+        .getState()
+        .updateWorkflowProperty("harness", HARNESS_IDS.ANTIGRAVITY_CLI);
+    });
+
+    expect(result.current.diagnostics.every((item) => item.harnessId === HARNESS_IDS.ANTIGRAVITY_CLI)).toBe(true);
+    expect(result.current.diagnostics).toHaveLength(2);
+  });
+
+  it("updates unsaved prompt diagnostics without saving or reloading", () => {
+    const snapshot = makeSnapshot();
+    useSettingsStore.getState().setWorkflowProperties({
+      harness: HARNESS_IDS.CODEX_CLI,
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(git:*)"],
+        deniedTools: ["shell(rm:*)"],
+      },
+    });
+    useWorkflowStore.setState({ steps: [{ prompt: "Use tools" }] });
+    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+
+    let promptProperties: PropertyValues = {
+      ...PROPERTY_DEFAULTS,
+      toolPermissions: undefined,
+    };
+    const { result, rerender } = renderHook(() =>
+      useCompatibilityDiagnostics({
+        promptProperties,
+        promptTarget: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      })
+    );
+    expect(result.current.diagnostics).toHaveLength(2);
+
+    promptProperties = {
+      ...promptProperties,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+    };
+    rerender();
+
+    expect(result.current.diagnostics).toEqual([]);
   });
 });
 

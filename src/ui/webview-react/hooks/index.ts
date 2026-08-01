@@ -11,6 +11,7 @@ export {
 export {
   useCompatibilityDiagnostics,
   type UseCompatibilityDiagnosticsResult,
+  type UseCompatibilityDiagnosticsOptions,
 } from "./useCompatibilityDiagnostics";
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
 export { useElementNarrow } from "./useElementNarrow";
