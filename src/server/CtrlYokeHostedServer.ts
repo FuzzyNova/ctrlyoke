@@ -268,6 +268,25 @@ export class CtrlYokeHostedServer
     this.broadcast(
       createHostedHarnessStatusUpdate(harnessId, available, installHint)
     );
+    void this.publishHarnessCapabilitySnapshot(harnessId);
+  }
+
+  /** Broadcast the same registry snapshot used by the VS Code panel. */
+  private async publishHarnessCapabilitySnapshot(
+    harnessId?: HarnessId
+  ): Promise<void> {
+    try {
+      const registry = this.getOrchestrator().getCompatibilityRegistry();
+      if (harnessId) {
+        await registry.refresh(harnessId);
+      }
+      this.broadcast({
+        type: MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT,
+        data: { snapshot: await registry.getSnapshot() },
+      });
+    } catch (error) {
+      Log.warn("Failed to publish hosted harness capability snapshot:", error);
+    }
   }
 
   // ── IDashboardSink — delegate to PostMessageDashboardSink ────────────────

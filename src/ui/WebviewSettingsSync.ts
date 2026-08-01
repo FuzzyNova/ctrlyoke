@@ -220,6 +220,7 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
+    await this.sendHarnessCapabilitySnapshot(postMessage);
   }
 
   /**
@@ -270,6 +271,33 @@ export class WebviewSettingsSync {
     this.writeCapabilities(this.buildModelOptions()).catch((err) =>
       Log.warn("Failed to write capabilities.json:", err)
     );
+  }
+
+  /** Publish the shared registry snapshot after a client handshake or status refresh. */
+  async sendHarnessCapabilitySnapshot(
+    postMessage: PostMessageFn = this.postMessage,
+    refreshHarnessId?: HarnessId
+  ): Promise<void> {
+    const registry = this.getOrchestrator()?.getCompatibilityRegistry();
+    if (!registry) {
+      return;
+    }
+
+    try {
+      if (refreshHarnessId) {
+        await registry.refresh(refreshHarnessId);
+      }
+      const snapshot = await registry.getSnapshot();
+      this.emitMessage(
+        {
+          type: MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT,
+          data: { snapshot },
+        },
+        postMessage
+      );
+    } catch (error) {
+      Log.warn("Failed to publish harness capability snapshot:", error);
+    }
   }
 
   /**
@@ -424,6 +452,7 @@ export class WebviewSettingsSync {
       installHint,
     };
     this.sendHarnessStatusUpdate();
+    void this.sendHarnessCapabilitySnapshot(this.postMessage, harnessId);
   }
 
   // ============================================================================

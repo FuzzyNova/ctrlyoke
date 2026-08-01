@@ -98,6 +98,7 @@ export const MESSAGE_TYPES = {
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
+  HARNESS_CAPABILITY_SNAPSHOT: "harnessCapabilitySnapshot", // Installed-version-aware harness facts
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
   SKILLS_UPDATE: "skillsUpdate", // Update available skills list
   GLOBAL_SETTINGS_UPDATED: "globalSettingsUpdated", // Extension -> Webview: Config changed, update settings only (no workflow reset)

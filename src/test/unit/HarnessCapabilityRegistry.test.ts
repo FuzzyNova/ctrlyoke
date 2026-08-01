@@ -212,4 +212,19 @@ suite("HarnessCapabilityRegistry", () => {
     const snapshot = await registry.getSnapshot();
     assert.deepStrictEqual(snapshot.enabledDomains, [CAPABILITY_DOMAINS.PERMISSIONS]);
   });
+
+  test("round-trips the schema-versioned snapshot with independent dimensions", async () => {
+    const registry = makeRegistry({ [HARNESS_IDS.QWEN_CLI]: "0.20.1" });
+    const serialized = await registry.serializeSnapshot();
+    const snapshot = HarnessCapabilityRegistry.deserializeSnapshot(serialized);
+    const qwen = snapshot.harnesses[HARNESS_IDS.QWEN_CLI];
+
+    assert.strictEqual(snapshot.schemaVersion, 1);
+    assert.strictEqual(qwen.descriptor.permissions?.mode.fidelity, "exact");
+    assert.strictEqual(qwen.descriptor.permissions?.mode.mechanism, "translated-cli");
+    assert.strictEqual(
+      qwen.effective?.permissions.mode.verification,
+      "verified"
+    );
+  });
 });

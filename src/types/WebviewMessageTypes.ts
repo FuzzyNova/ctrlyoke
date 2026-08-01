@@ -75,6 +75,7 @@ import type {
   RunSummary,
 } from "./WorkflowTimelineTypes";
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
+import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -736,6 +737,14 @@ export interface HarnessStatusUpdateMessage {
         installHint?: string;
       }
     >;
+  };
+}
+
+/** Installed-version-aware harness capability facts (extension -> webview). */
+export interface HarnessCapabilitySnapshotMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT;
+  data: {
+    snapshot: HarnessCapabilityRegistrySnapshot;
   };
 }
 
@@ -1823,6 +1832,7 @@ export type IncomingMessage =
   | PromptDeletedMessage
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage
+  | HarnessCapabilitySnapshotMessage
   | AgentsUpdateMessage
   | SkillsUpdateMessage
   | WorkflowPropertiesUpdateMessage

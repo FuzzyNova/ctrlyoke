@@ -53,6 +53,7 @@ import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { useMcpManagerStore } from "../store/useMcpManagerStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
+import { useCompatibilityStore } from "../store/compatibilityStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -1476,6 +1477,13 @@ export function createMessageHandlers(
     const data = message.data || message;
     if (data.harnessStatus) {
       settingsStore.setAllHarnessStatuses(data.harnessStatus);
+    }
+  };
+
+  handlers[MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT] = (message) => {
+    const snapshot = message.data?.snapshot;
+    if (snapshot) {
+      useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
     }
   };
 

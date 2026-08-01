@@ -8,6 +8,10 @@ export {
   sendMessage,
   type UseMessageHandlerReturn,
 } from "./useMessageHandler";
+export {
+  useCompatibilityDiagnostics,
+  type UseCompatibilityDiagnosticsResult,
+} from "./useCompatibilityDiagnostics";
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
 export { useElementNarrow } from "./useElementNarrow";
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";

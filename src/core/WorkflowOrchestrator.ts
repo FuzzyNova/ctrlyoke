@@ -476,6 +476,11 @@ export class WorkflowOrchestrator {
     return this.dashboardBroadcastHub;
   }
 
+  /** Shared installed-version-aware capability registry for dashboard consumers. */
+  public getCompatibilityRegistry(): HarnessCapabilityRegistry {
+    return this.compatibilityRegistry;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry management
   // ─────────────────────────────────────────────────────────────────────────

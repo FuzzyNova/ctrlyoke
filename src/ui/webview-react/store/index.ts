@@ -17,6 +17,7 @@ export {
   END_CONDITION_DEFAULTS,
 } from "./editorStore";
 export { useSettingsStore } from "./settingsStore";
+export { useCompatibilityStore } from "./compatibilityStore";
 export { useTerminalStore } from "./terminalStore";
 export { useWorkspaceViewerStore } from "./workspaceViewerStore";
 export {
@@ -54,3 +55,8 @@ export type {
   GlobalSettings,
   WorkflowProperties,
 } from "./settingsStore";
+export type {
+  CapabilitySnapshotStatus,
+  CompatibilityState,
+  CompatibilityActions,
+} from "./compatibilityStore";

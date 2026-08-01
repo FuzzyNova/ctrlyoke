@@ -98,6 +98,45 @@ suite("WebviewSettingsSync", () => {
         installHint: "Install via: npm install -g @openai/codex-cli",
       });
     });
+
+    test("publishes the shared capability snapshot after refreshing a harness", async () => {
+      const messages: any[] = [];
+      const snapshot = {
+        schemaVersion: 1,
+        enabledDomains: ["permissions"],
+        harnesses: {},
+      };
+      let refreshed: string | undefined;
+      const sync = new WebviewSettingsSync(
+        (message) => messages.push(message),
+        () =>
+          ({
+            getCompatibilityRegistry: () => ({
+              refresh: async (harnessId: string) => {
+                refreshed = harnessId;
+              },
+              getSnapshot: async () => snapshot,
+            }),
+          }) as any
+      );
+
+      await sync.sendHarnessCapabilitySnapshot(
+        (message) => messages.push(message),
+        HARNESS_IDS.CODEX_CLI
+      );
+
+      assert.strictEqual(refreshed, HARNESS_IDS.CODEX_CLI);
+      assert.deepStrictEqual(
+        messages.find(
+          (message) =>
+            message.type === MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT
+        ),
+        {
+          type: MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT,
+          data: { snapshot },
+        }
+      );
+    });
   });
 
   suite("handleGlobalSettingsLoadRequest", () => {
