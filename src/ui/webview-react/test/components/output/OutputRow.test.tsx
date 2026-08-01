@@ -467,6 +467,115 @@ describe("OutputRow auto-expand on hidden active match", () => {
     );
   });
 
+  it("renders every prompt reference as a chip when atomic formatting is enabled", () => {
+    const text =
+      "@src/app.ts @src/ #selection:src/app.ts:2-4 #sym:src/app.ts:run:2-4 ~staged $previous";
+    const row: OutputRenderRow = {
+      key: "row-prompt-chips",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text,
+    };
+
+    const { container } = render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        atomicContextReferences
+      />
+    );
+
+    const chips = container.querySelectorAll(
+      "[data-atomic-reference-copy-text]"
+    );
+    expect(chips).toHaveLength(6);
+    expect(chips[0]).toHaveTextContent("app.ts");
+    expect(chips[5]).toHaveTextContent("previous");
+
+    fireEvent.click(chips[0]);
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalled();
+  });
+
+  it("keeps prompt references as selectable links when atomic formatting is off", () => {
+    const row: OutputRenderRow = {
+      key: "row-prompt-links",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "Open @src/app.ts and $previous",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    expect(container.querySelectorAll('[role="link"]')).toHaveLength(2);
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("makes echoed $context clickable in both presentation modes", () => {
+    const row: OutputRenderRow = {
+      key: "row-context",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "Use $previous",
+    };
+
+    const plain = render(<OutputRow row={row} isExecutionActive={false} />);
+    expect(plain.getByRole("link")).toHaveTextContent("$previous");
+    plain.unmount();
+
+    const chips = render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        atomicContextReferences
+      />
+    );
+    expect(chips.container.querySelector("button")).toHaveTextContent(
+      "previous"
+    );
+  });
+
+  it("projects find marks onto an echoed chip while preserving its full copy text", () => {
+    const text = "Review @src/webview-react/app.ts";
+    const row: OutputRenderRow = {
+      key: "row-prompt-find",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text,
+    };
+    const start = text.indexOf("webview-react");
+
+    const { container } = render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        atomicContextReferences
+        findDecorations={{
+          matches: [
+            { start, end: start + "webview-react".length, active: true },
+          ],
+        }}
+      />
+    );
+
+    const chip = container.querySelector("button");
+    expect(chip).toHaveTextContent("webview-react");
+    expect(chip).toHaveAttribute(
+      "data-atomic-reference-copy-text",
+      "@src/webview-react/app.ts"
+    );
+    expect(chip?.querySelector("mark")).toHaveTextContent("webview-react");
+    expect(chip?.querySelector("mark")).toHaveAttribute(
+      "data-find-active",
+      "true"
+    );
+  });
+
   it("does not linkify prompt references inside fenced code blocks", () => {
     const row: OutputRenderRow = {
       key: "row-prompt-fenced",

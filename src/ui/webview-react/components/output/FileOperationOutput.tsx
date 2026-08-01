@@ -13,6 +13,12 @@ import { useUiStore } from "@store/uiStore";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
+import { AtomicReferenceChip } from "./AtomicReferenceChip";
+import {
+  createAtomicReferencePresentation,
+  createFileReferenceChip,
+} from "@utils/atomicReferences";
+import type { RowFindDecoration } from "@utils/outputFind";
 
 // ============================================================================
 // Shared primitives
@@ -52,6 +58,8 @@ interface FileOperationBlockProps {
   actionLabel: string;
   path: string;
   pathContent?: React.ReactNode;
+  atomicContextReferences?: boolean;
+  filePathFindMatches?: RowFindDecoration["matches"];
   trailingAction?: React.ReactNode;
   /** Failure detail. Rendered in the body so it hangs under the ●, not inline. */
   error?: string;
@@ -67,35 +75,56 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
   actionLabel,
   path,
   pathContent,
+  atomicContextReferences = false,
+  filePathFindMatches = [],
   trailingAction,
   error,
   children,
   fullBleed,
   className,
-}) => (
-  <ToolCallBlock
-    className={className}
-    fullBleed={fullBleed}
-    dot={<ToolDot status={dotStatus} />}
-    header={
-      <>
-        <span className="shrink-0 leading-relaxed">{actionLabel}</span>
-        <span className="min-w-0 flex-1 leading-relaxed">
-          <FilePath
-            path={path}
-            className="inline-block whitespace-normal [overflow-wrap:anywhere] text-left align-top"
-          >
-            {pathContent}
-          </FilePath>
-        </span>
-        {trailingAction}
-      </>
-    }
-  >
-    {error ? <div className="text-indicator-error">— {error}</div> : null}
-    {children}
-  </ToolCallBlock>
-);
+}) => {
+  const descriptor = atomicContextReferences
+    ? createFileReferenceChip(path)
+    : undefined;
+
+  return (
+    <ToolCallBlock
+      className={className}
+      fullBleed={fullBleed}
+      dot={<ToolDot status={dotStatus} />}
+      header={
+        <>
+          <span className="shrink-0 leading-relaxed">{actionLabel}</span>
+          <span className="min-w-0 flex-1 leading-relaxed">
+            {descriptor ? (
+              <AtomicReferenceChip
+                descriptor={descriptor}
+                presentation={createAtomicReferencePresentation(
+                  descriptor,
+                  path
+                )}
+                findMatches={filePathFindMatches}
+                onOpen={() => openFile(path)}
+                className="text-left align-top"
+              />
+            ) : (
+              <FilePath
+                path={path}
+                className="inline-block whitespace-normal [overflow-wrap:anywhere] text-left align-top"
+              >
+                {pathContent}
+              </FilePath>
+            )}
+          </span>
+          {trailingAction}
+        </>
+      }
+    >
+      {error ? <div className="text-indicator-error">— {error}</div> : null}
+      {children}
+    </ToolCallBlock>
+  );
+};
 
 function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
   if (status === OPERATION_STATUS.COMPLETED) return "success";
@@ -116,6 +145,8 @@ function boolDotStatus(success?: boolean): DotStatus {
 interface FileEditOutputProps {
   path: string;
   pathContent?: React.ReactNode;
+  atomicContextReferences?: boolean;
+  filePathFindMatches?: RowFindDecoration["matches"];
   status?: FileOperationStatus;
   oldContent?: string;
   newContent?: string;
@@ -156,6 +187,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
   ({
     path,
     pathContent,
+    atomicContextReferences,
+    filePathFindMatches,
     status,
     oldContent,
     newContent,
@@ -216,6 +249,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
         actionLabel={getActionLabel()}
         path={path}
         pathContent={pathContent}
+        atomicContextReferences={atomicContextReferences}
+        filePathFindMatches={filePathFindMatches}
         error={status === OPERATION_STATUS.FAILED ? error : undefined}
         // The diff spans the gutter as well so it keeps the full block width;
         // the rail therefore stops just above its "Show diff" toggle.
@@ -253,6 +288,8 @@ FileEditOutput.displayName = "FileEditOutput";
 interface FileWriteOutputProps {
   path: string;
   pathContent?: React.ReactNode;
+  atomicContextReferences?: boolean;
+  filePathFindMatches?: RowFindDecoration["matches"];
   status?: FileOperationStatus;
   content?: string;
   error?: string;
@@ -264,6 +301,8 @@ interface FileWriteOutputProps {
 export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   path,
   pathContent,
+  atomicContextReferences,
+  filePathFindMatches,
   status,
   content,
   error,
@@ -287,6 +326,8 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
       actionLabel={getActionLabel()}
       path={path}
       pathContent={pathContent}
+      atomicContextReferences={atomicContextReferences}
+      filePathFindMatches={filePathFindMatches}
       error={status === OPERATION_STATUS.FAILED ? error : undefined}
       trailingAction={
         onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
@@ -315,6 +356,8 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
 interface FileReadOutputProps {
   path: string;
   pathContent?: React.ReactNode;
+  atomicContextReferences?: boolean;
+  filePathFindMatches?: RowFindDecoration["matches"];
   status?: FileOperationStatus;
   error?: string;
   className?: string;
@@ -323,6 +366,8 @@ interface FileReadOutputProps {
 export const FileReadOutput: React.FC<FileReadOutputProps> = ({
   path,
   pathContent,
+  atomicContextReferences,
+  filePathFindMatches,
   status,
   error,
   className = "",
@@ -342,6 +387,8 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
       actionLabel={getActionLabel()}
       path={path}
       pathContent={pathContent}
+      atomicContextReferences={atomicContextReferences}
+      filePathFindMatches={filePathFindMatches}
       error={status === OPERATION_STATUS.FAILED ? error : undefined}
     />
   );
@@ -354,6 +401,8 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
 interface FileDeleteOutputProps {
   path: string;
   pathContent?: React.ReactNode;
+  atomicContextReferences?: boolean;
+  filePathFindMatches?: RowFindDecoration["matches"];
   success?: boolean;
   error?: string;
   onUndoFile?: () => void;
@@ -364,6 +413,8 @@ interface FileDeleteOutputProps {
 export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   path,
   pathContent,
+  atomicContextReferences,
+  filePathFindMatches,
   success,
   error,
   onUndoFile,
@@ -379,6 +430,8 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
       actionLabel="Delete file:"
       path={path}
       pathContent={pathContent}
+      atomicContextReferences={atomicContextReferences}
+      filePathFindMatches={filePathFindMatches}
       error={success === false ? error : undefined}
       trailingAction={
         onUndoFile && success !== false ? (

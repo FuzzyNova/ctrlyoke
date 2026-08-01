@@ -95,6 +95,57 @@ describe("MarkdownText", () => {
     expect(openFile).toHaveBeenCalledWith("src/utils/foo.ts");
   });
 
+  it("renders auto-linked local paths as atomic chips when opted in", async () => {
+    render(
+      <MarkdownText atomicContextReferences>
+        See src/ui/webview-react/utils/foo.ts for details
+      </MarkdownText>
+    );
+    expect(await screen.findByRole("button", { name: /open src/i })).toHaveClass(
+      "atomic-reference-chip"
+    );
+  });
+
+  it("preserves authored labels for opted-in local Markdown links", async () => {
+    render(
+      <MarkdownText atomicContextReferences>
+        {["[the utility](src/utils/foo.ts)"].join("")}
+      </MarkdownText>
+    );
+    const chip = await screen.findByRole("button", { name: /open src\/utils\/foo\.ts/i });
+    expect(chip).toHaveTextContent("the utility");
+    expect(chip).toHaveAttribute("title", "src/utils/foo.ts");
+  });
+
+  it("expands an opted-in chip when a hidden path segment matches", async () => {
+    const markdown = "See src/ui/webview-react/utils/foo.ts";
+    const start = markdown.indexOf("src/");
+    render(
+      <MarkdownText
+        atomicContextReferences
+        findDecorations={{
+          matches: [{ start: start + 7, end: start + 20, active: true }],
+        }}
+      >
+        {markdown}
+      </MarkdownText>
+    );
+    const mark = await screen.findByText("webview-react");
+    expect(mark.tagName).toBe("MARK");
+    expect(mark).toHaveAttribute("data-find-active", "true");
+  });
+
+  it("does not chip external links or inline code", async () => {
+    const { container } = render(
+      <MarkdownText atomicContextReferences>
+        {["[external](https://example.com) `src/utils/foo.ts`"].join("")}
+      </MarkdownText>
+    );
+    expect(await screen.findByRole("link", { name: "external" })).toBeInTheDocument();
+    expect(container.querySelector("code .atomic-reference-chip")).toBeNull();
+    expect(container.querySelectorAll(".atomic-reference-chip")).toHaveLength(0);
+  });
+
   it("opens Codex /abs/path drive markdown links as local file refs", async () => {
     const user = userEvent.setup();
     const { openFile } = await import("@hooks/useMessageHandler");

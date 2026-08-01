@@ -63,11 +63,14 @@ import {
   TOOL_RESULT_STANDALONE_INDENT,
 } from "./outputStyles";
 import {
-  findContextReferenceMatches,
-  getFencedBlockRanges,
-  isInFencedBlock,
+  AtomicReferenceChip,
+} from "./AtomicReferenceChip";
+import {
+  createAtomicReferencePresentation,
+  findAtomicReferences,
+  type AtomicReferenceChip as AtomicReferenceDescriptor,
   type ContextReferenceMatch,
-} from "../editor/CodeMirrorEditor";
+} from "@utils/atomicReferences";
 import { openContextReference } from "@utils/contextReferenceActions";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
@@ -105,6 +108,7 @@ export interface OutputRowFileUndoRequest {
 
 interface StructuredEventContentProps {
   row: StructuredEventRow;
+  atomicContextReferences?: boolean;
   findDecorations?: RowFindDecoration;
   findQuery?: string;
   findCaseSensitive?: boolean;
@@ -139,6 +143,7 @@ interface OutputRowProps {
   findDecorations?: RowFindDecoration;
   findQuery?: string;
   findCaseSensitive?: boolean;
+  atomicContextReferences?: boolean;
   activeFindMatch?: OutputFindMatch | null;
   isExecutionActive: boolean;
   onBackToLive?: () => void;
@@ -203,6 +208,8 @@ const TextOutput: React.FC<{
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
+  findDecorations?: RowFindDecoration;
+  atomicContextReferences?: boolean;
 }> = ({
   text,
   raw = false,
@@ -212,6 +219,8 @@ const TextOutput: React.FC<{
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
+  findDecorations,
+  atomicContextReferences = false,
 }) => (
   <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
@@ -224,6 +233,8 @@ const TextOutput: React.FC<{
         highlightQuery={findQuery}
         highlightCaseSensitive={findCaseSensitive}
         highlightActiveIndex={highlightActiveIndex}
+        findDecorations={findDecorations}
+        atomicContextReferences={atomicContextReferences}
       >
         {text}
       </MarkdownText>
@@ -237,12 +248,16 @@ const ThinkingOutput: React.FC<{
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
+  findDecorations?: RowFindDecoration;
+  atomicContextReferences?: boolean;
 }> = ({
   text,
   label = "Thinking",
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
+  findDecorations,
+  atomicContextReferences = false,
 }) => {
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
@@ -255,6 +270,8 @@ const ThinkingOutput: React.FC<{
           highlightQuery={findQuery}
           highlightCaseSensitive={findCaseSensitive}
           highlightActiveIndex={highlightActiveIndex}
+          findDecorations={findDecorations}
+          atomicContextReferences={atomicContextReferences}
         >
           {text}
         </MarkdownText>
@@ -268,7 +285,16 @@ const UserSteerOutput: React.FC<{
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
-}> = ({ text, findQuery, findCaseSensitive, highlightActiveIndex }) => (
+  findDecorations?: RowFindDecoration;
+  atomicContextReferences?: boolean;
+}> = ({
+  text,
+  findQuery,
+  findCaseSensitive,
+  highlightActiveIndex,
+  findDecorations,
+  atomicContextReferences = false,
+}) => (
   <div className="my-2">
     <div className="text-[length:var(--fp-output-font-size-xs)] text-indicator-info mb-1">
       ● User message
@@ -278,6 +304,8 @@ const UserSteerOutput: React.FC<{
         highlightQuery={findQuery}
         highlightCaseSensitive={findCaseSensitive}
         highlightActiveIndex={highlightActiveIndex}
+        findDecorations={findDecorations}
+        atomicContextReferences={atomicContextReferences}
       >
         {text}
       </MarkdownText>
@@ -335,6 +363,7 @@ function isActiveMatchHidden(
 const StructuredEventContent = memo<StructuredEventContentProps>(
   ({
     row,
+    atomicContextReferences = false,
     findDecorations,
     findQuery,
     findCaseSensitive,
@@ -472,6 +501,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             findQuery={rawTextOutput ? undefined : findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}
+            findDecorations={{ matches: getFieldMatches("response") }}
+            atomicContextReferences={atomicContextReferences}
           />
         );
       }
@@ -485,6 +516,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}
+            findDecorations={{ matches: getFieldMatches("response") }}
+            atomicContextReferences={atomicContextReferences}
           />
         );
       }
@@ -497,6 +530,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex("response")}
+            findDecorations={{ matches: getFieldMatches("response") }}
+            atomicContextReferences={atomicContextReferences}
           />
         );
       }
@@ -549,6 +584,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileEditOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}
             oldContent={displayOldContent}
             newContent={data.newContent}
@@ -593,6 +630,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileWriteOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}
             content={data.content}
             error={data.error}
@@ -621,6 +660,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileReadOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}
             error={data.error}
           />
@@ -633,6 +674,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileDeleteOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            atomicContextReferences={atomicContextReferences}
+            filePathFindMatches={getFieldMatches("filePath")}
             success={data.success}
             error={data.error}
             onUndoFile={
@@ -1129,6 +1172,8 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
       return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
     case "symbol":
       return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
+    case "priorContext":
+      return `Open ${ref.ref ?? "context"}`;
     default:
       return `Open ${ref.path ?? ""}`;
   }
@@ -1147,16 +1192,32 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
 const PromptReferenceText: React.FC<{
   text: string;
   matches: RowFindDecoration["matches"];
-}> = ({ text, matches }) => {
+  atomicContextReferences: boolean;
+}> = ({ text, matches, atomicContextReferences }) => {
   const vscode = getVsCodeApi();
   // Skip references inside ``` fenced blocks — they aren't expanded when the
   // prompt runs, so CodeMirror doesn't decorate them either; match that here.
-  const refs = useMemo(() => {
-    const fencedRanges = getFencedBlockRanges(text);
-    return findContextReferenceMatches(text).filter(
-      (ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges)
-    );
-  }, [text]);
+  // One pass, one array: each entry pairs the chip descriptor with the
+  // ContextReferenceMatch that drives the plain-text (setting off) path, so the
+  // two presentations can never disagree about which token is at which offset.
+  const refs = useMemo(
+    () =>
+      findAtomicReferences(text).map((descriptor) => ({
+        descriptor,
+        match: {
+          from: descriptor.from,
+          to: descriptor.to,
+          type: descriptor.attrs["data-type"] as ContextReferenceMatch["type"],
+          path: descriptor.attrs["data-path"],
+          gitRef: descriptor.attrs["data-git-ref"],
+          lineStart: descriptor.attrs["data-line-start"],
+          lineEnd: descriptor.attrs["data-line-end"],
+          symbolName: descriptor.attrs["data-symbol-name"],
+          ref: descriptor.attrs["data-ref"],
+        } satisfies ContextReferenceMatch,
+      })),
+    [text]
+  );
 
   // Rebase the row-relative find matches onto a [start,end) sub-slice so find
   // highlighting still lands correctly inside both plain text and link spans.
@@ -1171,7 +1232,7 @@ const PromptReferenceText: React.FC<{
 
   const nodes: React.ReactNode[] = [];
   let cursor = 0;
-  for (const ref of refs) {
+  for (const { descriptor, match: ref } of refs) {
     // References are sorted and non-overlapping; skip any that would run
     // backwards so a stray match can't corrupt the slicing.
     if (ref.from < cursor) continue;
@@ -1185,27 +1246,39 @@ const PromptReferenceText: React.FC<{
         </React.Fragment>
       );
     }
-    nodes.push(
-      <span
-        key={`ref-${ref.from}`}
-        role="link"
-        tabIndex={0}
-        className="cursor-pointer text-link-fg hover:text-link-active-fg hover:underline"
-        title={promptReferenceTooltip(ref)}
-        onClick={() => openContextReference(ref, vscode)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            openContextReference(ref, vscode);
-          }
-        }}
-      >
-        {highlightText(
-          text.slice(ref.from, ref.to),
-          sliceMatches(ref.from, ref.to)
-        )}
-      </span>
-    );
+    if (atomicContextReferences) {
+      nodes.push(
+        <AtomicPromptReference
+          key={`ref-${ref.from}`}
+          descriptor={descriptor}
+          text={text.slice(ref.from, ref.to)}
+          matches={matches}
+          vscode={vscode}
+        />
+      );
+    } else {
+      nodes.push(
+        <span
+          key={`ref-${ref.from}`}
+          role="link"
+          tabIndex={0}
+          className="cursor-pointer text-link-fg hover:text-link-active-fg hover:underline"
+          title={promptReferenceTooltip(ref)}
+          onClick={() => openContextReference(ref, vscode)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openContextReference(ref, vscode);
+            }
+          }}
+        >
+          {highlightText(
+            text.slice(ref.from, ref.to),
+            sliceMatches(ref.from, ref.to)
+          )}
+        </span>
+      );
+    }
     cursor = ref.to;
   }
   if (cursor < text.length) {
@@ -1225,11 +1298,38 @@ const PromptReferenceText: React.FC<{
   );
 };
 
+const AtomicPromptReference: React.FC<{
+  descriptor: AtomicReferenceDescriptor;
+  text: string;
+  matches: RowFindDecoration["matches"];
+  vscode: ReturnType<typeof getVsCodeApi>;
+}> = ({ descriptor, text, matches, vscode }) => (
+  <AtomicReferenceChip
+    descriptor={descriptor}
+    presentation={createAtomicReferencePresentation(descriptor, text)}
+    findMatches={matches}
+    onOpen={() =>
+      openContextReference(
+        {
+          type: descriptor.attrs["data-type"],
+          path: descriptor.attrs["data-path"],
+          gitRef: descriptor.attrs["data-git-ref"],
+          lineStart: descriptor.attrs["data-line-start"],
+          lineEnd: descriptor.attrs["data-line-end"],
+          ref: descriptor.attrs["data-ref"],
+        },
+        vscode
+      )
+    }
+  />
+);
+
 function OutputRowComponent({
   row,
   findDecorations,
   findQuery,
   findCaseSensitive,
+  atomicContextReferences = false,
   activeFindMatch,
   isExecutionActive,
   onBackToLive,
@@ -1302,6 +1402,7 @@ function OutputRowComponent({
         <PromptReferenceText
           text={row.text}
           matches={getFieldMatches("prompt")}
+          atomicContextReferences={atomicContextReferences}
         />
       );
       break;
@@ -1354,6 +1455,8 @@ function OutputRowComponent({
           highlightActiveIndex={responseMatches.findIndex(
             (match) => match.active
           )}
+          findDecorations={{ matches: responseMatches }}
+          atomicContextReferences={atomicContextReferences}
         />
       );
       break;
@@ -1362,6 +1465,7 @@ function OutputRowComponent({
       content = (
         <StructuredEventContent
           row={row}
+          atomicContextReferences={atomicContextReferences}
           findDecorations={findDecorations}
           findQuery={findQuery}
           findCaseSensitive={findCaseSensitive}

@@ -11,6 +11,7 @@ import type { ControlsConfig } from "streamdown";
 import mermaid from "mermaid";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import { visit } from "unist-util-visit";
+import { visitParents } from "unist-util-visit-parents";
 import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root } from "mdast";
 import type { PluginTuple } from "unified";
@@ -25,6 +26,13 @@ import {
   renderHighlightedCode,
   type CodeFindHighlight,
 } from "@utils/syntaxHighlighting";
+import {
+  createFileReferenceChip,
+  referenceBasename,
+  type AtomicReferenceChip as AtomicReferenceDescriptor,
+} from "@utils/atomicReferences";
+import { AtomicReferenceChip } from "./AtomicReferenceChip";
+import type { RowFindDecoration } from "@utils/outputFind";
 
 // Ensure the shared VS Code-themed syntax/find-highlight styles are in <head>.
 injectSyntaxHighlightStyles();
@@ -144,28 +152,46 @@ function normalizeCodexAbsPath(raw: string): string {
  */
 function remarkFileLinks() {
   return (tree: Root): undefined => {
-    findAndReplace(
-      tree,
-      [
-        [
-          // Fresh regex instance per transform call so lastIndex is always reset
-          new RegExp(FILE_PATH_SOURCE, "gi"),
-          (match: string) => {
-            const normalized = normalizeCodexAbsPath(
-              match.replace(/\\{2,}/g, "\\")
-            );
-            const encoded = encodeURIComponent(normalized);
-            const display = escapeHtml(normalized);
-            return {
-              type: "html",
-              value: `<file-ref path="${encoded}">${display}</file-ref>`,
-            };
-          },
-        ],
-      ],
-      // Skip text nodes that are already inside a link to avoid double-wrapping
-      { ignore: ["link"] }
-    );
+    // Do this per text node rather than through findAndReplace so the original
+    // source range survives the MDAST -> HAST transition. The range is later
+    // projected against the row's authoritative find decorations.
+    visitParents(tree, "text", (node, ancestors) => {
+      const parent = ancestors[ancestors.length - 1];
+      const index = parent
+        ? (parent.children as unknown[]).indexOf(node)
+        : -1;
+      if (ancestors.some((ancestor) => ancestor.type === "link")) return;
+      if (!parent || typeof index !== "number" || !node.position) return;
+      const value = node.value;
+      const regex = new RegExp(FILE_PATH_SOURCE, "gi");
+      const replacements: Array<Record<string, unknown>> = [];
+      let cursor = 0;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(value))) {
+        const raw = match[0];
+        const normalized = normalizeCodexAbsPath(
+          raw.replace(/\\{2,}/g, "\\")
+        );
+        const encoded = encodeURIComponent(normalized);
+        const display = escapeHtml(normalized);
+        const start = node.position.start.offset! + match.index;
+        const end = start + raw.length;
+        if (match.index > cursor) {
+          replacements.push({ type: "text", value: value.slice(cursor, match.index) });
+        }
+        replacements.push({
+          type: "html",
+          value: `<file-ref path="${encoded}" data-ref-start="${start}" data-ref-end="${end}" data-ref-label="${encodeURIComponent(normalized)}">${display}</file-ref>`,
+        });
+        cursor = match.index + raw.length;
+      }
+      if (replacements.length === 0) return;
+      if (cursor < value.length) {
+        replacements.push({ type: "text", value: value.slice(cursor) });
+      }
+      (parent.children as Array<unknown>).splice(index, 1, ...replacements);
+      return index + replacements.length;
+    });
   };
 }
 
@@ -213,26 +239,43 @@ const IMAGE_PATH_SOURCE =
  */
 function remarkImageRefs() {
   return (tree: Root): undefined => {
-    findAndReplace(
-      tree,
-      [
-        [
-          new RegExp(IMAGE_PATH_SOURCE, "gi"),
-          (match: string) => {
-            const raw = normalizeCodexAbsPath(
-              match.replace(/^@/, "").replace(/\\{2,}/g, "\\")
-            );
-            const encoded = encodeURIComponent(raw);
-            const display = escapeHtml(raw);
-            return {
-              type: "html",
-              value: `<image-ref path="${encoded}">${display}</image-ref>`,
-            };
-          },
-        ],
-      ],
-      { ignore: ["link"] }
-    );
+    visitParents(tree, "text", (node, ancestors) => {
+      const parent = ancestors[ancestors.length - 1];
+      const index = parent
+        ? (parent.children as unknown[]).indexOf(node)
+        : -1;
+      if (ancestors.some((ancestor) => ancestor.type === "link")) return;
+      if (!parent || typeof index !== "number" || !node.position) return;
+      const value = node.value;
+      const regex = new RegExp(IMAGE_PATH_SOURCE, "gi");
+      const replacements: Array<Record<string, unknown>> = [];
+      let cursor = 0;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(value))) {
+        const raw = match[0];
+        const normalized = normalizeCodexAbsPath(
+          raw.replace(/^@/, "").replace(/\\{2,}/g, "\\")
+        );
+        const encoded = encodeURIComponent(normalized);
+        const display = escapeHtml(normalized);
+        const start = node.position.start.offset! + match.index;
+        const end = start + raw.length;
+        if (match.index > cursor) {
+          replacements.push({ type: "text", value: value.slice(cursor, match.index) });
+        }
+        replacements.push({
+          type: "html",
+          value: `<image-ref path="${encoded}" data-ref-start="${start}" data-ref-end="${end}">${display}</image-ref>`,
+        });
+        cursor = match.index + raw.length;
+      }
+      if (replacements.length === 0) return;
+      if (cursor < value.length) {
+        replacements.push({ type: "text", value: value.slice(cursor) });
+      }
+      (parent.children as Array<unknown>).splice(index, 1, ...replacements);
+      return index + replacements.length;
+    });
   };
 }
 
@@ -445,9 +488,17 @@ async function downloadImage(uri: string, filename: string): Promise<void> {
 function ImageRefThumbnail({
   path: encodedPath,
   children,
+  atomicContextReferences = false,
+  findMatches = [],
+  rowStart = 0,
+  rowEnd,
 }: {
   path?: string;
   children?: React.ReactNode;
+  atomicContextReferences?: boolean;
+  findMatches?: RowFindDecoration["matches"];
+  rowStart?: number;
+  rowEnd?: number;
 }) {
   const relativePath = encodedPath ? decodeURIComponent(encodedPath) : "";
   // undefined = loading, null = fall back, string = show <img>.
@@ -476,6 +527,28 @@ function ImageRefThumbnail({
   }, [relativePath]);
 
   if (typeof uri !== "string") {
+    if (atomicContextReferences) {
+      const descriptor = createFileReferenceChip(relativePath);
+      return (
+        <AtomicReferenceChip
+          descriptor={descriptor}
+          presentation={createMarkdownReferencePresentation(
+            descriptor,
+            relativePath,
+            rowStart,
+            rowEnd ?? rowStart + relativePath.length,
+            relativePath
+          )}
+          findMatches={findMatches}
+          onOpen={() => {
+            const parsed = parseFilePathAndLine(relativePath);
+            parsed.line !== undefined
+              ? openFile(parsed.path, parsed.line)
+              : openFile(parsed.path);
+          }}
+        />
+      );
+    }
     return <FileRefButton filePath={relativePath}>{children}</FileRefButton>;
   }
   const filename = relativePath.split(/[\\/]/).pop() || "image";
@@ -531,7 +604,8 @@ function ImageRefThumbnail({
  * rehype-sanitize and rehype-harden entirely.
  */
 function remarkLocalLinks() {
-  return (tree: Root): undefined => {
+  return (tree: Root, file?: { value?: unknown }): undefined => {
+    const source = typeof file?.value === "string" ? file.value : "";
     visit(tree, "link", (node, index, parent) => {
       if (!parent || typeof index !== "number") return;
       if (!isLocalFileHref(node.url)) return;
@@ -539,10 +613,16 @@ function remarkLocalLinks() {
       const filePath = extractFilePath(node.url);
       const encoded = encodeURIComponent(filePath);
       const displayText = escapeHtml(mdastToString(node) || filePath);
+      const linkStart = node.position?.start.offset ?? 0;
+      const linkEnd = node.position?.end.offset ?? linkStart;
+      const urlStart = source ? source.indexOf(node.url, linkStart) : linkStart;
+      const targetStart = urlStart >= 0 ? urlStart : linkStart;
+      const targetEnd = urlStart >= 0 ? targetStart + node.url.length : linkEnd;
+      const label = mdastToString(node) || filePath;
 
       (parent.children as typeof parent.children)[index] = {
         type: "html",
-        value: `<file-ref path="${encoded}">${displayText}</file-ref>`,
+        value: `<file-ref path="${encoded}" data-ref-start="${targetStart}" data-ref-end="${targetEnd}" data-ref-label="${encodeURIComponent(label)}">${displayText}</file-ref>`,
       };
     });
   };
@@ -839,10 +919,35 @@ function MermaidBlock({ code }: { code: string }) {
 // <mark data-find-active="…"> nodes produced by remarkFileLinks /
 // remarkHighlightMatches.
 const FILE_REF_ALLOWED_TAGS = {
-  "file-ref": ["path"],
-  "image-ref": ["path"],
+  "file-ref": ["path", "dataRefStart", "dataRefEnd", "dataRefLabel"],
+  "image-ref": ["path", "dataRefStart", "dataRefEnd"],
   mark: ["dataFindActive"],
 };
+
+function createMarkdownReferencePresentation(
+  descriptor: AtomicReferenceDescriptor,
+  sourceText: string,
+  rowStart: number,
+  rowEnd: number,
+  label: string
+) {
+  const compactStart = Math.max(
+    0,
+    sourceText.lastIndexOf(referenceBasename(descriptor.attrs["data-path"] ?? ""))
+  );
+  return {
+    sourceText,
+    rowRange: { from: rowStart, to: rowEnd },
+    compactRanges: [
+      {
+        source: { from: compactStart, to: sourceText.length },
+        label: { from: 0, to: label.length },
+      },
+    ],
+    compactLabel: label,
+    selectionText: sourceText,
+  };
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -859,6 +964,10 @@ interface MarkdownTextProps {
   highlightCaseSensitive?: boolean;
   /** 0-based index (across the whole text) of the currently-active match */
   highlightActiveIndex?: number;
+  /** Exact row-relative find ranges used to reveal matches hidden by a chip. */
+  findDecorations?: RowFindDecoration;
+  /** Opt into compact atomic-reference chips for local Markdown links. */
+  atomicContextReferences?: boolean;
   /**
    * Whether streamdown's per-table "view fullscreen" control is enabled.
    * Its fullscreen overlay portals into `document.body`, which only renders
@@ -889,6 +998,8 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   highlightQuery,
   highlightCaseSensitive = false,
   highlightActiveIndex = -1,
+  findDecorations,
+  atomicContextReferences = false,
   tableFullscreen = true,
 }) => {
   // Find-highlight options for code blocks/inline code. These are skipped by
@@ -913,6 +1024,36 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       "file-ref": (props: Record<string, unknown>) => {
         const encoded = props.path as string | undefined;
         const filePath = encoded ? decodeURIComponent(encoded) : "";
+        if (atomicContextReferences) {
+          const sourceStart = Number(props["data-ref-start"] ?? 0);
+          const sourceEnd = Number(
+            props["data-ref-end"] ?? sourceStart + filePath.length
+          );
+          const labelEncoded = props["data-ref-label"] as string | undefined;
+          const label = labelEncoded
+            ? decodeURIComponent(labelEncoded)
+            : filePath;
+          const descriptor = createFileReferenceChip(filePath);
+          return (
+            <AtomicReferenceChip
+              descriptor={descriptor}
+              presentation={createMarkdownReferencePresentation(
+                descriptor,
+                children.slice(sourceStart, sourceEnd),
+                sourceStart,
+                sourceEnd,
+                label
+              )}
+              findMatches={findDecorations?.matches}
+              onOpen={() => {
+                const parsed = parseFilePathAndLine(filePath);
+                parsed.line !== undefined
+                  ? openFile(parsed.path, parsed.line)
+                  : openFile(parsed.path);
+              }}
+            />
+          );
+        }
         return (
           <FileRefButton filePath={filePath}>
             {props.children as React.ReactNode}
@@ -924,7 +1065,13 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       // Rendered by remarkImageRefs for image paths (incl. pasted @refs).
       // Resolves to an inline thumbnail, falling back to a file-ref button.
       "image-ref": (props: Record<string, unknown>) => (
-        <ImageRefThumbnail path={props.path as string | undefined}>
+        <ImageRefThumbnail
+          path={props.path as string | undefined}
+          atomicContextReferences={atomicContextReferences}
+          findMatches={findDecorations?.matches}
+          rowStart={Number(props["data-ref-start"] ?? 0)}
+          rowEnd={Number(props["data-ref-end"] ?? 0) || undefined}
+        >
           {props.children as React.ReactNode}
         </ImageRefThumbnail>
       ),
@@ -940,6 +1087,29 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         // wrote [file.ts](C:\\dev\\path\\file.ts) or a file:// URL).
         // VS Code's webview would block these; intercept and open in VS Code.
         if (href && isLocalFileHref(href)) {
+          if (atomicContextReferences) {
+            const filePath = extractFilePath(href);
+            const descriptor = createFileReferenceChip(filePath);
+            return (
+              <AtomicReferenceChip
+                descriptor={descriptor}
+                presentation={createMarkdownReferencePresentation(
+                  descriptor,
+                  filePath,
+                  0,
+                  filePath.length,
+                  linkChildren ? getNodeText(linkChildren) : filePath
+                )}
+                findMatches={findDecorations?.matches}
+                onOpen={() => {
+                  const parsed = parseFilePathAndLine(filePath);
+                  parsed.line !== undefined
+                    ? openFile(parsed.path, parsed.line)
+                    : openFile(parsed.path);
+                }}
+              />
+            );
+          }
           return (
             <FileRefButton filePath={extractFilePath(href)}>
               {linkChildren}
@@ -1062,7 +1232,12 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         </pre>
       ),
     }),
-    [codeFindHighlight]
+    [
+      atomicContextReferences,
+      children,
+      codeFindHighlight,
+      findDecorations,
+    ]
   );
 
   // Only append the highlight plugin when there's a non-whitespace query, so

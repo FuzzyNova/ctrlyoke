@@ -12,6 +12,17 @@ import {
   repositionTooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
+import {
+  DEFAULT_COMPLETION_ICON,
+  findAtomicReferences,
+  findContextReferenceMatches,
+  findInlinePriorContextRefs,
+  getFencedBlockRanges,
+  isInFencedBlock,
+  type AtomicReferenceChip,
+  type ContextReferenceMatch,
+  type SymbolIconResolver,
+} from "@utils/atomicReferences";
 import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
@@ -104,24 +115,6 @@ interface CodeMirrorEditorProps {
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
   onInsertApplied?: (requestId: string) => void;
-}
-
-type ContextReferenceType =
-  | "file"
-  | "directory"
-  | "lineRange"
-  | "symbol"
-  | "git";
-
-export interface ContextReferenceMatch {
-  from: number;
-  to: number;
-  type: ContextReferenceType;
-  path?: string;
-  gitRef?: string;
-  lineStart?: string;
-  lineEnd?: string;
-  symbolName?: string;
 }
 
 interface ContextReferenceValidationResult {
@@ -233,8 +226,6 @@ const COMPLETION_KIND_ICONS: Record<number, string> = {
   23: "symbol-operator", // Operator
   24: "symbol-type-parameter", // TypeParameter
 };
-
-const DEFAULT_COMPLETION_ICON = "symbol-misc";
 
 export function getRetryPlaceholderCompletions(
   context: Pick<CompletionContext, "state" | "pos" | "explicit">,
@@ -1547,207 +1538,6 @@ function createFindKeyHandlerExtension() {
   });
 }
 
-export interface AtomicReferenceChip {
-  from: number;
-  to: number;
-  /** Codicon name (without the `codicon-` prefix) shown as the chip's leading icon. */
-  icon: string;
-  /** Short label shown in place of the full reference text. */
-  label: string;
-  /** Full original reference text — surfaced as the chip's hover title. */
-  title: string;
-  /** data-* attributes forwarded to the existing link click/tap handler. */
-  attrs: Record<string, string>;
-  /**
-   * True once the async validation pass (createContextReferenceLintExtension)
-   * has confirmed the reference doesn't resolve — drives the warning-colored
-   * border. Undefined until validated (no border), so a freshly-typed chip
-   * isn't flagged before the debounced check runs. Only context references
-   * (@/#/~) are validated this way; prior-context ($) chips leave it undefined.
-   */
-  invalid?: boolean;
-}
-
-// Basename of a workspace-relative path, tolerant of a trailing slash.
-function referenceBasename(path: string): string {
-  const trimmed = path.replace(/\/+$/, "");
-  const slash = trimmed.lastIndexOf("/");
-  return slash === -1 ? trimmed : trimmed.slice(slash + 1);
-}
-
-// Compact label for a ~git reference: keywords stay as-is, a commit hash is
-// shortened to 7 chars (the full hash remains in the document + hover title).
-function gitReferenceLabel(gitRef: string): string {
-  if (gitRef === "diff" || gitRef === "staged") return gitRef;
-  const stash = gitRef.match(/^stash:(\d+)$/);
-  if (stash) return `stash ${stash[1]}`;
-  return gitRef.slice(0, 7);
-}
-
-const PRIOR_CONTEXT_CHIP_LABELS: Record<
-  Exclude<InlinePriorContextRef["kind"], "step">,
-  string
-> = {
-  previous: "previous",
-  all: "all steps",
-  finalStep: "final step",
-  allFinalStep: "all final",
-};
-
-// Looks up the codicon for a resolved #sym: reference, keyed by
-// symbolIconCacheKey(path, symbolName, lineStart, lineEnd). Returns undefined
-// until (if ever) the async lookup in createContextReferenceLintExtension
-// resolves it, in which case the chip falls back to DEFAULT_COMPLETION_ICON.
-type SymbolIconResolver = (
-  path: string,
-  symbolName: string,
-  lineStart?: string,
-  lineEnd?: string
-) => string | undefined;
-
-function describeContextReferenceChip(
-  ref: ContextReferenceMatch,
-  docText: string,
-  getSymbolIcon?: SymbolIconResolver
-): Omit<AtomicReferenceChip, "from" | "to"> {
-  const title = docText.slice(ref.from, ref.to);
-  const attrs: Record<string, string> = { "data-type": ref.type };
-
-  switch (ref.type) {
-    case "directory":
-      attrs["data-path"] = ref.path ?? "";
-      return {
-        icon: "folder",
-        label: `${referenceBasename(ref.path ?? "")}/`,
-        title,
-        attrs,
-      };
-    case "lineRange":
-      attrs["data-path"] = ref.path ?? "";
-      if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
-      if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
-      return {
-        icon: "list-selection",
-        label: `${referenceBasename(ref.path ?? "")}:${ref.lineStart}-${ref.lineEnd}`,
-        title,
-        attrs,
-      };
-    case "symbol":
-      attrs["data-path"] = ref.path ?? "";
-      if (ref.symbolName) attrs["data-symbol-name"] = ref.symbolName;
-      if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
-      if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
-      return {
-        icon:
-          (ref.path &&
-            ref.symbolName &&
-            getSymbolIcon?.(
-              ref.path,
-              ref.symbolName,
-              ref.lineStart,
-              ref.lineEnd
-            )) ||
-          DEFAULT_COMPLETION_ICON,
-        label: ref.symbolName || referenceBasename(ref.path ?? ""),
-        title,
-        attrs,
-      };
-    case "git":
-      if (ref.gitRef) attrs["data-git-ref"] = ref.gitRef;
-      return {
-        icon: "source-control",
-        label: gitReferenceLabel(ref.gitRef ?? ""),
-        title,
-        attrs,
-      };
-    case "file":
-    default:
-      attrs["data-path"] = ref.path ?? "";
-      return {
-        icon: "symbol-file",
-        label: referenceBasename(ref.path ?? ""),
-        title,
-        attrs,
-      };
-  }
-}
-
-function describePriorContextChip(
-  ref: InlinePriorContextRef,
-  docText: string
-): Omit<AtomicReferenceChip, "from" | "to"> {
-  const title = docText.slice(ref.from, ref.to);
-  const dataRef =
-    ref.kind === "step" ? `step:${ref.indices?.join(",") ?? ""}` : ref.kind;
-  const label =
-    ref.kind === "step"
-      ? `step ${ref.indices?.join(",") ?? ""}`
-      : PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
-  return {
-    icon: "book",
-    label,
-    title,
-    attrs: { "data-type": "priorContext", "data-ref": dataRef },
-  };
-}
-
-// Enrich every atomic reference with the metadata needed to render its chip.
-// Covers @/#/~ references and $ prior-context refs — the same tokens the link
-// decorations render — and skips refs inside fenced blocks (not decorated as
-// links) and lone prompt-path prompts (no @/#/~/$ trigger). Returned sorted by
-// start with overlaps dropped (widest wins) so the resulting decoration/atomic
-// RangeSet stays well-formed — e.g. a `$token` that falls inside an `@path.ts`
-// match is absorbed by the enclosing reference.
-export function findAtomicReferences(
-  docText: string,
-  getSymbolIcon?: SymbolIconResolver,
-  getValidity?: (referenceToken: string) => boolean | undefined
-): AtomicReferenceChip[] {
-  const fencedRanges = getFencedBlockRanges(docText);
-
-  const candidates: Array<{
-    from: number;
-    to: number;
-    invalid?: boolean;
-    describe: () => Omit<AtomicReferenceChip, "from" | "to">;
-  }> = [
-    ...findContextReferenceMatches(docText).map((ref) => ({
-      from: ref.from,
-      to: ref.to,
-      // Keyed by the exact reference token (validity is content-based, so two
-      // identical tokens share a result). `true` only once the async pass
-      // confirmed it doesn't resolve; left undefined while unvalidated or
-      // resolvable so a freshly-typed chip isn't flagged and no border shows.
-      invalid:
-        getValidity?.(docText.slice(ref.from, ref.to)) === false
-          ? true
-          : undefined,
-      describe: () => describeContextReferenceChip(ref, docText, getSymbolIcon),
-    })),
-    ...findInlinePriorContextRefs(docText).map((ref) => ({
-      from: ref.from,
-      to: ref.to,
-      describe: () => describePriorContextChip(ref, docText),
-    })),
-  ]
-    .filter((ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges))
-    .sort((a, b) => a.from - b.from || b.to - a.to);
-
-  const chips: AtomicReferenceChip[] = [];
-  let lastTo = -1;
-  for (const candidate of candidates) {
-    if (candidate.from < lastTo) continue; // overlaps a wider range already kept
-    chips.push({
-      ...candidate.describe(),
-      from: candidate.from,
-      to: candidate.to,
-      invalid: candidate.invalid,
-    });
-    lastTo = candidate.to;
-  }
-  return chips;
-}
-
 // Inline widget that renders a context reference as a compact, outlined chip
 // showing just the file/folder name (or short git hash / prior-context label)
 // instead of the full path. The full reference text stays in the document (so
@@ -1780,7 +1570,7 @@ class AtomicReferenceWidget extends WidgetType {
     // cm-link + the data-* attributes let the shared click/tap handler open
     // the reference while recognizing this element's button-like chip UX.
     const chip = document.createElement("span");
-    chip.className = "cm-link cm-atomic-ref";
+    chip.className = "cm-link atomic-reference-chip cm-atomic-ref";
     // Warning-colored border when validation found the reference unresolvable —
     // the chip's counterpart to the lint squiggle (which a chip replaces). The
     // native title (full reference text on hover) is suppressed while invalid so
@@ -1801,11 +1591,11 @@ class AtomicReferenceWidget extends WidgetType {
     }
     if (this.chip.icon) {
       const icon = document.createElement("span");
-      icon.className = `cm-atomic-ref-icon codicon codicon-${this.chip.icon}`;
+      icon.className = `cm-atomic-ref-icon atomic-reference-chip-icon codicon codicon-${this.chip.icon}`;
       chip.appendChild(icon);
     }
     const label = document.createElement("span");
-    label.className = "cm-atomic-ref-label";
+    label.className = "cm-atomic-ref-label atomic-reference-chip-label";
     label.textContent = this.chip.label;
     chip.appendChild(label);
     return chip;
@@ -1948,62 +1738,11 @@ function createPromptDecorationThemeExtension() {
     // file/folder name (or short git/prior-context label). Placed after
     // `.cm-link` so its non-underlined, boxed styling wins the cascade even
     // though the chip also carries the cm-link class (for click handling).
+    // CodeMirror-only adapter: editor widgets stay on one line even though
+    // output chips may wrap long find-expanded references.
     ".cm-atomic-ref": {
-      display: "inline-flex",
-      alignItems: "baseline",
-      gap: "3px",
-      padding: "0 5px",
-      margin: "0 1px",
-      border:
-        "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
-      borderRadius: "4px",
-      // editorActionList-background/foreground are the closest VS Code vars to a "chip" look,
-      // while still contrasting with colors we pick in the symbol icon color map.
-      backgroundColor: "var(--vscode-editorActionList-background)",
-      color: "var(--vscode-editorActionList-foreground)",
-      fontFamily: "var(--vscode-editor-font-family)",
-      fontSize: "0.92em",
-      lineHeight: "1.35",
-      textDecoration: "none",
       whiteSpace: "nowrap",
       verticalAlign: "baseline",
-      cursor: "pointer",
-    },
-    // Per-kind left+bottom accent lives in codemirrorTheme.ts
-    // (buildChipAccentShadowRules), keyed off the same SYMBOL_ICON_COLORS map
-    // that colors the chip's icon.
-    ".cm-atomic-ref:hover": {
-      color: "var(--vscode-editorActionList-foreground)",
-      borderColor: "var(--vscode-focusBorder)",
-      fontWeight: "bold",
-    },
-    // Unresolvable reference: warning-colored border matching the lint squiggle
-    // (which uses `orange`, see createLinterThemeExtension's cm-lintRange-warning).
-    // Kept orange even on hover so the not-found signal isn't lost to the focus
-    // border; the lint tooltip on hover explains why. Placed after the base and
-    // :hover rules so it wins the cascade.
-    ".cm-atomic-ref-invalid": {
-      borderColor: "orange",
-    },
-    ".cm-atomic-ref-invalid:hover": {
-      borderColor: "orange",
-    },
-    // Compound with .codicon (rather than relying on cascade order against the
-    // global .codicon rule in globals.css, which sets a flat 16px/line-height:1)
-    // so the shrink deterministically wins. Without it, the icon's 16px box
-    // became the tallest child of the inline-flex chip, inflating that line's
-    // height wherever a chip appeared — the icon must render no taller than
-    // the chip's own text to avoid that.
-    ".cm-atomic-ref-icon.codicon": {
-      fontSize: "0.85em !important",
-      lineHeight: "1 !important",
-      opacity: "0.85",
-    },
-    ".cm-atomic-ref-label": {
-      // No max-width/ellipsis: the label already dropped the directory
-      // portion of the path (see referenceBasename), so the remaining
-      // basename/symbol/selection text is short enough to show in full —
-      // truncating it further would hide useful info like line numbers.
     },
   });
 }
@@ -2453,147 +2192,6 @@ function splitCamelCaseWord(
   return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
-export function findContextReferenceMatches(
-  text: string,
-  offset = 0
-): ContextReferenceMatch[] {
-  const patterns = {
-    fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-    directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
-    // Include alphanumerics in the boundary check so the engine cannot
-    // backtrack to a partial extension when the complete path ends in `/`.
-    // Without this, a dotted directory such as `@.ctrlyoke/.runs/` also
-    // matched a truncated file reference.
-    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
-    directory: /@([^\s@#"]+\/)/g,
-    lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
-    lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
-    symbol: /#sym:([^\s:]+):([^:]+):(\d+)-(\d+)/g,
-  };
-
-  const fileMatches: ContextReferenceMatch[] = [];
-  const directoryMatches: ContextReferenceMatch[] = [];
-  const lineRangeMatches: ContextReferenceMatch[] = [];
-  const symbolMatches: ContextReferenceMatch[] = [];
-  const gitMatches: ContextReferenceMatch[] = [];
-
-  let match: RegExpExecArray | null;
-
-  const collectPathMatches = (
-    pattern: RegExp,
-    type: "file" | "directory",
-    target: ContextReferenceMatch[]
-  ) => {
-    const regex = new RegExp(pattern.source, "g");
-    while ((match = regex.exec(text)) !== null) {
-      target.push({
-        from: offset + match.index,
-        to: offset + match.index + match[0].length,
-        type,
-        path: match[1],
-      });
-    }
-  };
-
-  collectPathMatches(patterns.fullFileQuoted, "file", fileMatches);
-  collectPathMatches(patterns.fullFile, "file", fileMatches);
-  collectPathMatches(patterns.directoryQuoted, "directory", directoryMatches);
-  collectPathMatches(patterns.directory, "directory", directoryMatches);
-
-  const collectLineRangeMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, "g");
-    while ((match = regex.exec(text)) !== null) {
-      lineRangeMatches.push({
-        from: offset + match.index,
-        to: offset + match.index + match[0].length,
-        type: "lineRange",
-        path: match[1],
-        lineStart: match[2],
-        lineEnd: match[3],
-      });
-    }
-  };
-
-  collectLineRangeMatches(patterns.lineRangeQuoted);
-  collectLineRangeMatches(patterns.lineRange);
-
-  const collectSymbolMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, "g");
-    while ((match = regex.exec(text)) !== null) {
-      symbolMatches.push({
-        from: offset + match.index,
-        to: offset + match.index + match[0].length,
-        type: "symbol",
-        path: match[1],
-        symbolName: match[2],
-        lineStart: match[3],
-        lineEnd: match[4],
-      });
-    }
-  };
-
-  collectSymbolMatches(patterns.symbolQuoted);
-  collectSymbolMatches(patterns.symbol);
-
-  const filteredDirectoryMatches = directoryMatches.filter((dirMatch) => {
-    return !fileMatches.some(
-      (fileMatch) =>
-        dirMatch.from >= fileMatch.from && dirMatch.to <= fileMatch.to
-    );
-  });
-
-  const collectGitMatches = (
-    pattern: RegExp,
-    normalize: (match: RegExpExecArray) => string
-  ) => {
-    const regex = new RegExp(pattern.source, pattern.flags);
-    while ((match = regex.exec(text)) !== null) {
-      const matchFrom = offset + match.index;
-      if (!gitMatches.some((existing) => existing.from === matchFrom)) {
-        gitMatches.push({
-          from: matchFrom,
-          to: offset + match.index + match[0].length,
-          type: "git",
-          gitRef: normalize(match),
-        });
-      }
-    }
-  };
-
-  collectGitMatches(/~(diff|staged)/g, (m) => m[1]);
-  collectGitMatches(/~(stash:\d+)/g, (m) => m[1]);
-  collectGitMatches(/~([0-9a-f]{7,40})/gi, (m) => m[1].toLowerCase());
-
-  return [
-    ...fileMatches,
-    ...filteredDirectoryMatches,
-    ...lineRangeMatches,
-    ...symbolMatches,
-    ...gitMatches,
-  ].sort((a, b) => a.from - b.from);
-}
-
-export function getFencedBlockRanges(
-  text: string
-): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  const regex = /```[\s\S]*?```/g;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    ranges.push({ from: match.index, to: match.index + match[0].length });
-  }
-  return ranges;
-}
-
-export function isInFencedBlock(
-  from: number,
-  to: number,
-  fencedRanges: Array<{ from: number; to: number }>
-): boolean {
-  return fencedRanges.some((r) => from >= r.from && to <= r.to);
-}
-
 // Apply disabled/italic styling to triple-backtick fenced blocks
 function createFencedBlockDecorationExtension() {
   return ViewPlugin.fromClass(
@@ -2781,65 +2379,6 @@ function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
 // ============================================================================
 // Inline prior-context reference helpers ($previous, $all, $step:N, etc.)
 // ============================================================================
-
-interface InlinePriorContextRef {
-  from: number;
-  to: number;
-  token: string;
-  kind: "previous" | "all" | "finalStep" | "allFinalStep" | "step";
-  indices?: number[]; // 1-based step numbers for kind==="step"
-}
-
-/** Parse range notation like "1,3-5,2" into a flat 1-based array. Returns null on invalid input. */
-function parsePriorContextStepRange(rangeText: string): number[] | null {
-  if (!rangeText) return null;
-  const indices: number[] = [];
-  for (const part of rangeText.split(",")) {
-    const rangeMatch = part.match(/^(\d+)-(\d+)$/);
-    if (rangeMatch) {
-      const start = parseInt(rangeMatch[1], 10);
-      const end = parseInt(rangeMatch[2], 10);
-      if (start > end) return null;
-      for (let i = start; i <= end; i++) indices.push(i);
-    } else if (/^\d+$/.test(part)) {
-      indices.push(parseInt(part, 10));
-    } else {
-      return null;
-    }
-  }
-  return indices.length > 0 ? indices : null;
-}
-
-/** Find all inline $prior-context refs in text, returning their absolute positions. */
-function findInlinePriorContextRefs(
-  text: string,
-  offset = 0
-): InlinePriorContextRef[] {
-  const results: InlinePriorContextRef[] = [];
-  const regex = /\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    const body = match[1];
-    const token = match[0];
-    const from = offset + match.index;
-    const to = from + token.length;
-    if (body === "previous") {
-      results.push({ from, to, token, kind: "previous" });
-    } else if (body === "all") {
-      results.push({ from, to, token, kind: "all" });
-    } else if (body === "finalStep") {
-      results.push({ from, to, token, kind: "finalStep" });
-    } else if (body === "allFinalStep") {
-      results.push({ from, to, token, kind: "allFinalStep" });
-    } else if (body.startsWith("step:")) {
-      const indices = parsePriorContextStepRange(body.slice("step:".length));
-      if (indices !== null) {
-        results.push({ from, to, token, kind: "step", indices });
-      }
-    }
-  }
-  return results;
-}
 
 /** Apply cm-link decoration to inline $prior-context references. */
 function createPriorContextDecorationExtension() {
