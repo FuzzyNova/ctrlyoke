@@ -62,10 +62,10 @@ Detail lives in each plan's status header. The summary that drives sequencing:
   in. `getPermissionHarnessSupport()` has already dropped OpenCode.
 - **Compatibility — nothing built.** No registry, descriptor, or analyzer
   module exists in `src/`. Fully greenfield.
-- **Browser feedback — nothing built** except the Phase 2.5 Site 1 and Site 2
-  deletions.
-  No `USER_FEEDBACK_SEVERITY`, no `USER_FEEDBACK` message type, no toast
-  component.
+- **Browser feedback — Phase 1 built.** The bounded toast queue and viewport
+  are in, while the Phase 2.5 Site 1 and Site 2 deletions remain complete.
+  `USER_FEEDBACK` transport and the broader `show*Message` migration remain
+  deferred to later phases.
 
 Two shipped defects are worth naming because they shape Stage 0 below:
 
@@ -87,17 +87,16 @@ Neither item is a release gate, and neither touches a file Stage 1 touches
 (the only overlap is additive constants in `DashboardConstants.ts`). Both fix
 defects in what is shipping today.
 
-1. **[x] Delete `handleMaxRetriesExhausted`** — browser feedback Phase 2.5 Site
-   2. **Done 2026-08-01.**
+1. **[x] Delete `handleMaxRetriesExhausted`** — browser feedback Phase 2.5 Site 2. **Done 2026-08-01.**
    Under default settings (`maxRetries: 0`, `onFail: stopWorkflow`) _every_
    end-condition failure raises a host-only modal that contradicts the declared
    policy and hangs any remotely driven run. Report the expected/actual values
    through the existing status/output path now; upgrade to `USER_FEEDBACK` when
    Stage 2 lands.
-2. **[ ] Browser feedback Phase 1** — the toast queue, `ToastViewport`, and the
+2. **[x] Browser feedback Phase 1** — the toast queue, `ToastViewport`, and the
    `isStandalone` gate on `NOTIFICATION_EVENT`. Small, self-contained, and the
-   panel-double-notification regression it risks is already specified with a
-   prescribed test.
+   panel-double-notification regression it risks is covered by the prescribed
+   test. **Done 2026-08-01.**
 
 **If you would rather keep the release gate clean, defer both.** Nothing in
 Stage 1 changes either way.
@@ -159,19 +158,19 @@ The stages above are split into these single-session steps. Each one commits its
 own work and leaves this document and its owning plan current. Steps are
 strictly ordered: each builds only on what has already landed.
 
-| #   | Stage       | Scope                                                                                                    |
-| --- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| 1   | Stage 0.1   | **Done** — delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy            |
-| 2   | Stage 0.2   | Browser feedback Phase 1 — toast queue, `ToastViewport`, `isStandalone` gate                             |
-| 3   | Phase 1A(i) | Shared capability + diagnostic contracts and their constants                                             |
-| 4   | Phase 1A(ii)| Pure effective-property resolver extracted from `PropertyResolver` (own commit, highest risk)            |
-| 5   | Phase 1B(i) | Harness-owned permission descriptors, registry assembly, cached version detection                        |
-| 6   | Phase 1B(ii)| Pure compatibility analyzer, workflow validation, execution preflight                                    |
-| 7   | Phase 1B(iii)| Capability-snapshot message, React store, `useCompatibilityDiagnostics`                                 |
-| 8   | Phase 1C(i) | `FieldDiagnostic`, delete `getPermissionHarnessSupport`, honest permission UI in both property editors   |
-| 9   | Phase 1C(ii)| Defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage           |
-| 10  | Perm. 4     | `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract             |
-| 11  | Perm. 5–7   | Remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention                     |
+| #   | Stage         | Scope                                                                                                  |
+| --- | ------------- | ------------------------------------------------------------------------------------------------------ |
+| 1   | Stage 0.1     | **Done** — delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy      |
+| 2   | Stage 0.2     | **Done** — Browser feedback Phase 1 — toast queue, `ToastViewport`, `isStandalone` gate                |
+| 3   | Phase 1A(i)   | Shared capability + diagnostic contracts and their constants                                           |
+| 4   | Phase 1A(ii)  | Pure effective-property resolver extracted from `PropertyResolver` (own commit, highest risk)          |
+| 5   | Phase 1B(i)   | Harness-owned permission descriptors, registry assembly, cached version detection                      |
+| 6   | Phase 1B(ii)  | Pure compatibility analyzer, workflow validation, execution preflight                                  |
+| 7   | Phase 1B(iii) | Capability-snapshot message, React store, `useCompatibilityDiagnostics`                                |
+| 8   | Phase 1C(i)   | `FieldDiagnostic`, delete `getPermissionHarnessSupport`, honest permission UI in both property editors |
+| 9   | Phase 1C(ii)  | Defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage         |
+| 10  | Perm. 4       | `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract           |
+| 11  | Perm. 5–7     | Remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention                   |
 
 Stage 2 is deliberately not queued: it is post-release by decision of the plans
 themselves.

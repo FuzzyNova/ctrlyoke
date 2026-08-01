@@ -64,6 +64,12 @@ import {
   getNotificationSeverityColor,
   handleCompletionNotificationEvent,
 } from "@utils/browserNotifications";
+import {
+  COMPLETION_NOTIFICATION_SEVERITY,
+  NOTIFICATION_KINDS,
+  USER_FEEDBACK_SEVERITY,
+} from "@root/types/DashboardConstants";
+import type { CompletionNotificationEventPayload } from "@root/types/WebviewMessageTypes";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
@@ -75,6 +81,27 @@ import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 
 export type MessageHandler = (message: any) => void;
 export type MessageHandlerMap = Record<string, MessageHandler>;
+
+function isCompletionNotificationEvent(
+  value: unknown
+): value is CompletionNotificationEventPayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const event = value as Record<string, unknown>;
+  return (
+    typeof event.id === "string" &&
+    (event.kind === NOTIFICATION_KINDS.WORKFLOW ||
+      event.kind === NOTIFICATION_KINDS.PROMPT ||
+      event.kind === NOTIFICATION_KINDS.HOOK) &&
+    typeof event.title === "string" &&
+    typeof event.body === "string" &&
+    typeof event.tag === "string" &&
+    (event.severity === COMPLETION_NOTIFICATION_SEVERITY.INFO ||
+      event.severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING ||
+      event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR)
+  );
+}
 
 export interface UseMessageHandlerReturn {
   /** Send a message to the extension */
@@ -347,7 +374,9 @@ function isTerminalStepStatus(status: unknown): boolean {
  * Create all message handlers
  * Uses getState() pattern to access stores outside React render cycle
  */
-function createMessageHandlers(): MessageHandlerMap {
+export function createMessageHandlers(
+  standalone: boolean = isStandalone
+): MessageHandlerMap {
   const handlers: MessageHandlerMap = {};
 
   // --------------------------------------------------------------------------
@@ -494,7 +523,9 @@ function createMessageHandlers(): MessageHandlerMap {
       .getState()
       .showToast(
         message.success ? "Command completed" : "Command failed",
-        message.success ? "success" : "error"
+        message.success
+          ? USER_FEEDBACK_SEVERITY.SUCCESS
+          : USER_FEEDBACK_SEVERITY.ERROR
       );
   };
 
@@ -549,18 +580,27 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE] = (message) => {
     useUiStore
       .getState()
-      .showToast(message.reason ?? "Developer command unavailable", "error");
+      .showToast(
+        message.reason ?? "Developer command unavailable",
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
   };
 
   handlers[MESSAGE_TYPES.UX_SNAPSHOT_SAVED] = (message) => {
     const ui = useUiStore.getState();
     if (message.error) {
       ui.setUxSnapshotStatus("error");
-      ui.showToast(`UX snapshot failed: ${message.error}`, "error");
+      ui.showToast(
+        `UX snapshot failed: ${message.error}`,
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
       return;
     }
     ui.setUxSnapshotStatus("saved");
-    ui.showToast(`UX snapshot saved to ${message.path}`, "success");
+    ui.showToast(
+      `UX snapshot saved to ${message.path}`,
+      USER_FEEDBACK_SEVERITY.SUCCESS
+    );
   };
 
   handlers[MESSAGE_TYPES.COMMIT_MESSAGE_GENERATION_UPDATED] = (message) => {
@@ -994,16 +1034,19 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   handlers[MESSAGE_TYPES.NOTIFICATION_EVENT] = (message) => {
-    if (!message.event) {
+    if (!isCompletionNotificationEvent(message?.event)) {
       return;
     }
 
-    useUiStore
-      .getState()
-      .showToast(
-        message.event.body,
-        getNotificationSeverityColor(message.event.severity)
-      );
+    if (standalone) {
+      useUiStore
+        .getState()
+        .showToast(
+          message.event.body,
+          getNotificationSeverityColor(message.event.severity),
+          { dedupeKey: `notification:${message.event.id}` }
+        );
+    }
 
     void handleCompletionNotificationEvent(
       message.event,
@@ -1520,7 +1563,10 @@ function createMessageHandlers(): MessageHandlerMap {
     if (!message.success) {
       useUiStore
         .getState()
-        .showToast(message.error ?? "Unable to open folder", "warning");
+        .showToast(
+          message.error ?? "Unable to open folder",
+          USER_FEEDBACK_SEVERITY.WARNING
+        );
     }
   };
 
@@ -1772,7 +1818,10 @@ function createMessageHandlers(): MessageHandlerMap {
     ) {
       uiStore.clearPendingRunViewLoad();
     }
-    uiStore.showToast(`Failed to ${message.action}: ${message.error}`, "error");
+    uiStore.showToast(
+      `Failed to ${message.action}: ${message.error}`,
+      USER_FEEDBACK_SEVERITY.ERROR
+    );
     if (message.requestId) {
       useRunSummaryCacheStore
         .getState()
@@ -2156,7 +2205,7 @@ function createMessageHandlers(): MessageHandlerMap {
     uiStore.closeSaveWorkflowDialog();
     // Extract filename for a concise toast
     const fileName = message.filePath.split(/[/\\]/).pop() ?? message.filePath;
-    uiStore.showToast(`Saved as ${fileName}`, "success");
+    uiStore.showToast(`Saved as ${fileName}`, USER_FEEDBACK_SEVERITY.SUCCESS);
   };
 
   // --------------------------------------------------------------------------
@@ -2173,7 +2222,10 @@ function createMessageHandlers(): MessageHandlerMap {
     if (message.requestId) {
       uiStore.closeSaveWorkflowDialog();
     }
-    uiStore.showToast(`Save failed: ${message.error}`, "error");
+    uiStore.showToast(
+      `Save failed: ${message.error}`,
+      USER_FEEDBACK_SEVERITY.ERROR
+    );
   };
 
   // --------------------------------------------------------------------------
@@ -2188,7 +2240,7 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     uiStore.closeSaveWorkflowDialog();
     uiStore.setTemplates(message.templates || []);
-    uiStore.showToast("Saved as template", "success");
+    uiStore.showToast("Saved as template", USER_FEEDBACK_SEVERITY.SUCCESS);
   };
 
   // --------------------------------------------------------------------------

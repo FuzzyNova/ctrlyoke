@@ -476,6 +476,19 @@ export type CompletionNotificationSeverity =
   (typeof COMPLETION_NOTIFICATION_SEVERITY)[keyof typeof COMPLETION_NOTIFICATION_SEVERITY];
 
 // ============================================================================
+// USER FEEDBACK SEVERITY - Visual level for transient dashboard feedback
+// ============================================================================
+export const USER_FEEDBACK_SEVERITY = {
+  INFO: "info",
+  SUCCESS: "success",
+  WARNING: "warning",
+  ERROR: "error",
+} as const;
+
+export type UserFeedbackSeverity =
+  (typeof USER_FEEDBACK_SEVERITY)[keyof typeof USER_FEEDBACK_SEVERITY];
+
+// ============================================================================
 // NOTIFICATION KINDS - Superset of completion notification kinds (includes hook events)
 // ============================================================================
 export const NOTIFICATION_KINDS = {

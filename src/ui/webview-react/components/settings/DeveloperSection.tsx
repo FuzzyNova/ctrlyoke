@@ -10,6 +10,7 @@ import {
   getProfilerState,
   setProfilingEnabled,
 } from "@utils/performanceProfiler";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
 const TERMINATION_WARNING =
   "Reload and restart actions terminate active workflows, PTY sessions, and CLI processes.";
@@ -127,7 +128,7 @@ export function DeveloperSection() {
       enabled
         ? "Performance profiling enabled."
         : "Performance profiling disabled.",
-      "info"
+      USER_FEEDBACK_SEVERITY.INFO
     );
   }
 
@@ -193,7 +194,7 @@ export function DeveloperSection() {
             resetLayoutState();
             showToast(
               "Layout state cleared. Reload the window to see default panel sizes.",
-              "info"
+              USER_FEEDBACK_SEVERITY.INFO
             );
           }}
         >

@@ -50,6 +50,7 @@ import {
 import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
@@ -917,7 +918,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         WebviewLog.error(
           `[CodeMirror] Pasted image save failed: ${messageText}`
         );
-        useUiStore.getState().showToast(messageText, "error");
+        useUiStore
+          .getState()
+          .showToast(messageText, USER_FEEDBACK_SEVERITY.ERROR);
         return;
       }
       // Trailing space terminates the @ref token so the user can keep typing.
@@ -996,7 +999,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         if (!mimeTypeToImageExtension(item.type)) {
           useUiStore
             .getState()
-            .showToast(`Unsupported image type: ${item.type}`, "error");
+            .showToast(
+              `Unsupported image type: ${item.type}`,
+              USER_FEEDBACK_SEVERITY.ERROR
+            );
           continue;
         }
         const file = item.getAsFile();
@@ -2523,7 +2529,7 @@ function openContextReferenceLink(
       .getState()
       .showToast(
         "Can't open — this reference doesn't resolve to an existing file",
-        "warning"
+        USER_FEEDBACK_SEVERITY.WARNING
       );
     return true;
   }

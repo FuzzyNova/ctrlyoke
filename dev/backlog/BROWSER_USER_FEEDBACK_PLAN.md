@@ -1,12 +1,10 @@
 # Browser User Feedback Plan
 
-**Status (2026-07-29, re-verified 2026-08-01):** Proposed. The React dashboard
-already has transient toast state and receives structured workflow-completion
-notification events, but there is no mounted toast renderer and ordinary
-`vscode.window.show*Message()` calls never reach hosted browser clients.
-Nothing in this plan has been implemented apart from the Phase 2.5 deletions;
-there is no `USER_FEEDBACK_SEVERITY` constant, no `USER_FEEDBACK`
-message type, and no toast component anywhere in `src/ui/webview-react/`.
+**Status (2026-08-01):** Phase 1 complete; Phases 2–4 remain proposed. The
+React dashboard now renders a bounded, accessible transient toast queue in both
+hosts and keeps completion notifications separate from operational feedback.
+Ordinary `vscode.window.show*Message()` calls still do not reach hosted browser
+clients; that migration remains Phase 2.
 
 **Related plans:**
 
@@ -111,7 +109,7 @@ Counts re-verified against `src/` on 2026-08-01:
 | Adapter method                 | Call sites | Where                                                                                                              |
 | ------------------------------ | ---------: | ------------------------------------------------------------------------------------------------------------------ |
 | `log()` / `warn()` / `error()` |         18 | `WorkflowInstance` ×9, `WorkflowExecutor` ×3, `PromptFileParser` ×4, `CliIntegration` ×1, `EndConditionHandler` ×1 |
-| `showChoice()`                 |          1 | `CliIntegration` ×1                                                                                                 |
+| `showChoice()`                 |          1 | `CliIntegration` ×1                                                                                                |
 
 `showChoice()` dropped from three sites to one when both Phase 2.5 sites were
 deleted. `PromptFileParser` has four adapter-UI calls, not three.
@@ -446,6 +444,8 @@ messages when those are clearer than the generic interaction contract.
 ## Migration Plan
 
 ### Phase 1 — Make existing in-app toasts real
+
+**Done 2026-08-01.**
 
 1. Add `USER_FEEDBACK_SEVERITY` to `DashboardConstants.ts`.
 2. Add the queue model and `ToastViewport`.

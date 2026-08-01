@@ -3,8 +3,10 @@ import {
   COMPLETION_NOTIFICATION_SEVERITY,
   HOSTED_ICON_PATHS,
   SERVICE_WORKER_BADGE_MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
   type BrowserNotificationMode,
   type ServiceWorkerBadgeMessageType,
+  type UserFeedbackSeverity,
 } from "@root/types/DashboardConstants";
 import type {
   CompletionNotificationEventPayload,
@@ -370,12 +372,12 @@ function base64UrlToUint8Array(value: string): Uint8Array {
 
 export function getNotificationSeverityColor(
   severity: CompletionNotificationEventPayload["severity"]
-): "info" | "success" | "warning" | "error" {
+): UserFeedbackSeverity {
   if (severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR) {
-    return "error";
+    return USER_FEEDBACK_SEVERITY.ERROR;
   }
   if (severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING) {
-    return "warning";
+    return USER_FEEDBACK_SEVERITY.WARNING;
   }
-  return "info";
+  return USER_FEEDBACK_SEVERITY.INFO;
 }

@@ -21,6 +21,7 @@ import {
 } from "@utils/stepClipboard";
 import { useUiStore } from "@store/uiStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
@@ -157,7 +158,7 @@ export function useStepContextMenu({
                     .getState()
                     .showToast(
                       "Clipboard does not contain a workflow step",
-                      "warning"
+                      USER_FEEDBACK_SEVERITY.WARNING
                     );
                 });
             },
@@ -335,7 +336,7 @@ export function usePasteToEndContextMenu({
                     .getState()
                     .showToast(
                       "Clipboard does not contain a workflow step",
-                      "warning"
+                      USER_FEEDBACK_SEVERITY.WARNING
                     );
                 });
             },

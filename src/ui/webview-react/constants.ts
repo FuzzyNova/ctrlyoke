@@ -40,6 +40,14 @@ export const DEFAULT_MOBILE_SIZES = {
   editor: 200,
 };
 
+/** Shared timing and capacity contract for the transient toast viewport. */
+export const TOAST_MAX_QUEUE_SIZE = 10;
+export const TOAST_MAX_VISIBLE_COUNT = 3;
+export const TOAST_INFO_SUCCESS_TIMEOUT_MS = 5_000;
+export const TOAST_WARNING_ERROR_TIMEOUT_MS = 12_000;
+export const TOAST_VIEWPORT_BOTTOM_OFFSET =
+  "calc(var(--safe-area-bottom) + 3rem)";
+
 /** Separator styling constants for consistent appearance and interaction */
 /** Horizontal separator (vertical resize handle) - thin horizontal line */
 export const SEPARATOR_HORIZONTAL =

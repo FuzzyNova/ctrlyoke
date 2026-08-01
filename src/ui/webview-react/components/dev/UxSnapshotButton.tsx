@@ -5,6 +5,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { captureUxSnapshot } from "@utils/uxSnapshot";
 import { WebviewLog } from "@utils/logger";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
 /**
  * Floating, dev-only "UX Snapshot" capture button pinned to the right-center of
@@ -72,7 +73,7 @@ export function UxSnapshotButton() {
           });
         } catch (error) {
           WebviewLog.error("UX snapshot capture failed", error);
-          showToast("UX snapshot capture failed", "error");
+          showToast("UX snapshot capture failed", USER_FEEDBACK_SEVERITY.ERROR);
           setStatus("error");
         }
       });

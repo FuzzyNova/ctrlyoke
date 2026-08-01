@@ -53,6 +53,7 @@ import { UxSnapshotButton } from "./components/dev/UxSnapshotButton";
 import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
+import { ToastViewport } from "@components/shared/ToastViewport";
 
 function isIosWebKitBrowser(): boolean {
   const platform = navigator.platform;
@@ -997,6 +998,8 @@ function App() {
         {/* Dev-only floating UX snapshot capture button */}
         <UxSnapshotButton />
 
+        <ToastViewport />
+
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
             Placing it here (flex sibling of the main content area) means every
@@ -1260,6 +1263,8 @@ function App() {
 
       {/* Dev-only floating UX snapshot capture button */}
       <UxSnapshotButton />
+
+      <ToastViewport />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />

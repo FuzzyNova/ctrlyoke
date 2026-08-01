@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { useUiStore } from "@store/uiStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
 
 // Zustand store is a module singleton — reset between tests.
 beforeEach(() => {
@@ -297,23 +299,47 @@ describe("setLoading", () => {
 // Toast notifications
 // ---------------------------------------------------------------------------
 
-describe("showToast / hideToast", () => {
-  it("shows a toast with default type info", () => {
+describe("toast queue", () => {
+  it("shows a toast with default info severity", () => {
     store().showToast("Hello!");
-    expect(store().toast?.message).toBe("Hello!");
-    expect(store().toast?.type).toBe("info");
-    expect(store().toast?.visible).toBe(true);
+    expect(store().toastQueue[0]).toMatchObject({
+      message: "Hello!",
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+    });
   });
 
-  it("shows a toast with specified type", () => {
-    store().showToast("Done", "success");
-    expect(store().toast?.type).toBe("success");
+  it("supports enqueue, dedupe, cap, dismissal, and clearing", () => {
+    store().enqueueToast({
+      message: "First",
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+      dedupeKey: "same",
+    });
+    store().enqueueToast({
+      message: "Duplicate",
+      severity: USER_FEEDBACK_SEVERITY.ERROR,
+      dedupeKey: "same",
+    });
+    for (let index = 0; index < TOAST_MAX_QUEUE_SIZE + 2; index++) {
+      store().showToast(`Toast ${index}`, USER_FEEDBACK_SEVERITY.SUCCESS);
+    }
+
+    expect(store().toastQueue).toHaveLength(TOAST_MAX_QUEUE_SIZE);
+    expect(
+      store().toastQueue.some((toast) => toast.message === "Duplicate")
+    ).toBe(false);
+    const firstId = store().toastQueue[0].id;
+    store().dismissToast(firstId);
+    expect(store().toastQueue.some((toast) => toast.id === firstId)).toBe(
+      false
+    );
+    store().clearToasts();
+    expect(store().toastQueue).toEqual([]);
   });
 
-  it("hideToast clears toast to null", () => {
+  it("keeps hideToast as a compatibility wrapper for clearing", () => {
     store().showToast("Hi");
     store().hideToast();
-    expect(store().toast).toBeNull();
+    expect(store().toastQueue).toEqual([]);
   });
 });
 
@@ -645,7 +671,7 @@ describe("resetUi", () => {
 
     expect(store().saveWorkflowDialogOpen).toBe(false);
     expect(store().isLoading).toBe(false);
-    expect(store().toast).toBeNull();
+    expect(store().toastQueue).toEqual([]);
     expect(store().propertiesDrawerOpen).toBe(false);
   });
 });

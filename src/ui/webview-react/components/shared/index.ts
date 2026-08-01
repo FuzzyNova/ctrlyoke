@@ -77,3 +77,4 @@ export { ExpandCollapseAllDiffsButton } from "./ExpandCollapseAllDiffsButton";
 export { AutoResumeStatusRow } from "./AutoResumeStatusRow";
 export { ScopeToggle, type ScopeToggleOption } from "./ScopeToggle";
 export { VirtualizedDropdownList } from "./VirtualizedDropdownList";
+export { ToastViewport } from "./ToastViewport";

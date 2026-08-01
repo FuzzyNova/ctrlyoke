@@ -36,7 +36,10 @@ vi.mock("@utils/logger", () => ({
   },
 }));
 
-import { useMessageHandler } from "@hooks/useMessageHandler";
+import {
+  createMessageHandlers,
+  useMessageHandler,
+} from "@hooks/useMessageHandler";
 import * as reconnectWatchdog from "@hooks/reconnectWatchdog";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -55,6 +58,7 @@ import {
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -774,7 +778,29 @@ describe("EXECUTION_COMPLETED", () => {
 // ---------------------------------------------------------------------------
 
 describe("NOTIFICATION_EVENT", () => {
-  it("shows an in-app toast and delegates browser delivery", () => {
+  it("enqueues only in standalone mode", () => {
+    const event = {
+      id: "workflow:wf-1:completed",
+      title: "ctrlyoke - Workflow Complete",
+      body: "workflow completed",
+      severity: "warning",
+      tag: "workflow:wf-1",
+      kind: "workflow",
+    };
+
+    act(() => {
+      createMessageHandlers(true)[MESSAGE_TYPES.NOTIFICATION_EVENT]({ event });
+    });
+    expect(useUiStore.getState().toastQueue).toHaveLength(1);
+
+    useUiStore.getState().clearToasts();
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.NOTIFICATION_EVENT]({ event });
+    });
+    expect(useUiStore.getState().toastQueue).toEqual([]);
+  });
+
+  it("keeps panel completion events native while delegating browser delivery", () => {
     renderHook(() => useMessageHandler());
 
     const fullSettings: FullGlobalSettings = {
@@ -812,12 +838,7 @@ describe("NOTIFICATION_EVENT", () => {
       });
     });
 
-    expect(useUiStore.getState().toast).toEqual({
-      message:
-        "refactor.ctrlyoke.yaml - completed 2 of 4 prompts before timeout",
-      type: "warning",
-      visible: true,
-    });
+    expect(useUiStore.getState().toastQueue).toEqual([]);
     expect(handleCompletionNotificationEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "workflow:wf-1:completed",
@@ -825,6 +846,19 @@ describe("NOTIFICATION_EVENT", () => {
       }),
       fullSettings
     );
+  });
+
+  it("ignores malformed notification events", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.NOTIFICATION_EVENT, {
+        event: { body: "missing required fields" },
+      });
+    });
+
+    expect(useUiStore.getState().toastQueue).toEqual([]);
+    expect(handleCompletionNotificationEventMock).not.toHaveBeenCalled();
   });
 });
 
@@ -844,11 +878,11 @@ describe("OPEN_HARNESS_DIR_RESULT", () => {
       });
     });
 
-    expect(useUiStore.getState().toast).toEqual({
+    expect(useUiStore.getState().toastQueue).toHaveLength(1);
+    expect(useUiStore.getState().toastQueue[0]).toMatchObject({
       message:
         "The workspace skill folder does not exist yet: C:\\dev\\ctrlyoke\\.ctrlyoke\\skills",
-      type: "warning",
-      visible: true,
+      severity: USER_FEEDBACK_SEVERITY.WARNING,
     });
   });
 });

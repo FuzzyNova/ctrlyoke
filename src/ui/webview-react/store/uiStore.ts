@@ -20,9 +20,35 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isWorkflowRunning } from "@utils/status";
-import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
+import {
+  DEFAULT_DESKTOP_SIZES,
+  DEFAULT_MOBILE_SIZES,
+  TOAST_MAX_QUEUE_SIZE,
+} from "../constants";
+import {
+  USER_FEEDBACK_SEVERITY,
+  type UserFeedbackSeverity,
+} from "@root/types/DashboardConstants";
 
 let runViewRequestSequence = 0;
+let toastSequence = 0;
+
+export interface ToastItem {
+  id: string;
+  message: string;
+  detail?: string;
+  severity: UserFeedbackSeverity;
+  createdAt: number;
+  dedupeKey?: string;
+}
+
+export type ToastInput = Omit<ToastItem, "id" | "createdAt"> &
+  Partial<Pick<ToastItem, "id" | "createdAt">>;
+
+export interface ToastOptions {
+  detail?: string;
+  dedupeKey?: string;
+}
 
 /**
  * Rebuild the observed-running ledger (see {@link UiState.observedRunningWorkflowIds})
@@ -395,12 +421,8 @@ interface UiState {
   terminalRailCollapsed: boolean;
   terminalRailSizePx: number;
 
-  // Notification toast state (transient, not persisted)
-  toast: {
-    message: string;
-    type: "info" | "success" | "warning" | "error";
-    visible: boolean;
-  } | null;
+  // Notification toast queue (transient, not persisted)
+  toastQueue: ToastItem[];
 
   // Content preview modal (git diff / prior-context XML) — transient, not persisted
   contentPreviewModal: {
@@ -576,9 +598,13 @@ interface UiActions {
   setLoading: (loading: boolean, message?: string) => void;
 
   // Toast notifications
+  enqueueToast: (toast: ToastInput) => void;
+  dismissToast: (id: string) => void;
+  clearToasts: () => void;
   showToast: (
     message: string,
-    type?: "info" | "success" | "warning" | "error"
+    severity?: UserFeedbackSeverity,
+    options?: ToastOptions
   ) => void;
   hideToast: () => void;
 
@@ -739,7 +765,7 @@ const initialState: UiState = {
   loadingMessage: null,
   outputFontSize: 13,
   terminalFontSize: 14,
-  toast: null,
+  toastQueue: [],
   contentPreviewModal: null,
   suffixEditConfirmation: null,
   activeOutputTabs: {},
@@ -1152,12 +1178,62 @@ export const useUiStore = create<UiState & UiActions>()(
       // TOAST NOTIFICATIONS
       // ============================================================================
 
-      showToast: (message, type = "info") =>
-        set({
-          toast: { message, type, visible: true },
+      enqueueToast: (toast) =>
+        set((state) => {
+          if (
+            toast.dedupeKey &&
+            state.toastQueue.some(
+              (queuedToast) => queuedToast.dedupeKey === toast.dedupeKey
+            )
+          ) {
+            return state;
+          }
+
+          const item: ToastItem = {
+            ...toast,
+            id: toast.id ?? `toast-${++toastSequence}`,
+            createdAt: toast.createdAt ?? Date.now(),
+          };
+          return {
+            toastQueue: [...state.toastQueue, item].slice(
+              -TOAST_MAX_QUEUE_SIZE
+            ),
+          };
         }),
 
-      hideToast: () => set({ toast: null }),
+      dismissToast: (id) =>
+        set((state) => ({
+          toastQueue: state.toastQueue.filter((toast) => toast.id !== id),
+        })),
+
+      clearToasts: () => set({ toastQueue: [] }),
+
+      showToast: (message, severity = USER_FEEDBACK_SEVERITY.INFO, options) =>
+        set((state) => {
+          if (
+            options?.dedupeKey &&
+            state.toastQueue.some(
+              (toast) => toast.dedupeKey === options.dedupeKey
+            )
+          ) {
+            return state;
+          }
+          const item: ToastItem = {
+            id: `toast-${++toastSequence}`,
+            message,
+            severity,
+            createdAt: Date.now(),
+            ...options,
+          };
+          return {
+            toastQueue: [...state.toastQueue, item].slice(
+              -TOAST_MAX_QUEUE_SIZE
+            ),
+          };
+        }),
+
+      // Kept for existing callers while the queue API is adopted incrementally.
+      hideToast: () => set({ toastQueue: [] }),
 
       setContentPreviewModal: (modal) => set({ contentPreviewModal: modal }),
       setSuffixEditConfirmation: (confirmation) =>
@@ -1474,7 +1550,7 @@ export const useUiStore = create<UiState & UiActions>()(
           isLoading: false,
           loadingMessage: null,
           outputScrollTargets: {},
-          toast: null,
+          toastQueue: [],
           footerOpenPicker: null,
           horizontalPanelResizeActive: false,
           suffixEditConfirmation: null,
