@@ -3,6 +3,7 @@ import {
   ToolPermissionConfig,
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
+import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 import type {
@@ -15,6 +16,31 @@ import {
 } from "./OpenCodeInlineConfig";
 
 const MAX_PERMISSION_KEY_SUFFIX_ATTEMPTS = 1000;
+
+const OPENCODE_PERMISSION_VERIFICATION = {
+  kind: "behavioral-test",
+  reference: "src/test/harness/inline-config.harness.test.ts",
+  basis: "cli-version",
+  verifiedVersions: ["1.18.10"],
+} as const;
+
+const OPENCODE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  mode: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: OPENCODE_PERMISSION_VERIFICATION,
+  },
+  allowedTools: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: OPENCODE_PERMISSION_VERIFICATION,
+  },
+  deniedTools: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: OPENCODE_PERMISSION_VERIFICATION,
+  },
+};
 
 const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
   shell: "bash",
@@ -61,6 +87,8 @@ export class OpenCodeToolPermissionMapper
   extends ToolPermissionMapperBase
   implements IToolPermissionMapper
 {
+  readonly capabilities = OPENCODE_PERMISSION_CAPABILITIES;
+
   /**
    * Build CLI arguments for tool permissions.
    *

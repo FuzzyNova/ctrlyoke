@@ -3,8 +3,34 @@ import {
   ToolPermissionConfig,
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
+import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+
+const COPILOT_PERMISSION_VERIFICATION = {
+  kind: "manual",
+  reference: "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+  basis: "cli-version",
+  verifiedVersions: [">=0.0.384 <2.0.0"],
+} as const;
+
+const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  mode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: COPILOT_PERMISSION_VERIFICATION,
+  },
+  allowedTools: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: COPILOT_PERMISSION_VERIFICATION,
+  },
+  deniedTools: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: COPILOT_PERMISSION_VERIFICATION,
+  },
+};
 
 /**
  * Copilot CLI Tool Permission Mapper
@@ -33,6 +59,8 @@ export class CopilotToolPermissionMapper
   extends ToolPermissionMapperBase
   implements IToolPermissionMapper
 {
+  readonly capabilities = COPILOT_PERMISSION_CAPABILITIES;
+
   /**
    * Read-only tools that don't require explicit permission
    * (Copilot CLI auto-grants these)

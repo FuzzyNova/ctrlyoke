@@ -9,6 +9,7 @@ import {
 } from "../../core/WorkflowExecutor";
 import { PromptQueue } from "../../core/PromptQueue";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { MockPlatform } from "../helpers/mockHarness";
 import {
   EXECUTION_MODES,
@@ -49,6 +50,7 @@ function createProvider(): ICliProvider {
       getNotificationDirectory: () => process.cwd(),
     },
     toolPermissionMapper: {
+      capabilities: new CopilotToolPermissionMapper().capabilities,
       buildArgs: () => [],
       hasFullPermissions: () => true,
     },

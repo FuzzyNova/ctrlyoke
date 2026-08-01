@@ -1,7 +1,10 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Provider work landed. Remaining scope is the honest-UI stage
-> (Compatibility Phase 1C) plus the Antigravity/Codex parity follow-up.
+> **Status:** Provider work and Compatibility Phase 1B(i) landed. Each harness
+> now owns its permission capability descriptor, and the backend registry
+> assembles the six declarations with version-aware verification. Remaining
+> scope is the analyzer/client snapshot and honest-UI stage (Compatibility
+> Phases 1B(ii)–1C) plus the Antigravity/Codex parity follow-up.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -29,7 +32,7 @@
 - `getPermissionHarnessSupport()` has already dropped OpenCode and now returns
   `mode-only` for Codex and Antigravity only.
 
-What has **not** landed: the capability registry, the analyzer, the
+What has **not** landed: the analyzer, the client snapshot message, the
 `prepare()` interface change (`IToolPermissionMapper` still exposes
 `buildArgs()`), and the honest-UI stage below.
 
@@ -122,8 +125,8 @@ removed before release per
 `dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`; it must not reappear as
 a capability row, descriptor, or UI caveat.
 
-This table belongs in the shared capability registry once that registry exists.
-Do not copy it into multiple UI components.
+The shared capability registry now assembles this table from the six mapper
+descriptors. Do not copy it into multiple UI components.
 
 ## Root Cause: Why Qwen's Allow/Deny Lists Silently No-Op
 

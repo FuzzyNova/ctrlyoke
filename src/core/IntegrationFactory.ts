@@ -8,6 +8,7 @@ import { CodexCliProvider } from "./harness/codex/CodexCliProvider";
 import { OpenCodeCliProvider } from "./harness/opencode/OpenCodeCliProvider";
 import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
 import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProvider";
+import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 
 /**
  * IntegrationFactory
@@ -29,6 +30,29 @@ import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProv
  */
 export class IntegrationFactory {
   constructor(protected readonly platform: PlatformAdapter) {}
+
+  /**
+   * Create a provider for capability inspection without creating an execution
+   * integration. This is the single HarnessId-to-provider source used by the
+   * capability registry; it intentionally performs no CLI calls.
+   */
+  static createCapabilityProvider(harness: HarnessId): ICliProvider {
+    switch (harness) {
+      case HARNESS_IDS.CLAUDE_CLI:
+        return new ClaudeCliProvider();
+      case HARNESS_IDS.CODEX_CLI:
+        return new CodexCliProvider();
+      case HARNESS_IDS.OPENCODE_CLI:
+        return new OpenCodeCliProvider();
+      case HARNESS_IDS.QWEN_CLI:
+        return new QwenCliProvider();
+      case HARNESS_IDS.ANTIGRAVITY_CLI:
+        return new AntigravityCliProvider();
+      case HARNESS_IDS.COPILOT_CLI:
+      default:
+        return new CopilotCliProvider();
+    }
+  }
 
   /** Create a new Copilot CLI integration */
   createCopilotCli(registerWithContext: boolean = true): CliIntegration {

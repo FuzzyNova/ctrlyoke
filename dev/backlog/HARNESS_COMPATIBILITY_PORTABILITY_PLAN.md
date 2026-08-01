@@ -1,16 +1,21 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Phase 1A is complete. Shared contracts and the pure effective-
-> property resolver have landed in
+> **Status:** Phase 1A and Compatibility Phase 1B(i) are complete. Shared
+> contracts, the pure effective-property resolver, harness-owned permission
+> descriptors, and the backend capability registry have landed in
 > [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
 > [`src/types/ExecutionPropertyTypes.ts`](../../src/types/ExecutionPropertyTypes.ts),
 > [`src/types/ExecutionPropertyResolver.ts`](../../src/types/ExecutionPropertyResolver.ts),
 > and the backend adapter in
 > [`src/utils/PropertyResolver.ts`](../../src/utils/PropertyResolver.ts), with
 > runtime vocabulary constants in
-> [`src/types/DashboardConstants.ts`](../../src/types/DashboardConstants.ts).
-> The registry, descriptor assembly, and analyzer remain to be built (verified
-> 2026-08-01).
+> [`src/types/DashboardConstants.ts`](../../src/types/DashboardConstants.ts),
+> mapper descriptors in the six harness directories, and
+> [`src/core/HarnessCapabilityRegistry.ts`](../../src/core/HarnessCapabilityRegistry.ts).
+> Phase 1B(i) enables only `permissions`, validates all six harnesses and all
+> three permission leaves, caches installed availability/version detection, and
+> derives version-aware verification independently per leaf (verified
+> 2026-08-01). The analyzer and client snapshot message remain to be built.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >

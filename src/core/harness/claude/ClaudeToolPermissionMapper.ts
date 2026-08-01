@@ -3,9 +3,35 @@ import {
   ToolPermissionConfig,
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
+import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+
+const CLAUDE_PERMISSION_VERIFICATION = {
+  kind: "manual",
+  reference: "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+  basis: "cli-version",
+  verifiedVersions: [">=2.1.17 <3.0.0"],
+} as const;
+
+const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  mode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: CLAUDE_PERMISSION_VERIFICATION,
+  },
+  allowedTools: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: CLAUDE_PERMISSION_VERIFICATION,
+  },
+  deniedTools: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: CLAUDE_PERMISSION_VERIFICATION,
+  },
+};
 
 /**
  * Claude CLI Tool Permission Mapper
@@ -35,6 +61,8 @@ export class ClaudeToolPermissionMapper
   extends ToolPermissionMapperBase
   implements IToolPermissionMapper
 {
+  readonly capabilities = CLAUDE_PERMISSION_CAPABILITIES;
+
   /**
    * Build CLI arguments for tool permissions
    *

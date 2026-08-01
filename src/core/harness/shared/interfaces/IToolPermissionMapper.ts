@@ -1,4 +1,5 @@
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import type { PermissionCapabilityDescriptor } from "../../../../types/CompatibilityTypes";
 import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTypes";
 
 export type {
@@ -18,6 +19,9 @@ export type {
  * - Codex: `shell(git:*)` → MCP tool configuration
  */
 export interface IToolPermissionMapper {
+  /** Static permission facts owned by this harness adapter. */
+  readonly capabilities: PermissionCapabilityDescriptor;
+
   /**
    * Build CLI arguments for tool permissions
    * @param config Tool permission configuration
@@ -43,6 +47,7 @@ export interface IToolPermissionMapper {
  * Providers can extend this class to avoid duplicating logic.
  */
 export abstract class ToolPermissionMapperBase implements IToolPermissionMapper {
+  abstract readonly capabilities: PermissionCapabilityDescriptor;
   abstract buildArgs(config: ToolPermissionConfig): string[];
 
   /**

@@ -3,8 +3,34 @@ import {
   ToolPermissionConfig,
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
+import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+
+const CODEX_PERMISSION_VERIFICATION = {
+  kind: "manual",
+  reference: "dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md#current-baseline",
+  basis: "cli-version",
+  verifiedVersions: ["0.146.0"],
+} as const;
+
+const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  mode: {
+    fidelity: "exact",
+    mechanism: "native",
+    verification: CODEX_PERMISSION_VERIFICATION,
+  },
+  allowedTools: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: CODEX_PERMISSION_VERIFICATION,
+  },
+  deniedTools: {
+    fidelity: "unsupported",
+    mechanism: "none",
+    verification: CODEX_PERMISSION_VERIFICATION,
+  },
+};
 
 /**
  * Codex CLI Tool Permission Mapper
@@ -36,6 +62,8 @@ export class CodexToolPermissionMapper
   extends ToolPermissionMapperBase
   implements IToolPermissionMapper
 {
+  readonly capabilities = CODEX_PERMISSION_CAPABILITIES;
+
   private readonly AUTO_PRESET_ARGS = [
     "--sandbox",
     "workspace-write",

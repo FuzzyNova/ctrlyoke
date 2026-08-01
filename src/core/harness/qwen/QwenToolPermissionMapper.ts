@@ -3,8 +3,34 @@ import {
   ToolPermissionMapperBase,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
+import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+
+const QWEN_PERMISSION_VERIFICATION = {
+  kind: "behavioral-test",
+  reference: "src/test/harness/inline-config.harness.test.ts",
+  basis: "cli-version",
+  verifiedVersions: ["0.20.1"],
+} as const;
+
+const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+  mode: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: QWEN_PERMISSION_VERIFICATION,
+  },
+  allowedTools: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: QWEN_PERMISSION_VERIFICATION,
+  },
+  deniedTools: {
+    fidelity: "exact",
+    mechanism: "translated-cli",
+    verification: QWEN_PERMISSION_VERIFICATION,
+  },
+};
 
 /**
  * Qwen Code CLI Tool Permission Mapper
@@ -33,6 +59,8 @@ export class QwenToolPermissionMapper
   extends ToolPermissionMapperBase
   implements IToolPermissionMapper
 {
+  readonly capabilities = QWEN_PERMISSION_CAPABILITIES;
+
   /**
    * Build CLI arguments for tool permissions
    *

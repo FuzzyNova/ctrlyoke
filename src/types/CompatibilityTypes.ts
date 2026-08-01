@@ -40,7 +40,7 @@ export interface CapabilityDeclaration {
     reference: string;
     basis: CapabilityVerificationBasis;
     /** Ranges for which this exact capability claim has evidence. */
-    verifiedVersions: HarnessVersionRange[];
+    readonly verifiedVersions: readonly HarnessVersionRange[];
   };
   caveatCode?: string;
   remediationCode?: string;
@@ -57,6 +57,13 @@ export interface PermissionCapabilityDescriptor {
   allowedTools: CapabilityDeclaration;
   deniedTools: CapabilityDeclaration;
 }
+
+export type PermissionCapabilityKey = keyof PermissionCapabilityDescriptor;
+
+export type EffectivePermissionCapabilityState = Record<
+  PermissionCapabilityKey,
+  EffectiveCapabilityState
+>;
 
 export interface HarnessCapabilityDescriptor {
   harnessId: HarnessId;
@@ -87,6 +94,10 @@ export interface InstalledHarnessCapabilities {
   /** Present for versioned CLI harnesses after detection succeeds. */
   version?: string;
   descriptor: HarnessCapabilityDescriptor;
+  /** Installed-version-aware states for the enabled capability domains. */
+  effective?: {
+    permissions: EffectivePermissionCapabilityState;
+  };
 }
 
 export type CompatibilityConsumerTarget =

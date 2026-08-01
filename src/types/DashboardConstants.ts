@@ -623,6 +623,12 @@ export const CAPABILITY_DOMAINS = {
   USAGE: "usage",
 } as const;
 
+export const PERMISSION_CAPABILITY_KEYS = {
+  MODE: "mode",
+  ALLOWED_TOOLS: "allowedTools",
+  DENIED_TOOLS: "deniedTools",
+} as const;
+
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   INFO: "info",
   WARNING: "warning",
