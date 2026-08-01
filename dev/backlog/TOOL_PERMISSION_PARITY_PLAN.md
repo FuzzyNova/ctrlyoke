@@ -1,11 +1,12 @@
 # Cross-Harness Tool Permission Parity Plan
 
-> **Status:** Provider work and Compatibility Phases 1A–1C are complete. The
+> **Status:** Provider work, Compatibility Phases 1A–1C, runtime preparation,
+> and the surviving Antigravity statusline-lease scope are complete. The
 > shared analyzer now drives persistent mixed-harness diagnostics across the
 > workflow, prompt, defaults, and advanced permission surfaces; authored tool
-> lists remain editable under mode-only harnesses. The runtime preparation
-> contract is landed; remaining work is the workspace permission writer and
-> the post-release Antigravity/Codex parity follow-up.
+> lists remain editable under mode-only harnesses. Qwen/OpenCode behavioral
+> verification remains pinned in the separate real-harness fixture suite; the
+> post-release work is limited to Antigravity/Codex parity follow-up.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -35,15 +36,15 @@
 
 The runtime preparation contract has landed: `IToolPermissionMapper.prepare()`
 now returns CLI arguments, optional workspace mutations, and compatibility
-diagnostics through one application object. The remaining work is the
-workspace permission writer and the post-release Antigravity/Codex parity
-follow-up described below.
+diagnostics through one application object. Antigravity's remaining global
+statusline lease scope is also complete; the post-release follow-up is limited
+to new parity evidence for Antigravity and Codex.
 
-This plan is implemented in full before 0.1.0 ships, not split into a pre-launch
-honesty slice and a post-launch parity slice. The staging below is therefore an
-engineering sequence, not a release boundary: no stage is deferred past release,
-and the honest-UI stage is built directly on the shared registry rather than as
-a throwaway stopgap.
+Stages 1–7 are implemented before 0.1.0 ships; Compatibility Phase 2 and the
+Codex/Antigravity parity investigation remain post-release. The staging below
+is therefore an engineering sequence for the shipped gate, while the honest-UI
+stage is built directly on the shared registry rather than as a throwaway
+stopgap.
 
 Capability _classifications_ still change only when new behavioral evidence is
 available. Qwen's inline allow/deny flags and OpenCode's inline permission
@@ -311,6 +312,32 @@ The remaining scope of this section is Antigravity's global statusline lease.
 Its generic `registerValueLease` / `unregisterValueLease` /
 `getValueLeaseBaseline` machinery remains in `SettingsJsonMcpTracker` and must
 retain its existing baseline restoration and ownership behavior.
+
+### Stage 11 scope decision (2026-08-01)
+
+The surviving implementation scope is deliberately narrower than the retired
+OpenCode workspace-lease design:
+
+- **In scope:** key MCP and value-lease baseline snapshots by their resolved
+  config file path. This prevents one tracker serving multiple workspaces (or
+  Antigravity's global settings through different workspace arguments) from
+  accumulating a union baseline and restoring the wrong file's state.
+- **In scope:** identify lease owners with the process PID plus a random token
+  generated once per ctrlyoke process. PID-only ownership can mistake a
+  recycled process for the owner of a stale sidecar; the token is checked for
+  owners belonging to the current process, while live foreign processes remain
+  protected by PID liveness.
+- **In scope:** add regression coverage for pruning a dead owner, including a
+  stale owner with the same workflow key as a new acquisition.
+- **In scope:** correct `withLock()`'s documentation to describe its actual
+  in-process `AsyncMutex`, and use the existing `withFileLock()` around
+  tracker-owned settings mutations. Antigravity's statusline file is global
+  and can be touched by multiple ctrlyoke processes; MCP mutations use the
+  same tracker and must retain atomic read-modify-write behavior.
+- **Out of scope:** the retired OpenCode permission lease, step-scoped lease
+  lifetime, structured conflict results, blocking conflict UX, retry policy,
+  disclosure work, and any attempt to govern harnesses launched outside
+  ctrlyoke. OpenCode continues to use `OPENCODE_CONFIG_CONTENT`.
 
 <!-- Pre-Stage-2 OpenCode workspace-lease design retained below only as an
      implementation-history reference; it is no longer active scope.

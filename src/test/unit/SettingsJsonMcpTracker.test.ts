@@ -213,7 +213,14 @@ suite("SettingsJsonMcpTracker", () => {
       JSON.stringify({
         baseline: "baseline",
         baselineHadKey: true,
-        owners: [{ pid: 99999999, workflowKey: "crashed", ts: Date.now() }],
+        owners: [
+          {
+            pid: 99999999,
+            token: "crashed-process",
+            workflowKey: "crashed",
+            ts: Date.now(),
+          },
+        ],
       })
     );
 
@@ -227,12 +234,9 @@ suite("SettingsJsonMcpTracker", () => {
     await assert.rejects(fs.access(sidecarPath), /ENOENT/);
   });
 
-  test("adopts the sidecar baseline after in-memory state is lost", async () => {
+  test("reacquires after a dead owner with the same workflow key", async () => {
     await fs.mkdir(settingsDir, { recursive: true });
-    await fs.writeFile(
-      settingsPath,
-      JSON.stringify({ statusLine: "ctrlyoke-installed-by-crashed-host" })
-    );
+    await fs.writeFile(settingsPath, JSON.stringify({ statusLine: "owned" }));
     const sidecarPath = path.join(
       settingsDir,
       ".ctrlyoke-lease-statusLine.json"
@@ -240,12 +244,127 @@ suite("SettingsJsonMcpTracker", () => {
     await fs.writeFile(
       sidecarPath,
       JSON.stringify({
-        baseline: "user-status",
+        baseline: "baseline",
         baselineHadKey: true,
-        owners: [{ pid: process.pid, workflowKey: "wf-1", ts: Date.now() }],
+        owners: [
+          {
+            pid: 99999999,
+            token: "crashed-process",
+            workflowKey: "wf-reused",
+            ts: Date.now(),
+          },
+        ],
       })
     );
 
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    assert.strictEqual(
+      await tracker.registerValueLease(
+        "wf-reused",
+        tmpDir,
+        "statusLine",
+        "replacement"
+      ),
+      "acquired"
+    );
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "replacement"
+    );
+    await tracker.unregisterValueLease("wf-reused", tmpDir, "statusLine");
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      "baseline"
+    );
+  });
+
+  test("does not treat a recycled current PID as the old lease owner", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(settingsPath, JSON.stringify({ statusLine: "owned" }));
+    const sidecarPath = path.join(
+      settingsDir,
+      ".ctrlyoke-lease-statusLine.json"
+    );
+    await fs.writeFile(
+      sidecarPath,
+      JSON.stringify({
+        baseline: "baseline",
+        baselineHadKey: true,
+        owners: [
+          {
+            pid: process.pid,
+            token: "previous-process-instance",
+            workflowKey: "wf-reused",
+            ts: Date.now(),
+          },
+        ],
+      })
+    );
+
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    assert.strictEqual(
+      await tracker.registerValueLease(
+        "wf-reused",
+        tmpDir,
+        "statusLine",
+        "replacement"
+      ),
+      "acquired"
+    );
+  });
+
+  test("keeps MCP baselines isolated by resolved config path", async () => {
+    const firstWorkspace = path.join(tmpDir, "first");
+    const secondWorkspace = path.join(tmpDir, "second");
+    const firstSettingsPath = path.join(
+      firstWorkspace,
+      ".qwen",
+      "settings.json"
+    );
+    const secondSettingsPath = path.join(
+      secondWorkspace,
+      ".qwen",
+      "settings.json"
+    );
+    await fs.mkdir(path.dirname(firstSettingsPath), { recursive: true });
+    await fs.writeFile(
+      firstSettingsPath,
+      JSON.stringify({ mcpServers: { shared: { command: "user" } } })
+    );
+
+    const tracker = SettingsJsonMcpTracker.getInstance("multi-root", {
+      userConfigPath: () => path.join(tmpDir, "missing-user-settings.json"),
+    });
+    await tracker.registerServers("wf-second", secondWorkspace, {
+      shared: { command: "ctrlyoke" },
+    });
+    await tracker.unregisterWorkflow("wf-second", secondWorkspace);
+
+    await assert.rejects(fs.access(secondSettingsPath), /ENOENT/);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(firstSettingsPath, "utf-8")),
+      { mcpServers: { shared: { command: "user" } } }
+    );
+  });
+
+  test("adopts the sidecar baseline after in-memory state is lost", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: "user-status" })
+    );
+    const firstTracker = SettingsJsonMcpTracker.getInstance("global-settings", {
+      projectConfigPath: () => settingsPath,
+    });
+    await firstTracker.registerValueLease(
+      "wf-1",
+      path.join(tmpDir, "different-workspace"),
+      "statusLine",
+      "ctrlyoke-installed-by-crashed-host"
+    );
+
+    // Simulate a host restart while preserving the on-disk lease sidecar.
+    SettingsJsonMcpTracker.resetAll();
     const tracker = SettingsJsonMcpTracker.getInstance("global-settings", {
       projectConfigPath: () => settingsPath,
     });

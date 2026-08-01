@@ -62,8 +62,9 @@ Detail lives in each plan's status header. The summary that drives sequencing:
   in. `getPermissionHarnessSupport()` has already dropped OpenCode.
 - **Compatibility — Phases 1A–1C complete.** The registry, analyzer, client
   snapshot, honest permission surfaces, and hosted-browser transport coverage
-  are in place. Runtime permission preparation and post-release portability
-  reporting remain queued.
+  are in place. Runtime permission preparation and the remaining Antigravity
+  statusline-lease scope are also complete; post-release portability reporting
+  remains deferred.
 - **Browser feedback — Phase 1 built.** The bounded toast queue and viewport
   are in, while the Phase 2.5 Site 1 and Site 2 deletions remain complete.
   `USER_FEEDBACK` transport and the broader `show*Message` migration remain
@@ -122,9 +123,9 @@ temporary harness switch while waiting for it is explicitly forbidden.
 3. **[x] Compatibility Phase 1C** — honest permission UI across every
    authoring surface (`TOOL_PERMISSION_PARITY_PLAN.md` "Compatibility Phase
    1C"). **Done 2026-08-01.**
-4. **Permission plan stages 4–7** — the runtime preparation contract, then the
-   remaining Antigravity statusline-lease scope, then Qwen/OpenCode fixture
-   retention.
+4. **[x] Permission plan stages 4–7** — the runtime preparation contract, the
+   remaining Antigravity statusline-lease scope, and Qwen/OpenCode fixture
+   retention. **Done 2026-08-01.**
 
 Two sequencing hazards worth restating here because they are cheap to get
 wrong:
@@ -173,7 +174,7 @@ strictly ordered: each builds only on what has already landed.
 | 8   | Phase 1C(i)   | `FieldDiagnostic`, delete `getPermissionHarnessSupport`, honest permission UI in both property editors |
 | 9   | Phase 1C(ii)  | Defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage         |
 | 10  | Perm. 4       | `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract           |
-| 11  | Perm. 5–7     | Remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention                   |
+| 11  | Perm. 5–7     | **Done** — remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention         |
 
 Stage 2 is deliberately not queued: it is post-release by decision of the plans
 themselves.

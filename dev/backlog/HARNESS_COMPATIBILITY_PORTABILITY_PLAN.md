@@ -1,6 +1,8 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Phases 1A–1B and Compatibility Phase 1C are complete. Shared
+> **Status:** The complete Stage 1 / 0.1.0 compatibility gate is shipped:
+> Phases 1A–1B and Compatibility Phase 1C are complete, as are the permission
+> plan's runtime preparation and remaining Antigravity lease stages. Shared
 > contracts, the pure effective-property resolver, harness-owned permission
 > descriptors, and the backend capability registry have landed in
 > [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
@@ -26,7 +28,9 @@
 > Defaults and advanced permission settings now render the same capability
 > summary, and hosted-browser transport parity is covered by the standalone
 > shim tests. Customer docs distinguish portable workflow attachments from
-> optional harness-native discovery.
+> optional harness-native discovery. Compatibility Phase 2 (dry run, portability
+> reporting, and CLI/MCP serialization) and Phase 3 capability domains remain
+> post-release.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >

@@ -158,6 +158,27 @@ function qwenMcpWorkflow(
   };
 }
 
+function qwenPermissionWorkflow(
+  markerPath: string,
+  permissions: ToolPermissionsOverride
+): PromptFile {
+  return {
+    harness: QWEN,
+    model: HARNESS_MODELS[QWEN],
+    toolPermissions: permissions,
+    steps: [
+      {
+        name: "qwen-permission-probe",
+        prompt: [
+          "Use the shell tool exactly once.",
+          `Run: node -e \"require('fs').writeFileSync('${normalizedPath(markerPath)}','permission-allowed')\"`,
+          "If the shell tool is denied, do not retry and do not create the file another way.",
+        ].join(" "),
+      },
+    ],
+  };
+}
+
 suite("Inline harness configuration regression tests", function () {
   this.timeout(HARNESS_TIMEOUT_MS);
 
@@ -475,6 +496,44 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   suite(`Qwen ${PINNED_HARNESS_VERSIONS[QWEN]}`, function () {
+    for (const permissionCase of [
+      {
+        name: "allow proceeds",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell(node:*)"],
+          deniedTools: [],
+        } satisfies ToolPermissionsOverride,
+        shouldCreate: true,
+      },
+      {
+        name: "deny blocks",
+        permissions: {
+          mode: "custom",
+          allowedTools: [],
+          deniedTools: ["shell(node:*)"],
+        } satisfies ToolPermissionsOverride,
+        shouldCreate: false,
+      },
+    ]) {
+      test(`${permissionCase.name} through inline CLI arguments`, function () {
+        const markerPath = path.join(tmpDir, "qwen-permission-marker.txt");
+        const result = runWorkflowFile(
+          qwenPermissionWorkflow(markerPath, permissionCase.permissions),
+          tmpDir,
+          `qwen-permission-${permissionCase.name.replace(/ /g, "-")}`
+        );
+        if (logAndMaybeSkip(`qwen-cli (${permissionCase.name})`, result))
+          return;
+        assertSuccessfulRun(`qwen-cli (${permissionCase.name})`, result);
+        assert.strictEqual(
+          fs.existsSync(markerPath),
+          permissionCase.shouldCreate
+        );
+        assertNoWorkspaceConfig(tmpDir, [".qwen", ".gitignore"]);
+      });
+    }
+
     for (const mode of ["headless", "interactive"] as const) {
       test(`calls an inline MCP tool in ${mode} mode`, function () {
         const toolName = `qwen_${mode}_probe`;

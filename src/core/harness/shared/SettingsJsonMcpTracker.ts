@@ -1,8 +1,10 @@
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
+import { randomUUID } from "crypto";
 import { Log } from "../../../utils/Log";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
+import { withFileLock } from "../../../utils/FileLockUtils";
 import { AsyncMutex } from "./AsyncMutex";
 
 /**
@@ -33,7 +35,7 @@ export type SettingsJsonPermissionPolicy = Record<
 
 interface ValueLease {
   normalizedRequestedValue: string;
-  owners: Map<string, string>;
+  owners: Map<string, LeaseOwnerState>;
   baselineHadKey: boolean;
   baselineValue: unknown;
   appliedValue: unknown;
@@ -41,6 +43,7 @@ interface ValueLease {
 
 interface LeaseOwnerState {
   pid: number;
+  token: string;
   workflowKey: string;
   ts: number;
 }
@@ -49,6 +52,15 @@ interface LeaseSidecar {
   baseline: unknown;
   baselineHadKey: boolean;
   owners: LeaseOwnerState[];
+  normalizedRequestedValue?: string;
+  appliedValue?: unknown;
+}
+
+interface BaselineState {
+  settingsFileExisted: boolean;
+  hadMcpServers: boolean;
+  hadSchema: boolean;
+  servers: Set<string>;
 }
 
 /**
@@ -132,26 +144,14 @@ export class SettingsJsonMcpTracker {
   /** Optional schema URL added only while ctrlyoke owns file mutations. */
   private readonly schemaUrl: string | undefined;
 
-  /** Async mutex for serializing all read-modify-write operations on settings.json. */
+  /** In-process mutex for serializing tracker read-modify-write operations. */
   private readonly mutex = new AsyncMutex();
 
-  /** MCP server names that existed before ctrlyoke modified anything. */
-  private baselineServers = new Set<string>();
+  /** Baseline snapshots keyed by the resolved config file path. */
+  private readonly baselines = new Map<string, BaselineState>();
 
-  /** Project-level MCP names that cleanup must never remove. */
-  private baselineProjectServers = new Set<string>();
-
-  /** Whether baseline capture has completed for this workspace. */
-  private baselineCapturedForWorkspace: string | undefined;
-
-  /** Whether the project settings.json existed before ctrlyoke touched it. */
-  private baselineProjectSettingsFileExisted = false;
-
-  /** Whether the project settings.json originally had an mcpServers property. */
-  private baselineProjectHadMcpServers = false;
-
-  /** Whether the project settings file originally had a $schema property. */
-  private baselineProjectHadSchema = false;
+  /** Random identity component shared by every lease owned by this process. */
+  private readonly processOwnerToken: string = randomUUID();
 
   /** Path to the temporary .gitignore written for a newly-created config file. */
   private gitignorePath: string | undefined;
@@ -189,7 +189,11 @@ export class SettingsJsonMcpTracker {
   // ============================================================
 
   /**
-   * Execute a callback while holding the settings.json file lock.
+   * Execute a callback while holding this process's settings mutation mutex.
+   *
+   * This does not provide cross-process locking. Tracker-owned file mutations
+   * use `withFileLock()` around this mutex; callers that use this hook for
+   * another tracker must provide the appropriate file lock themselves.
    *
    * Use this to wrap non-MCP read-modify-write operations (e.g., hooks
    * backup/restore) that touch the same settings.json file. MCP operations
@@ -207,6 +211,34 @@ export class SettingsJsonMcpTracker {
     }
   }
 
+  /** Serialize one tracker mutation both within and across ctrlyoke processes. */
+  private async withMutationLock<T>(
+    settingsPath: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    return withFileLock(settingsPath, () => this.withLock(fn));
+  }
+
+  private getBaseline(settingsPath: string): BaselineState {
+    return (
+      this.baselines.get(settingsPath) ?? {
+        settingsFileExisted: false,
+        hadMcpServers: false,
+        hadSchema: false,
+        servers: new Set<string>(),
+      }
+    );
+  }
+
+  private getProjectConfigPath(workspaceRoot: string): string {
+    return path.resolve(this.projectConfigPath(workspaceRoot));
+  }
+
+  private getUserConfigPath(): string {
+    return path.resolve(this.userConfigPath());
+  }
+
   // ============================================================
   // BASELINE CAPTURE
   // ============================================================
@@ -221,45 +253,46 @@ export class SettingsJsonMcpTracker {
    * Called lazily on first use per workspace root. Thread-safe (idempotent).
    */
   async captureBaseline(workspaceRoot: string): Promise<void> {
-    if (this.baselineCapturedForWorkspace === workspaceRoot) {
-      return;
-    }
+    const projectSettings = this.getProjectConfigPath(workspaceRoot);
+    const userSettings = this.getUserConfigPath();
 
-    const projectSettings = this.projectConfigPath(workspaceRoot);
-    const userSettings = this.userConfigPath();
+    for (const filePath of new Set([projectSettings, userSettings])) {
+      if (this.baselines.has(filePath)) {
+        continue;
+      }
 
-    this.baselineProjectSettingsFileExisted = false;
-    this.baselineProjectHadMcpServers = false;
-    this.baselineProjectHadSchema = false;
-
-    for (const filePath of [projectSettings, userSettings]) {
+      const baseline: BaselineState = {
+        settingsFileExisted: false,
+        hadMcpServers: false,
+        hadSchema: false,
+        servers: new Set(),
+      };
       try {
         const content = await fs.readFile(filePath, "utf-8");
-        const settings = JSON.parse(content);
-        if (filePath === projectSettings) {
-          this.baselineProjectSettingsFileExisted = true;
-          this.baselineProjectHadSchema = "$schema" in settings;
-        }
+        const settings = JSON.parse(content) as Record<string, unknown>;
+        baseline.settingsFileExisted = true;
+        baseline.hadSchema = "$schema" in settings;
         const mcpServers = settings[this.mcpServersProperty];
         if (mcpServers && typeof mcpServers === "object") {
-          if (filePath === projectSettings) {
-            this.baselineProjectHadMcpServers = true;
-            for (const name of Object.keys(mcpServers)) {
-              this.baselineProjectServers.add(name);
-            }
-          }
+          baseline.hadMcpServers = true;
           for (const name of Object.keys(mcpServers)) {
-            this.baselineServers.add(name);
+            baseline.servers.add(name);
           }
         }
       } catch {
         // File doesn't exist or invalid JSON — skip
       }
+      this.baselines.set(filePath, baseline);
     }
 
-    this.baselineCapturedForWorkspace = workspaceRoot;
+    const baselineServers = new Set<string>();
+    for (const filePath of [projectSettings, userSettings]) {
+      for (const name of this.getBaseline(filePath).servers) {
+        baselineServers.add(name);
+      }
+    }
     Log.debug(
-      `📋 ${this.toolName} MCP baseline captured: [${[...this.baselineServers].join(", ")}]`
+      `📋 ${this.toolName} MCP baseline captured for ${projectSettings}: [${[...baselineServers].join(", ")}]`
     );
   }
 
@@ -310,10 +343,10 @@ export class SettingsJsonMcpTracker {
       this.refCounts.set(name, (this.refCounts.get(name) ?? 0) + 1);
     }
 
-    // Serialize the file read-modify-write under the mutex
-    await this.mutex.acquire();
-    try {
-      const settingsPath = this.projectConfigPath(workspaceRoot);
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
+    // Serialize the complete read-modify-write across processes as well as
+    // within this process.
+    await this.withMutationLock(settingsPath, async () => {
       const settings = await this.readProjectConfig(settingsPath);
 
       const existingMcp =
@@ -341,7 +374,7 @@ export class SettingsJsonMcpTracker {
           `🔧 ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
         );
 
-        if (!this.baselineProjectSettingsFileExisted) {
+        if (!this.getBaseline(settingsPath).settingsFileExisted) {
           await this.writeGitignore(settingsPath);
         }
       } else {
@@ -349,9 +382,7 @@ export class SettingsJsonMcpTracker {
           `♻️ ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
         );
       }
-    } finally {
-      this.mutex.release();
-    }
+    });
 
     return serverNames;
   }
@@ -383,7 +414,7 @@ export class SettingsJsonMcpTracker {
       if (count <= 0) {
         this.refCounts.delete(name);
         // Only remove from settings if it wasn't a baseline server
-        if (!this.baselineProjectServers.has(name)) {
+        if (!this.getBaseline(this.getProjectConfigPath(workspaceRoot)).servers.has(name)) {
           toRemove.push(name);
         }
       } else {
@@ -395,9 +426,8 @@ export class SettingsJsonMcpTracker {
 
     // Remove zero-ref servers from settings.json (serialized under mutex)
     if (toRemove.length > 0) {
-      await this.mutex.acquire();
-      try {
-        const settingsPath = this.projectConfigPath(workspaceRoot);
+      const settingsPath = this.getProjectConfigPath(workspaceRoot);
+      await this.withMutationLock(settingsPath, async () => {
         try {
           const settings = JSON.parse(
             await fs.readFile(settingsPath, "utf-8")
@@ -422,7 +452,7 @@ export class SettingsJsonMcpTracker {
             }
             if (
               Object.keys(mcpServers).length === 0 &&
-              !this.baselineProjectHadMcpServers
+              !this.getBaseline(settingsPath).hadMcpServers
             ) {
               delete settings[this.mcpServersProperty];
             } else {
@@ -437,15 +467,13 @@ export class SettingsJsonMcpTracker {
         } catch {
           // Settings file gone — nothing to clean up
         }
-      } finally {
-        this.mutex.release();
-      }
+      });
     }
 
     if (
       this.refCounts.size === 0 &&
       !this.hasValueLeaseForWorkspace(workspaceRoot) &&
-      !this.baselineProjectSettingsFileExisted
+      !this.getBaseline(this.getProjectConfigPath(workspaceRoot)).settingsFileExisted
     ) {
       await this.deleteCtrlYokeGitignore();
     }
@@ -472,8 +500,8 @@ export class SettingsJsonMcpTracker {
   ): Promise<"acquired" | "shared"> {
     await this.captureBaseline(workspaceRoot);
 
-    return this.withLock(async () => {
-      const settingsPath = this.projectConfigPath(workspaceRoot);
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
+    return this.withMutationLock(settingsPath, async () => {
       const leaseKey = this.getLeaseKey(settingsPath, key);
       await this.pruneLeaseOwnersLocked(settingsPath, key);
       const normalizedRequestedValue = JSON.stringify(value);
@@ -484,7 +512,7 @@ export class SettingsJsonMcpTracker {
         if (activeLease.normalizedRequestedValue !== normalizedRequestedValue) {
           const otherOwners = [...activeLease.owners.entries()]
             .filter(([activeOwnerId]) => activeOwnerId !== ownerId)
-            .map(([, activeWorkflowKey]) => activeWorkflowKey);
+            .map(([, owner]) => owner.workflowKey);
           if (otherOwners.length > 0) {
             const conflictDescription =
               key === "permission"
@@ -501,7 +529,12 @@ export class SettingsJsonMcpTracker {
           activeLease = undefined;
         } else {
           const wasShared = !activeLease.owners.has(ownerId);
-          activeLease.owners.set(ownerId, workflowKey);
+          activeLease.owners.set(ownerId, {
+            pid: process.pid,
+            token: this.processOwnerToken,
+            workflowKey,
+            ts: Date.now(),
+          });
           await this.writeLeaseSidecar(settingsPath, key, activeLease);
           return wasShared ? "shared" : "acquired";
         }
@@ -509,6 +542,39 @@ export class SettingsJsonMcpTracker {
 
       const settings = await this.readProjectConfig(settingsPath);
       const sidecar = await this.readLeaseSidecar(settingsPath, key);
+      if (sidecar?.owners.length) {
+        if (sidecar.normalizedRequestedValue !== normalizedRequestedValue) {
+          const activeOwner = sidecar.owners[0].workflowKey;
+          throw new Error(
+            `${this.toolName} ${
+              key === "permission" ? "permission policy conflict" : `${key} value conflict`
+            } in ${settingsPath}; active owner: ${activeOwner}`
+          );
+        }
+
+        const sharedLease: ValueLease = {
+          normalizedRequestedValue,
+          owners: new Map(
+            sidecar.owners.map((owner) => [
+              this.getOwnerId(owner.workflowKey, owner.pid, owner.token),
+              owner,
+            ])
+          ),
+          baselineHadKey: sidecar.baselineHadKey,
+          baselineValue: this.cloneJson(sidecar.baseline),
+          appliedValue: this.cloneJson(sidecar.appliedValue),
+        };
+        const wasShared = sharedLease.owners.has(ownerId);
+        sharedLease.owners.set(ownerId, {
+          pid: process.pid,
+          token: this.processOwnerToken,
+          workflowKey,
+          ts: Date.now(),
+        });
+        this.valueLeases.set(leaseKey, sharedLease);
+        await this.writeLeaseSidecar(settingsPath, key, sharedLease);
+        return wasShared ? "acquired" : "shared";
+      }
       const baselineHadKey = sidecar?.baselineHadKey ?? key in settings;
       const baselineValue = sidecar
         ? this.cloneJson(sidecar.baseline)
@@ -519,7 +585,7 @@ export class SettingsJsonMcpTracker {
       this.addOwnedSchema(settings);
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
-      if (!this.baselineProjectSettingsFileExisted) {
+      if (!this.getBaseline(settingsPath).settingsFileExisted) {
         await this.writeGitignore(settingsPath);
       }
 
@@ -527,15 +593,20 @@ export class SettingsJsonMcpTracker {
         normalizedRequestedValue,
         owners: new Map(
           (sidecar?.owners ?? []).map((owner) => [
-            this.getOwnerId(owner.workflowKey, owner.pid),
-            owner.workflowKey,
+            this.getOwnerId(owner.workflowKey, owner.pid, owner.token),
+            owner,
           ])
         ),
         baselineHadKey,
         baselineValue,
         appliedValue: this.cloneJson(appliedValue),
       };
-      lease.owners.set(ownerId, workflowKey);
+      lease.owners.set(ownerId, {
+        pid: process.pid,
+        token: this.processOwnerToken,
+        workflowKey,
+        ts: Date.now(),
+      });
       this.valueLeases.set(leaseKey, lease);
       Log.debug(
         `🔐 ${this.toolName} ${key} value lease applied to ${settingsPath}`
@@ -555,10 +626,10 @@ export class SettingsJsonMcpTracker {
     workspaceRoot: string,
     key: string
   ): Promise<void> {
-    const settingsPath = this.projectConfigPath(workspaceRoot);
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
     try {
-      await this.withLock(async () => {
+      await this.withMutationLock(settingsPath, async () => {
         await this.pruneLeaseOwnersLocked(settingsPath, key);
         const leaseKey = this.getLeaseKey(settingsPath, key);
         const lease = this.valueLeases.get(leaseKey);
@@ -569,7 +640,7 @@ export class SettingsJsonMcpTracker {
           }
           const remainingOwners = sidecar.owners.filter(
             (owner) =>
-              this.getOwnerId(owner.workflowKey, owner.pid) !==
+              this.getOwnerId(owner.workflowKey, owner.pid, owner.token) !==
               this.getOwnerId(workflowKey)
           );
           if (remainingOwners.length > 0) {
@@ -612,7 +683,7 @@ export class SettingsJsonMcpTracker {
     if (
       this.refCounts.size === 0 &&
       !this.hasValueLeaseForWorkspace(workspaceRoot) &&
-      !this.baselineProjectSettingsFileExisted
+      !this.getBaseline(settingsPath).settingsFileExisted
     ) {
       await this.deleteCtrlYokeGitignore();
     }
@@ -620,9 +691,9 @@ export class SettingsJsonMcpTracker {
 
   /** Prune dead owners and restore the baseline when the lease is orphaned. */
   async pruneDeadOwners(workspaceRoot: string, key: string): Promise<void> {
-    const settingsPath = this.projectConfigPath(workspaceRoot);
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
     try {
-      await this.withLock(async () => {
+      await this.withMutationLock(settingsPath, async () => {
         await this.pruneLeaseOwnersLocked(settingsPath, key);
       });
     } catch (error) {
@@ -642,7 +713,7 @@ export class SettingsJsonMcpTracker {
    * after successfully registering a lease.
    */
   getValueLeaseBaseline(workspaceRoot: string, key: string): unknown {
-    const settingsPath = this.projectConfigPath(workspaceRoot);
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
     const lease = this.valueLeases.get(this.getLeaseKey(settingsPath, key));
     if (!lease || !lease.baselineHadKey) {
       return undefined;
@@ -654,8 +725,12 @@ export class SettingsJsonMcpTracker {
     return `${settingsPath}::${key}`;
   }
 
-  private getOwnerId(workflowKey: string, pid = process.pid): string {
-    return `${pid}:${workflowKey}`;
+  private getOwnerId(
+    workflowKey: string,
+    pid = process.pid,
+    token = this.processOwnerToken
+  ): string {
+    return `${pid}:${token}:${workflowKey}`;
   }
 
   private getLeaseSidecarPath(settingsPath: string, key: string): string {
@@ -700,6 +775,7 @@ export class SettingsJsonMcpTracker {
             !!owner &&
             typeof owner === "object" &&
             typeof owner.pid === "number" &&
+            typeof owner.token === "string" &&
             typeof owner.workflowKey === "string" &&
             typeof owner.ts === "number"
         ),
@@ -726,14 +802,9 @@ export class SettingsJsonMcpTracker {
         ? this.cloneJson(lease.baselineValue)
         : null,
       baselineHadKey: lease.baselineHadKey,
-      owners: [...lease.owners.entries()].map(([ownerId, workflowKey]) => {
-        const separator = ownerId.indexOf(":");
-        return {
-          pid: Number(ownerId.slice(0, separator)),
-          workflowKey,
-          ts: Date.now(),
-        };
-      }),
+      owners: [...lease.owners.values()],
+      normalizedRequestedValue: lease.normalizedRequestedValue,
+      appliedValue: this.cloneJson(lease.appliedValue),
     };
     const sidecarPath = this.getLeaseSidecarPath(settingsPath, key);
     await fs.mkdir(path.dirname(sidecarPath), { recursive: true });
@@ -758,16 +829,18 @@ export class SettingsJsonMcpTracker {
       return;
     }
 
-    const liveOwners = sidecar.owners.filter((owner) =>
-      this.isProcessAlive(owner.pid)
+    const liveOwners = sidecar.owners.filter(
+      (owner) =>
+        this.isProcessAlive(owner.pid) &&
+        (owner.pid !== process.pid || owner.token === this.processOwnerToken)
     );
     if (liveOwners.length > 0) {
       const lease = this.valueLeases.get(this.getLeaseKey(settingsPath, key));
       if (lease) {
         lease.owners = new Map(
           liveOwners.map((owner) => [
-            this.getOwnerId(owner.workflowKey, owner.pid),
-            owner.workflowKey,
+            this.getOwnerId(owner.workflowKey, owner.pid, owner.token),
+            owner,
           ])
         );
         await this.writeLeaseSidecar(settingsPath, key, lease);
@@ -822,7 +895,7 @@ export class SettingsJsonMcpTracker {
   }
 
   private hasValueLeaseForWorkspace(workspaceRoot: string): boolean {
-    const settingsPath = this.projectConfigPath(workspaceRoot);
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
     return [...this.valueLeases.keys()].some((leaseKey) =>
       leaseKey.startsWith(`${settingsPath}::`)
     );
@@ -866,14 +939,14 @@ export class SettingsJsonMcpTracker {
     if (
       !hasManagedState &&
       this.schemaUrl &&
-      !this.baselineProjectHadSchema &&
+      !this.getBaseline(settingsPath).hadSchema &&
       settings.$schema === this.schemaUrl
     ) {
       delete settings.$schema;
     }
 
     if (
-      !this.baselineProjectSettingsFileExisted &&
+      !this.getBaseline(settingsPath).settingsFileExisted &&
       Object.keys(settings).length === 0
     ) {
       await fs.unlink(settingsPath).catch(() => {});
@@ -949,17 +1022,31 @@ export class SettingsJsonMcpTracker {
    * restriction needed). Otherwise returns baseline servers plus the prompt's
    * explicitly configured server names.
    *
+   * @param workspaceRoot Workspace root used to resolve the project config
    * @param promptServerNames MCP server names configured for this prompt
    * @returns Array of allowed names, or undefined to skip the flag entirely
    */
-  getAllowedServerNames(promptServerNames: string[]): string[] | undefined {
+  getAllowedServerNames(
+    workspaceRoot: string,
+    promptServerNames: string[]
+  ): string[] | undefined {
     // If no ctrlyoke-managed servers are active, don't restrict
     if (this.refCounts.size === 0) {
       return undefined;
     }
 
-    // Combine baseline + this prompt's servers
-    const allowed = new Set([...this.baselineServers, ...promptServerNames]);
+    const projectSettings = this.getProjectConfigPath(workspaceRoot);
+    const userSettings = this.getUserConfigPath();
+    const baselineServers = new Set<string>();
+    for (const baseline of [
+      this.getBaseline(projectSettings),
+      this.getBaseline(userSettings),
+    ]) {
+      for (const name of baseline.servers) {
+        baselineServers.add(name);
+      }
+    }
+    const allowed = new Set([...baselineServers, ...promptServerNames]);
     return [...allowed];
   }
 }
