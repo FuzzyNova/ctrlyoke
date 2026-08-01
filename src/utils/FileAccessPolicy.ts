@@ -1,6 +1,9 @@
+import * as path from "path";
 import { isPathWithinDirectory } from "./PathSecurity";
 
-const IS_WINDOWS = process.platform === "win32";
+function isWindows(): boolean {
+  return process.platform === "win32";
+}
 
 /**
  * `isPathWithinDirectory` is a plain string-prefix comparator (see
@@ -13,7 +16,14 @@ const IS_WINDOWS = process.platform === "win32";
  * rather than changing the shared primitive's behavior for every caller.
  */
 function forCompare(value: string): string {
-  return IS_WINDOWS ? value.toLowerCase() : value;
+  return isWindows() ? value.toLowerCase() : value;
+}
+
+function isPathWithinRoot(candidate: string, root: string): boolean {
+  if (!isWindows()) {
+    return isPathWithinDirectory(candidate, root);
+  }
+  return candidate === root || candidate.startsWith(root + path.win32.sep);
 }
 
 /**
@@ -64,7 +74,7 @@ export function evaluateFileAccess(
   const comparablePath = forCompare(candidatePath);
 
   for (const root of options.workspaceRoots) {
-    if (isPathWithinDirectory(comparablePath, forCompare(root))) {
+    if (isPathWithinRoot(comparablePath, forCompare(root))) {
       return {
         allowed: true,
         reason: "workspace",
@@ -75,7 +85,7 @@ export function evaluateFileAccess(
   }
 
   for (const root of options.approvedExternalRoots) {
-    if (isPathWithinDirectory(comparablePath, forCompare(root))) {
+    if (isPathWithinRoot(comparablePath, forCompare(root))) {
       return {
         allowed: true,
         reason: "trustedExternalRoot",

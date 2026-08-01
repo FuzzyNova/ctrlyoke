@@ -266,6 +266,16 @@ export class WorkflowLineageRepository {
         );
       }
       try {
+        await fs.promises.lstat(allocation.runDir);
+        throw new Error(
+          `Run ref collision while publishing ${allocation.runRef}`
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+      }
+      try {
         // A directory rename, but the same Windows sharing failures apply: the
         // staging directory's files were just written, so a scanner can still
         // be holding one when this publishes.
