@@ -584,6 +584,57 @@ export const HARNESS_IDS = {
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
 
+// ============================================================================
+// CAPABILITY VOCABULARY - Shared compatibility contract discriminants
+// ============================================================================
+export const CAPABILITY_FIDELITIES = {
+  EXACT: "exact",
+  PARTIAL: "partial",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+export const CAPABILITY_MECHANISMS = {
+  NATIVE: "native",
+  TRANSLATED_CLI: "translated-cli",
+  WORKSPACE_CONFIG: "workspace-config",
+  MIXED: "mixed",
+  NONE: "none",
+} as const;
+
+export const CAPABILITY_VERIFICATION_STATUSES = {
+  VERIFIED: "verified",
+  UNKNOWN: "unknown",
+} as const;
+
+export const CAPABILITY_VERIFICATION_KINDS = {
+  BEHAVIORAL_TEST: "behavioral-test",
+  MANUAL: "manual",
+} as const;
+
+export const CAPABILITY_VERIFICATION_BASES = {
+  CLI_VERSION: "cli-version",
+} as const;
+
+export const CAPABILITY_DOMAINS = {
+  PERMISSIONS: "permissions",
+  PROMPT_INPUTS: "promptInputs",
+  HOOKS: "hooks",
+  MCP: "mcp",
+  USAGE: "usage",
+} as const;
+
+export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
+  INFO: "info",
+  WARNING: "warning",
+  ERROR: "error",
+} as const;
+
+export const COMPATIBILITY_SOURCE_TIERS = {
+  PROMPT: "prompt",
+  WORKFLOW: "workflow",
+  DEFAULTS: "defaults",
+} as const;
+
 /** Shared dot-notation paths for settings consumed across the extension and webview. */
 export const SETTING_PATHS = {
   PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:

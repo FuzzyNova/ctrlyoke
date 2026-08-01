@@ -1,8 +1,11 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Ready for implementation. Nothing in this plan has been built yet
-> (verified 2026-08-01: no capability registry, descriptor, or analyzer module
-> exists anywhere in `src/`).
+> **Status:** Phase 1A shared contracts have landed in
+> [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
+> with their runtime vocabulary constants in
+> [`src/types/DashboardConstants.ts`](../../src/types/DashboardConstants.ts).
+> The registry, descriptor assembly, analyzer, and resolver remain to be built
+> (verified 2026-08-01).
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
