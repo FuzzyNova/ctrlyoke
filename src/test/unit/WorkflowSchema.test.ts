@@ -110,4 +110,20 @@ suite("Workflow template schema", () => {
 
     assert.strictEqual(valid, false);
   });
+
+  test("accepts all persisted workflow timing metadata", () => {
+    const valid = validate({
+      steps: [{ prompt: "Implement the change" }],
+      _runtime: {
+        currentIndex: 1,
+        executionState: "completed",
+        startTime: 100,
+        pausedTime: 200,
+        totalPausedDuration: 50,
+        executionEndTime: 300,
+      },
+    });
+
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
 });

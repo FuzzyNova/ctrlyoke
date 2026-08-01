@@ -143,6 +143,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         this.mergeDiskSteps(diskSteps),
       emitStateChange: () => this.emitStateChange(),
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
+      getFinalStepExecutionMetadata: () =>
+        this.workflowFile?.finalStep?._runtime,
       getPendingRewind: () => this.state.pendingRewind,
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
@@ -889,25 +891,26 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @returns Number of new prompts added, or -1 if reload failed
    */
   /**
-   * Persist partial runtime metadata updates for a specific prompt.
-   * Merges durable execution metadata into the prompt's `_runtime` and flushes
-   * to the working file. Response and script output are timeline-only.
+   * Persist partial runtime metadata updates for a workflow step. Queue steps
+   * use their zero-based index; `steps.length` addresses the finalStep.
+   * Merges durable execution metadata into the step's `_runtime` and flushes to
+   * the working file. Response and script output are timeline-only.
    *
-   * @param promptIndex 0-based prompt index
+   * @param promptIndex 0-based queue index, or steps.length for finalStep
    * @param updates Partial metadata to merge into existing _runtime
    */
   async persistRuntimeMetadata(
     promptIndex: number,
     updates: Partial<PromptRuntimeMetadata>
   ): Promise<void> {
-    const prompt = this.state.steps[promptIndex];
-    if (!prompt) {
+    const step = this.getRuntimeStep(promptIndex);
+    if (!step) {
       return;
     }
 
-    prompt._runtime = {
+    step._runtime = {
       startedAt: Date.now(),
-      ...prompt._runtime,
+      ...step._runtime,
       ...updates,
     };
 
@@ -922,28 +925,20 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     promptIndex: number,
     sessionId: string
   ): Promise<void> {
-    const prompt = this.state.steps[promptIndex];
-    if (prompt) {
-      if (prompt._runtime?.sessionId === sessionId) {
-        return;
-      }
-      await this.persistRuntimeMetadata(promptIndex, { sessionId });
+    const step = this.getRuntimeStep(promptIndex);
+    if (!step || step._runtime?.sessionId === sessionId) {
       return;
     }
+    await this.persistRuntimeMetadata(promptIndex, { sessionId });
+  }
 
-    const finalStep = this.workflowFile?.finalStep;
-    if (promptIndex !== this.state.steps.length || !finalStep) {
-      return;
-    }
-    if (finalStep._runtime?.sessionId === sessionId) {
-      return;
-    }
-    finalStep._runtime = {
-      startedAt: Date.now(),
-      ...finalStep._runtime,
-      sessionId,
-    };
-    await this.updateWorkingFile();
+  private getRuntimeStep(promptIndex: number): WorkflowStep | undefined {
+    return (
+      this.state.steps[promptIndex] ??
+      (promptIndex === this.state.steps.length
+        ? this.workflowFile?.finalStep
+        : undefined)
+    );
   }
 
   /**

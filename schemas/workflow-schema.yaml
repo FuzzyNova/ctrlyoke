@@ -61,7 +61,9 @@ oneOf:
             description: >-
               A step that always runs after all queued prompts complete. Can be an AI prompt or a
               script step. If mcpServers includes "ctrlyoke" and the finalStep appends prompts,
-              those prompts run before finalStep executes again.
+              those prompts run before finalStep executes again. Working files store resolved
+              harness/model/session metadata on finalStep._runtime; workflow phase/status remains in
+              the root _runtime.finalStep block.
           originalFile:
             type: string
             description: Path to original prompt file (working files only)
@@ -778,6 +780,18 @@ definitions:
           - completed
           - error
         description: Current execution state
+      startTime:
+        type: number
+        description: Wall-clock timestamp when active workflow execution timing began
+      pausedTime:
+        type: number
+        description: Wall-clock timestamp when the current pause began
+      totalPausedDuration:
+        type: number
+        description: Accumulated time spent paused before the current pause, in milliseconds
+      executionEndTime:
+        type: number
+        description: Wall-clock timestamp when workflow execution reached a terminal state
       finalStep:
         type: object
         description: >-

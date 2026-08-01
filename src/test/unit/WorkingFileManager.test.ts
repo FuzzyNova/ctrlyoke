@@ -7,13 +7,20 @@ import { WorkingFileManager } from "../../core/WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "../../core/WorkingFileManager";
 import { PromptQueue } from "../../core/PromptQueue";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
-import type { PromptStep, WorkingFile } from "../../types/CtrlYokeTypes";
+import type {
+  PromptRuntimeMetadata,
+  PromptStep,
+  WorkingFile,
+} from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────
 
-function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
+function makeMockAccess(
+  workingFilePath?: string,
+  finalStepStepRuntime?: PromptRuntimeMetadata
+): IWorkingFileQueueAccess {
   let definitionRevision = 1;
   return {
     getWorkingFilePath: () => workingFilePath,
@@ -31,6 +38,7 @@ function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
       /* no-op */
     },
     getFinalStepRuntime: () => undefined,
+    getFinalStepExecutionMetadata: () => finalStepStepRuntime,
     updateWorkflowProperty: () => {
       /* no-op */
     },
@@ -205,6 +213,61 @@ suite("WorkingFileManager", () => {
         EXECUTION_STATES.RUNNING
       );
     });
+  });
+
+  test("persists finalStep per-step runtime without replacing its definition", async () => {
+    const workingFilePath = tempFile("final-step-runtime");
+    const workingFile = makeMinimalWorkingFile();
+    workingFile.finalStep = {
+      prompt: "disk-authoritative final prompt",
+      model: "gpt-5.4-mini",
+    };
+    await writeTempJson(workingFilePath, workingFile);
+
+    const finalStepRuntime: PromptRuntimeMetadata = {
+      startedAt: 123,
+      harness: "codex-cli",
+      model: "gpt-5.4-mini",
+      sessionId: "final-session-id",
+    };
+    const manager = new WorkingFileManager(
+      makeMockAccess(workingFilePath, finalStepRuntime)
+    );
+
+    await manager.updateWorkingFile();
+
+    const persisted = JSON.parse(
+      await fs.readFile(workingFilePath, "utf-8")
+    ) as WorkingFile;
+    assert.deepStrictEqual(persisted.finalStep, {
+      prompt: "disk-authoritative final prompt",
+      model: "gpt-5.4-mini",
+      _runtime: finalStepRuntime,
+    });
+  });
+
+  test("persists a finalStep session ID through PromptQueue", async () => {
+    const workingFilePath = tempFile("final-step-session");
+    const workingFile = makeMinimalWorkingFile();
+    workingFile.finalStep = { prompt: "final prompt" };
+    await writeTempJson(workingFilePath, workingFile);
+
+    const queue = new PromptQueue();
+    queue.loadPrompts(workingFile, workingFilePath);
+
+    await queue.persistSessionId(workingFile.steps!.length, "final-session-id");
+
+    const persisted = JSON.parse(
+      await fs.readFile(workingFilePath, "utf-8")
+    ) as WorkingFile;
+    assert.strictEqual(
+      persisted.finalStep?._runtime?.sessionId,
+      "final-session-id"
+    );
+    assert.strictEqual(
+      typeof persisted.finalStep?._runtime?.startedAt,
+      "number"
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import type {
   WorkflowKey,
   WorkflowRuntimeState,
   WorkflowStep,
+  PromptRuntimeMetadata,
   WorkingFile,
   WorkingFileRuntime,
 } from "../types/CtrlYokeTypes";
@@ -166,6 +167,9 @@ export interface IWorkingFileQueueAccess {
 
   /** Runtime metadata for workflow-level finalStep execution */
   getFinalStepRuntime(): FinalStepRuntimeState | undefined;
+
+  /** Per-step execution metadata for the finalStep definition */
+  getFinalStepExecutionMetadata?(): PromptRuntimeMetadata | undefined;
 
   /** Durable same-run rewind marker, when the queue is editing a suffix. */
   getPendingRewind?():
@@ -1552,6 +1556,23 @@ export class WorkingFileManager {
       workingFile.steps = this.queueAccess
         .getSteps()
         .map(stripViewOnlyWorkflowStepFields);
+
+      // The finalStep definition remains disk-authoritative, but its per-step
+      // execution metadata is owned by PromptQueue just like queue-step runtime.
+      // Copy only `_runtime` so a runtime flush cannot overwrite a concurrent
+      // definition/property edit to the finalStep itself.
+      if (
+        workingFile.finalStep &&
+        this.queueAccess.getFinalStepExecutionMetadata
+      ) {
+        const { _runtime: _diskRuntime, ...finalStepDefinition } =
+          workingFile.finalStep;
+        const finalStepExecutionMetadata =
+          this.queueAccess.getFinalStepExecutionMetadata();
+        workingFile.finalStep = finalStepExecutionMetadata
+          ? { ...finalStepDefinition, _runtime: finalStepExecutionMetadata }
+          : finalStepDefinition;
+      }
       // Count steps with _runtime metadata (Phase 4: Session Management)
       const stepsWithRuntime = workingFile.steps.filter(
         (p) => p._runtime

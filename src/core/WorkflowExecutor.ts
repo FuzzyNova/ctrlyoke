@@ -629,13 +629,18 @@ export class WorkflowExecutor {
         resolvedProperties.harness
       );
 
+      const runtimeStepIndex =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : state.steps.length;
+      await this.promptQueue.persistRuntimeMetadata(runtimeStepIndex, {
+        harness: resolvedProperties.harness,
+        model: resolvedProperties.model,
+        agent: resolvedProperties.agent,
+        skills: resolvedProperties.skills,
+      });
+
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
-          harness: resolvedProperties.harness,
-          model: resolvedProperties.model,
-          agent: resolvedProperties.agent,
-          skills: resolvedProperties.skills,
-        });
         this.updateDashboardForPromptStart(
           context,
           prompt,

@@ -356,7 +356,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     queue.loadPrompts({
       steps: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
-      finalStep: { prompt: "final-gate" },
+      finalStep: {
+        prompt: "final-gate",
+        harness: HARNESS_IDS.CODEX_CLI,
+        model: "gpt-5.4-mini",
+      },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -372,6 +376,14 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtime?.loopCount, 0);
     assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
     assert.ok(runtime?.completedAt);
+    assert.strictEqual(
+      queue.getWorkflowFile().finalStep?._runtime?.harness,
+      HARNESS_IDS.CODEX_CLI
+    );
+    assert.strictEqual(
+      queue.getWorkflowFile().finalStep?._runtime?.model,
+      "gpt-5.4-mini"
+    );
   });
 
   test("keeps disabled finalStep present but skips execution", async () => {
