@@ -105,6 +105,39 @@ describe("FileEditOutput", () => {
     );
   });
 
+  // Multi-root workspaces hand the harness absolute paths, so file events come
+  // back with OS-native separators — the chip must still compact those.
+  it("compacts a Windows absolute path from a multi-root workspace", () => {
+    const path = "c:\\dev\\ctrlyoke\\src\\utils\\ContextExpander.ts";
+    render(<FileReadOutput path={path} atomicContextReferences />);
+
+    const chip = screen.getByRole("button", { name: `Open ${path}` });
+    expect(chip).toHaveTextContent("ContextExpander.ts");
+    expect(chip).not.toHaveTextContent("dev");
+  });
+
+  it("expands a Windows absolute path when a find match hits its hidden portion", () => {
+    const path = "c:\\dev\\ctrlyoke\\src\\utils\\ContextExpander.ts";
+    const hiddenFrom = path.indexOf("ctrlyoke");
+    render(
+      <FileReadOutput
+        path={path}
+        atomicContextReferences
+        filePathFindMatches={[
+          {
+            start: hiddenFrom,
+            end: hiddenFrom + "ctrlyoke".length,
+            active: true,
+          },
+        ]}
+      />
+    );
+
+    const chip = screen.getByRole("button", { name: `Open ${path}` });
+    expect(chip).toHaveTextContent(path);
+    expect(chip.querySelector("mark")).toHaveTextContent("ctrlyoke");
+  });
+
   it("does not rewrite arbitrary generic tool body text", () => {
     const { container } = render(
       <GenericToolCallOutput

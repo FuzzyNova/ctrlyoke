@@ -499,6 +499,25 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     }
   });
 
+  it("carries only chip styling — never cm-link, whose link color and underline paint inside the chip", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      doc: "@src/deep/file.ts",
+      extensions: [createAtomicReferenceExtension()],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.classList.contains("atomic-reference-chip")).toBe(true);
+      expect(chip?.classList.contains("cm-link")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("keeps the native hover title on a resolvable reference chip", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);

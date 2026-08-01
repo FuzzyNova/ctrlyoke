@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  createAtomicReferencePresentation,
+  createFileReferenceChip,
   findAtomicReferences,
   findContextReferenceMatches,
   projectAtomicReferenceFind,
+  referenceBasename,
 } from "@utils/atomicReferences";
 
 describe("CodeMirrorEditor context reference parsing", () => {
@@ -168,6 +171,61 @@ describe("atomic reference presentation", () => {
 
   it("leaves the invalid flag undefined when no validity resolver is supplied", () => {
     expect(findAtomicReferences("@b/missing.ts")[0].invalid).toBeUndefined();
+  });
+});
+
+// Multi-root workspaces send the harness absolute paths, so file-operation
+// events come back with OS-native separators — on Windows, backslashes.
+describe("file-operation reference chips on backslash paths", () => {
+  const winPath = "c:\\dev\\ctrlyoke\\src\\utils\\ContextExpander.ts";
+
+  it("takes the basename of a Windows absolute path", () => {
+    expect(referenceBasename(winPath)).toBe("ContextExpander.ts");
+    expect(referenceBasename("c:\\dev\\ctrlyoke\\src\\")).toBe("src");
+  });
+
+  it("labels a backslash file event with just its basename", () => {
+    expect(createFileReferenceChip(winPath)).toMatchObject({
+      icon: "symbol-file",
+      label: "ContextExpander.ts",
+      title: winPath,
+      attrs: { "data-type": "file", "data-path": winPath },
+    });
+  });
+
+  it("labels a backslash directory event with a trailing slash", () => {
+    expect(createFileReferenceChip("c:\\dev\\ctrlyoke\\src\\")).toMatchObject({
+      icon: "folder",
+      label: "src/",
+      attrs: { "data-type": "directory" },
+    });
+  });
+
+  it("renders compact until a find match reaches the hidden directory portion", () => {
+    const descriptor = createFileReferenceChip(winPath);
+    const presentation = createAtomicReferencePresentation(descriptor, winPath);
+
+    expect(projectAtomicReferenceFind(presentation, [])).toMatchObject({
+      text: "ContextExpander.ts",
+      expanded: false,
+    });
+
+    const hiddenFrom = winPath.indexOf("ctrlyoke");
+    expect(
+      projectAtomicReferenceFind(presentation, [
+        {
+          start: hiddenFrom,
+          end: hiddenFrom + "ctrlyoke".length,
+          active: true,
+        },
+      ])
+    ).toMatchObject({
+      text: winPath,
+      expanded: true,
+      marks: [
+        { from: hiddenFrom, to: hiddenFrom + "ctrlyoke".length, active: true },
+      ],
+    });
   });
 });
 

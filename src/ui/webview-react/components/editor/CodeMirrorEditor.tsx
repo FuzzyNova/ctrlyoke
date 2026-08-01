@@ -1538,6 +1538,11 @@ function createFindKeyHandlerExtension() {
   });
 }
 
+// Editor-side adapter class on an atomic reference chip: it carries the shared
+// `.atomic-reference-chip` presentation plus CodeMirror-only layout, and marks
+// the element as a click/tap target for the editor's delegated link handlers.
+const ATOMIC_REFERENCE_CHIP_CLASS = "cm-atomic-ref";
+
 // Inline widget that renders a context reference as a compact, outlined chip
 // showing just the file/folder name (or short git hash / prior-context label)
 // instead of the full path. The full reference text stays in the document (so
@@ -1567,10 +1572,14 @@ class AtomicReferenceWidget extends WidgetType {
   }
 
   toDOM(): HTMLElement {
-    // cm-link + the data-* attributes let the shared click/tap handler open
-    // the reference while recognizing this element's button-like chip UX.
+    // Deliberately NOT `cm-link`: a chip already reads as clickable, and that
+    // class's link color + underline paint *inside* the chip box (its rules are
+    // unlayered CodeMirror theme CSS, so they beat the layered
+    // `.atomic-reference-chip` rules in globals.css regardless of specificity).
+    // `getLinkElement` matches `.cm-atomic-ref` alongside `.cm-link` so the
+    // shared click/tap handler still opens the reference from its data-* attrs.
     const chip = document.createElement("span");
-    chip.className = "cm-link atomic-reference-chip cm-atomic-ref";
+    chip.className = `atomic-reference-chip ${ATOMIC_REFERENCE_CHIP_CLASS}`;
     // Warning-colored border when validation found the reference unresolvable —
     // the chip's counterpart to the lint squiggle (which a chip replaces). The
     // native title (full reference text on hover) is suppressed while invalid so
@@ -1734,12 +1743,10 @@ function createPromptDecorationThemeExtension() {
     ".cm-prior-context-ref": {
       fontStyle: "italic",
     },
-    // Atomic-mode reference chip: a compact outlined box showing just the
-    // file/folder name (or short git/prior-context label). Placed after
-    // `.cm-link` so its non-underlined, boxed styling wins the cascade even
-    // though the chip also carries the cm-link class (for click handling).
-    // CodeMirror-only adapter: editor widgets stay on one line even though
-    // output chips may wrap long find-expanded references.
+    // Atomic-mode reference chip: the box/icon/label styling is the shared
+    // `.atomic-reference-chip` rule in globals.css. This is the CodeMirror-only
+    // adapter — editor widgets stay on one line even though output chips may
+    // wrap long find-expanded references.
     ".cm-atomic-ref": {
       whiteSpace: "nowrap",
       verticalAlign: "baseline",
@@ -2493,7 +2500,11 @@ function createPriorContextLintExtension(
 }
 
 function getLinkElement(target: EventTarget | null): HTMLElement | null {
-  return target instanceof HTMLElement ? target.closest(".cm-link") : null;
+  // Atomic chips are link targets without being `.cm-link` — see
+  // AtomicReferenceWidget.toDOM for why they don't carry that class.
+  return target instanceof HTMLElement
+    ? target.closest(`.cm-link, .${ATOMIC_REFERENCE_CHIP_CLASS}`)
+    : null;
 }
 
 function openContextReferenceLink(
@@ -2622,7 +2633,7 @@ export function createClickHandlerExtension(
       // require Ctrl/Cmd+Click, while previews open on a plain click.
       const type = target.getAttribute("data-type");
       if (
-        !target.classList.contains("cm-atomic-ref") &&
+        !target.classList.contains(ATOMIC_REFERENCE_CHIP_CLASS) &&
         type !== "git" &&
         type !== "priorContext" &&
         !(event.ctrlKey || event.metaKey)

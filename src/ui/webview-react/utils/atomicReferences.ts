@@ -168,7 +168,7 @@ export interface AtomicReferenceChip {
 
 /** Build a file-operation descriptor directly from its canonical event path. */
 export function createFileReferenceChip(path: string): AtomicReferenceChip {
-  const directory = path.endsWith("/");
+  const directory = path.endsWith("/") || path.endsWith("\\");
   return {
     from: 0,
     to: path.length,
@@ -294,9 +294,17 @@ export type SymbolIconResolver = (
   lineEnd?: string
 ) => string | undefined;
 
-// Basename of a workspace-relative path, tolerant of a trailing slash.
+// Basename of a path, tolerant of a trailing separator and of either separator.
+//
+// Backslashes matter here: references authored in the prompt editor are always
+// forward-slash workspace-relative, but a *file-operation event* path comes
+// straight off the harness's tool call, and in a multi-root workspace ctrlyoke
+// hands the harness absolute paths (see CliIntegration.getEffectiveAbsolute) —
+// on Windows that means `C:\dev\repo\src\foo.ts`. Splitting on `/` alone found
+// no separator there and returned the whole path, so every multi-root file chip
+// rendered fully expanded instead of showing just `foo.ts`.
 export function referenceBasename(path: string): string {
-  const trimmed = path.replace(/\/+$/, "");
+  const trimmed = path.replace(/\\/g, "/").replace(/\/+$/, "");
   const slash = trimmed.lastIndexOf("/");
   return slash === -1 ? trimmed : trimmed.slice(slash + 1);
 }
