@@ -1,24 +1,10 @@
-import {
-  PERMISSION_MODES,
-  PermissionMode,
-} from "../../../../types/DashboardConstants";
+import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTypes";
 
-/** Tool permission mode */
-export type ToolPermissionMode = PermissionMode;
-
-/**
- * Tool permission configuration
- */
-export interface ToolPermissionConfig {
-  /** Permission mode */
-  mode: ToolPermissionMode;
-
-  /** Allowed tool patterns (used in custom mode) */
-  allowedTools: string[];
-
-  /** Denied tool patterns (takes precedence over allowed) */
-  deniedTools: string[];
-}
+export type {
+  ToolPermissionConfig,
+  ToolPermissionMode,
+} from "../../../../types/ExecutionPropertyTypes";
 
 /**
  * Tool permission mapper interface

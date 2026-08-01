@@ -18,7 +18,7 @@ import {
   type FailureKind,
 } from "./DashboardConstants";
 export type { HarnessId, HookEvent, FailureKind };
-import { ToolPermissionMode } from "../core/harness/shared/interfaces/IToolPermissionMapper";
+import type { ToolPermissionMode } from "./ExecutionPropertyTypes";
 export type { ToolPermissionMode };
 
 /**

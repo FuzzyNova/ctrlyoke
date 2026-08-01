@@ -331,7 +331,8 @@ export class WorkflowInstance {
     private readonly onWorkflowNameChange: (name: string | undefined) => void,
     /** Callback so status bar in orchestrator stays in sync with queue state */
     private readonly onStatusBarUpdate: () => void,
-    private readonly workspaceFolderPath: string | undefined
+    private readonly workspaceFolderPath: string | undefined,
+    private readonly hostCanProvidePty: boolean = true
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
@@ -1291,7 +1292,8 @@ export class WorkflowInstance {
       const executionMode: ExecutionMode | undefined = currentStep
         ? PropertyResolver.resolveExecutionMode(
             currentStep,
-            this.promptQueue.getWorkflowFile()
+            this.promptQueue.getWorkflowFile(),
+            { hostCanProvidePty: this.hostCanProvidePty }
           )
         : undefined;
 
@@ -2765,6 +2767,7 @@ export class WorkflowInstance {
     const self = this;
     return {
       workspaceFolderPath: this.workspaceFolderPath,
+      hostCanProvidePty: this.hostCanProvidePty,
       namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),
       currentPromptFilePath: this.currentPromptFile?.filePath,
       // Use a getter so dashboardProvider is evaluated lazily each time

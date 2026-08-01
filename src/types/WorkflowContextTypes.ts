@@ -28,6 +28,8 @@ export interface WorkflowContext {
   workingFilePath?: string;
   resolvedProperties?: ResolvedProperties;
   workflowFile?: PromptFile;
+  /** Whether the current host can provide a PTY for this execution. */
+  hostCanProvidePty?: boolean;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
   /**

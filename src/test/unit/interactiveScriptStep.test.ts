@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { setup, suite, teardown, test } from "mocha";
+import { suite, test } from "mocha";
 import {
   WorkflowExecutor,
   WorkflowExecutionContext,
@@ -12,7 +12,6 @@ import {
   STEP_STATUS,
   STEP_TYPES,
 } from "../../types/DashboardConstants";
-import { PropertyResolver } from "../../utils/PropertyResolver";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
 type ComparisonCase = {
@@ -204,14 +203,6 @@ async function runCase(
 }
 
 suite("interactive script steps", () => {
-  setup(() => {
-    PropertyResolver.setHostCanProvidePty(true);
-  });
-
-  teardown(() => {
-    PropertyResolver.setHostCanProvidePty(true);
-  });
-
   test("matches headless verdicts across the comparison matrix", async () => {
     for (const comparisonCase of cases) {
       const headless = await runCase(comparisonCase, "headless");

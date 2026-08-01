@@ -1,7 +1,12 @@
 import * as assert from "assert";
 import { teardown } from "mocha";
 import { PropertyResolver } from "../../utils/PropertyResolver";
+import {
+  resolveExecutionProperties,
+  type ResolutionSource,
+} from "../../types/ExecutionPropertyResolver";
 import { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
+import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import {
   PERMISSION_MODES,
   HARNESS_IDS,
@@ -11,8 +16,191 @@ import { configService } from "../../config/CtrlYokeConfigService";
 
 suite("PropertyResolver Tests", () => {
   teardown(() => {
-    PropertyResolver.setHostCanProvidePty(true);
     configService.setCliOverlay({});
+  });
+
+  suite("pure/backend conformance", () => {
+    test("resolves every property from every source tier with matching provenance", () => {
+      configService.setCliOverlay({
+        defaults: {
+          harness: HARNESS_IDS.COPILOT_CLI,
+          models: { [HARNESS_IDS.COPILOT_CLI]: "default-model" },
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+          agent: "default-agent",
+          skills: ["default-skill"],
+          resumeSession: false,
+          mcpServers: ["default-mcp"],
+          priorContext: "previous",
+          additionalArgs: { [HARNESS_IDS.COPILOT_CLI]: "--default" },
+        },
+      });
+
+      const promptBase: PromptStep = { prompt: "fixture" };
+      const workflowBase: PromptFile = { steps: [] };
+      const fixtures: Array<{
+        property: keyof ResolvedProperties;
+        prompt: unknown;
+        workflow: unknown;
+        defaults: unknown;
+      }> = [
+        {
+          property: "harness",
+          prompt: HARNESS_IDS.CLAUDE_CLI,
+          workflow: HARNESS_IDS.CODEX_CLI,
+          defaults: HARNESS_IDS.COPILOT_CLI,
+        },
+        {
+          property: "model",
+          prompt: "prompt-model",
+          workflow: "workflow-model",
+          defaults: "default-model",
+        },
+        {
+          property: "executionMode",
+          prompt: EXECUTION_MODES.INTERACTIVE,
+          workflow: EXECUTION_MODES.HEADLESS,
+          defaults: EXECUTION_MODES.INTERACTIVE,
+        },
+        {
+          property: "agent",
+          prompt: "prompt-agent",
+          workflow: "workflow-agent",
+          defaults: "default-agent",
+        },
+        {
+          property: "skills",
+          prompt: ["prompt-skill"],
+          workflow: ["workflow-skill"],
+          defaults: ["default-skill"],
+        },
+        {
+          property: "resumeSession",
+          prompt: true,
+          workflow: true,
+          defaults: false,
+        },
+        {
+          property: "mcpServers",
+          prompt: ["prompt-mcp"],
+          workflow: ["workflow-mcp"],
+          defaults: ["default-mcp"],
+        },
+        {
+          property: "hooks",
+          prompt: [{ event: "stop", command: "prompt-hook" }],
+          workflow: [{ event: "stop", command: "workflow-hook" }],
+          defaults: [],
+        },
+        {
+          property: "sessionId",
+          prompt: "prompt-session",
+          workflow: "workflow-session",
+          defaults: undefined,
+        },
+        {
+          property: "endCondition",
+          prompt: { script: "prompt-end", returns: "true" },
+          workflow: { script: "workflow-end", returns: "true" },
+          defaults: undefined,
+        },
+        {
+          property: "preCondition",
+          prompt: { script: "prompt-pre", returns: "true" },
+          workflow: { script: "workflow-pre", returns: "true" },
+          defaults: undefined,
+        },
+        {
+          property: "priorContext",
+          prompt: [1],
+          workflow: "all",
+          defaults: "previous",
+        },
+        {
+          property: "additionalArgs",
+          prompt: "--prompt",
+          workflow: "--workflow",
+          defaults: "--default",
+        },
+        {
+          property: "toolPermissions",
+          prompt: { mode: PERMISSION_MODES.CUSTOM, allowedTools: ["write"] },
+          workflow: { mode: PERMISSION_MODES.ALLOW_ALL },
+          defaults: null,
+        },
+        {
+          property: "errorBehavior",
+          prompt: { onError: "retry", maxRetries: 1 },
+          workflow: { onError: "continue" },
+          defaults: undefined,
+        },
+      ];
+
+      const sourceTiers: Array<{
+        source: ResolutionSource;
+        usePrompt: boolean;
+        useWorkflow: boolean;
+      }> = [
+        { source: "prompt", usePrompt: true, useWorkflow: true },
+        { source: "workflow", usePrompt: false, useWorkflow: true },
+        { source: "defaults", usePrompt: false, useWorkflow: false },
+      ];
+
+      for (const fixture of fixtures) {
+        for (const tier of sourceTiers) {
+          const prompt = {
+            ...promptBase,
+            ...(tier.usePrompt ? { [fixture.property]: fixture.prompt } : {}),
+          } as PromptStep;
+          const workflow = {
+            ...workflowBase,
+            ...(tier.useWorkflow
+              ? { [fixture.property]: fixture.workflow }
+              : {}),
+          } as PromptFile;
+          const context = PropertyResolver.createContext();
+          const pure = resolveExecutionProperties(prompt, workflow, context);
+          const backend = PropertyResolver.resolveTarget(prompt, workflow);
+          const expected = tier.usePrompt
+            ? fixture.prompt
+            : tier.useWorkflow
+              ? fixture.workflow
+              : fixture.defaults;
+
+          assert.deepStrictEqual(backend, pure);
+          assert.strictEqual(pure.sources[fixture.property], tier.source);
+          if (fixture.property === "toolPermissions") {
+            assert.deepStrictEqual(
+              pure.properties[fixture.property],
+              expected === null || expected === undefined
+                ? null
+                : {
+                    mode:
+                      (expected as { mode?: string }).mode ??
+                      PERMISSION_MODES.ALLOW_ALL,
+                    allowedTools:
+                      (expected as { allowedTools?: string[] }).allowedTools ??
+                      [],
+                    deniedTools:
+                      (expected as { deniedTools?: string[] }).deniedTools ??
+                      [],
+                  }
+            );
+          } else if (
+            fixture.property === "agent" ||
+            fixture.property === "skills" ||
+            fixture.property === "additionalArgs" ||
+            fixture.property === "priorContext"
+          ) {
+            assert.deepStrictEqual(
+              pure.properties[fixture.property],
+              expected || undefined
+            );
+          } else {
+            assert.deepStrictEqual(pure.properties[fixture.property], expected);
+          }
+        }
+      }
+    });
   });
 
   suite("execution property precedence contracts", () => {
@@ -461,7 +649,6 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveExecutionMode", () => {
     teardown(() => {
-      PropertyResolver.setHostCanProvidePty(true);
       configService.setCliOverlay({});
     });
 
@@ -498,19 +685,19 @@ suite("PropertyResolver Tests", () => {
       configService.setCliOverlay({
         defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
       });
-      PropertyResolver.setHostCanProvidePty(false);
-
       assert.strictEqual(
         PropertyResolver.resolve(
           { prompt: "test" },
-          { steps: [], executionMode: EXECUTION_MODES.INTERACTIVE }
+          { steps: [], executionMode: EXECUTION_MODES.INTERACTIVE },
+          { hostCanProvidePty: false }
         ).executionMode,
         EXECUTION_MODES.HEADLESS
       );
       assert.strictEqual(
         PropertyResolver.resolve(
           { prompt: "test" },
-          { steps: [], executionMode: EXECUTION_MODES.HEADLESS }
+          { steps: [], executionMode: EXECUTION_MODES.HEADLESS },
+          { hostCanProvidePty: false }
         ).executionMode,
         EXECUTION_MODES.HEADLESS
       );

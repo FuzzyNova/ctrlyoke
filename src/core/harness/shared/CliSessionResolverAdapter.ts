@@ -26,7 +26,9 @@ export class CliSessionResolverAdapter {
     workflowContext?: WorkflowContext
   ): CliSessionResolution {
     const resolvedProperties = workflowContext?.workflowFile
-      ? PropertyResolver.resolve(prompt, workflowContext.workflowFile)
+      ? PropertyResolver.resolve(prompt, workflowContext.workflowFile, {
+          hostCanProvidePty: workflowContext.hostCanProvidePty,
+        })
       : workflowContext?.resolvedProperties;
 
     let resolvedSessionId = SessionResolver.resolve(

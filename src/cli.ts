@@ -37,7 +37,6 @@ import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
-import { PropertyResolver } from "./utils/PropertyResolver";
 import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
@@ -309,9 +308,6 @@ async function runCommand(
     // regardless of what the user's config file says.
     overlay.defaults = { ...overlay.defaults, executionMode };
   }
-  // PropertyResolver owns the workflow-level clamp. The CLI only reports
-  // whether this process can actually host an interactive PTY.
-  PropertyResolver.setHostCanProvidePty(hostCanProvidePty);
   if (options.permissionMode) {
     overlay.defaults = {
       ...overlay.defaults,
@@ -429,7 +425,8 @@ async function runCommand(
     (_harnessOverride?: HarnessId) => detectorIntegration,
     (_name: string | undefined) => {}, // no tab management
     () => {}, // no status bar update
-    workingDir
+    workingDir,
+    hostCanProvidePty
   );
 
   // In headless mode, stream output to the terminal as events arrive.

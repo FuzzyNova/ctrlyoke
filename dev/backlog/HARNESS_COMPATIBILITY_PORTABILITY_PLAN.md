@@ -1,11 +1,16 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** Phase 1A shared contracts have landed in
+> **Status:** Phase 1A is complete. Shared contracts and the pure effective-
+> property resolver have landed in
 > [`src/types/CompatibilityTypes.ts`](../../src/types/CompatibilityTypes.ts),
-> with their runtime vocabulary constants in
+> [`src/types/ExecutionPropertyTypes.ts`](../../src/types/ExecutionPropertyTypes.ts),
+> [`src/types/ExecutionPropertyResolver.ts`](../../src/types/ExecutionPropertyResolver.ts),
+> and the backend adapter in
+> [`src/utils/PropertyResolver.ts`](../../src/utils/PropertyResolver.ts), with
+> runtime vocabulary constants in
 > [`src/types/DashboardConstants.ts`](../../src/types/DashboardConstants.ts).
-> The registry, descriptor assembly, analyzer, and resolver remain to be built
-> (verified 2026-08-01).
+> The registry, descriptor assembly, and analyzer remain to be built (verified
+> 2026-08-01).
 >
 > **Priority:** P0 — release gate for 0.1.0
 >

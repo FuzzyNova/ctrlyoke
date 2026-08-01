@@ -71,6 +71,8 @@ import {
 } from "./orchestration/ScriptExecutionReporter";
 
 export interface WorkflowExecutionContext {
+  /** Whether this host can provide a PTY for interactive execution. */
+  hostCanProvidePty?: boolean;
   workspaceFolderPath: string | undefined;
   /**
    * Open workspace roots (multi-root). Passed to WorkspaceSnapshotService so
@@ -508,7 +510,8 @@ export class WorkflowExecutor {
       const workflowFileForPre = this.promptQueue.getWorkflowFile();
       const preResolvedProperties = PropertyResolver.resolve(
         prompt,
-        workflowFileForPre
+        workflowFileForPre,
+        { hostCanProvidePty: context.hostCanProvidePty }
       );
       const resolvedPreCondition = preResolvedProperties.preCondition;
       const preErrorBehavior = preResolvedProperties.errorBehavior;
@@ -606,7 +609,9 @@ export class WorkflowExecutor {
       }
 
       const workflowFile = this.promptQueue.getWorkflowFile();
-      let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+      let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile, {
+        hostCanProvidePty: context.hostCanProvidePty,
+      });
 
       // Apply {{var}} substitution when the workflow has vars defined.
       const vars = workflowFile.vars;
@@ -688,6 +693,7 @@ export class WorkflowExecutor {
           workingFilePath: context.workingFilePath,
           resolvedProperties: attemptProperties,
           workflowFile,
+          hostCanProvidePty: context.hostCanProvidePty,
           workingFilePersistence: this.promptQueue,
           resolvePriorContextItems: context.resolvePriorContextItems,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
@@ -951,7 +957,8 @@ export class WorkflowExecutor {
       // ─── Interactive mode: run inside a PTY so the user can provide input ────
       const resolvedExecutionMode = PropertyResolver.resolveExecutionMode(
         step,
-        this.promptQueue.getWorkflowFile()
+        this.promptQueue.getWorkflowFile(),
+        { hostCanProvidePty: context.hostCanProvidePty }
       );
       const requestedInteractive =
         resolvedExecutionMode === EXECUTION_MODES.INTERACTIVE;
@@ -2305,7 +2312,8 @@ export class WorkflowExecutor {
       const workflowFile = this.promptQueue.getWorkflowFile();
       const resolvedProperties = PropertyResolver.resolve(
         retryPromptStep,
-        workflowFile
+        workflowFile,
+        { hostCanProvidePty: context.hostCanProvidePty }
       );
 
       if (context.historyFilePath && context.outputHistoryManager) {
@@ -2392,7 +2400,7 @@ export class WorkflowExecutor {
     const workflowName = path.basename(
       context.currentPromptFilePath ?? "unknown"
     );
-    const nextTarget = this.describeNextExecutionTarget();
+    const nextTarget = this.describeNextExecutionTarget(context);
     Log.info(
       `${tag}Workflow started - ${workflowName}, ${totalSteps} step(s), ${nextTarget}`
     );
@@ -2403,7 +2411,9 @@ export class WorkflowExecutor {
    * A workflow may switch harnesses per step, so its pre-created default
    * integration is not necessarily the harness that will actually run next.
    */
-  private describeNextExecutionTarget(): string {
+  private describeNextExecutionTarget(
+    context: WorkflowExecutionContext
+  ): string {
     const state = this.promptQueue.getState();
     const workflowFile = this.promptQueue.getWorkflowFile();
     const nextQueueStep = state.steps
@@ -2422,7 +2432,9 @@ export class WorkflowExecutor {
       return "next target: script";
     }
 
-    let resolvedProperties = PropertyResolver.resolve(nextStep, workflowFile);
+    let resolvedProperties = PropertyResolver.resolve(nextStep, workflowFile, {
+      hostCanProvidePty: context.hostCanProvidePty,
+    });
     const vars = workflowFile.vars;
     if (vars && Object.keys(vars).length > 0) {
       resolvedProperties = VarSubstitutor.applyToResolvedProperties(
