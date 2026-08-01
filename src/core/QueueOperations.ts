@@ -12,8 +12,8 @@ import { PromptStep, EndCondition, isScriptStep } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
-  QUEUE_POSITION,
   STEP_STATUS,
+  resolveQueueInsertIndex,
   type HarnessId,
   type QueuePosition,
 } from "../types/DashboardConstants";
@@ -245,10 +245,11 @@ export async function appendToQueue(
   }));
 
   // 4. Calculate insert index based on position
-  const insertIndex =
-    request.position === QUEUE_POSITION.NEXT
-      ? state.currentIndex + 1
-      : state.steps.length;
+  const insertIndex = resolveQueueInsertIndex(
+    request.position,
+    state.currentIndex,
+    state.steps.length
+  );
 
   if (runtime.status === EXECUTION_STATES.COMPLETED) {
     runtime.reopenForContinuation();

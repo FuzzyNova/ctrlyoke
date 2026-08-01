@@ -1073,7 +1073,7 @@ suite("WorkingFileManager", () => {
     });
   });
 
-  suite("appendTailToRun", () => {
+  suite("appendStepsToRun", () => {
     let workspace: string;
 
     afterEach(async () => {
@@ -1124,7 +1124,7 @@ suite("WorkingFileManager", () => {
         await fs.readFile(promoted.workingFilePath, "utf8")
       ) as WorkingFile;
 
-      const appended = await WorkingFileManager.appendTailToRun(
+      const appended = await WorkingFileManager.appendStepsToRun(
         workspace,
         workflowKey,
         promoted.runRef,
@@ -1148,7 +1148,7 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(appended.definitionRevision, 2);
       await assert.rejects(
         () =>
-          WorkingFileManager.appendTailToRun(
+          WorkingFileManager.appendStepsToRun(
             workspace,
             workflowKey,
             promoted.runRef,

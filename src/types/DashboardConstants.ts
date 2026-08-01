@@ -811,6 +811,27 @@ export const QUEUE_POSITION = {
   BEFORE_CURRENT: "beforeCurrent", // Insert before current prompt (stopped/idle with prompts)
 } as const;
 
+/**
+ * Resolve the array index a queue position splices at, given the execution head
+ * and the current step count. Single source for every append path — the
+ * in-memory queue, the dashboard queue operation, and the cross-process run
+ * continuation transaction — so `next`/`beforeCurrent`/`end` cannot drift apart.
+ */
+export function resolveQueueInsertIndex(
+  position: QueuePosition,
+  currentIndex: number,
+  stepCount: number
+): number {
+  switch (position) {
+    case QUEUE_POSITION.NEXT:
+      return Math.min(Math.max(currentIndex + 1, 0), stepCount);
+    case QUEUE_POSITION.BEFORE_CURRENT:
+      return Math.min(Math.max(currentIndex, 0), stepCount);
+    default:
+      return stepCount;
+  }
+}
+
 // ============================================================================
 // EDITOR TARGET KINDS - Selection target kinds for the prompt editor
 // ============================================================================

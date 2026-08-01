@@ -30,6 +30,7 @@ import type { WorkingFile } from "../types/CtrlYokeTypes";
 import type { WorkflowWorkingFilePersistence } from "../types/WorkflowContextTypes";
 import {
   QUEUE_POSITION,
+  resolveQueueInsertIndex,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -1132,18 +1133,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     // Serialize state mutations + file write through WorkingFileManager's operation queue
     await this.workingFileManager.runInQueue(async () => {
-      // Calculate insert index based on position
-      let insertIndex: number;
-      if (position === QUEUE_POSITION.NEXT) {
-        // Insert after current prompt
-        insertIndex = this.state.currentIndex + 1;
-      } else if (position === QUEUE_POSITION.BEFORE_CURRENT) {
-        // Insert before current prompt (for stopped/idle states)
-        insertIndex = this.state.currentIndex;
-      } else {
-        // QUEUE_POSITION.END - append to end
-        insertIndex = this.state.steps.length;
-      }
+      const insertIndex = resolveQueueInsertIndex(
+        position,
+        this.state.currentIndex,
+        this.state.steps.length
+      );
 
       // Insert steps at the specified position
       this.state.steps.splice(insertIndex, 0, ...steps);

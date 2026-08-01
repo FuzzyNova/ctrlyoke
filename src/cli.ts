@@ -668,7 +668,7 @@ async function executeAddressedCliOperation(
       options as AppendOptions,
       platform
     );
-    const appended = await RunContinuationService.appendTailToRun(
+    const appended = await RunContinuationService.appendStepsToRun(
       workspaceRoot,
       workflowKey,
       runRef,

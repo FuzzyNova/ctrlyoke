@@ -22,11 +22,11 @@ workflow, permanently. `ctrlyoke_start_workflow` under that grant lets any
 prompt-injected file a step reads spawn arbitrary billable harness runs, with no
 approval gate anywhere in the path.
 
-The run-scoping enforced by `resolveSelectedRun` in `src/mcp-server.ts` — which
-requires an explicit `workflowKey` + `runRef`, rejects selectors that conflict
-with the `CTRLYOKE_WORKING_FILE` pin, and refuses to resolve a target without
-one — is what makes blanket auto-approval defensible. It is a security boundary,
-not an incidental limitation.
+The run-scoping enforced by `requireRunAddress`/`resolveRun` in
+`src/mcp-server.ts` — which resolves every tool against the single run named by
+`CTRLYOKE_WORKING_FILE`, accepts no target from the caller at all, and refuses
+outright when no run is attached — is what makes blanket auto-approval
+defensible. It is a security boundary, not an incidental limitation.
 
 ### 2. It duplicates a control plane the CLI already owns
 
@@ -73,9 +73,15 @@ feature.
 
 The non-goal this decision establishes is recorded in
 `.github/instructions/extension.instructions.md`: **no tool on the built-in MCP
-server may target a workflow other than the pinned/addressed one, and no tool may
-start, cancel, or pause a run.** Re-proposing a lifecycle surface requires first
-solving the auto-approval posture, not just the API shape.
+server may target a workflow other than the run it was launched for, and no tool
+may start, cancel, or pause a run.** `ctrlyoke_global_status` remains the single
+read-only exception. Re-proposing a lifecycle surface requires first solving the
+auto-approval posture, not just the API shape.
+
+The same decision settles the caller question: this server exists to serve one
+ctrlyoke run, so it has no "external client" mode to design an API for. Driving
+ctrlyoke from outside a workflow is the CLI's job
+(`dev/active/AUTOMATION_API_PLAN.md`).
 
 ---
 

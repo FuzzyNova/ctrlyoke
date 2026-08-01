@@ -12,7 +12,9 @@ import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   HARNESS_IDS,
+  QUEUE_POSITION,
   type HarnessId,
+  type QueuePosition,
 } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -798,13 +800,13 @@ export class WorkingFileManager {
   }
 
   /**
-   * Appends a new, runtime-free tail to one explicitly addressed promoted run.
+   * Appends new, runtime-free steps to one explicitly addressed promoted run.
    * The descriptor lock is acquired before the definition lock, matching the
    * other addressed definition transactions.  Existing steps are copied
    * untouched so their execution/session metadata remains associated with the
-   * historical prefix.
+   * steps that produced it.
    */
-  public static async appendTailToRun(
+  public static async appendStepsToRun(
     workspaceFolderPath: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
@@ -812,13 +814,15 @@ export class WorkingFileManager {
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    allowInterruptedRun: boolean = false
+    allowInterruptedRun: boolean = false,
+    position: QueuePosition = QUEUE_POSITION.END
   ): Promise<{
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    insertIndex: number;
   }> {
-    return RunContinuationService.appendTailToRun(
+    return RunContinuationService.appendStepsToRun(
       workspaceFolderPath,
       workflowKey,
       runRef,
@@ -826,7 +830,8 @@ export class WorkingFileManager {
       expectedDefinitionRevision,
       expectedDescriptorRevision,
       lineageRepository,
-      allowInterruptedRun
+      allowInterruptedRun,
+      position
     );
   }
 

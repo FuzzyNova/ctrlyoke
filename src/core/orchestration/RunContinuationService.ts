@@ -5,7 +5,13 @@ import type {
   WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_STATES, LOCK_STATUS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  LOCK_STATUS,
+  QUEUE_POSITION,
+  resolveQueueInsertIndex,
+  type QueuePosition,
+} from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import {
   inspectWorkflowLock,
@@ -104,7 +110,7 @@ export class RunContinuationService {
     };
   }
 
-  static async appendTailToRun(
+  static async appendStepsToRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
@@ -112,11 +118,13 @@ export class RunContinuationService {
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    allowInterruptedRun: boolean = false
+    allowInterruptedRun: boolean = false,
+    position: QueuePosition = QUEUE_POSITION.END
   ): Promise<{
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    insertIndex: number;
   }> {
     if (tail.length === 0) {
       throw new Error("Append continuation requires at least one tail step");
@@ -155,16 +163,32 @@ export class RunContinuationService {
               `Cannot append while run is in state ${sourceState}`
             );
           }
+          // Resolve the splice point from the run file read under this same
+          // lock. Reading it earlier (or from the caller's snapshot) would let
+          // the executing run advance in between and land `next` on the wrong
+          // step.
+          const sourceSteps = source.steps ?? [];
+          const insertIndex = Math.max(
+            resolveQueueInsertIndex(
+              position,
+              source._runtime?.currentIndex ?? sourceSteps.length,
+              sourceSteps.length
+            ),
+            immutablePrefixLength(sourceSteps)
+          );
+          const steps = [...sourceSteps];
+          steps.splice(
+            insertIndex,
+            0,
+            ...tail.map((step) =>
+              stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+            )
+          );
           const workingFile: WorkingFile = {
             ...source,
             lastModifiedAt: Date.now(),
             definitionRevision: sourceRevision + 1,
-            steps: [
-              ...(source.steps ?? []),
-              ...tail.map((step) =>
-                stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
-              ),
-            ],
+            steps,
           };
           await writeWorkingFileAtomic(runFilePath, workingFile);
           return {
@@ -172,6 +196,7 @@ export class RunContinuationService {
               workingFile,
               definitionRevision: workingFile.definitionRevision,
               descriptorRevision: expectedDescriptorRevision + 1,
+              insertIndex,
             },
             descriptor,
           };
@@ -198,6 +223,24 @@ export class RunContinuationService {
       );
     }
   }
+}
+
+/**
+ * Number of leading steps a cross-process insert must never shift. Only steps
+ * that already recorded a terminal `completedAt` are immutable: their array
+ * index is how `manifest.json`/`events.jsonl` address their recorded attempts,
+ * so moving one would re-attribute recorded output to a different step. Pending
+ * steps past the execution head stay editable, matching the in-process rule in
+ * `PromptQueue.assertEditableDuringExecution`.
+ */
+function immutablePrefixLength(steps: WorkflowStep[]): number {
+  let boundary = 0;
+  steps.forEach((step, index) => {
+    if (step._runtime?.completedAt !== undefined) {
+      boundary = index + 1;
+    }
+  });
+  return boundary;
 }
 
 async function writeWorkingFileAtomic(

@@ -36,8 +36,10 @@ second read path or materializing the JSONL history.
 ## Non-goals
 
 - No new tools. This modifies one existing tool's input/output schema.
-- No cross-workflow or cross-run reads. The tool stays bound by
-  `resolveSelectedRun`'s pin/selector contract — see the scoping constraint in
+- No cross-workflow or cross-run reads, and no new addressing input. The tool
+  reads whichever run `resolveRun` returns from `CTRLYOKE_WORKING_FILE`; a
+  cursor is a position within that run's output, never a way to name another
+  one. See the scoping constraint in
   `.github/instructions/extension.instructions.md`.
 - No lifecycle control of any kind.
 

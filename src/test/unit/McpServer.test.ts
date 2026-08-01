@@ -131,89 +131,128 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
 
-  test("publishes stable selector and revision schemas", async () => {
+  test("publishes a run address on ctrlyoke_global_status and nowhere else", async () => {
     const server = await setup();
-    const tools = server.getToolDefinitions();
-    for (const name of [
-      "ctrlyoke_queue_status",
-      "ctrlyoke_append_queue",
-      "ctrlyoke_read_output",
-      "ctrlyoke_global_status",
-    ]) {
-      const tool: any = tools.find((candidate) => candidate.name === name)!;
-      assert.ok(tool.inputSchema.properties.workflowKey);
-      assert.ok(tool.inputSchema.properties.runRef);
-    }
-    const append: any = tools.find(
-      (candidate) => candidate.name === "ctrlyoke_append_queue"
-    )!;
-    assert.ok(append.inputSchema.properties.expectedDefinitionRevision);
-    assert.deepStrictEqual(append.inputSchema.properties.position.enum, [
-      "end",
+    const selectorKeys = () =>
+      server.getToolDefinitions().map((tool) => ({
+        name: tool.name,
+        keys: ["workflowKey", "runRef"].filter(
+          (key) => (tool.inputSchema as any).properties[key] !== undefined
+        ),
+      }));
+    const addressable = () =>
+      selectorKeys()
+        .filter((tool) => tool.keys.length > 0)
+        .map((tool) => tool.name);
+
+    // Only the cross-workflow read tool is addressable, and the shape does not
+    // change with the environment: there is one supported way to run this
+    // server, so there is one tool surface.
+    assert.deepStrictEqual(addressable(), ["ctrlyoke_global_status"]);
+    process.env.CTRLYOKE_WORKING_FILE = (
+      await createRun("schema", "2026-01-01T00-00-00-000Z")
+    ).runFilePath;
+    assert.deepStrictEqual(addressable(), ["ctrlyoke_global_status"]);
+
+    const append: any = server
+      .getToolDefinitions()
+      .find((tool) => tool.name === "ctrlyoke_append_queue")!.inputSchema;
+    assert.deepStrictEqual(Object.keys(append.properties).sort(), [
+      "position",
+      "source",
+      "steps",
     ]);
+    assert.deepStrictEqual(append.properties.position.enum, ["next", "end"]);
   });
 
-  test("reads an explicitly selected historical run and returns its address", async () => {
+  test("answers only for its own run, ignoring any address in the arguments", async () => {
     const server = await setup();
-    const older = await createRun("older", "2026-01-01T00-00-00-000Z", {
-      responseText: "historical output",
+    const own = await createRun("own", "2026-01-01T00-00-00-000Z", {
+      responseText: "own output",
     });
-    const current = await createRun("current", "2026-01-02T00-00-00-000Z");
+    const other = await createRun("other", "2026-01-02T00-00-00-000Z", {
+      responseText: "other output",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const status = responseJson(
-      await server.invokeTool("ctrlyoke_queue_status", older)
+      await server.invokeTool("ctrlyoke_queue_status", other)
     );
     const output = responseJson(
-      await server.invokeTool("ctrlyoke_read_output", older)
-    );
-    const global = responseJson(
-      await server.invokeTool("ctrlyoke_global_status", older)
+      await server.invokeTool("ctrlyoke_read_output", other)
     );
 
-    assert.strictEqual(status.metadata.workflowKey, older.workflowKey);
-    assert.strictEqual(status.metadata.runRef, older.runRef);
-    assert.strictEqual(output.workflowKey, older.workflowKey);
-    assert.strictEqual(output.runRef, older.runRef);
-    assert.strictEqual(output.outputs[0].responseText, "historical output");
-    assert.deepStrictEqual(
-      global.workflows.map((workflow: any) => ({
-        workflowKey: workflow.workflowKey,
-        runRef: workflow.runRef,
-      })),
-      [{ workflowKey: older.workflowKey, runRef: older.runRef }]
-    );
-    assert.notStrictEqual(older.workflowKey, current.workflowKey);
+    assert.strictEqual(status.metadata.workflowKey, own.workflowKey);
+    assert.strictEqual(status.metadata.runRef, own.runRef);
+    assert.strictEqual(output.workflowKey, own.workflowKey);
+    assert.strictEqual(output.outputs[0].responseText, "own output");
   });
 
-  test("requires an exact selector unless the environment pins the same run", async () => {
+  test("global_status reports sibling workflows and narrows on request", async () => {
     const server = await setup();
-    const pinned = await createRun("pinned", "2026-01-01T00-00-00-000Z");
+    const own = await createRun("own", "2026-01-01T00-00-00-000Z");
     const other = await createRun("other", "2026-01-02T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
+
+    const all = responseJson(
+      await server.invokeTool("ctrlyoke_global_status", {})
+    );
+    assert.deepStrictEqual(
+      all.workflows.map((workflow: any) => workflow.workflowKey).sort(),
+      [other.workflowKey, own.workflowKey].sort()
+    );
+
+    const narrowed = responseJson(
+      await server.invokeTool("ctrlyoke_global_status", {
+        workflowKey: other.workflowKey,
+      })
+    );
+    assert.deepStrictEqual(
+      narrowed.workflows.map((workflow: any) => workflow.workflowKey),
+      [other.workflowKey]
+    );
+  });
+
+  test("refuses every workflow tool when no run is attached", async () => {
+    const server = await setup();
+    const run = await createRun("unattached", "2026-01-01T00-00-00-000Z");
+    const notAttached = /no ctrlyoke workflow run is attached/i;
 
     await assert.rejects(
       () => server.invokeTool("ctrlyoke_queue_status", {}),
-      /workflowKey and runRef are required/i
+      notAttached
     );
-    process.env.CTRLYOKE_WORKING_FILE = pinned.runFilePath;
-    const selected = responseJson(
-      await server.invokeTool("ctrlyoke_queue_status", {})
-    );
-    assert.strictEqual(selected.metadata.runRef, pinned.runRef);
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_read_output", other),
-      /conflicts with CTRLYOKE_WORKING_FILE/i
+      () => server.invokeTool("ctrlyoke_read_output", {}),
+      notAttached
     );
+    await assert.rejects(
+      () => server.invokeTool("ctrlyoke_global_status", {}),
+      notAttached
+    );
+    await assert.rejects(
+      () =>
+        server.invokeTool("ctrlyoke_append_queue", {
+          position: "end",
+          steps: [{ prompt: "no target" }],
+        }),
+      notAttached
+    );
+
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.strictEqual(persisted.steps?.length, 1);
   });
 
-  test("appends through the addressed continuation transaction and returns revisions", async () => {
+  test("appends to its own run through the continuation transaction", async () => {
     const server = await setup();
     const run = await createRun("append", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
     const result = responseJson(
       await server.invokeTool("ctrlyoke_append_queue", {
-        ...run,
         position: "end",
-        expectedDefinitionRevision: 4,
-        expectedDescriptorRevision: 3,
         steps: [{ prompt: "new tail", _runtime: { responseText: "omit" } }],
       })
     );
@@ -231,16 +270,35 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "session-append"
     );
     assert.strictEqual(persisted.steps?.[1]._runtime, undefined);
-    await assert.rejects(
-      () =>
-        server.invokeTool("ctrlyoke_append_queue", {
-          ...run,
-          position: "end",
-          expectedDefinitionRevision: 4,
-          steps: [{ prompt: "stale" }],
-        }),
-      /Definition revision conflict: expected 4, found 5/
+  });
+
+  test("cannot append to any run but its own", async () => {
+    const server = await setup();
+    const own = await createRun("own", "2026-01-01T00-00-00-000Z");
+    const other = await createRun("other-run", "2026-01-02T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
+
+    // A supplied address is not an alternate target — it is ignored outright,
+    // so a workflow cannot queue work into a sibling run by guessing its ref.
+    const result = responseJson(
+      await server.invokeTool("ctrlyoke_append_queue", {
+        workflowKey: other.workflowKey,
+        runRef: other.runRef,
+        position: "end",
+        steps: [{ prompt: "cross-run attempt" }],
+      })
     );
+    assert.strictEqual(result.workflowKey, own.workflowKey);
+    assert.strictEqual(result.runRef, own.runRef);
+
+    const ownFile = JSON.parse(
+      await fs.readFile(own.runFilePath, "utf8")
+    ) as WorkingFile;
+    const otherFile = JSON.parse(
+      await fs.readFile(other.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.strictEqual(ownFile.steps?.length, 2);
+    assert.strictEqual(otherFile.steps?.length, 1);
   });
 
   test("permits an MCP tail append only for its exact active execution target", async () => {
@@ -255,6 +313,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       executionState: EXECUTION_STATES.RUNNING,
     };
     await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
       workflowKey: run.workflowKey,
       runRef: run.runRef,
@@ -267,10 +326,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     try {
       const result = responseJson(
         await server.invokeTool("ctrlyoke_append_queue", {
-          ...run,
           position: "end",
-          expectedDefinitionRevision: 4,
-          expectedDescriptorRevision: 3,
           steps: [{ prompt: "active tail" }],
         })
       );
@@ -285,12 +341,107 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
-  test("rejects busy lineages and concurrent stale revisions deterministically", async () => {
+  test("inserts a 'next' step after the running step without displacing completed work", async () => {
     const server = await setup();
-    const run = await createRun("busy", "2026-01-01T00-00-00-000Z");
+    const run = await createRun("next-append", "2026-01-01T00-00-00-000Z");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    // step 0 completed, step 1 running, step 2 still pending
+    workingFile.steps = [
+      workingFile.steps![0],
+      { prompt: "running", _runtime: { startedAt: 3 } },
+      { prompt: "pending" },
+    ];
+    workingFile._runtime = {
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
       workflowKey: run.workflowKey,
       runRef: run.runRef,
+      runner: RUNNER_IDS.CLI,
+      pid: process.pid,
+      ownerToken: "mcp-next-append-owner",
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    });
+    try {
+      const result = responseJson(
+        await server.invokeTool("ctrlyoke_append_queue", {
+          position: "next",
+          steps: [{ prompt: "steered" }],
+        })
+      );
+      assert.strictEqual(result.insertIndex, 2);
+      assert.strictEqual(result.newQueueSize, 4);
+
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["prompt-next-append", "running", "steered", "pending"]
+      );
+      // The executed prefix keeps its index and its session/runtime metadata.
+      assert.deepStrictEqual(persisted.steps?.[0], workingFile.steps![0]);
+      assert.strictEqual(persisted.steps?.[2]._runtime, undefined);
+    } finally {
+      await WorkflowLockManager.releaseLock(
+        workspaceRoot,
+        run.workflowKey,
+        "mcp-next-append-owner"
+      );
+    }
+  });
+
+  test("clamps a 'next' insert past every completed step when the head lags", async () => {
+    const server = await setup();
+    const run = await createRun("next-clamp", "2026-01-01T00-00-00-000Z");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    // A stale/lagging currentIndex must never let an insert land inside the
+    // completed prefix, where it would re-index recorded timeline attempts.
+    workingFile.steps = [
+      workingFile.steps![0],
+      { prompt: "also completed", _runtime: { startedAt: 3, completedAt: 4 } },
+      { prompt: "pending" },
+    ];
+    workingFile._runtime = {
+      currentIndex: 0,
+      executionState: EXECUTION_STATES.PAUSED,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool("ctrlyoke_append_queue", {
+        position: "next",
+        steps: [{ prompt: "steered" }],
+      })
+    );
+    assert.strictEqual(result.insertIndex, 2);
+
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.deepStrictEqual(
+      persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+      ["prompt-next-clamp", "also completed", "steered", "pending"]
+    );
+  });
+
+  test("rejects an append while another run in the lineage holds the lock", async () => {
+    const server = await setup();
+    const run = await createRun("busy", "2026-01-01T00-00-00-000Z");
+    const sibling = `run-2026-01-02T00-00-00-000Z` as RunRef;
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      workflowKey: run.workflowKey,
+      runRef: sibling,
       runner: RUNNER_IDS.CLI,
       pid: process.pid,
       ownerToken: "mcp-test-owner",
@@ -300,7 +451,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     await assert.rejects(
       () =>
         server.invokeTool("ctrlyoke_append_queue", {
-          ...run,
           position: "end",
           steps: [{ prompt: "blocked" }],
         }),
@@ -312,28 +462,19 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "mcp-test-owner"
     );
 
-    const results = await Promise.allSettled(
+    // Serialized through the server's operation queue, so an agent that adds
+    // work twice gets both appends rather than a spurious revision conflict.
+    const results = await Promise.all(
       ["first", "second"].map((prompt) =>
         server.invokeTool("ctrlyoke_append_queue", {
-          ...run,
           position: "end",
-          expectedDefinitionRevision: 4,
-          expectedDescriptorRevision: 3,
           steps: [{ prompt }],
         })
       )
     );
-    assert.strictEqual(
-      results.filter((result) => result.status === "fulfilled").length,
-      1
-    );
-    assert.match(
-      (
-        results.find(
-          (result) => result.status === "rejected"
-        ) as PromiseRejectedResult
-      ).reason.message,
-      /revision conflict/i
+    assert.deepStrictEqual(
+      results.map((result) => responseJson(result).newQueueSize),
+      [2, 3]
     );
   });
 });

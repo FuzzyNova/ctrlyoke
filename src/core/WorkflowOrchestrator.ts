@@ -3757,7 +3757,7 @@ export class WorkflowOrchestrator {
           )
         ).descriptorRevision
       : expectedDescriptorRevision;
-    const appended = await RunContinuationService.appendTailToRun(
+    const appended = await RunContinuationService.appendStepsToRun(
       workspaceRoot,
       address.workflowKey,
       address.runRef,
@@ -4373,7 +4373,7 @@ export class WorkflowOrchestrator {
       (live) =>
         live.executeEphemeralPrompt(text, properties, action, promptName),
       (workspaceRoot) =>
-        WorkingFileManager.appendTailToRun(
+        WorkingFileManager.appendStepsToRun(
           workspaceRoot,
           runAddress.workflowKey,
           runAddress.runRef,
