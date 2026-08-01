@@ -886,6 +886,8 @@ export function useOutputVirtualization({
     // target once afterward.
   }, [isOutputVirtualized, outputCollapsed, performBulkRemeasure]);
 
+  const hasAnyRows = rows.length > 0;
+
   useEffect(() => {
     if (postLoadRemeasureFrameRef.current !== null) {
       cancelAnimationFrame(postLoadRemeasureFrameRef.current);
@@ -896,7 +898,7 @@ export function useOutputVirtualization({
       postLoadRemeasureTimerRef.current = null;
     }
 
-    if (outputCollapsed || !isOutputVirtualized || rows.length === 0) {
+    if (outputCollapsed || !isOutputVirtualized || !hasAnyRows) {
       return;
     }
 
@@ -909,15 +911,25 @@ export function useOutputVirtualization({
         measureMountedRowsAndRestoreTarget("post-load-remeasure-settle");
       }, POST_LOAD_REMEASURE_DELAY_MS);
     });
+    // Keyed on `hasAnyRows`, never on `rows.length` — for the same reason the
+    // bulk-remeasure effect above excludes it, but with sharper teeth here: this
+    // pass remeasures every mounted row and then applies the scroll target with
+    // `force: true`, bypassing the recent-user-scroll grace. Running it per
+    // appended row meant that during streaming, every new row at the tail
+    // re-measured the rows the user was actually looking at hundreds of rows
+    // above and force-wrote scrollTop right after they stopped scrolling — the
+    // "scrolls a bit and snaps back" glitch. Genuinely new rows are measured
+    // individually as they mount; a sweep is only needed when the displayed run
+    // changes or output first appears.
   }, [
+    hasAnyRows,
     isOutputVirtualized,
     measureMountedRowsAndRestoreTarget,
     outputCollapsed,
     rowRenderIdentity,
-    rows.length,
   ]);
 
-  const hasOutput = rows.length > 0;
+  const hasOutput = hasAnyRows;
   const nonVirtualVisibleRowCount = isOutputVirtualized
     ? rows.length
     : Math.min(rows.length, nonVirtualRenderedRowCount);

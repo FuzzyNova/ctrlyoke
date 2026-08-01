@@ -47,8 +47,13 @@ import { WebviewLog } from "@utils/logger";
 import { captureViewportRowAnchor } from "@utils/outputDom";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
+  OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
   OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
 } from "@utils/outputScrollConstants";
+import {
+  getDistanceFromBottomPx,
+  nextAutoscrollArmed,
+} from "@utils/outputAutoscroll";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -57,7 +62,6 @@ const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
 // Stable workflowId used for standalone user shell sessions (no active workflow).
 const SHELL_WORKFLOW_ID = "_shell";
 
-const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned.
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
 const OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES = 5; // animation-frame retries for capturing a viewport anchor when rows are mid-transition (e.g. scroll-seek placeholder swap).
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
@@ -462,7 +466,7 @@ const OutputSectionInner: React.FC = () => {
   } = useOutputScrollTarget({
     applyScrollTargetRef,
     autoscrollEnabledRef: autoscrollEnabled,
-    bottomThresholdPx: SCROLL_BOTTOM_THRESHOLD,
+    bottomThresholdPx: OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
     commitMaxRetries: OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES,
     commitScrollTargetFromViewportRef,
     defaultTarget: DEFAULT_OUTPUT_SCROLL_TARGET,
@@ -566,13 +570,23 @@ const OutputSectionInner: React.FC = () => {
       return;
     }
     if (isProgrammaticScroll.current) {
-      // Still update autoscrollEnabled so a user wheel mid-programmatic-scroll
-      // correctly disables auto-scroll. Without this, the flag stays true and
-      // the auto-scroll effect fires again on the next measurementVersion bump.
-      const atBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight <=
-        SCROLL_BOTTOM_THRESHOLD;
-      autoscrollEnabled.current = atBottom;
+      // Still run the latch so a user wheel mid-programmatic-scroll correctly
+      // disables auto-scroll. Without this, the flag stays armed and the
+      // auto-scroll effect fires again on the next measurementVersion bump.
+      // Attribution is strict here: only a *recent real input event* counts, so
+      // the pane's own pinning writes can never release their own latch.
+      autoscrollEnabled.current = nextAutoscrollArmed({
+        distanceFromBottomPx: getDistanceFromBottomPx(el),
+        viewportHeightPx: el.clientHeight,
+        isArmed: autoscrollEnabled.current,
+        movedUp:
+          lastScrollTopRef.current != null &&
+          el.scrollTop < lastScrollTopRef.current,
+        isUserDriven:
+          lastUserScrollInputAtRef.current != null &&
+          performance.now() - lastUserScrollInputAtRef.current <=
+            OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+      });
       return;
     }
     // TanStack's rAF-deferred scroll corrections fire during the flush window.
@@ -606,14 +620,28 @@ const OutputSectionInner: React.FC = () => {
     );
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <=
-      SCROLL_BOTTOM_THRESHOLD;
-    autoscrollEnabled.current = atBottom;
+      OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX;
+    // Everything reaching this point is a scroll we did not initiate: the
+    // programmatic and measurement-flush paths returned above. Keyboard and
+    // scrollbar-drag scrolling produce no wheel/touch stamp, so attribution
+    // can't be narrowed further than that — the `movedUp` + release-distance
+    // requirement is what keeps virtualizer corrections from unpinning the view.
+    autoscrollEnabled.current = nextAutoscrollArmed({
+      distanceFromBottomPx: getDistanceFromBottomPx(el),
+      viewportHeightPx: el.clientHeight,
+      isArmed: autoscrollEnabled.current,
+      movedUp: previousScrollTop != null && el.scrollTop < previousScrollTop,
+      isUserDriven: true,
+    });
 
     // Immediately track the live scroll position so layout effects always apply
     // the current position, not a stale pre-scroll target. This covers momentum
     // scroll where the debounced commit hasn't fired yet. We only update the ref
     // here; the store write is still deferred via scheduleScrollTargetCommit.
-    if (atBottom) {
+    // The latch — not raw `atBottom` — decides, so a pane that grew out from
+    // under a pinned viewport keeps its bottom target instead of pinning itself
+    // to whichever row happened to be on screen that frame.
+    if (autoscrollEnabled.current) {
       scrollTargetRef.current = DEFAULT_OUTPUT_SCROLL_TARGET;
     } else {
       const anchor = captureViewportRowAnchor(el, "visible-top");

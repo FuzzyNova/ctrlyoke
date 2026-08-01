@@ -168,7 +168,11 @@ export function useOutputScrollTarget({
           scrollElement.scrollTop -
           scrollElement.clientHeight <=
         bottomThresholdPx;
-      if (atBottom) {
+      // The auto-scroll latch outranks raw geometry. While it is armed the view
+      // is *meant* to be at the bottom even if streaming content has temporarily
+      // outgrown it, so committing a row anchor here would silently unpin the
+      // pane (setCurrentScrollTarget disarms on any non-bottom target).
+      if (autoscrollEnabledRef.current || atBottom) {
         scrollTargetCommitRetryCountRef.current = 0;
         setCurrentScrollTarget(defaultTarget, reason);
         return;
@@ -198,6 +202,7 @@ export function useOutputScrollTarget({
       );
     },
     [
+      autoscrollEnabledRef,
       bottomThresholdPx,
       commitMaxRetries,
       commitScrollTargetFromViewportRef,
