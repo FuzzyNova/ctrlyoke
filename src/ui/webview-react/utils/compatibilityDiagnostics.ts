@@ -7,9 +7,10 @@ import {
   COMPATIBILITY_SOURCE_TIERS,
   type HarnessId,
 } from "@root/types/DashboardConstants";
-import type {
-  CompatibilityDiagnostic,
-  HarnessCapabilityRegistrySnapshot,
+import {
+  getCompatibilityCaveatMessage,
+  type CompatibilityDiagnostic,
+  type HarnessCapabilityRegistrySnapshot,
 } from "@root/types/CompatibilityTypes";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
 
@@ -79,11 +80,7 @@ export function toFieldDiagnostic(
   diagnostic: CompatibilityDiagnostic,
   sourceLabel?: string
 ): Pick<CompatibilityDiagnostic, "severity" | "message"> {
-  const harnessName =
-    HARNESS_INFO[diagnostic.harnessId]?.name ?? diagnostic.harnessId;
-  const message = diagnostic.message
-    .split(diagnostic.harnessId)
-    .join(harnessName);
+  const message = diagnostic.message;
   return {
     severity: diagnostic.severity,
     message: sourceLabel ? `${message} ${sourceLabel}` : message,
@@ -113,15 +110,24 @@ function harnessLabel(harnessId: HarnessId): string {
   return HARNESS_INFO[harnessId]?.shortName ?? harnessId;
 }
 
-function reasonForHarness(harnessId: HarnessId): string {
-  switch (harnessId) {
-    case HARNESS_IDS.CODEX_CLI:
-      return "because Codex uses sandbox/approval modes instead of individual tool patterns";
-    case HARNESS_IDS.ANTIGRAVITY_CLI:
-      return "because Antigravity uses coarse permission modes instead of individual tool patterns";
-    default:
-      return "because this harness does not provide verified individual tool-pattern enforcement";
-  }
+/**
+ * The reason a harness cannot enforce a list is a harness-owned fact carried on
+ * the declaration as `caveatCode`; the prose lives in the shared helper. This
+ * module must never switch on `harnessId` to invent one.
+ */
+function reasonForHarness(
+  harnessId: HarnessId,
+  field: Exclude<PermissionField, "mode">,
+  capabilities: HarnessCapabilityRegistrySnapshot
+): string {
+  const caveat = getCompatibilityCaveatMessage(
+    capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
+      ?.caveatCode
+  );
+  return (
+    caveat ??
+    "because this harness does not provide verified individual tool-pattern enforcement"
+  );
 }
 
 /**
@@ -161,7 +167,7 @@ export function workflowPermissionDiagnostic(
     .filter(([, counts]) => counts.affected > 0)
     .map(
       ([harnessId, counts]) =>
-        `Ignored by ${counts.affected} ${harnessLabel(harnessId)} step${counts.affected === 1 ? "" : "s"} ${reasonForHarness(harnessId)}`
+        `Ignored by ${counts.affected} ${harnessLabel(harnessId)} step${counts.affected === 1 ? "" : "s"} ${reasonForHarness(harnessId, field, capabilities)}`
     );
 
   if (ignored.length === 0) return undefined;

@@ -5,7 +5,10 @@ import {
   ToolPermissionMapperBase,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
+import {
+  PERMISSION_CAVEAT_CODES,
+  type PermissionCapabilityDescriptor,
+} from "../../../types/CompatibilityTypes";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -18,7 +21,7 @@ const ANTIGRAVITY_PERMISSION_VERIFICATION = {
   verifiedVersions: ["1.0.16"],
 } as const;
 
-const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -28,11 +31,13 @@ const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
     fidelity: "unsupported",
     mechanism: "none",
     verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
   },
   deniedTools: {
     fidelity: "unsupported",
     mechanism: "none",
     verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
   },
 };
 

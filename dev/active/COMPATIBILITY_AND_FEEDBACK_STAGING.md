@@ -104,11 +104,11 @@ defects in what is shipping today.
 **If you would rather keep the release gate clean, defer both.** Nothing in
 Stage 1 changes either way.
 
-**Decided 2026-08-01: Stage 0 item 1 is in.** It fixes a defect in
-already-shipped behavior rather than adding surface, is small, and touches no
-file Stage 1 touches. Landing it early costs the gate nothing and removes a
-run-hanging modal from remotely driven workflows before any of the registry
-work starts.
+**Decided 2026-08-01: both Stage 0 items are in, and both have landed.** They
+fix defects in already-shipped behavior rather than adding surface, are the
+smallest work in this document, and touch no file Stage 1 touches. Landing them
+first cost the gate nothing and removed a run-hanging modal from remotely
+driven workflows before any of the registry work started.
 
 ### Stage 1 — the P0 release gate
 
@@ -166,14 +166,14 @@ strictly ordered: each builds only on what has already landed.
 | --- | ------------- | ------------------------------------------------------------------------------------------------------ |
 | 1   | Stage 0.1     | **Done** — delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy      |
 | 2   | Stage 0.2     | **Done** — Browser feedback Phase 1 — toast queue, `ToastViewport`, `isStandalone` gate                |
-| 3   | Phase 1A(i)   | Shared capability + diagnostic contracts and their constants                                           |
-| 4   | Phase 1A(ii)  | Pure effective-property resolver extracted from `PropertyResolver` (own commit, highest risk)          |
-| 5   | Phase 1B(i)   | Harness-owned permission descriptors, registry assembly, cached version detection                      |
-| 6   | Phase 1B(ii)  | Pure compatibility analyzer, workflow validation, execution preflight                                  |
-| 7   | Phase 1B(iii) | Capability-snapshot message, React store, `useCompatibilityDiagnostics`                                |
-| 8   | Phase 1C(i)   | `FieldDiagnostic`, delete `getPermissionHarnessSupport`, honest permission UI in both property editors |
-| 9   | Phase 1C(ii)  | Defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage         |
-| 10  | Perm. 4       | `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract           |
+| 3   | Phase 1A(i)   | **Done** — shared capability + diagnostic contracts and their constants                                           |
+| 4   | Phase 1A(ii)  | **Done** — pure effective-property resolver extracted from `PropertyResolver`          |
+| 5   | Phase 1B(i)   | **Done** — harness-owned permission descriptors, registry assembly, cached version detection                      |
+| 6   | Phase 1B(ii)  | **Done** — pure compatibility analyzer wired into execution preflight                                  |
+| 7   | Phase 1B(iii) | **Done** — capability-snapshot message, React store, `useCompatibilityDiagnostics`                                |
+| 8   | Phase 1C(i)   | **Done** — `FieldDiagnostic`, `getPermissionHarnessSupport` deleted, honest UI in both property editors |
+| 9   | Phase 1C(ii)  | **Done** — defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage         |
+| 10  | Perm. 4       | **Done** — `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract           |
 | 11  | Perm. 5–7     | **Done** — remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention         |
 
 Stage 2 is deliberately not queued: it is post-release by decision of the plans

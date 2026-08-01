@@ -1,5 +1,6 @@
 import {
   CAPABILITY_DOMAINS,
+  HARNESS_INFO,
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_BASES,
@@ -146,6 +147,38 @@ export interface CompatibilityDiagnosticMessageContext {
   capability: string;
 }
 
+/**
+ * Stable caveat codes a harness adapter may attach to a declaration to explain
+ * *why* a capability is limited. The code is the harness-owned fact; the prose
+ * lives in `getCompatibilityCaveatMessage()` so no consumer — least of all a
+ * React component — needs a harness switch to render it.
+ */
+export const PERMISSION_CAVEAT_CODES = {
+  SANDBOX_APPROVAL_MODES: "permissions.sandboxApprovalModes",
+  COARSE_PERMISSION_MODES: "permissions.coarsePermissionModes",
+} as const;
+
+export type PermissionCaveatCode =
+  (typeof PERMISSION_CAVEAT_CODES)[keyof typeof PERMISSION_CAVEAT_CODES];
+
+/**
+ * Resolve a declaration's `caveatCode` into a trailing "because ..." clause.
+ * Returns undefined when the declaration carries no caveat, so callers can
+ * omit the clause rather than inventing a reason.
+ */
+export function getCompatibilityCaveatMessage(
+  caveatCode: string | undefined
+): string | undefined {
+  switch (caveatCode) {
+    case PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES:
+      return "because this harness uses sandbox/approval modes instead of individual tool patterns";
+    case PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES:
+      return "because this harness uses coarse permission modes instead of individual tool patterns";
+    default:
+      return undefined;
+  }
+}
+
 /** Shared user-facing prose for compatibility diagnostics. */
 export function getCompatibilityDiagnosticMessage(
   code: string,
@@ -155,28 +188,30 @@ export function getCompatibilityDiagnosticMessage(
     context.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
       ? "Allowed Tools"
       : "Denied Tools";
+  // Render the display name here so no consumer has to rewrite the prose.
+  const harness = HARNESS_INFO[context.harnessId]?.name ?? context.harnessId;
 
   switch (code) {
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
-      return `The ${context.harnessId} harness is unavailable for this execution target.`;
+      return `The ${harness} harness is unavailable for this execution target.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
-      return `Permission mode is not supported by the ${context.harnessId} harness.`;
+      return `Permission mode is not supported by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
-      return `Permission mode is only partially translated by the ${context.harnessId} harness.`;
+      return `Permission mode is only partially translated by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNVERIFIED:
-      return `Permission mode support is unverified for the installed ${context.harnessId} version.`;
+      return `Permission mode support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED:
-      return `${capabilityLabel} are NOT ENFORCED by the ${context.harnessId} harness.`;
+      return `${capabilityLabel} are NOT ENFORCED by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
-      return `${capabilityLabel} are only partially translated by the ${context.harnessId} harness.`;
+      return `${capabilityLabel} are only partially translated by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
-      return `${capabilityLabel} support is unverified for the installed ${context.harnessId} version.`;
+      return `${capabilityLabel} support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
-      return `${capabilityLabel} include rules that are only partially represented by the ${context.harnessId} harness.`;
+      return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
     default:
-      return `Compatibility for ${context.capability} is unavailable for the ${context.harnessId} harness.`;
+      return `Compatibility for ${context.capability} is unavailable for the ${harness} harness.`;
   }
 }

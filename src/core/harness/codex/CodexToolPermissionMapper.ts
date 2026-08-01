@@ -5,7 +5,10 @@ import {
   ToolPermissionMapperBase,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
+import {
+  PERMISSION_CAVEAT_CODES,
+  type PermissionCapabilityDescriptor,
+} from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
@@ -19,7 +22,7 @@ const CODEX_PERMISSION_VERIFICATION = {
   verifiedVersions: ["0.146.0"],
 } as const;
 
-const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
+export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {
     fidelity: "exact",
     mechanism: "native",
@@ -29,11 +32,13 @@ const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
     fidelity: "unsupported",
     mechanism: "none",
     verification: CODEX_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES,
   },
   deniedTools: {
     fidelity: "unsupported",
     mechanism: "none",
     verification: CODEX_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES,
   },
 };
 

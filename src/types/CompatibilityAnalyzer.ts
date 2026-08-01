@@ -272,9 +272,15 @@ function createDiagnostic(
   };
 }
 
+/**
+ * Fallback state for a harness with no usable declaration (an unavailable
+ * harness has nothing installed to evaluate). `unsupported` is the only
+ * fidelity that may pair with mechanism `none` — a supported fidelity must
+ * always name a real mechanism.
+ */
 function unknownCapabilityState(): EffectiveCapabilityState {
   return {
-    fidelity: CAPABILITY_FIDELITIES.EXACT,
+    fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
     mechanism: CAPABILITY_MECHANISMS.NONE,
     verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
   };
