@@ -56,10 +56,10 @@ plan's own table, this section is newer.
 
 | Fact                                                              | Value                                                                                                                       |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Direct `show*Message` in reusable code (the parity gap)           | **64** across 13 files                                                                                                      |
+| Direct `show*Message` in reusable code (the parity gap)           | **63** across 12 files (an AST count; the earlier 64/13 included the commented-out call in `WorkspaceSessionManager.ts:62`)  |
 | Direct `show*Message` at the VS Code boundary (correctly staying) | **53** across 7 files                                                                                                       |
 | Adapter-mediated host UI (`platform.log/warn/error`)              | **18** — `WorkflowInstance` ×9, `PromptFileParser` ×4, `WorkflowExecutor` ×3, `CliIntegration` ×1, `EndConditionHandler` ×1 |
-| Adapter-mediated `showChoice()`                                   | **1** — `CliIntegration.ts:1394` (the plan cites 1373; the file has drifted)                                                |
+| Adapter-mediated `showChoice()`                                   | **1** — `CliIntegration.ts:1381` (was 1394 before Stage A.2 edited the file above it; the plan's 1373 is older still)       |
 | `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                                      |
 | `MESSAGE_TYPES.USER_FEEDBACK`                                     | **Does not exist** — Phase 1 landed the severity vocabulary and the queue, not the transport                                |
 | `ToastViewport`                                                   | Shipped, mounted, consuming the queue                                                                                       |
@@ -161,7 +161,7 @@ measured numbers below are the committed baselines:**
 
 Neither counter can be a line-oriented `grep`: `PromptFileParser.ts:227` and
 `EndConditionHandler.ts:382` call through `this.platform?.` (optional chaining),
-and `CliIntegration.ts:1394`'s `.showChoice(` sits on its own line with the
+and `CliIntegration.ts:1381`'s `.showChoice(` sits on its own line with the
 receiver above it. Count by AST, and exclude declarations and prose — the
 `show*Message` members declared in `platform/vscode-shim.ts`, the four
 `PlatformAdapter.ts` doc-comment mentions, and the comment references in
@@ -312,9 +312,9 @@ may be swapped as a block.
 | 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                      |
 | 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast         |
 | 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls   |
-| 13  | C.4   | Triage all 64 reusable direct sites and record per-site disposition (no migration yet)                              |
+| 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                              |
 | 14  | C.5   | Execute the triage: deletions and scoped-reply conversions                                                          |
-| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1394` "don't show again" (Phase 2.5 Site 3)                 |
+| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1381` "don't show again" (Phase 2.5 Site 3)                 |
 | 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention        |
 | 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                        |
 | 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                         |
@@ -357,7 +357,7 @@ adapter-mediated `platform.log/warn/error` calls in `WorkflowInstance`,
 `PromptFileParser`, `WorkflowExecutor`, `CliIntegration`, and
 `EndConditionHandler` move to the sink and the five UI methods are **deleted**
 from `PlatformAdapter` — deleting them is what stops the native path being
-reintroduced, and it is what unblocks `StandaloneServerAdapter`. The 64 direct
+reintroduced, and it is what unblocks `StandaloneServerAdapter`. The 63 direct
 `show*Message` calls in reusable code are triaged first against the plan's
 five-class table (delete-policy-conflict / delete-duplicate / delete-noise /
 convert-to-scoped-reply / port-to-broadcast); sampling suggests scoped reply,
@@ -368,7 +368,7 @@ gate and vanishes for anyone with browser notifications off.
 ### Browser feedback Phase 2.5 Site 3 (folded into Stage C.6)
 
 The last surviving `showChoice()` — a "don't show again" harness warning at
-`CliIntegration.ts:1394`. Unlike the two deleted end-condition dialogs it is
+`CliIntegration.ts:1381`. Unlike the two deleted end-condition dialogs it is
 neither execution-blocking nor policy-contradicting, so it migrates normally:
 feedback plus a persisted suppression flag.
 

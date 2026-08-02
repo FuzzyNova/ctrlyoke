@@ -407,7 +407,7 @@ Direct (`vscode.window.show*Message` with actions):
 
 Adapter-mediated (`platform.showChoice`):
 
-- harness warning "don't show again" (`CliIntegration.ts:1394`) — migrate
+- harness warning "don't show again" (`CliIntegration.ts:1381`) — migrate
   normally.
 
 (The two end-condition dialogs were deleted rather than migrated in Phase 2.5.)
@@ -612,7 +612,7 @@ dashboard as a **non-blocking action on an already-stopped workflow**, not as a
 modal that halts the run and is invisible to remote clients. Track that
 separately; it is not required to close this gap.
 
-#### Site 3 — `CliIntegration.ts:1394`
+#### Site 3 — `CliIntegration.ts:1381`
 
 A "don't show again" harness warning. Not execution-blocking and not
 policy-contradicting. Migrate normally as feedback plus a persisted

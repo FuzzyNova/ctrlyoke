@@ -318,6 +318,22 @@ not repair the enforcement posture. Keeping `mode` exact was also rejected:
 even when its deny list is empty. No granular `allowedTools` or `deniedTools`
 support is inferred; both remain explicitly unsupported.
 
+**Residual risk this decision accepts, recorded 2026-08-02.** `allowAll` is the
+_default_ mode (`CtrlYokeSettings` defaults, `toolPermissions.mode: "allowAll"`),
+so this change removes `--dangerously-skip-permissions` from default-configured
+Antigravity runs. What agy then does headlessly — block on an approval prompt,
+auto-deny, or proceed — is **not established by code inspection**, and this
+plan's own standard is that behavior is only claimed once a behavioral test
+earns it. The honest-enforcement argument still wins on the merits: the previous
+mapping silently disabled the deny list, and no safe auto-approve flag exists to
+substitute. The exposure is bounded because `hasFullPermissions()` now returns
+false for this combination, which fires
+`CliIntegration.warnIfHeadlessWithoutPermissions()` before the run, and the
+`partial` mode declaration produces an author-time diagnostic. Confirm the
+headless behavior with a real-harness test before treating this as settled; if
+agy blocks, the follow-up is a defined headless fallback, not a return to the
+bypass.
+
 ## Staging Within the Parent Plan
 
 This is the first consumer of the compatibility architecture, not an

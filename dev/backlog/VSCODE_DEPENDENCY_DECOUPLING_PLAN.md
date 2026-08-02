@@ -353,9 +353,9 @@ Notes on the merges:
 
 1. Define shared and VS Code-only path groups.
 2. Add lint/source-audit rules that reject `vscode` imports in shared groups.
-3. **DONE —** Add an explicit temporary allowlist matching this audit. The
-   direct `show*Message` source audit commits the seven-file VS Code boundary
-   allowlist and defaults every unknown file to the reusable group.
+3. Add an explicit temporary allowlist matching this audit. **Still open** —
+   this is the `vscode`-import allowlist for items 1–2, which Stage A
+   deliberately did not build.
 4. Make the allowlist shrink-only.
 5. Add a bundle/metafile check for the Node server entry graph.
 6. **DONE —** Add a **shrink-only counter for adapter-mediated host UI** —
@@ -363,6 +363,14 @@ Notes on the merges:
    An import-graph rule cannot see these, so without a separate counter the
    `vscode`-import metric can reach zero while core code still opens native
    modals.
+
+**DONE —** the absorbed `BROWSER_USER_FEEDBACK_PLAN.md` Phase 5 rule (a
+shrink-only direct `show*Message` audit, baselines 53 boundary / 63 reusable)
+landed alongside item 6. Both counters live in
+`src/test/unit/SourceAuditCounters.test.ts`, count `ts.CallExpression` nodes
+rather than lines, and fail in _both_ directions so a baseline cannot go stale.
+The seven-file boundary allowlist there is the `show*Message` split only — it is
+not the item 3 `vscode`-import allowlist.
 
 This lands before refactoring so the measured baseline cannot grow.
 
