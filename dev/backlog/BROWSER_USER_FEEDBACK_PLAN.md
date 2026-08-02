@@ -12,9 +12,11 @@ clients; that migration remains Phase 2.
 - [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md)
 
 **Implementation order:**
-[`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
-— Phase 2.5 Site 2 and Phase 1 are staged early and independently; Phases 2–4
-are post-release.
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+— Phases 2, 2.5 Site 3, 3, and 4 are Stages C, E, and F there; the Phase 5
+guards are Stage A. The completed Phase 1 and Phase 2.5 Site 2 sequencing is
+recorded in
+[`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md).
 
 **Not a dependency of the 0.1.0 permission work.**
 [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](./HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
@@ -191,7 +193,10 @@ above, so the full inventory to migrate is **136 sites (116 direct + 20 via
 `showChoice`).
 
 Re-run the AST audit before the Phase 2 triage rather than trusting these
-totals. A 2026-08-01 text scan found per-file drift against the original table
+totals. A 2026-08-02 re-measure found the reusable group at **64** across 13
+files and the boundary group at exactly **53** across 7; the adapter-mediated
+table below is exact. An earlier 2026-08-01 text scan found per-file drift
+against the original table
 (`WorkflowCommandHandler` at 13, `showErrorMessage` at 67 /
 `showInformationMessage` at 24), and a naive `grep` both over-counts the four
 doc-comment mentions in `PlatformAdapter.ts` and under-counts the three
@@ -402,7 +407,7 @@ Direct (`vscode.window.show*Message` with actions):
 
 Adapter-mediated (`platform.showChoice`):
 
-- harness warning "don't show again" (`CliIntegration.ts:1373`) — migrate
+- harness warning "don't show again" (`CliIntegration.ts:1394`) — migrate
   normally.
 
 (The two end-condition dialogs were deleted rather than migrated in Phase 2.5.)
@@ -607,7 +612,7 @@ dashboard as a **non-blocking action on an already-stopped workflow**, not as a
 modal that halts the run and is invisible to remote clients. Track that
 separately; it is not required to close this gap.
 
-#### Site 3 — `CliIntegration.ts:1373`
+#### Site 3 — `CliIntegration.ts:1394`
 
 A "don't show again" harness warning. Not execution-blocking and not
 policy-contradicting. Migrate normally as feedback plus a persisted

@@ -6,15 +6,19 @@
 > workflow, prompt, defaults, and advanced permission surfaces; authored tool
 > lists remain editable under mode-only harnesses. Qwen/OpenCode behavioral
 > verification remains pinned in the separate real-harness fixture suite; the
-> post-release work is limited to Antigravity/Codex parity follow-up.
+> post-release work is limited to Antigravity/Codex parity follow-up. Two
+> Antigravity enforcement gaps found 2026-08-02 are open and queued — see
+> "Known enforcement gaps".
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
 > **Parent architecture:**
 > [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
 >
-> **Implementation order:**
-> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
+> **Implementation order:** the completed Stages 1–7 are recorded in
+> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
+> the remaining Codex and Antigravity parity items are Stage G of
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
 >
 > **No dependency on**
 > [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md). Every user
@@ -216,6 +220,69 @@ installed CLI) has no delete/remove-file tool at all, so an allow/deny rule
 targeting it never matched any real Qwen tool call. The mapper now skips
 `delete`/`remove` patterns with a `Log.warn` pointing users at `shell(rm:*)`
 instead, which is how Qwen actually performs file deletion.
+
+## Known enforcement gaps (found 2026-08-02)
+
+Two Antigravity defects found while auditing whether capability data was worth
+serializing for MCP consumers. Both are the failure mode this plan exists to
+prevent — a restriction ctrlyoke presents as active that the harness does not
+apply — and both are queued as Stage A of
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
+
+### Gap 1 — ctrlyoke MCP tool denials are silently unenforced on Antigravity
+
+Unchecking a function in the ctrlyoke MCP server's per-tool controls produces no
+enforcement under Antigravity, and no user-visible warning on any surface.
+
+The path:
+
+1. `McpServersEditor.tsx:82` is the **only** producer of
+   `McpServerConfig.deniedTools` — it emits `{ id: "ctrlyoke", deniedTools }` and
+   passes every other server through untouched. The field is not in
+   `schemas/workflow-schema.json`'s `mcpServers` entries either, so the ctrlyoke
+   checkboxes are its sole authoring path despite the generic type.
+2. `CliIntegration.mergeServerDeniedTools()` (defined line 1252, called line 963)
+   rewrites those entries as `mcp__ctrlyoke__<tool>` and appends them to
+   `toolPermissions.deniedTools`. There is one enforcement mechanism with two
+   entry points, not a second deny list.
+3. Antigravity declares `deniedTools` `fidelity: "unsupported"`, so its mapper
+   drops them.
+
+Why nothing warns:
+
+- **Author time is blind.** `WorkflowInstance.ts:429` runs the analyzer on
+  `PropertyResolver.resolveTarget()` output — _upstream_ of the merge in step 2 —
+  and `CompatibilityAnalyzer.ts:152` gates the diagnostic on
+  `used: permissions.deniedTools.length > 0`. With denials expressed only through
+  the checkboxes, that list is empty and no diagnostic is produced.
+- **Runtime warns into a log file.** `prepare()` _does_ receive the merged config,
+  so `getToolTranslationDiagnostics()` (`IToolPermissionMapper.ts:109`) correctly
+  emits `DENIED_TOOLS_NOT_ENFORCED`. Its only consumer is
+  `CliIntegration.ts:994`, a bare `Log.warn`. That violates this plan's parent
+  architecture rule that runtime warnings reuse the same codes _and_ stay visible
+  in status/output.
+
+Scope is one harness: Copilot/Claude/Qwen/OpenCode enforce the pattern normally,
+and Codex enforces it through its own native `disabled_tools`
+(`CodexCliProvider.ts:592`) despite its mode-only summary. Fix both halves —
+teach the analyzer about attached-server denials so author time matches runtime,
+and route `permissionApplication.diagnostics` to status/output. Note that the
+RFC 6901 `propertyPointer` must address the ctrlyoke MCP entry rather than
+`/toolPermissions/deniedTools`, since that is where the value was authored.
+
+### Gap 2 — Antigravity maps `allowAll` to `--dangerously-skip-permissions`
+
+`AntigravityToolPermissionMapper.ts:58` emits `--dangerously-skip-permissions`
+for **both** `dangerouslyAllowAll` and `allowAll`, and `hasFullPermissions()`
+returns true for both. The workflow schema documents `allowAll` as "auto-grants
+all but respects deny list", so whenever a deny list exists the effective posture
+is not "all granted except these" but "permission checking off".
+
+This compounds Gap 1: in the checkbox scenario above the outcome is not one
+missing denial but no permission enforcement at all. It also sits uneasily with
+Antigravity declaring `mode: { fidelity: "exact", mechanism: "native" }` —
+defensible with no deny list, questionable with one. Decide whether the fix is
+the mapping, the declaration, or a diagnostic, and record the reasoning.
 
 ## Staging Within the Parent Plan
 

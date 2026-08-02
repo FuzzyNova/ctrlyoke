@@ -37,8 +37,11 @@
 > **First implementation consumer:**
 > [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
 >
-> **Implementation order:**
-> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
+> **Implementation order:** completed Phase 1 sequencing is recorded in
+> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
+> remaining Phase 2 and Phase 3 work is sequenced by
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
+> which splits Phase 2 because only its dry-run leg has an unbuilt dependency.
 >
 > **No dependency on**
 > [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md) — see
@@ -157,6 +160,24 @@ Required documentation must explain both paths:
 Do not add `agents`, `skills`, or categorized prompt files to the capability
 registry unless ctrlyoke intentionally changes this architecture.
 
+### MCP server injection
+
+Every ctrlyoke harness accepts attached MCP servers. `mcpServers` is therefore a
+product invariant like execution mode and sessions, not a capability to
+negotiate, and `mcp.injection` was removed from the descriptor on 2026-08-02
+before it was ever built.
+
+Per-server tool filtering is a different question and stays modeled — but note
+that it is largely _already_ covered by the permission domain rather than being
+an independent mechanism. `CliIntegration.mergeServerDeniedTools()` translates a
+server's `deniedTools` into ordinary `mcp__<id>__<tool>` deny patterns appended
+to `toolPermissions.deniedTools`, so on most harnesses it rides the existing
+`permissions.deniedTools` capability. Codex is the exception: it additionally
+emits native `disabled_tools` in its generated TOML
+(`CodexCliProvider.ts:592`), so it enforces per-server filtering even though its
+general granular-list capability is unsupported. Model this domain only if that
+asymmetry proves to need its own declaration.
+
 ### When a temporary difference becomes invariant
 
 Usage reporting remains in the registry for now because Antigravity does not
@@ -272,7 +293,6 @@ interface HarnessCapabilityDescriptor {
   permissions?: PermissionCapabilityDescriptor;
   hooks?: Partial<Record<HookEvent, CapabilityDeclaration>>;
   mcp?: {
-    injection: CapabilityDeclaration;
     perServerToolFiltering: CapabilityDeclaration;
   };
   usage?: {
@@ -396,7 +416,7 @@ Initial checks:
 - each execution target's resolved harness and model availability;
 - allowed/denied tool rules and permission modes;
 - requested hook events;
-- MCP injection and per-server tool filtering;
+- MCP per-server tool filtering;
 - image inputs;
 - context/usage reporting;
 - required workspace configuration and its side effects.
@@ -940,7 +960,8 @@ second speculative implementation.
 ### Phase 3 — Expand capability domains
 
 - Hooks and notifications.
-- MCP injection and tool filtering.
+- MCP per-server tool filtering, if the Codex asymmetry above proves to need its
+  own declaration. Injection is uniform and is not modeled.
 - Images and usage metadata.
 - Generate customer-facing compatibility documentation from the registry.
 

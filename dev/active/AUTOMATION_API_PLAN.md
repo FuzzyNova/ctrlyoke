@@ -4,6 +4,11 @@
 > are implemented. The remaining work is a stable, detailed JSON result for
 > one completed CLI run. SDK and MCP workflow-launching proposals remain
 > deferred indefinitely; they are not part of this implementation.
+>
+> **Implementation order:**
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+> — Stage B, whole plan, five steps. Its `schemaVersion` envelope is the
+> convention `ctrlyoke validate --json` follows in Stage D.
 
 ## Goal
 

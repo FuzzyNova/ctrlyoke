@@ -1,5 +1,12 @@
 # Compatibility, Permission, and Feedback Staging
 
+> **Complete as of 2026-08-01 — retained as the record of how the 0.1.0
+> permission gate was sequenced.** Every step in its queue landed. Forward-looking
+> work in these plans is sequenced by
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
+> which supersedes this document and drops its release-gate framing. Do not add
+> new steps here.
+
 **Decided 2026-08-01.** Implementation order for three interlocking plans:
 
 - [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
@@ -162,19 +169,19 @@ The stages above are split into these single-session steps. Each one commits its
 own work and leaves this document and its owning plan current. Steps are
 strictly ordered: each builds only on what has already landed.
 
-| #   | Stage         | Scope                                                                                                  |
-| --- | ------------- | ------------------------------------------------------------------------------------------------------ |
-| 1   | Stage 0.1     | **Done** — delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy      |
-| 2   | Stage 0.2     | **Done** — Browser feedback Phase 1 — toast queue, `ToastViewport`, `isStandalone` gate                |
-| 3   | Phase 1A(i)   | **Done** — shared capability + diagnostic contracts and their constants                                           |
-| 4   | Phase 1A(ii)  | **Done** — pure effective-property resolver extracted from `PropertyResolver`          |
-| 5   | Phase 1B(i)   | **Done** — harness-owned permission descriptors, registry assembly, cached version detection                      |
-| 6   | Phase 1B(ii)  | **Done** — pure compatibility analyzer wired into execution preflight                                  |
-| 7   | Phase 1B(iii) | **Done** — capability-snapshot message, React store, `useCompatibilityDiagnostics`                                |
-| 8   | Phase 1C(i)   | **Done** — `FieldDiagnostic`, `getPermissionHarnessSupport` deleted, honest UI in both property editors |
-| 9   | Phase 1C(ii)  | **Done** — defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage         |
-| 10  | Perm. 4       | **Done** — `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract           |
-| 11  | Perm. 5–7     | **Done** — remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention         |
+| #   | Stage         | Scope                                                                                                     |
+| --- | ------------- | --------------------------------------------------------------------------------------------------------- |
+| 1   | Stage 0.1     | **Done** — delete `handleMaxRetriesExhausted` and honor the declared `onFail`/`maxRetries` policy         |
+| 2   | Stage 0.2     | **Done** — Browser feedback Phase 1 — toast queue, `ToastViewport`, `isStandalone` gate                   |
+| 3   | Phase 1A(i)   | **Done** — shared capability + diagnostic contracts and their constants                                   |
+| 4   | Phase 1A(ii)  | **Done** — pure effective-property resolver extracted from `PropertyResolver`                             |
+| 5   | Phase 1B(i)   | **Done** — harness-owned permission descriptors, registry assembly, cached version detection              |
+| 6   | Phase 1B(ii)  | **Done** — pure compatibility analyzer wired into execution preflight                                     |
+| 7   | Phase 1B(iii) | **Done** — capability-snapshot message, React store, `useCompatibilityDiagnostics`                        |
+| 8   | Phase 1C(i)   | **Done** — `FieldDiagnostic`, `getPermissionHarnessSupport` deleted, honest UI in both property editors   |
+| 9   | Phase 1C(ii)  | **Done** — defaults page, advanced permissions help, tooltips/schema docs, hosted-browser parity coverage |
+| 10  | Perm. 4       | **Done** — `IToolPermissionMapper.prepare()` / `ToolPermissionApplication` runtime preparation contract   |
+| 11  | Perm. 5–7     | **Done** — remaining Antigravity statusline-lease scope; Qwen/OpenCode pinned-fixture retention           |
 
 Stage 2 is deliberately not queued: it is post-release by decision of the plans
 themselves.
