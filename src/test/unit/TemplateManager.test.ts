@@ -6,6 +6,7 @@ import * as jsYaml from "js-yaml";
 import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
 import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
+import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
 
 // parseTemplateMeta and mergeVariablesWithMeta are private but pure — they operate
 // only on strings/objects and never touch the ExtensionContext — so we construct a
@@ -364,6 +365,193 @@ suite("TemplateManager variable metadata", () => {
         ),
         /Template already exists/
       );
+    });
+  });
+
+  suite("workflow instantiation", () => {
+    test("keeps the shared execution-property list aligned with the schema", () => {
+      const schema = JSON.parse(
+        fs.readFileSync(
+          path.join(__dirname, "..", "..", "schemas", "workflow-schema.json"),
+          "utf-8"
+        )
+      );
+      const schemaKeys = Object.keys(
+        schema.definitions.executionProperties.properties
+      ).sort();
+
+      assert.deepStrictEqual(schemaKeys, [...EXECUTION_PROPERTY_KEYS].sort());
+    });
+
+    test("propagates every authoring property defined by the workflow schema", async () => {
+      const tm = makeManager();
+      const workspaceDir = makeTempDir();
+      const executionProperties = {
+        harness: "codex-cli",
+        model: "gpt-test",
+        executionMode: "headless",
+        agent: "reviewer",
+        skills: ["schema-audit"],
+        resumeSession: true,
+        mcpServers: [
+          {
+            id: "stdio-server",
+            command: "node",
+            args: ["server.js"],
+            env: { MODE: "test" },
+            autoApprove: ["read"],
+          },
+          {
+            id: "remote-server",
+            url: "https://example.test/mcp",
+            transport: "sse",
+            headers: { Authorization: "Bearer test" },
+            autoApprove: true,
+          },
+        ],
+        hooks: [{ event: "stop", command: "echo stop", timeoutSec: 5 }],
+        sessionId: "schema-session",
+        endCondition: {
+          script: "npm test",
+          returns: "ok",
+          compareSource: "stdout",
+          timeout: 1_000,
+          maxRetries: 2,
+          retryPrompt: "retry {stdout}",
+          passRetryPrompt: "pass {stdout}",
+          resumeSessionOnRetry: false,
+          onPass: "retry",
+          onFail: "continue",
+        },
+        preCondition: {
+          script: "npm run precheck",
+          compareSource: "exitCode",
+          returns: "0",
+          timeout: 500,
+          onPass: "continue",
+          onFail: "skipPrompt",
+        },
+        priorContext: [1],
+        additionalArgs: "--effort high",
+        toolPermissions: {
+          mode: "custom",
+          allowedTools: ["read"],
+          deniedTools: ["write"],
+        },
+        errorBehavior: {
+          onError: "retry",
+          maxRetries: 3,
+          retryDelayMs: 25,
+        },
+      };
+      const runtime = {
+        startedAt: 1,
+        completedAt: 2,
+        terminalStatus: "completed",
+        retryCount: 1,
+        failureKind: "unknown",
+        failureMessage: "old run",
+      };
+      const promptStep = {
+        type: "prompt",
+        name: "Prompt step",
+        enabled: false,
+        prompt: "Build {feature}",
+        ...executionProperties,
+        _runtime: runtime,
+      };
+      const scriptStep = {
+        type: "script",
+        name: "Script step",
+        enabled: false,
+        executionMode: "interactive",
+        script: "npm run verify",
+        compareSource: "stderr",
+        returns: "warning",
+        timeout: 2_000,
+        errorBehavior: executionProperties.errorBehavior,
+        onPass: "stopWorkflow",
+        onFail: "continue",
+        _runtime: runtime,
+      };
+      const finalStep = {
+        ...promptStep,
+        name: "Final prompt",
+        enabled: true,
+        prompt: "Finish {feature}",
+      };
+      const template = {
+        _templateMeta: {
+          name: "Schema audit",
+          description: "Exercises every template metadata property",
+          variables: {
+            feature: {
+              type: "select",
+              fileFilter: ["**/*.md"],
+              options: ["audit", "verify"],
+              autoFillFilename: true,
+              description: "Feature name",
+              default: "audit",
+              multiline: true,
+            },
+          },
+        },
+        ...executionProperties,
+        vars: { branch: "main" },
+        steps: [promptStep, scriptStep],
+        finalStep,
+        originalFile: "old.ctrlyoke.yaml",
+        workflowName: "Old workflow",
+        startedAt: 1,
+        _runtime: { currentIndex: 1, executionState: "completed" },
+      };
+
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
+      tm.getTemplateContent = async () => jsYaml.dump(template);
+
+      const workflow = await tm.createWorkflow("schema-audit", {
+        feature: "verify",
+      });
+
+      const expectedPrompt = {
+        type: "prompt",
+        name: "Prompt step",
+        enabled: false,
+        prompt: "Build verify",
+        ...executionProperties,
+      };
+      const expectedScript = {
+        type: "script",
+        name: "Script step",
+        enabled: false,
+        executionMode: "interactive",
+        script: "npm run verify",
+        compareSource: "stderr",
+        returns: "warning",
+        timeout: 2_000,
+        errorBehavior: executionProperties.errorBehavior,
+        onPass: "stopWorkflow",
+        onFail: "continue",
+      };
+      assert.deepStrictEqual(workflow, {
+        ...executionProperties,
+        vars: { branch: "main" },
+        steps: [expectedPrompt, expectedScript],
+        finalStep: {
+          ...expectedPrompt,
+          name: "Final prompt",
+          enabled: true,
+          prompt: "Finish verify",
+        },
+      });
+      assert.ok(!("_templateMeta" in workflow));
+      assert.ok(!("_runtime" in workflow));
+      assert.ok(!("originalFile" in workflow));
+      assert.ok(!("workflowName" in workflow));
+      assert.ok(!("startedAt" in workflow));
+      assert.ok(!("_runtime" in workflow.steps![0]));
+      assert.ok(!("_runtime" in workflow.steps![1]));
+      assert.ok(!("_runtime" in workflow.finalStep!));
     });
   });
 });

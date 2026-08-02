@@ -7,6 +7,8 @@ import {
   PromptStep,
   WorkflowStep,
   ScriptStep,
+  ExecutionProperties,
+  EXECUTION_PROPERTY_KEYS,
   isScriptStep,
   hasExecutableSteps,
 } from "../types/CtrlYokeTypes";
@@ -329,6 +331,8 @@ export class PromptFileParser {
     const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
     if (source.name !== undefined) step.name = source.name;
     if (source.enabled !== undefined) step.enabled = source.enabled;
+    if (source.executionMode !== undefined)
+      step.executionMode = source.executionMode;
     if (source.timeout !== undefined) step.timeout = source.timeout;
     if (source.compareSource !== undefined)
       step.compareSource = source.compareSource;
@@ -350,30 +354,10 @@ export class PromptFileParser {
     const promptStep: PromptStep = { prompt: promptText };
 
     // Only include properties that are explicitly set
+    if (source.type !== undefined) promptStep.type = source.type;
     if (source.name !== undefined) promptStep.name = source.name;
     if (source.enabled !== undefined) promptStep.enabled = source.enabled;
-    if (source.harness !== undefined) promptStep.harness = source.harness;
-    if (source.model !== undefined) promptStep.model = source.model;
-    if (source.agent !== undefined) promptStep.agent = source.agent;
-    if (source.skills !== undefined) promptStep.skills = source.skills;
-    if (source.resumeSession !== undefined)
-      promptStep.resumeSession = source.resumeSession;
-    if (source.sessionId !== undefined) promptStep.sessionId = source.sessionId;
-    if (source.mcpServers !== undefined)
-      promptStep.mcpServers = source.mcpServers;
-    if (source.hooks !== undefined) promptStep.hooks = source.hooks;
-    if (source.endCondition !== undefined)
-      promptStep.endCondition = source.endCondition;
-    if (source.preCondition !== undefined)
-      promptStep.preCondition = source.preCondition;
-    if (source.priorContext !== undefined)
-      promptStep.priorContext = source.priorContext;
-    if (source.additionalArgs !== undefined)
-      promptStep.additionalArgs = source.additionalArgs;
-    if (source.toolPermissions !== undefined)
-      promptStep.toolPermissions = source.toolPermissions;
-    if (source.errorBehavior !== undefined)
-      promptStep.errorBehavior = source.errorBehavior;
+    this.copyExecutionProperties(source, promptStep);
 
     return promptStep;
   }
@@ -470,29 +454,21 @@ export class PromptFileParser {
     parsed: any,
     promptFile: PromptFile
   ): void {
-    if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
-    if (parsed.model !== undefined) promptFile.model = parsed.model;
-    if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
-    if (parsed.skills !== undefined) promptFile.skills = parsed.skills;
-    if (parsed.resumeSession !== undefined)
-      promptFile.resumeSession = parsed.resumeSession;
-    if (parsed.sessionId !== undefined) promptFile.sessionId = parsed.sessionId;
-    if (parsed.mcpServers !== undefined)
-      promptFile.mcpServers = parsed.mcpServers;
-    if (parsed.hooks !== undefined) promptFile.hooks = parsed.hooks;
-    if (parsed.endCondition !== undefined)
-      promptFile.endCondition = parsed.endCondition;
-    if (parsed.preCondition !== undefined)
-      promptFile.preCondition = parsed.preCondition;
-    if (parsed.priorContext !== undefined)
-      promptFile.priorContext = parsed.priorContext;
-    if (parsed.additionalArgs !== undefined)
-      promptFile.additionalArgs = parsed.additionalArgs;
-    if (parsed.toolPermissions !== undefined)
-      promptFile.toolPermissions = parsed.toolPermissions;
-    if (parsed.errorBehavior !== undefined)
-      promptFile.errorBehavior = parsed.errorBehavior;
+    this.copyExecutionProperties(parsed, promptFile);
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
+  }
+
+  /** Copy every schema-backed execution property while preserving null values. */
+  private copyExecutionProperties(
+    source: Record<string, unknown>,
+    target: ExecutionProperties
+  ): void {
+    for (const key of EXECUTION_PROPERTY_KEYS) {
+      const value = source[key];
+      if (value !== undefined) {
+        Object.assign(target, { [key]: value });
+      }
+    }
   }
 
   /**

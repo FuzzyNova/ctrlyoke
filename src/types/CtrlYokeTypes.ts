@@ -229,6 +229,29 @@ export interface ExecutionProperties {
   hooks?: UserHookConfig[] | null;
 }
 
+/**
+ * Schema-backed execution properties shared by workflows and prompt steps.
+ * Parser normalization and working-file persistence both consume this list so
+ * adding a property to ExecutionProperties cannot leave one path behind.
+ */
+export const EXECUTION_PROPERTY_KEYS = [
+  "harness",
+  "model",
+  "executionMode",
+  "agent",
+  "skills",
+  "resumeSession",
+  "mcpServers",
+  "sessionId",
+  "endCondition",
+  "preCondition",
+  "priorContext",
+  "additionalArgs",
+  "toolPermissions",
+  "errorBehavior",
+  "hooks",
+] as const satisfies readonly (keyof ExecutionProperties)[];
+
 export interface PromptFile extends ExecutionProperties {
   prompt?: string;
   steps?: WorkflowStep[];

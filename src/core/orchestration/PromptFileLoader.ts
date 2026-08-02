@@ -4,27 +4,17 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
+import {
+  PromptFile,
+  EXECUTION_STATES,
+  EXECUTION_PROPERTY_KEYS,
+} from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 
 const WORKFLOW_PROPERTY_KEYS = [
-  "harness",
-  "model",
-  "executionMode",
-  "agent",
-  "skills",
-  "resumeSession",
-  "sessionId",
-  "mcpServers",
-  "hooks",
-  "toolPermissions",
-  "endCondition",
-  "preCondition",
-  "errorBehavior",
-  "priorContext",
-  "additionalArgs",
+  ...EXECUTION_PROPERTY_KEYS,
   "vars",
   "finalStep",
 ] satisfies (keyof PromptFile)[];
@@ -349,9 +339,8 @@ export class PromptFileLoader {
       this.lastCompatibilityDiagnostics = [];
       return;
     }
-    this.lastCompatibilityDiagnostics = await this.validateCompatibility(
-      workflow
-    );
+    this.lastCompatibilityDiagnostics =
+      await this.validateCompatibility(workflow);
     this.onCompatibilityDiagnostics?.(this.lastCompatibilityDiagnostics);
   }
 
