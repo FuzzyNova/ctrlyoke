@@ -13,6 +13,8 @@ import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_STORAGE_FILES,
   type WorkflowDefinitionSnapshot,
+  type WorkflowRunManifest,
+  type WorkflowTimelineEvent,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
 
@@ -20,6 +22,7 @@ suite("RunOutputResolver", () => {
   let workspaceRoot: string;
   let runDirectory: string;
   let manifestPath: string;
+  let approvedExternalRoot: string;
   let recorder: TimelineRecorder;
 
   const revisionOne: WorkflowDefinitionSnapshot = {
@@ -41,6 +44,9 @@ suite("RunOutputResolver", () => {
 
   setup(async () => {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-resolver-"));
+    approvedExternalRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-resolver-external-")
+    );
     runDirectory = path.join(workspaceRoot, "run-2026-07-20T00-00-00-000Z");
     recorder = new TimelineRecorder();
     manifestPath = await recorder.initializeRunAt(
@@ -56,6 +62,7 @@ suite("RunOutputResolver", () => {
 
   teardown(async () => {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
+    await fs.rm(approvedExternalRoot, { recursive: true, force: true });
   });
 
   test("reconstructs runtime response, prior-context, preview, script, retry, resumed, and terminal values", async () => {
@@ -629,5 +636,216 @@ suite("RunOutputResolver", () => {
       assert.strictEqual(restored?.responseText, boundary.response);
       assert.strictEqual(restored?.terminalState, boundary.terminal);
     }
+  });
+
+  test("projects retries, scoped file events, and final loops in one pass", async () => {
+    const queueTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 0,
+    } as const;
+    const finalLoopZero = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      loopIndex: 0,
+    } as const;
+    const finalLoopOne = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      loopIndex: 1,
+    } as const;
+    const workspaceFile = path.join(workspaceRoot, "src", "index.ts");
+    const externalFile = path.join(approvedExternalRoot, "shared.txt");
+    const fileEvents = [
+      {
+        type: "fileWrite" as const,
+        data: {
+          path: workspaceFile,
+          content: "created",
+          status: "completed" as const,
+          success: true,
+        },
+      },
+      {
+        type: "fileEdit" as const,
+        data: { path: "src/index.ts", success: true },
+      },
+      {
+        type: "fileDelete" as const,
+        data: { path: externalFile, success: true },
+      },
+      {
+        type: "fileWrite" as const,
+        data: {
+          path: path.join(workspaceRoot, "failed.ts"),
+          content: "",
+          success: false,
+        },
+      },
+    ];
+    const output = (events: typeof fileEvents) => ({
+      prompt: "prompt",
+      response: "response",
+      elapsed: 1,
+      isStreaming: false,
+      structured: { events, metadata: {} },
+    });
+    const start = (
+      target: typeof queueTarget | typeof finalLoopZero | typeof finalLoopOne,
+      runIndex: number,
+      attemptIndex: number,
+      startReason: "initial" | "retry" | "resumed",
+      prompt = "prompt",
+      kind: "ai" | "script" = "ai"
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+      timestampMs: runIndex * 100 + attemptIndex,
+      target,
+      runIndex,
+      attemptIndex,
+      definitionRevision: 1,
+      payload: { kind, startReason, prompt },
+    });
+    const terminate = (
+      target: typeof queueTarget | typeof finalLoopZero | typeof finalLoopOne,
+      runIndex: number,
+      attemptIndex: number,
+      reason?: string
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+      timestampMs: runIndex * 100 + attemptIndex + 50,
+      target,
+      runIndex,
+      attemptIndex,
+      definitionRevision: 1,
+      payload: { terminalState: "completed", ...(reason ? { reason } : {}) },
+    });
+    const drafts: WorkflowTimelineEventDraft[] = [
+      start(queueTarget, 0, 0, "initial"),
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+        timestampMs: 2,
+        target: queueTarget,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: { events: fileEvents },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 3,
+        target: queueTarget,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: { cliOutput: output(fileEvents) },
+      },
+      terminate(queueTarget, 0, 0, "initial complete"),
+      start(queueTarget, 0, 1, "retry", "retry prompt"),
+      terminate(queueTarget, 0, 1, "retry complete"),
+      start(queueTarget, 1, 0, "resumed", "resumed prompt"),
+      terminate(queueTarget, 1, 0, "latest terminal reason"),
+      start(finalLoopZero, 0, 0, "initial"),
+      terminate(finalLoopZero, 0, 0),
+      start(finalLoopOne, 0, 0, "initial", "node check.js", "script"),
+      {
+        eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+        timestampMs: 12,
+        target: finalLoopOne,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          command: "node check.js",
+          stdout: "ok",
+          stderr: "",
+          exitCode: 0,
+        },
+      },
+      terminate(finalLoopOne, 0, 0),
+    ];
+    await recorder.appendEvents(manifestPath, drafts);
+
+    class CountingRecorder extends TimelineRecorder {
+      manifestReads = 0;
+      streamReads = 0;
+
+      override async readManifest(
+        sourceManifestPath: string
+      ): Promise<WorkflowRunManifest> {
+        this.manifestReads++;
+        return super.readManifest(sourceManifestPath);
+      }
+
+      override async *streamEvents(
+        sourceManifestPath: string
+      ): AsyncGenerator<WorkflowTimelineEvent, void, undefined> {
+        this.streamReads++;
+        yield* super.streamEvents(sourceManifestPath);
+      }
+    }
+
+    const countingRecorder = new CountingRecorder();
+    const projection = await new RunOutputResolver(
+      countingRecorder
+    ).resolveAttemptProjection(
+      manifestPath,
+      [queueTarget],
+      [finalLoopZero, finalLoopOne],
+      {
+        workspaceRoot,
+        approvedExternalRoots: [approvedExternalRoot],
+      }
+    );
+    const queueProjection = projection.targets.get("queue:0");
+    assert.strictEqual(countingRecorder.manifestReads, 1);
+    assert.strictEqual(countingRecorder.streamReads, 1);
+    assert.strictEqual(queueProjection?.attempts, 3);
+    assert.deepStrictEqual(queueProjection?.latestAttempt, {
+      number: 3,
+      startReason: "resumed",
+      terminalState: "completed",
+      terminalReason: "latest terminal reason",
+    });
+    assert.deepStrictEqual(queueProjection?.filesChanged, [
+      {
+        path: "src/index.ts",
+        scope: "workspace",
+        operations: ["created", "modified"],
+      },
+      {
+        path: externalFile,
+        scope: "external",
+        operations: ["deleted"],
+      },
+    ]);
+    assert.strictEqual(projection.finalStep?.loopCount, 2);
+    assert.strictEqual(projection.finalStep?.attempts, 2);
+    assert.strictEqual(
+      projection.finalStep?.latestLoop?.target.kind,
+      "finalStep"
+    );
+    assert.strictEqual(
+      projection.finalStep?.latestLoop?.target.kind === "finalStep"
+        ? projection.finalStep.latestLoop.target.loopIndex
+        : undefined,
+      1
+    );
+    assert.deepStrictEqual(projection.finalStep?.latestLoop?.scriptOutput, {
+      command: "node check.js",
+      stdout: "ok",
+      stderr: "",
+      exitCode: 0,
+    });
+  });
+
+  test("returns empty projections when the manifest or history cannot be read", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const projection = await new RunOutputResolver().resolveAttemptProjection(
+      path.join(runDirectory, "missing-manifest.json"),
+      [target],
+      [],
+      { workspaceRoot }
+    );
+    assert.strictEqual(projection.targets.get("queue:0")?.attempts, 0);
+    assert.deepStrictEqual(projection.targets.get("queue:0")?.filesChanged, []);
   });
 });

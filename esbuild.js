@@ -337,6 +337,11 @@ async function main() {
     mainFields,
     outfile: "out/mcp-server.js",
     logLevel: "silent",
+    alias: {
+      // Shared core projections use the platform logger; the MCP binary has
+      // no VS Code host, so resolve that dependency to the standalone shim.
+      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
+    },
   });
 
   // Build standalone CLI binary
