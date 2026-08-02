@@ -14,6 +14,7 @@ import {
   STEP_STATUS,
   HARNESS_IDS,
   EXECUTION_MODES,
+  FINAL_STEP_PHASES,
   PERMISSION_MODES,
   RUNNER_IDS,
 } from "./types/DashboardConstants";
@@ -33,7 +34,9 @@ import {
 } from "./config/FileConfigBackend";
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
+import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
+import { buildCliJsonResult } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
@@ -371,7 +374,7 @@ async function runCommand(
   const factory = new IntegrationFactory(platform);
   const harness = config.harness as HarnessId;
 
-  if (options.verbose) {
+  if (options.verbose && !options.json) {
     console.log(
       chalk.dim(
         `[verbose] Execution mode: ${executionMode} (TTY: stdout=${!!process.stdout.isTTY} stdin=${!!process.stdin.isTTY})`
@@ -464,7 +467,7 @@ async function runCommand(
   // bounded timeout) for the in-flight execution to actually settle, which is
   // what guarantees the runner lock has been released before we exit.
   const cleanup = async (): Promise<void> => {
-    if (!options.quiet) {
+    if (!options.quiet && !options.json) {
       console.log(chalk.yellow("\n\nInterrupted. Stopping workflow..."));
     }
     await instance.shutdown();
@@ -539,23 +542,23 @@ async function runCommand(
     const completed = exitCode === 0;
 
     if (options.json) {
-      const results = {
-        version,
-        file: resolvedFile,
-        harness: config.harness,
+      const promptFile = instance.promptQueue.getWorkflowFile();
+      const outputProjection = await resolveCliJsonOutputProjection(
+        instance,
+        state,
+        workingDir
+      );
+      const result = buildCliJsonResult({
+        state,
+        promptFile,
+        harness,
         model: config.model,
-        status: state.status,
-        summary: {
-          total: state.steps?.length ?? 0,
-          completed:
-            state.results?.filter((r) => r.status === STEP_STATUS.COMPLETED)
-              .length ?? 0,
-          failed:
-            state.results?.filter((r) => r.status === STEP_STATUS.FAILED)
-              .length ?? 0,
-        },
-      };
-      console.log(JSON.stringify(results, null, 2));
+        workflowFileReference: file,
+        workspaceRoot: workingDir,
+        outputProjection,
+        finalStepRuntime: instance.promptQueue.getFinalStepRuntime(),
+      });
+      process.stdout.write(JSON.stringify(result) + "\n");
     } else if (!options.quiet) {
       // In interactive mode the AI CLI TUI may leave the terminal with a hidden
       // cursor or stale attributes when killed. Reset before printing the summary.
@@ -575,12 +578,68 @@ async function runCommand(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (options.json) {
-      console.log(JSON.stringify({ status: "error", error: message }));
+      const state = instance.getQueueState();
+      const result = buildCliJsonResult({
+        state: undefined,
+        promptFile: instance.promptQueue.getWorkflowFile(),
+        harness,
+        model: config.model,
+        workflowFileReference: file,
+        workspaceRoot: workingDir,
+        workflowKey: state.workflowKey,
+        runRef: state.runRef,
+        error: err,
+      });
+      process.stdout.write(JSON.stringify(result) + "\n");
     } else {
       console.error(chalk.red("Error: " + message));
     }
     process.exit(2);
   }
+}
+
+async function resolveCliJsonOutputProjection(
+  instance: WorkflowInstance,
+  state: QueueState,
+  workspaceRoot: string
+) {
+  if (!state.workflowKey || !state.runRef) {
+    return undefined;
+  }
+
+  const workflowFile = instance.promptQueue.getWorkflowFile();
+  const finalStepRuntime = instance.promptQueue.getFinalStepRuntime();
+  const finalLoopCount = finalStepRuntime
+    ? finalStepRuntime.phase === FINAL_STEP_PHASES.FINAL_STEP
+      ? finalStepRuntime.loopCount + 1
+      : finalStepRuntime.loopCount
+    : 0;
+  const queueTargets: OutputExecutionTarget[] = state.steps.map(
+    (_, stepIndex) => ({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex,
+    })
+  );
+  const finalStepTargets: OutputExecutionTarget[] = workflowFile.finalStep
+    ? Array.from({ length: finalLoopCount }, (_, loopIndex) => ({
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex,
+      }))
+    : [];
+  const manifestPath = instance
+    .getOutputHistoryManager()
+    .getHistoryFilePath(state.workflowKey, state.runRef);
+
+  return instance
+    .getOutputHistoryManager()
+    .getRunOutputResolver()
+    .resolveAttemptProjection(manifestPath, queueTargets, finalStepTargets, {
+      workspaceRoot,
+      approvedExternalRoots:
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
+        ),
+    });
 }
 
 async function executeAddressedCliOperation(

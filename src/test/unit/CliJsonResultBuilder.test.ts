@@ -368,6 +368,26 @@ suite("CliJsonResultBuilder", () => {
       conditionJson(true, null)
     );
   });
+
+  test("serializes success and thrown-error envelopes as one JSON document", () => {
+    const success = build({
+      steps: [{ prompt: "complete" }],
+      results: [promptResult({ prompt: "complete" }, STEP_STATUS.COMPLETED)],
+      status: EXECUTION_STATES.COMPLETED,
+    });
+    const thrownError = build({ error: new Error("fixture parse failure") });
+
+    for (const [result, expectedStatus] of [
+      [success, EXECUTION_STATES.COMPLETED],
+      [thrownError, EXECUTION_STATES.ERROR],
+    ] as const) {
+      const stdout = JSON.stringify(result) + "\n";
+      assert.strictEqual(stdout.endsWith("\n"), true);
+      assert.strictEqual(stdout.slice(0, -1).includes("\n"), false);
+      assert.deepStrictEqual(JSON.parse(stdout), result);
+      assert.strictEqual(result.status, expectedStatus);
+    }
+  });
 });
 
 function build(overrides: {
