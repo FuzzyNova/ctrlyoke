@@ -208,6 +208,13 @@ remains the supported MCP surface for selected response text.
 
 ## Design and implementation plan
 
+> **Build order.** The sections below are numbered by concern, not by
+> implementation order. Section 1's builder consumes the projection type from
+> section 2 and the condition-summary types from section 3, so the producers land
+> first: **3 → 2 → 1 → 4**, with tests written alongside each (see section 5).
+> `FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`'s queue table is the
+> authoritative step sequence.
+
 ### 1. Define a CLI-only result contract and builder
 
 Add `src/cli/CliJsonResultBuilder.ts` with exported TypeScript interfaces and a
@@ -243,6 +250,21 @@ Do not call `TimelineRecorder.readEvents()` or resolve each step separately:
 that would materialize or rescan a potentially large JSONL history. Reuse
 `normalizeCliEvents()` and the existing file-event types for path extraction.
 
+`resolveLatestAttempts()` in the same file is the pattern to follow — one
+`stream()` walk, keyed by `getTargetKey()`, retaining only the reduction. Two
+differences the new projection must handle that it does not:
+
+- It ignores `streamingEvents`, but file events arrive **both** as
+  `streamingEvents` during an attempt and again inside the completed attempt's
+  `output.events`. Aggregate from both and deduplicate by path, or a single edit
+  is counted twice.
+- It keeps only the latest attempt, whereas `attempts` and `filesChanged` are
+  aggregates across every attempt for a target.
+
+Skip file events carrying `success === false`; a failed write did not change the
+file. `FileWriteData.status` is a lifecycle stage, so the same path legitimately
+appears more than once per attempt — dedupe on `(path, operation)`.
+
 If the run manifest/history cannot be read after a workflow terminal state,
 the builder must log a diagnostic and return the state-derived result with
 `attempts: 0` and empty file lists. JSON reporting must never convert an
@@ -268,6 +290,15 @@ result. Persist the actual effective `executionMode` with the existing prompt
 runtime harness/model metadata so JSON reports what ran, not a later-resolved
 default.
 
+Confirmed against the current code: `EndConditionHandler.recordPassingEvaluation()`
+writes `endConditionResult`/`scriptOutput` on the **passing** path only, so a
+failed or errored end condition leaves no queue-visible record; the pre-condition
+report at `WorkflowExecutor.ts:532` is consumed for the action decision and then
+discarded. `CliPromptRuntimeCoordinator` persists `harness`/`model`/`agent`/
+`skills` into `_runtime` but never `executionMode`, even though
+`PromptRuntimeMetadata extends ExecutionProperties` already declares the field —
+this is a missing write, not a missing type.
+
 ### 4. Wire the builder into the CLI success and error paths
 
 Replace the `options.json` branch in `src/cli.ts` with the builder and one
@@ -280,7 +311,11 @@ never write a formatting/log line to stdout in JSON mode.
 
 ### 5. Tests
 
-Add focused tests rather than requiring installed harnesses:
+Add focused tests rather than requiring installed harnesses. **Each group ships
+in the same step as the behavior it covers**, per the repo rule that tests
+accompany the behavior change; there is no trailing test-only step. The final
+step is instead a live end-to-end verification, because every group below is a
+mock and none of them proves the timeline a real harness actually writes.
 
 1. `CliJsonResultBuilder` unit tests for a completed prompt, failed prompt,
    pre-condition-skipped/pending step, script step, per-step overrides, null
@@ -297,6 +332,11 @@ Add focused tests rather than requiring installed harnesses:
 4. CLI integration coverage that invokes the JSON writer with a fixture state
    and asserts stdout is exactly one parseable JSON document with no decorative
    output.
+5. One live verification pass driving the built CLI against a real multi-step
+   workflow — a prompt step with pre/end conditions, a script step, and a
+   `finalStep` — asserting the emitted document against the v1 contract. Use the
+   `opencode-cli` harness with model `opencode/big-pickle`; it is free, so this
+   costs nothing and is not part of the paid `npm run test:harness` suite.
 
 Run `npm run compile:extension`, `npm run typecheck`, the focused unit/integration
 tests, and `npm run format:check` before moving this plan to `dev/implemented/`.

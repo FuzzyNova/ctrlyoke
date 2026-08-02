@@ -225,8 +225,9 @@ transport-aware invalidation before saving the edited fields.
 
 Self-contained, unblocked, ships a user-visible feature, and produces the
 condition-record substrate and JSON envelope convention that Stages C and D
-reuse (see the two ordering nudges). Five steps, per the plan's own design
-sections.
+reuse (see the two ordering nudges). Five steps, covering the plan's design
+sections in dependency order rather than section order — see the note under the
+queue table.
 
 ### Stage C — Browser feedback Phases 2 and 2.5
 
@@ -304,11 +305,11 @@ may be swapped as a block.
 | 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                    |
 | 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest |
 | 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation     |
-| 5   | B.1   | CLI-local result contract + `CliJsonResultBuilder`, over a fixture `QueueState` (plan §1)                                                    |
+| 5   | B.1   | Typed pre/end-condition summaries on `PromptResult` + `FinalStepRuntimeState`; executor/handler recording; persist `executionMode` (plan §3) |
 | 6   | B.2   | `RunOutputResolver` one-pass attempt/file-event/loop projection (plan §2)                                                                    |
-| 7   | B.3   | Typed pre/end-condition summaries on `PromptResult` + `FinalStepRuntimeState`; executor/handler recording (plan §3)                          |
+| 7   | B.3   | CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                            |
 | 8   | B.4   | Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                       |
-| 9   | B.5   | Builder/resolver/core/CLI test coverage (plan §5); move the plan to `dev/implemented/`                                                       |
+| 9   | B.5   | Live end-to-end CLI verification on `opencode-cli`; fix defects; move the plan to `dev/implemented/`                                         |
 | 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                                               |
 | 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast                                  |
 | 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls                            |
@@ -319,6 +320,15 @@ may be swapped as a block.
 | 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                 |
 | 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                                                  |
 | 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                      |
+
+**Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
+plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
+type from plan §2 and the condition-summary types from plan §3 — writing it first
+means writing it against types that do not exist and revising it twice. Producers
+now land first (§3 → §2 → §1 → §4), which is this document's own
+contracts-before-consumers rule. The plan's §5 test list was also folded into the
+steps that introduce each behavior, freeing step 9 to be the live end-to-end run
+that mocks cannot substitute for.
 
 Step 13 is deliberately its own step. The plan is explicit that porting all
 sites is the wrong default and that a meaningful fraction should be deleted;
