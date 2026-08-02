@@ -271,6 +271,68 @@ suite("CompatibilityAnalyzer", () => {
     assert.ok(!diagnostics.some((diagnostic) => diagnostic.capability === "hooks"));
   });
 
+  test("suppresses every diagnostic when mode is dangerouslyAllowAll, even with stale leftover lists", () => {
+    const workflow = mixedWorkflow({
+      toolPermissions: {
+        mode: "dangerouslyAllowAll",
+        allowedTools: ["shell(git:*)"],
+        deniedTools: ["shell(rm:*)"],
+      },
+      steps: [{ prompt: "Codex target" }],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: {
+          ...installed(HARNESS_IDS.CODEX_CLI, true, "exact", "verified"),
+          effective: {
+            permissions: {
+              mode: {
+                fidelity: "exact",
+                mechanism: "native",
+                verification: "unknown",
+              },
+              allowedTools: {
+                fidelity: "unsupported",
+                mechanism: "none",
+                verification: "verified",
+              },
+              deniedTools: {
+                fidelity: "unsupported",
+                mechanism: "none",
+                verification: "verified",
+              },
+            },
+          },
+        },
+      })
+    );
+    assert.deepStrictEqual(diagnostics, []);
+  });
+
+  test("suppresses every diagnostic when mode is none", () => {
+    const workflow = mixedWorkflow({
+      toolPermissions: {
+        mode: "none",
+        allowedTools: ["shell(git:*)"],
+        deniedTools: ["shell(rm:*)"],
+      },
+      steps: [{ prompt: "Codex target" }],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: installed(
+          HARNESS_IDS.CODEX_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    );
+    assert.deepStrictEqual(diagnostics, []);
+  });
+
   test("reports partial and unverified facts as warnings", () => {
     const workflow = mixedWorkflow({
       steps: [{ prompt: "Target", harness: HARNESS_IDS.CLAUDE_CLI }],

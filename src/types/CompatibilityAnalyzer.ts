@@ -6,6 +6,7 @@ import {
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
   PERMISSION_CAPABILITY_KEYS,
+  PERMISSION_MODES,
   STEP_TYPES,
   type HarnessId,
 } from "./DashboardConstants";
@@ -109,6 +110,15 @@ export function analyzeCompatibility({
 
     const permissions = target.resolved.properties.toolPermissions;
     if (!permissions) {
+      // `none` mode already resolves to `null` upstream in
+      // `resolveToolPermissions`, so it never reaches this point.
+      continue;
+    }
+
+    if (permissions.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
+      // Every harness natively bypasses all approval/tool-list checks in this
+      // mode, so neither the mode nor the (possibly stale, leftover) allow/deny
+      // lists have anything to diagnose.
       continue;
     }
 

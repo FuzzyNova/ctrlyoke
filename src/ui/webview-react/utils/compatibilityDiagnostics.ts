@@ -2,6 +2,7 @@ import {
   HARNESS_INFO,
   HARNESS_IDS,
   PERMISSION_CAPABILITY_KEYS,
+  PERMISSION_MODES,
   CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_SOURCE_TIERS,
@@ -140,10 +141,16 @@ export function workflowPermissionDiagnostic(
   targets: readonly CompatibilityExecutionTarget[],
   capabilities: HarnessCapabilityRegistrySnapshot
 ): Pick<CompatibilityDiagnostic, "severity" | "message"> | undefined {
-  const relevant = targets.filter(
-    (target) =>
-      (target.resolved.properties.toolPermissions?.[field]?.length ?? 0) > 0
-  );
+  const relevant = targets.filter((target) => {
+    const permissions = target.resolved.properties.toolPermissions;
+    // dangerouslyAllowAll bypasses every allow/deny list natively, so a
+    // leftover non-empty list carried over from a previous mode is never
+    // "ignored" by anything — there is nothing left for it to affect.
+    if (permissions?.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
+      return false;
+    }
+    return (permissions?.[field]?.length ?? 0) > 0;
+  });
   if (relevant.length === 0) return undefined;
 
   const grouped = new Map<HarnessId, { supported: number; affected: number }>();
