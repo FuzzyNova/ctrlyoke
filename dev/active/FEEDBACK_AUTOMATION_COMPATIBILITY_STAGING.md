@@ -307,7 +307,7 @@ may be swapped as a block.
 | 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation     |
 | 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3) |
 | 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                |
-| 7   | B.3   | CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                            |
+| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                  |
 | 8   | B.4   | Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                       |
 | 9   | B.5   | Live end-to-end CLI verification on `opencode-cli`; fix defects; move the plan to `dev/implemented/`                                         |
 | 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                                               |
