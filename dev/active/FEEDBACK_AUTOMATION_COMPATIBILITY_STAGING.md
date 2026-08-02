@@ -145,6 +145,32 @@ Phase 0 items 3 and 6 — the direct `show*Message` counter (baseline 64 reusabl
 This is the one item whose cost rises the longer it waits: it exists to stop the
 migration target growing while the migration runs, so it must precede Stage C.
 
+**The three baselines were re-verified against `src/` on 2026-08-02 and are
+exactly reproducible**, so the counter step commits them rather than re-deriving:
+
+- **53 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
+  `ScmCommitCommand` 5, `VsCodeAdapter` 4, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
+- **64 reusable** = `WorkflowCommandHandler` 13, `WorkflowSerializer` 8,
+  `McpManagerService` 8, `WorkflowOrchestrator` 7, `TemplateImporter` 7,
+  `PromptFileLoader` 5, `WorkflowStepHandlers` 5, `UndoRedoCoordinator` 5,
+  `TerminalMessageHandlers` 2, and 1 each in `FileSystemUtils`,
+  `WorkspaceSessionManager`, `WorkflowMutationCoordinator`, `PromptEditorSupportService`.
+- **19 adapter-UI** = `WorkflowInstance` 9, `PromptFileParser` 4, `WorkflowExecutor` 3,
+  `EndConditionHandler` 1, `CliIntegration` 1 (`platform.warn`), plus the one `showChoice`.
+
+Neither counter can be a line-oriented `grep`: `PromptFileParser.ts:227` and
+`EndConditionHandler.ts:382` call through `this.platform?.` (optional chaining),
+and `CliIntegration.ts:1394`'s `.showChoice(` sits on its own line with the
+receiver above it. Count by AST, and exclude declarations and prose — the
+`show*Message` members declared in `platform/vscode-shim.ts`, the four
+`PlatformAdapter.ts` doc-comment mentions, and the comment references in
+`WebviewMessageTypes.ts` and `useMessageHandler.ts` are not call sites.
+
+**A.1 constrains A.2.** Once the adapter-UI counter is frozen at 19, the runtime
+diagnostic routing in A.2 cannot be implemented with a new `platform.warn` — it
+must reach an existing dashboard/status surface instead. That is the intended
+pressure, not an obstacle to route around by raising the baseline.
+
 **Scope it to the counters only.** Decoupling Phase 0 also specifies `vscode`
 import path groups, an allowlist, and a bundle metafile check. Those belong to
 the decoupling plan's own sequence and are not needed to protect this work;
@@ -167,8 +193,9 @@ declared capabilities match what it actually enforces.
 
 #### A.4 — `McpServerForm` silently drops `headers` on edit
 
-A plain data-loss bug with no owning plan; it lives here. `McpServerForm.tsx`
-round-trips only id/description/command/args/env/autoApprove/url/transport —
+A plain data-loss bug with no owning plan; it lives here.
+`src/ui/webview-react/components/shared/McpServerForm.tsx` round-trips only
+id/description/command/args/env/autoApprove/url/transport —
 `serverToMcpServerFormState()` (line 64) never reads `headers`, and
 `mcpServerFormStateToServer()` (line 81) rebuilds a fresh `McpServerConfig`
 without it. Import a remote registry server carrying required headers
@@ -178,6 +205,17 @@ loss is visible after the fact. Fix by preserving unmodelled fields across the
 form round trip rather than by adding a header editor; `deniedTools` is
 vulnerable to the same rebuild if the ctrlyoke entry ever becomes editable
 through this form.
+
+**`autoApprove` is lossy in the same round trip and belongs to the same fix.**
+`McpServerConfig.autoApprove` is `boolean | string[]`, but `McpServerFormState`
+narrows it to `boolean` — so a server carrying a per-tool allowlist
+(`autoApprove: ["tool_a"]`) comes back from `serverToMcpServerFormState()` as
+`false` and is rebuilt as an omitted field. This is a value collapse rather than
+a dropped key, so preserving "fields the form does not model" is not by itself
+sufficient; the original value has to survive alongside the boolean the checkbox
+edits. Whatever mechanism preserves it must still drop fields the user
+deliberately invalidated by switching the stdio/remote tab — a server edited from
+remote to stdio must not retain `url`, `transport`, or `headers`.
 
 ### Stage B — Automation API, in full
 
