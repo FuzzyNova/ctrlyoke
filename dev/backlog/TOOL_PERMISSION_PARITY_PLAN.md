@@ -296,6 +296,28 @@ Antigravity declaring `mode: { fidelity: "exact", mechanism: "native" }` —
 defensible with no deny list, questionable with one. Decide whether the fix is
 the mapping, the declaration, or a diagnostic, and record the reasoning.
 
+**A.3 completed (2026-08-02).** The installed Antigravity CLI is 1.1.9. Its
+`agy --help` surface exposes `--dangerously-skip-permissions` (auto-approves
+all tool permission requests) and `--sandbox` (enables terminal restrictions),
+but no safe auto-approve flag and no allow/deny-tool flags. The mapping is now:
+`dangerouslyAllowAll` → `--dangerously-skip-permissions`; `allowAll` → no
+permission flag; `custom` → `--sandbox`. `hasFullPermissions()` is true only
+for `dangerouslyAllowAll`. The mode declaration is `partial`/`native` with the
+coarse-permission caveat, so author-time compatibility analysis discloses that
+the requested mode is not fully translated; the existing unsupported denied
+tools declaration also discloses any deny list.
+
+The rejected alternatives were deliberate. Keeping the dangerous flag for
+`allowAll` would preserve the defect because agy would ignore the deny list.
+Mapping `allowAll` to `--sandbox` would invent semantics: the installed help
+describes sandbox restrictions, not auto-approval or deny-list enforcement.
+A diagnostic-only fix would still launch agy with the bypass and would leave
+`hasFullPermissions()` claiming that headless approval cannot block, so it does
+not repair the enforcement posture. Keeping `mode` exact was also rejected:
+`allowAll` has no native representation, making exact fidelity indefensible
+even when its deny list is empty. No granular `allowedTools` or `deniedTools`
+support is inferred; both remain explicitly unsupported.
+
 ## Staging Within the Parent Plan
 
 This is the first consumer of the compatibility architecture, not an

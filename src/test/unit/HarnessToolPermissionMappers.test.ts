@@ -245,9 +245,17 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("allowAll returns the Antigravity bypass flag", async () => {
+      test("allowAll returns no flag because agy has no safe auto-approve flag", async () => {
         const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
+        assert.deepStrictEqual(args, []);
+      });
+
+      test("allowAll does not bypass a deny list", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+        );
+        assert.deepStrictEqual(args, []);
       });
 
       test("custom mode uses Antigravity sandbox and ignores allow and deny lists", async () => {
@@ -274,10 +282,19 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → true", async () => {
+      test("allowAll → false without a deny list", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          true
+          false
+        );
+      });
+
+      test("allowAll → false with a deny list", async () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(
+            cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+          ),
+          false
         );
       });
 

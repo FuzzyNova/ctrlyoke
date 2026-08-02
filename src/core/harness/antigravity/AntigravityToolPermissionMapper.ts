@@ -18,14 +18,15 @@ const ANTIGRAVITY_PERMISSION_VERIFICATION = {
   kind: "manual",
   reference: "dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
   basis: "cli-version",
-  verifiedVersions: ["1.0.16"],
+  verifiedVersions: ["1.0.16", "1.1.9"],
 } as const;
 
 export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {
-    fidelity: "exact",
+    fidelity: "partial",
     mechanism: "native",
     verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
   },
   allowedTools: {
     fidelity: "unsupported",
@@ -54,8 +55,12 @@ export class AntigravityToolPermissionMapper
     let cliArgs: string[];
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-      case PERMISSION_MODES.ALLOW_ALL:
         cliArgs = ["--dangerously-skip-permissions"];
+        break;
+      case PERMISSION_MODES.ALLOW_ALL:
+        // agy has no native allow-list flag. Do not use its dangerous bypass
+        // here: it would silently ignore ctrlyoke's deny list.
+        cliArgs = [];
         break;
       case PERMISSION_MODES.CUSTOM:
         cliArgs = ["--sandbox"];
@@ -75,9 +80,6 @@ export class AntigravityToolPermissionMapper
   }
 
   override hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return (
-      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
-      config.mode === PERMISSION_MODES.ALLOW_ALL
-    );
+    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL;
   }
 }

@@ -12,6 +12,7 @@ import {
   type HarnessId,
 } from "../../types/DashboardConstants";
 import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityCaveatMessage,
   type HarnessCapabilityRegistrySnapshot,
   type InstalledHarnessCapabilities,
@@ -357,6 +358,85 @@ suite("CompatibilityAnalyzer", () => {
     assert.strictEqual(
       denial.propertyPointer,
       "/steps/0/mcpServers/0/deniedTools"
+    );
+  });
+
+  test("warns that Antigravity allowAll is only partially translated", () => {
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions: {
+        mode: "allowAll",
+        allowedTools: [],
+        deniedTools: [],
+      },
+      steps: [{ prompt: "Antigravity target" }],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "partial",
+          "verified"
+        ),
+      })
+    );
+
+    assert.deepStrictEqual(
+      diagnostics.map(({ code, capability, harnessId }) => ({
+        code,
+        capability,
+        harnessId,
+      })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL,
+          capability: "mode",
+          harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+        },
+      ]
+    );
+  });
+
+  test("keeps the allowAll deny-list warning visible on Antigravity", () => {
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions: {
+        mode: "allowAll",
+        allowedTools: [],
+        deniedTools: ["shell(rm:*)"],
+      },
+      steps: [{ prompt: "Antigravity target" }],
+    });
+    const antigravity = installed(
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      true,
+      "partial",
+      "verified"
+    );
+    antigravity.effective!.permissions.deniedTools = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    };
+    const diagnostics = analyze(
+      workflow,
+      snapshot({ [HARNESS_IDS.ANTIGRAVITY_CLI]: antigravity })
+    );
+
+    assert.deepStrictEqual(
+      diagnostics.map(({ code, capability }) => ({ code, capability })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL,
+          capability: "mode",
+        },
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED,
+          capability: "deniedTools",
+        },
+      ]
     );
   });
 

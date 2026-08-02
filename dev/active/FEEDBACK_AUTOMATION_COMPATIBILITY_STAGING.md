@@ -299,7 +299,7 @@ may be swapped as a block.
 | --- | ----- | ------------------------------------------------------------------------------------------------------------------- |
 | 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above          |
 | 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn` |
-| 3   | A.3   | Antigravity `allowAll` → `--dangerously-skip-permissions`; re-examine its `mode` fidelity declaration               |
+| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest |
 | 4   | A.4   | Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip                         |
 | 5   | B.1   | CLI-local result contract + `CliJsonResultBuilder`, over a fixture `QueueState` (plan §1)                           |
 | 6   | B.2   | `RunOutputResolver` one-pass attempt/file-event/loop projection (plan §2)                                           |

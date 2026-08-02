@@ -176,9 +176,17 @@ suite("ToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("allowAll → ['--dangerously-skip-permissions']", async () => {
+      test("allowAll → no permission flag", async () => {
         const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
+        assert.deepStrictEqual(args, []);
+      });
+
+      test("allowAll with a deny list → no permission flag", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+        );
+        assert.deepStrictEqual(args, []);
       });
 
       test("custom mode → ['--sandbox']", async () => {
@@ -208,10 +216,19 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → true", async () => {
+      test("allowAll → false", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          true
+          false
+        );
+      });
+
+      test("allowAll with a deny list → false", async () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(
+            cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+          ),
+          false
         );
       });
 
