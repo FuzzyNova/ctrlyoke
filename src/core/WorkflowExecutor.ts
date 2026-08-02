@@ -82,6 +82,7 @@ export interface WorkflowExecutionContext {
   namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
   currentPromptFilePath: string | undefined;
   dashboardProvider?: IDashboardSink;
+  reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
   shouldShowCliCommand: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
   getIntegrationForPrompt: (
@@ -695,6 +696,8 @@ export class WorkflowExecutor {
           workflowFile,
           hostCanProvidePty: context.hostCanProvidePty,
           workingFilePersistence: this.promptQueue,
+          reportCompatibilityDiagnostics:
+            context.reportCompatibilityDiagnostics,
           resolvePriorContextItems: context.resolvePriorContextItems,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
@@ -2346,6 +2349,8 @@ export class WorkflowExecutor {
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           workingFilePersistence: this.promptQueue,
+          reportCompatibilityDiagnostics:
+            context.reportCompatibilityDiagnostics,
           resolvePriorContextItems: context.resolvePriorContextItems,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string

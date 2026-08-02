@@ -1,6 +1,7 @@
 import type { PriorContext, PromptFile, WorkflowStep } from "./CtrlYokeTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
 import type { PriorContextItem } from "../core/HarnessIntegration";
+import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 
 /** Narrow working-file persistence contract exposed to harnesses. */
 export interface WorkflowWorkingFilePersistence {
@@ -32,6 +33,10 @@ export interface WorkflowContext {
   hostCanProvidePty?: boolean;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
+  /** Forward runtime compatibility diagnostics to the workflow dashboard. */
+  reportCompatibilityDiagnostics?: (
+    diagnostics: readonly CompatibilityDiagnostic[]
+  ) => void;
   /**
    * Timeline-backed prior-context projection for an executing promoted run.
    * The timeline is the only response source; execution caches are in-memory only.

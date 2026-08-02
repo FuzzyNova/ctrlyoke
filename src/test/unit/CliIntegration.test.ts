@@ -5,7 +5,10 @@ import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
-import { EXECUTION_MODES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  FINAL_STEP_PHASES,
+} from "../../types/DashboardConstants";
 import { HARNESS_IDS, PERMISSION_MODES } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
@@ -20,6 +23,7 @@ import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 
 class MockVsCodePlatform
   implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
@@ -463,6 +467,58 @@ suite("CliIntegration", () => {
     assert.strictEqual(success, true);
     assert.strictEqual(interactiveCalled, true);
     assert.strictEqual(headlessCalled, false);
+  });
+
+  test("routes runtime permission diagnostics through the workflow status callback", async () => {
+    const diagnostic: CompatibilityDiagnostic = {
+      code: "compatibility.permissions.deniedTools.notEnforced",
+      severity: "warning",
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      capability: "deniedTools",
+      state: {
+        fidelity: "unsupported",
+        mechanism: "none",
+        verification: "unknown",
+      },
+      message: "Denied tools are not enforced.",
+    };
+    const surfaced: CompatibilityDiagnostic[] = [];
+    const integration = createHeadlessIntegration({
+      prepareToolPermissions: async () => ({
+        cliArgs: [],
+        diagnostics: [diagnostic],
+      }),
+    });
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: createResolvedProperties({
+        executionMode: EXECUTION_MODES.HEADLESS,
+        toolPermissions: {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: [],
+          deniedTools: ["mcp__ctrlyoke__append_queue"],
+        },
+      }),
+      resolvedSessionId: undefined,
+    });
+    (integration as any).executionRunner.executeHeadless = async () => true;
+
+    try {
+      const success = await integration.sendPrompt({ prompt: "run" }, true, {
+        promptIndex: 1,
+        allPrompts: [{ prompt: "first" }, { prompt: "run" }],
+        reportCompatibilityDiagnostics: (diagnostics) =>
+          surfaced.push(...diagnostics),
+      });
+
+      assert.strictEqual(success, true);
+      assert.strictEqual(surfaced.length, 1);
+      assert.deepStrictEqual(surfaced[0].consumer, {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 1,
+      });
+    } finally {
+      integration.dispose();
+    }
   });
 
   test("should dispatch a headless session when the global setting is interactive", async () => {

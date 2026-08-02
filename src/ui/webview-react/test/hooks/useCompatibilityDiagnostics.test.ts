@@ -11,7 +11,10 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
-import { analyzeCompatibility, enumerateCompatibilityTargets } from "@root/types/CompatibilityAnalyzer";
+import {
+  analyzeCompatibility,
+  enumerateCompatibilityTargets,
+} from "@root/types/CompatibilityAnalyzer";
 import { workflowPermissionDiagnostic } from "@utils/compatibilityDiagnostics";
 import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolver";
 import type { HarnessCapabilityRegistrySnapshot } from "@root/types/CompatibilityTypes";
@@ -170,8 +173,9 @@ describe("useCompatibilityDiagnostics", () => {
     const context = { defaults, hostCanProvidePty: true };
     const backendDiagnostics = analyzeCompatibility({
       workflow,
-      executionTargets: enumerateCompatibilityTargets(workflow, (prompt, file) =>
-        resolveExecutionProperties(prompt, file, context)
+      executionTargets: enumerateCompatibilityTargets(
+        workflow,
+        (prompt, file) => resolveExecutionProperties(prompt, file, context)
       ),
       capabilities: snapshot,
     });
@@ -179,6 +183,55 @@ describe("useCompatibilityDiagnostics", () => {
     expect(result.current.diagnostics.map(projectDiagnostic)).toEqual(
       backendDiagnostics.map(projectDiagnostic)
     );
+  });
+
+  it("reports attached MCP denials through the shared analyzer", () => {
+    const snapshot = makeSnapshot();
+    const unsupported = {
+      fidelity: "unsupported" as const,
+      mechanism: "none" as const,
+      verification: "verified" as const,
+    };
+    snapshot.harnesses[HARNESS_IDS.ANTIGRAVITY_CLI].effective!.permissions = {
+      mode: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
+      allowedTools: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
+      deniedTools: unsupported,
+    };
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+    });
+    useSettingsStore.getState().setWorkflowProperties({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [],
+        deniedTools: [],
+      },
+      mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
+    });
+    useWorkflowStore.setState({ steps: [{ prompt: "Use MCP" }] });
+    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+
+    const { result } = renderHook(() => useCompatibilityDiagnostics());
+    expect(result.current.diagnostics.map(projectDiagnostic)).toEqual([
+      {
+        code: "compatibility.permissions.deniedTools.notEnforced",
+        harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+        capability: "deniedTools",
+        consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        propertyPointer: "/mcpServers/0/deniedTools",
+        sourceTier: "workflow",
+      },
+    ]);
   });
 
   it("aggregates mixed harness coverage and re-evaluates only inherited targets", () => {
@@ -226,7 +279,11 @@ describe("useCompatibilityDiagnostics", () => {
 
     expect(aggregate?.message).toContain("Enforced for 1 Claude Code step");
     expect(aggregate?.message).toContain("Ignored by 1 Codex step");
-    expect(result.current.diagnostics.every((item) => item.harnessId === HARNESS_IDS.CODEX_CLI)).toBe(true);
+    expect(
+      result.current.diagnostics.every(
+        (item) => item.harnessId === HARNESS_IDS.CODEX_CLI
+      )
+    ).toBe(true);
 
     act(() => {
       useSettingsStore
@@ -234,7 +291,11 @@ describe("useCompatibilityDiagnostics", () => {
         .updateWorkflowProperty("harness", HARNESS_IDS.ANTIGRAVITY_CLI);
     });
 
-    expect(result.current.diagnostics.every((item) => item.harnessId === HARNESS_IDS.ANTIGRAVITY_CLI)).toBe(true);
+    expect(
+      result.current.diagnostics.every(
+        (item) => item.harnessId === HARNESS_IDS.ANTIGRAVITY_CLI
+      )
+    ).toBe(true);
     expect(result.current.diagnostics).toHaveLength(2);
   });
 

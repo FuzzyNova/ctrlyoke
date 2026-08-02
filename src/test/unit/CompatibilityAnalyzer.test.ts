@@ -18,6 +18,7 @@ import {
 } from "../../types/CompatibilityTypes";
 import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
+import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 
 const defaults = {
   harness: HARNESS_IDS.CODEX_CLI,
@@ -75,8 +76,7 @@ function snapshot(
   const harnesses = {} as Record<HarnessId, InstalledHarnessCapabilities>;
   for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
     harnesses[harnessId] =
-      overrides[harnessId] ??
-      installed(harnessId, true, "exact", "verified");
+      overrides[harnessId] ?? installed(harnessId, true, "exact", "verified");
   }
   return {
     schemaVersion: 1,
@@ -128,12 +128,7 @@ suite("CompatibilityAnalyzer", () => {
           "verified"
         ),
         [HARNESS_IDS.CODEX_CLI]: {
-          ...installed(
-            HARNESS_IDS.CODEX_CLI,
-            true,
-            "exact",
-            "verified"
-          ),
+          ...installed(HARNESS_IDS.CODEX_CLI, true, "exact", "verified"),
           effective: {
             permissions: {
               mode: {
@@ -179,24 +174,31 @@ suite("CompatibilityAnalyzer", () => {
         },
       ]
     );
-    assert.ok(diagnostics.every((diagnostic) => diagnostic.severity === "warning"));
-    assert.ok(diagnostics.every((diagnostic) => diagnostic.message.includes("NOT ENFORCED")));
+    assert.ok(
+      diagnostics.every((diagnostic) => diagnostic.severity === "warning")
+    );
+    assert.ok(
+      diagnostics.every((diagnostic) =>
+        diagnostic.message.includes("NOT ENFORCED")
+      )
+    );
   });
 
   test("does not warn for an unused workflow harness default", () => {
     const workflow = mixedWorkflow({
-      steps: [
-        { prompt: "Claude target", harness: HARNESS_IDS.CLAUDE_CLI },
-      ],
+      steps: [{ prompt: "Claude target", harness: HARNESS_IDS.CLAUDE_CLI }],
     });
-    const diagnostics = analyze(workflow, snapshot({
-      [HARNESS_IDS.CODEX_CLI]: installed(
-        HARNESS_IDS.CODEX_CLI,
-        true,
-        "unsupported",
-        "verified"
-      ),
-    }));
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: installed(
+          HARNESS_IDS.CODEX_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    );
     assert.deepStrictEqual(diagnostics, []);
   });
 
@@ -209,9 +211,7 @@ suite("CompatibilityAnalyzer", () => {
     );
     const claudeOnly = analyze(
       mixedWorkflow({
-        steps: [
-          { prompt: "Claude target", harness: HARNESS_IDS.CLAUDE_CLI },
-        ],
+        steps: [{ prompt: "Claude target", harness: HARNESS_IDS.CLAUDE_CLI }],
       }),
       snapshot({ [HARNESS_IDS.CODEX_CLI]: unavailableCodex })
     );
@@ -270,7 +270,94 @@ suite("CompatibilityAnalyzer", () => {
       diagnostics.map((diagnostic) => diagnostic.capability),
       ["deniedTools"]
     );
-    assert.ok(!diagnostics.some((diagnostic) => diagnostic.capability === "hooks"));
+    assert.ok(
+      !diagnostics.some((diagnostic) => diagnostic.capability === "hooks")
+    );
+  });
+
+  test("uses the shared MCP denial merge and points workflow-authored denials at mcpServers", () => {
+    const toolPermissions = {
+      mode: "custom" as const,
+      allowedTools: [],
+      deniedTools: [],
+    };
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions,
+      mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
+      steps: [{ prompt: "Antigravity target" }],
+    });
+    const merged = mergeServerDeniedTools(toolPermissions, workflow.mcpServers);
+    assert.deepStrictEqual(merged?.deniedTools, [
+      "mcp__ctrlyoke__append_queue",
+    ]);
+
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    );
+    assert.deepStrictEqual(
+      diagnostics
+        .filter((diagnostic) => diagnostic.capability === "deniedTools")
+        .map(({ code, capability, sourceTier, propertyPointer }) => ({
+          code,
+          capability,
+          sourceTier,
+          propertyPointer,
+        })),
+      [
+        {
+          code: "compatibility.permissions.deniedTools.notEnforced",
+          capability: "deniedTools",
+          sourceTier: "workflow",
+          propertyPointer: "/mcpServers/0/deniedTools",
+        },
+      ]
+    );
+  });
+
+  test("points prompt-authored MCP denials at the prompt mcpServers entry", () => {
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions: {
+        mode: "custom",
+        allowedTools: [],
+        deniedTools: [],
+      },
+      steps: [
+        {
+          prompt: "Antigravity target",
+          mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
+        },
+      ],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    );
+    const denial = diagnostics.find(
+      (diagnostic) => diagnostic.capability === "deniedTools"
+    );
+    assert.ok(denial);
+    assert.strictEqual(denial.sourceTier, "prompt");
+    assert.strictEqual(
+      denial.propertyPointer,
+      "/steps/0/mcpServers/0/deniedTools"
+    );
   });
 
   test("suppresses every diagnostic when mode is dangerouslyAllowAll, even with stale leftover lists", () => {
@@ -280,6 +367,7 @@ suite("CompatibilityAnalyzer", () => {
         allowedTools: ["shell(git:*)"],
         deniedTools: ["shell(rm:*)"],
       },
+      mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
       steps: [{ prompt: "Codex target" }],
     });
     const diagnostics = analyze(
@@ -319,6 +407,7 @@ suite("CompatibilityAnalyzer", () => {
         allowedTools: ["shell(git:*)"],
         deniedTools: ["shell(rm:*)"],
       },
+      mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
       steps: [{ prompt: "Codex target" }],
     });
     const diagnostics = analyze(
@@ -333,6 +422,12 @@ suite("CompatibilityAnalyzer", () => {
       })
     );
     assert.deepStrictEqual(diagnostics, []);
+    assert.strictEqual(
+      mergeServerDeniedTools(null, [
+        { id: "ctrlyoke", deniedTools: ["append_queue"] },
+      ]),
+      null
+    );
   });
 
   test("folds the caveat reason into a permanently unsupported capability's message and omits 'unverified'", () => {
@@ -378,7 +473,9 @@ suite("CompatibilityAnalyzer", () => {
     );
 
     assert.ok(
-      !diagnostics.some((diagnostic) => diagnostic.code.endsWith(".unverified")),
+      !diagnostics.some((diagnostic) =>
+        diagnostic.code.endsWith(".unverified")
+      ),
       "an unsupported capability must not also be flagged unverified"
     );
 
@@ -412,8 +509,14 @@ suite("CompatibilityAnalyzer", () => {
         ),
       })
     );
-    assert.ok(diagnostics.some((diagnostic) => diagnostic.code.endsWith("partial")));
-    assert.ok(diagnostics.some((diagnostic) => diagnostic.code.endsWith("unverified")));
-    assert.ok(diagnostics.every((diagnostic) => diagnostic.severity === "warning"));
+    assert.ok(
+      diagnostics.some((diagnostic) => diagnostic.code.endsWith("partial"))
+    );
+    assert.ok(
+      diagnostics.some((diagnostic) => diagnostic.code.endsWith("unverified"))
+    );
+    assert.ok(
+      diagnostics.every((diagnostic) => diagnostic.severity === "warning")
+    );
   });
 });

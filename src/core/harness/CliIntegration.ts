@@ -12,7 +12,7 @@ import {
   ContextWindowSyncData,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { PromptStep, McpServerConfig } from "../../types/CtrlYokeTypes";
+import { PromptStep } from "../../types/CtrlYokeTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -22,7 +22,7 @@ import { Log } from "../../utils/Log";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
-  PERMISSION_MODES,
+  FINAL_STEP_PHASES,
   type ExecutionMode,
   type HarnessId,
   HOOK_EVENT_ORDER,
@@ -50,6 +50,7 @@ import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
+import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -960,7 +961,7 @@ export class CliIntegration extends HarnessIntegration {
     // Use session.resolvedProperties (prompt > workflow > settings) so prompt-level
     // overrides take precedence over workflow-level defaults.
     // Merge any server-level deniedTools from McpServerConfig objects before dispatching.
-    const effectiveToolPermissions = this.mergeServerDeniedTools(
+    const effectiveToolPermissions = mergeServerDeniedTools(
       session.resolvedProperties?.toolPermissions,
       session.resolvedProperties?.mcpServers
     );
@@ -990,9 +991,30 @@ export class CliIntegration extends HarnessIntegration {
     if (permissionApplication.workspaceMutation) {
       await permissionApplication.workspaceMutation.apply();
     }
-    for (const diagnostic of permissionApplication.diagnostics) {
+    const routedDiagnostics = permissionApplication.diagnostics.map(
+      (diagnostic) => {
+        const workflowContext = session.workflowContext;
+        if (!workflowContext) {
+          return diagnostic;
+        }
+        return {
+          ...diagnostic,
+          consumer:
+            workflowContext.promptIndex < workflowContext.allPrompts.length
+              ? {
+                  kind: FINAL_STEP_PHASES.QUEUE,
+                  stepIndex: workflowContext.promptIndex,
+                }
+              : { kind: FINAL_STEP_PHASES.FINAL_STEP },
+        };
+      }
+    );
+    for (const diagnostic of routedDiagnostics) {
       Log.warn(`[PermissionCompatibility] ${diagnostic.message}`);
     }
+    session.workflowContext?.reportCompatibilityDiagnostics?.(
+      routedDiagnostics
+    );
     baseArgs.push(...permissionApplication.cliArgs);
 
     // Append suffix args last — these are args that must follow ALL global flags.
@@ -1233,41 +1255,6 @@ export class CliIntegration extends HarnessIntegration {
         Log.appendLine(`\n[STATISTICS] ${statistics}`);
       }
     }
-  }
-
-  // ============================================================
-  // TOOL PERMISSION HELPERS
-  // ============================================================
-
-  /**
-   * Merge server-level `deniedTools` from McpServerConfig objects into the tool permission config.
-   *
-   * Each McpServerConfig may declare bare tool names to deny (e.g. `["ctrlyoke_append_queue"]`).
-   * These are translated to `mcp__<id>__<tool>` patterns and appended to the resolved deny list
-   * before the harness-specific permission preparation call.
-   *
-   * Returns the original config unchanged when no server specifies `deniedTools`, keeping the
-   * fast path free of allocation overhead. Returns `null` as-is (none mode — no permission flags).
-   */
-  private mergeServerDeniedTools(
-    toolPermissions: ToolPermissionConfig | null | undefined,
-    mcpServers: (string | McpServerConfig)[] | null | undefined
-  ): ToolPermissionConfig | null | undefined {
-    if (!mcpServers) return toolPermissions;
-    const serverDenied = (mcpServers as (string | McpServerConfig)[])
-      .filter(
-        (s): s is McpServerConfig =>
-          typeof s === "object" && s !== null && !!s.deniedTools?.length
-      )
-      .flatMap((s) => s.deniedTools!.map((tool) => `mcp__${s.id}__${tool}`));
-    if (serverDenied.length === 0) return toolPermissions;
-    if (toolPermissions === null) return null;
-    const base = toolPermissions ?? {
-      mode: PERMISSION_MODES.ALLOW_ALL,
-      allowedTools: [],
-      deniedTools: [],
-    };
-    return { ...base, deniedTools: [...base.deniedTools, ...serverDenied] };
   }
 
   // ============================================================

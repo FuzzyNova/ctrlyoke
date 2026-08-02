@@ -10,11 +10,7 @@ import {
   STEP_TYPES,
   type HarnessId,
 } from "./DashboardConstants";
-import type {
-  PromptFile,
-  PromptStep,
-  WorkflowStep,
-} from "./CtrlYokeTypes";
+import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
 import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
 import type {
   CompatibilityConsumerTarget,
@@ -26,6 +22,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
 } from "./CompatibilityTypes";
+import { mergeServerDeniedTools } from "./ToolPermissionUtils";
 
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
@@ -70,7 +67,11 @@ export function enumerateCompatibilityTargets(
   }
 
   const finalStep = workflow.finalStep;
-  if (finalStep && finalStep.enabled !== false && !isScriptWorkflowStep(finalStep)) {
+  if (
+    finalStep &&
+    finalStep.enabled !== false &&
+    !isScriptWorkflowStep(finalStep)
+  ) {
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
       resolved: resolveTarget(finalStep, workflow),
@@ -122,6 +123,22 @@ export function analyzeCompatibility({
       continue;
     }
 
+    const effectivePermissions = mergeServerDeniedTools(
+      permissions,
+      target.resolved.properties.mcpServers
+    );
+    const hasAttachedServerDenials =
+      effectivePermissions !== permissions &&
+      target.resolved.properties.mcpServers?.some(
+        (server) =>
+          typeof server === "object" &&
+          server !== null &&
+          (server.deniedTools?.length ?? 0) > 0
+      ) === true;
+    const serverDenialPointer = hasAttachedServerDenials
+      ? getMcpServerDenialPointer(target)
+      : undefined;
+
     const effective = installed.effective?.permissions;
     if (!effective) {
       continue;
@@ -134,6 +151,8 @@ export function analyzeCompatibility({
       used: boolean;
       state: EffectiveCapabilityState;
       caveatCode?: string;
+      sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"];
+      propertyPointer?: string;
     }> = [
       {
         key: PERMISSION_CAPABILITY_KEYS.MODE,
@@ -149,9 +168,13 @@ export function analyzeCompatibility({
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
-        used: permissions.deniedTools.length > 0,
+        used: Boolean(effectivePermissions?.deniedTools?.length),
         state: effective.deniedTools,
         caveatCode: declarations?.deniedTools.caveatCode,
+        sourceTier: hasAttachedServerDenials
+          ? target.resolved.sources.mcpServers
+          : sourceTier,
+        propertyPointer: serverDenialPointer,
       },
     ];
 
@@ -164,8 +187,9 @@ export function analyzeCompatibility({
         field.state,
         harnessId,
         target,
-        sourceTier,
-        field.caveatCode
+        field.sourceTier ?? sourceTier,
+        field.caveatCode,
+        field.propertyPointer
       )) {
         diagnostics.push(diagnostic);
       }
@@ -181,7 +205,8 @@ function diagnosticsForPermissionField(
   harnessId: HarnessId,
   target: CompatibilityExecutionTarget,
   sourceTier: ResolvedExecutionTarget["sources"]["toolPermissions"],
-  caveatCode?: string
+  caveatCode?: string,
+  propertyPointer?: string
 ): CompatibilityDiagnostic[] {
   const diagnostics: CompatibilityDiagnostic[] = [];
   const base = {
@@ -207,7 +232,8 @@ function diagnosticsForPermissionField(
         base.state,
         base.sourceTier,
         key,
-        caveatCode
+        caveatCode,
+        propertyPointer
       )
     );
   } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
@@ -225,7 +251,8 @@ function diagnosticsForPermissionField(
         base.state,
         base.sourceTier,
         key,
-        caveatCode
+        caveatCode,
+        propertyPointer
       )
     );
   }
@@ -252,7 +279,9 @@ function diagnosticsForPermissionField(
         base.target,
         base.state,
         base.sourceTier,
-        key
+        key,
+        undefined,
+        propertyPointer
       )
     );
   }
@@ -269,7 +298,8 @@ function createDiagnostic(
   state: EffectiveCapabilityState,
   sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"],
   permissionKey?: "mode" | "allowedTools" | "deniedTools",
-  caveatCode?: string
+  caveatCode?: string,
+  propertyPointer?: string
 ): CompatibilityDiagnostic {
   const pointerBase =
     target.consumer.kind === FINAL_STEP_PHASES.QUEUE
@@ -282,16 +312,18 @@ function createDiagnostic(
     capability,
     consumer: target.consumer,
     ...(sourceTier ? { sourceTier } : {}),
-    ...(sourceTier &&
-    sourceTier !== COMPATIBILITY_SOURCE_TIERS.DEFAULTS &&
-    permissionKey
-      ? {
-          propertyPointer:
-            sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
-              ? `${pointerBase}/toolPermissions/${permissionKey}`
-              : `/toolPermissions/${permissionKey}`,
-        }
-      : {}),
+    ...(propertyPointer
+      ? { propertyPointer }
+      : sourceTier &&
+          sourceTier !== COMPATIBILITY_SOURCE_TIERS.DEFAULTS &&
+          permissionKey
+        ? {
+            propertyPointer:
+              sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
+                ? `${pointerBase}/toolPermissions/${permissionKey}`
+                : `/toolPermissions/${permissionKey}`,
+          }
+        : {}),
     state,
     message: getCompatibilityDiagnosticMessage(code, {
       harnessId,
@@ -299,6 +331,33 @@ function createDiagnostic(
       caveatCode,
     }),
   };
+}
+
+function getMcpServerDenialPointer(
+  target: CompatibilityExecutionTarget
+): string | undefined {
+  const sourceTier = target.resolved.sources.mcpServers;
+  if (!sourceTier || sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS) {
+    return undefined;
+  }
+
+  const serverIndex = target.resolved.properties.mcpServers?.findIndex(
+    (server) =>
+      typeof server === "object" &&
+      server !== null &&
+      (server.deniedTools?.length ?? 0) > 0
+  );
+  if (serverIndex === undefined || serverIndex < 0) {
+    return undefined;
+  }
+
+  const pointerBase =
+    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${target.consumer.stepIndex}`
+      : "/finalStep";
+  return sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
+    ? `${pointerBase}/mcpServers/${serverIndex}/deniedTools`
+    : `/mcpServers/${serverIndex}/deniedTools`;
 }
 
 /**

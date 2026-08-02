@@ -45,8 +45,8 @@ import {
   QUEUE_POSITION,
   RUNNER_IDS,
   SESSION_KINDS,
-      STATUS_MESSAGE_SEVERITY,
-      COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  STATUS_MESSAGE_SEVERITY,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -1244,11 +1244,10 @@ export class WorkflowInstance {
       // Compatibility is authoritative at execution time. Resolve only the
       // consumers that exist in the current queue/definition so a workflow
       // default never stands in for a step-level harness override.
-      const compatibilityDiagnostics =
-        await this.analyzeWorkflowCompatibility({
-          ...this.promptQueue.getWorkflowFile(),
-          steps: this.promptQueue.getState().steps,
-        });
+      const compatibilityDiagnostics = await this.analyzeWorkflowCompatibility({
+        ...this.promptQueue.getWorkflowFile(),
+        steps: this.promptQueue.getState().steps,
+      });
       this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
       const compatibilityErrors = compatibilityDiagnostics.filter(
         (diagnostic) =>
@@ -2853,6 +2852,8 @@ export class WorkflowInstance {
       get dashboardProvider() {
         return self.dashboardSink;
       },
+      reportCompatibilityDiagnostics: (diagnostics) =>
+        this.reportCompatibilityDiagnostics(diagnostics),
       getDefinitionRevisionContext: () => self.getDefinitionRevisionContext(),
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.

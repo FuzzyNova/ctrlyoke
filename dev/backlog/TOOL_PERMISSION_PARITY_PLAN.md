@@ -270,6 +270,18 @@ and route `permissionApplication.diagnostics` to status/output. Note that the
 RFC 6901 `propertyPointer` must address the ctrlyoke MCP entry rather than
 `/toolPermissions/deniedTools`, since that is where the value was authored.
 
+**A.2 completed (2026-08-02).** `mergeServerDeniedTools()` now lives in
+`src/types/ToolPermissionUtils.ts` and is the shared pure merge used by both
+`CompatibilityAnalyzer` and `CliIntegration`. The analyzer includes attached
+server denials in its `used` gate while preserving the `none` and
+`dangerouslyAllowAll` early exits. When the denial was authored in a prompt or
+workflow `mcpServers` array, the diagnostic points to the first denied server's
+array entry: `/steps/<stepIndex>/mcpServers/<serverIndex>/deniedTools` for a
+prompt override, or `/mcpServers/<serverIndex>/deniedTools` for a workflow
+property. Runtime mapper diagnostics remain in the log and are also forwarded
+through `WorkflowInstance.reportCompatibilityDiagnostics()` to the dashboard
+status surface with the executing consumer attached.
+
 ### Gap 2 — Antigravity maps `allowAll` to `--dangerously-skip-permissions`
 
 `AntigravityToolPermissionMapper.ts:58` emits `--dangerously-skip-permissions`
