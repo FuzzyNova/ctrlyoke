@@ -8,14 +8,18 @@ import {
   WorkflowExecutionContext,
 } from "../../core/WorkflowExecutor";
 import { PromptQueue } from "../../core/PromptQueue";
-import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
+import {
+  EndConditionEvaluator,
+  type EvaluationResult,
+} from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
-import { PromptFile } from "../../types/CtrlYokeTypes";
+import { PromptFile, type ScriptProperties } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   STEP_STATUS,
+  CONDITION_ACTIONS,
 } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 import { Log } from "../../utils/Log";
@@ -39,16 +43,34 @@ function makeContext(
   };
 }
 
-function makeExecutor(queue: PromptQueue): WorkflowExecutor {
+function makeExecutor(
+  queue: PromptQueue,
+  evaluator?: EndConditionEvaluator
+): WorkflowExecutor {
   const platform = new MockPlatform();
-  const evaluator = new EndConditionEvaluator(platform);
+  const conditionEvaluator = evaluator ?? new EndConditionEvaluator(platform);
   const handler = new EndConditionHandler(
-    evaluator,
+    conditionEvaluator,
     queue,
     () => undefined,
     platform
   );
-  return new WorkflowExecutor(queue, handler, evaluator, platform);
+  return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
+}
+
+class FixedEvaluationEvaluator extends EndConditionEvaluator {
+  constructor(
+    platform: MockPlatform,
+    private readonly fixedResult: EvaluationResult
+  ) {
+    super(platform);
+  }
+
+  override async evaluateCondition(
+    _condition: ScriptProperties
+  ): Promise<EvaluationResult> {
+    return this.fixedResult;
+  }
 }
 
 async function requestQueuePause(queue: PromptQueue): Promise<void> {
@@ -238,6 +260,23 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           })
       )
     );
+
+    assert.deepStrictEqual(queue.getState().results[0].preCondition, {
+      passed: true,
+      action: CONDITION_ACTIONS.CONTINUE,
+      script: `node -e "process.stdout.write('pre-output')"`,
+      actual: "pre-output",
+      actualSource: "stdout",
+      stdout: "pre-output",
+      stderr: "",
+      exitCode: 0,
+      durationMs: queue.getState().results[0].preCondition?.durationMs,
+    });
+    assert.strictEqual(queue.getState().results[0].endCondition?.passed, true);
+    assert.strictEqual(
+      queue.getState().results[0].endCondition?.stdout,
+      "end-output"
+    );
   });
 
   test("round-trips a passing end-condition retry through history before advancing", async () => {
@@ -347,6 +386,78 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       STEP_STATUS.SKIPPED
     );
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("records a failed pre-condition that skips the prompt", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "should be skipped",
+          preCondition: {
+            script: `node -e "process.exit(1)"`,
+            onFail: CONDITION_ACTIONS.SKIP_PROMPT,
+          },
+        },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.SKIPPED);
+    assert.strictEqual(queue.getState().results[0].preCondition?.passed, false);
+    assert.strictEqual(
+      queue.getState().results[0].preCondition?.action,
+      CONDITION_ACTIONS.SKIP_PROMPT
+    );
+  });
+
+  test("records a pre-condition evaluator error before continuing", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const platform = new MockPlatform();
+    const evaluator = new FixedEvaluationEvaluator(platform, {
+      passed: false,
+      matchRule: "none",
+      actual: "",
+      actualSource: "exitCode",
+      errored: true,
+      stdout: "",
+      stderr: "evaluator failed",
+      result: "",
+      duration: 3,
+      error: "evaluator failed",
+    });
+    const executor = makeExecutor(queue, evaluator);
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "continues after gate error",
+          preCondition: { script: "check-gate.js" },
+          errorBehavior: { onError: "continue" },
+        },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "continues after gate error",
+    ]);
+    assert.strictEqual(queue.getState().results[0].preCondition?.passed, false);
+    assert.strictEqual(
+      queue.getState().results[0].preCondition?.action,
+      CONDITION_ACTIONS.CONTINUE
+    );
+    assert.strictEqual(
+      queue.getState().results[0].preCondition?.error,
+      "evaluator failed"
+    );
   });
 
   test("runs finalStep once after queue drains", async () => {

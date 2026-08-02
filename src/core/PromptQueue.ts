@@ -7,6 +7,7 @@ import {
   QueueState,
   WorkflowRuntimeState,
   PromptResult,
+  ConditionEvaluationSummary,
   EXECUTION_STATES,
   WorkflowStep,
   ScriptRuntimeOutput,
@@ -628,6 +629,58 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       ...this.state,
       totalExecutionTime: this.stateMachine.getActiveExecutionTime(),
       ...this.stateMachine.getSnapshot(),
+    };
+  }
+
+  /** Record the latest pre-condition evaluation for a queue step. */
+  public recordPreConditionSummary(
+    stepIndex: number,
+    summary: ConditionEvaluationSummary
+  ): void {
+    const result = this.state.results[stepIndex];
+    if (!result) {
+      return;
+    }
+    result.preCondition = { ...summary };
+  }
+
+  /** Record the latest end-condition evaluation for a queue step. */
+  public recordEndConditionSummary(
+    stepIndex: number,
+    summary: ConditionEvaluationSummary
+  ): void {
+    const result = this.state.results[stepIndex];
+    if (!result) {
+      return;
+    }
+    result.endCondition = { ...summary };
+    result.endConditionResult = summary.passed;
+    result.scriptOutput = summary.stdout;
+  }
+
+  /** Record the latest pre-condition evaluation for the active final step loop. */
+  public recordFinalStepPreConditionSummary(
+    summary: ConditionEvaluationSummary
+  ): void {
+    this.finalStepRuntime = {
+      ...(this.finalStepRuntime ?? {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: 0,
+      }),
+      preCondition: { ...summary },
+    };
+  }
+
+  /** Record the latest end-condition evaluation for the active final step loop. */
+  public recordFinalStepEndConditionSummary(
+    summary: ConditionEvaluationSummary
+  ): void {
+    this.finalStepRuntime = {
+      ...(this.finalStepRuntime ?? {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: 0,
+      }),
+      endCondition: { ...summary },
     };
   }
 

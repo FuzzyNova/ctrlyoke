@@ -153,6 +153,21 @@ function validationFailure(result: string = "bad"): EvaluationResult {
   };
 }
 
+function evaluationError(error: string = "could not run"): EvaluationResult {
+  return {
+    passed: false,
+    matchRule: "none",
+    actual: "",
+    actualSource: "exitCode",
+    errored: true,
+    result: "",
+    stdout: "partial stdout",
+    stderr: "stderr",
+    duration: 7,
+    error,
+  };
+}
+
 function createPrompt(
   maxRetries: number | undefined,
   onPass: EndConditionAction = "continue",
@@ -222,6 +237,16 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(transitions, [
       { command: WORKFLOW_ATTEMPT_COMMANDS.COMPLETE, attemptIndex: 0 },
     ]);
+    assert.deepStrictEqual(queue.getState().results[0].endCondition, {
+      passed: true,
+      script: "check-results.js",
+      actual: "ok",
+      actualSource: "stdout",
+      stdout: "ok",
+      stderr: "",
+      exitCode: 0,
+      durationMs: 1,
+    });
   });
 
   test("stops the workflow when the end condition passes with stopWorkflow", async () => {
@@ -414,6 +439,93 @@ suite("EndConditionHandler", () => {
         severity: "error",
       },
     ]);
+    assert.strictEqual(queue.getState().results[0].endCondition?.passed, false);
+    assert.strictEqual(
+      queue.getState().results[0].endCondition?.actual,
+      "actual-result"
+    );
+    assert.strictEqual(queue.getState().results[0].endConditionResult, false);
+  });
+
+  test("records evaluator errors as the final end-condition evaluation", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(0);
+    const integration = new MockHarnessIntegration(undefined, false);
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform),
+      queue,
+      () => undefined,
+      platform
+    );
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      evaluationError(),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => {
+        throw new Error("retry callback should not be invoked");
+      }
+    );
+
+    assert.strictEqual(result.errorResult?.error, "could not run");
+    assert.deepStrictEqual(queue.getState().results[0].endCondition, {
+      passed: false,
+      script: "check-results.js",
+      actual: "",
+      actualSource: "exitCode",
+      stdout: "partial stdout",
+      stderr: "stderr",
+      durationMs: 7,
+      error: "could not run",
+    });
+  });
+
+  test("leaves the final failed verdict after retry exhaustion", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(1);
+    const integration = new MockHarnessIntegration(undefined, false);
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform, [validationFailure("final")]),
+      queue,
+      () => undefined,
+      platform
+    );
+
+    queue.loadPrompts({ steps: [prompt] });
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      validationFailure("initial"),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => "retry response"
+    );
+
+    assert.strictEqual(result.shouldContinue, false);
+    assert.strictEqual(
+      queue.getState().results[0].endCondition?.actual,
+      "final"
+    );
+    assert.strictEqual(queue.getState().results[0].endCondition?.passed, false);
   });
 
   test("continues the workflow when onFail is continue after exhaustion", async () => {

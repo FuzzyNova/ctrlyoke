@@ -3,6 +3,7 @@ import type {
   ScriptProperties,
   ScriptRuntimeOutput,
   ScriptVerdict,
+  ConditionEvaluationSummary,
 } from "../../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
@@ -97,6 +98,32 @@ export interface ScriptExecutionReport {
   scriptRuntimeOutput: ScriptRuntimeOutput;
   verdict: ScriptVerdict;
   outputText: string;
+}
+
+export function createConditionEvaluationSummary(
+  script: string,
+  result: EvaluationResult,
+  action?: ScriptVerdict["action"]
+): ConditionEvaluationSummary {
+  const summary: ConditionEvaluationSummary = {
+    passed: result.passed,
+    script,
+    actual: result.actual,
+    actualSource: result.actualSource,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    durationMs: result.duration,
+  };
+  if (action !== undefined) {
+    summary.action = action;
+  }
+  if (result.exitCode !== undefined) {
+    summary.exitCode = result.exitCode;
+  }
+  if (result.error !== undefined) {
+    summary.error = result.error;
+  }
+  return summary;
 }
 
 /** Publishes every script execution through the ordered CLI output pipeline. */

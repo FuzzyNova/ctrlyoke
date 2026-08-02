@@ -67,6 +67,7 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   formatVerdictSummary,
+  createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
 
@@ -555,6 +556,14 @@ export class WorkflowExecutor {
           actionForErrored: this.getErrorConditionAction(preErrorBehavior),
         });
         const preResult = preReport.evaluationResult;
+        this.recordPreConditionSummary(
+          target,
+          createConditionEvaluationSummary(
+            resolvedPreCondition.script,
+            preResult,
+            preReport.verdict.action
+          )
+        );
 
         if (preResult.errored) {
           const preDisposition = await this.handleEvaluationError(
@@ -1644,6 +1653,28 @@ export class WorkflowExecutor {
     );
   }
 
+  private recordPreConditionSummary(
+    target: ExecutionTarget,
+    summary: ReturnType<typeof createConditionEvaluationSummary>
+  ): void {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.promptQueue.recordPreConditionSummary(target.stepIndex, summary);
+    } else {
+      this.promptQueue.recordFinalStepPreConditionSummary(summary);
+    }
+  }
+
+  private recordEndConditionSummary(
+    target: ExecutionTarget,
+    summary: ReturnType<typeof createConditionEvaluationSummary>
+  ): void {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.promptQueue.recordEndConditionSummary(target.stepIndex, summary);
+    } else {
+      this.promptQueue.recordFinalStepEndConditionSummary(summary);
+    }
+  }
+
   private getErrorConditionAction(
     errorBehavior?: ErrorBehavior
   ): ConditionAction {
@@ -1889,6 +1920,13 @@ export class WorkflowExecutor {
         error: "End condition missing required 'script' property",
         duration,
       };
+      this.recordEndConditionSummary(
+        target,
+        createConditionEvaluationSummary(
+          prompt.endCondition?.script ?? "",
+          missingScriptResult
+        )
+      );
       return this.handleEvaluationError(
         context,
         target,
@@ -1947,6 +1985,10 @@ export class WorkflowExecutor {
     const evaluationResult = endReport.evaluationResult;
 
     if (evaluationResult.errored) {
+      this.recordEndConditionSummary(
+        target,
+        createConditionEvaluationSummary(endCondition.script, evaluationResult)
+      );
       return this.handleEvaluationError(
         context,
         target,

@@ -9,12 +9,14 @@ import {
 import {
   STATUS_MESSAGE_SEVERITY,
   CONDITION_ACTIONS,
+  FINAL_STEP_PHASES,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import {
   EndConditionEvaluator,
   EvaluationResult,
 } from "./EndConditionEvaluator";
+import { createConditionEvaluationSummary } from "./orchestration/ScriptExecutionReporter";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
@@ -113,6 +115,11 @@ export class EndConditionHandler {
     // Evaluation errors are internal failures, not condition outcomes. The
     // executor owns their policy because retry must re-enter the whole step.
     if (evaluationResult.errored) {
+      this.recordEndConditionEvaluation(
+        prompt,
+        evaluationResult,
+        retryContext.attemptTarget
+      );
       return {
         shouldContinue: false,
         failureReason: evaluationResult.error ?? "End condition could not run",
@@ -163,6 +170,11 @@ export class EndConditionHandler {
 
     while (true) {
       if (evaluationResult.errored) {
+        this.recordEndConditionEvaluation(
+          prompt,
+          evaluationResult,
+          retryContext.attemptTarget
+        );
         return {
           shouldContinue: false,
           failureReason:
@@ -174,7 +186,11 @@ export class EndConditionHandler {
 
       if (evaluationResult.passed) {
         Log.info("✅ End condition passed");
-        this.recordPassingEvaluation(evaluationResult);
+        this.recordPassingEvaluation(
+          prompt,
+          evaluationResult,
+          retryContext.attemptTarget
+        );
 
         if (onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
           const reason = "End condition passed with onPass: stopWorkflow";
@@ -225,6 +241,11 @@ export class EndConditionHandler {
       // Preserve the existing failure-side behavior: onFail: continue
       // advances immediately, while other actions use the conversational
       // retry/exhaustion flow whenever retry settings permit it.
+      this.recordEndConditionEvaluation(
+        prompt,
+        evaluationResult,
+        retryContext.attemptTarget
+      );
       if (retryContext.runtime.stopped) {
         Log.info("⚠️ Workflow stopped, aborting retry");
         return this.workflowStopped("Workflow stopped by user");
@@ -423,12 +444,27 @@ export class EndConditionHandler {
     return { shouldContinue: false, failureReason };
   }
 
-  private recordPassingEvaluation(evaluationResult: EvaluationResult): void {
-    const currentIndex = this.promptQueue.getState().currentIndex;
-    const currentResult = this.promptQueue.getState().results[currentIndex];
-    if (currentResult) {
-      currentResult.endConditionResult = true;
-      currentResult.scriptOutput = evaluationResult.stdout;
+  private recordPassingEvaluation(
+    prompt: PromptStep,
+    evaluationResult: EvaluationResult,
+    target: WorkflowAttemptTarget
+  ): void {
+    this.recordEndConditionEvaluation(prompt, evaluationResult, target);
+  }
+
+  private recordEndConditionEvaluation(
+    prompt: PromptStep,
+    evaluationResult: EvaluationResult,
+    target: WorkflowAttemptTarget
+  ): void {
+    const summary = createConditionEvaluationSummary(
+      prompt.endCondition?.script ?? "",
+      evaluationResult
+    );
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.promptQueue.recordEndConditionSummary(target.stepIndex, summary);
+    } else {
+      this.promptQueue.recordFinalStepEndConditionSummary(summary);
     }
   }
 

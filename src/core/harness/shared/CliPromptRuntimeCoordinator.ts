@@ -34,6 +34,7 @@ export class CliPromptRuntimeCoordinator {
     const actualHarness =
       params.resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
     const actualModel = params.resolvedProperties?.model ?? "";
+    const actualExecutionMode = params.resolvedProperties?.executionMode;
     const actualAgent = params.resolvedProperties?.agent;
     const actualSkills = params.resolvedProperties?.skills;
 
@@ -47,6 +48,7 @@ export class CliPromptRuntimeCoordinator {
 
     params.prompt._runtime.harness = actualHarness;
     params.prompt._runtime.model = actualModel;
+    params.prompt._runtime.executionMode = actualExecutionMode;
     if (actualAgent) {
       params.prompt._runtime.agent = actualAgent;
     }
@@ -78,6 +80,7 @@ export class CliPromptRuntimeCoordinator {
     const actualHarness =
       params.resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
     const actualModel = params.resolvedProperties?.model ?? "";
+    const actualExecutionMode = params.resolvedProperties?.executionMode;
     const actualAgent = params.resolvedProperties?.agent;
     const actualSkills = params.resolvedProperties?.skills;
 
@@ -85,6 +88,7 @@ export class CliPromptRuntimeCoordinator {
       params.prompt._runtime = {
         harness: actualHarness,
         model: actualModel,
+        executionMode: actualExecutionMode,
         agent: actualAgent,
         skills: actualSkills,
         startedAt: this.now(),
@@ -92,6 +96,7 @@ export class CliPromptRuntimeCoordinator {
     } else {
       params.prompt._runtime.harness = actualHarness;
       params.prompt._runtime.model = actualModel;
+      params.prompt._runtime.executionMode = actualExecutionMode;
       params.prompt._runtime.agent = actualAgent;
       params.prompt._runtime.skills = actualSkills;
     }

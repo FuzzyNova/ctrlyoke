@@ -274,6 +274,8 @@ export interface FinalStepRuntimeState {
   status?: StepStatus;
   startedAt?: number;
   completedAt?: number;
+  preCondition?: ConditionEvaluationSummary;
+  endCondition?: ConditionEvaluationSummary;
 }
 
 /**
@@ -551,6 +553,23 @@ export interface ScriptVerdict {
 }
 
 /**
+ * The latest evaluation details retained for the automation result projection.
+ * The action is populated for pre-conditions, where it explains a gate decision.
+ */
+export interface ConditionEvaluationSummary {
+  passed: boolean;
+  action?: ConditionAction;
+  script: string;
+  actual: string;
+  actualSource: ScriptVerdict["actualSource"];
+  stdout: string;
+  stderr: string;
+  exitCode?: number;
+  durationMs: number;
+  error?: string;
+}
+
+/**
  * Per-prompt runtime execution metadata.
  * Tracks execution state for individual prompts within a workflow.
  */
@@ -694,6 +713,8 @@ export interface PromptResult {
   error?: string;
   retryCount?: number; // Track retry attempts for this prompt
   scriptOutput?: string; // Capture last script output for debugging
+  preCondition?: ConditionEvaluationSummary;
+  endCondition?: ConditionEvaluationSummary;
 }
 
 /**

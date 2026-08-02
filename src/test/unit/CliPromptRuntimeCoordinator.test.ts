@@ -113,6 +113,7 @@ suite("CliPromptRuntimeCoordinator", () => {
     assert.deepStrictEqual(prompt._runtime, {
       harness: HARNESS_IDS.COPILOT_CLI,
       model: "",
+      executionMode: undefined,
       skills: undefined,
       startedAt: 1234,
       completedAt: 9999,
@@ -167,6 +168,7 @@ suite("CliPromptRuntimeCoordinator", () => {
 
     assert.strictEqual(prompt._runtime?.harness, HARNESS_IDS.CLAUDE_CLI);
     assert.strictEqual(prompt._runtime?.model, "sonnet");
+    assert.strictEqual(prompt._runtime?.executionMode, "headless");
     assert.strictEqual(prompt._runtime?.agent, "reviewer");
     assert.strictEqual(prompt._runtime?.startedAt, 2000);
     assert.strictEqual(prompt._runtime?.completedAt, 3000);
@@ -213,6 +215,7 @@ suite("CliPromptRuntimeCoordinator", () => {
 
     assert.strictEqual(prompt._runtime?.harness, HARNESS_IDS.CODEX_CLI);
     assert.strictEqual(prompt._runtime?.model, "gpt-5.2-codex");
+    assert.strictEqual(prompt._runtime?.executionMode, "headless");
     assert.strictEqual(prompt._runtime?.startedAt, 111);
     assert.strictEqual(prompt._runtime?.completedAt, 4000);
     assert.strictEqual(prompt._runtime?.sessionId, "thread_new");
