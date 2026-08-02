@@ -1155,6 +1155,58 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
     expect(useUiStore.getState().pendingRunViewSwitch).toBeNull();
   });
 
+  it("accepts a reconnect snapshot when retained content no longer matches its applied address", () => {
+    renderHook(() => useMessageHandler());
+    const workflowId = "execution-mode-instance";
+    const address = {
+      workflowKey: "execution-mode" as never,
+      kind: "run" as const,
+      runRef: "run-2026-08-02T21-09-53-340Z" as never,
+    };
+
+    act(() => {
+      useUiStore.setState({
+        activeWorkflowId: workflowId,
+        displayedViewAddress: address,
+        appliedViewAddress: address,
+        displayedDefinitionRevision: 1,
+        displayedDescriptorRevision: 1,
+      });
+      useWorkflowStore.getState().loadWorkflow({
+        fileName: "workflow.ctrlyoke.json",
+        workflowName: "staging order",
+        steps: [makePrompt("stale 1"), makePrompt("stale 2")],
+      });
+    });
+
+    act(() => {
+      // replayWorkflowStateTo announces the binding before its authoritative,
+      // requestless snapshot. The instance ID may be unchanged on reconnect.
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, { workflowId });
+    });
+
+    expect(useUiStore.getState().appliedViewAddress).toBeNull();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Execution mode",
+          definitionRevision: 1,
+          steps: [makePrompt("current")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+      });
+    });
+
+    expect(useWorkflowStore.getState().workflowName).toBe("Execution mode");
+    expect(useWorkflowStore.getState().steps).toHaveLength(1);
+    expect(useUiStore.getState().appliedViewAddress).toEqual(address);
+  });
+
   it("hydrates an executing run's full history before overlaying buffered output", () => {
     renderHook(() => useMessageHandler());
     const workflowId = "instance-atomic";

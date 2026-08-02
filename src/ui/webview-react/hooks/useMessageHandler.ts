@@ -2359,6 +2359,16 @@ export function createMessageHandlers(
     if (message.workflowId) {
       const uiStore = useUiStore.getState();
       uiStore.setActiveWorkflowId(message.workflowId);
+      // A requestless announcement starts an authoritative full-state replay,
+      // including a requestless RUN_VIEW_LOADED snapshot. The retained client
+      // state may no longer match the address it previously applied (for
+      // example, iOS can resume an older React state while uiStore still holds
+      // the newer address/revision). Invalidate that content association so
+      // the replay snapshot cannot be rejected as a same-address regression
+      // against unrelated retained steps/name.
+      if (!message.requestId) {
+        useUiStore.setState({ appliedViewAddress: null });
+      }
       // A backend-initiated switch supersedes any in-flight run-view request,
       // and clearing here is also the recovery valve for a stale pending id
       // (its requestless replay would otherwise be suppressed forever). But an
