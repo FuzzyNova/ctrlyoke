@@ -128,25 +128,30 @@ export function analyzeCompatibility({
     }
 
     const sourceTier = target.resolved.sources.toolPermissions;
+    const declarations = installed.descriptor.permissions;
     const permissionFields: Array<{
       key: "mode" | "allowedTools" | "deniedTools";
       used: boolean;
       state: EffectiveCapabilityState;
+      caveatCode?: string;
     }> = [
       {
         key: PERMISSION_CAPABILITY_KEYS.MODE,
         used: true,
         state: effective.mode,
+        caveatCode: declarations?.mode.caveatCode,
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
         used: permissions.allowedTools.length > 0,
         state: effective.allowedTools,
+        caveatCode: declarations?.allowedTools.caveatCode,
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
         used: permissions.deniedTools.length > 0,
         state: effective.deniedTools,
+        caveatCode: declarations?.deniedTools.caveatCode,
       },
     ];
 
@@ -159,7 +164,8 @@ export function analyzeCompatibility({
         field.state,
         harnessId,
         target,
-        sourceTier
+        sourceTier,
+        field.caveatCode
       )) {
         diagnostics.push(diagnostic);
       }
@@ -174,7 +180,8 @@ function diagnosticsForPermissionField(
   state: EffectiveCapabilityState,
   harnessId: HarnessId,
   target: CompatibilityExecutionTarget,
-  sourceTier: ResolvedExecutionTarget["sources"]["toolPermissions"]
+  sourceTier: ResolvedExecutionTarget["sources"]["toolPermissions"],
+  caveatCode?: string
 ): CompatibilityDiagnostic[] {
   const diagnostics: CompatibilityDiagnostic[] = [];
   const base = {
@@ -199,7 +206,8 @@ function diagnosticsForPermissionField(
         base.target,
         base.state,
         base.sourceTier,
-        key
+        key,
+        caveatCode
       )
     );
   } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
@@ -216,12 +224,21 @@ function diagnosticsForPermissionField(
         base.target,
         base.state,
         base.sourceTier,
-        key
+        key,
+        caveatCode
       )
     );
   }
 
-  if (state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN) {
+  // An `unsupported` fidelity is an architectural fact ("Codex uses sandbox
+  // modes instead"), not a claim that erodes with the installed CLI version —
+  // the NOT_ENFORCED diagnostic above already explains it in full. Layering an
+  // "unverified" diagnostic on top would incorrectly suggest we merely haven't
+  // checked, when we deliberately know this harness has no equivalent.
+  if (
+    state.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
+    state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+  ) {
     diagnostics.push(
       createDiagnostic(
         key === PERMISSION_CAPABILITY_KEYS.MODE
@@ -251,7 +268,8 @@ function createDiagnostic(
   target: CompatibilityExecutionTarget,
   state: EffectiveCapabilityState,
   sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"],
-  permissionKey?: "mode" | "allowedTools" | "deniedTools"
+  permissionKey?: "mode" | "allowedTools" | "deniedTools",
+  caveatCode?: string
 ): CompatibilityDiagnostic {
   const pointerBase =
     target.consumer.kind === FINAL_STEP_PHASES.QUEUE
@@ -278,6 +296,7 @@ function createDiagnostic(
     message: getCompatibilityDiagnosticMessage(code, {
       harnessId,
       capability,
+      caveatCode,
     }),
   };
 }

@@ -11,10 +11,12 @@ import {
   HARNESS_IDS,
   type HarnessId,
 } from "../../types/DashboardConstants";
-import type {
-  HarnessCapabilityRegistrySnapshot,
-  InstalledHarnessCapabilities,
+import {
+  getCompatibilityCaveatMessage,
+  type HarnessCapabilityRegistrySnapshot,
+  type InstalledHarnessCapabilities,
 } from "../../types/CompatibilityTypes";
+import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 
 const defaults = {
@@ -331,6 +333,68 @@ suite("CompatibilityAnalyzer", () => {
       })
     );
     assert.deepStrictEqual(diagnostics, []);
+  });
+
+  test("folds the caveat reason into a permanently unsupported capability's message and omits 'unverified'", () => {
+    // A permanently unsupported capability (Codex's granular tool lists) is an
+    // architectural fact, not a claim that erodes when the installed CLI
+    // version falls outside the verified range. Even with `verification:
+    // "unknown"`, the message must explain *why* it's unsupported rather than
+    // implying ctrlyoke merely hasn't checked.
+    const workflow = mixedWorkflow({
+      steps: [{ prompt: "Codex target" }],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: {
+          available: true,
+          version: "999.0.0",
+          descriptor: {
+            harnessId: HARNESS_IDS.CODEX_CLI,
+            permissions: CODEX_PERMISSION_CAPABILITIES,
+          },
+          effective: {
+            permissions: {
+              mode: {
+                fidelity: "exact",
+                mechanism: "native",
+                verification: "verified",
+              },
+              allowedTools: {
+                fidelity: "unsupported",
+                mechanism: "none",
+                verification: "unknown",
+              },
+              deniedTools: {
+                fidelity: "unsupported",
+                mechanism: "none",
+                verification: "unknown",
+              },
+            },
+          },
+        },
+      })
+    );
+
+    assert.ok(
+      !diagnostics.some((diagnostic) => diagnostic.code.endsWith(".unverified")),
+      "an unsupported capability must not also be flagged unverified"
+    );
+
+    const allowedToolsDiagnostics = diagnostics.filter(
+      (diagnostic) => diagnostic.capability === "allowedTools"
+    );
+    assert.strictEqual(allowedToolsDiagnostics.length, 1);
+    assert.strictEqual(
+      allowedToolsDiagnostics[0].code,
+      "compatibility.permissions.allowedTools.notEnforced"
+    );
+    const caveat = getCompatibilityCaveatMessage(
+      CODEX_PERMISSION_CAPABILITIES.allowedTools.caveatCode
+    );
+    assert.ok(caveat);
+    assert.ok(allowedToolsDiagnostics[0].message.includes(caveat!));
   });
 
   test("reports partial and unverified facts as warnings", () => {

@@ -145,6 +145,13 @@ export interface CompatibilityDiagnostic {
 export interface CompatibilityDiagnosticMessageContext {
   harnessId: HarnessId;
   capability: string;
+  /**
+   * The declaration's `caveatCode`, when the diagnostic concerns a capability
+   * that is unsupported or partially supported. Folded into the message as
+   * the "why", so an unsupported capability reads as a known architectural
+   * fact rather than an open question.
+   */
+  caveatCode?: string;
 }
 
 /**
@@ -190,22 +197,33 @@ export function getCompatibilityDiagnosticMessage(
       : "Denied Tools";
   // Render the display name here so no consumer has to rewrite the prose.
   const harness = HARNESS_INFO[context.harnessId]?.name ?? context.harnessId;
+  const caveat = getCompatibilityCaveatMessage(context.caveatCode);
+  // Fold the harness-owned "why" into the sentence instead of leaving a bare
+  // fidelity fact — an unsupported capability is a known architectural
+  // limitation, not an open question, so the reason belongs in the same
+  // sentence rather than a separate lookup.
+  const withCaveat = (sentence: string): string =>
+    caveat ? `${sentence} ${caveat}.` : `${sentence}.`;
 
   switch (code) {
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
       return `The ${harness} harness is unavailable for this execution target.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
-      return `Permission mode is not supported by the ${harness} harness.`;
+      return withCaveat(`Permission mode is not supported by the ${harness} harness`);
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
-      return `Permission mode is only partially translated by the ${harness} harness.`;
+      return withCaveat(
+        `Permission mode is only partially translated by the ${harness} harness`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNVERIFIED:
       return `Permission mode support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED:
-      return `${capabilityLabel} are NOT ENFORCED by the ${harness} harness.`;
+      return withCaveat(`${capabilityLabel} are NOT ENFORCED by the ${harness} harness`);
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
-      return `${capabilityLabel} are only partially translated by the ${harness} harness.`;
+      return withCaveat(
+        `${capabilityLabel} are only partially translated by the ${harness} harness`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
       return `${capabilityLabel} support is unverified for the installed ${harness} version.`;
