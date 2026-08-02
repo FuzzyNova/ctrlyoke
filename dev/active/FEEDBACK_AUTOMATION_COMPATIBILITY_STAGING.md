@@ -56,7 +56,7 @@ plan's own table, this section is newer.
 
 | Fact                                                              | Value                                                                                                                       |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Direct `show*Message` in reusable code (the parity gap)           | **63** across 12 files (an AST count; the earlier 64/13 included the commented-out call in `WorkspaceSessionManager.ts:62`)  |
+| Direct `show*Message` in reusable code (the parity gap)           | **63** across 12 files (an AST count; the earlier 64/13 included the commented-out call in `WorkspaceSessionManager.ts:62`) |
 | Direct `show*Message` at the VS Code boundary (correctly staying) | **53** across 7 files                                                                                                       |
 | Adapter-mediated host UI (`platform.log/warn/error`)              | **18** — `WorkflowInstance` ×9, `PromptFileParser` ×4, `WorkflowExecutor` ×3, `CliIntegration` ×1, `EndConditionHandler` ×1 |
 | Adapter-mediated `showChoice()`                                   | **1** — `CliIntegration.ts:1381` (was 1394 before Stage A.2 edited the file above it; the plan's 1373 is older still)       |
@@ -298,27 +298,27 @@ Single-session steps. Each commits its own work and leaves this document and its
 owning plan current. Steps are strictly ordered within a stage; stages B and C
 may be swapped as a block.
 
-| #   | Stage | Scope                                                                                                               |
-| --- | ----- | ------------------------------------------------------------------------------------------------------------------- |
-| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above          |
-| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn` |
+| #   | Stage | Scope                                                                                                                                        |
+| --- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                    |
+| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                    |
 | 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest |
-| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation |
-| 5   | B.1   | CLI-local result contract + `CliJsonResultBuilder`, over a fixture `QueueState` (plan §1)                           |
-| 6   | B.2   | `RunOutputResolver` one-pass attempt/file-event/loop projection (plan §2)                                           |
-| 7   | B.3   | Typed pre/end-condition summaries on `PromptResult` + `FinalStepRuntimeState`; executor/handler recording (plan §3) |
-| 8   | B.4   | Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                              |
-| 9   | B.5   | Builder/resolver/core/CLI test coverage (plan §5); move the plan to `dev/implemented/`                              |
-| 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                      |
-| 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast         |
-| 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls   |
-| 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                              |
-| 14  | C.5   | Execute the triage: deletions and scoped-reply conversions                                                          |
-| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1381` "don't show again" (Phase 2.5 Site 3)                 |
-| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention        |
-| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                        |
-| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                         |
-| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                             |
+| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation     |
+| 5   | B.1   | CLI-local result contract + `CliJsonResultBuilder`, over a fixture `QueueState` (plan §1)                                                    |
+| 6   | B.2   | `RunOutputResolver` one-pass attempt/file-event/loop projection (plan §2)                                                                    |
+| 7   | B.3   | Typed pre/end-condition summaries on `PromptResult` + `FinalStepRuntimeState`; executor/handler recording (plan §3)                          |
+| 8   | B.4   | Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                       |
+| 9   | B.5   | Builder/resolver/core/CLI test coverage (plan §5); move the plan to `dev/implemented/`                                                       |
+| 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                                               |
+| 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast                                  |
+| 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls                            |
+| 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                       |
+| 14  | C.5   | Execute the triage: deletions and scoped-reply conversions                                                                                   |
+| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1381` "don't show again" (Phase 2.5 Site 3)                                          |
+| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                 |
+| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                 |
+| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                                                  |
+| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                      |
 
 Step 13 is deliberately its own step. The plan is explicit that porting all
 sites is the wrong default and that a meaningful fraction should be deleted;
