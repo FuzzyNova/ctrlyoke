@@ -353,10 +353,12 @@ Notes on the merges:
 
 1. Define shared and VS Code-only path groups.
 2. Add lint/source-audit rules that reject `vscode` imports in shared groups.
-3. Add an explicit temporary allowlist matching this audit.
+3. **DONE —** Add an explicit temporary allowlist matching this audit. The
+   direct `show*Message` source audit commits the seven-file VS Code boundary
+   allowlist and defaults every unknown file to the reusable group.
 4. Make the allowlist shrink-only.
 5. Add a bundle/metafile check for the Node server entry graph.
-6. Add a **shrink-only counter for adapter-mediated host UI** —
+6. **DONE —** Add a **shrink-only counter for adapter-mediated host UI** —
    `platform.log|warn|error|showProgress|showChoice` call sites, baseline 19.
    An import-graph rule cannot see these, so without a separate counter the
    `vscode`-import metric can reach zero while core code still opens native

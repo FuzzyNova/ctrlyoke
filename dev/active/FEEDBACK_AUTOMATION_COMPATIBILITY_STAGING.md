@@ -139,22 +139,23 @@ first; the three bugs can land in any order.
 
 Land the two **shrink-only counters** from
 [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
-Phase 0 items 3 and 6 — the direct `show*Message` counter (baseline 64 reusable
+Phase 0 items 3 and 6 — the direct `show*Message` counter (baseline 63 reusable
 / 53 boundary) and the adapter-UI counter (baseline 19).
 
 This is the one item whose cost rises the longer it waits: it exists to stop the
 migration target growing while the migration runs, so it must precede Stage C.
 
-**The three baselines were re-verified against `src/` on 2026-08-02 and are
-exactly reproducible**, so the counter step commits them rather than re-deriving:
+**The three baselines were re-verified against `src/` on 2026-08-02; the
+measured numbers below are the committed baselines:**
 
 - **53 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
   `ScmCommitCommand` 5, `VsCodeAdapter` 4, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
-- **64 reusable** = `WorkflowCommandHandler` 13, `WorkflowSerializer` 8,
+- **63 reusable** = `WorkflowCommandHandler` 13, `WorkflowSerializer` 8,
   `McpManagerService` 8, `WorkflowOrchestrator` 7, `TemplateImporter` 7,
   `PromptFileLoader` 5, `WorkflowStepHandlers` 5, `UndoRedoCoordinator` 5,
   `TerminalMessageHandlers` 2, and 1 each in `FileSystemUtils`,
-  `WorkspaceSessionManager`, `WorkflowMutationCoordinator`, `PromptEditorSupportService`.
+  `WorkflowMutationCoordinator`, `PromptEditorSupportService`. The commented
+  `WorkspaceSessionManager` reference is not an AST call site.
 - **19 adapter-UI** = `WorkflowInstance` 9, `PromptFileParser` 4, `WorkflowExecutor` 3,
   `EndConditionHandler` 1, `CliIntegration` 1 (`platform.warn`), plus the one `showChoice`.
 
@@ -296,7 +297,7 @@ may be swapped as a block.
 
 | #   | Stage | Scope                                                                                                               |
 | --- | ----- | ------------------------------------------------------------------------------------------------------------------- |
-| 1   | A.1   | Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                      |
+| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above          |
 | 2   | A.2   | Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`      |
 | 3   | A.3   | Antigravity `allowAll` → `--dangerously-skip-permissions`; re-examine its `mode` fidelity declaration               |
 | 4   | A.4   | Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip                         |
