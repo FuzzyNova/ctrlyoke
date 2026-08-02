@@ -192,7 +192,7 @@ Also owned by the permission plan's "Known enforcement gaps". Distinct from A.2
 and worth resolving in the same pass, since both concern whether Antigravity's
 declared capabilities match what it actually enforces.
 
-#### A.4 — `McpServerForm` silently drops `headers` on edit
+#### A.4 — `McpServerForm` silently drops `headers` on edit — RESOLVED
 
 A plain data-loss bug with no owning plan; it lives here.
 `src/ui/webview-react/components/shared/McpServerForm.tsx` round-trips only
@@ -217,6 +217,9 @@ sufficient; the original value has to survive alongside the boolean the checkbox
 edits. Whatever mechanism preserves it must still drop fields the user
 deliberately invalidated by switching the stdio/remote tab — a server edited from
 remote to stdio must not retain `url`, `transport`, or `headers`.
+
+Resolved 2026-08-02 — the form keeps a cloned original config snapshot and applies
+transport-aware invalidation before saving the edited fields.
 
 ### Stage B — Automation API, in full
 
@@ -300,7 +303,7 @@ may be swapped as a block.
 | 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above          |
 | 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn` |
 | 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest |
-| 4   | A.4   | Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip                         |
+| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation |
 | 5   | B.1   | CLI-local result contract + `CliJsonResultBuilder`, over a fixture `QueueState` (plan §1)                           |
 | 6   | B.2   | `RunOutputResolver` one-pass attempt/file-event/loop projection (plan §2)                                           |
 | 7   | B.3   | Typed pre/end-condition summaries on `PromptResult` + `FinalStepRuntimeState`; executor/handler recording (plan §3) |

@@ -18,8 +18,10 @@ export interface McpServerFormState {
   args: string;
   env: string;
   autoApprove: boolean;
+  autoApproveTouched: boolean;
   url: string;
   transport: McpServerTransport;
+  originalServer?: McpServerConfig;
 }
 
 export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
@@ -30,9 +32,23 @@ export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
   args: "",
   env: "",
   autoApprove: false,
+  autoApproveTouched: false,
   url: "",
   transport: "streamable-http",
 };
+
+function cloneMcpServerConfig(server: McpServerConfig): McpServerConfig {
+  return {
+    ...server,
+    ...(server.args ? { args: [...server.args] } : {}),
+    ...(server.env ? { env: { ...server.env } } : {}),
+    ...(Array.isArray(server.autoApprove)
+      ? { autoApprove: [...server.autoApprove] }
+      : {}),
+    ...(server.headers ? { headers: { ...server.headers } } : {}),
+    ...(server.deniedTools ? { deniedTools: [...server.deniedTools] } : {}),
+  };
+}
 
 function mcpEnvObjectToString(env: Record<string, string> | undefined): string {
   if (!env) return "";
@@ -73,49 +89,78 @@ export function serverToMcpServerFormState(
     env: mcpEnvObjectToString(server.env),
     autoApprove:
       typeof server.autoApprove === "boolean" ? server.autoApprove : false,
+    autoApproveTouched: false,
     url: server.url ?? "",
     transport: server.transport ?? "streamable-http",
+    originalServer: cloneMcpServerConfig(server),
   };
+}
+
+function getAutoApproveValue(
+  form: McpServerFormState
+): boolean | string[] | undefined {
+  const original = form.originalServer?.autoApprove;
+  const originalCheckboxValue =
+    typeof original === "boolean" ? original : false;
+
+  if (!form.autoApproveTouched && form.autoApprove === originalCheckboxValue) {
+    return Array.isArray(original) ? [...original] : original;
+  }
+
+  if (form.autoApprove) return true;
+  return undefined;
+}
+
+function applyCommonMcpServerFormFields(
+  server: McpServerConfig,
+  form: McpServerFormState
+): void {
+  server.id = form.id.trim();
+
+  delete server.description;
+  if (form.description.trim()) {
+    server.description = form.description.trim();
+  }
+
+  delete server.autoApprove;
+  const autoApprove = getAutoApproveValue(form);
+  if (autoApprove !== undefined) {
+    server.autoApprove = autoApprove;
+  }
 }
 
 export function mcpServerFormStateToServer(
   form: McpServerFormState
 ): McpServerConfig {
+  const server: McpServerConfig = form.originalServer
+    ? cloneMcpServerConfig(form.originalServer)
+    : { id: form.id.trim() };
+
+  applyCommonMcpServerFormFields(server, form);
+
   if (form.activeTab === "remote") {
-    const server: McpServerConfig = {
-      id: form.id.trim(),
-      url: form.url.trim(),
-      transport: form.transport,
-    };
-    if (form.description.trim()) {
-      server.description = form.description.trim();
-    }
-    if (form.autoApprove) {
-      server.autoApprove = true;
-    }
+    delete server.command;
+    delete server.args;
+    delete server.env;
+    server.url = form.url.trim();
+    server.transport = form.transport;
     return server;
   }
 
-  const server: McpServerConfig = {
-    id: form.id.trim(),
-    command: form.command.trim(),
-  };
+  delete server.url;
+  delete server.transport;
+  delete server.headers;
+  server.command = form.command.trim();
 
-  if (form.description.trim()) {
-    server.description = form.description.trim();
-  }
-
+  delete server.args;
   if (form.args.trim()) {
     server.args = form.args.trim().split(/\s+/);
   }
 
+  delete server.env;
   const env = mcpEnvStringToObject(form.env);
   if (env) {
     server.env = env;
-  }
-
-  if (form.autoApprove) {
-    server.autoApprove = true;
   }
 
   return server;
@@ -285,7 +330,11 @@ export function McpServerForm({
           aria-label="Auto-approve all tools (CLI harnesses only)"
           checked={value.autoApprove}
           onChange={(event) =>
-            onChange({ ...value, autoApprove: event.target.checked })
+            onChange({
+              ...value,
+              autoApprove: event.target.checked,
+              autoApproveTouched: true,
+            })
           }
           className="h-3 w-3 accent-focus-border"
         />
