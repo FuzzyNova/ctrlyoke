@@ -1217,9 +1217,18 @@ export class WorkflowExecutor {
     }
   }
 
-  private getAttemptStartedAt(target: ExecutionTarget): number | undefined {
-    return this.promptQueue.getRuntimeStateMachine().getAttempt(target)
-      ?.startedAt;
+  /**
+   * The timestamp every CLI output record for this attempt's *prompt* is
+   * stamped with. Falls back to the whole-step attempt start only before the
+   * prompt phase has begun — an attempt starts at its pre-condition gate, so
+   * using `startedAt` here back-dates the prompt output ahead of the
+   * pre-condition output it must follow.
+   */
+  private getPromptPhaseStartedAt(target: ExecutionTarget): number | undefined {
+    const attempt = this.promptQueue
+      .getRuntimeStateMachine()
+      .getAttempt(target);
+    return attempt?.promptStartedAt ?? attempt?.startedAt;
   }
 
   private async captureAndEmitSnapshot(
@@ -1887,7 +1896,7 @@ export class WorkflowExecutor {
         bufferedOutput?.workingDirectory ?? context.workspaceFolderPath,
       timestampMs:
         bufferedOutput?.timestampMs ??
-        this.getAttemptStartedAt(target) ??
+        this.getPromptPhaseStartedAt(target) ??
         Date.now(),
       runIndex,
       attemptIndex,
@@ -2176,13 +2185,17 @@ export class WorkflowExecutor {
     beginAttempt: boolean = true
   ): Promise<{ responseText: string; duration: number } | null> {
     const runtime = this.promptQueue.getRuntimeStateMachine();
-    const attempt = beginAttempt
-      ? runtime.beginAttempt(target, attemptIndex, Date.now())
-      : (runtime.getAttempt(target) ??
-        runtime.beginAttempt(target, attemptIndex, Date.now()));
+    if (beginAttempt) {
+      runtime.beginAttempt(target, attemptIndex, Date.now());
+    } else if (!runtime.getAttempt(target)) {
+      runtime.beginAttempt(target, attemptIndex, Date.now());
+    }
     const startTime = Date.now();
 
-    const initTimestampMs = attempt.startedAt;
+    // The attempt began at its pre-condition gate, which may have run for
+    // minutes; the prompt's own output must be stamped from here so it sorts
+    // after the pre-condition output rather than ahead of it.
+    const initTimestampMs = runtime.markPromptStarted(target, startTime);
     const rawTextOutput = integration.rawTextOutput || undefined;
 
     const placeholder = this.emitStreamingPlaceholder(
@@ -2764,7 +2777,7 @@ export class WorkflowExecutor {
         ? integration.getLastCliCommandWasInjected()
         : undefined,
       workingDirectory: context.workspaceFolderPath,
-      timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
+      timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
       attemptIndex,
       runIndex,
       rawTextOutput: integration.rawTextOutput || undefined,
@@ -2808,7 +2821,8 @@ export class WorkflowExecutor {
     const runtime = this.getRuntime();
     const failureReason = integration.getLastFailureReason();
     const failureOutput = integration.getLastFailureOutput?.();
-    const attemptTimestampMs = this.getAttemptStartedAt(target) ?? Date.now();
+    const attemptTimestampMs =
+      this.getPromptPhaseStartedAt(target) ?? Date.now();
     const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
     const errorBehavior = resolvedProperties?.errorBehavior ?? {
       onError: "stop" as const,
@@ -2993,7 +3007,7 @@ export class WorkflowExecutor {
       cliCommand,
       cliCommandWasInjected,
       workingDirectory: context.workspaceFolderPath,
-      timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
+      timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
       runIndex,
       attemptIndex,
       rawTextOutput: integration.rawTextOutput || undefined,

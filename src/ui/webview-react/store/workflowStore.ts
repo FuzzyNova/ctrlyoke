@@ -410,19 +410,49 @@ function getCliEntryRunIndex(entry: OrderedCliHistoryEntry): number {
   return entry.runIndex ?? entry.cliOutput.runIndex ?? 0;
 }
 
+/**
+ * The identity tuple that decides whether two CLI records describe the same
+ * logical attempt output. `phase` is part of it: one step's pre-condition,
+ * prompt, and end-condition all share `(target, runIndex, attemptIndex)`.
+ */
+interface CliEntryIdentity {
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+}
+
+function matchesCliEntryIdentity(
+  entry: OrderedHistoryEntry,
+  identity: CliEntryIdentity
+): entry is OrderedCliHistoryEntry {
+  return (
+    entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+    targetsEqual(entry.target, identity.target) &&
+    getCliEntryRunIndex(entry) === identity.runIndex &&
+    entry.attemptIndex === identity.attemptIndex &&
+    (entry.phase ?? EXECUTION_PHASES.PROMPT) ===
+      (identity.phase ?? EXECUTION_PHASES.PROMPT)
+  );
+}
+
+function findCliEntryIndexByIdentity(
+  entries: OrderedHistoryEntry[],
+  identity: CliEntryIdentity
+): number {
+  return entries.findIndex((entry) => matchesCliEntryIdentity(entry, identity));
+}
+
 function findMatchingCliEntryIndex(
   entries: OrderedHistoryEntry[],
   cliEntry: OrderedCliHistoryEntry
 ): number {
-  return entries.findIndex(
-    (entry): entry is OrderedCliHistoryEntry =>
-      entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-      targetsEqual(entry.target, cliEntry.target) &&
-      getCliEntryRunIndex(entry) === getCliEntryRunIndex(cliEntry) &&
-      entry.attemptIndex === cliEntry.attemptIndex &&
-      (entry.phase ?? EXECUTION_PHASES.PROMPT) ===
-        (cliEntry.phase ?? EXECUTION_PHASES.PROMPT)
-  );
+  return findCliEntryIndexByIdentity(entries, {
+    target: cliEntry.target,
+    runIndex: getCliEntryRunIndex(cliEntry),
+    attemptIndex: cliEntry.attemptIndex,
+    phase: cliEntry.phase,
+  });
 }
 
 function overlayLiveHistoryEntries(
@@ -663,20 +693,17 @@ export const useWorkflowStore = create<
               kind: FINAL_STEP_PHASES.QUEUE,
               stepIndex,
             };
-            const existingIdx = state.liveOrderedEntries.findIndex(
-              (e): e is OrderedCliHistoryEntry =>
-                e.kind === "cli" &&
-                "target" in e &&
-                (e as OrderedCliHistoryEntry).target.kind ===
-                  FINAL_STEP_PHASES.QUEUE &&
-                (
-                  (e as OrderedCliHistoryEntry).target as {
-                    kind: typeof FINAL_STEP_PHASES.QUEUE;
-                    stepIndex: number;
-                  }
-                ).stepIndex === stepIndex &&
-                getCliEntryRunIndex(e as OrderedCliHistoryEntry) === runIndex &&
-                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex
+            // Structured events are only ever produced by the prompt phase, so
+            // this must not attach them to a pre-/end-condition record that
+            // shares the same (target, runIndex, attemptIndex).
+            const existingIdx = findCliEntryIndexByIdentity(
+              state.liveOrderedEntries,
+              {
+                target,
+                runIndex,
+                attemptIndex,
+                phase: EXECUTION_PHASES.PROMPT,
+              }
             );
             if (existingIdx >= 0) {
               const existing = state.liveOrderedEntries[
@@ -757,20 +784,15 @@ export const useWorkflowStore = create<
               kind: FINAL_STEP_PHASES.FINAL_STEP,
               loopIndex,
             };
-            const existingIdx = state.liveOrderedEntries.findIndex(
-              (e): e is OrderedCliHistoryEntry =>
-                e.kind === "cli" &&
-                "target" in e &&
-                (e as OrderedCliHistoryEntry).target.kind ===
-                  FINAL_STEP_PHASES.FINAL_STEP &&
-                (
-                  (e as OrderedCliHistoryEntry).target as {
-                    kind: typeof FINAL_STEP_PHASES.FINAL_STEP;
-                    loopIndex: number;
-                  }
-                ).loopIndex === loopIndex &&
-                getCliEntryRunIndex(e as OrderedCliHistoryEntry) === runIndex &&
-                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex
+            // Same phase constraint as the queue-step path above.
+            const existingIdx = findCliEntryIndexByIdentity(
+              state.liveOrderedEntries,
+              {
+                target,
+                runIndex,
+                attemptIndex,
+                phase: EXECUTION_PHASES.PROMPT,
+              }
             );
             if (existingIdx >= 0) {
               const existing = state.liveOrderedEntries[

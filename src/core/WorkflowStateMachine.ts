@@ -177,6 +177,26 @@ export class WorkflowStateMachine {
     return this.cloneAttemptState(current)!;
   }
 
+  /**
+   * Stamp the moment this attempt's prompt phase begins. The attempt itself
+   * starts earlier (it spans the pre-condition gate), so output produced by
+   * the prompt must be timestamped from here — see `WorkflowAttemptState`.
+   * Returns the effective prompt-phase start, so callers can use the return
+   * value directly without a second read.
+   */
+  markPromptStarted(
+    target: WorkflowAttemptTarget,
+    timestampMs: number = Date.now()
+  ): number {
+    const existing = this.attempts.get(this.getAttemptKey(target));
+    if (!existing) {
+      return timestampMs;
+    }
+
+    existing.promptStartedAt = timestampMs;
+    return timestampMs;
+  }
+
   scheduleRetry(
     target: WorkflowAttemptTarget,
     attemptIndex: number,
@@ -223,6 +243,10 @@ export class WorkflowStateMachine {
         previous?.attemptIndex === attemptIndex
           ? previous.startedAt
           : timestampMs,
+      promptStartedAt:
+        previous?.attemptIndex === attemptIndex
+          ? previous.promptStartedAt
+          : undefined,
       completedAt: timestampMs,
       retryCount:
         previous?.attemptIndex === attemptIndex
@@ -263,6 +287,10 @@ export class WorkflowStateMachine {
         previous?.attemptIndex === attemptIndex
           ? previous.startedAt
           : timestampMs,
+      promptStartedAt:
+        previous?.attemptIndex === attemptIndex
+          ? previous.promptStartedAt
+          : undefined,
       completedAt: timestampMs,
       retryCount:
         previous?.attemptIndex === attemptIndex
@@ -304,6 +332,10 @@ export class WorkflowStateMachine {
         previous?.attemptIndex === attemptIndex
           ? previous.startedAt
           : timestampMs,
+      promptStartedAt:
+        previous?.attemptIndex === attemptIndex
+          ? previous.promptStartedAt
+          : undefined,
       completedAt: timestampMs,
       retryCount:
         previous?.attemptIndex === attemptIndex

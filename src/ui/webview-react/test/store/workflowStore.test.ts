@@ -343,6 +343,44 @@ describe("appendStreamingEvents", () => {
     ]);
   });
 
+  it("does not merge prompt events into a pre-condition entry sharing the same attempt", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    // A failed pre-condition gate for step 0 leaves a CLI entry with the same
+    // (target, runIndex, attemptIndex) as the prompt that follows it.
+    const preConditionEntry: OrderedCliHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      phase: EXECUTION_PHASES.PRE_CONDITION,
+      cliOutput: makeOutput({ prompt: "npm test", response: "1 failing" }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    };
+    store().appendLiveEntry(preConditionEntry);
+
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "fixing the test" } },
+    ]);
+
+    const entries = store().liveOrderedEntries.filter(
+      (item): item is OrderedCliHistoryEntry =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+
+    expect(entries).toHaveLength(2);
+    const [preCondition, prompt] = entries;
+    expect(preCondition.phase).toBe(EXECUTION_PHASES.PRE_CONDITION);
+    expect(preCondition.cliOutput.structured?.events).toBeUndefined();
+    expect(prompt.phase ?? EXECUTION_PHASES.PROMPT).toBe(
+      EXECUTION_PHASES.PROMPT
+    );
+    expect(prompt.cliOutput.structured?.events).toMatchObject([
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "fixing the test" } },
+    ]);
+  });
+
   it("merges post-completion follow-up activity into the completed entry instead of creating a new one", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 

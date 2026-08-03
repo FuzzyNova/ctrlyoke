@@ -307,6 +307,39 @@ suite("WorkflowStateMachine", () => {
     );
   });
 
+  test("tracks the prompt-phase start separately from the whole-step attempt start", () => {
+    const runtime = new WorkflowStateMachine();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    // The attempt opens at the pre-condition gate...
+    runtime.beginAttempt(target, 0, 100);
+    assert.strictEqual(runtime.getAttempt(target)?.promptStartedAt, undefined);
+
+    // ...and the prompt only starts once the gate has finished.
+    assert.strictEqual(runtime.markPromptStarted(target, 500), 500);
+    assert.strictEqual(runtime.getAttempt(target)?.startedAt, 100);
+    assert.strictEqual(runtime.getAttempt(target)?.promptStartedAt, 500);
+
+    // Terminal transitions for the same attempt keep both timestamps.
+    runtime.completeAttempt(target, 0, 900);
+    assert.strictEqual(runtime.getAttempt(target)?.startedAt, 100);
+    assert.strictEqual(runtime.getAttempt(target)?.promptStartedAt, 500);
+
+    // A fresh attempt has no prompt-phase start until its prompt begins.
+    runtime.beginAttempt(target, 1, 1_000);
+    assert.strictEqual(runtime.getAttempt(target)?.promptStartedAt, undefined);
+    runtime.failAttempt(target, 1, "boom", 1_100);
+    assert.strictEqual(runtime.getAttempt(target)?.promptStartedAt, undefined);
+  });
+
+  test("markPromptStarted is a no-op when no attempt is open", () => {
+    const runtime = new WorkflowStateMachine();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    assert.strictEqual(runtime.markPromptStarted(target, 42), 42);
+    assert.strictEqual(runtime.getAttempt(target), undefined);
+  });
+
   test("confirms stop only after a stop request", () => {
     const runtime = new WorkflowStateMachine();
 

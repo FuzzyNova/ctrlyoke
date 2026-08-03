@@ -419,7 +419,21 @@ export interface WorkflowAttemptState {
   target: WorkflowAttemptTarget;
   attemptIndex: number;
   status: WorkflowAttemptStatus;
+  /**
+   * When the *whole-step* attempt began — i.e. before its pre-condition gate,
+   * not when the harness prompt was sent. Use `promptStartedAt` to stamp
+   * prompt-phase output.
+   */
   startedAt: number;
+  /**
+   * When this attempt's prompt phase began, set once the harness prompt is
+   * about to be sent. Distinct from `startedAt` because the attempt spans
+   * pre-condition → prompt → end-condition: a pre-condition that runs for
+   * minutes would otherwise back-date every prompt output entry to before the
+   * pre-condition's own output, which sorts the prompt above the gate that
+   * produced it. Undefined until the prompt phase starts.
+   */
+  promptStartedAt?: number;
   completedAt?: number;
   retryCount?: number;
   maxRetries?: number;

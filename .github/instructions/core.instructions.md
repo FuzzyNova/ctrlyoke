@@ -36,6 +36,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 - Disabled steps stay in the working file and are skipped by the executor; do not silently drop them from the queue.
 - Script steps and prompt `preCondition` handling are executor concerns, not parser or queue concerns.
 - `executionMode` controls where the step itself runs; pre-conditions and end-conditions always run headlessly. The CLI capability clamp can force an explicitly interactive workflow/step to headless when the host cannot provide a TTY.
+- **One attempt spans pre-condition → prompt → end-condition, so `WorkflowAttemptState.startedAt` is _not_ when the prompt ran.** `beginAttempt` fires at the top of the whole-step loop, ahead of the gate, which is what lets a whole-step retry re-run the gate. Prompt output must therefore be stamped from `promptStartedAt` (set by `markPromptStarted` just before the prompt is sent; read via `WorkflowExecutor.getPromptPhaseStartedAt`) — the streaming placeholder and every finalizer have to agree on that one value. Using `startedAt` back-dates the prompt output to _before_ the pre-condition's own output, and since the dashboard sorts output rows by timestamp, a gate that runs for minutes puts the prompt's row above the gate output that produced it — which reads as the prompt output never arriving at all.
 
 </runtimeModel>
 

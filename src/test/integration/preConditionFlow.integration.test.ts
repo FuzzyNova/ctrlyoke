@@ -269,6 +269,12 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.ok(promptOutput, "the prompt must retain its own CLI entry");
     assert.strictEqual(promptOutput.phase, undefined);
     assert.notStrictEqual(preOutput, promptOutput);
+    // The output pane sorts by timestamp, so a prompt stamped with the
+    // whole-step attempt start would render above the gate that produced it.
+    assert.ok(
+      promptOutput.timestampMs > preOutput.timestampMs,
+      `the prompt output must be stamped after the pre-condition that gated it (pre=${preOutput.timestampMs}, prompt=${promptOutput.timestampMs})`
+    );
   });
 
   test("errored preCondition with onError stop halts before the prompt", async () => {
