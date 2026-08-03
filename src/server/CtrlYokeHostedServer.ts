@@ -13,6 +13,7 @@ import type {
   CliEvent,
   CliOutput,
   UndoExecutionTarget,
+  UserFeedbackMessage,
 } from "../types/WebviewMessageTypes";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
@@ -200,6 +201,15 @@ export class CtrlYokeHostedServer
   // ── IDashboardProvider — broadcast all orchestrator events ────────────────
 
   postMessage(message: unknown): void {
+    this.broadcast(message);
+  }
+
+  /**
+   * Delivers operational feedback to browser sockets only.
+   * The VS Code panel uses the separate DashboardBroadcastHub path and is not
+   * part of this connection set, so it cannot receive an in-app duplicate.
+   */
+  broadcastUserFeedback(message: UserFeedbackMessage): void {
     this.broadcast(message);
   }
 

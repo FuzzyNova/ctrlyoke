@@ -314,7 +314,7 @@ may be swapped as a block.
 | 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                             |
 | 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                            |
 | 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                 |
-| 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast                                                                   |
+| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage |
 | 12  | C.3   | Migrate all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); delete the five `PlatformAdapter` UI methods and update all impls             |
 | 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                                                        |
 | 14  | C.5   | Execute the triage for the core/orchestration group (32 sites in 4 files)                                                                                                     |

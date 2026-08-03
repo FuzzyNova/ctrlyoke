@@ -89,6 +89,7 @@ import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import {
   DashboardBroadcastHub,
@@ -364,7 +365,8 @@ export class WorkflowOrchestrator {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    dashboardProvider?: DashboardClient
+    dashboardProvider: DashboardClient | undefined,
+    private readonly userFeedbackSink: UserFeedbackSink
   ) {
     // Create the startup auto-load promise — browser clients await this instead
     // of registering pending callbacks, eliminating the startup race condition.
@@ -4760,7 +4762,8 @@ export class WorkflowOrchestrator {
       () => this.updateStatusBar(),
       this.currentWorkspaceFolder?.uri.fsPath,
       true,
-      this.compatibilityRegistry
+      this.compatibilityRegistry,
+      this.userFeedbackSink
     );
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);

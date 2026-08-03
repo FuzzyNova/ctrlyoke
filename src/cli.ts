@@ -5,6 +5,7 @@ import * as readline from "readline";
 import { access, readFile } from "fs/promises";
 
 import { CliAdapter } from "./platform/CliAdapter";
+import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
 import { IntegrationFactory } from "./core/IntegrationFactory";
@@ -369,6 +370,7 @@ async function runCommand(
   }
 
   const platform = new CliAdapter(config);
+  const userFeedbackSink = new ConsoleUserFeedbackSink();
   // Register the adapter with the vscode-shim for backward compatibility.
   registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform);
@@ -429,7 +431,9 @@ async function runCommand(
     (_name: string | undefined) => {}, // no tab management
     () => {}, // no status bar update
     workingDir,
-    hostCanProvidePty
+    hostCanProvidePty,
+    undefined,
+    userFeedbackSink
   );
 
   // In headless mode, stream output to the terminal as events arrive.

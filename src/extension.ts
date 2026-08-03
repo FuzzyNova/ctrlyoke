@@ -63,6 +63,9 @@ import {
   type FileOpenTarget,
 } from "./ui/ExternalFileTrustPrompt";
 import { ScmCommitCommand } from "./scm/ScmCommitCommand";
+import { CompositeUserFeedbackSink } from "./core/CompositeUserFeedbackSink";
+import { VsCodeUserFeedbackSink } from "./platform/VsCodeUserFeedbackSink";
+import { HostedWebSocketUserFeedbackSink } from "./server/HostedWebSocketUserFeedbackSink";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
@@ -453,7 +456,18 @@ export async function activate(context: vscode.ExtensionContext) {
     Log.debug("ctrlyoke: PTY process manager initialized");
 
     // Initialize ctrlyoke orchestrator with React webview provider
-    workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);
+    const browserUserFeedbackSink = new HostedWebSocketUserFeedbackSink(
+      (message) => hostedServer?.broadcastUserFeedback(message)
+    );
+    const userFeedbackSink = new CompositeUserFeedbackSink([
+      new VsCodeUserFeedbackSink(),
+      browserUserFeedbackSink,
+    ]);
+    workflowOrchestrator = new WorkflowOrchestrator(
+      context,
+      webviewProvider,
+      userFeedbackSink
+    );
 
     // If ctrlyoke has not yet been initialized in this workspace, gate startup
     // behind an init prompt. Must be set before initialize() so the check is in

@@ -80,6 +80,7 @@ import {
 } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
+import type { UserFeedbackSink } from "./UserFeedbackSink";
 import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
@@ -340,7 +341,9 @@ export class WorkflowInstance {
     private readonly onStatusBarUpdate: () => void,
     private readonly workspaceFolderPath: string | undefined,
     private readonly hostCanProvidePty: boolean = true,
-    private readonly compatibilityRegistry?: HarnessCapabilityRegistry
+    private readonly compatibilityRegistry?: HarnessCapabilityRegistry,
+    /** Destination for future operational feedback migrations. */
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
@@ -406,6 +409,11 @@ export class WorkflowInstance {
     this.workflowRuntime.onDidAttemptTransition(
       this.onAttemptTransition.bind(this)
     );
+  }
+
+  /** Exposes the injected feedback port to the future caller migrations. */
+  getUserFeedbackSink(): UserFeedbackSink | undefined {
+    return this.userFeedbackSink;
   }
 
   private async analyzeWorkflowCompatibility(
