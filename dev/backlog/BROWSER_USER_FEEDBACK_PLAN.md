@@ -208,10 +208,10 @@ what matters; the exact totals are not load-bearing.
 
 The calls split into two architectural groups:
 
-| Disposition                                         | Calls | Files                                                                                                                                       |
-| --------------------------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Disposition                                         | Calls | Files                                                                                                                      |
+| --------------------------------------------------- | ----: | -------------------------------------------------------------------------------------------------------------------------- |
 | Keep as native VS Code UI at the extension boundary |    49 | `extension.ts`, `DevCommands`, context-menu commands, `ScmCommitCommand`, `ExternalFileTrustPrompt`, `NotificationManager` |
-| Remove from reusable/core/router services           |    63 | `WorkflowOrchestrator`, orchestration helpers, shared webview services, and `FileSystemUtils`                                               |
+| Remove from reusable/core/router services           |    63 | `WorkflowOrchestrator`, orchestration helpers, shared webview services, and `FileSystemUtils`                              |
 
 The exhaustive file-level dependency audit is in
 [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md).
@@ -547,21 +547,21 @@ name `WORKFLOW_ACTION_FAILED` where that existing generic addressed failure is
 the fit; C.5/C.6 must either reconcile the workspace name with the existing
 contract or add it deliberately. This triage does not add a message type.
 
-| File | Sites | Delete-policy-conflict | Delete-duplicate | Delete-noise | Convert-scoped-reply | Port-broadcast |
-| ---- | ----: | ---------------------: | ---------------: | -----------: | --------------------: | --------------: |
-| `WorkflowCommandHandler.ts` | 13 | 0 | 0 | 2 | 9 | 2 |
-| `TemplateImporter.ts` | 7 | 0 | 0 | 0 | 5 | 2 |
-| `WorkflowOrchestrator.ts` | 7 | 1 | 0 | 0 | 4 | 2 |
-| `PromptFileLoader.ts` | 5 | 0 | 0 | 0 | 5 | 0 |
-| `McpManagerService.ts` | 8 | 0 | 0 | 2 | 6 | 0 |
-| `WorkflowSerializer.ts` | 8 | 0 | 1 | 2 | 4 | 1 |
-| `UndoRedoCoordinator.ts` | 5 | 0 | 0 | 2 | 3 | 0 |
-| `WorkflowStepHandlers.ts` | 5 | 0 | 5 | 0 | 0 | 0 |
-| `TerminalMessageHandlers.ts` | 2 | 0 | 0 | 0 | 2 | 0 |
-| `PromptEditorSupportService.ts` | 1 | 0 | 0 | 0 | 1 | 0 |
-| `WorkflowMutationCoordinator.ts` | 1 | 0 | 1 | 0 | 0 | 0 |
-| `FileSystemUtils.ts` | 1 | 0 | 0 | 0 | 0 | 1 |
-| **Total** | **63** | **1** | **7** | **8** | **39** | **8** |
+| File                             |  Sites | Delete-policy-conflict | Delete-duplicate | Delete-noise | Convert-scoped-reply | Port-broadcast |
+| -------------------------------- | -----: | ---------------------: | ---------------: | -----------: | -------------------: | -------------: |
+| `WorkflowCommandHandler.ts`      |     13 |                      0 |                0 |            2 |                    9 |              2 |
+| `TemplateImporter.ts`            |      7 |                      0 |                0 |            0 |                    5 |              2 |
+| `WorkflowOrchestrator.ts`        |      7 |                      1 |                0 |            0 |                    4 |              2 |
+| `PromptFileLoader.ts`            |      5 |                      0 |                0 |            0 |                    5 |              0 |
+| `McpManagerService.ts`           |      8 |                      0 |                0 |            2 |                    6 |              0 |
+| `WorkflowSerializer.ts`          |      8 |                      0 |                1 |            2 |                    4 |              1 |
+| `UndoRedoCoordinator.ts`         |      5 |                      0 |                0 |            2 |                    3 |              0 |
+| `WorkflowStepHandlers.ts`        |      5 |                      0 |                5 |            0 |                    0 |              0 |
+| `TerminalMessageHandlers.ts`     |      2 |                      0 |                0 |            0 |                    2 |              0 |
+| `PromptEditorSupportService.ts`  |      1 |                      0 |                0 |            0 |                    1 |              0 |
+| `WorkflowMutationCoordinator.ts` |      1 |                      0 |                1 |            0 |                    0 |              0 |
+| `FileSystemUtils.ts`             |      1 |                      0 |                0 |            0 |                    0 |              1 |
+| **Total**                        | **63** |                  **1** |            **7** |        **8** |               **39** |          **8** |
 
 The expected C.5/C.6 execution counts are therefore **32 sites in four
 files** and **31 sites in eight files**, unchanged from the staging split. The
@@ -588,126 +588,126 @@ they require `USER_INTERACTION_REQUEST`, not a fire-and-forget feedback toast.
 
 ##### `src/core/orchestration/WorkflowCommandHandler.ts` — 13
 
-| Line | Message | Disposition | Justification | Status |
-| ---: | --- | --- | --- | --- |
-| 54 | `ctrlyoke: No workspace folder found` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The create-prompt command has one initiating command client; return the failure to that client/panel rather than broadcast a toast. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 129 | `ctrlyoke: Created ${fileName}` | Delete-noise | The newly created file is opened immediately; the editor state is the durable visual result. | **DONE C.5** |
-| 132 | `ctrlyoke: Failed to create prompt file: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is the failure result of the create-prompt request; retain `Log.error` and address the typed reply. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 147 | `ctrlyoke: No workspace folder found` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The draft-prompt command has one initiating client and needs an addressed failure. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 193 | `ctrlyoke: Failed to create draft prompt: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the failed draft creation to its requester; do not make it a global operational event. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 249 | `✅ Created end condition script: ${path.basename(scriptPath)}` + actions | Port-broadcast | **Interaction hold:** preserve the Open Script/Show in Explorer choices for Phase 4; never replace this awaited result with a toast. | **DONE C.5** — retained for Phase 4 |
-| 265 | `❌ Failed to create end condition script. Check that you have a workspace folder open.` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The command failed before producing a script, so its requester needs a typed error. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 271 | `❌ Failed to create end condition script: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the script-creation exception to the initiating command client. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 294 | `ctrlyoke: HarnessId automation is unavailable. Would you like to retry detection?` + actions | Port-broadcast | **Interaction hold:** retain Retry Detection/Continue Anyway for Phase 4; the choice has execution meaning. | **DONE C.5** — retained for Phase 4 |
-| 322 | `ctrlyoke: No prompt file loaded. Use 'Select' button to choose a file first.` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is a rejected open-current-file request, not background status. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 333 | `ctrlyoke: Failed to open file: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Address the failed file-open operation to its requester. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 391 | `✅ Created custom template: ${path.basename(templatePath)}` | Delete-noise | The template is opened in the editor immediately; that visible state is the success acknowledgement. | **DONE C.5** |
-| 396 | `Failed to create template: ${errorMsg}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the custom-template creation failure to the one command client. | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| Line | Message                                                                                       | Disposition                                     | Justification                                                                                                                        | Status                                                |
+| ---: | --------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+|   54 | `ctrlyoke: No workspace folder found`                                                         | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The create-prompt command has one initiating command client; return the failure to that client/panel rather than broadcast a toast.  | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  129 | `ctrlyoke: Created ${fileName}`                                                               | Delete-noise                                    | The newly created file is opened immediately; the editor state is the durable visual result.                                         | **DONE C.5**                                          |
+|  132 | `ctrlyoke: Failed to create prompt file: ${error}`                                            | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is the failure result of the create-prompt request; retain `Log.error` and address the typed reply.                             | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  147 | `ctrlyoke: No workspace folder found`                                                         | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The draft-prompt command has one initiating client and needs an addressed failure.                                                   | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  193 | `ctrlyoke: Failed to create draft prompt: ${error}`                                           | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the failed draft creation to its requester; do not make it a global operational event.                                        | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  249 | `✅ Created end condition script: ${path.basename(scriptPath)}` + actions                     | Port-broadcast                                  | **Interaction hold:** preserve the Open Script/Show in Explorer choices for Phase 4; never replace this awaited result with a toast. | **DONE C.5** — retained for Phase 4                   |
+|  265 | `❌ Failed to create end condition script. Check that you have a workspace folder open.`      | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The command failed before producing a script, so its requester needs a typed error.                                                  | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  271 | `❌ Failed to create end condition script: ${error}`                                          | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the script-creation exception to the initiating command client.                                                               | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  294 | `ctrlyoke: HarnessId automation is unavailable. Would you like to retry detection?` + actions | Port-broadcast                                  | **Interaction hold:** retain Retry Detection/Continue Anyway for Phase 4; the choice has execution meaning.                          | **DONE C.5** — retained for Phase 4                   |
+|  322 | `ctrlyoke: No prompt file loaded. Use 'Select' button to choose a file first.`                | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is a rejected open-current-file request, not background status.                                                                 | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  333 | `ctrlyoke: Failed to open file: ${error}`                                                     | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Address the failed file-open operation to its requester.                                                                             | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  391 | `✅ Created custom template: ${path.basename(templatePath)}`                                  | Delete-noise                                    | The template is opened in the editor immediately; that visible state is the success acknowledgement.                                 | **DONE C.5**                                          |
+|  396 | `Failed to create template: ${errorMsg}`                                                      | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the custom-template creation failure to the one command client.                                                               | **DONE C.5** — sink fallback; Stage E scope follow-up |
 
 ##### `src/core/orchestration/TemplateImporter.ts` — 7
 
-| Line | Message | Disposition | Justification | Status |
-| ---: | --- | --- | --- | --- |
-| 52 | `ctrlyoke: No workspace folder open` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Import was requested by one command client; report the missing workspace to that client. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 64 | `ctrlyoke: No workflow templates available to import` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is the result of the import request, not a reusable background notification. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 128 | `❌ Failed to import workflow templates: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the import operation's failure to its requester while retaining the diagnostic log. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 155 | `❌ Failed to load ctrlyoke ${type}. The extension may not be properly installed.` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Manifest loading failed as part of one import request; use its addressed failure path. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 187 | `"${item.label}" already exists. Overwrite?` + actions | Port-broadcast | **Interaction hold:** preserve the overwrite decision for Phase 4; it is not feedback. | **DONE C.5** — retained for Phase 4 |
-| 230 | `✅ Imported ${imported.length} item(s): ${imported.join(", ")}` + actions | Port-broadcast | **Interaction hold:** preserve Open Folder/View File semantics for Phase 4. | **DONE C.5** — retained for Phase 4 |
-| 251 | `❌ Failed to import: ${failed.join(", ")}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Partial import failure is the addressed result of the import command. | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| Line | Message                                                                            | Disposition                                     | Justification                                                                              | Status                                                |
+| ---: | ---------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+|   52 | `ctrlyoke: No workspace folder open`                                               | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Import was requested by one command client; report the missing workspace to that client.   | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|   64 | `ctrlyoke: No workflow templates available to import`                              | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is the result of the import request, not a reusable background notification.          | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  128 | `❌ Failed to import workflow templates: ${error}`                                 | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the import operation's failure to its requester while retaining the diagnostic log. | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  155 | `❌ Failed to load ctrlyoke ${type}. The extension may not be properly installed.` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Manifest loading failed as part of one import request; use its addressed failure path.     | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  187 | `"${item.label}" already exists. Overwrite?` + actions                             | Port-broadcast                                  | **Interaction hold:** preserve the overwrite decision for Phase 4; it is not feedback.     | **DONE C.5** — retained for Phase 4                   |
+|  230 | `✅ Imported ${imported.length} item(s): ${imported.join(", ")}` + actions         | Port-broadcast                                  | **Interaction hold:** preserve Open Folder/View File semantics for Phase 4.                | **DONE C.5** — retained for Phase 4                   |
+|  251 | `❌ Failed to import: ${failed.join(", ")}`                                        | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Partial import failure is the addressed result of the import command.                      | **DONE C.5** — sink fallback; Stage E scope follow-up |
 
 ##### `src/core/WorkflowOrchestrator.ts` — 7
 
-| Line | Message | Disposition | Justification | Status |
-| ---: | --- | --- | --- | --- |
-| 520 | `This workflow is already running and ${existingStatus}. Switch to it or create a new instance?` + actions | Delete-policy-conflict | The workflow's running-instance policy already determines the safe behavior; the modal lets a runtime answer override that policy. Explicitly remove this from Stage F's action inventory. | **DONE C.5** — reuse existing running instance |
-| 1180 | `ctrlyoke: Initialization failed: ${error}` | Port-broadcast | Initialization is a startup/background event with no initiating webview request; every connected dashboard must see the failure. | **DONE C.5** — `USER_FEEDBACK` sink |
-| 1259 | `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created with your workflows, prompts, and scripts folders.` + action | Port-broadcast | **Interaction hold:** workspace initialization is a shared lifecycle event; retain Reveal Folder for Phase 4. | **DONE C.5** — retained for Phase 4 |
-| 4408 | `No workspace folder open` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Resume was requested by one command client; return the rejected operation to that client/panel. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 4418 | `No previous sessions found. Run a workflow first to create a session.` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is the addressed result of the resume request, not a background broadcast. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 4442 | `Failed to load session: ${getErrorMessage(loadError)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The selected session load failed for the requester and should be scoped to it. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 4449 | `Failed to resume session: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The resume operation's outer failure has one initiating client. | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| Line | Message                                                                                                                                                     | Disposition                                     | Justification                                                                                                                                                                              | Status                                                |
+| ---: | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+|  520 | `This workflow is already running and ${existingStatus}. Switch to it or create a new instance?` + actions                                                  | Delete-policy-conflict                          | The workflow's running-instance policy already determines the safe behavior; the modal lets a runtime answer override that policy. Explicitly remove this from Stage F's action inventory. | **DONE C.5** — reuse existing running instance        |
+| 1180 | `ctrlyoke: Initialization failed: ${error}`                                                                                                                 | Port-broadcast                                  | Initialization is a startup/background event with no initiating webview request; every connected dashboard must see the failure.                                                           | **DONE C.5** — `USER_FEEDBACK` sink                   |
+| 1259 | `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created with your workflows, prompts, and scripts folders.` + action | Port-broadcast                                  | **Interaction hold:** workspace initialization is a shared lifecycle event; retain Reveal Folder for Phase 4.                                                                              | **DONE C.5** — retained for Phase 4                   |
+| 4408 | `No workspace folder open`                                                                                                                                  | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Resume was requested by one command client; return the rejected operation to that client/panel.                                                                                            | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| 4418 | `No previous sessions found. Run a workflow first to create a session.`                                                                                     | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | This is the addressed result of the resume request, not a background broadcast.                                                                                                            | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| 4442 | `Failed to load session: ${getErrorMessage(loadError)}`                                                                                                     | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The selected session load failed for the requester and should be scoped to it.                                                                                                             | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| 4449 | `Failed to resume session: ${getErrorMessage(error)}`                                                                                                       | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The resume operation's outer failure has one initiating client.                                                                                                                            | **DONE C.5** — sink fallback; Stage E scope follow-up |
 
 ##### `src/core/orchestration/PromptFileLoader.ts` — 5
 
-| Line | Message | Disposition | Justification | Status |
-| ---: | --- | --- | --- | --- |
-| 69 | `ctrlyoke: Failed to parse prompt file` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | A browser/client-initiated file load must deliver its parse failure to that client; this is genuine feedback, not noise. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 81 | `ctrlyoke: Failed to load file: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the source-file load exception to the client that requested the load. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 110 | `ctrlyoke: Failed to create workflow: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Template creation is a client request; the browser must receive the failure rather than only the host popup. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 129 | `ctrlyoke: Failed to parse prompt file` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The shared in-memory/file path validation failure still belongs to the initiating load request. | **DONE C.5** — sink fallback; Stage E scope follow-up |
-| 142 | `ctrlyoke: Validation failed:\n${errors}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Validation diagnostics are genuine and must reach the browser that loaded the workflow. | **DONE C.5** — sink fallback; Stage E scope follow-up |
+| Line | Message                                         | Disposition                                     | Justification                                                                                                            | Status                                                |
+| ---: | ----------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+|   69 | `ctrlyoke: Failed to parse prompt file`         | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | A browser/client-initiated file load must deliver its parse failure to that client; this is genuine feedback, not noise. | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|   81 | `ctrlyoke: Failed to load file: ${error}`       | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Return the source-file load exception to the client that requested the load.                                             | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  110 | `ctrlyoke: Failed to create workflow: ${error}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Template creation is a client request; the browser must receive the failure rather than only the host popup.             | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  129 | `ctrlyoke: Failed to parse prompt file`         | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The shared in-memory/file path validation failure still belongs to the initiating load request.                          | **DONE C.5** — sink fallback; Stage E scope follow-up |
+|  142 | `ctrlyoke: Validation failed:\n${errors}`       | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Validation diagnostics are genuine and must reach the browser that loaded the workflow.                                  | **DONE C.5** — sink fallback; Stage E scope follow-up |
 
 ##### `src/ui/McpManagerService.ts` — 8
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 67 | `Failed to load MCP registry servers: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The service already receives `ctx`; return the registry request failure only to its caller. |
-| 85 | `Failed to save MCP registry server: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Save is a single-client mutation; retain the log and send an addressed typed failure. |
-| 99 | `Failed to delete MCP registry server: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Delete is a single-client mutation and must not become a broadcast toast. |
-| 135 | `No stdio MCP servers were exported to ${result.filePath}.` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The export request completed with no applicable entries; tell the requesting manager view through its typed result path. |
-| 140 | `Exported ${result.exportedCount} MCP server${result.exportedCount === 1 ? "" : "s"} to ${result.filePath}.` | Delete-noise | The subsequent `MCP_LOCAL_SCAN_RESULT` refreshes the dashboard's authoritative state; the success toast adds no information. |
-| 147 | `Failed to export MCP servers: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Export failure is scoped to the manager request and must remain visible in the browser. |
-| 162 | `Removed ... from ${result.filePath}.` / `No matching MCP servers were found in ${result.filePath}.` | Delete-noise | The subsequent local scan is the visual state/result for the manager; do not duplicate it with a success/info popup. |
-| 171 | `Failed to delete MCP servers from harness config: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Harness-config deletion is a single-client operation; use the existing addressed failure precedent. |
+| Line | Message                                                                                                      | Disposition                                     | Justification                                                                                                                |
+| ---: | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+|   67 | `Failed to load MCP registry servers: ${getErrorMessage(error)}`                                             | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The service already receives `ctx`; return the registry request failure only to its caller.                                  |
+|   85 | `Failed to save MCP registry server: ${getErrorMessage(error)}`                                              | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Save is a single-client mutation; retain the log and send an addressed typed failure.                                        |
+|   99 | `Failed to delete MCP registry server: ${getErrorMessage(error)}`                                            | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Delete is a single-client mutation and must not become a broadcast toast.                                                    |
+|  135 | `No stdio MCP servers were exported to ${result.filePath}.`                                                  | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The export request completed with no applicable entries; tell the requesting manager view through its typed result path.     |
+|  140 | `Exported ${result.exportedCount} MCP server${result.exportedCount === 1 ? "" : "s"} to ${result.filePath}.` | Delete-noise                                    | The subsequent `MCP_LOCAL_SCAN_RESULT` refreshes the dashboard's authoritative state; the success toast adds no information. |
+|  147 | `Failed to export MCP servers: ${getErrorMessage(error)}`                                                    | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Export failure is scoped to the manager request and must remain visible in the browser.                                      |
+|  162 | `Removed ... from ${result.filePath}.` / `No matching MCP servers were found in ${result.filePath}.`         | Delete-noise                                    | The subsequent local scan is the visual state/result for the manager; do not duplicate it with a success/info popup.         |
+|  171 | `Failed to delete MCP servers from harness config: ${getErrorMessage(error)}`                                | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Harness-config deletion is a single-client operation; use the existing addressed failure precedent.                          |
 
 ##### `src/ui/WorkflowSerializer.ts` — 8
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 648 | `Output exported to ${uri.fsPath}` | Delete-noise | The file-save operation itself and the browser's direct-download fallback are the success result; no dashboard state needs a second toast. |
-| 657 | `Failed to export output: ${msg}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Export failure is the result of one client's request; return it through the addressed reply path. |
-| 690 | `Failed to load templates: ${errorMsg}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | New-workflow template loading is a client request and already has a supplied `postMessage` channel. |
-| 765 | `Failed to create workflow: ${errorMsg}` | Delete-duplicate | The same catch already sends typed `WORKFLOW_CREATED` with `error` after logging; the native popup is a third channel. |
-| 1135 | `Failed to load workflow: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The fallback load path has one requester; the primary route already uses the addressed orchestrator path. |
-| 1161 | `Delete all workflows and their history from .ctrlyoke/.runs?` + action | Port-broadcast | **Interaction hold:** preserve the destructive confirmation for Phase 4; it cannot be a toast. |
-| 1190 | `Deleted ${workflowKeys.length} workflow lineage(s)` | Delete-noise | `RECENT_WORKFLOWS` is emitted with the empty authoritative list immediately afterward. |
-| 1201 | `Failed to delete workflow history: ${getErrorMessage(error)}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The clear-history request has a supplied post-message path; return the failure to its initiator. |
+| Line | Message                                                                 | Disposition                                     | Justification                                                                                                                              |
+| ---: | ----------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+|  648 | `Output exported to ${uri.fsPath}`                                      | Delete-noise                                    | The file-save operation itself and the browser's direct-download fallback are the success result; no dashboard state needs a second toast. |
+|  657 | `Failed to export output: ${msg}`                                       | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Export failure is the result of one client's request; return it through the addressed reply path.                                          |
+|  690 | `Failed to load templates: ${errorMsg}`                                 | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | New-workflow template loading is a client request and already has a supplied `postMessage` channel.                                        |
+|  765 | `Failed to create workflow: ${errorMsg}`                                | Delete-duplicate                                | The same catch already sends typed `WORKFLOW_CREATED` with `error` after logging; the native popup is a third channel.                     |
+| 1135 | `Failed to load workflow: ${getErrorMessage(error)}`                    | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The fallback load path has one requester; the primary route already uses the addressed orchestrator path.                                  |
+| 1161 | `Delete all workflows and their history from .ctrlyoke/.runs?` + action | Port-broadcast                                  | **Interaction hold:** preserve the destructive confirmation for Phase 4; it cannot be a toast.                                             |
+| 1190 | `Deleted ${workflowKeys.length} workflow lineage(s)`                    | Delete-noise                                    | `RECENT_WORKFLOWS` is emitted with the empty authoritative list immediately afterward.                                                     |
+| 1201 | `Failed to delete workflow history: ${getErrorMessage(error)}`          | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | The clear-history request has a supplied post-message path; return the failure to its initiator.                                           |
 
 ##### `src/ui/UndoRedoCoordinator.ts` — 5
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 213 | `Undo complete: restored ${result.restoredFiles.length} file(s).` | Delete-noise | `UNDO_PROMPT_RESULT` and the updated undo record already make the restored state visible. |
-| 217 | `Undo partially complete: ${result.restoredFiles.length} restored, ${result.failedFiles.length} failed.` | Convert-scoped-reply — `UNDO_PROMPT_RESULT` | The existing request-correlated typed result already carries both restored and failed files to the initiating client. |
-| 221 | `Undo failed: ${result.failedFiles[0]?.error ?? "unknown error"}` | Convert-scoped-reply — `UNDO_PROMPT_RESULT` | Preserve the existing typed result as the scoped failure channel; the popup duplicates it. |
-| 231 | `Redo complete: re-applied ${result.restoredFiles.length} file change(s).` | Delete-noise | The updated undo record/dashboard state is the success feedback. |
-| 235 | `Redo failed: ${result.failedFiles[0]?.error ?? "unknown error"}` | Convert-scoped-reply — `UNDO_PROMPT_RESULT` | The existing typed result is already addressed by the request ID and carries the failure. |
+| Line | Message                                                                                                  | Disposition                                 | Justification                                                                                                         |
+| ---: | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+|  213 | `Undo complete: restored ${result.restoredFiles.length} file(s).`                                        | Delete-noise                                | `UNDO_PROMPT_RESULT` and the updated undo record already make the restored state visible.                             |
+|  217 | `Undo partially complete: ${result.restoredFiles.length} restored, ${result.failedFiles.length} failed.` | Convert-scoped-reply — `UNDO_PROMPT_RESULT` | The existing request-correlated typed result already carries both restored and failed files to the initiating client. |
+|  221 | `Undo failed: ${result.failedFiles[0]?.error ?? "unknown error"}`                                        | Convert-scoped-reply — `UNDO_PROMPT_RESULT` | Preserve the existing typed result as the scoped failure channel; the popup duplicates it.                            |
+|  231 | `Redo complete: re-applied ${result.restoredFiles.length} file change(s).`                               | Delete-noise                                | The updated undo record/dashboard state is the success feedback.                                                      |
+|  235 | `Redo failed: ${result.failedFiles[0]?.error ?? "unknown error"}`                                        | Convert-scoped-reply — `UNDO_PROMPT_RESULT` | The existing typed result is already addressed by the request ID and carries the failure.                             |
 
 ##### `src/ui/WorkflowStepHandlers.ts` — 5
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 60 | `Failed to execute prompt: ${getErrorMessage(error)}` | Delete-duplicate | The catch already logs and emits typed `EXECUTE_PROMPT_ERROR`; the popup is a redundant third channel. |
-| 129 | `Failed to update prompt: ${getErrorMessage(error)}` | Delete-duplicate | The mutation path already logs and the router/mutation contract emits the addressed failure/revision response. |
-| 160 | `Failed to insert workflow step: ${getErrorMessage(error)}` | Delete-duplicate | The mutation path already logs and reports the rejected addressed operation through the typed mutation channel. |
-| 191 | `Failed to update finalStep: ${getErrorMessage(error)}` | Delete-duplicate | The typed mutation response and log already cover this failure; no native third channel is needed. |
-| 223 | `Failed to delete prompt: ${getErrorMessage(error)}` | Delete-duplicate | The addressed mutation failure is already represented by the log and typed router response. |
+| Line | Message                                                     | Disposition      | Justification                                                                                                   |
+| ---: | ----------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
+|   60 | `Failed to execute prompt: ${getErrorMessage(error)}`       | Delete-duplicate | The catch already logs and emits typed `EXECUTE_PROMPT_ERROR`; the popup is a redundant third channel.          |
+|  129 | `Failed to update prompt: ${getErrorMessage(error)}`        | Delete-duplicate | The mutation path already logs and the router/mutation contract emits the addressed failure/revision response.  |
+|  160 | `Failed to insert workflow step: ${getErrorMessage(error)}` | Delete-duplicate | The mutation path already logs and reports the rejected addressed operation through the typed mutation channel. |
+|  191 | `Failed to update finalStep: ${getErrorMessage(error)}`     | Delete-duplicate | The typed mutation response and log already cover this failure; no native third channel is needed.              |
+|  223 | `Failed to delete prompt: ${getErrorMessage(error)}`        | Delete-duplicate | The addressed mutation failure is already represented by the log and typed router response.                     |
 
 ##### `src/ui/TerminalMessageHandlers.ts` — 2
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 141 | `${errorMessage}` (failed to spawn embedded shell) | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Spawn has the initiating `ctx`; return the failure to that controller instead of broadcasting a host-only warning. |
-| 171 | `${errorMessage}` (failed to restart embedded shell) | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Restart is one client's action; thread its context through the currently unscoped handler and use the addressed failure precedent. |
+| Line | Message                                              | Disposition                                     | Justification                                                                                                                      |
+| ---: | ---------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+|  141 | `${errorMessage}` (failed to spawn embedded shell)   | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Spawn has the initiating `ctx`; return the failure to that controller instead of broadcasting a host-only warning.                 |
+|  171 | `${errorMessage}` (failed to restart embedded shell) | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | Restart is one client's action; thread its context through the currently unscoped handler and use the addressed failure precedent. |
 
 ##### `src/ui/PromptEditorSupportService.ts` — 1
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 719 | `Failed to open: ${relativePath}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | `OPEN_FILE` originates in a webview request; pass its context into this currently unscoped helper and reply only to that client. |
+| Line | Message                           | Disposition                                     | Justification                                                                                                                    |
+| ---: | --------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+|  719 | `Failed to open: ${relativePath}` | Convert-scoped-reply — `WORKFLOW_ACTION_FAILED` | `OPEN_FILE` originates in a webview request; pass its context into this currently unscoped helper and reply only to that client. |
 
 ##### `src/ui/WorkflowMutationCoordinator.ts` — 1
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 189 | `Failed to ${action}: ${getErrorMessage(error)}` | Delete-duplicate | `reportActionFailure(ctx, ...)` immediately emits `WORKFLOW_ACTION_FAILED`; the native popup duplicates the log and typed reply. |
+| Line | Message                                          | Disposition      | Justification                                                                                                                    |
+| ---: | ------------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+|  189 | `Failed to ${action}: ${getErrorMessage(error)}` | Delete-duplicate | `reportActionFailure(ctx, ...)` immediately emits `WORKFLOW_ACTION_FAILED`; the native popup duplicates the log and typed reply. |
 
 ##### `src/utils/FileSystemUtils.ts` — 1
 
-| Line | Message | Disposition | Justification |
-| ---: | --- | --- | --- |
-| 33 | `ctrlyoke: Could not auto-save file. Running with last saved version.` | Port-broadcast | Auto-save can run as infrastructure work without a requesting client; the stale-version warning is a genuine background event that users must see. |
+| Line | Message                                                                | Disposition    | Justification                                                                                                                                      |
+| ---: | ---------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   33 | `ctrlyoke: Could not auto-save file. Running with last saved version.` | Port-broadcast | Auto-save can run as infrastructure work without a requesting client; the stale-version warning is a genuine background event that users must see. |
 
 **Triage totals:** Delete-policy-conflict **1**, Delete-duplicate **7**,
 Delete-noise **8**, Convert-scoped-reply **39**, and Port-broadcast **8**.

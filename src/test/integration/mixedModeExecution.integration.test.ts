@@ -229,11 +229,7 @@ suite("mixed-mode workflow execution", () => {
 
     const platform = new MockPlatform();
     const evaluator = new EndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     const executor = new WorkflowExecutor(queue, handler, evaluator, platform);
 
     await executor.execute(

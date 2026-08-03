@@ -51,10 +51,7 @@ import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
-import {
-  notifyUserFeedback,
-  type UserFeedbackSink,
-} from "../UserFeedbackSink";
+import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**

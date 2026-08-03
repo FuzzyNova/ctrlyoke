@@ -20,10 +20,7 @@ import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { IDashboardSink } from "../types/IDashboardSink";
-import {
-  notifyUserFeedback,
-  type UserFeedbackSink,
-} from "./UserFeedbackSink";
+import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 
 /**
  * Context needed to handle retry prompts

@@ -15,10 +15,7 @@ import {
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
-import {
-  notifyUserFeedback,
-  type UserFeedbackSink,
-} from "./UserFeedbackSink";
+import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   PROMPT_FILE_EXTENSIONS,

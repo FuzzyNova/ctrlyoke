@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { USER_FEEDBACK_SEVERITY } from "../types/DashboardConstants";
 import {
   formatUserFeedback,
   type UserFeedback,
@@ -13,21 +14,19 @@ interface VsCodeFeedbackApi {
 
 /** Delivers operational feedback through the native VS Code message APIs. */
 export class VsCodeUserFeedbackSink implements UserFeedbackSink {
-  constructor(
-    private readonly api: VsCodeFeedbackApi = vscode.window
-  ) {}
+  constructor(private readonly api: VsCodeFeedbackApi = vscode.window) {}
 
   notify(message: UserFeedback): void {
     const text = formatUserFeedback(message);
     switch (message.severity) {
-      case "warning":
+      case USER_FEEDBACK_SEVERITY.WARNING:
         this.api.showWarningMessage(text);
         return;
-      case "error":
+      case USER_FEEDBACK_SEVERITY.ERROR:
         this.api.showErrorMessage(text);
         return;
-      case "info":
-      case "success":
+      case USER_FEEDBACK_SEVERITY.INFO:
+      case USER_FEEDBACK_SEVERITY.SUCCESS:
         this.api.showInformationMessage(text);
         return;
     }

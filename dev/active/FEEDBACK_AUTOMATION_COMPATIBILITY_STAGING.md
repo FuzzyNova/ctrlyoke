@@ -54,17 +54,17 @@ a long migration is in flight, and that argument is independent of release date.
 Measured against `src/`, not read from the plans. Where these disagree with a
 plan's own table, this section is newer.
 
-| Fact                                                              | Value                                                                                                                       |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Fact                                                              | Value                                                                                                  |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Direct `show*Message` in reusable code (the parity gap)           | **6** across 6 files — the six intentional Phase 4 interaction holds; the initial Stage C count was 63 |
-| Direct `show*Message` at the VS Code boundary (correctly staying) | **49** across 6 files                                                                                                       |
-| Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                                                 |
-| Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                                             |
-| `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                                      |
-| `MESSAGE_TYPES.USER_FEEDBACK`                                     | **Shipped** — Phase 2 transport and sink implementations are wired                                                              |
-| `ToastViewport`                                                   | Shipped, mounted, consuming the queue                                                                                       |
-| `src/cli/CliJsonResultBuilder.ts`                                 | **Shipped** — `cli.ts` emits the versioned per-step JSON v1 envelope with clean stdout                                      |
-| Capability registry, analyzer, snapshot, preflight, honest UI     | Shipped (Compatibility Phases 1A–1C)                                                                                        |
+| Direct `show*Message` at the VS Code boundary (correctly staying) | **49** across 6 files                                                                                  |
+| Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                        |
+| Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                   |
+| `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                 |
+| `MESSAGE_TYPES.USER_FEEDBACK`                                     | **Shipped** — Phase 2 transport and sink implementations are wired                                     |
+| `ToastViewport`                                                   | Shipped, mounted, consuming the queue                                                                  |
+| `src/cli/CliJsonResultBuilder.ts`                                 | **Shipped** — `cli.ts` emits the versioned per-step JSON v1 envelope with clean stdout                 |
+| Capability registry, analyzer, snapshot, preflight, honest UI     | Shipped (Compatibility Phases 1A–1C)                                                                   |
 
 Two consequences worth naming up front:
 
@@ -140,16 +140,21 @@ first; the three bugs can land in any order.
 Land the two **shrink-only counters** from
 [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
 Phase 0 items 3 and 6 — the direct `show*Message` counter (initial baseline 63
-reusable / 49 boundary) and the adapter-UI counter (baseline 19).
+reusable / 53 boundary) and the adapter-UI counter (initial baseline 19).
 
 This is the one item whose cost rises the longer it waits: it exists to stop the
 migration target growing while the migration runs, so it must precede Stage C.
 
-**The initial three baselines were re-verified against `src/` on 2026-08-02;
-the direct reusable baseline was then lowered as C.5 and C.6 landed:**
+**The initial three baselines were re-verified against `src/` on 2026-08-02 as
+53 boundary / 63 reusable / 19 adapter-UI; all three were then lowered as Stage
+C landed. Current values:**
 
 - **49 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
   `ScmCommitCommand` 5, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
+  Down from 53: C.3 deleted the four `VsCodeAdapter` calls that implemented the
+  removed `PlatformAdapter` UI methods. `VsCodeAdapter.ts` stays in the
+  counter's `boundaryFiles` list at zero calls, so a future call there is
+  classified as boundary rather than counted as a reusable regression.
 - **6 reusable after C.6** = `TemplateImporter` 2,
   `WorkflowCommandHandler` 2, `WorkflowOrchestrator` 1, and
   `WorkflowSerializer` 1. These are all Phase 4 interaction holds; the
@@ -300,27 +305,27 @@ Single-session steps. Each commits its own work and leaves this document and its
 owning plan current. Steps are strictly ordered within a stage; stages B and C
 may be swapped as a block.
 
-| #   | Stage | Scope                                                                                                                                                                         |
-| --- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                     |
-| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                     |
-| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                  |
-| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                      |
-| 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3) |
-| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                  |
-| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                  |
-| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                             |
-| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                            |
-| 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                 |
-| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage |
-| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls |
+| #   | Stage | Scope                                                                                                                                                                                            |
+| --- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                                        |
+| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                                        |
+| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                                     |
+| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                                         |
+| 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3)                    |
+| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                                     |
+| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                                     |
+| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                                                |
+| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                                               |
+| 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                                    |
+| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage                              |
+| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls                  |
 | 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration |
-| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E |
-| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining |
-| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                  |
-| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                  |
-| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                          |
-| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                                                       |
+| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E            |
+| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                         |
+| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                     |
+| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                                     |
+| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                                            |
+| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                                                                          |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
@@ -358,9 +363,9 @@ either implementation session starts.
    `PromptEditorSupportService`, `WorkflowMutationCoordinator`,
    `FileSystemUtils`.
 3. **The initial three baselines were re-measured by AST on 2026-08-02 before
-   Stage C** — exactly 49 boundary / 63 reusable / 0 adapter-UI. C.5 and C.6
-   lowered reusable to 6; boundary remains 49 and adapter-UI remains 0. Note
-   that an AST scan reports
+   Stage C** — exactly 53 boundary / 63 reusable / 19 adapter-UI, matching what
+   Stage A.1 committed. Stage C then took adapter-UI to 0, boundary to 49, and
+   reusable to 6. Note that an AST scan reports
    `CliIntegration`'s `showChoice` at **1380**, the start of the call expression
    (`this.platform`), while the plan cites **1381**, where `.showChoice(`
    textually sits. Both are correct; the split-line form is the reason this

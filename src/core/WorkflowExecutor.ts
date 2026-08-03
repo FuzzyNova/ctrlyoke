@@ -1,9 +1,6 @@
 import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
-import {
-  notifyUserFeedback,
-  type UserFeedbackSink,
-} from "./UserFeedbackSink";
+import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
   PromptStep,
   ScriptStep,

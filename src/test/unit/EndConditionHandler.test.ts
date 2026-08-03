@@ -183,11 +183,7 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(1, "continue");
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -240,7 +236,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform),
       queue,
-      () => undefined,
+      () => undefined
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -277,11 +273,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       successResult(),
     ]);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     const transitions: Array<{
       command: string;
       attemptIndex: number;
@@ -373,11 +365,7 @@ suite("EndConditionHandler", () => {
         dashboardMessages.push({ stepIndex, message, severity });
       },
     } as IDashboardSink;
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => dashboard,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => dashboard);
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -434,7 +422,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform),
       queue,
-      () => undefined,
+      () => undefined
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -477,7 +465,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform, [validationFailure("final")]),
       queue,
-      () => undefined,
+      () => undefined
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -513,7 +501,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform),
       queue,
-      () => undefined,
+      () => undefined
     );
     const transitions: string[] = [];
 
@@ -552,11 +540,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       successResult("should-not-run"),
     ]);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     let retryCallbackCount = 0;
 
     queue.loadPrompts({ steps: [prompt] });
@@ -605,11 +589,7 @@ suite("EndConditionHandler", () => {
         dashboardMessages.push(message);
       },
     } as IDashboardSink;
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => dashboard,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => dashboard);
     const transitions: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -666,11 +646,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       validationFailure("still green"),
     ]);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     const retryPrompts: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -710,11 +686,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       validationFailure("red"),
     ]);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
 
     queue.loadPrompts({ steps: [prompt] });
     const result = await handler.handleEndConditionResult(
@@ -751,11 +723,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       successResult(),
     ]);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     const retryAttempts: number[] = [];
     const maxRetries: number[] = [];
 
@@ -794,11 +762,7 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(2, "retry", { passRetryPrompt: "Again" });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     let retryCallbackCount = 0;
 
     queue.loadPrompts({ steps: [prompt] });
@@ -840,11 +804,7 @@ suite("EndConditionHandler", () => {
       validationFailure("failure after pass retry"),
       successResult("passing again"),
     ]);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     const retryPrompts: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -884,11 +844,7 @@ suite("EndConditionHandler", () => {
     });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new EndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(
-      evaluator,
-      queue,
-      () => undefined,
-    );
+    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
     let retryPromptText = "";
 
     queue.loadPrompts({ steps: [prompt] });
@@ -930,7 +886,7 @@ suite("EndConditionHandler", () => {
     const fallbackHandler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform, [successResult()]),
       queue,
-      () => undefined,
+      () => undefined
     );
     let fallbackText = "";
     await fallbackHandler.handleEndConditionResult(

@@ -143,11 +143,7 @@ function makeContext(
 function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   const platform = new MockPlatform();
   const evaluator = new EndConditionEvaluator(platform);
-  const handler = new EndConditionHandler(
-    evaluator,
-    queue,
-    () => undefined
-  );
+  const handler = new EndConditionHandler(evaluator, queue, () => undefined);
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }
 

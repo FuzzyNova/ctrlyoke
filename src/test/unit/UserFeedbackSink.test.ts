@@ -32,8 +32,14 @@ suite("VsCodeUserFeedbackSink", () => {
     sink.notify({ ...feedback, severity: "success" });
 
     assert.deepStrictEqual(calls, [
-      ["info", "The harness needs attention\nCheck the configured permissions."],
-      ["info", "The harness needs attention\nCheck the configured permissions."],
+      [
+        "info",
+        "The harness needs attention\nCheck the configured permissions.",
+      ],
+      [
+        "info",
+        "The harness needs attention\nCheck the configured permissions.",
+      ],
     ]);
   });
 
@@ -104,8 +110,20 @@ interface HostedServerBroadcastInternals {
 suite("HostedWebSocketUserFeedbackSink", () => {
   test("reaches every browser socket but not the VS Code panel", () => {
     const browserSockets: FakeHostedSocket[] = [
-      { readyState: 1, sent: [], send(message) { this.sent.push(message); } },
-      { readyState: 1, sent: [], send(message) { this.sent.push(message); } },
+      {
+        readyState: 1,
+        sent: [],
+        send(message) {
+          this.sent.push(message);
+        },
+      },
+      {
+        readyState: 1,
+        sent: [],
+        send(message) {
+          this.sent.push(message);
+        },
+      },
     ];
     const panelMessages: unknown[] = [];
     const server = Object.create(
@@ -120,7 +138,9 @@ suite("HostedWebSocketUserFeedbackSink", () => {
 
     assert.strictEqual(browserSockets[0].sent.length, 1);
     assert.strictEqual(browserSockets[1].sent.length, 1);
-    const firstMessage = JSON.parse(browserSockets[0].sent[0]) as UserFeedbackMessage;
+    const firstMessage = JSON.parse(
+      browserSockets[0].sent[0]
+    ) as UserFeedbackMessage;
     assert.strictEqual(firstMessage.type, MESSAGE_TYPES.USER_FEEDBACK);
     assert.strictEqual(firstMessage.severity, "error");
     assert.strictEqual(firstMessage.message, feedback.message);
