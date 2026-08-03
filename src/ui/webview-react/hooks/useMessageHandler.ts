@@ -894,10 +894,17 @@ export function createMessageHandlers(
     // Handle ai-cli terminal sessions for the new run.
     const wfId = message.workflowId;
     if (wfId) {
+      // Only the headless case can be decided from executionMode. It describes
+      // where the step's *prompt* will eventually run, not that anything is
+      // spawning now: pre-/end-conditions always run headlessly, so focusing the
+      // terminal for an interactive step that opens with a pre-condition shows
+      // an empty pane — permanently, when the gate's action is stopWorkflow or
+      // skipPrompt and no PTY is ever created. Interactive focus therefore
+      // belongs to whoever knows a terminal exists: TERMINAL_STARTED (see
+      // terminalMessageHandlers, which covers script PTYs too) for a fresh
+      // spawn, and the inject branch below for a reused one.
       if (message.executionMode === EXECUTION_MODES.HEADLESS) {
         autoFocusOutputOnExecution(wfId, "output");
-      } else if (message.executionMode === EXECUTION_MODES.INTERACTIVE) {
-        autoFocusOutputOnExecution(wfId, "terminal");
       }
 
       if (message.isInjectMode) {
@@ -913,6 +920,10 @@ export function createMessageHandlers(
         }
         if (aiCliSessions.length > 0) {
           useUiStore.getState().setTerminalSessionActive(wfId, true);
+          // No TERMINAL_STARTED follows a reused PTY, and this terminal is
+          // already populated, so this is the one place at execution start that
+          // can legitimately focus it.
+          autoFocusOutputOnExecution(wfId, "terminal");
         }
       } else if (!isContinuation) {
         // Fresh non-inject run start: clear old ai-cli sessions so the new PTY

@@ -28,6 +28,7 @@ import type {
   TimelineAttemptStartContext,
 } from "./OutputHistoryManager";
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
+import { StreamChunkCoalescer } from "../../utils/StreamChunkCoalescer";
 
 export interface ScriptExecutionReporterContext {
   workspaceFolderPath?: string;
@@ -192,7 +193,7 @@ export class ScriptExecutionReporter {
       );
     }
 
-    const onOutput = (chunk: string): void => {
+    const publishChunk = (chunk: string): void => {
       const sanitizedChunk = sanitizeTerminalOutput(chunk);
       if (context.historyFilePath && history) {
         void history.appendStreamingChunk(
@@ -221,14 +222,30 @@ export class ScriptExecutionReporter {
       }
     };
 
-    const evaluationResult = request.evaluate
-      ? await request.evaluate(onOutput)
-      : await this.evaluator.evaluateCondition(
-          properties,
-          context.workspaceFolderPath,
-          request.vars,
-          onOutput
-        );
+    // stdout arrives one packet at a time; the dashboard renders a script's
+    // whole accumulated output as a single row, so each delivery costs a full
+    // rebuild of it. Coalescing decouples render frequency from how the process
+    // flushes. Sanitizing the joined buffer is also strictly better than
+    // sanitizing pieces — an escape sequence split across a packet boundary now
+    // survives as one sequence.
+    const coalescer = new StreamChunkCoalescer(publishChunk);
+    const onOutput = (chunk: string): void => coalescer.append(chunk);
+
+    let evaluationResult: EvaluationResult;
+    try {
+      evaluationResult = request.evaluate
+        ? await request.evaluate(onOutput)
+        : await this.evaluator.evaluateCondition(
+            properties,
+            context.workspaceFolderPath,
+            request.vars,
+            onOutput
+          );
+    } finally {
+      // The buffered tail must land before the completed output replaces the
+      // streaming placeholder below, on the throwing path too.
+      coalescer.flush();
+    }
     const outputText = sanitizeTerminalOutput(
       [evaluationResult.stdout, evaluationResult.stderr]
         .filter(Boolean)

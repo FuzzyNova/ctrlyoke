@@ -1558,4 +1558,56 @@ describe("outputRows", () => {
         OUTPUT_ROW_GROUP_END_PADDING
     );
   });
+
+  // Large plain-response rows (streaming script output) memoize their wrapped
+  // line count, so the estimate must still track both the text and the layout
+  // parameters rather than serving a stale cached height.
+  describe("large plain-response height estimates", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const makeRow = (text: string) =>
+      ({
+        key: "streaming-response",
+        rowKind: "plain-response",
+        target,
+        text,
+        rawTextOutput: true,
+        animated: false,
+        estimateSize: 0,
+      }) as const;
+
+    // Comfortably past the 4096-char threshold that enables caching.
+    const baseText = Array.from(
+      { length: 400 },
+      (_value, index) => `line ${index} of streaming script output`
+    ).join("\n");
+
+    it("returns a stable height for repeated calls on the same text", () => {
+      const row = makeRow(baseText);
+      const first = estimateOutputRowHeight(row, 13, 760);
+      expect(estimateOutputRowHeight(row, 13, 760)).toBe(first);
+      expect(estimateOutputRowHeight(makeRow(baseText), 13, 760)).toBe(first);
+    });
+
+    it("grows when the streamed text grows under the same row key", () => {
+      const before = estimateOutputRowHeight(makeRow(baseText), 13, 760);
+      const after = estimateOutputRowHeight(
+        makeRow(`${baseText}\n${baseText}`),
+        13,
+        760
+      );
+      expect(after).toBeGreaterThan(before);
+    });
+
+    it("recomputes when the content width changes for the same text", () => {
+      const wide = estimateOutputRowHeight(makeRow(baseText), 13, 1600);
+      const narrow = estimateOutputRowHeight(makeRow(baseText), 13, 320);
+      expect(narrow).toBeGreaterThan(wide);
+    });
+
+    it("recomputes when the font size changes for the same text", () => {
+      const small = estimateOutputRowHeight(makeRow(baseText), 11, 760);
+      const large = estimateOutputRowHeight(makeRow(baseText), 20, 760);
+      expect(large).toBeGreaterThan(small);
+    });
+  });
 });

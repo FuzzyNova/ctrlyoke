@@ -2550,7 +2550,7 @@ describe("EXECUTION_STARTED", () => {
     );
   });
 
-  it("focuses the tab for each step's resolved execution mode", () => {
+  it("focuses output for headless steps and leaves interactive steps to TERMINAL_STARTED", () => {
     renderHook(() => useMessageHandler());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
@@ -2571,12 +2571,47 @@ describe("EXECUTION_STARTED", () => {
     dispatchStepStart("headless");
     expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
 
+    // An interactive step may open with a pre-condition that runs headlessly and
+    // can end the step before any PTY exists, so execution start must not move
+    // the view to an empty terminal. TERMINAL_STARTED owns that switch.
     dispatchStepStart("interactive");
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        controllerClientId: "controller-1",
+      });
+    });
     expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
       "terminal"
     );
+  });
 
-    dispatchStepStart("headless");
+  it("does not expand or switch the output view for an interactive step that has not spawned a terminal", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.getState().setOutputCollapsed(true);
+    useUiStore.getState().setActiveOutputTab("workflow-1", "output");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", true);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 1,
+        executionMode: "interactive",
+      });
+    });
+
+    expect(useUiStore.getState().outputCollapsed).toBe(true);
     expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
   });
 

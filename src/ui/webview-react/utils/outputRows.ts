@@ -338,6 +338,46 @@ function resolveContentWidth(
   return resolveOutputContentWidth(outputContentWidth, chrome);
 }
 
+/**
+ * Counting wrapped lines is O(text length) — two full-string regex passes plus
+ * a split — and `estimateOutputRowHeight` is called several times per render
+ * for the same row (the virtualizer's `estimateSize`, the `rowLayout` model,
+ * and measurement reconciliation). That repetition is free for ordinary rows
+ * but dominates when a row holds a streaming script's entire output, which is
+ * a single unbounded row that can reach hundreds of KB.
+ *
+ * Cache only large texts: small rows are cheap to recount and would evict the
+ * one entry that matters. Keyed on the text itself — repeated lookups with the
+ * same string reference are cheap once V8 has cached its hash — with the layout
+ * parameters stored alongside and revalidated, since they change far less often
+ * than the text does.
+ */
+const WRAPPED_LINE_COUNT_CACHE_MIN_CHARS = 4096;
+const WRAPPED_LINE_COUNT_CACHE_MAX_ENTRIES = 16;
+
+interface WrappedLineCountCacheEntry {
+  charsPerLine: number;
+  emptyLineWeight: number;
+  count: number;
+}
+
+const wrappedLineCountCache = new Map<string, WrappedLineCountCacheEntry>();
+
+function countWrappedLines(
+  text: string,
+  charsPerLine: number,
+  emptyLineWeight: number
+): number {
+  return normalizeTextForLayout(text)
+    .split("\n")
+    .reduce((total, rawLine) => {
+      if (rawLine.length === 0) {
+        return total + emptyLineWeight;
+      }
+      return total + Math.max(1, Math.ceil(rawLine.length / charsPerLine));
+    }, 0);
+}
+
 function estimateWrappedLineCount(
   text: string,
   outputContentWidth: number | undefined,
@@ -351,8 +391,7 @@ function estimateWrappedLineCount(
     emptyLineWeight?: number;
   }
 ): number {
-  const normalized = normalizeTextForLayout(text);
-  if (normalized.length === 0) {
+  if (text.length === 0) {
     return 0;
   }
 
@@ -367,12 +406,32 @@ function estimateWrappedLineCount(
   const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
   const emptyLineWeight = options?.emptyLineWeight ?? 1.0;
 
-  return normalized.split("\n").reduce((total, rawLine) => {
-    if (rawLine.length === 0) {
-      return total + emptyLineWeight;
+  if (text.length < WRAPPED_LINE_COUNT_CACHE_MIN_CHARS) {
+    return countWrappedLines(text, charsPerLine, emptyLineWeight);
+  }
+
+  const cached = wrappedLineCountCache.get(text);
+  if (
+    cached &&
+    cached.charsPerLine === charsPerLine &&
+    cached.emptyLineWeight === emptyLineWeight
+  ) {
+    return cached.count;
+  }
+
+  const count = countWrappedLines(text, charsPerLine, emptyLineWeight);
+  // Map preserves insertion order, so the first key is the oldest entry.
+  if (
+    !cached &&
+    wrappedLineCountCache.size >= WRAPPED_LINE_COUNT_CACHE_MAX_ENTRIES
+  ) {
+    const oldest = wrappedLineCountCache.keys().next();
+    if (!oldest.done) {
+      wrappedLineCountCache.delete(oldest.value);
     }
-    return total + Math.max(1, Math.ceil(rawLine.length / charsPerLine));
-  }, 0);
+  }
+  wrappedLineCountCache.set(text, { charsPerLine, emptyLineWeight, count });
+  return count;
 }
 
 function estimateTextBlockHeight(

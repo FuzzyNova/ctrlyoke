@@ -231,4 +231,66 @@ suite("ScriptExecutionReporter", () => {
     assert.strictEqual(report.verdict.action, "retry");
     assert.strictEqual(report.verdict.actionDetail, "retry 1 of 3");
   });
+
+  test("coalesces stdout chunks into one streaming update, flushed before the final output", async () => {
+    const events: string[] = [];
+    const evaluator = {
+      evaluateCondition: async (
+        _condition: unknown,
+        _workingDirectory: string | undefined,
+        _vars: Record<string, string> | undefined,
+        onOutput: (chunk: string) => void
+      ) => {
+        // Stand in for a process emitting many small stdout packets in a burst.
+        for (let index = 0; index < 25; index++) {
+          onOutput(`line ${index}\n`);
+        }
+        return makeResult();
+      },
+    } as unknown as EndConditionEvaluator;
+    const reporter = new ScriptExecutionReporter(evaluator);
+    const context: ScriptExecutionReporterContext = {
+      workspaceFolderPath: process.cwd(),
+      dashboardProvider: {
+        updateCliOutput: (_stepIndex: number, output: unknown) => {
+          events.push(
+            (output as CliOutput).isStreaming ? "placeholder" : "final"
+          );
+        },
+        updateCliStreamingChunk: (_stepIndex: number, chunk: string) => {
+          events.push(`chunk:${chunk.length}`);
+        },
+        updateStatusMessage: () => undefined,
+      } as any,
+    };
+
+    await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+      properties: {
+        script: "npm test",
+        compareSource: "exitCode",
+      },
+      phase: EXECUTION_PHASES.PRE_CONDITION,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+    });
+
+    const expectedLength = Array.from(
+      { length: 25 },
+      (_value, index) => `line ${index}\n`
+    ).join("").length;
+
+    assert.deepStrictEqual(events, [
+      "placeholder",
+      `chunk:${expectedLength}`,
+      "final",
+    ]);
+  });
 });
