@@ -1,6 +1,10 @@
 import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "./UserFeedbackSink";
+import {
   PromptStep,
   ScriptStep,
   WorkflowStep,
@@ -249,7 +253,8 @@ export class WorkflowExecutor {
     private readonly promptQueue: PromptQueue,
     private readonly endConditionHandler: EndConditionHandler,
     private readonly endConditionEvaluator: EndConditionEvaluator,
-    private readonly platform: PlatformAdapter
+    private readonly platform: PlatformAdapter,
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {
     this.scriptExecutionReporter = new ScriptExecutionReporter(
       endConditionEvaluator
@@ -2544,7 +2549,7 @@ export class WorkflowExecutor {
 
       const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
 
-      this.platform.warn(message);
+      notifyUserFeedback(this.userFeedbackSink, "warning", message);
       Log.trace(`⏱️ ${message}`);
 
       this.promptQueue.getRuntimeStateMachine().fail();
@@ -2568,7 +2573,7 @@ export class WorkflowExecutor {
     }
 
     const message = `Workflow stopped - Maximum queue size reached (${totalSteps}/${dynamicConfig.maxQueueSize}).`;
-    this.platform.warn(message);
+    notifyUserFeedback(this.userFeedbackSink, "warning", message);
     Log.trace(`📏 ${message}`);
     this.promptQueue.getRuntimeStateMachine().fail();
     await this.promptQueue.commitRuntimeTransition();
@@ -2725,7 +2730,11 @@ export class WorkflowExecutor {
       signedStepIndex >= 0
         ? `prompt ${signedStepIndex + 1}`
         : `finalStep loop ${Math.abs(signedStepIndex)}`;
-    this.platform.error(`Failed to execute ${stepLabel}: ${failureReason}`);
+    notifyUserFeedback(
+      this.userFeedbackSink,
+      "error",
+      `Failed to execute ${stepLabel}: ${failureReason}`
+    );
 
     // Send FAILED status before markErrored() so the step icon updates
     // before the execution state transitions to ERROR (separate postMessages

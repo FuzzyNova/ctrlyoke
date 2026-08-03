@@ -1,4 +1,3 @@
-import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptStep,
   type ScriptProperties,
@@ -21,6 +20,10 @@ import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "./UserFeedbackSink";
 
 /**
  * Context needed to handle retry prompts
@@ -94,7 +97,7 @@ export class EndConditionHandler {
     private readonly promptQueue: PromptQueue,
     private readonly getDashboard: () => IDashboardSink | undefined = () =>
       undefined,
-    private readonly platform?: PlatformAdapter
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {}
 
   /**
@@ -400,7 +403,9 @@ export class EndConditionHandler {
 
     if (retryResponseText === null) {
       const failureReason = retryContext.integration.getLastFailureReason();
-      this.platform?.error(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "error",
         `ctrlyoke: Failed to send retry prompt: ${failureReason}`
       );
       this.promptQueue.resetRetryCount();

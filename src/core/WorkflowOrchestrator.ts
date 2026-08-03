@@ -380,7 +380,8 @@ export class WorkflowOrchestrator {
       this.dashboardBroadcastHub.addClient(dashboardProvider);
     }
     this.integrationFactory = new IntegrationFactory(
-      new VsCodeAdapter(context)
+      new VsCodeAdapter(context),
+      this.userFeedbackSink
     );
     this.compatibilityRegistry = new HarnessCapabilityRegistry();
 
@@ -401,7 +402,10 @@ export class WorkflowOrchestrator {
     this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
 
     // Shared parsers / orchestration helpers
-    this.promptFileParser = new PromptFileParser(new VsCodeAdapter(context));
+    this.promptFileParser = new PromptFileParser(
+      new VsCodeAdapter(context),
+      this.userFeedbackSink
+    );
     this.workspaceSessionManager = new WorkspaceSessionManager(
       this.promptFileParser,
       new VsCodeAdapter(context)

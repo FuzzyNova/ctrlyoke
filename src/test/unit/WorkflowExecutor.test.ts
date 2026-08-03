@@ -52,8 +52,7 @@ function makeExecutor(
   const handler = new EndConditionHandler(
     conditionEvaluator,
     queue,
-    () => undefined,
-    platform
+    () => undefined
   );
   return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
 }

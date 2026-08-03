@@ -146,8 +146,7 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   const handler = new EndConditionHandler(
     evaluator,
     queue,
-    () => undefined,
-    platform
+    () => undefined
   );
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }

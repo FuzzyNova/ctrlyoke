@@ -80,7 +80,10 @@ import {
 } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
-import type { UserFeedbackSink } from "./UserFeedbackSink";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "./UserFeedbackSink";
 import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
@@ -352,7 +355,10 @@ export class WorkflowInstance {
       : undefined;
 
     // Per-workflow dependencies
-    this.promptFileParser = new PromptFileParser(this.platform);
+    this.promptFileParser = new PromptFileParser(
+      this.platform,
+      this.userFeedbackSink
+    );
     this.workflowRuntime = new WorkflowStateMachine();
     this.promptQueue = new PromptQueue(this.workflowRuntime);
 
@@ -365,13 +371,14 @@ export class WorkflowInstance {
       this.endConditionEvaluator,
       this.promptQueue,
       () => this.dashboardSink,
-      this.platform
+      this.userFeedbackSink
     );
     this.workflowExecutor = new WorkflowExecutor(
       this.promptQueue,
       this.endConditionHandler,
       this.endConditionEvaluator,
-      this.platform
+      this.platform,
+      this.userFeedbackSink
     );
     this.promptFileLoader = new PromptFileLoader(
       this.promptFileParser,
@@ -945,7 +952,9 @@ export class WorkflowInstance {
       Log.info(`Loaded workflow: ${filePath}`);
     } catch (loadError) {
       Log.error("Failed to load workflow:", loadError as Error);
-      this.platform.error(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "error",
         `Failed to load workflow: ${getErrorMessage(loadError)}`
       );
       throw loadError;
@@ -1190,7 +1199,9 @@ export class WorkflowInstance {
           `workingFilePath=${queueState.workingFilePath ?? "(none)"}, ` +
           `prompts=${queueState.steps.length}, status=${this.getAuthoritativeExecutionState()}`
       );
-      this.platform.warn(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "warning",
         "No prompt file loaded. Use 'Change' button to select a file first."
       );
       return;
@@ -1658,10 +1669,11 @@ export class WorkflowInstance {
             Log.warn("Failed to finalize history run on early error:", err)
           );
       }
-      this.platform.error(`ctrlyoke: Execution failed: ${error}`);
-      // `platform.error` is a VS Code notification, which a hosted browser
-      // client never sees — without this the run simply stops with no stated
-      // reason there.
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "error",
+        `ctrlyoke: Execution failed: ${error}`
+      );
       this.dashboardSink?.updateStatusMessage(
         this.promptQueue.getState().currentIndex,
         `Execution failed: ${getErrorMessage(error)}`,
@@ -1894,7 +1906,11 @@ export class WorkflowInstance {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
 
       if (!parsed?.steps?.length) {
-        this.platform.error("No steps found in file");
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          "error",
+          "No steps found in file"
+        );
         return;
       }
 
@@ -1918,7 +1934,9 @@ export class WorkflowInstance {
       }
 
       if (!this.promptQueue.canAppend()) {
-        this.platform.error(
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          "error",
           "Cannot queue prompts: Workflow must be cleared first"
         );
         return;
@@ -1930,7 +1948,9 @@ export class WorkflowInstance {
       const newSize = currentSize + parsed.steps.length;
 
       if (!unlimitedMode && newSize > maxQueueSize) {
-        this.platform.warn(
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          "warning",
           `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
             `Enable unlimitedMode or increase maxQueueSize to proceed.`
         );
@@ -1971,12 +1991,18 @@ export class WorkflowInstance {
         position === QUEUE_POSITION.NEXT
           ? "after current prompt"
           : "at end of queue";
-      this.platform.log(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "info",
         `Queued ${parsed.steps.length} prompt(s) ${positionText}`
       );
     } catch (error) {
       Log.error("Failed to queue prompts:", error);
-      this.platform.error(`Failed to queue prompts: ${getErrorMessage(error)}`);
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "error",
+        `Failed to queue prompts: ${getErrorMessage(error)}`
+      );
     }
   }
 
@@ -3835,7 +3861,7 @@ export class WorkflowInstance {
     }
 
     if (notificationMessage) {
-      this.platform.log(notificationMessage);
+      notifyUserFeedback(this.userFeedbackSink, "info", notificationMessage);
     }
 
     return workingFilePath;

@@ -9,6 +9,7 @@ import { OpenCodeCliProvider } from "./harness/opencode/OpenCodeCliProvider";
 import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
 import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProvider";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
+import type { UserFeedbackSink } from "./UserFeedbackSink";
 
 /**
  * IntegrationFactory
@@ -29,7 +30,10 @@ import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
  *           fresh, isolated integration per execution.
  */
 export class IntegrationFactory {
-  constructor(protected readonly platform: PlatformAdapter) {}
+  constructor(
+    protected readonly platform: PlatformAdapter,
+    protected readonly userFeedbackSink?: UserFeedbackSink
+  ) {}
 
   /**
    * Create a provider for capability inspection without creating an execution
@@ -57,37 +61,67 @@ export class IntegrationFactory {
   /** Create a new Copilot CLI integration */
   createCopilotCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new CopilotCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
+    return new CliIntegration(
+      provider,
+      this.platform,
+      registerWithContext,
+      this.userFeedbackSink
+    );
   }
 
   /** Create a new Claude Code CLI integration */
   createClaudeCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new ClaudeCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
+    return new CliIntegration(
+      provider,
+      this.platform,
+      registerWithContext,
+      this.userFeedbackSink
+    );
   }
 
   /** Create a new Codex CLI integration */
   createCodexCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new CodexCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
+    return new CliIntegration(
+      provider,
+      this.platform,
+      registerWithContext,
+      this.userFeedbackSink
+    );
   }
 
   /** Create a new OpenCode CLI integration */
   createOpenCodeCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new OpenCodeCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
+    return new CliIntegration(
+      provider,
+      this.platform,
+      registerWithContext,
+      this.userFeedbackSink
+    );
   }
 
   /** Create a new Qwen Code CLI integration */
   createQwenCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new QwenCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
+    return new CliIntegration(
+      provider,
+      this.platform,
+      registerWithContext,
+      this.userFeedbackSink
+    );
   }
 
   /** Create a new Antigravity CLI integration */
   createAntigravityCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new AntigravityCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
+    return new CliIntegration(
+      provider,
+      this.platform,
+      registerWithContext,
+      this.userFeedbackSink
+    );
   }
 
   /** Create a new integration for the given harness (CLI harnesses only) */

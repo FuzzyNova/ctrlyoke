@@ -18,3 +18,17 @@ export function formatUserFeedback(message: UserFeedback): string {
 export interface UserFeedbackSink {
   notify(message: UserFeedback): void;
 }
+
+/** Emit operational feedback when the current host has a feedback surface. */
+export function notifyUserFeedback(
+  sink: UserFeedbackSink | undefined,
+  severity: UserFeedbackSeverity,
+  message: string,
+  detail?: string
+): void {
+  sink?.notify({
+    severity,
+    message,
+    ...(detail === undefined ? {} : { detail }),
+  });
+}

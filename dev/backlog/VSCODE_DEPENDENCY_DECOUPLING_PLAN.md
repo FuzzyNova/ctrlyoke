@@ -365,7 +365,7 @@ Notes on the merges:
    modals.
 
 **DONE —** the absorbed `BROWSER_USER_FEEDBACK_PLAN.md` Phase 5 rule (a
-shrink-only direct `show*Message` audit, baselines 53 boundary / 63 reusable)
+shrink-only direct `show*Message` audit, baselines 49 boundary / 63 reusable)
 landed alongside item 6. Both counters live in
 `src/test/unit/SourceAuditCounters.test.ts`, count `ts.CallExpression` nodes
 rather than lines, and fail in _both_ directions so a baseline cannot go stale.
@@ -550,8 +550,9 @@ Only the first is blocking; the rest can be answered inside their stage.
 
 - `WorkflowOrchestrator` and `WorkflowInstance` have no `vscode` import or
   `ExtensionContext` dependency.
-- `PlatformAdapter` no longer declares `log`, `warn`, `error`, `showProgress`,
-  or `showChoice`, and the adapter-mediated host-UI counter is zero.
+- **DONE 2026-08-02 —** `PlatformAdapter` no longer declares `log`, `warn`,
+  `error`, `showProgress`, or `showChoice`, and the adapter-mediated host-UI
+  counter is zero.
 - No reusable code path can block execution on a prompt whose headless behavior
   is undefined.
 - The five watcher sites use the project watcher contract.

@@ -194,7 +194,8 @@ above, so the full inventory to migrate is **136 sites (116 direct + 20 via
 
 Re-run the AST audit before the Phase 2 triage rather than trusting these
 totals. A 2026-08-02 re-measure found the reusable group at **64** across 13
-files and the boundary group at exactly **53** across 7; the adapter-mediated
+files and the boundary group at exactly **49** across 6 after the
+`VsCodeAdapter` calls moved to the feedback sink; the adapter-mediated
 table below is exact. An earlier 2026-08-01 text scan found per-file drift
 against the original table
 (`WorkflowCommandHandler` at 13, `showErrorMessage` at 67 /
@@ -207,7 +208,7 @@ The calls split into two architectural groups:
 
 | Disposition                                         | Calls | Files                                                                                                                                       |
 | --------------------------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Keep as native VS Code UI at the extension boundary |    53 | `extension.ts`, `DevCommands`, context-menu commands, `ScmCommitCommand`, `VsCodeAdapter`, `ExternalFileTrustPrompt`, `NotificationManager` |
+| Keep as native VS Code UI at the extension boundary |    49 | `extension.ts`, `DevCommands`, context-menu commands, `ScmCommitCommand`, `ExternalFileTrustPrompt`, `NotificationManager` |
 | Remove from reusable/core/router services           |    63 | `WorkflowOrchestrator`, orchestration helpers, shared webview services, and `FileSystemUtils`                                               |
 
 The exhaustive file-level dependency audit is in
@@ -553,12 +554,12 @@ leaves `FEEDBACK_SOURCE_AUDIT_BASELINES` untouched breaks `npm test`.
 4. Add browser-only broadcasting to `CtrlYokeHostedServer`.
 5. Migrate the surviving direct message calls in reusable code, starting with
    the one-argument error paths.
-6. Migrate the 18 `platform.log()` / `warn()` / `error()` calls in
-   `WorkflowInstance`, `WorkflowExecutor`, `PromptFileParser`, `CliIntegration`,
-   and `EndConditionHandler` to the feedback sink, then delete those three
-   methods (and
-   `showProgress()`) from `PlatformAdapter`. Deleting them is what prevents the
-   native path from being silently reintroduced.
+6. **DONE 2026-08-02 (staging step C.3).** Migrate the 18 `platform.log()` /
+   `warn()` / `error()` calls in `WorkflowInstance`, `WorkflowExecutor`,
+   `PromptFileParser`, `CliIntegration`, and `EndConditionHandler` to the
+   feedback sink, migrate the final `showChoice()` site, then delete all five
+   UI methods from `PlatformAdapter`. Deleting them is what prevents the native
+   path from being silently reintroduced.
 7. Prefer existing typed success/failure replies for browser-initiated actions.
 
 ### Phase 2.5 — Delete the end-condition dialogs (do not port them)
@@ -629,7 +630,7 @@ A "don't show again" harness warning. Not execution-blocking and not
 policy-contradicting. Migrate normally as feedback plus a persisted
 suppression flag.
 
-**The suppression flag already exists** — `warnIfHeadlessWithoutPermissions()`
+**DONE 2026-08-02 (staging step C.3).** The suppression flag already exists — `warnIfHeadlessWithoutPermissions()`
 gates on `ConfigurationUtils.shouldShowHeadlessPermissionWarning()` and the
 dialog's only effect is `setShowHeadlessPermissionWarning(false)`. So this is a
 feedback emission, not new persistence, and the setting stays reachable through

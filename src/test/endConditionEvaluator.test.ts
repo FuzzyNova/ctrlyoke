@@ -23,11 +23,6 @@ suite("EndConditionEvaluator Tests", () => {
       getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
       getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => "",
-      log: () => {},
-      warn: () => {},
-      error: () => {},
-      showProgress: () => {},
-      showChoice: async () => undefined,
     };
 
     evaluator = new EndConditionEvaluator(mockPlatform);

@@ -373,7 +373,7 @@ async function runCommand(
   const userFeedbackSink = new ConsoleUserFeedbackSink();
   // Register the adapter with the vscode-shim for backward compatibility.
   registerCliAdapter(platform);
-  const factory = new IntegrationFactory(platform);
+  const factory = new IntegrationFactory(platform, userFeedbackSink);
   const harness = config.harness as HarnessId;
 
   if (options.verbose && !options.json) {
@@ -540,7 +540,8 @@ async function runCommand(
         workingDir,
         platform,
         instance,
-        hostCanProvidePty
+        hostCanProvidePty,
+        userFeedbackSink
       );
     }
 
@@ -655,7 +656,8 @@ async function executeAddressedCliOperation(
   workspaceRoot: string,
   platform: CliAdapter,
   instance: WorkflowInstance,
-  hostCanProvidePty: boolean
+  hostCanProvidePty: boolean,
+  userFeedbackSink: ConsoleUserFeedbackSink
 ): Promise<void> {
   const workflowKey = operation.workflow;
   WorkflowPaths.assertValidWorkflowKey(workflowKey);
@@ -729,7 +731,8 @@ async function executeAddressedCliOperation(
     const tail = await parseAppendTail(
       operation,
       options as AppendOptions,
-      platform
+      platform,
+      userFeedbackSink
     );
     const appended = await RunContinuationService.appendStepsToRun(
       workspaceRoot,
@@ -761,7 +764,8 @@ async function executeAddressedCliOperation(
 async function parseAppendTail(
   operation: Extract<CliRunOperation, { kind: "append" }>,
   options: AppendOptions,
-  platform: CliAdapter
+  platform: CliAdapter,
+  userFeedbackSink: ConsoleUserFeedbackSink
 ): Promise<WorkflowStep[]> {
   if (options.prompt) {
     return [{ prompt: options.prompt }];
@@ -769,7 +773,7 @@ async function parseAppendTail(
   if (!operation.file) {
     throw new Error("Append source was not provided");
   }
-  const parser = new PromptFileParser(platform);
+  const parser = new PromptFileParser(platform, userFeedbackSink);
   const parsed = await parser.parsePromptFile(path.resolve(operation.file));
   if (!parsed?.steps?.length) {
     throw new Error("Append source must contain at least one workflow step");

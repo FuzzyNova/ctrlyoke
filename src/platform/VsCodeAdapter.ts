@@ -27,29 +27,6 @@ export class VsCodeAdapter implements PlatformAdapter {
     return getVsCodeNamedWorkspaceRoots();
   }
 
-  log(message: string): void {
-    vscode.window.showInformationMessage(message);
-  }
-
-  warn(message: string): void {
-    vscode.window.showWarningMessage(message);
-  }
-
-  error(message: string): void {
-    vscode.window.showErrorMessage(message);
-  }
-
-  showProgress(_message: string): void {
-    // VS Code shows progress via status bar / webview updates; no-op here
-  }
-
-  async showChoice(
-    message: string,
-    ...options: string[]
-  ): Promise<string | undefined> {
-    return vscode.window.showWarningMessage(message, ...options);
-  }
-
   getExtensionPath(): string {
     return this.context.extensionPath;
   }

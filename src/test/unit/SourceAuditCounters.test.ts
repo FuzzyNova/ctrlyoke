@@ -6,7 +6,7 @@ import { suite, test } from "mocha";
 
 export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
   directMessage: {
-    boundary: 53,
+    boundary: 49,
     reusable: 63,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",
@@ -18,7 +18,7 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
       "src/ui/NotificationManager.ts",
     ] as readonly string[],
   },
-  adapterUi: 19,
+  adapterUi: 0,
 } as const;
 
 const DIRECT_MESSAGE_NAMES = new Set([

@@ -48,45 +48,6 @@ export interface PlatformAdapter {
   getNamedWorkspaceRoots(): ResolverWorkspaceFolder[];
 
   /**
-   * Log an informational message.
-   * VS Code: vscode.window.showInformationMessage()
-   * CLI: console.log()
-   */
-  log(message: string): void;
-
-  /**
-   * Show a warning message.
-   * VS Code: vscode.window.showWarningMessage()
-   * CLI: console.warn()
-   */
-  warn(message: string): void;
-
-  /**
-   * Show an error message.
-   * VS Code: vscode.window.showErrorMessage()
-   * CLI: console.error()
-   */
-  error(message: string): void;
-
-  /**
-   * Show a progress/status message.
-   * VS Code: can be a no-op or use status bar
-   * CLI: console.log()
-   */
-  showProgress(message: string): void;
-
-  /**
-   * Present a choice to the user.
-   * VS Code: vscode.window.showWarningMessage(message, ...options)
-   * CLI: in headless mode returns undefined; in interactive mode could use a prompt
-   * Returns the chosen option, or undefined if dismissed.
-   */
-  showChoice(
-    message: string,
-    ...options: string[]
-  ): Promise<string | undefined>;
-
-  /**
    * Get the extension's installation directory.
    * VS Code: context.extensionPath
    * CLI: directory of the main entry file (or process.cwd())

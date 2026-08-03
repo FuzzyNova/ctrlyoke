@@ -51,6 +51,10 @@ import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "../UserFeedbackSink";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -69,7 +73,6 @@ const CLI_EXECUTION_MODE = EXECUTION_MODES;
 const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
     "Headless mode with limited tool permissions: there is no interactive approval prompt, so tools that are not explicitly allowed will be auto-denied. Workflow may not make progress.",
-  DONT_SHOW_AGAIN: "Don't Show Again",
 } as const;
 
 interface CliIntegrationServices {
@@ -179,7 +182,8 @@ export class CliIntegration extends HarnessIntegration {
   constructor(
     cliProvider: ICliProvider,
     platform: PlatformAdapter,
-    registerWithContext: boolean = true
+    registerWithContext: boolean = true,
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {
     // Pass ExtensionContext to base class if available (VS Code context) for subscription management
     const vsCtx =
@@ -1376,25 +1380,7 @@ export class CliIntegration extends HarnessIntegration {
     this.headlessPermissionWarningShown = true;
     const message = CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS;
 
-    if (this.platform.isVsCode?.()) {
-      void this.platform
-        .showChoice(message, CLI_WARNING_MESSAGES.DONT_SHOW_AGAIN)
-        .then((choice) => {
-          if (choice === CLI_WARNING_MESSAGES.DONT_SHOW_AGAIN) {
-            return ConfigurationUtils.setShowHeadlessPermissionWarning(false);
-          }
-          return undefined;
-        })
-        .catch((error) =>
-          Log.warn(
-            "Failed to handle headless permission warning choice:",
-            error
-          )
-        );
-      return;
-    }
-
-    this.platform.warn(message);
+    notifyUserFeedback(this.userFeedbackSink, "warning", message);
   }
 
   private getEnabledHookNotificationEvents(): HookEvent[] {

@@ -57,11 +57,11 @@ plan's own table, this section is newer.
 | Fact                                                              | Value                                                                                                                       |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Direct `show*Message` in reusable code (the parity gap)           | **63** across 12 files (an AST count; the earlier 64/13 included the commented-out call in `WorkspaceSessionManager.ts:62`) |
-| Direct `show*Message` at the VS Code boundary (correctly staying) | **53** across 7 files                                                                                                       |
-| Adapter-mediated host UI (`platform.log/warn/error`)              | **18** — `WorkflowInstance` ×9, `PromptFileParser` ×4, `WorkflowExecutor` ×3, `CliIntegration` ×1, `EndConditionHandler` ×1 |
-| Adapter-mediated `showChoice()`                                   | **1** — `CliIntegration.ts:1381` (was 1394 before Stage A.2 edited the file above it; the plan's 1373 is older still)       |
+| Direct `show*Message` at the VS Code boundary (correctly staying) | **49** across 6 files                                                                                                       |
+| Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                                                 |
+| Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                                             |
 | `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                                      |
-| `MESSAGE_TYPES.USER_FEEDBACK`                                     | **Does not exist** — Phase 1 landed the severity vocabulary and the queue, not the transport                                |
+| `MESSAGE_TYPES.USER_FEEDBACK`                                     | **Shipped** — Phase 2 transport and sink implementations are wired                                                              |
 | `ToastViewport`                                                   | Shipped, mounted, consuming the queue                                                                                       |
 | `src/cli/CliJsonResultBuilder.ts`                                 | **Shipped** — `cli.ts` emits the versioned per-step JSON v1 envelope with clean stdout                                      |
 | Capability registry, analyzer, snapshot, preflight, honest UI     | Shipped (Compatibility Phases 1A–1C)                                                                                        |
@@ -140,7 +140,7 @@ first; the three bugs can land in any order.
 Land the two **shrink-only counters** from
 [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
 Phase 0 items 3 and 6 — the direct `show*Message` counter (baseline 63 reusable
-/ 53 boundary) and the adapter-UI counter (baseline 19).
+/ 49 boundary) and the adapter-UI counter (baseline 19).
 
 This is the one item whose cost rises the longer it waits: it exists to stop the
 migration target growing while the migration runs, so it must precede Stage C.
@@ -148,8 +148,8 @@ migration target growing while the migration runs, so it must precede Stage C.
 **The three baselines were re-verified against `src/` on 2026-08-02; the
 measured numbers below are the committed baselines:**
 
-- **53 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
-  `ScmCommitCommand` 5, `VsCodeAdapter` 4, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
+- **49 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
+  `ScmCommitCommand` 5, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
 - **63 reusable** = `WorkflowCommandHandler` 13, `WorkflowSerializer` 8,
   `McpManagerService` 8, `WorkflowOrchestrator` 7, `TemplateImporter` 7,
   `PromptFileLoader` 5, `WorkflowStepHandlers` 5, `UndoRedoCoordinator` 5,
@@ -315,7 +315,7 @@ may be swapped as a block.
 | 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                            |
 | 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                 |
 | 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage |
-| 12  | C.3   | Migrate all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); delete the five `PlatformAdapter` UI methods and update all impls             |
+| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls |
 | 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                                                        |
 | 14  | C.5   | Execute the triage for the core/orchestration group (32 sites in 4 files)                                                                                                     |
 | 15  | C.6   | Execute the triage for the ui/utils group (31 sites in 8 files)                                                                                                               |
@@ -377,7 +377,19 @@ reality — but it means every step from 12 onward **must edit
 `FEEDBACK_SOURCE_AUDIT_BASELINES` in the same commit that removes call sites**,
 or `npm test` fails on a change that is otherwise correct. Step 12 takes
 `adapterUi` to 0; steps 14 and 15 each lower `directMessage.reusable`. The
-`boundary` baseline of 53 must not move — those sites are staying.
+`boundary` baseline of 49 must not move — those remaining sites are staying.
+
+### Stage C.3 disposition — complete
+
+All 19 adapter-mediated sites remain operational user feedback: workflow load,
+queue, parse, execution-limit, harness-failure, retry-failure, and headless
+permission outcomes are visible outcomes for the person running the workflow,
+not diagnostic-only noise. Their existing `Log.*` calls remain the separate
+diagnostic channel; no `PlatformAdapter` logging meaning was preserved. The
+headless permission warning now emits warning feedback without an inline
+"Don't Show Again" action. The suppression setting remains reachable through
+the dashboard's General settings section (`ui.showHeadlessPermissionWarning`)
+and remains user-editable.
 
 ---
 

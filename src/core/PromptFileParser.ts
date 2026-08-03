@@ -15,6 +15,10 @@ import {
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "./UserFeedbackSink";
 import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   PROMPT_FILE_EXTENSIONS,
@@ -26,7 +30,10 @@ export class PromptFileParser {
   private ajv = new Ajv({ allowUnionTypes: true });
   private promptSchema: any;
 
-  constructor(private readonly platform?: PlatformAdapter) {
+  constructor(
+    private readonly platform?: PlatformAdapter,
+    private readonly userFeedbackSink?: UserFeedbackSink
+  ) {
     this.loadSchemas();
   }
 
@@ -60,11 +67,11 @@ export class PromptFileParser {
       Log.debug("JSON schema loaded successfully");
     } catch (error) {
       Log.error("Failed to load JSON schema:", error);
-      if (this.platform) {
-        this.platform.error("ctrlyoke: Failed to load validation schema");
-      } else {
-        Log.error("ctrlyoke: Failed to load validation schema");
-      }
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "error",
+        "ctrlyoke: Failed to load validation schema"
+      );
     }
   }
 
@@ -110,8 +117,10 @@ export class PromptFileParser {
       return await this.validateAndNormalize(parsed, filePath);
     } catch (error) {
       Log.error(`Failed to parse file ${filePath}:`, error);
-      if (this.platform) {
-        this.platform.error(
+      if (this.userFeedbackSink) {
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          "error",
           `ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
         );
       } else {
@@ -171,8 +180,10 @@ export class PromptFileParser {
       };
     } catch (error) {
       Log.error(`Failed to read markdown prompt file ${filePath}:`, error);
-      if (this.platform) {
-        this.platform.error(
+      if (this.userFeedbackSink) {
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          "error",
           `ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
         );
       } else {
@@ -224,7 +235,9 @@ export class PromptFileParser {
         Log.warn(
           `Prompt file reference not found, using as literal text: "${trimmedPath}"`
         );
-        this.platform?.warn(
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          "warning",
           `ctrlyoke: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
         );
       }

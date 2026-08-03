@@ -42,16 +42,6 @@ export class MockPlatform implements PlatformAdapter {
   getNamedWorkspaceRoots() {
     return [{ name: "root", fsPath: this.workspaceRoot }];
   }
-  log(_message: string): void {}
-  warn(_message: string): void {}
-  error(_message: string): void {}
-  showProgress(_message: string): void {}
-  async showChoice(
-    _message: string,
-    ..._options: string[]
-  ): Promise<string | undefined> {
-    return undefined;
-  }
   getExtensionPath(): string {
     return process.cwd();
   }

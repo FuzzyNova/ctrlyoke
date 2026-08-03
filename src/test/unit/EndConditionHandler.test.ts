@@ -27,10 +27,6 @@ import {
 import type { StatusMessageSeverity } from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
-  choiceCallCount = 0;
-
-  constructor(private readonly choice?: string) {}
-
   getConfig<T>(_key: string, defaultValue: T): T {
     return defaultValue;
   }
@@ -45,19 +41,6 @@ class MockPlatform implements PlatformAdapter {
 
   getNamedWorkspaceRoots() {
     return [{ name: "root", fsPath: process.cwd() }];
-  }
-
-  log(_message: string): void {}
-  warn(_message: string): void {}
-  error(_message: string): void {}
-  showProgress(_message: string): void {}
-
-  async showChoice(
-    _message: string,
-    ..._options: string[]
-  ): Promise<string | undefined> {
-    this.choiceCallCount++;
-    return this.choice;
   }
 
   getExtensionPath(): string {
@@ -204,7 +187,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
@@ -259,7 +241,6 @@ suite("EndConditionHandler", () => {
       new TestEndConditionEvaluator(platform),
       queue,
       () => undefined,
-      platform
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -300,7 +281,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     const transitions: Array<{
       command: string;
@@ -397,7 +377,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => dashboard,
-      platform
     );
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
@@ -430,7 +409,6 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(transitions, [
       { command: WORKFLOW_ATTEMPT_COMMANDS.FAIL, attemptIndex: 0 },
     ]);
-    assert.strictEqual(platform.choiceCallCount, 0);
     assert.deepStrictEqual(dashboardMessages, [
       {
         stepIndex: 0,
@@ -457,7 +435,6 @@ suite("EndConditionHandler", () => {
       new TestEndConditionEvaluator(platform),
       queue,
       () => undefined,
-      platform
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -501,7 +478,6 @@ suite("EndConditionHandler", () => {
       new TestEndConditionEvaluator(platform, [validationFailure("final")]),
       queue,
       () => undefined,
-      platform
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -538,7 +514,6 @@ suite("EndConditionHandler", () => {
       new TestEndConditionEvaluator(platform),
       queue,
       () => undefined,
-      platform
     );
     const transitions: string[] = [];
 
@@ -566,7 +541,6 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(result.shouldContinue, true);
     assert.deepStrictEqual(transitions, [WORKFLOW_ATTEMPT_COMMANDS.COMPLETE]);
-    assert.strictEqual(platform.choiceCallCount, 0);
   });
 
   test("aborts retries when the runtime is stopped before queue state sync catches up", async () => {
@@ -582,7 +556,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     let retryCallbackCount = 0;
 
@@ -636,7 +609,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => dashboard,
-      platform
     );
     const transitions: string[] = [];
 
@@ -698,7 +670,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     const retryPrompts: string[] = [];
 
@@ -743,7 +714,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -785,7 +755,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     const retryAttempts: number[] = [];
     const maxRetries: number[] = [];
@@ -829,7 +798,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     let retryCallbackCount = 0;
 
@@ -876,7 +844,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     const retryPrompts: string[] = [];
 
@@ -921,7 +888,6 @@ suite("EndConditionHandler", () => {
       evaluator,
       queue,
       () => undefined,
-      platform
     );
     let retryPromptText = "";
 
@@ -965,7 +931,6 @@ suite("EndConditionHandler", () => {
       new TestEndConditionEvaluator(platform, [successResult()]),
       queue,
       () => undefined,
-      platform
     );
     let fallbackText = "";
     await fallbackHandler.handleEndConditionResult(

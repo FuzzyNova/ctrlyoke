@@ -123,36 +123,6 @@ export class CliAdapter implements PlatformAdapter {
     return [{ name: path.basename(fsPath), fsPath }];
   }
 
-  log(message: string): void {
-    if (!this.config.quiet) {
-      console.log(message);
-    }
-  }
-
-  warn(message: string): void {
-    if (!this.config.quiet) {
-      console.warn(`⚠ ${message}`);
-    }
-  }
-
-  error(message: string): void {
-    console.error(`✗ ${message}`);
-  }
-
-  showProgress(message: string): void {
-    if (!this.config.quiet && !this.config.json) {
-      process.stdout.write(`\r${message}`);
-    }
-  }
-
-  async showChoice(
-    _message: string,
-    ..._options: string[]
-  ): Promise<string | undefined> {
-    // In headless mode (CI/CD), choices cannot be presented — return undefined
-    return undefined;
-  }
-
   getExtensionPath(): string {
     // Match VS Code's `context.extensionPath` contract: return package root.
     // In the bundled CLI this file lives under `<root>/out/cli.js`, so climb one level.

@@ -6,7 +6,9 @@
  * "vscode" to this file in esbuild's CLI config, all vscode imports compile
  * cleanly and the APIs degrade gracefully:
  *
- *  - UI APIs (showMessage, createTerminal) are no-ops or return undefined
+ *  - Direct UI APIs used by shared code (showMessage, createTerminal) are
+ *    no-ops or return undefined; operational feedback is injected separately
+ *    through UserFeedbackSink.
  *  - workspace.getConfiguration() returns defaults for every key (or delegate to
  *    the registered CliAdapter so CLI flags reach ConfigurationUtils callers)
  *  - workspace.fs and openTextDocument delegate to Node.js fs
