@@ -315,10 +315,10 @@ may be swapped as a block.
 | 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                            |
 | 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                                                                                |
 | 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast                                                                   |
-| 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls                                                             |
+| 12  | C.3   | Migrate all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); delete the five `PlatformAdapter` UI methods and update all impls              |
 | 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                                                        |
-| 14  | C.5   | Execute the triage: deletions and scoped-reply conversions                                                                                                                    |
-| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1381` "don't show again" (Phase 2.5 Site 3)                                                                           |
+| 14  | C.5   | Execute the triage for the core/orchestration group (32 sites in 4 files)                                                                                                     |
+| 15  | C.6   | Execute the triage for the ui/utils group (31 sites in 8 files)                                                                                                               |
 | 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                  |
 | 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                  |
 | 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                                                                                   |
@@ -337,6 +337,47 @@ Step 13 is deliberately its own step. The plan is explicit that porting all
 sites is the wrong default and that a meaningful fraction should be deleted;
 triage is the work that decides how large steps 14 and 15 actually are, and it
 is worth having reviewed before either of them starts.
+
+**Stage C was corrected on 2026-08-02 before queueing, on three points.**
+
+1. **Steps 12 and 15 both claimed `CliIntegration`'s `showChoice`.** Step 12
+   deletes `showChoice` from `PlatformAdapter`; step 15 owned its only surviving
+   caller. Step 12 cannot land with the caller unmigrated, so Phase 2.5 Site 3
+   moved into step 12 and step 15 is now purely triage execution. The
+   suppression flag that site needs already exists
+   (`ConfigurationUtils.shouldShowHeadlessPermissionWarning()` /
+   `setShowHeadlessPermissionWarning()`), so the migration is a feedback
+   emission, not new persistence.
+2. **Steps 14 and 15 were re-split by file group, not by disposition class.**
+   Splitting "deletions + scoped replies" from "broadcast ports" means almost
+   every one of the 12 files gets edited twice by two sessions that each hold
+   half the triage — `WorkflowCommandHandler` alone has 13 sites that would span
+   both. Splitting by file lets each file be finished once: step 14 takes
+   `WorkflowCommandHandler` (13), `TemplateImporter` (7), `WorkflowOrchestrator`
+   (7), `PromptFileLoader` (5); step 15 takes `McpManagerService` (8),
+   `WorkflowSerializer` (8), `UndoRedoCoordinator` (5), `WorkflowStepHandlers`
+   (5), `TerminalMessageHandlers` (2), and one each in
+   `PromptEditorSupportService`, `WorkflowMutationCoordinator`,
+   `FileSystemUtils`.
+3. **The three baselines were re-measured by AST on 2026-08-02 and are
+   unchanged** — still exactly 53 / 63 / 19, so the numbers committed in Stage
+   A.1 need no revision before Stage C starts. Note that an AST scan reports
+   `CliIntegration`'s `showChoice` at **1380**, the start of the call expression
+   (`this.platform`), while the plan cites **1381**, where `.showChoice(`
+   textually sits. Both are correct; the split-line form is the reason this
+   counter cannot be a line-oriented `grep`, as noted under A.1.
+
+### The Stage A.1 counters fail on shrink, not just growth
+
+`assertShrinkOnly` in `src/test/unit/SourceAuditCounters.test.ts` throws in
+**both** directions: a count below the committed baseline is as much a failure as
+one above it, and the message tells you to lower the baseline. This is
+deliberate — it keeps the baseline honest rather than letting it drift above
+reality — but it means every step from 12 onward **must edit
+`FEEDBACK_SOURCE_AUDIT_BASELINES` in the same commit that removes call sites**,
+or `npm test` fails on a change that is otherwise correct. Step 12 takes
+`adapterUi` to 0; steps 14 and 15 each lower `directMessage.reusable`. The
+`boundary` baseline of 53 must not move — those sites are staying.
 
 ---
 

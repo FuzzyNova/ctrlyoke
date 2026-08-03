@@ -535,6 +535,17 @@ per-site disposition; the remaining ~41 sites are unclassified. Expect the
 `vscode` and adapter-UI baselines from Stage 0 to fall partly through deletion
 rather than migration.
 
+**Execute the triage file by file, not class by class.** The disposition classes
+cut across files — `WorkflowCommandHandler` alone has 13 sites that will land in
+several classes — so migrating "all the deletions", then "all the broadcasts",
+edits most of the 12 files twice from two sessions each holding half the plan.
+Grouping by file finishes each one once and keeps the diff reviewable.
+
+**Lower the Stage 0 baselines in the same commit.** `assertShrinkOnly` in
+`src/test/unit/SourceAuditCounters.test.ts` fails when a count drops below its
+committed baseline just as loudly as when it grows, so a correct migration that
+leaves `FEEDBACK_SOURCE_AUDIT_BASELINES` untouched breaks `npm test`.
+
 1. Add `MESSAGE_TYPES.USER_FEEDBACK` and its shared payload type.
 2. Add the browser handler.
 3. Add the feedback sink contract and VS Code/console/WebSocket
@@ -617,6 +628,17 @@ separately; it is not required to close this gap.
 A "don't show again" harness warning. Not execution-blocking and not
 policy-contradicting. Migrate normally as feedback plus a persisted
 suppression flag.
+
+**The suppression flag already exists** — `warnIfHeadlessWithoutPermissions()`
+gates on `ConfigurationUtils.shouldShowHeadlessPermissionWarning()` and the
+dialog's only effect is `setShowHeadlessPermissionWarning(false)`. So this is a
+feedback emission, not new persistence, and the setting stays reachable through
+the settings UI once the inline action is gone.
+
+**Migrate it in the same step that deletes `showChoice` from `PlatformAdapter`**
+(staging step 12), not later. It is that method's only surviving caller, so the
+deletion and this migration are one change, and splitting them leaves an
+uncompilable intermediate state.
 
 #### Why this is the better outcome
 
