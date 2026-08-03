@@ -611,6 +611,14 @@ export class EndConditionEvaluator {
         env: cleanEnv,
         onStdout: onOutput,
         shell: viaShell,
+        // Pre/end-condition and headless script-step execution never wires up
+        // user input (interactive script steps use a separate PTY path), but
+        // an "ignore" (NUL-bound) stdin can cause tools spawned deep in the
+        // process tree — e.g. Vitest's worker pool when the script is a
+        // multi-stage npm command — to misbehave on Windows. A "pipe" stdin
+        // that nothing ever writes to is behaviorally equivalent for scripts
+        // (no input arrives either way) without handing them a closed handle.
+        stdin: "pipe",
       });
 
       return {

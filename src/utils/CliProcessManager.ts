@@ -11,6 +11,17 @@ export interface SpawnOptions {
   shell?: boolean | string;
   env?: NodeJS.ProcessEnv;
   /**
+   * stdin behavior for the spawned process. Defaults to "ignore" (bound to
+   * NUL/dev-null), which is required for AI-CLI harness invocations that may
+   * probe or read stdin in headless mode — an open-but-unwritten pipe would
+   * leave them blocked waiting for input that never arrives. Headless script
+   * and end-condition execution (which never expects or wires up user input;
+   * interactive script steps use a separate PTY path) should pass "pipe"
+   * instead, since some shells/tools misbehave when a descendant process
+   * expects stdin to exist as a real (non-NUL) handle.
+   */
+  stdin?: "ignore" | "pipe";
+  /**
    * Set when `args` is already a cmd.exe-escaped verbatim payload (see
    * `CliResolvedCommand.requiresShellVerbatimArgs` /
    * `WindowsCmdEscaping.buildCmdExeVerbatimArgs`) so Node does not apply a
@@ -75,7 +86,7 @@ export class CliProcessManager {
       const child = spawn(command, args, {
         cwd: options.cwd || this.workspaceRoot,
         shell: options.shell ?? false,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: [options.stdin ?? "ignore", "pipe", "pipe"],
         env: options.env || { ...process.env },
         // The extension host is a GUI process, so Windows creates a visible
         // console for cmd.exe/PowerShell launchers unless it is explicitly
