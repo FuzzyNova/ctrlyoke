@@ -30,6 +30,7 @@ import {
   type ExecutionPhase,
   type UndoFileAction,
   type CompletionNotificationSeverity,
+  type UserFeedbackSeverity,
   type HookEvent,
   type NotificationKind,
   type SettingScope,
@@ -1117,6 +1118,16 @@ export interface NotificationEventMessage {
   event: CompletionNotificationEventPayload;
 }
 
+/** Extension/hosted server -> Webview: transient operational feedback. */
+export interface UserFeedbackMessage {
+  type: typeof MESSAGE_TYPES.USER_FEEDBACK;
+  id: string;
+  severity: UserFeedbackSeverity;
+  message: string;
+  detail?: string;
+  dedupeKey?: string;
+}
+
 export interface SearchHistoryMessage extends Partial<HistorySearchQuery> {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY;
   query: string;
@@ -1889,6 +1900,7 @@ export type IncomingMessage =
   | GlobalSettingsLoadedMessage
   | GlobalSettingUpdatedMessage
   | NotificationEventMessage
+  | UserFeedbackMessage
   | DevStatusMessage
   | DevBuildStartedMessage
   | DevBuildOutputMessage

@@ -863,6 +863,75 @@ describe("NOTIFICATION_EVENT", () => {
 });
 
 // ---------------------------------------------------------------------------
+// USER_FEEDBACK
+// ---------------------------------------------------------------------------
+
+describe("USER_FEEDBACK", () => {
+  it("enqueues operational feedback in both standalone and panel modes", () => {
+    const feedback = {
+      id: "feedback-1",
+      severity: USER_FEEDBACK_SEVERITY.SUCCESS,
+      message: "Workflow saved",
+    };
+
+    for (const standalone of [true, false]) {
+      useUiStore.getState().clearToasts();
+      act(() => {
+        createMessageHandlers(standalone)[MESSAGE_TYPES.USER_FEEDBACK](
+          feedback
+        );
+      });
+
+      expect(useUiStore.getState().toastQueue).toHaveLength(1);
+      expect(useUiStore.getState().toastQueue[0]).toEqual(
+        expect.objectContaining(feedback)
+      );
+    }
+  });
+
+  it("maps severity and passes through detail and dedupeKey", () => {
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.USER_FEEDBACK]({
+        id: "feedback-2",
+        severity: USER_FEEDBACK_SEVERITY.ERROR,
+        message: "Workflow failed",
+        detail: "The end condition failed.",
+        dedupeKey: "workflow-failed",
+      });
+    });
+
+    expect(useUiStore.getState().toastQueue[0]).toMatchObject({
+      id: "feedback-2",
+      message: "Workflow failed",
+      severity: USER_FEEDBACK_SEVERITY.ERROR,
+      detail: "The end condition failed.",
+      dedupeKey: "workflow-failed",
+    });
+  });
+
+  it.each([
+    {},
+    { id: "feedback-2", severity: USER_FEEDBACK_SEVERITY.INFO },
+    {
+      id: "feedback-3",
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+      message: 42,
+    },
+    {
+      id: "feedback-4",
+      severity: "unknown",
+      message: "invalid severity",
+    },
+  ])("ignores malformed payload %#", (payload) => {
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.USER_FEEDBACK](payload);
+    });
+
+    expect(useUiStore.getState().toastQueue).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // OPEN_HARNESS_DIR_RESULT
 // ---------------------------------------------------------------------------
 

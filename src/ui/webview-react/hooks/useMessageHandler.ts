@@ -69,8 +69,12 @@ import {
   COMPLETION_NOTIFICATION_SEVERITY,
   NOTIFICATION_KINDS,
   USER_FEEDBACK_SEVERITY,
+  type UserFeedbackSeverity,
 } from "@root/types/DashboardConstants";
-import type { CompletionNotificationEventPayload } from "@root/types/WebviewMessageTypes";
+import type {
+  CompletionNotificationEventPayload,
+  UserFeedbackMessage,
+} from "@root/types/WebviewMessageTypes";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
@@ -101,6 +105,23 @@ function isCompletionNotificationEvent(
     (event.severity === COMPLETION_NOTIFICATION_SEVERITY.INFO ||
       event.severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING ||
       event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR)
+  );
+}
+
+function isUserFeedbackMessage(value: unknown): value is UserFeedbackMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const feedback = value as Record<string, unknown>;
+  const validSeverity = Object.values(USER_FEEDBACK_SEVERITY).includes(
+    feedback.severity as UserFeedbackSeverity
+  );
+  return (
+    typeof feedback.id === "string" &&
+    typeof feedback.message === "string" &&
+    validSeverity &&
+    (feedback.detail === undefined || typeof feedback.detail === "string") &&
+    (feedback.dedupeKey === undefined || typeof feedback.dedupeKey === "string")
   );
 }
 
@@ -1053,6 +1074,20 @@ export function createMessageHandlers(
       message.event,
       useSettingsStore.getState().fullGlobalSettings
     );
+  };
+
+  handlers[MESSAGE_TYPES.USER_FEEDBACK] = (message) => {
+    if (!isUserFeedbackMessage(message)) {
+      return;
+    }
+
+    useUiStore.getState().enqueueToast({
+      id: message.id,
+      message: message.message,
+      severity: message.severity,
+      detail: message.detail,
+      dedupeKey: message.dedupeKey,
+    });
   };
 
   // --------------------------------------------------------------------------

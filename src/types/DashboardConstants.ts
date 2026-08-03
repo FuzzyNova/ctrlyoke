@@ -379,6 +379,8 @@ export const MESSAGE_TYPES = {
   BROWSER_NOTIFICATION_PERMISSION_RESULT: "browserNotificationPermissionResult",
   /** Extension/Hosted server -> Webview: structured completion notification event */
   NOTIFICATION_EVENT: "notificationEvent",
+  /** Extension/Hosted server -> Webview: operational user feedback */
+  USER_FEEDBACK: "userFeedback",
 } as const;
 
 // ============================================================================
