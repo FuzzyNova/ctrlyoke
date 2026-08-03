@@ -25,6 +25,37 @@ interface GetCliVersionOptions extends CliVersionCommandOptions {
 }
 
 /**
+ * Shares a successful asynchronous lookup while allowing failures to be retried.
+ *
+ * CLI installation/version checks are called by both detector integrations and
+ * capability consumers. Keeping a rejected promise would make a newly installed
+ * CLI appear unavailable for the rest of the extension-host session, so only
+ * successful results are retained.
+ */
+export class RetryableAsyncCache<T> {
+  private readonly entries = new Map<string, Promise<T>>();
+
+  async getOrRun(key: string, operation: () => Promise<T>): Promise<T> {
+    const cached = this.entries.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const result = operation();
+    this.entries.set(key, result);
+
+    try {
+      return await result;
+    } catch (error) {
+      if (this.entries.get(key) === result) {
+        this.entries.delete(key);
+      }
+      throw error;
+    }
+  }
+}
+
+/**
  * Per-harness formatting knobs for {@link CliProviderUtils.buildSettingsJsonMcpEntries}.
  *
  * Defaults reproduce Qwen output (`url` + `type` for remote servers,
@@ -55,6 +86,14 @@ export interface SettingsJsonMcpEntryOptions {
  */
 export class CliProviderUtils {
   /**
+   * One extension-host session needs only one successful `--version` probe per
+   * command. The cache also coalesces simultaneous detector and capability
+   * checks while their process is still running.
+   */
+  private static readonly versionCommandCache =
+    new RetryableAsyncCache<string>();
+
+  /**
    * Execute a CLI version command through the same launcher resolution path used
    * for runtime prompt execution.
    */
@@ -81,28 +120,33 @@ export class CliProviderUtils {
       return typeof stdout === "string" ? stdout.trim() : String(stdout).trim();
     };
 
-    if (!options.retryWindowsFileLockErrors) {
-      return execute();
-    }
-
-    const result = await retryWithBackoff(
+    return CliProviderUtils.versionCommandCache.getOrRun(
+      versionCommand,
       async () => {
-        try {
-          return await execute();
-        } catch (error) {
-          if (String(error).includes(WINDOWS_FILE_LOCK_ERROR)) {
-            return null;
-          }
-          throw error;
+        if (!options.retryWindowsFileLockErrors) {
+          return execute();
         }
-      },
-      { maxAttempts: 4, delays: [200, 500, 1000] }
-    );
 
-    if (result === undefined) {
-      throw new Error(`Version command failed: ${versionCommand}`);
-    }
-    return result;
+        const result = await retryWithBackoff(
+          async () => {
+            try {
+              return await execute();
+            } catch (error) {
+              if (String(error).includes(WINDOWS_FILE_LOCK_ERROR)) {
+                return null;
+              }
+              throw error;
+            }
+          },
+          { maxAttempts: 4, delays: [200, 500, 1000] }
+        );
+
+        if (result === undefined) {
+          throw new Error(`Version command failed: ${versionCommand}`);
+        }
+        return result;
+      }
+    );
   }
 
   /**
