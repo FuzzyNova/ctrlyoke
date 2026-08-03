@@ -21,9 +21,10 @@ import type {
   QueueState,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import type {
-  RunAttemptProjection,
-  RunOutputProjection,
+import {
+  queueTargetKey,
+  type RunAttemptProjection,
+  type RunOutputProjection,
 } from "../../core/orchestration/RunOutputResolver";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
@@ -68,7 +69,7 @@ suite("CliJsonResultBuilder", () => {
     const output = build({
       steps: [step],
       results: [result],
-      outputProjection: projectionMap([["queue:0", projection]]),
+      outputProjection: projectionMap([[queueTargetKey(0), projection]]),
       promptFile: { steps: [step], vars: { repoPath: "secret-value" } },
     });
 
@@ -129,7 +130,7 @@ suite("CliJsonResultBuilder", () => {
       status: EXECUTION_STATES.ERROR,
       outputProjection: projectionMap([
         [
-          "queue:0",
+          queueTargetKey(0),
           attemptProjection(0, {
             attempts: 2,
             startReason: TIMELINE_ATTEMPT_START_REASONS.RETRY,
@@ -213,7 +214,7 @@ suite("CliJsonResultBuilder", () => {
     const output = build({
       steps: [step],
       results: [promptResult(step, STEP_STATUS.COMPLETED)],
-      outputProjection: projectionMap([["queue:0", projection]]),
+      outputProjection: projectionMap([[queueTargetKey(0), projection]]),
       promptFile: { steps: [step] },
     });
 
@@ -305,7 +306,7 @@ suite("CliJsonResultBuilder", () => {
     const output = build({
       steps: [step],
       results: [promptResult(step, STEP_STATUS.COMPLETED)],
-      outputProjection: projectionMap([["queue:0", projection]]),
+      outputProjection: projectionMap([[queueTargetKey(0), projection]]),
       promptFile: { steps: [step] },
     });
     assert.deepStrictEqual(output.steps[0].filesChanged, [

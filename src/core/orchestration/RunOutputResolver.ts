@@ -1136,9 +1136,20 @@ function toPortableRelativePath(root: string, candidate: string): string {
   return path.relative(root, candidate).replace(/\\/g, "/");
 }
 
+/**
+ * The one producer of `RunOutputProjection.targets` keys. Exported because
+ * consumers outside this module (notably `CliJsonResultBuilder`) must look
+ * entries up by the same format — a hand-built `queue:${index}` literal on the
+ * reader side silently degrades to a miss if this ever changes, yielding
+ * `attempts: 0` and empty file lists instead of an error.
+ */
+export function queueTargetKey(stepIndex: number): string {
+  return `queue:${stepIndex}`;
+}
+
 function getTargetKey(target: OutputExecutionTarget): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `queue:${target.stepIndex}`
+    ? queueTargetKey(target.stepIndex)
     : `final:${target.loopIndex}`;
 }
 

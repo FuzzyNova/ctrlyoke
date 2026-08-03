@@ -23,10 +23,11 @@ import type {
   WorkflowKey,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import type {
-  RunAttemptProjection,
-  RunFileChangeProjection,
-  RunOutputProjection,
+import {
+  queueTargetKey,
+  type RunAttemptProjection,
+  type RunFileChangeProjection,
+  type RunOutputProjection,
 } from "../core/orchestration/RunOutputResolver";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
@@ -209,7 +210,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
       state.results[index],
       index,
       input,
-      input.outputProjection?.targets.get(`queue:${index}`)
+      input.outputProjection?.targets.get(queueTargetKey(index))
     )
   );
   const finalStep = buildFinalStep(
