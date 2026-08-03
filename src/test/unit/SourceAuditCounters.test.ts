@@ -164,7 +164,11 @@ function assertShrinkOnly(
 suite("source audit counters", () => {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
-  test("holds the direct show*Message boundary and reusable baselines", () => {
+  test("holds the direct show*Message boundary and reusable baselines", function () {
+    // Full-repo TypeScript AST parse; default 2000ms mocha timeout is too
+    // tight under CPU contention (e.g. running as a ctrlyoke script step
+    // while the extension host is also busy orchestrating the workflow).
+    this.timeout(10_000);
     const sites = collectCallSites(repoRoot, isVscodeWindowMessageCall);
     const boundaryFiles =
       FEEDBACK_SOURCE_AUDIT_BASELINES.directMessage.boundaryFiles;
@@ -191,7 +195,8 @@ suite("source audit counters", () => {
     );
   });
 
-  test("holds the adapter-mediated host UI baseline", () => {
+  test("holds the adapter-mediated host UI baseline", function () {
+    this.timeout(10_000);
     const sites = collectCallSites(repoRoot, isAdapterUiCall);
     assertShrinkOnly(
       "Adapter-mediated host UI",

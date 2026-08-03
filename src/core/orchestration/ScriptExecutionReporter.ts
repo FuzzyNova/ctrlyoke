@@ -75,12 +75,29 @@ export interface ScriptExecutionReportRequest {
   evaluate?: (onOutput: (chunk: string) => void) => Promise<EvaluationResult>;
 }
 
+/** Cap on how much of a raw error gets folded into the one-line verdict summary. */
+const MAX_STATUS_SUMMARY_ERROR_CHARS = 160;
+
+/**
+ * Collapses a raw error/stderr blob into a single-line, sanitized excerpt.
+ * The full text is already shown in the script's own output above the
+ * summary row, so this only needs to convey why it failed.
+ */
+function summarizeStatusError(error: string): string {
+  const collapsed = sanitizeTerminalOutput(error)
+    .replace(/\s+/g, " ")
+    .trim();
+  return collapsed.length > MAX_STATUS_SUMMARY_ERROR_CHARS
+    ? `${collapsed.slice(0, MAX_STATUS_SUMMARY_ERROR_CHARS)}…`
+    : collapsed;
+}
+
 export function formatVerdictSummary(
   label: string,
   verdict: ScriptVerdict
 ): string {
   const comparison = verdict.error
-    ? verdict.error
+    ? summarizeStatusError(verdict.error)
     : verdict.timedOut
       ? "timed out"
       : verdict.actualSource === "exitCode"

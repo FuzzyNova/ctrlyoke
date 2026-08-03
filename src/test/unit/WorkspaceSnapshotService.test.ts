@@ -147,7 +147,10 @@ suite("WorkspaceSnapshotService", () => {
     assert.ok(createdChange?.afterHash);
   });
 
-  test("detects files deleted and committed mid-prompt leaving a clean tree on both sides", async () => {
+  test("detects files deleted and committed mid-prompt leaving a clean tree on both sides", async function () {
+    // Git-backed snapshot tests can exceed Mocha's default while the full
+    // extension host suite is probing installed harness CLIs in parallel.
+    this.timeout(10_000);
     const beforeState = await snapshotService.captureWorkspaceState(
       workspaceRoot,
       SNAPSHOT_STRATEGIES.GIT
