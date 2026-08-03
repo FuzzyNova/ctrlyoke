@@ -6,7 +6,14 @@ import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
 import { gitRefExists } from "../../utils/GitUtils";
 
-suite("GitUtils.gitRefExists", () => {
+suite("GitUtils.gitRefExists", function () {
+  // Setup shells out to real git (init/config/commit) via execFileSync.
+  // `this.timeout()` in a test callback only extends that test's own
+  // runnable, not the "before each" hook ahead of it, so the timeout needs
+  // to be set at suite level to keep `setup` from timing out while the full
+  // extension host suite is probing installed harness CLIs in parallel.
+  this.timeout(10_000);
+
   let workspaceRoot: string;
 
   function runGit(args: string[]): string {
@@ -37,7 +44,14 @@ suite("GitUtils.gitRefExists", () => {
   });
 
   teardown(async () => {
-    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    // Windows can hold transient locks on git pack files (which are also
+    // read-only), causing EBUSY/EPERM. maxRetries makes rm retry those.
+    await fs.rm(workspaceRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50,
+    });
   });
 
   test("reports the diff pseudo-ref as missing when the tree is clean", async () => {

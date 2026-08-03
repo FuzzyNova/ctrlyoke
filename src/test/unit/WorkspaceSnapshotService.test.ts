@@ -10,7 +10,15 @@ import {
   UNDO_FILE_ACTIONS,
 } from "../../types/DashboardConstants";
 
-suite("WorkspaceSnapshotService", () => {
+suite("WorkspaceSnapshotService", function () {
+  // Git-backed snapshot tests shell out to real git (init/config/commit) in
+  // `setup`, not just in test bodies. `this.timeout()` inside a single test
+  // callback only extends that test's own runnable — it does not cover the
+  // "before each" hook that runs ahead of it — so the suite-level timeout is
+  // needed to keep `setup` from timing out while the full extension host
+  // suite is probing installed harness CLIs in parallel.
+  this.timeout(10_000);
+
   let workspaceRoot: string;
   let snapshotService: WorkspaceSnapshotService;
 
@@ -47,7 +55,14 @@ suite("WorkspaceSnapshotService", () => {
   });
 
   teardown(async () => {
-    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    // Windows can hold transient locks on git pack files (which are also
+    // read-only), causing EBUSY/EPERM. maxRetries makes rm retry those.
+    await fs.rm(workspaceRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50,
+    });
   });
 
   test("ignores files that were already dirty and only became clean because they were committed", async () => {
@@ -147,10 +162,7 @@ suite("WorkspaceSnapshotService", () => {
     assert.ok(createdChange?.afterHash);
   });
 
-  test("detects files deleted and committed mid-prompt leaving a clean tree on both sides", async function () {
-    // Git-backed snapshot tests can exceed Mocha's default while the full
-    // extension host suite is probing installed harness CLIs in parallel.
-    this.timeout(10_000);
+  test("detects files deleted and committed mid-prompt leaving a clean tree on both sides", async () => {
     const beforeState = await snapshotService.captureWorkspaceState(
       workspaceRoot,
       SNAPSHOT_STRATEGIES.GIT
@@ -236,7 +248,9 @@ suite("WorkspaceSnapshotService", () => {
 
 // ── Multi-root (multiple repos) ─────────────────────────────────────────────
 
-suite("WorkspaceSnapshotService — multi-root", () => {
+suite("WorkspaceSnapshotService — multi-root", function () {
+  this.timeout(10_000);
+
   const tempDirs: string[] = [];
   let snapshotService: WorkspaceSnapshotService;
 
@@ -262,7 +276,12 @@ suite("WorkspaceSnapshotService — multi-root", () => {
 
   teardown(async () => {
     for (const dir of tempDirs.splice(0)) {
-      await fs.rm(dir, { recursive: true, force: true });
+      await fs.rm(dir, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 50,
+      });
     }
   });
 
