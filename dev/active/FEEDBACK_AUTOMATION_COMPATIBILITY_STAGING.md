@@ -273,7 +273,7 @@ execute once, and update both plans when it lands.
 
 ### Stage F — Browser feedback Phase 4
 
-Interactive choices: the 7 surviving action-bearing sites and the
+Interactive choices: the 6 surviving action-bearing sites and the
 `USER_INTERACTION_REQUEST` correlation contract.
 
 ### Stage G — Compatibility Phase 3, and the deferred remainder
@@ -316,12 +316,12 @@ may be swapped as a block.
 | 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                 |
 | 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage |
 | 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls |
-| 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                                                        |
+| 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration |
 | 14  | C.5   | Execute the triage for the core/orchestration group (32 sites in 4 files)                                                                                                     |
 | 15  | C.6   | Execute the triage for the ui/utils group (31 sites in 8 files)                                                                                                               |
 | 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                  |
 | 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                  |
-| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                                                                                   |
+| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                          |
 | 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                                                       |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
@@ -333,10 +333,10 @@ contracts-before-consumers rule. The plan's §5 test list was also folded into t
 steps that introduce each behavior, freeing step 9 to be the live end-to-end run
 that mocks cannot substitute for.
 
-Step 13 is deliberately its own step. The plan is explicit that porting all
+Step 13 was deliberately its own step. The plan is explicit that porting all
 sites is the wrong default and that a meaningful fraction should be deleted;
-triage is the work that decides how large steps 14 and 15 actually are, and it
-is worth having reviewed before either of them starts.
+the completed C.4 table now fixes the exact work for steps 14 and 15 before
+either implementation session starts.
 
 **Stage C was corrected on 2026-08-02 before queueing, on three points.**
 
@@ -360,7 +360,7 @@ is worth having reviewed before either of them starts.
    `PromptEditorSupportService`, `WorkflowMutationCoordinator`,
    `FileSystemUtils`.
 3. **The three baselines were re-measured by AST on 2026-08-02 and are
-   unchanged** — still exactly 53 / 63 / 19, so the numbers committed in Stage
+   unchanged** — still exactly 49 boundary / 63 reusable / 0 adapter-UI, so the numbers committed in Stage
    A.1 need no revision before Stage C starts. Note that an AST scan reports
    `CliIntegration`'s `showChoice` at **1380**, the start of the call expression
    (`this.platform`), while the plan cites **1381**, where `.showChoice(`
@@ -450,15 +450,14 @@ it once and update both plans.
 
 ### Browser feedback Phase 4 — interactive choices (Stage F)
 
-The 7 reusable action-bearing messages (template overwrite, post-import,
-post-script-create, retry harness automation, duplicate-running-workflow,
-post-workspace-init, clear-all-workflows) get a correlated
+The 6 surviving reusable action-bearing messages (template overwrite,
+post-import, post-script-create, retry harness automation, post-workspace-init,
+clear-all-workflows) get a correlated
 `USER_INTERACTION_REQUEST` contract: the browser returns only a request ID and a
 choice ID, the host owns what the choice means. Requires timeout, dismissal, and
 disconnect handling, a defined headless fallback per interaction, and rejection
-of duplicate/expired responses. The duplicate-running-workflow site should be
-re-tested against the policy-conflict rule first — it may be a deletion rather
-than a migration, like the two end-condition dialogs were.
+of duplicate/expired responses. The duplicate-running-workflow site was deleted
+in C.4 as a policy conflict and is no longer in Stage F's scope.
 
 ### Compatibility Phase 2 — unblocked legs (Stage D)
 
