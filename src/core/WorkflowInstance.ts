@@ -80,10 +80,7 @@ import {
 } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
-import {
-  notifyUserFeedback,
-  type UserFeedbackSink,
-} from "./UserFeedbackSink";
+import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
@@ -385,7 +382,8 @@ export class WorkflowInstance {
       this.promptQueue,
       () => this.dashboardSink,
       (workflow) => this.analyzeWorkflowCompatibility(workflow),
-      (diagnostics) => this.reportCompatibilityDiagnostics(diagnostics)
+      (diagnostics) => this.reportCompatibilityDiagnostics(diagnostics),
+      this.userFeedbackSink
     );
     this.promptFileWatcher = new PromptFileWatcher(
       this.promptQueue,

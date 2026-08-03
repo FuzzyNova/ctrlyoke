@@ -185,6 +185,35 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
   });
 });
 
+suite("WorkflowOrchestrator duplicate workflow policy", () => {
+  test("reuses a running instance without prompting for a conflicting choice", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const existing = {
+      id: "existing-instance",
+      filePath: "workflow.ctrlyoke.yaml",
+      getQueueState: () => ({ status: EXECUTION_STATES.RUNNING }),
+    };
+    const replayed: string[] = [];
+
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.instances = new Map([[existing.id, existing]]);
+    internal.retiredInstances = new Map();
+    internal.getViewedWorkflowId = () => undefined;
+    internal.storedPanelSend = undefined;
+    internal.replayWorkflowStateTo = async (workflowId: string) => {
+      replayed.push(workflowId);
+    };
+
+    const result = await internal.createWorkflow(existing.filePath);
+
+    assert.strictEqual(result, existing);
+    assert.deepStrictEqual(replayed, [existing.id]);
+  });
+});
+
 /**
  * The startup auto-load is deferred behind `initialize()`, which on a real
  * workspace can take 15s+ (six harness version probes, model discovery, prompt

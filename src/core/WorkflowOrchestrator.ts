@@ -46,6 +46,7 @@ import {
   STEP_STATUS,
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
+  USER_FEEDBACK_SEVERITY,
   type HarnessId,
   type QueuePosition,
   type ActionType,
@@ -90,6 +91,7 @@ import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
+import { notifyUserFeedback } from "./UserFeedbackSink";
 import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import {
   DashboardBroadcastHub,
@@ -410,14 +412,20 @@ export class WorkflowOrchestrator {
       this.promptFileParser,
       new VsCodeAdapter(context)
     );
-    this.templateImporter = new TemplateImporter(context);
+    this.templateImporter = new TemplateImporter(
+      context,
+      undefined,
+      this.userFeedbackSink
+    );
     this.endConditionEvaluatorForCommands = new EndConditionEvaluator(
       new VsCodeAdapter(context)
     );
     this.workflowCommandHandler = new WorkflowCommandHandler(
       context,
       this.promptFileParser,
-      this.endConditionEvaluatorForCommands
+      this.endConditionEvaluatorForCommands,
+      undefined,
+      this.userFeedbackSink
     );
 
     this.templateImporter.setWorkspaceFolder(this.currentWorkspaceFolder);
@@ -517,21 +525,16 @@ export class WorkflowOrchestrator {
           Log.info(
             `createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
           );
-          const choice = await vscode.window.showInformationMessage(
-            `This workflow is already running and ${existingStatus}. Switch to it or create a new instance?`,
-            "Switch to Existing",
-            "Create New Instance"
+          // The running-instance policy is to reuse the existing workflow.
+          // Keep this safe default explicit now that the native choice prompt
+          // is no longer allowed to override it from a shared core path.
+          const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+          await this.replayWorkflowStateTo(
+            existing.id,
+            panelSend,
+            this.PANEL_CLIENT_ID
           );
-          if (choice === "Switch to Existing" || choice === undefined) {
-            const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-            await this.replayWorkflowStateTo(
-              existing.id,
-              panelSend,
-              this.PANEL_CLIENT_ID
-            );
-            return existing;
-          }
-          // Fall through to create new instance
+          return existing;
         }
       }
     }
@@ -1177,7 +1180,9 @@ export class WorkflowOrchestrator {
     } catch (error) {
       this.orchestratorInitialized = true;
       Log.error("Failed to initialize WorkflowOrchestrator:", error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Initialization failed: ${error}`
       );
     }
@@ -4405,7 +4410,11 @@ export class WorkflowOrchestrator {
 
   async resumeSession(): Promise<void> {
     if (!this.currentWorkspaceFolder) {
-      vscode.window.showErrorMessage("No workspace folder open");
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        "No workspace folder open"
+      );
       return;
     }
 
@@ -4415,7 +4424,9 @@ export class WorkflowOrchestrator {
       );
 
       if (sessions.length === 0) {
-        vscode.window.showInformationMessage(
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.INFO,
           "No previous sessions found. Run a workflow first to create a session."
         );
         return;
@@ -4439,14 +4450,18 @@ export class WorkflowOrchestrator {
           Log.info(`Resumed session: ${selected.label}`);
         } catch (loadError) {
           Log.error("Failed to load session:", loadError as Error);
-          vscode.window.showErrorMessage(
+          notifyUserFeedback(
+            this.userFeedbackSink,
+            USER_FEEDBACK_SEVERITY.ERROR,
             `Failed to load session: ${getErrorMessage(loadError)}`
           );
         }
       }
     } catch (error) {
       Log.error("Failed to resume session:", error as Error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `Failed to resume session: ${getErrorMessage(error)}`
       );
     }

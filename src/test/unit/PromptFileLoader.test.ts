@@ -11,6 +11,7 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
+import type { UserFeedback } from "../../core/UserFeedbackSink";
 import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -23,6 +24,33 @@ suite("PromptFileLoader Tests", () => {
     for (const tempDir of tempDirs.splice(0)) {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
+  });
+
+  suite("operational feedback", () => {
+    test("reports parse failures through the feedback sink", async () => {
+      const feedback: UserFeedback[] = [];
+      const parser = {
+        parsePromptFile: async () => undefined,
+      } as unknown as PromptFileParser;
+      const loader = new PromptFileLoader(
+        parser,
+        new PromptQueue(),
+        undefined,
+        undefined,
+        undefined,
+        { notify: (message) => feedback.push(message) }
+      );
+
+      const result = await loader.loadPromptFile("missing-workflow.yaml");
+
+      assert.strictEqual(result, undefined);
+      assert.deepStrictEqual(feedback, [
+        {
+          severity: "error",
+          message: "ctrlyoke: Failed to parse prompt file",
+        },
+      ]);
+    });
   });
 
   suite("populateSettingsDefaults", () => {

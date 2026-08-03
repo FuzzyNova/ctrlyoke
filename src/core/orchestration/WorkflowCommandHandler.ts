@@ -7,9 +7,13 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../../utils/ConfigurationUtils";
-import { HARNESS_STATUS_STRINGS } from "../../types/DashboardConstants";
+import {
+  HARNESS_STATUS_STRINGS,
+  USER_FEEDBACK_SEVERITY,
+} from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { getErrorMessage } from "../../utils/ErrorUtils";
+import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 /**
  * WorkflowCommandHandler
@@ -30,7 +34,8 @@ export class WorkflowCommandHandler {
     _context: vscode.ExtensionContext,
     _promptFileParser: PromptFileParser,
     private endConditionEvaluator: EndConditionEvaluator,
-    private currentWorkspaceFolder?: vscode.WorkspaceFolder
+    private currentWorkspaceFolder?: vscode.WorkspaceFolder,
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {
     this.templateManager = new TemplateManager(_context);
   }
@@ -51,7 +56,11 @@ export class WorkflowCommandHandler {
   async createPromptFile(): Promise<void> {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("ctrlyoke: No workspace folder found");
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.ERROR,
+          "ctrlyoke: No workspace folder found"
+        );
         return;
       }
 
@@ -125,11 +134,11 @@ export class WorkflowCommandHandler {
 
       // Open file in editor (respects openPromptsInSecondGroup setting)
       await this.openPromptFile(filePath);
-
-      vscode.window.showInformationMessage(`ctrlyoke: Created ${fileName}`);
     } catch (error) {
       Log.error("ctrlyoke: Failed to create prompt file:", error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Failed to create prompt file: ${error}`
       );
     }
@@ -144,7 +153,11 @@ export class WorkflowCommandHandler {
   > {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("ctrlyoke: No workspace folder found");
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.ERROR,
+          "ctrlyoke: No workspace folder found"
+        );
         return undefined;
       }
 
@@ -190,7 +203,9 @@ export class WorkflowCommandHandler {
       return { filePath, fileName };
     } catch (error) {
       Log.error("ctrlyoke: Failed to create draft prompt:", error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Failed to create draft prompt: ${error}`
       );
       return undefined;
@@ -262,13 +277,17 @@ export class WorkflowCommandHandler {
           );
         }
       } else {
-        vscode.window.showErrorMessage(
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.ERROR,
           "❌ Failed to create end condition script. Check that you have a workspace folder open."
         );
       }
     } catch (error) {
       Log.error("ctrlyoke: Error creating end condition script:", error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `❌ Failed to create end condition script: ${error}`
       );
     }
@@ -319,7 +338,9 @@ export class WorkflowCommandHandler {
    */
   async openCurrentPromptFile(currentFilePath?: string): Promise<void> {
     if (!currentFilePath) {
-      vscode.window.showWarningMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.WARNING,
         "ctrlyoke: No prompt file loaded. Use 'Select' button to choose a file first."
       );
       return;
@@ -330,7 +351,11 @@ export class WorkflowCommandHandler {
       Log.info(`ctrlyoke: Opened prompt file: ${currentFilePath}`);
     } catch (error) {
       Log.error("ctrlyoke: Failed to open prompt file:", error);
-      vscode.window.showErrorMessage(`ctrlyoke: Failed to open file: ${error}`);
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `ctrlyoke: Failed to open file: ${error}`
+      );
     }
   }
 
@@ -387,13 +412,13 @@ export class WorkflowCommandHandler {
 
       const doc = await vscode.workspace.openTextDocument(templatePath);
       await vscode.window.showTextDocument(doc);
-
-      vscode.window.showInformationMessage(
-        `✅ Created custom template: ${path.basename(templatePath)}`
-      );
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      vscode.window.showErrorMessage(`Failed to create template: ${errorMsg}`);
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `Failed to create template: ${errorMsg}`
+      );
     }
   }
 

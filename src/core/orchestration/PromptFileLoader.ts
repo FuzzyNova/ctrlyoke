@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
@@ -12,6 +11,8 @@ import {
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
+import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
+import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 const WORKFLOW_PROPERTY_KEYS = [
   ...EXECUTION_PROPERTY_KEYS,
@@ -42,7 +43,8 @@ export class PromptFileLoader {
     ) => Promise<CompatibilityDiagnostic[]>,
     private onCompatibilityDiagnostics?: (
       diagnostics: CompatibilityDiagnostic[]
-    ) => void
+    ) => void,
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {}
 
   getLastCompatibilityDiagnostics(): readonly CompatibilityDiagnostic[] {
@@ -66,7 +68,11 @@ export class PromptFileLoader {
       const promptFile = await this.promptFileParser.parsePromptFile(filePath);
 
       if (!promptFile || !promptFile.steps) {
-        vscode.window.showErrorMessage("ctrlyoke: Failed to parse prompt file");
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.ERROR,
+          "ctrlyoke: Failed to parse prompt file"
+        );
         return undefined;
       }
 
@@ -78,7 +84,11 @@ export class PromptFileLoader {
       );
     } catch (error) {
       Log.error("Failed to load prompt file:", error);
-      vscode.window.showErrorMessage(`ctrlyoke: Failed to load file: ${error}`);
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `ctrlyoke: Failed to load file: ${error}`
+      );
       return undefined;
     }
   }
@@ -107,7 +117,9 @@ export class PromptFileLoader {
       );
     } catch (error) {
       Log.error("Failed to load workflow from template:", error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Failed to create workflow: ${error}`
       );
       return undefined;
@@ -126,7 +138,11 @@ export class PromptFileLoader {
     originalFilePath: string | undefined
   ): Promise<string | undefined> {
     if (!promptFile.steps) {
-      vscode.window.showErrorMessage("ctrlyoke: Failed to parse prompt file");
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        "ctrlyoke: Failed to parse prompt file"
+      );
       return undefined;
     }
 
@@ -139,7 +155,11 @@ export class PromptFileLoader {
     );
     if (!validation.valid) {
       const errors = validation.errors.join("\n");
-      vscode.window.showErrorMessage(`ctrlyoke: Validation failed:\n${errors}`);
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `ctrlyoke: Validation failed:\n${errors}`
+      );
       return undefined;
     }
 

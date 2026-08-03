@@ -317,7 +317,7 @@ may be swapped as a block.
 | 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage |
 | 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls |
 | 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration |
-| 14  | C.5   | Execute the triage for the core/orchestration group (32 sites in 4 files)                                                                                                     |
+| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E |
 | 15  | C.6   | Execute the triage for the ui/utils group (31 sites in 8 files)                                                                                                               |
 | 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                  |
 | 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                  |

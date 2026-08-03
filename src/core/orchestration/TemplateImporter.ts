@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
+import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 /**
  * Manifest structure for workflows
@@ -30,7 +32,8 @@ interface WorkflowManifest {
 export class TemplateImporter {
   constructor(
     private context: vscode.ExtensionContext,
-    private currentWorkspaceFolder?: vscode.WorkspaceFolder
+    private currentWorkspaceFolder?: vscode.WorkspaceFolder,
+    private readonly userFeedbackSink?: UserFeedbackSink
   ) {}
 
   /**
@@ -49,7 +52,11 @@ export class TemplateImporter {
   async importWorkflowTemplates(): Promise<void> {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("ctrlyoke: No workspace folder open");
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.ERROR,
+          "ctrlyoke: No workspace folder open"
+        );
         return;
       }
 
@@ -61,7 +68,9 @@ export class TemplateImporter {
       }
 
       if (!manifest.workflows || manifest.workflows.length === 0) {
-        vscode.window.showInformationMessage(
+        notifyUserFeedback(
+          this.userFeedbackSink,
+          USER_FEEDBACK_SEVERITY.INFO,
           "ctrlyoke: No workflow templates available to import"
         );
         return;
@@ -125,7 +134,9 @@ export class TemplateImporter {
       );
     } catch (error) {
       Log.error("ctrlyoke: Error importing workflow templates:", error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `❌ Failed to import workflow templates: ${error}`
       );
     }
@@ -152,7 +163,9 @@ export class TemplateImporter {
       return JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
     } catch (error) {
       Log.error(`ctrlyoke: Failed to load ${type} manifest:`, error);
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `❌ Failed to load ctrlyoke ${type}. The extension may not be properly installed.`
       );
       return undefined;
@@ -248,7 +261,9 @@ export class TemplateImporter {
 
     // Show error message for failures
     if (failed.length > 0) {
-      vscode.window.showErrorMessage(
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
         `❌ Failed to import: ${failed.join(", ")}`
       );
     }
