@@ -1,8 +1,8 @@
-import * as vscode from "vscode";
 import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   SESSION_KINDS,
+  USER_FEEDBACK_SEVERITY,
 } from "../types/DashboardConstants";
 import {
   getPtyProcessManager,
@@ -12,6 +12,10 @@ import {
 } from "../core/harness/PtyProcessManager";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "../core/UserFeedbackSink";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
 type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
@@ -24,6 +28,10 @@ type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
  * recreated its webview.
  */
 export class TerminalMessageHandlers {
+  constructor(
+    private readonly getUserFeedbackSink: () => UserFeedbackSink | undefined
+  ) {}
+
   /**
    * The panel has this dedicated reconnect path, which sends TERMINAL_STARTED
    * plus reconnect buffers. Orchestrator client-ready replay must therefore skip
@@ -138,7 +146,11 @@ export class TerminalMessageHandlers {
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       Log.warn(`Failed to spawn embedded shell: ${errorMessage}`);
-      void vscode.window.showWarningMessage(errorMessage);
+      ctx.emit({
+        type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+        action: "spawn embedded shell",
+        error: errorMessage,
+      });
       return;
     }
     // Register the spawning client as controller and update workflowRunControllers
@@ -168,7 +180,11 @@ export class TerminalMessageHandlers {
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       Log.warn(`Failed to restart embedded shell: ${errorMessage}`);
-      void vscode.window.showWarningMessage(errorMessage);
+      notifyUserFeedback(
+        this.getUserFeedbackSink(),
+        USER_FEEDBACK_SEVERITY.WARNING,
+        errorMessage
+      );
       return;
     }
     if (newSession) {

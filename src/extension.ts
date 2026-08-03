@@ -767,7 +767,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("No file selected");
         return;
       }
-      await saveIfDirty(uri.fsPath);
+      await saveIfDirty(uri.fsPath, workflowOrchestrator.getUserFeedbackSink());
       await workflowOrchestrator.appendFromFile(uri.fsPath, "end");
     }
   );
@@ -780,7 +780,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("No file selected");
         return;
       }
-      await saveIfDirty(uri.fsPath);
+      await saveIfDirty(uri.fsPath, workflowOrchestrator.getUserFeedbackSink());
       await workflowOrchestrator.appendFromFile(uri.fsPath, "next");
     }
   );
@@ -797,7 +797,10 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await saveIfDirty(uri.fsPath);
+        await saveIfDirty(
+          uri.fsPath,
+          workflowOrchestrator.getUserFeedbackSink()
+        );
         await workflowOrchestrator.executePromptFile(uri.fsPath);
       } catch (error) {
         vscode.window.showErrorMessage(
@@ -819,7 +822,10 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await saveIfDirty(uri.fsPath);
+        await saveIfDirty(
+          uri.fsPath,
+          workflowOrchestrator.getUserFeedbackSink()
+        );
         await workflowOrchestrator.loadPromptFile(uri.fsPath);
         // Open the ctrlyoke panel to show the loaded file
         await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
@@ -1094,7 +1100,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.addFileToPromptEditor",
     async (uri: vscode.Uri) => {
       if (uri) {
-        await saveIfDirty(uri.fsPath);
+        await saveIfDirty(
+          uri.fsPath,
+          workflowOrchestrator.getUserFeedbackSink()
+        );
       }
       await contextMenuReferenceCommands.addFileToPromptEditor(uri);
     }
@@ -1111,7 +1120,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.addSelectionToPromptEditor",
     async (uri: vscode.Uri) => {
       if (uri) {
-        await saveIfDirty(uri.fsPath);
+        await saveIfDirty(
+          uri.fsPath,
+          workflowOrchestrator.getUserFeedbackSink()
+        );
       }
       await contextMenuReferenceCommands.addSelectionToPromptEditor(uri);
     }
@@ -1121,7 +1133,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.addSymbolToPromptEditor",
     async (uri: vscode.Uri, lineNumber?: number) => {
       if (uri) {
-        await saveIfDirty(uri.fsPath);
+        await saveIfDirty(
+          uri.fsPath,
+          workflowOrchestrator.getUserFeedbackSink()
+        );
       }
       await contextMenuReferenceCommands.addSymbolToPromptEditor(
         uri,

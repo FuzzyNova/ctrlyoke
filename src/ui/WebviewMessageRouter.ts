@@ -109,7 +109,9 @@ export class WebviewMessageRouter {
       this.getWorkspaceRoot()
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
-    this.terminalHandlers = new TerminalMessageHandlers();
+    this.terminalHandlers = new TerminalMessageHandlers(() =>
+      this.getOrchestrator()?.getUserFeedbackSink()
+    );
     this.workflowStepHandlers = new WorkflowStepHandlers(
       getOrchestrator,
       settingsSync,
@@ -494,10 +496,11 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
     });
 
-    table.set(MESSAGE_TYPES.EXPORT_OUTPUT, async (message) => {
+    table.set(MESSAGE_TYPES.EXPORT_OUTPUT, async (message, ctx) => {
       await this.serializer.handleExportOutput(
         message.content,
-        message.fileName
+        message.fileName,
+        ctx.postMessage
       );
     });
   }
@@ -575,8 +578,9 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.OPEN_FILE, (message) => {
+    table.set(MESSAGE_TYPES.OPEN_FILE, (message, ctx) => {
       this.promptEditorSupport.handleOpenFile(
+        ctx,
         message.path,
         message.lineStart,
         message.lineEnd
@@ -1024,7 +1028,7 @@ export class WebviewMessageRouter {
         return;
       }
       // Fallback when orchestrator is not yet available
-      this.serializer.handleLoadWorkflow(message);
+      this.serializer.handleLoadWorkflow(message, ctx.postMessage);
     });
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async (_message, ctx) => {

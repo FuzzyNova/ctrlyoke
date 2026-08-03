@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import type {
@@ -13,7 +12,6 @@ import type {
   StartNewRunInsteadMessage,
   UpdatePromptMessage,
 } from "../types/WebviewMessageTypes";
-import { getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
 import type { WebviewClientContext } from "./WebviewClientContext";
 import type { WebviewSettingsSync } from "./WebviewSettingsSync";
@@ -57,9 +55,6 @@ export class WorkflowStepHandlers {
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);
-      vscode.window.showErrorMessage(
-        `Failed to execute prompt: ${getErrorMessage(error)}`
-      );
       ctx.emit({
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text,
@@ -126,9 +121,6 @@ export class WorkflowStepHandlers {
       );
     } catch (error) {
       Log.error("Failed to update prompt:", error);
-      vscode.window.showErrorMessage(
-        `Failed to update prompt: ${getErrorMessage(error)}`
-      );
     }
   }
 
@@ -157,9 +149,6 @@ export class WorkflowStepHandlers {
       );
     } catch (error) {
       Log.error("Failed to insert workflow step:", error);
-      vscode.window.showErrorMessage(
-        `Failed to insert workflow step: ${getErrorMessage(error)}`
-      );
     }
   }
 
@@ -188,9 +177,6 @@ export class WorkflowStepHandlers {
       );
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
-      vscode.window.showErrorMessage(
-        `Failed to update finalStep: ${getErrorMessage(error)}`
-      );
     }
   }
 
@@ -220,9 +206,6 @@ export class WorkflowStepHandlers {
       );
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
-      vscode.window.showErrorMessage(
-        `Failed to delete prompt: ${getErrorMessage(error)}`
-      );
     }
   }
 

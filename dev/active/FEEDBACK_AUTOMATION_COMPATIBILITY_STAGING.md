@@ -56,7 +56,7 @@ plan's own table, this section is newer.
 
 | Fact                                                              | Value                                                                                                                       |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Direct `show*Message` in reusable code (the parity gap)           | **63** across 12 files (an AST count; the earlier 64/13 included the commented-out call in `WorkspaceSessionManager.ts:62`) |
+| Direct `show*Message` in reusable code (the parity gap)           | **6** across 6 files — the six intentional Phase 4 interaction holds; the initial Stage C count was 63 |
 | Direct `show*Message` at the VS Code boundary (correctly staying) | **49** across 6 files                                                                                                       |
 | Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                                                 |
 | Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                                             |
@@ -68,9 +68,9 @@ plan's own table, this section is newer.
 
 Two consequences worth naming up front:
 
-1. **The feedback plan's Phase 1 is genuinely done and Phase 2 is genuinely
-   untouched.** The severity constant and the rendered queue exist; there is no
-   message type, no sink, and no migrated call site. Phase 2 starts from zero.
+1. **The feedback plan's Phases 1 and 2 are genuinely done.** The severity
+   constant, rendered queue, transport, sink, and reusable-call migration are
+   shipped; only the six action-bearing Phase 4 holds remain.
 2. **The adapter-UI baseline of 19 in
    [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
    Phase 0 is exactly right** (18 + 1). That number is still accurate and can be
@@ -139,23 +139,21 @@ first; the three bugs can land in any order.
 
 Land the two **shrink-only counters** from
 [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
-Phase 0 items 3 and 6 — the direct `show*Message` counter (baseline 63 reusable
-/ 49 boundary) and the adapter-UI counter (baseline 19).
+Phase 0 items 3 and 6 — the direct `show*Message` counter (initial baseline 63
+reusable / 49 boundary) and the adapter-UI counter (baseline 19).
 
 This is the one item whose cost rises the longer it waits: it exists to stop the
 migration target growing while the migration runs, so it must precede Stage C.
 
-**The three baselines were re-verified against `src/` on 2026-08-02; the
-measured numbers below are the committed baselines:**
+**The initial three baselines were re-verified against `src/` on 2026-08-02;
+the direct reusable baseline was then lowered as C.5 and C.6 landed:**
 
 - **49 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
   `ScmCommitCommand` 5, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
-- **63 reusable** = `WorkflowCommandHandler` 13, `WorkflowSerializer` 8,
-  `McpManagerService` 8, `WorkflowOrchestrator` 7, `TemplateImporter` 7,
-  `PromptFileLoader` 5, `WorkflowStepHandlers` 5, `UndoRedoCoordinator` 5,
-  `TerminalMessageHandlers` 2, and 1 each in `FileSystemUtils`,
-  `WorkflowMutationCoordinator`, `PromptEditorSupportService`. The commented
-  `WorkspaceSessionManager` reference is not an AST call site.
+- **6 reusable after C.6** = `TemplateImporter` 2,
+  `WorkflowCommandHandler` 2, `WorkflowOrchestrator` 1, and
+  `WorkflowSerializer` 1. These are all Phase 4 interaction holds; the
+  commented `WorkspaceSessionManager` reference is not an AST call site.
 - **19 adapter-UI** = `WorkflowInstance` 9, `PromptFileParser` 4, `WorkflowExecutor` 3,
   `EndConditionHandler` 1, `CliIntegration` 1 (`platform.warn`), plus the one `showChoice`.
 
@@ -318,7 +316,7 @@ may be swapped as a block.
 | 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls |
 | 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration |
 | 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E |
-| 15  | C.6   | Execute the triage for the ui/utils group (31 sites in 8 files)                                                                                                               |
+| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining |
 | 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                  |
 | 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                  |
 | 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                          |
@@ -359,9 +357,10 @@ either implementation session starts.
    (5), `TerminalMessageHandlers` (2), and one each in
    `PromptEditorSupportService`, `WorkflowMutationCoordinator`,
    `FileSystemUtils`.
-3. **The three baselines were re-measured by AST on 2026-08-02 and are
-   unchanged** — still exactly 49 boundary / 63 reusable / 0 adapter-UI, so the numbers committed in Stage
-   A.1 need no revision before Stage C starts. Note that an AST scan reports
+3. **The initial three baselines were re-measured by AST on 2026-08-02 before
+   Stage C** — exactly 49 boundary / 63 reusable / 0 adapter-UI. C.5 and C.6
+   lowered reusable to 6; boundary remains 49 and adapter-UI remains 0. Note
+   that an AST scan reports
    `CliIntegration`'s `showChoice` at **1380**, the start of the call expression
    (`this.platform`), while the plan cites **1381**, where `.showChoice(`
    textually sits. Both are correct; the split-line form is the reason this

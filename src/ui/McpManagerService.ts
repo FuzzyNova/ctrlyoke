@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import type {
   DeleteMcpFromHarnessMessage,
@@ -58,13 +57,25 @@ export class McpManagerService {
     });
   }
 
+  private emitActionFailure(
+    ctx: WebviewClientContext,
+    action: string,
+    error: string
+  ): void {
+    ctx.emit({
+      type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+      action,
+      error,
+    });
+  }
+
   async handleRequestRegistryServers(ctx: WebviewClientContext): Promise<void> {
     try {
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {
       const message = `Failed to load MCP registry servers: ${getErrorMessage(error)}`;
       Log.error(message);
-      void vscode.window.showErrorMessage(message);
+      this.emitActionFailure(ctx, "load MCP registry servers", message);
     }
   }
 
@@ -82,7 +93,7 @@ export class McpManagerService {
     } catch (error) {
       const errorMessage = `Failed to save MCP registry server: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
+      this.emitActionFailure(ctx, "save MCP registry server", errorMessage);
     }
   }
 
@@ -96,7 +107,7 @@ export class McpManagerService {
     } catch (error) {
       const errorMessage = `Failed to delete MCP registry server: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
+      this.emitActionFailure(ctx, "delete MCP registry server", errorMessage);
     }
   }
 
@@ -132,19 +143,18 @@ export class McpManagerService {
         message.scope
       );
       if (result.exportedCount === 0) {
-        void vscode.window.showWarningMessage(
+        this.emitActionFailure(
+          ctx,
+          "export MCP servers",
           `No stdio MCP servers were exported to ${result.filePath}.`
         );
         return;
       }
-      void vscode.window.showInformationMessage(
-        `Exported ${result.exportedCount} MCP server${result.exportedCount === 1 ? "" : "s"} to ${result.filePath}.`
-      );
       await this.emitLocalScan(ctx);
     } catch (error) {
       const errorMessage = `Failed to export MCP servers: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
+      this.emitActionFailure(ctx, "export MCP servers", errorMessage);
     }
   }
 
@@ -153,22 +163,21 @@ export class McpManagerService {
     message: DeleteMcpFromHarnessMessage
   ): Promise<void> {
     try {
-      const result = await this.getHarnessExporter().remove(
+      await this.getHarnessExporter().remove(
         message.ids ?? [],
         message.targetId,
         message.scope,
         message.filePath
       );
-      void vscode.window.showInformationMessage(
-        result.removedCount > 0
-          ? `Removed ${result.removedCount} MCP server${result.removedCount === 1 ? "" : "s"} from ${result.filePath}.`
-          : `No matching MCP servers were found in ${result.filePath}.`
-      );
       await this.emitLocalScan(ctx);
     } catch (error) {
       const errorMessage = `Failed to delete MCP servers from harness config: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
-      void vscode.window.showErrorMessage(errorMessage);
+      this.emitActionFailure(
+        ctx,
+        "delete MCP servers from harness config",
+        errorMessage
+      );
     }
   }
 }

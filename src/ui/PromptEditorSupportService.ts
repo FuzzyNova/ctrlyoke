@@ -642,6 +642,7 @@ export class PromptEditorSupportService {
   }
 
   async handleOpenFile(
+    ctx: WebviewClientContext,
     relativePath: string,
     lineStart?: number,
     lineEnd?: number
@@ -716,7 +717,11 @@ export class PromptEditorSupportService {
       await openResolvedTarget(target);
     } catch (error) {
       Log.error("Error opening file:", error);
-      vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
+      ctx.emit({
+        type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+        action: "open file",
+        error: `Failed to open: ${relativePath}`,
+      });
     }
   }
 

@@ -212,6 +212,18 @@ export class WorkflowSerializer {
     });
   }
 
+  private sendActionFailure(
+    postMessage: PostMessageFn,
+    action: string,
+    error: string
+  ): void {
+    postMessage({
+      type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+      action,
+      error,
+    });
+  }
+
   /**
    * Handle SAVE_WORKFLOW_REQUEST from the webview.
    * Determines the default save path and format from the working file and
@@ -604,7 +616,12 @@ export class WorkflowSerializer {
   // Export Output
   // ============================================================================
 
-  async handleExportOutput(content: string, fileName?: string): Promise<void> {
+  async handleExportOutput(
+    content: string,
+    fileName?: string,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     try {
       let baseName = fileName || "ctrlyoke-output";
       baseName = baseName
@@ -645,16 +662,17 @@ export class WorkflowSerializer {
 
       if (uri) {
         await fs.writeFile(uri.fsPath, content, "utf-8");
-        vscode.window.showInformationMessage(
-          `Output exported to ${uri.fsPath}`
-        );
       } else {
         Log.debug("handleExportOutput: save dialog cancelled by user");
       }
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.error("Failed to export output:", error);
-      vscode.window.showErrorMessage(`Failed to export output: ${msg}`);
+      this.sendActionFailure(
+        pm,
+        "export output",
+        `Failed to export output: ${msg}`
+      );
     }
   }
 
@@ -687,7 +705,11 @@ export class WorkflowSerializer {
       });
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      vscode.window.showErrorMessage(`Failed to load templates: ${errorMsg}`);
+      this.sendActionFailure(
+        pm,
+        "load templates",
+        `Failed to load templates: ${errorMsg}`
+      );
     }
   }
 
@@ -762,7 +784,6 @@ export class WorkflowSerializer {
       return true;
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);
       pm({
         type: MESSAGE_TYPES.WORKFLOW_CREATED,
         error: errorMsg,
@@ -1125,14 +1146,20 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleLoadWorkflow(message: any): Promise<void> {
+  async handleLoadWorkflow(
+    message: any,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const { filePath } = message;
 
     try {
       await this.getManager()?.loadWorkingFile(filePath);
     } catch (error) {
       Log.error("Failed to load workflow:", error);
-      vscode.window.showErrorMessage(
+      this.sendActionFailure(
+        pm,
+        "load workflow",
         `Failed to load workflow: ${getErrorMessage(error)}`
       );
     }
@@ -1187,10 +1214,6 @@ export class WorkflowSerializer {
           });
         }
 
-        vscode.window.showInformationMessage(
-          `Deleted ${workflowKeys.length} workflow lineage(s)`
-        );
-
         pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [],
@@ -1198,7 +1221,9 @@ export class WorkflowSerializer {
         return true;
       } catch (error) {
         Log.error("Failed to delete workflow files:", error);
-        vscode.window.showErrorMessage(
+        this.sendActionFailure(
+          pm,
+          "delete workflow history",
           `Failed to delete workflow history: ${getErrorMessage(error)}`
         );
       }

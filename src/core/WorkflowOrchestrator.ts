@@ -676,6 +676,10 @@ export class WorkflowOrchestrator {
     });
   }
 
+  getUserFeedbackSink(): UserFeedbackSink {
+    return this.userFeedbackSink;
+  }
+
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflow(): WorkflowInstance | undefined {
     const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);

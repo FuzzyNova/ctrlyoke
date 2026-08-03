@@ -10,7 +10,10 @@ import {
   HOSTED_CONNECTION_LIVENESS,
   HARNESS_STATUS_STRINGS,
   MESSAGE_TYPES,
+  BROWSER_NOTIFICATION_MODES,
 } from "../../types/DashboardConstants";
+import { configService } from "../../config/CtrlYokeConfigService";
+import { buildTestNotificationEvent } from "../../ui/notifications/CompletionNotificationFactory";
 
 suite("sanitizeBrowserClientId", () => {
   test("passes through a well-formed tabId", () => {
@@ -79,6 +82,16 @@ interface HostedServerHeartbeatInternals {
   socketClientTags: WeakMap<FakeHostedSocket, string>;
   nextApplicationHeartbeatId: number;
   runHeartbeatCycle(): void;
+}
+
+interface HostedServerFeedbackInternals {
+  connections: Set<FakeHostedSocket>;
+  notifiedEventIds: Set<string>;
+  broadcast(message: unknown): void;
+  broadcastUserFeedback(message: unknown): void;
+  dispatchCompletionNotification(
+    event: ReturnType<typeof buildTestNotificationEvent>
+  ): Promise<void>;
 }
 
 function createHeartbeatHarness(): {
@@ -159,5 +172,91 @@ suite("CtrlYokeHostedServer connection heartbeat", () => {
       server.socketTerminationCauses.get(socket),
       "application-heartbeat-ack-timeout"
     );
+  });
+});
+
+suite("CtrlYokeHostedServer feedback transport", () => {
+  test("delivers USER_FEEDBACK even when browser notifications are never", () => {
+    try {
+      configService.setCliOverlay({
+        notifications: {
+          browser: { mode: BROWSER_NOTIFICATION_MODES.NEVER },
+        },
+      });
+      const socket: FakeHostedSocket = {
+        readyState: 1,
+        pingCalls: 0,
+        sent: [],
+        terminated: false,
+        ping() {},
+        send(message) {
+          this.sent.push(message);
+        },
+        terminate() {},
+      };
+      const server = Object.create(
+        CtrlYokeHostedServer.prototype
+      ) as HostedServerFeedbackInternals;
+      server.connections = new Set([socket]);
+
+      server.broadcastUserFeedback({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: "feedback-1",
+        severity: "error",
+        message: "Operational failure",
+      });
+
+      assert.strictEqual(socket.sent.length, 1);
+      assert.strictEqual(
+        JSON.parse(socket.sent[0]).type,
+        MESSAGE_TYPES.USER_FEEDBACK
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
+  test("suppresses NOTIFICATION_EVENT in never mode but delivers it when connected", async () => {
+    try {
+      const socket: FakeHostedSocket = {
+        readyState: 1,
+        pingCalls: 0,
+        sent: [],
+        terminated: false,
+        ping() {},
+        send(message) {
+          this.sent.push(message);
+        },
+        terminate() {},
+      };
+      const server = Object.create(
+        CtrlYokeHostedServer.prototype
+      ) as HostedServerFeedbackInternals;
+      server.connections = new Set([socket]);
+      server.notifiedEventIds = new Set();
+      const event = buildTestNotificationEvent("http://localhost");
+
+      configService.setCliOverlay({
+        notifications: {
+          browser: { mode: BROWSER_NOTIFICATION_MODES.NEVER },
+        },
+      });
+      await server.dispatchCompletionNotification(event);
+      assert.strictEqual(socket.sent.length, 0);
+
+      configService.setCliOverlay({
+        notifications: {
+          browser: { mode: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY },
+        },
+      });
+      await server.dispatchCompletionNotification(event);
+      assert.strictEqual(socket.sent.length, 1);
+      assert.strictEqual(
+        JSON.parse(socket.sent[0]).type,
+        MESSAGE_TYPES.NOTIFICATION_EVENT
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
   });
 });

@@ -1,10 +1,12 @@
 # Browser User Feedback Plan
 
-**Status (2026-08-01):** Phase 1 complete; Phases 2–4 remain proposed. The
-React dashboard now renders a bounded, accessible transient toast queue in both
-hosts and keeps completion notifications separate from operational feedback.
-Ordinary `vscode.window.show*Message()` calls still do not reach hosted browser
-clients; that migration remains Phase 2.
+**Status (2026-08-02):** Phases 1 and 2 (including Phase 2.5) are complete.
+The React dashboard renders a bounded, accessible transient toast queue in both
+hosts, operational feedback reaches connected browsers independently of
+notification settings, and the reusable direct-message migration is complete
+except for the six action-bearing interactions reserved for Phase 4. Phase 3
+(client-scoped routing) and Phase 4 (correlated interactive choices) remain
+outstanding.
 
 **Related plans:**
 
@@ -574,6 +576,16 @@ rows as truly scoped. The six port rows were split as recorded: initialization
 failure uses `USER_FEEDBACK`, while the five interaction holds retain their
 choices for Phase 4.
 
+**C.6 execution complete 2026-08-02.** All 31 rows in the eight UI/utils
+files are executed. Scoped UI failures use the initiating client's typed reply
+path; the unscoped terminal-restart and auto-save infrastructure paths use the
+composite `UserFeedbackSink` broadcast fallback. The AST counter is now 49
+boundary / 6 reusable direct `show*Message` calls. The six survivors are the
+intentional Phase 4 choices: template overwrite, post-import actions, end
+condition script actions, harness detection retry, workspace initialization's
+Reveal Folder action, and clear-history confirmation. They survive because
+they require `USER_INTERACTION_REQUEST`, not a fire-and-forget feedback toast.
+
 ##### `src/core/orchestration/WorkflowCommandHandler.ts` — 13
 
 | Line | Message | Disposition | Justification | Status |
@@ -901,32 +913,41 @@ current effective behavior for every workflow that does not click a button.
 
 ## Acceptance Criteria
 
-- Existing `uiStore.showToast()` calls are visibly rendered.
-- Hosted browser users see operational errors that were previously visible only
-  through `vscode.window`.
-- Completion events render **exactly once per surface**: in-app in a browser,
-  native in the VS Code extension. The VS Code panel shows no in-app duplicate.
-- Completion events reach the hosted browser whenever notification settings
-  permit, and reach it in **no** form — toast or OS — when
+- **MET —** Existing `uiStore.showToast()` calls are visibly rendered.
+- **MET —** Hosted browser users see operational errors that were previously
+  visible only through `vscode.window`.
+- **MET —** Completion events render **exactly once per surface**: in-app in a
+  browser, native in the VS Code extension. The VS Code panel shows no in-app
+  duplicate.
+- **MET —** Completion events reach the hosted browser whenever notification
+  settings permit, and reach it in **no** form — toast or OS — when
   `browser.mode: never`.
-- Operational feedback is never suppressed by notification settings.
-- No operational feedback is incorrectly delivered as browser push.
-- Browser request failures are scoped to the initiating client.
-- Native VS Code notifications remain native.
-- CLI behavior remains non-interactive unless an explicit interactive prompt
-  implementation is selected.
-- Reusable code no longer calls `vscode.window.showErrorMessage`,
-  `showWarningMessage`, or `showInformationMessage` directly.
-- `PlatformAdapter` no longer declares `log()`, `warn()`, `error()`,
-  `showProgress()`, or `showChoice()`; all 20 callers use the feedback or
-  interaction port. `CliAdapter`, `VsCodeAdapter`, and
-  `src/test/helpers/mockHarness.ts` all implement `showChoice()` today and must
-  be updated together.
-- **No workflow can block on a prompt that the client driving it cannot see.**
-  Every `showChoice` site either reaches the initiating client or resolves to
-  its existing safe default within a bounded time while emitting visible
-  feedback.
-- Severity strings are declared once in `DashboardConstants.ts` and nowhere
-  else.
-- Action-bearing messages retain real choice semantics and safe dismissal
+- **MET —** Operational feedback is never suppressed by notification settings;
+  `USER_FEEDBACK` is delivered under `browser.mode: never` as well as
+  `connectedOnly`.
+- **MET —** No operational feedback is incorrectly delivered as browser push.
+- **OUTSTANDING — Stage E:** Browser request failures are not yet guaranteed
+  to be scoped to the initiating client. The current fallback is broadcast for
+  the unscoped helper paths; Stage E threads `WebviewClientContext` through the
+  four planned handler modules and adds two-tab isolation tests.
+- **MET —** Native VS Code notifications remain native at the extension
+  boundary.
+- **MET —** CLI behavior remains non-interactive unless an explicit interactive
+  prompt implementation is selected.
+- **OUTSTANDING — Stage F:** Reusable code has six direct
+  `vscode.window.show*Message()` calls remaining. They are the intentional
+  action-bearing sites: template overwrite, post-import actions, end-condition
+  script actions, harness detection retry, workspace initialization's Reveal
+  Folder action, and clear-history confirmation. They survive because they need
+  the correlated `USER_INTERACTION_REQUEST` contract, not a feedback toast.
+- **MET —** `PlatformAdapter` no longer declares `log()`, `warn()`, `error()`,
+  `showProgress()`, or `showChoice()`; the adapter-mediated UI baseline is 0.
+- **OUTSTANDING — Stage F:** **No workflow can block on a prompt that the
+  client driving it cannot see.** The six surviving choices still need client
+  routing, timeout/dismissal handling, disconnect handling, and safe headless
   fallbacks.
+- **MET —** Severity strings are declared once in `DashboardConstants.ts` and
+  nowhere else.
+- **OUTSTANDING — Stage F:** Action-bearing messages retain their host-side
+  choices today, but their browser interaction contract and safe dismissal
+  fallbacks remain to be implemented.

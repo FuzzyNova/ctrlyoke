@@ -1,6 +1,11 @@
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import { Log } from "./Log";
+import { USER_FEEDBACK_SEVERITY } from "../types/DashboardConstants";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "../core/UserFeedbackSink";
 
 /**
  * Read a JSON file and parse it.
@@ -20,7 +25,10 @@ export async function readJsonFile(filePath: string): Promise<any> {
  *
  * @param filePath Absolute path to the file
  */
-export async function saveIfDirty(filePath: string): Promise<void> {
+export async function saveIfDirty(
+  filePath: string,
+  userFeedbackSink?: UserFeedbackSink
+): Promise<void> {
   const openDocument = vscode.workspace.textDocuments.find(
     (doc) => doc.uri.fsPath === filePath
   );
@@ -30,7 +38,9 @@ export async function saveIfDirty(filePath: string): Promise<void> {
       await openDocument.save();
     } catch (error) {
       Log.error("Failed to auto-save file:", error);
-      vscode.window.showWarningMessage(
+      notifyUserFeedback(
+        userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.WARNING,
         "ctrlyoke: Could not auto-save file. Running with last saved version."
       );
     }

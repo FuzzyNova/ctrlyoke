@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -186,9 +185,6 @@ export class WorkflowMutationCoordinator {
     error: unknown
   ): void {
     Log.error(`Failed to ${action}:`, error);
-    void vscode.window.showErrorMessage(
-      `Failed to ${action}: ${getErrorMessage(error)}`
-    );
     // A hosted browser client never sees the VS Code notification, so without
     // this the rejected run action is indistinguishable from a dead button.
     void this.reportActionFailure(ctx, action, error);

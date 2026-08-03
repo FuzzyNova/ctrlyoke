@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   FINAL_STEP_PHASES,
@@ -51,7 +50,6 @@ export class UndoRedoCoordinator {
       { emitUndoRecordWithoutHistory: true }
     );
     this.emitUndoPromptResult(postMessage, requestId, target, result);
-    this.showUndoRestoreStatus(result);
   }
 
   async handleRedoPromptChanges(
@@ -67,7 +65,6 @@ export class UndoRedoCoordinator {
       clientId
     );
     this.emitUndoPromptResult(postMessage, requestId, target, result);
-    this.showRedoRestoreStatus(result);
   }
 
   async handleUndoWorkflowChanges(
@@ -88,7 +85,6 @@ export class UndoRedoCoordinator {
       { emitUndoRecordWithoutHistory: false }
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
-    this.showUndoRestoreStatus(result);
   }
 
   async handleRedoWorkflowChanges(
@@ -108,7 +104,6 @@ export class UndoRedoCoordinator {
       clientId
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
-    this.showRedoRestoreStatus(result);
   }
 
   private async applyUndoEntries(
@@ -204,38 +199,6 @@ export class UndoRedoCoordinator {
         failedFiles: result.failedFiles,
       },
     });
-  }
-
-  private showUndoRestoreStatus(
-    result: Pick<UndoResult, "restoredFiles" | "failedFiles">
-  ): void {
-    if (result.failedFiles.length === 0 && result.restoredFiles.length > 0) {
-      vscode.window.showInformationMessage(
-        `Undo complete: restored ${result.restoredFiles.length} file${result.restoredFiles.length !== 1 ? "s" : ""}.`
-      );
-    } else if (result.restoredFiles.length > 0) {
-      vscode.window.showWarningMessage(
-        `Undo partially complete: ${result.restoredFiles.length} restored, ${result.failedFiles.length} failed.`
-      );
-    } else if (result.failedFiles.length > 0) {
-      vscode.window.showErrorMessage(
-        `Undo failed: ${result.failedFiles[0]?.error ?? "unknown error"}`
-      );
-    }
-  }
-
-  private showRedoRestoreStatus(
-    result: Pick<UndoResult, "restoredFiles" | "failedFiles">
-  ): void {
-    if (result.restoredFiles.length > 0) {
-      vscode.window.showInformationMessage(
-        `Redo complete: re-applied ${result.restoredFiles.length} file change${result.restoredFiles.length !== 1 ? "s" : ""}.`
-      );
-    } else {
-      vscode.window.showErrorMessage(
-        `Redo failed: ${result.failedFiles[0]?.error ?? "unknown error"}`
-      );
-    }
   }
 
   private async recordUndoApplied(
