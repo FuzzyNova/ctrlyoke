@@ -209,7 +209,9 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
       return `The ${harness} harness is unavailable for this execution target.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
-      return withCaveat(`Permission mode is not supported by the ${harness} harness`);
+      return withCaveat(
+        `Permission mode is not supported by the ${harness} harness`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
       return withCaveat(
         `Permission mode is only partially translated by the ${harness} harness`
@@ -218,7 +220,9 @@ export function getCompatibilityDiagnosticMessage(
       return `Permission mode support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED:
-      return withCaveat(`${capabilityLabel} are NOT ENFORCED by the ${harness} harness`);
+      return withCaveat(
+        `${capabilityLabel} are NOT ENFORCED by the ${harness} harness`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
       return withCaveat(

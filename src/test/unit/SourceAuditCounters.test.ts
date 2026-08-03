@@ -122,8 +122,9 @@ function collectCallSites(
       if (ts.isCallExpression(node) && predicate(node)) {
         sites.push({
           file: path.relative(repoRoot, filePath).split(path.sep).join("/"),
-          line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-            .line + 1,
+          line:
+            sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+              .line + 1,
           member: getPropertyAccessName(node.expression) ?? "unknown",
         });
       }

@@ -86,7 +86,7 @@ export function nextAutoscrollArmed({
   if (!movedUp || !isUserDriven) {
     return true;
   }
-  return distanceFromBottomPx <= getAutoscrollReleaseThresholdPx(
-    viewportHeightPx
+  return (
+    distanceFromBottomPx <= getAutoscrollReleaseThresholdPx(viewportHeightPx)
   );
 }

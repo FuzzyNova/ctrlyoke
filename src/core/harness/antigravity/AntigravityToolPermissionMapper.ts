@@ -21,26 +21,27 @@ const ANTIGRAVITY_PERMISSION_VERIFICATION = {
   verifiedVersions: ["1.0.16", "1.1.9"],
 } as const;
 
-export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
-  mode: {
-    fidelity: "partial",
-    mechanism: "native",
-    verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
-  },
-  allowedTools: {
-    fidelity: "unsupported",
-    mechanism: "none",
-    verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
-  },
-  deniedTools: {
-    fidelity: "unsupported",
-    mechanism: "none",
-    verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
-  },
-};
+export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor =
+  {
+    mode: {
+      fidelity: "partial",
+      mechanism: "native",
+      verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+      caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
+    },
+    allowedTools: {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+      caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
+    },
+    deniedTools: {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
+      caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
+    },
+  };
 
 export class AntigravityToolPermissionMapper
   extends ToolPermissionMapperBase

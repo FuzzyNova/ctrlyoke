@@ -414,7 +414,11 @@ export class SettingsJsonMcpTracker {
       if (count <= 0) {
         this.refCounts.delete(name);
         // Only remove from settings if it wasn't a baseline server
-        if (!this.getBaseline(this.getProjectConfigPath(workspaceRoot)).servers.has(name)) {
+        if (
+          !this.getBaseline(
+            this.getProjectConfigPath(workspaceRoot)
+          ).servers.has(name)
+        ) {
           toRemove.push(name);
         }
       } else {
@@ -473,7 +477,8 @@ export class SettingsJsonMcpTracker {
     if (
       this.refCounts.size === 0 &&
       !this.hasValueLeaseForWorkspace(workspaceRoot) &&
-      !this.getBaseline(this.getProjectConfigPath(workspaceRoot)).settingsFileExisted
+      !this.getBaseline(this.getProjectConfigPath(workspaceRoot))
+        .settingsFileExisted
     ) {
       await this.deleteCtrlYokeGitignore();
     }
@@ -547,7 +552,9 @@ export class SettingsJsonMcpTracker {
           const activeOwner = sidecar.owners[0].workflowKey;
           throw new Error(
             `${this.toolName} ${
-              key === "permission" ? "permission policy conflict" : `${key} value conflict`
+              key === "permission"
+                ? "permission policy conflict"
+                : `${key} value conflict`
             } in ${settingsPath}; active owner: ${activeOwner}`
           );
         }

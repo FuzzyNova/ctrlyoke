@@ -40,9 +40,21 @@ const unsupportedSnapshot: HarnessCapabilityRegistrySnapshot = {
       descriptor: { harnessId: HARNESS_IDS.CODEX_CLI },
       effective: {
         permissions: {
-          mode: { fidelity: "exact", mechanism: "native", verification: "verified" },
-          allowedTools: { fidelity: "unsupported", mechanism: "none", verification: "verified" },
-          deniedTools: { fidelity: "unsupported", mechanism: "none", verification: "verified" },
+          mode: {
+            fidelity: "exact",
+            mechanism: "native",
+            verification: "verified",
+          },
+          allowedTools: {
+            fidelity: "unsupported",
+            mechanism: "none",
+            verification: "verified",
+          },
+          deniedTools: {
+            fidelity: "unsupported",
+            mechanism: "none",
+            verification: "verified",
+          },
         },
       },
     },
@@ -51,7 +63,9 @@ const unsupportedSnapshot: HarnessCapabilityRegistrySnapshot = {
 
 describe("workflowPermissionDiagnostic", () => {
   it("ignores leftover lists on a target whose resolved mode is dangerouslyAllowAll", () => {
-    const targets = [target("dangerouslyAllowAll", ["shell(git:*)"], ["shell(rm:*)"])];
+    const targets = [
+      target("dangerouslyAllowAll", ["shell(git:*)"], ["shell(rm:*)"]),
+    ];
     expect(
       workflowPermissionDiagnostic("allowedTools", targets, unsupportedSnapshot)
     ).toBeUndefined();

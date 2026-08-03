@@ -18,9 +18,9 @@ describe("McpServerForm round trips", () => {
       autoApprove: ["tool_a"],
     };
 
-    expect(mcpServerFormStateToServer(serverToMcpServerFormState(server))).toEqual(
-      server
-    );
+    expect(
+      mcpServerFormStateToServer(serverToMcpServerFormState(server))
+    ).toEqual(server);
   });
 
   it("drops remote-only fields when switching to stdio", () => {

@@ -62,9 +62,7 @@ import {
   TOOL_RESULT_LINE,
   TOOL_RESULT_STANDALONE_INDENT,
 } from "./outputStyles";
-import {
-  AtomicReferenceChip,
-} from "./AtomicReferenceChip";
+import { AtomicReferenceChip } from "./AtomicReferenceChip";
 import {
   createAtomicReferencePresentation,
   findAtomicReferences,

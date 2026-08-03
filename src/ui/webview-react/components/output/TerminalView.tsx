@@ -234,7 +234,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
         return;
       }
 
-      const fitResult = terminalRegistry.measureViewportContainer(activeContainer);
+      const fitResult =
+        terminalRegistry.measureViewportContainer(activeContainer);
       if (!fitResult) {
         return;
       }
@@ -259,20 +260,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     };
 
     sendMeasuredViewportHint();
-    const { observer, disconnect } =
-      createAnimationFrameResizeObserver(sendMeasuredViewportHint);
+    const { observer, disconnect } = createAnimationFrameResizeObserver(
+      sendMeasuredViewportHint
+    );
     observer.observe(container);
 
     return () => {
       disconnect();
       terminalRegistry.releaseViewportMeasurement();
     };
-  }, [
-    workflowId,
-    sessions.length,
-    terminalFontSize,
-    terminalLineHeight,
-  ]);
+  }, [workflowId, sessions.length, terminalFontSize, terminalLineHeight]);
 
   const handleCloseSession = useCallback(
     (session: TerminalSession) => {

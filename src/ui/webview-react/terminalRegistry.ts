@@ -152,7 +152,10 @@ function createTerminalOptions(theme: ITheme, settings: TerminalSettings) {
   };
 }
 
-function applyTerminalSettings(term: Terminal, settings: TerminalSettings): void {
+function applyTerminalSettings(
+  term: Terminal,
+  settings: TerminalSettings
+): void {
   term.options.scrollback = settings.scrollback;
   term.options.lineHeight = settings.lineHeight;
   term.options.cursorStyle = settings.cursorStyle;
@@ -214,7 +217,10 @@ function getFitMode(entry: RegistryEntry): "controller" | "viewer" {
 
 function ensureViewportMeasurementEntry(): FitRegistryTarget {
   if (viewportMeasurementEntry) {
-    applyTerminalSettings(viewportMeasurementEntry.term, currentTerminalSettings);
+    applyTerminalSettings(
+      viewportMeasurementEntry.term,
+      currentTerminalSettings
+    );
     return viewportMeasurementEntry;
   }
 

@@ -479,11 +479,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
     };
 
     const { container } = render(
-      <OutputRow
-        row={row}
-        isExecutionActive={false}
-        atomicContextReferences
-      />
+      <OutputRow row={row} isExecutionActive={false} atomicContextReferences />
     );
 
     const chips = container.querySelectorAll(
@@ -528,11 +524,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
     plain.unmount();
 
     const chips = render(
-      <OutputRow
-        row={row}
-        isExecutionActive={false}
-        atomicContextReferences
-      />
+      <OutputRow row={row} isExecutionActive={false} atomicContextReferences />
     );
     expect(chips.container.querySelector("button")).toHaveTextContent(
       "previous"

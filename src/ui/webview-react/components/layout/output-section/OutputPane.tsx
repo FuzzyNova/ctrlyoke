@@ -195,17 +195,17 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     if (selectedChips.length === 0) return;
 
     const fragment = range.cloneContents();
-    fragment.querySelectorAll<HTMLElement>(
-      "[data-atomic-reference-copy-text]"
-    ).forEach((chip) => {
-      chip.replaceWith(
-        document.createTextNode(
-          chip.getAttribute("data-atomic-reference-copy-text") ??
-            chip.textContent ??
-            ""
-        )
-      );
-    });
+    fragment
+      .querySelectorAll<HTMLElement>("[data-atomic-reference-copy-text]")
+      .forEach((chip) => {
+        chip.replaceWith(
+          document.createTextNode(
+            chip.getAttribute("data-atomic-reference-copy-text") ??
+              chip.textContent ??
+              ""
+          )
+        );
+      });
     event.clipboardData.setData("text/plain", fragment.textContent ?? "");
     event.preventDefault();
   };

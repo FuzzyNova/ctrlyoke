@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useCompatibilityStore } from "@store/compatibilityStore";
-import { useSettingsStore, type WorkflowProperties } from "@store/settingsStore";
+import {
+  useSettingsStore,
+  type WorkflowProperties,
+} from "@store/settingsStore";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import type { PropertyValues, EditorSelectionTarget } from "@store/editorStore";
 import {
@@ -26,7 +29,9 @@ import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnal
 export interface UseCompatibilityDiagnosticsResult {
   diagnostics: CompatibilityDiagnostic[];
   executionTargets: CompatibilityExecutionTarget[];
-  capabilitySnapshot: ReturnType<typeof useCompatibilityStore.getState>["capabilitySnapshot"];
+  capabilitySnapshot: ReturnType<
+    typeof useCompatibilityStore.getState
+  >["capabilitySnapshot"];
   isChecking: boolean;
   snapshotStatus: "checking" | "ready";
 }
@@ -37,7 +42,9 @@ export interface UseCompatibilityDiagnosticsOptions {
   promptTarget?: EditorSelectionTarget;
 }
 
-function toCorePromptStep(step: Exclude<WorkflowStep, CoreScriptStep>): CorePromptStep {
+function toCorePromptStep(
+  step: Exclude<WorkflowStep, CoreScriptStep>
+): CorePromptStep {
   return {
     type: step.type,
     name: step.name,
@@ -71,7 +78,9 @@ function applyPromptProperties(
   step: WorkflowStep,
   properties: PropertyValues
 ): CorePromptStep {
-  const coreStep = toCorePromptStep(step as Exclude<WorkflowStep, CoreScriptStep>);
+  const coreStep = toCorePromptStep(
+    step as Exclude<WorkflowStep, CoreScriptStep>
+  );
   return {
     ...coreStep,
     harness: properties.harness as HarnessId | undefined,
@@ -132,7 +141,8 @@ function createDefaults(
     mcpServers: globalSettings.mcpServers as PromptFile["mcpServers"],
     hooks: globalSettings.hooks as PromptFile["hooks"],
     priorContext: globalSettings.priorContext as PromptFile["priorContext"],
-    toolPermissions: globalSettings.toolPermissions as PromptFile["toolPermissions"],
+    toolPermissions:
+      globalSettings.toolPermissions as PromptFile["toolPermissions"],
     endCondition: globalSettings.defaultEndCondition,
     preCondition: globalSettings.defaultPreCondition,
     errorBehavior: globalSettings.defaultErrorBehavior,
@@ -204,10 +214,10 @@ export function useCompatibilityDiagnostics(
 
     return {
       diagnostics: analyzeCompatibility({
-      workflow,
-      executionTargets,
-      capabilities: capabilitySnapshot,
-      workspace: { workspaceRoot: globalSettings.workspaceRoot },
+        workflow,
+        executionTargets,
+        capabilities: capabilitySnapshot,
+        workspace: { workspaceRoot: globalSettings.workspaceRoot },
       }),
       executionTargets,
     };

@@ -579,7 +579,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         }
       });
     }
-  }, [controllerCols, isController, workflowId, sessionId, syncControllerTerminalSize]);
+  }, [
+    controllerCols,
+    isController,
+    workflowId,
+    sessionId,
+    syncControllerTerminalSize,
+  ]);
 
   // When isController changes from true→false (control claimed by another client),
   // dispose onData and apply the controller's known column width.

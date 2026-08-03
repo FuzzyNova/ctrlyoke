@@ -9,9 +9,7 @@ interface CompatibilityState {
 }
 
 interface CompatibilityActions {
-  setCapabilitySnapshot: (
-    snapshot: HarnessCapabilityRegistrySnapshot
-  ) => void;
+  setCapabilitySnapshot: (snapshot: HarnessCapabilityRegistrySnapshot) => void;
   resetCapabilitySnapshot: () => void;
 }
 

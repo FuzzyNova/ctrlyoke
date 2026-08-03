@@ -27,9 +27,7 @@ export interface HarnessCapabilitySource {
     getVersion?(): Promise<string | undefined>;
   };
   /** Optional hook for invalidating the session cache after a status refresh. */
-  readonly onStatusChange?: (
-    listener: () => void
-  ) => { dispose(): void };
+  readonly onStatusChange?: (listener: () => void) => { dispose(): void };
 }
 
 export interface HarnessCapabilityRegistryOptions {
@@ -62,7 +60,9 @@ export class HarnessCapabilityRegistry {
   private readonly enabledDomains: readonly CapabilityDomain[];
 
   constructor(options: HarnessCapabilityRegistryOptions = {}) {
-    this.enabledDomains = options.enabledDomains ?? [CAPABILITY_DOMAINS.PERMISSIONS];
+    this.enabledDomains = options.enabledDomains ?? [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+    ];
     this.validateEnabledDomains();
 
     for (const harnessId of HARNESS_ID_LIST) {
@@ -119,10 +119,10 @@ export class HarnessCapabilityRegistry {
   /** Build a serializable snapshot for the currently enabled domains. */
   async getSnapshot(): Promise<HarnessCapabilityRegistrySnapshot> {
     const entries = await Promise.all(
-      HARNESS_ID_LIST.map(async (harnessId) => [
-        harnessId,
-        await this.getInstalledCapabilities(harnessId),
-      ] as const)
+      HARNESS_ID_LIST.map(
+        async (harnessId) =>
+          [harnessId, await this.getInstalledCapabilities(harnessId)] as const
+      )
     );
 
     return {
@@ -142,7 +142,9 @@ export class HarnessCapabilityRegistry {
   static deserializeSnapshot(
     serialized: string
   ): HarnessCapabilityRegistrySnapshot {
-    const snapshot = JSON.parse(serialized) as HarnessCapabilityRegistrySnapshot;
+    const snapshot = JSON.parse(
+      serialized
+    ) as HarnessCapabilityRegistrySnapshot;
     if (snapshot.schemaVersion !== HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION) {
       throw new Error(
         `Unsupported harness capability snapshot schema: ${String(
@@ -154,7 +156,9 @@ export class HarnessCapabilityRegistry {
       snapshot.enabledDomains.length !== 1 ||
       snapshot.enabledDomains[0] !== CAPABILITY_DOMAINS.PERMISSIONS
     ) {
-      throw new Error("Harness capability snapshots must enable permissions only");
+      throw new Error(
+        "Harness capability snapshots must enable permissions only"
+      );
     }
     return snapshot;
   }
@@ -187,7 +191,9 @@ export class HarnessCapabilityRegistry {
       await this.getInstalledCapabilities(harnessId);
       return;
     }
-    await Promise.all(HARNESS_ID_LIST.map((id) => this.getInstalledCapabilities(id)));
+    await Promise.all(
+      HARNESS_ID_LIST.map((id) => this.getInstalledCapabilities(id))
+    );
   }
 
   /** Invalidate cached installed availability and version information. */
@@ -211,8 +217,11 @@ export class HarnessCapabilityRegistry {
     source: HarnessCapabilitySource
   ): Promise<InstalledHarnessCapabilities> {
     const available = await source.provider.checkAvailability();
-    const version = available ? await source.provider.getVersion?.() : undefined;
-    const permissionCapabilities = source.provider.toolPermissionMapper.capabilities;
+    const version = available
+      ? await source.provider.getVersion?.()
+      : undefined;
+    const permissionCapabilities =
+      source.provider.toolPermissionMapper.capabilities;
     const descriptor = {
       harnessId: source.provider.config.harnessId,
       permissions: permissionCapabilities,
@@ -244,9 +253,9 @@ export class HarnessCapabilityRegistry {
   ): EffectiveCapabilityState {
     const verified = Boolean(
       installedVersion &&
-        declaration.verification?.verifiedVersions.some((range) =>
-          versionSatisfies(installedVersion, range)
-        )
+      declaration.verification?.verifiedVersions.some((range) =>
+        versionSatisfies(installedVersion, range)
+      )
     );
 
     return {
@@ -327,7 +336,9 @@ function parseVersion(version: string): ParsedVersion | undefined {
 
 function compareVersions(left: ParsedVersion, right: ParsedVersion): number {
   return (
-    left.major - right.major || left.minor - right.minor || left.patch - right.patch
+    left.major - right.major ||
+    left.minor - right.minor ||
+    left.patch - right.patch
   );
 }
 

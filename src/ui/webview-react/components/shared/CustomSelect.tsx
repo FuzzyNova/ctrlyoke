@@ -308,7 +308,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           id={warningId}
           className={`text-xxs mt-0.5 flex items-start gap-1 ${dropdownWarningClass(warning)}`}
         >
-          <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
+          <i
+            className="codicon codicon-warning mt-px flex-shrink-0"
+            aria-hidden="true"
+          />
           {warning}
         </span>
       )}

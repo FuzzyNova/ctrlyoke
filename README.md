@@ -132,22 +132,22 @@ steps:
 
 Properties follow a three-tier precedence: **prompt-level → workflow-level → VS Code settings**.
 
-| Property          | Type                                    | Description                                                                     |
-| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------- |
-| `prompt`          | `string`                                | Prompt text, or path to a `.prompt.md` / `.txt` file                            |
-| `name`            | `string`                                | Display label for this step                                                     |
-| `harness`         | harness ID                              | Override the active harness for this prompt                                     |
-| `model`           | `string`                                | Model to use (harness-specific format)                                          |
+| Property          | Type                                    | Description                                                                                                  |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `prompt`          | `string`                                | Prompt text, or path to a `.prompt.md` / `.txt` file                                                         |
+| `name`            | `string`                                | Display label for this step                                                                                  |
+| `harness`         | harness ID                              | Override the active harness for this prompt                                                                  |
+| `model`           | `string`                                | Model to use (harness-specific format)                                                                       |
 | `agent`           | `string`                                | Portable ctrlyoke prompt attachment; resolved into a categorized prompt reference with `<agentInstructions>` |
-| `skills`          | `string[]`                              | Portable ctrlyoke prompt attachments resolved into categorized prompt references |
-| `resumeSession`   | `boolean`                               | Continue the previous prompt's conversation session                             |
-| `sessionId`       | `string \| number`                      | Resume a session by ID or by prior prompt index                                 |
-| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"ctrlyoke"` enables dynamic queue extension             |
-| `hooks`           | `UserHookConfig[]`                      | Shell commands to run at harness lifecycle events                               |
-| `endCondition`    | `EndCondition`                          | Validation script with retry configuration                                      |
-| `priorContext`    | `string \| number[]`                    | Inject prior prompt outputs: `none`, `previous`, `all`, or index array          |
-| `additionalArgs`  | `string`                                | Extra flags appended to the CLI invocation                                      |
-| `toolPermissions` | `ToolPermissionsOverride`               | Per-prompt override: `dangerouslyAllowAll`, `allowAll`, `custom`, `passthrough` |
+| `skills`          | `string[]`                              | Portable ctrlyoke prompt attachments resolved into categorized prompt references                             |
+| `resumeSession`   | `boolean`                               | Continue the previous prompt's conversation session                                                          |
+| `sessionId`       | `string \| number`                      | Resume a session by ID or by prior prompt index                                                              |
+| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"ctrlyoke"` enables dynamic queue extension                                          |
+| `hooks`           | `UserHookConfig[]`                      | Shell commands to run at harness lifecycle events                                                            |
+| `endCondition`    | `EndCondition`                          | Validation script with retry configuration                                                                   |
+| `priorContext`    | `string \| number[]`                    | Inject prior prompt outputs: `none`, `previous`, `all`, or index array                                       |
+| `additionalArgs`  | `string`                                | Extra flags appended to the CLI invocation                                                                   |
+| `toolPermissions` | `ToolPermissionsOverride`               | Per-prompt override: `dangerouslyAllowAll`, `allowAll`, `custom`, `passthrough`                              |
 
 ### End condition
 

@@ -101,9 +101,9 @@ describe("MarkdownText", () => {
         See src/ui/webview-react/utils/foo.ts for details
       </MarkdownText>
     );
-    expect(await screen.findByRole("button", { name: /open src/i })).toHaveClass(
-      "atomic-reference-chip"
-    );
+    expect(
+      await screen.findByRole("button", { name: /open src/i })
+    ).toHaveClass("atomic-reference-chip");
   });
 
   it("preserves authored labels for opted-in local Markdown links", async () => {
@@ -112,7 +112,9 @@ describe("MarkdownText", () => {
         {["[the utility](src/utils/foo.ts)"].join("")}
       </MarkdownText>
     );
-    const chip = await screen.findByRole("button", { name: /open src\/utils\/foo\.ts/i });
+    const chip = await screen.findByRole("button", {
+      name: /open src\/utils\/foo\.ts/i,
+    });
     expect(chip).toHaveTextContent("the utility");
     expect(chip).toHaveAttribute("title", "src/utils/foo.ts");
   });
@@ -141,9 +143,13 @@ describe("MarkdownText", () => {
         {["[external](https://example.com) `src/utils/foo.ts`"].join("")}
       </MarkdownText>
     );
-    expect(await screen.findByRole("link", { name: "external" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: "external" })
+    ).toBeInTheDocument();
     expect(container.querySelector("code .atomic-reference-chip")).toBeNull();
-    expect(container.querySelectorAll(".atomic-reference-chip")).toHaveLength(0);
+    expect(container.querySelectorAll(".atomic-reference-chip")).toHaveLength(
+      0
+    );
   });
 
   it("opens Codex /abs/path drive markdown links as local file refs", async () => {

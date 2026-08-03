@@ -93,7 +93,14 @@ describe("markFindTokens", () => {
 
   it("marks path-like text in diff tokens without creating reference-chip metadata", () => {
     const input = tokens(
-      [[{ type: "string", value: "@ctrlyoke/src/ui/webview-react/utils/codemirrorTheme.ts" }]],
+      [
+        [
+          {
+            type: "string",
+            value: "@ctrlyoke/src/ui/webview-react/utils/codemirrorTheme.ts",
+          },
+        ],
+      ],
       []
     );
 

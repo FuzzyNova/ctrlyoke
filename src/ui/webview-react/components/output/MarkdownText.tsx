@@ -157,9 +157,7 @@ function remarkFileLinks() {
     // projected against the row's authoritative find decorations.
     visitParents(tree, "text", (node, ancestors) => {
       const parent = ancestors[ancestors.length - 1];
-      const index = parent
-        ? (parent.children as unknown[]).indexOf(node)
-        : -1;
+      const index = parent ? (parent.children as unknown[]).indexOf(node) : -1;
       if (ancestors.some((ancestor) => ancestor.type === "link")) return;
       if (!parent || typeof index !== "number" || !node.position) return;
       const value = node.value;
@@ -169,15 +167,16 @@ function remarkFileLinks() {
       let match: RegExpExecArray | null;
       while ((match = regex.exec(value))) {
         const raw = match[0];
-        const normalized = normalizeCodexAbsPath(
-          raw.replace(/\\{2,}/g, "\\")
-        );
+        const normalized = normalizeCodexAbsPath(raw.replace(/\\{2,}/g, "\\"));
         const encoded = encodeURIComponent(normalized);
         const display = escapeHtml(normalized);
         const start = node.position.start.offset! + match.index;
         const end = start + raw.length;
         if (match.index > cursor) {
-          replacements.push({ type: "text", value: value.slice(cursor, match.index) });
+          replacements.push({
+            type: "text",
+            value: value.slice(cursor, match.index),
+          });
         }
         replacements.push({
           type: "html",
@@ -241,9 +240,7 @@ function remarkImageRefs() {
   return (tree: Root): undefined => {
     visitParents(tree, "text", (node, ancestors) => {
       const parent = ancestors[ancestors.length - 1];
-      const index = parent
-        ? (parent.children as unknown[]).indexOf(node)
-        : -1;
+      const index = parent ? (parent.children as unknown[]).indexOf(node) : -1;
       if (ancestors.some((ancestor) => ancestor.type === "link")) return;
       if (!parent || typeof index !== "number" || !node.position) return;
       const value = node.value;
@@ -261,7 +258,10 @@ function remarkImageRefs() {
         const start = node.position.start.offset! + match.index;
         const end = start + raw.length;
         if (match.index > cursor) {
-          replacements.push({ type: "text", value: value.slice(cursor, match.index) });
+          replacements.push({
+            type: "text",
+            value: value.slice(cursor, match.index),
+          });
         }
         replacements.push({
           type: "html",
@@ -933,7 +933,9 @@ function createMarkdownReferencePresentation(
 ) {
   const compactStart = Math.max(
     0,
-    sourceText.lastIndexOf(referenceBasename(descriptor.attrs["data-path"] ?? ""))
+    sourceText.lastIndexOf(
+      referenceBasename(descriptor.attrs["data-path"] ?? "")
+    )
   );
   return {
     sourceText,
@@ -1232,12 +1234,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         </pre>
       ),
     }),
-    [
-      atomicContextReferences,
-      children,
-      codeFindHighlight,
-      findDecorations,
-    ]
+    [atomicContextReferences, children, codeFindHighlight, findDecorations]
   );
 
   // Only append the highlight plugin when there's a non-whitespace query, so

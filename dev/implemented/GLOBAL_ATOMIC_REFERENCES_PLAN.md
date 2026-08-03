@@ -121,7 +121,7 @@ With `ui.atomicContextReferences` enabled inside `OutputPane`:
   **Note this is a behavior change, not only a presentation change:** echoed
   `$context` tokens are not clickable in output today at all, because
   `PromptReferenceText` calls only `findContextReferenceMatches` and never
-  `findInlinePriorContextRefs`. Gating clickability on a *formatting* setting
+  `findInlinePriorContextRefs`. Gating clickability on a _formatting_ setting
   would be incoherent, so `$context` becomes clickable in **both** states —
   a plain text link when the setting is off (matching how every other echoed
   reference renders when off) and a chip when it is on;
@@ -209,19 +209,19 @@ source markup can remain documented.
 extending `src/utils/FileReferenceParser.ts` so one parser served both runtime
 and UI. That is the wrong trade here and is explicitly **not** part of this work:
 
-- `FileReferenceParser.ts` is the *runtime* parser. `parseAtReferences()` and
+- `FileReferenceParser.ts` is the _runtime_ parser. `parseAtReferences()` and
   friends feed harness context expansion through `HarnessIntegration`; its
   regexes are tuned for prose tolerance (trailing-punctuation stripping) and it
   returns `FileReference` objects, not ranged discriminated matches.
-- `findContextReferenceMatches()` in `CodeMirrorEditor.tsx` is the *UI* parser.
+- `findContextReferenceMatches()` in `CodeMirrorEditor.tsx` is the _UI_ parser.
   It needs exact `[from, to)` source ranges, a discriminated `type`, and it
   covers dialects the runtime parser does not (quoted variants, `~git` refs,
   inline `$context`).
 
 Merging them would put harness context expansion at risk for no user-visible
 benefit to this feature. The single-source requirement that actually matters —
-and the one the acceptance criteria test — is *one parser shared by the editor
-and output renderers*. That is achieved entirely on the webview side.
+and the one the acceptance criteria test — is _one parser shared by the editor
+and output renderers_. That is achieved entirely on the webview side.
 
 So: extract the UI parser and presentation helpers out of
 `CodeMirrorEditor.tsx` verbatim (no behavior change) into

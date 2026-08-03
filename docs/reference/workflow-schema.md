@@ -15,24 +15,24 @@ finalStep:
 
 ## Workflow-level fields
 
-| Field             | Type                | Notes                                           |
-| ----------------- | ------------------- | ----------------------------------------------- |
-| `harness`         | string              | One of the supported harness IDs                |
-| `model`           | string              | Harness-specific model name                     |
+| Field             | Type                | Notes                                                                                                                 |
+| ----------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `harness`         | string              | One of the supported harness IDs                                                                                      |
+| `model`           | string              | Harness-specific model name                                                                                           |
 | `agent`           | string or `null`    | Portable ctrlyoke prompt attachment; resolved into categorized prompt references and wrapped in `<agentInstructions>` |
-| `skills`          | string[] or `null`  | Portable ctrlyoke prompt attachments resolved into categorized prompt references |
-| `resumeSession`   | boolean             | Default session behavior                        |
-| `sessionId`       | string or number    | Exact session, step reference, or `"finalStep"` |
-| `mcpServers`      | array or `null`     | Include `"ctrlyoke"` for dynamic queue support  |
-| `hooks`           | array or `null`     | User-defined harness hook commands              |
-| `endCondition`    | object or `null`    | Post-step validation defaults                   |
-| `preCondition`    | object or `null`    | Pre-step gating defaults                        |
-| `priorContext`    | keyword or number[] | Prior-output injection rules                    |
-| `additionalArgs`  | string or `null`    | Extra CLI arguments                             |
-| `toolPermissions` | object or `null`    | Per-workflow tool permission overrides          |
-| `steps`           | array               | Required for multi-step workflows               |
-| `finalStep`       | step                | Optional loop/review step                       |
-| `vars`            | object              | `{{name}}` substitutions                        |
+| `skills`          | string[] or `null`  | Portable ctrlyoke prompt attachments resolved into categorized prompt references                                      |
+| `resumeSession`   | boolean             | Default session behavior                                                                                              |
+| `sessionId`       | string or number    | Exact session, step reference, or `"finalStep"`                                                                       |
+| `mcpServers`      | array or `null`     | Include `"ctrlyoke"` for dynamic queue support                                                                        |
+| `hooks`           | array or `null`     | User-defined harness hook commands                                                                                    |
+| `endCondition`    | object or `null`    | Post-step validation defaults                                                                                         |
+| `preCondition`    | object or `null`    | Pre-step gating defaults                                                                                              |
+| `priorContext`    | keyword or number[] | Prior-output injection rules                                                                                          |
+| `additionalArgs`  | string or `null`    | Extra CLI arguments                                                                                                   |
+| `toolPermissions` | object or `null`    | Per-workflow tool permission overrides                                                                                |
+| `steps`           | array               | Required for multi-step workflows                                                                                     |
+| `finalStep`       | step                | Optional loop/review step                                                                                             |
+| `vars`            | object              | `{{name}}` substitutions                                                                                              |
 
 ## Prompt step fields
 
