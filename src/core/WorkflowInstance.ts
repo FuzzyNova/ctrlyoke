@@ -826,7 +826,7 @@ export class WorkflowInstance {
   /**
    * Load a prompt file into the dashboard without executing.
    */
-  async loadPromptFile(filePath: string): Promise<void> {
+  async loadPromptFile(filePath: string): Promise<boolean> {
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
@@ -837,15 +837,21 @@ export class WorkflowInstance {
       this.workspaceFolderPath
     );
 
-    if (workingFilePath) {
-      const promptFile = await this.promptFileParser.parsePromptFile(filePath);
-      if (promptFile) {
-        this.currentPromptFile = { filePath, promptFile };
-      }
-      this.setupPromptFileWatcher(workingFilePath);
+    if (!workingFilePath) {
+      this.propagateWorkflowNameToIntegrations();
+      return false;
     }
 
+    const promptFile = await this.promptFileParser.parsePromptFile(filePath);
+    if (!promptFile) {
+      this.propagateWorkflowNameToIntegrations();
+      return false;
+    }
+
+    this.currentPromptFile = { filePath, promptFile };
+    this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
+    return true;
   }
 
   /**

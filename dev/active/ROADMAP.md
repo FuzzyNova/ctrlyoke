@@ -76,7 +76,7 @@ to drive.
    is _not_ a prerequisite — is in
    [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](COMPATIBILITY_AND_FEEDBACK_STAGING.md).
 6. **Automation API structured results** — implement the versioned per-step JSON
-   result contract in [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md).
+   result contract in [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md).
    Promoted from P1 because the CLI is now the _only_ sanctioned automation
    surface: the MCP lifecycle control surface was rejected on the explicit
    grounds that `ctrlyoke run --headless --json` already serves external
@@ -215,11 +215,11 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 | Gate                                                                      | Status                                        | Source                                                                                                             |
 | ------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Harness capability registry and compatibility diagnostics (phase 1)       | Implemented — Stage 1 release gate complete  | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
+| Harness capability registry and compatibility diagnostics (phase 1)       | Implemented — Stage 1 release gate complete   | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                |
 | Qwen/OpenCode permission parity and behavioral verification               | Implemented — pinned fixtures, run on request | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
-| Tool-permission honesty UI (compatibility phase 1C)                       | Implemented — Stage 1 release gate complete  | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
+| Tool-permission honesty UI (compatibility phase 1C)                       | Implemented — Stage 1 release gate complete   | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
 | Antigravity global statusline lease safety                                | Implemented — path baselines and file locking | [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)                                      |
-| Per-step CLI `--json` result contract                                     | Not implemented                               | [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                                                                 |
+| Per-step CLI `--json` result contract                                     | Implemented — Stage B complete                | [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)                                                  |
 | Final release artifact audit                                              | In progress                                   | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
 | Landing/docs production deployment and DNS verification                   | In progress                                   | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
 | Pro license provider, entitlement service, activation, and feature gating | Not implemented                               | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
@@ -348,7 +348,7 @@ criteria matter more than speculative dates.
 | [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md)               | Infrastructure/content exists; freshness and deployment remain                     |
 | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                     | Architecture decided; provider and extension implementation remain                 |
 | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                     | External cutover work remains                                                      |
-| [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)                               | **P0 release gate.** Per-step JSON ready to implement; SDK/MCP launch rejected     |
+| [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)                | **Implemented.** Per-step JSON shipped; SDK/MCP launch rejected                    |
 | [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](COMPATIBILITY_AND_FEEDBACK_STAGING.md) | Implementation order for the compatibility, permission, and browser-feedback plans |
 
 ### Prioritized backlog

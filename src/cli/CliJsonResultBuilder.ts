@@ -267,8 +267,10 @@ function buildStepResult(
     success: getStepSuccess(status, enabled),
     attempts:
       projection?.attempts ?? getFallbackAttempts(result, runtime, status),
-    lastAttempt: projection?.latestAttempt
-      ? toLastAttempt(projection.latestAttempt)
+    lastAttempt: projection
+      ? projection.latestAttempt
+        ? toLastAttempt(projection.latestAttempt)
+        : null
       : getFallbackLastAttempt(result, runtime, status),
     startedAt,
     completedAt,

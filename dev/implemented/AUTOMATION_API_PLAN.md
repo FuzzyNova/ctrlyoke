@@ -1,12 +1,12 @@
 # Automation API & Power User Scripting Plan
 
-> **Status: ACTIVE — per-step `--json` results.** Parameterized headless runs
-> are implemented. The remaining work is a stable, detailed JSON result for
-> one completed CLI run. SDK and MCP workflow-launching proposals remain
-> deferred indefinitely; they are not part of this implementation.
+> **Status: IMPLEMENTED — per-step `--json` results.** Parameterized headless
+> runs and the JSON v1 result contract are implemented. SDK and MCP
+> workflow-launching proposals remain deferred indefinitely; they are not part
+> of this implementation.
 >
 > **Implementation order:**
-> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 > — Stage B, whole plan, five steps. Its `schemaVersion` envelope is the
 > convention `ctrlyoke validate --json` follows in Stage D.
 

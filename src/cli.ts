@@ -485,7 +485,10 @@ async function runCommand(
       if (options.prompt) {
         instance.loadPromptString(options.prompt);
       } else {
-        await instance.loadPromptFile(resolvedFile!);
+        const loaded = await instance.loadPromptFile(resolvedFile!);
+        if (!loaded) {
+          throw new Error(`Failed to load workflow file: ${resolvedFile}`);
+        }
       }
 
       warnAboutClampedInteractiveSteps(

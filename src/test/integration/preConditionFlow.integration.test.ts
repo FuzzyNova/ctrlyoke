@@ -145,6 +145,17 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.strictEqual(await markerExists(), false);
   });
 
+  test("reports a failed source parse to the caller", async () => {
+    harness = createExecutionHarness(workspace);
+    const invalidWorkflow = path.join(workspace, "invalid.ctrlyoke.json");
+    await fs.writeFile(invalidWorkflow, "{ invalid json");
+
+    assert.strictEqual(
+      await harness.instance.loadPromptFile(invalidWorkflow),
+      false
+    );
+  });
+
   test("workflow-level preCondition in the source file runs before the first prompt; onPass: skipPrompt skips it", async () => {
     harness = createExecutionHarness(workspace);
     await harness.instance.loadPromptFile(

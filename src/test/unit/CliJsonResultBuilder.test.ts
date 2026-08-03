@@ -179,6 +179,8 @@ suite("CliJsonResultBuilder", () => {
         [2, "pending", false, null],
       ]
     );
+    assert.strictEqual(output.steps[0].lastAttempt, null);
+    assert.strictEqual(output.steps[1].lastAttempt, null);
     assert.deepStrictEqual(output.summary, {
       total: 3,
       completed: 0,
@@ -224,6 +226,7 @@ suite("CliJsonResultBuilder", () => {
     assert.strictEqual(output.steps[0].harness, null);
     assert.strictEqual(output.steps[0].model, null);
     assert.strictEqual(output.steps[0].sessionId, null);
+    assert.strictEqual(output.steps[0].executionMode, "headless");
     assert.strictEqual(output.steps[0].preCondition, null);
     assert.strictEqual(output.steps[0].endCondition, null);
   });

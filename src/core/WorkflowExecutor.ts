@@ -651,6 +651,7 @@ export class WorkflowExecutor {
       await this.promptQueue.persistRuntimeMetadata(runtimeStepIndex, {
         harness: resolvedProperties.harness,
         model: resolvedProperties.model,
+        executionMode: resolvedProperties.executionMode,
         agent: resolvedProperties.agent,
         skills: resolvedProperties.skills,
       });
@@ -948,7 +949,9 @@ export class WorkflowExecutor {
 
     // Record startedAt on the step's _runtime
     await this.promptQueue.persistRuntimeMetadata(
-      stepIndex >= 0 ? stepIndex : this.promptQueue.getState().currentIndex,
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? stepIndex
+        : this.promptQueue.getState().steps.length,
       { startedAt: Date.now() }
     );
 
@@ -971,6 +974,12 @@ export class WorkflowExecutor {
         step,
         this.promptQueue.getWorkflowFile(),
         { hostCanProvidePty: context.hostCanProvidePty }
+      );
+      await this.promptQueue.persistRuntimeMetadata(
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? stepIndex
+          : this.promptQueue.getState().steps.length,
+        { executionMode: resolvedExecutionMode }
       );
       const requestedInteractive =
         resolvedExecutionMode === EXECUTION_MODES.INTERACTIVE;

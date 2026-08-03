@@ -5,7 +5,7 @@ plans, none of which is a 0.1.0 release gate:
 
 - [`BROWSER_USER_FEEDBACK_PLAN.md`](../backlog/BROWSER_USER_FEEDBACK_PLAN.md)
   — Phases 2, 2.5 (Site 3), 3, 4, and the Phase 5 guards.
-- [`AUTOMATION_API_PLAN.md`](AUTOMATION_API_PLAN.md)
+- [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)
   — the per-step `ctrlyoke run --headless --json` v1 contract, in full.
 - [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
   — Phase 2, Phase 3, and the permission plan's post-release parity items.
@@ -63,7 +63,7 @@ plan's own table, this section is newer.
 | `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                                      |
 | `MESSAGE_TYPES.USER_FEEDBACK`                                     | **Does not exist** — Phase 1 landed the severity vocabulary and the queue, not the transport                                |
 | `ToastViewport`                                                   | Shipped, mounted, consuming the queue                                                                                       |
-| `src/cli/CliJsonResultBuilder.ts`                                 | **Does not exist** — `cli.ts:541` still emits the compact unversioned payload via `console.log`                             |
+| `src/cli/CliJsonResultBuilder.ts`                                 | **Shipped** — `cli.ts` emits the versioned per-step JSON v1 envelope with clean stdout                                      |
 | Capability registry, analyzer, snapshot, preflight, honest UI     | Shipped (Compatibility Phases 1A–1C)                                                                                        |
 
 Two consequences worth naming up front:
@@ -221,13 +221,16 @@ remote to stdio must not retain `url`, `transport`, or `headers`.
 Resolved 2026-08-02 — the form keeps a cloned original config snapshot and applies
 transport-aware invalidation before saving the edited fields.
 
-### Stage B — Automation API, in full
+### Stage B — Automation API, in full — COMPLETE
 
 Self-contained, unblocked, ships a user-visible feature, and produces the
 condition-record substrate and JSON envelope convention that Stages C and D
 reuse (see the two ordering nudges). Five steps, covering the plan's design
 sections in dependency order rather than section order — see the note under the
 queue table.
+
+Stage B was completed on 2026-08-02 after live success, end-condition failure,
+pre-condition skip, and parse-error verification against the built CLI.
 
 ### Stage C — Browser feedback Phases 2 and 2.5
 
@@ -299,27 +302,27 @@ Single-session steps. Each commits its own work and leaves this document and its
 owning plan current. Steps are strictly ordered within a stage; stages B and C
 may be swapped as a block.
 
-| #   | Stage | Scope                                                                                                                                        |
-| --- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                    |
-| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                    |
-| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest |
-| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation     |
+| #   | Stage | Scope                                                                                                                                                                         |
+| --- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                     |
+| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                     |
+| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                  |
+| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                      |
 | 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3) |
-| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                |
-| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                  |
-| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                              |
-| 9   | B.5   | Live end-to-end CLI verification on `opencode-cli`; fix defects; move the plan to `dev/implemented/`                                         |
-| 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                                               |
-| 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast                                  |
-| 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls                            |
-| 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                       |
-| 14  | C.5   | Execute the triage: deletions and scoped-reply conversions                                                                                   |
-| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1381` "don't show again" (Phase 2.5 Site 3)                                          |
-| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                 |
-| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                 |
-| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                                                  |
-| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                      |
+| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                  |
+| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                  |
+| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                             |
+| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                            |
+| 10  | C.1   | `MESSAGE_TYPES.USER_FEEDBACK` + payload type + browser handler                                                                                                                |
+| 11  | C.2   | `UserFeedbackSink` contract; VS Code, console, and hosted-WebSocket implementations; browser-only broadcast                                                                   |
+| 12  | C.3   | Migrate the 18 adapter-UI calls + `showChoice`; delete the five `PlatformAdapter` UI methods and update all impls                                                             |
+| 13  | C.4   | Triage all 63 reusable direct sites and record per-site disposition (no migration yet)                                                                                        |
+| 14  | C.5   | Execute the triage: deletions and scoped-reply conversions                                                                                                                    |
+| 15  | C.6   | Execute the triage: broadcast ports; `CliIntegration.ts:1381` "don't show again" (Phase 2.5 Site 3)                                                                           |
+| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                  |
+| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                  |
+| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 7 action-bearing sites; headless fallbacks                                                                                   |
+| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                                                       |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection

@@ -30,7 +30,7 @@ defensible. It is a security boundary, not an incidental limitation.
 
 ### 2. It duplicates a control plane the CLI already owns
 
-`dev/active/AUTOMATION_API_PLAN.md` had already deferred `ctrlyoke_run_workflow`
+`dev/implemented/AUTOMATION_API_PLAN.md` had already deferred `ctrlyoke_run_workflow`
 indefinitely for exactly this reason: it "would create a second lifecycle,
 locking, cancellation, and workspace control plane." `ctrlyoke_start_workflow`
 was the same tool under a different name.
@@ -81,7 +81,7 @@ auto-approval posture, not just the API shape.
 The same decision settles the caller question: this server exists to serve one
 ctrlyoke run, so it has no "external client" mode to design an API for. Driving
 ctrlyoke from outside a workflow is the CLI's job
-(`dev/active/AUTOMATION_API_PLAN.md`).
+(`dev/implemented/AUTOMATION_API_PLAN.md`).
 
 ---
 

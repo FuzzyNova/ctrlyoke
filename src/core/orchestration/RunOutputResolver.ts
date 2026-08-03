@@ -1112,7 +1112,9 @@ function sameProjectionAttempt(
   return (
     identity.runIndex === attempt.runIndex &&
     identity.attemptIndex === attempt.attemptIndex &&
-    identity.phase === attempt.phase &&
+    (identity.phase === undefined ||
+      attempt.phase === undefined ||
+      identity.phase === attempt.phase) &&
     getTargetKey(identity.target) === getTargetKey(attempt.target)
   );
 }

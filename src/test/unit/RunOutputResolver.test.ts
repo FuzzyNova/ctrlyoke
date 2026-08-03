@@ -7,6 +7,7 @@ import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   EXECUTION_STATES,
+  EXECUTION_PHASES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
 import {
@@ -176,6 +177,7 @@ suite("RunOutputResolver", () => {
           startReason: "initial",
           prompt: "npm test -- --runInBand",
         },
+        phase: EXECUTION_PHASES.PROMPT,
       },
       {
         eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
