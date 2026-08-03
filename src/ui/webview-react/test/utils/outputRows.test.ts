@@ -10,7 +10,10 @@ import {
   toolCallLineHeight,
   toolResultLineHeight,
 } from "@utils/outputLineMetrics";
-import { DEFAULT_COLLAPSED_OUTPUT_MAX_LINES } from "@utils/outputTruncation";
+import {
+  DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  SCRIPT_OUTPUT_LINES_PER_ROW,
+} from "@utils/outputTruncation";
 import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
@@ -161,7 +164,7 @@ describe("outputRows", () => {
       "cli-header",
       "prompt",
       "cli-command",
-      "plain-response",
+      "script-output",
       "script-verdict",
       "stats",
     ]);
@@ -228,7 +231,7 @@ describe("outputRows", () => {
 
     expect(
       result.rows
-        .filter((row) => row.rowKind === "plain-response")
+        .filter((row) => row.rowKind === "script-output")
         .map((row) => row.text)
     ).toEqual(["pre output", "end output"]);
   });
@@ -1608,6 +1611,216 @@ describe("outputRows", () => {
       const small = estimateOutputRowHeight(makeRow(baseText), 11, 760);
       const large = estimateOutputRowHeight(makeRow(baseText), 20, 760);
       expect(large).toBeGreaterThan(small);
+    });
+  });
+
+  // Script output has no structured events, so it used to collapse into one
+  // unbounded plain-response row that the virtualizer could not page and that
+  // re-laid-out in full on every append.
+  describe("script output rows", () => {
+    const scriptLines = (count: number) =>
+      Array.from({ length: count }, (_, index) => `line ${index + 1}`).join(
+        "\n"
+      );
+
+    const buildScriptRows = (
+      options: {
+        streaming?: string;
+        response?: string;
+        scriptOutputExpansionState?: Map<string, boolean>;
+      } = {}
+    ) =>
+      buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            phase: EXECUTION_PHASES.PRE_CONDITION,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "Run the condition",
+              cliCommand: "npm test",
+              response: options.response ?? "",
+              elapsed: 0,
+              isStreaming: options.streaming !== undefined,
+              source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks:
+          options.streaming !== undefined
+            ? {
+                [getStreamingChunkKey(0, EXECUTION_PHASES.PRE_CONDITION)]:
+                  options.streaming,
+              }
+            : {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: options.streaming !== undefined,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        scriptOutputExpansionState: options.scriptOutputExpansionState,
+        defaultDiffCollapsed: false,
+        outputContentWidth: 760,
+        outputFontSize: 13,
+      });
+
+    const scriptRows = (result: ReturnType<typeof buildOutputRows>) =>
+      result.rows.filter((row) => row.rowKind === "script-output");
+
+    it("splits completed output into bounded slices that rejoin to the original", () => {
+      const response = scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 3 + 4);
+      const rows = scriptRows(buildScriptRows({ response }));
+
+      expect(rows).toHaveLength(4);
+      expect(rows.map((row) => row.text).join("\n")).toBe(response);
+      for (const row of rows) {
+        expect(row.text.split("\n").length).toBeLessThanOrEqual(
+          SCRIPT_OUTPUT_LINES_PER_ROW
+        );
+      }
+      // Completed output has stopped changing, so nothing is withheld.
+      expect(rows.some((row) => row.tailToggle)).toBe(false);
+      expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
+    });
+
+    it("marks only the outer slices so the block's chrome is charged once", () => {
+      const rows = scriptRows(
+        buildScriptRows({
+          response: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 3),
+        })
+      );
+
+      expect(rows.map((row) => row.isFirstSegment)).toEqual([
+        true,
+        false,
+        false,
+      ]);
+      expect(rows.map((row) => row.isLastSegment)).toEqual([
+        false,
+        false,
+        true,
+      ]);
+    });
+
+    it("shows only the trailing window while the script is still running", () => {
+      const streaming = scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW + 12);
+      const rows = scriptRows(buildScriptRows({ streaming }));
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].text.split("\n")).toHaveLength(
+        SCRIPT_OUTPUT_LINES_PER_ROW
+      );
+      expect(rows[0].text).toContain(
+        `line ${SCRIPT_OUTPUT_LINES_PER_ROW + 12}`
+      );
+      expect(rows[0].text.startsWith("line 1\n")).toBe(false);
+      expect(rows[0].tailToggle).toMatchObject({
+        hiddenLineCount: 12,
+        expanded: false,
+      });
+    });
+
+    it("streams without a toggle until there is something to hide", () => {
+      const rows = scriptRows(
+        buildScriptRows({ streaming: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW) })
+      );
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].tailToggle).toBeUndefined();
+    });
+
+    it("reveals the full stream once the tail toggle is expanded", () => {
+      const streaming = scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2 + 5);
+      const collapsed = scriptRows(buildScriptRows({ streaming }));
+      const toggleKey = collapsed[0].tailToggle?.key;
+      expect(toggleKey).toBeDefined();
+
+      const expanded = scriptRows(
+        buildScriptRows({
+          streaming,
+          scriptOutputExpansionState: new Map([[toggleKey ?? "", true]]),
+        })
+      );
+
+      expect(expanded).toHaveLength(3);
+      expect(expanded.map((row) => row.text).join("\n")).toBe(streaming);
+      // The toggle rides the last slice in both states so it stays put on screen.
+      expect(expanded[expanded.length - 1].tailToggle).toMatchObject({
+        expanded: true,
+      });
+      expect(expanded.slice(0, -1).some((row) => row.tailToggle)).toBe(false);
+      // Disjoint keys: a reused key would keep the measured height of the text
+      // it held in the other state.
+      const collapsedKeys = new Set(collapsed.map((row) => row.key));
+      expect(expanded.some((row) => collapsedKeys.has(row.key))).toBe(false);
+    });
+
+    it("splits the block's vertical chrome across the outer slices", () => {
+      const split = scriptRows(
+        buildScriptRows({
+          response: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2),
+        })
+      );
+      const single = scriptRows(
+        buildScriptRows({ response: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW) })
+      );
+
+      // Two slices of N lines cost about the same as the one row they replaced,
+      // rather than paying the block chrome twice.
+      const combined = split[0].estimateSize + split[1].estimateSize;
+      expect(combined).toBeGreaterThan(single[0].estimateSize);
+      expect(combined).toBeLessThan(single[0].estimateSize * 2);
+    });
+
+    it("leaves non-script responses as a single row", () => {
+      const result = buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "Explain",
+              response: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2),
+              elapsed: 1,
+              isStreaming: false,
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+      });
+
+      expect(scriptRows(result)).toHaveLength(0);
+      expect(
+        result.rows.filter((row) => row.rowKind === "plain-response")
+      ).toHaveLength(1);
     });
   });
 });

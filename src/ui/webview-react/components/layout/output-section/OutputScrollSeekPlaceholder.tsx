@@ -35,6 +35,8 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Command";
     case "plain-response":
       return "Response";
+    case "script-output":
+      return "Script output";
     case "prompt":
       return "Prompt";
     case "status":
@@ -59,6 +61,7 @@ export function shouldRenderScrollSeekPlaceholder(
 ): boolean {
   switch (row.rowKind) {
     case "plain-response":
+    case "script-output":
       return row.text.length >= OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS;
     case "structured-event":
       if (row.diff || row.toolCall) {

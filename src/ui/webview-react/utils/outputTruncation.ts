@@ -12,6 +12,121 @@ export const DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS = 1200;
 export const MAX_COLLAPSED_OUTPUT_MAX_CHARS = 100_000;
 export const DEFAULT_COLLAPSED_COMMAND_MAX_CHARS = 160;
 
+/**
+ * Governs both how script output (pre-conditions, end-conditions, script steps)
+ * is chopped into rows and how much of it stays visible while the script runs.
+ *
+ * One number covers both because they answer the same question: how much script
+ * output is worth looking at in one go. It is deliberately far larger than
+ * `collapsedToolOutputLineCount`, which trims an *incidental* tool result down
+ * to a glance — a script's output is the reason its step exists, so the default
+ * is a screenful. Hardcoded rather than surfaced as a setting until someone
+ * actually needs a different number; keep it here so both uses move together.
+ */
+export const SCRIPT_OUTPUT_LINES_PER_ROW = 30;
+
+function stripTrailingNewline(text: string): string {
+  return text.endsWith("\n") ? text.slice(0, -1) : text;
+}
+
+/**
+ * Offset at which each line starts. A trailing newline terminates the final
+ * line rather than opening an empty one, which is what the pane renders.
+ *
+ * Built with `indexOf` over the raw string instead of `split("\n")` so walking
+ * a few hundred KB of streamed output costs one scan and an offset array rather
+ * than thousands of substrings — this runs on every rebuild while a script is
+ * still producing output.
+ */
+function getLineStartOffsets(body: string): number[] {
+  if (body.length === 0) {
+    return [];
+  }
+
+  const offsets = [0];
+  let newlineIndex = body.indexOf("\n");
+  while (newlineIndex !== -1) {
+    offsets.push(newlineIndex + 1);
+    newlineIndex = body.indexOf("\n", newlineIndex + 1);
+  }
+  return offsets;
+}
+
+/**
+ * Splits `text` into consecutive chunks of at most `linesPerSegment` lines,
+ * preserving the original text exactly when the chunks are rejoined with "\n".
+ */
+export function splitTextIntoLineSegments(
+  text: string,
+  linesPerSegment: number
+): string[] {
+  const body = stripTrailingNewline(text);
+  if (body.length === 0) {
+    return [];
+  }
+
+  const lineStarts = getLineStartOffsets(body);
+  const size = Math.max(1, Math.floor(linesPerSegment));
+  const segments: string[] = [];
+
+  for (let line = 0; line < lineStarts.length; line += size) {
+    const nextLine = line + size;
+    segments.push(
+      nextLine < lineStarts.length
+        ? // -1 drops the newline that the next segment starts after.
+          body.slice(lineStarts[line], lineStarts[nextLine] - 1)
+        : body.slice(lineStarts[line])
+    );
+  }
+
+  return segments;
+}
+
+export interface TrailingLinesWindow {
+  /** The last `maxLines` lines of the source text. */
+  text: string;
+  /** How many lines precede the window. */
+  hiddenLineCount: number;
+  totalLineCount: number;
+}
+
+/** Keeps only the last `maxLines` lines of `text`, reporting what it dropped. */
+export function takeTrailingLines(
+  text: string,
+  maxLines: number
+): TrailingLinesWindow {
+  const body = stripTrailingNewline(text);
+  const lineStarts = getLineStartOffsets(body);
+  const limit = Math.max(1, Math.floor(maxLines));
+  const hiddenLineCount = Math.max(0, lineStarts.length - limit);
+
+  return {
+    text:
+      hiddenLineCount === 0 ? body : body.slice(lineStarts[hiddenLineCount]),
+    hiddenLineCount,
+    totalLineCount: lineStarts.length,
+  };
+}
+
+/**
+ * Label for the script-output tail toggle. Unlike a collapsed tool result — cut
+ * off at the bottom, so "[show N more lines]" reads forward — script output is
+ * cut off at the *top*, so the collapsed label has to say which direction the
+ * hidden lines are in.
+ */
+export function formatScriptOutputTailToggleLabel(
+  hiddenLineCount: number,
+  expanded: boolean
+): string {
+  if (expanded) {
+    return "[show less]";
+  }
+
+  return `[show full output — ${hiddenLineCount} earlier line${
+    hiddenLineCount !== 1 ? "s" : ""
+  }]`;
+}
+
 export interface CollapsedOutputCharacterLimitOptions {
   maxLines: number;
   contentWidth?: number;

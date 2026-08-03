@@ -44,9 +44,12 @@ import {
   DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  SCRIPT_OUTPUT_LINES_PER_ROW,
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   getCollapsedOutputMaxChars,
+  splitTextIntoLineSegments,
+  takeTrailingLines,
 } from "./outputTruncation";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import {
@@ -193,6 +196,36 @@ export interface PlainResponseRow extends OutputRowBase {
   animated: boolean;
 }
 
+/**
+ * One slice of a script's stdout/stderr.
+ *
+ * Script output is plain text with no structured events, so it used to render
+ * as a single `plain-response` row holding the entire accumulated output. That
+ * row is indivisible: the virtualizer cannot page it, every append re-lays-out
+ * every character already on screen, and a chatty `npm test` reached hundreds
+ * of KB — enough to wedge the pane in a measure/render loop for minutes after
+ * the process had already exited. Slicing it into bounded rows makes each
+ * append touch one row's DOM and lets virtualization do its job.
+ */
+export interface ScriptOutputRow extends OutputRowBase {
+  rowKind: "script-output";
+  target: OutputMessageTarget;
+  text: string;
+  /** Position within the emitted slices; only the ends carry block padding. */
+  isFirstSegment: boolean;
+  isLastSegment: boolean;
+  /**
+   * Present on the last emitted slice when output is being withheld, or when
+   * the user expanded it and can collapse again. Keyed separately from the row
+   * because which row carries the toggle changes with the expansion state.
+   */
+  tailToggle?: {
+    key: string;
+    hiddenLineCount: number;
+    expanded: boolean;
+  };
+}
+
 export interface StatsRow extends OutputRowBase {
   rowKind: "stats";
   target: OutputMessageTarget;
@@ -218,6 +251,7 @@ export type OutputRenderRow =
   | ErrorRow
   | StructuredEventRow
   | PlainResponseRow
+  | ScriptOutputRow
   | ScriptVerdictRow
   | StatsRow;
 
@@ -244,6 +278,8 @@ export interface BuildOutputRowsInput {
   toolCallExpansionState: ReadonlyMap<string, ToolCallExpansionState>;
   bashExpansionState?: ReadonlyMap<string, OutputRowBashExpansionState>;
   scriptVerdictExpansionState?: ReadonlyMap<string, boolean>;
+  /** Keyed by `ScriptOutputRow.tailToggle.key`, not by row key. */
+  scriptOutputExpansionState?: ReadonlyMap<string, boolean>;
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
@@ -776,6 +812,31 @@ function estimateStatsRowHeight(
 }
 
 /**
+ * Script-output slices render exactly like a raw `plain-response` block, so
+ * they must be estimated with the same calibration — the only difference is
+ * that the block's vertical chrome belongs to the run as a whole, not to each
+ * slice. Splitting it across the first and last slice keeps a multi-row run the
+ * same total height as the single row it replaced, so nothing drifts when the
+ * user expands or the stream crosses a segment boundary.
+ */
+function estimateScriptOutputHeight(
+  row: ScriptOutputRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const verticalChrome =
+    (row.isFirstSegment ? OUTPUT_BLOCK_VERTICAL_CHROME / 2 : 0) +
+    (row.isLastSegment ? OUTPUT_BLOCK_VERTICAL_CHROME / 2 : 0);
+  const toggleHeight = row.tailToggle ? Math.max(16, outputFontSize * 1.55) : 0;
+
+  return (
+    estimateTextBlockHeight(row.text, outputContentWidth, outputFontSize, {
+      verticalChrome,
+    }) + toggleHeight
+  );
+}
+
+/**
  * Height of a ● header line (or a short one-line block that renders like one).
  * Uses the ● block's real geometry: `leading-relaxed` at the base font size
  * over `my-2`, with only the row's own `px-[var(--spacing-md)]` taken out
@@ -1241,6 +1302,12 @@ function estimateOutputRowContentHeight(
             outputContentWidth,
             outputFontSize
           );
+    case "script-output":
+      return estimateScriptOutputHeight(
+        row,
+        outputContentWidth,
+        outputFontSize
+      );
     case "script-verdict":
       return row.expanded ? 220 : 36;
     case "stats":
@@ -1268,6 +1335,74 @@ export function estimateOutputDiffBlockHeight(
     return row.estimateSize;
   }
   return row.diff.renderPlan.diffBlockHeight;
+}
+
+interface ScriptOutputRowsRequest {
+  rows: OutputRenderRow[];
+  /** Row keys are derived from this; must be unique per attempt and phase. */
+  baseKey: string;
+  target: OutputMessageTarget;
+  text: string;
+  /**
+   * True while the script is still producing output. The trailing window is
+   * what the user is actually watching, and withholding the rest keeps the cost
+   * of an append proportional to the window instead of to everything printed so
+   * far. Completed output is emitted whole — it has stopped changing, and the
+   * slices make it cheap to render.
+   */
+  capToTail: boolean;
+  expansionState?: ReadonlyMap<string, boolean>;
+}
+
+/**
+ * Emits a script's output as bounded slices, optionally capped to its tail.
+ *
+ * Collapsed and expanded slices deliberately use disjoint key prefixes: a key
+ * that survived the toggle would keep the measured height of whatever it used
+ * to hold, and the two states put very different text at the same index.
+ */
+function pushScriptOutputRows({
+  rows,
+  baseKey,
+  target,
+  text,
+  capToTail,
+  expansionState,
+}: ScriptOutputRowsRequest): void {
+  const toggleKey = `${baseKey}:tail-toggle`;
+  const expanded = expansionState?.get(toggleKey) ?? false;
+  const tailWindow =
+    capToTail && !expanded
+      ? takeTrailingLines(text, SCRIPT_OUTPUT_LINES_PER_ROW)
+      : null;
+  const segments = splitTextIntoLineSegments(
+    tailWindow ? tailWindow.text : text,
+    SCRIPT_OUTPUT_LINES_PER_ROW
+  );
+  if (segments.length === 0) {
+    return;
+  }
+
+  const hiddenLineCount = tailWindow?.hiddenLineCount ?? 0;
+  // The toggle earns its line only when it has something to reveal or undo.
+  const showTailToggle = capToTail && (hiddenLineCount > 0 || expanded);
+
+  for (const [index, segment] of segments.entries()) {
+    const isLastSegment = index === segments.length - 1;
+    rows.push({
+      key: tailWindow ? `${baseKey}:tail` : `${baseKey}:segment${index}`,
+      rowKind: "script-output",
+      target,
+      text: segment,
+      isFirstSegment: index === 0,
+      isLastSegment,
+      tailToggle:
+        showTailToggle && isLastSegment
+          ? { key: toggleKey, hiddenLineCount, expanded }
+          : undefined,
+      estimateSize: 120,
+    });
+  }
 }
 
 export function buildOutputRows(
@@ -1561,26 +1696,49 @@ export function buildOutputRows(
     }
 
     if (!hasStructuredEvents) {
+      const attemptKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}`;
       if (output.isStreaming && streamingChunk) {
-        rows.push({
-          key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:streaming-response`,
-          rowKind: "plain-response",
-          target,
-          text: streamingChunk,
-          rawTextOutput: isScriptOutput(output) ? true : rawTextOutput,
-          animated: !isScriptOutput(output),
-          estimateSize: 120,
-        });
+        if (isScriptOutput(output)) {
+          pushScriptOutputRows({
+            rows,
+            baseKey: `${attemptKey}:streaming-response`,
+            target,
+            text: streamingChunk,
+            capToTail: true,
+            expansionState: input.scriptOutputExpansionState,
+          });
+        } else {
+          rows.push({
+            key: `${attemptKey}:streaming-response`,
+            rowKind: "plain-response",
+            target,
+            text: streamingChunk,
+            rawTextOutput,
+            animated: true,
+            estimateSize: 120,
+          });
+        }
       } else if (!output.isStreaming && output.response) {
-        rows.push({
-          key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:response`,
-          rowKind: "plain-response",
-          target,
-          text: output.response,
-          rawTextOutput: isScriptOutput(output) ? true : rawTextOutput,
-          animated: false,
-          estimateSize: 120,
-        });
+        if (isScriptOutput(output)) {
+          pushScriptOutputRows({
+            rows,
+            baseKey: `${attemptKey}:response`,
+            target,
+            text: output.response,
+            capToTail: false,
+            expansionState: input.scriptOutputExpansionState,
+          });
+        } else {
+          rows.push({
+            key: `${attemptKey}:response`,
+            rowKind: "plain-response",
+            target,
+            text: output.response,
+            rawTextOutput,
+            animated: false,
+            estimateSize: 120,
+          });
+        }
       }
     }
 

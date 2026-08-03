@@ -650,4 +650,107 @@ describe("OutputRow auto-expand on hidden active match", () => {
       "[12:03:21] Error: Stopped by user"
     );
   });
+
+  describe("script output rows", () => {
+    const buildScriptOutputRow = (
+      overrides: Partial<Extract<OutputRenderRow, { rowKind: "script-output" }>>
+    ): OutputRenderRow => ({
+      key: "row-script-output",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "script-output",
+      text: "line 1\nline 2",
+      isFirstSegment: true,
+      isLastSegment: true,
+      ...overrides,
+    });
+
+    it("renders a slice without a toggle when nothing is withheld", () => {
+      const { container } = render(
+        <OutputRow row={buildScriptOutputRow({})} isExecutionActive={false} />
+      );
+
+      expect(container).toHaveTextContent("line 1");
+      expect(screen.queryByRole("button")).toBeNull();
+    });
+
+    it("reports the toggle key rather than the row key when expanding", () => {
+      const onScriptOutputExpansionChange = vi.fn();
+      const row = buildScriptOutputRow({
+        tailToggle: {
+          key: "toggle-key",
+          hiddenLineCount: 412,
+          expanded: false,
+        },
+      });
+
+      render(
+        <OutputRow
+          row={row}
+          isExecutionActive={true}
+          onScriptOutputExpansionChange={onScriptOutputExpansionChange}
+        />
+      );
+
+      fireEvent.click(
+        screen.getByText("[show full output — 412 earlier lines]")
+      );
+
+      expect(onScriptOutputExpansionChange).toHaveBeenCalledWith(
+        "row-script-output",
+        "toggle-key",
+        true
+      );
+    });
+
+    it("collapses back from the expanded toggle", () => {
+      const onScriptOutputExpansionChange = vi.fn();
+
+      render(
+        <OutputRow
+          row={buildScriptOutputRow({
+            tailToggle: {
+              key: "toggle-key",
+              hiddenLineCount: 0,
+              expanded: true,
+            },
+          })}
+          isExecutionActive={true}
+          onScriptOutputExpansionChange={onScriptOutputExpansionChange}
+        />
+      );
+
+      fireEvent.click(screen.getByText("[show less]"));
+
+      expect(onScriptOutputExpansionChange).toHaveBeenCalledWith(
+        "row-script-output",
+        "toggle-key",
+        false
+      );
+    });
+
+    it("charges block padding only to the outer slices", () => {
+      const middle = render(
+        <OutputRow
+          row={buildScriptOutputRow({
+            isFirstSegment: false,
+            isLastSegment: false,
+          })}
+          isExecutionActive={false}
+        />
+      );
+      const segment = middle.container.querySelector(".border-l-transparent");
+
+      expect(segment?.className).not.toContain("pt-[var(--spacing-sm)]");
+      expect(segment?.className).not.toContain("pb-[var(--spacing-sm)]");
+
+      const only = render(
+        <OutputRow row={buildScriptOutputRow({})} isExecutionActive={false} />
+      );
+      const onlySegment = only.container.querySelector(".border-l-transparent");
+
+      expect(onlySegment?.className).toContain("pt-[var(--spacing-sm)]");
+      expect(onlySegment?.className).toContain("pb-[var(--spacing-sm)]");
+    });
+  });
 });

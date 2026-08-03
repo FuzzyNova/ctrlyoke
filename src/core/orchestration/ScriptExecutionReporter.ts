@@ -85,9 +85,7 @@ const MAX_STATUS_SUMMARY_ERROR_CHARS = 160;
  * summary row, so this only needs to convey why it failed.
  */
 function summarizeStatusError(error: string): string {
-  const collapsed = sanitizeTerminalOutput(error)
-    .replace(/\s+/g, " ")
-    .trim();
+  const collapsed = sanitizeTerminalOutput(error).replace(/\s+/g, " ").trim();
   return collapsed.length > MAX_STATUS_SUMMARY_ERROR_CHARS
     ? `${collapsed.slice(0, MAX_STATUS_SUMMARY_ERROR_CHARS)}…`
     : collapsed;

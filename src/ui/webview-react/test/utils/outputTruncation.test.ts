@@ -5,7 +5,10 @@ import {
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   formatCollapsedOutputToggleLabel,
+  formatScriptOutputTailToggleLabel,
   getCollapsedOutputMaxChars,
+  splitTextIntoLineSegments,
+  takeTrailingLines,
 } from "@utils/outputTruncation";
 
 describe("outputTruncation", () => {
@@ -97,5 +100,63 @@ describe("outputTruncation", () => {
     expect(preview.visibleText).toBe("alpha bet");
     expect(preview.hiddenLineCount).toBe(0);
     expect(preview.isTruncated).toBe(true);
+  });
+
+  describe("script output windowing", () => {
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, index) => `line ${index + 1}`);
+
+    it("splits into segments that rejoin to the original text", () => {
+      const text = lines(7).join("\n");
+      const segments = splitTextIntoLineSegments(text, 3);
+
+      expect(segments).toEqual([
+        "line 1\nline 2\nline 3",
+        "line 4\nline 5\nline 6",
+        "line 7",
+      ]);
+      expect(segments.join("\n")).toBe(text);
+    });
+
+    it("does not open an empty segment for a trailing newline", () => {
+      expect(splitTextIntoLineSegments("line 1\nline 2\n", 2)).toEqual([
+        "line 1\nline 2",
+      ]);
+      expect(splitTextIntoLineSegments("", 3)).toEqual([]);
+    });
+
+    it("preserves blank lines inside the output", () => {
+      expect(splitTextIntoLineSegments("a\n\nb\n\nc", 2)).toEqual([
+        "a\n",
+        "b\n",
+        "c",
+      ]);
+    });
+
+    it("keeps only the trailing window and reports what it dropped", () => {
+      const window = takeTrailingLines(lines(10).join("\n"), 3);
+
+      expect(window.text).toBe("line 8\nline 9\nline 10");
+      expect(window.hiddenLineCount).toBe(7);
+      expect(window.totalLineCount).toBe(10);
+    });
+
+    it("returns the whole text when it is shorter than the window", () => {
+      const window = takeTrailingLines("line 1\nline 2", 30);
+
+      expect(window.text).toBe("line 1\nline 2");
+      expect(window.hiddenLineCount).toBe(0);
+      expect(window.totalLineCount).toBe(2);
+    });
+
+    it("labels the toggle by which direction the hidden lines are in", () => {
+      expect(formatScriptOutputTailToggleLabel(42, false)).toBe(
+        "[show full output — 42 earlier lines]"
+      );
+      expect(formatScriptOutputTailToggleLabel(1, false)).toBe(
+        "[show full output — 1 earlier line]"
+      );
+      expect(formatScriptOutputTailToggleLabel(42, true)).toBe("[show less]");
+    });
   });
 });

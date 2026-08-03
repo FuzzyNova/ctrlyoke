@@ -56,6 +56,11 @@ interface OutputPaneProps {
     expanded: boolean
   ) => void;
   onScriptVerdictExpansionChange: (rowKey: string, expanded: boolean) => void;
+  onScriptOutputExpansionChange: (
+    rowKey: string,
+    toggleKey: string,
+    expanded: boolean
+  ) => void;
   onContextMenuOpen: (
     x: number,
     y: number,
@@ -107,6 +112,7 @@ function renderOutputRow(
     | "onBackToLive"
     | "onBashExpansionChange"
     | "onScriptVerdictExpansionChange"
+    | "onScriptOutputExpansionChange"
     | "onDiffCollapsedChange"
     | "onDiffGapExpand"
     | "onFileUndo"
@@ -140,6 +146,7 @@ function renderOutputRow(
       }
       onBashExpansionChange={props.onBashExpansionChange}
       onScriptVerdictExpansionChange={props.onScriptVerdictExpansionChange}
+      onScriptOutputExpansionChange={props.onScriptOutputExpansionChange}
     />
   );
 }

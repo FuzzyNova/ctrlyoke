@@ -76,6 +76,7 @@ import type {
   CliHeaderRow,
   HistoryBannerRow,
   OutputRenderRow,
+  ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
 import {
@@ -93,6 +94,7 @@ import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedOutputPreview,
+  formatScriptOutputTailToggleLabel,
 } from "@utils/outputTruncation";
 
 export interface OutputRowFileUndoRequest {
@@ -174,6 +176,11 @@ interface OutputRowProps {
     expanded: boolean
   ) => void;
   onScriptVerdictExpansionChange?: (rowKey: string, expanded: boolean) => void;
+  onScriptOutputExpansionChange?: (
+    rowKey: string,
+    toggleKey: string,
+    expanded: boolean
+  ) => void;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -236,6 +243,53 @@ const TextOutput: React.FC<{
       >
         {text}
       </MarkdownText>
+    )}
+  </div>
+);
+
+/**
+ * One slice of a script's output.
+ *
+ * Deliberately does not reuse `OUTPUT_BLOCK_BASE`: that class carries the
+ * block's vertical padding and margin, which every slice would then repeat,
+ * gapping the output every `SCRIPT_OUTPUT_LINES_PER_ROW` lines. Charging that
+ * chrome only to the outer slices makes a run of them render as the single
+ * uninterrupted block it represents — and matches how
+ * `estimateScriptOutputHeight` splits the same allowance.
+ */
+const ScriptOutputSegment: React.FC<{
+  row: ScriptOutputRow;
+  content: React.ReactNode;
+  onTailToggle?: (expanded: boolean) => void;
+}> = ({ row, content, onTailToggle }) => (
+  <div
+    className={[
+      "px-[var(--spacing-sm)] border-l-[3px] border-l-transparent",
+      "whitespace-pre-wrap [overflow-wrap:anywhere] font-mono",
+      "text-[length:var(--fp-output-font-size-sm)] bg-transparent",
+      row.isFirstSegment ? "pt-[var(--spacing-sm)] mt-[var(--spacing-sm)]" : "",
+      row.isLastSegment ? "pb-[var(--spacing-sm)] mb-[var(--spacing-sm)]" : "",
+    ]
+      .filter(Boolean)
+      .join(" ")}
+  >
+    {content}
+    {row.tailToggle && (
+      <div>
+        <button
+          type="button"
+          className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+          onClick={(event) => {
+            event.preventDefault();
+            onTailToggle?.(!row.tailToggle?.expanded);
+          }}
+        >
+          {formatScriptOutputTailToggleLabel(
+            row.tailToggle.hiddenLineCount,
+            row.tailToggle.expanded
+          )}
+        </button>
+      </div>
     )}
   </div>
 );
@@ -1340,6 +1394,7 @@ function OutputRowComponent({
   bashExpansion,
   onBashExpansionChange,
   onScriptVerdictExpansionChange,
+  onScriptOutputExpansionChange,
 }: OutputRowProps) {
   const rowSearchSegments = getOutputRowSearchSegments(row);
   const getFieldMatches = (field: string, occurrence = 0) => {
@@ -1459,6 +1514,26 @@ function OutputRowComponent({
       );
       break;
     }
+    case "script-output": {
+      const tailToggle = row.tailToggle;
+      content = (
+        <ScriptOutputSegment
+          row={row}
+          content={highlightText(row.text, getFieldMatches("response"))}
+          onTailToggle={
+            tailToggle
+              ? (expanded) =>
+                  onScriptOutputExpansionChange?.(
+                    row.key,
+                    tailToggle.key,
+                    expanded
+                  )
+              : undefined
+          }
+        />
+      );
+      break;
+    }
     case "structured-event":
       content = (
         <StructuredEventContent
@@ -1511,6 +1586,7 @@ function OutputRowComponent({
     row.rowKind === "cli-command" ||
     row.rowKind === "error" ||
     row.rowKind === "plain-response" ||
+    row.rowKind === "script-output" ||
     row.rowKind === "structured-event" ||
     row.rowKind === "script-verdict" ||
     row.rowKind === "stats";

@@ -179,6 +179,7 @@ export function getOutputRowSearchSegments(
     case "error":
       return createSegments([{ field: "error", text: row.errorMessage }]);
     case "plain-response":
+    case "script-output":
       return createSegments([{ field: "response", text: row.text }]);
     case "status":
       return createSegments([{ field: "status", text: row.status.message }]);

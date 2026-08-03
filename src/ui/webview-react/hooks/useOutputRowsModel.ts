@@ -102,6 +102,9 @@ export function useOutputRowsModel({
   >(new Map());
   const [scriptVerdictExpansionState, setScriptVerdictExpansionState] =
     useState<Map<string, boolean>>(new Map());
+  const [scriptOutputExpansionState, setScriptOutputExpansionState] = useState<
+    Map<string, boolean>
+  >(new Map());
 
   // Build chronologically sorted list of all messages from the single ordered entries array.
   const allMessages = useMemo((): OutputMessage[] => {
@@ -148,6 +151,7 @@ export function useOutputRowsModel({
             toolCallExpansionState,
             bashExpansionState,
             scriptVerdictExpansionState,
+            scriptOutputExpansionState,
             defaultDiffCollapsed: diffsCollapsed,
             diffViewType: outputDiffViewType,
             outputFontSize,
@@ -172,6 +176,7 @@ export function useOutputRowsModel({
       toolCallExpansionState,
       bashExpansionState,
       scriptVerdictExpansionState,
+      scriptOutputExpansionState,
       diffsCollapsed,
       outputDiffViewType,
       outputFontSize,
@@ -221,6 +226,15 @@ export function useOutputRowsModel({
     );
     const scriptVerdictRowKeys = new Set(
       rows.flatMap((row) => (row.rowKind === "script-verdict" ? [row.key] : []))
+    );
+    // Keyed by the toggle, not the row: which slice carries the toggle moves
+    // between the collapsed and expanded layouts.
+    const scriptOutputToggleKeys = new Set(
+      rows.flatMap((row) =>
+        row.rowKind === "script-output" && row.tailToggle
+          ? [row.tailToggle.key]
+          : []
+      )
     );
 
     setDiffCollapseState((previous) => {
@@ -288,6 +302,19 @@ export function useOutputRowsModel({
 
       for (const key of [...next.keys()]) {
         if (!scriptVerdictRowKeys.has(key)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+
+      return changed ? next : previous;
+    });
+    setScriptOutputExpansionState((previous) => {
+      let changed = false;
+      const next = new Map(previous);
+
+      for (const key of [...next.keys()]) {
+        if (!scriptOutputToggleKeys.has(key)) {
           next.delete(key);
           changed = true;
         }
@@ -471,6 +498,25 @@ export function useOutputRowsModel({
     [invalidateMeasuredRowForUserResize]
   );
 
+  const handleScriptOutputExpansionChange = useCallback(
+    (rowKey: string, toggleKey: string, expanded: boolean) => {
+      invalidateMeasuredRowForUserResize(rowKey);
+      setScriptOutputExpansionState((previous) => {
+        if (!expanded) {
+          if (!previous.has(toggleKey)) return previous;
+          const next = new Map(previous);
+          next.delete(toggleKey);
+          return next;
+        }
+        if (previous.get(toggleKey) === true) return previous;
+        const next = new Map(previous);
+        next.set(toggleKey, true);
+        return next;
+      });
+    },
+    [invalidateMeasuredRowForUserResize]
+  );
+
   return {
     allMessages,
     rows,
@@ -481,6 +527,7 @@ export function useOutputRowsModel({
     anyDiffCollapsed,
     bashExpansionState,
     handleScriptVerdictExpansionChange,
+    handleScriptOutputExpansionChange,
     handleDiffCollapsedChange,
     handleDiffGapExpand,
     handleToolCallExpansionChange,
