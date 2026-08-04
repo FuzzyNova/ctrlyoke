@@ -258,15 +258,66 @@ export class WorkflowStepHandlers {
     ctx: WebviewClientContext,
     message: any
   ): Promise<void> {
+    try {
+      await this.syncUndoRedo(ctx, message);
+    } catch (error) {
+      // The client already applied this undo/redo optimistically to its own
+      // zundo-backed state before the write was confirmed. A rejected write
+      // (e.g. a stale expectedDefinitionRevision) leaves that optimistic
+      // change resident locally with nothing persisted to back it — a silent
+      // client/server desync that would only surface on reload or promotion.
+      // A full resync overwrites the client's local guess with the actual
+      // persisted definition; the caller's catch-all still reports the
+      // failure toast via reportActionFailure.
+      await this.mutationCoordinator.refreshDefinitionMutationView(
+        ctx,
+        message
+      );
+      throw error;
+    }
+  }
+
+  private async syncUndoRedo(
+    ctx: WebviewClientContext,
+    message: any
+  ): Promise<void> {
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
     const mutation =
       this.mutationCoordinator.asWorkflowDefinitionMutation(message);
-    const latest = await this.getOrchestrator()?.syncStepsForUndoRedo(
+    const orchestrator = this.getOrchestrator();
+    let latest = await orchestrator?.syncStepsForUndoRedo(
       mutation,
       message.steps,
       message.finalStep ?? null,
       ctx.clientId
     );
+    if (typeof message.workflowName === "string") {
+      // Undo/redo tracks workflowName as part of its zundo-covered state
+      // (UndoRedoControl's describeChange shows "Renamed to X" and the
+      // client already reverted its local display), but nothing previously
+      // sent the restored name back to the server — undoing a rename was a
+      // pure client-side illusion that a following resync (or simply this
+      // handler's own steps write, for a run address) would silently
+      // overwrite back to the never-reverted persisted name. Same stale-
+      // revision reasoning as the workflowProperties chaining below: target
+      // the steps write's fresh revision, not the one this message started with.
+      const nameMutation =
+        mutation && latest
+          ? {
+              ...mutation,
+              expectedDefinitionRevision: latest.definitionRevision,
+              expectedDescriptorRevision: latest.descriptorRevision,
+            }
+          : mutation;
+      const nameLatest = await orchestrator?.updateWorkflowName(
+        nameMutation,
+        message.workflowName,
+        ctx.clientId
+      );
+      if (nameLatest) {
+        latest = nameLatest;
+      }
+    }
     if ("workflowProperties" in message) {
       const raw = {
         harness: message.workflowProperties?.harness,
@@ -314,7 +365,18 @@ export class WorkflowStepHandlers {
         );
       }
     }
-    await this.mutationCoordinator.refreshDefinitionMutationView(ctx, message);
+    // Identity-only, like every other successful definition mutation
+    // (finishWorkflowPropertiesMutation, updateWorkingFileProperties, ...).
+    // The client already holds the post-undo/redo content it just sent —
+    // it applied the zundo pop locally before syncing — so a full
+    // RUN_VIEW_LOADED snapshot here would be redundant. Worse, that
+    // snapshot's bumped definitionRevision never equals the client's prior
+    // one (this write bumped it), so `RUN_VIEW_LOADED`'s isSameViewReplay
+    // check would always read this as a genuine new view and clear the
+    // entire zundo temporal stack (past *and* future) after every single
+    // undo/redo — which is why more than one undo/redo in a row used to
+    // stop working.
+    await this.mutationCoordinator.publishViewIdentity(ctx);
   }
 
   async handleExecuteDraft(

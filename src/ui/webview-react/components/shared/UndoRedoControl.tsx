@@ -369,6 +369,12 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       steps: ws.steps,
       finalStep: ws.finalStep,
       workflowProperties,
+      // workflowName is zundo-tracked (partialize/equality/describeChange all
+      // cover it) so Undo/Redo shows it as restorable, but nothing previously
+      // sent the reverted name back to the server — the persisted definition
+      // never actually changed, so the next resync silently overwrote the
+      // local revert back to the un-reverted name.
+      workflowName: ws.workflowName,
     });
   }, [vscode]);
 

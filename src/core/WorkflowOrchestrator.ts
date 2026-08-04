@@ -2867,18 +2867,24 @@ export class WorkflowOrchestrator {
     mutation: WorkflowDefinitionMutation | undefined,
     workflowName: string,
     clientId: string
-  ): Promise<void> {
+  ): Promise<
+    { definitionRevision: number; descriptorRevision: number } | undefined
+  > {
     if (!mutation || mutation.address.kind !== "run") {
-      return this.getInstanceForClient(clientId).updateWorkflowName(
+      await this.getInstanceForClient(clientId).updateWorkflowName(
         workflowName
       );
+      return undefined;
     }
     const runAddress = mutation.address;
+    let latest:
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       (instance) => instance.updateWorkflowName(workflowName),
-      (workspaceRoot) =>
-        WorkingFileManager.updateWorkflowNameAtRun(
+      async (workspaceRoot) => {
+        const written = await WorkingFileManager.updateWorkflowNameAtRun(
           workspaceRoot,
           runAddress.workflowKey,
           runAddress.runRef,
@@ -2886,8 +2892,26 @@ export class WorkflowOrchestrator {
           mutation.expectedDefinitionRevision,
           mutation.expectedDescriptorRevision,
           this.lineageRepository
-        ).then(() => undefined)
+        );
+        latest = {
+          definitionRevision: written.definitionRevision,
+          descriptorRevision: written.descriptorRevision,
+        };
+      },
+      // A rename leaves steps/output untouched — same as any other property
+      // write — so viewers only need the lightweight properties push, not a
+      // full RUN_VIEW_LOADED snapshot. The live branch above already tells
+      // every viewer the new name via the WORKFLOW_NAME_UPDATED broadcast
+      // (WorkflowInstance.updateWorkflowName → onQueueStateChanged →
+      // dashboardSink.updateWorkflowName); a "snapshot" invalidation here was
+      // redundant for that and actively harmful for the acting client, whose
+      // own bumped definitionRevision always makes RUN_VIEW_LOADED look like
+      // a genuine new view and clear its entire zundo undo/redo history —
+      // right after the WORKFLOW_NAME_UPDATED broadcast had just made the
+      // rename undoable.
+      "properties"
     );
+    return latest;
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
