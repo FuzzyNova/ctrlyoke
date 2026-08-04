@@ -1182,7 +1182,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                         {getServerSummary(server.config)}
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <div className="mt-1 flex flex-col gap-1.5 sm:flex-row sm:items-center">
                         <div className="flex flex-wrap items-center gap-1">
                           {allLocations.map((location) => (
                             <ScopeBadge
@@ -1194,7 +1194,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           ))}
                         </div>
 
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
                           <FlyoutActionDropdown
                             label="Save"
                             icon="save"

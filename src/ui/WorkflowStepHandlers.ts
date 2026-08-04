@@ -115,10 +115,14 @@ export class WorkflowStepHandlers {
           ctx.clientId
         );
       }
-      await this.mutationCoordinator.refreshDefinitionMutationView(
-        ctx,
-        message
-      );
+      // Identity-only, not a full RUN_VIEW_LOADED snapshot: the editing
+      // client already holds the post-edit content from its own STEPS_EXTENDED
+      // broadcast. A full snapshot here arrives with a bumped
+      // definitionRevision the client hasn't recorded yet, so RUN_VIEW_LOADED's
+      // isSameViewReplay check always reads it as a genuine new view and wipes
+      // the entire zundo undo stack (see ui.instructions.md) — silently
+      // erasing the undo entry STEPS_EXTENDED just recorded for this edit.
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to update prompt:", error);
     }
@@ -143,10 +147,10 @@ export class WorkflowStepHandlers {
         message.step,
         ctx.clientId
       );
-      await this.mutationCoordinator.refreshDefinitionMutationView(
-        ctx,
-        message
-      );
+      // Identity-only — see the comment in handleUpdatePrompt above; the
+      // inserting client already holds the post-insert steps via its own
+      // STEPS_EXTENDED broadcast.
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to insert workflow step:", error);
     }
@@ -171,10 +175,8 @@ export class WorkflowStepHandlers {
         message.clearProperties,
         ctx.clientId
       );
-      await this.mutationCoordinator.refreshDefinitionMutationView(
-        ctx,
-        message
-      );
+      // Identity-only — see the comment in handleUpdatePrompt above.
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
     }
@@ -200,10 +202,10 @@ export class WorkflowStepHandlers {
         index,
         ctx.clientId
       );
-      await this.mutationCoordinator.refreshDefinitionMutationView(
-        ctx,
-        message
-      );
+      // Identity-only — see the comment in handleUpdatePrompt above; the
+      // deleting client already holds the post-delete steps via its own
+      // PROMPT_DELETED broadcast.
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
     }

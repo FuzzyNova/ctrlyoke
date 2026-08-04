@@ -1,0 +1,167 @@
+import { suite, test } from "mocha";
+import * as assert from "assert";
+import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
+import { WorkflowStepHandlers } from "../../ui/WorkflowStepHandlers";
+import { WorkflowMutationCoordinator } from "../../ui/WorkflowMutationCoordinator";
+import type { WebviewClientContext } from "../../ui/WebviewClientContext";
+import type { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
+
+/**
+ * Regression coverage for the "step edit doesn't stay undoable" bug: a
+ * successful step mutation must echo the acting client with
+ * `publishViewIdentity` (revisions only), never a full `refreshDefinitionMutationView`
+ * snapshot — the latter's `RUN_VIEW_LOADED` reply carries a bumped
+ * `definitionRevision` the client hasn't recorded yet, so the webview's
+ * `isSameViewReplay` check always reads it as a new view and wipes the
+ * zundo undo stack the client's own STEPS_EXTENDED/PROMPT_DELETED handling
+ * had just recorded an entry into. See `.github/instructions/ui.instructions.md`.
+ */
+
+/** Records which coordinator method a handler used on its success path. */
+class RecordingMutationCoordinator extends WorkflowMutationCoordinator {
+  readonly calls: string[] = [];
+
+  constructor() {
+    super(() => undefined);
+  }
+
+  override async prepareDefinitionMutation(): Promise<void> {
+    this.calls.push("prepareDefinitionMutation");
+  }
+
+  override async publishViewIdentity(): Promise<void> {
+    this.calls.push("publishViewIdentity");
+  }
+
+  override async refreshDefinitionMutationView(): Promise<void> {
+    this.calls.push("refreshDefinitionMutationView");
+  }
+}
+
+function makeOrchestrator(overrides: Record<string, unknown>) {
+  const orchestrator = Object.create(
+    WorkflowOrchestrator.prototype
+  ) as WorkflowOrchestrator;
+  Object.assign(orchestrator as unknown as Record<string, unknown>, overrides);
+  return orchestrator;
+}
+
+function makeCtx(): WebviewClientContext {
+  return {
+    clientId: "panel",
+    postMessage: () => undefined,
+    emit: () => undefined,
+  };
+}
+
+suite("WorkflowStepHandlers — success-path client echo", () => {
+  test("handleUpdatePrompt uses publishViewIdentity, not refreshDefinitionMutationView", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const orchestrator = makeOrchestrator({
+      updatePromptInQueue: async () => undefined,
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await handlers.handleUpdatePrompt(makeCtx(), {
+      index: 0,
+      text: "edited",
+      properties: { harness: "claude-cli" },
+    } as any);
+
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "publishViewIdentity",
+    ]);
+  });
+
+  test("handleInsertWorkflowStep uses publishViewIdentity, not refreshDefinitionMutationView", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const orchestrator = makeOrchestrator({
+      insertWorkflowStepAfterIndex: async () => undefined,
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await handlers.handleInsertWorkflowStep(makeCtx(), {
+      afterIndex: 0,
+      step: { prompt: "new step" },
+    } as any);
+
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "publishViewIdentity",
+    ]);
+  });
+
+  test("handleUpdateFinalStep uses publishViewIdentity, not refreshDefinitionMutationView", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const orchestrator = makeOrchestrator({
+      updateFinalStepInQueue: async () => undefined,
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await handlers.handleUpdateFinalStep(makeCtx(), {
+      finalStep: { prompt: "final" },
+    } as any);
+
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "publishViewIdentity",
+    ]);
+  });
+
+  test("handleDeletePrompt uses publishViewIdentity, not refreshDefinitionMutationView", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const orchestrator = makeOrchestrator({
+      deletePromptFromQueue: async () => undefined,
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await handlers.handleDeletePrompt(makeCtx(), { index: 0 } as any);
+
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "publishViewIdentity",
+    ]);
+  });
+
+  test("handleUndoRedoSync's failure path still forces a full refreshDefinitionMutationView resync", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const orchestrator = makeOrchestrator({
+      syncStepsForUndoRedo: async () => {
+        throw new Error("Definition revision conflict: expected 3, found 4");
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await assert.rejects(
+      handlers.handleUndoRedoSync(makeCtx(), {
+        steps: [],
+      } as any)
+    );
+
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "refreshDefinitionMutationView",
+    ]);
+  });
+});

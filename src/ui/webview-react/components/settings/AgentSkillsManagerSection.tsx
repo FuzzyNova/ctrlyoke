@@ -361,7 +361,7 @@ function FileRow({
         </p>
       )}
 
-      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+      <div className="mt-1 flex flex-col gap-1.5 sm:flex-row sm:items-center">
         <div className="flex items-center gap-1 flex-wrap">
           {file.locations.map((loc) => (
             <HarnessBadge
@@ -377,7 +377,7 @@ function FileRow({
           )}
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
           <FlyoutActionDropdown
             label="Save"
             icon="save"

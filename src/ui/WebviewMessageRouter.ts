@@ -555,10 +555,10 @@ export class WebviewMessageRouter {
         message.newPendingOrder as number[],
         ctx.clientId
       );
-      await this.mutationCoordinator.refreshDefinitionMutationView(
-        ctx,
-        message
-      );
+      // Identity-only — see the comment in WorkflowStepHandlers.handleUpdatePrompt.
+      // The reordering client already holds the post-reorder steps via its own
+      // REORDER_PROMPTS_CONFIRMED broadcast.
+      await this.mutationCoordinator.publishViewIdentity(ctx);
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message, ctx) => {
