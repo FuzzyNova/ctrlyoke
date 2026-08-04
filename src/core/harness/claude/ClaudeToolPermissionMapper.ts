@@ -18,7 +18,7 @@ const CLAUDE_PERMISSION_VERIFICATION = {
   reference:
     "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
   basis: "cli-version",
-  verifiedVersions: [">=2.1.17 <3.0.0"],
+  verifiedVersions: [">=2.1.17"],
 } as const;
 
 const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {

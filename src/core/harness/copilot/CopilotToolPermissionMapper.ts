@@ -17,7 +17,7 @@ const COPILOT_PERMISSION_VERIFICATION = {
   reference:
     "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
   basis: "cli-version",
-  verifiedVersions: [">=0.0.384 <2.0.0"],
+  verifiedVersions: [">=0.0.384"],
 } as const;
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {

@@ -19,7 +19,7 @@ const CODEX_PERMISSION_VERIFICATION = {
   kind: "manual",
   reference: "dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md#current-baseline",
   basis: "cli-version",
-  verifiedVersions: ["0.146.0"],
+  verifiedVersions: [">=0.146.0"],
 } as const;
 
 export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
