@@ -619,9 +619,16 @@ export class CtrlYokeWebviewProvider
     stepIndex: number,
     message: string,
     severity?: StatusMessageSeverity,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number
   ): void {
-    this.sink.updateStatusMessage(stepIndex, message, severity, workflowId);
+    this.sink.updateStatusMessage(
+      stepIndex,
+      message,
+      severity,
+      workflowId,
+      timestampMs
+    );
   }
   public updateExecutionCompleted(workflowId?: string): void {
     this.sink.updateExecutionCompleted(workflowId);

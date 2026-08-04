@@ -56,6 +56,7 @@ import {
   isImageRefPath,
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
+import { pathsEqual } from "../utils/PathCasing";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -222,7 +223,7 @@ export class HostedWorkspaceViewerService {
 
   private isExactRoot(absolutePath: string): boolean {
     const resolved = path.resolve(absolutePath);
-    return this.trustedRoots.some((root) => root === resolved);
+    return this.trustedRoots.some((root) => pathsEqual(root, resolved));
   }
 
   // ── Repo discovery ───────────────────────────────────────────────────────

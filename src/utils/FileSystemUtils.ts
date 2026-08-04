@@ -6,6 +6,7 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
+import { pathsEqual } from "./PathCasing";
 
 /**
  * Read a JSON file and parse it.
@@ -29,8 +30,8 @@ export async function saveIfDirty(
   filePath: string,
   userFeedbackSink?: UserFeedbackSink
 ): Promise<void> {
-  const openDocument = vscode.workspace.textDocuments.find(
-    (doc) => doc.uri.fsPath === filePath
+  const openDocument = vscode.workspace.textDocuments.find((doc) =>
+    pathsEqual(doc.uri.fsPath, filePath)
   );
   if (openDocument?.isDirty) {
     Log.info(`Auto-saving dirty file: ${filePath}`);

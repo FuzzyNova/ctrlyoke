@@ -1175,5 +1175,24 @@ suite("HarnessToolPermissionMappers", () => {
         COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY
       );
     });
+
+    test("prepare suppresses tool-list diagnostics for modes that ignore lists", async () => {
+      const mapper = new CodexToolPermissionMapper();
+
+      for (const mode of [
+        PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+        PERMISSION_MODES.NONE,
+      ]) {
+        const application = await mapper.prepare(
+          cfg(mode, ["write"], ["shell"]),
+          {}
+        );
+        assert.deepStrictEqual(
+          application.diagnostics,
+          [],
+          `${mode}: diagnostics`
+        );
+      }
+    });
   });
 });

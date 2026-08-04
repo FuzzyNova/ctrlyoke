@@ -110,6 +110,13 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     config: ToolPermissionConfig,
     harnessId: HarnessId
   ): CompatibilityDiagnostic[] {
+    if (
+      config.mode !== PERMISSION_MODES.ALLOW_ALL &&
+      config.mode !== PERMISSION_MODES.CUSTOM
+    ) {
+      return [];
+    }
+
     const diagnostics: CompatibilityDiagnostic[] = [];
     for (const [key, patterns] of [
       [PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS, config.allowedTools],

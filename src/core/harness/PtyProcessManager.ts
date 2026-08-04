@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import {
   SESSION_KINDS,
   SHELL_KINDS,
@@ -475,7 +476,10 @@ export class PtyProcessManager {
       name: "xterm-256color",
       cols: spawnCols,
       rows: spawnRows,
-      cwd: options.cwd,
+      // Canonical drive letter — see `PathCasing.canonicalizeDriveLetter`.
+      // Interactive script steps and shell sessions inherit the same VS Code
+      // sourced root (`c:\...`) that broke Vitest on the headless path.
+      cwd: canonicalizeDriveLetter(options.cwd),
       env: (options.env ?? process.env) as Record<string, string>,
     });
 

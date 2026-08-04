@@ -477,9 +477,16 @@ export class CtrlYokeHostedServer
     stepIndex: number,
     message: string,
     severity?: StatusMessageSeverity,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number
   ): void {
-    this.sink.updateStatusMessage(stepIndex, message, severity, workflowId);
+    this.sink.updateStatusMessage(
+      stepIndex,
+      message,
+      severity,
+      workflowId,
+      timestampMs
+    );
   }
   updateStepsExtended(
     steps: any[],

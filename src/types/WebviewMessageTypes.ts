@@ -644,6 +644,11 @@ export interface StatusMessageMessage {
   stepIndex: number;
   message: string;
   severity: StatusSeverity;
+  workflowId?: string;
+  /** Origination time on the extension-host clock. The webview must sort by
+   *  this value rather than its own receipt-time Date.now() — a receive-time
+   *  stamp races the CLI/script row this status message is ordered against. */
+  timestampMs?: number;
 }
 
 /**

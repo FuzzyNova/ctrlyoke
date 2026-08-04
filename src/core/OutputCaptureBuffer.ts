@@ -429,7 +429,9 @@ export class OutputCaptureBuffer {
         updateStatusMessage?: (
           stepIndex: number,
           message: string,
-          severity?: string
+          severity?: string,
+          workflowId?: string,
+          timestampMs?: number
         ) => void;
       };
       if (dashboard.updateStatusMessage) {
@@ -439,7 +441,9 @@ export class OutputCaptureBuffer {
             dashboard.updateStatusMessage(
               negativeLoopStepIndex,
               msg.message,
-              msg.severity
+              msg.severity,
+              undefined,
+              msg.timestamp
             );
           }
         }

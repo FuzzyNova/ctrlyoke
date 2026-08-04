@@ -1,30 +1,4 @@
-import * as path from "path";
 import { isPathWithinDirectory } from "./PathSecurity";
-
-function isWindows(): boolean {
-  return process.platform === "win32";
-}
-
-/**
- * `isPathWithinDirectory` is a plain string-prefix comparator (see
- * `PathSecurity.ts`) and does not case-fold, so it stays correct for the
- * many callers that already compare paths from the same OS-reported casing.
- * Windows paths, however, are case-insensitive at the filesystem level, and
- * a candidate resolved via one code path (e.g. a harness-reported absolute
- * path) can differ in case from a root captured via another (e.g.
- * `vscode.workspace.workspaceFolders`). Fold to lowercase only on win32
- * rather than changing the shared primitive's behavior for every caller.
- */
-function forCompare(value: string): string {
-  return isWindows() ? value.toLowerCase() : value;
-}
-
-function isPathWithinRoot(candidate: string, root: string): boolean {
-  if (!isWindows()) {
-    return isPathWithinDirectory(candidate, root);
-  }
-  return candidate === root || candidate.startsWith(root + path.win32.sep);
-}
 
 /**
  * Why a path was allowed or blocked. UI call sites (dashboard "open file",
@@ -71,10 +45,8 @@ export function evaluateFileAccess(
   candidatePath: string,
   options: FileAccessPolicyOptions
 ): FileAccessDecision {
-  const comparablePath = forCompare(candidatePath);
-
   for (const root of options.workspaceRoots) {
-    if (isPathWithinRoot(comparablePath, forCompare(root))) {
+    if (isPathWithinDirectory(candidatePath, root)) {
       return {
         allowed: true,
         reason: "workspace",
@@ -85,7 +57,7 @@ export function evaluateFileAccess(
   }
 
   for (const root of options.approvedExternalRoots) {
-    if (isPathWithinRoot(comparablePath, forCompare(root))) {
+    if (isPathWithinDirectory(candidatePath, root)) {
       return {
         allowed: true,
         reason: "trustedExternalRoot",

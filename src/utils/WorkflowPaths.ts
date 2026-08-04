@@ -77,23 +77,6 @@ function isSafeSegment(segment: string): boolean {
   return true;
 }
 
-/** Case-insensitive on Windows, case-sensitive elsewhere — matches filesystem semantics. */
-function pathsEqualForPlatform(a: string, b: string): boolean {
-  return process.platform === "win32"
-    ? a.toLowerCase() === b.toLowerCase()
-    : a === b;
-}
-
-function isContainedForPlatform(candidate: string, directory: string): boolean {
-  if (process.platform !== "win32") {
-    return isPathWithinDirectory(candidate, directory);
-  }
-  return isPathWithinDirectory(
-    candidate.toLowerCase(),
-    directory.toLowerCase()
-  );
-}
-
 /** Throws `WorkflowPathError` unless `value` is a syntactically valid `WorkflowKey`. */
 export function assertValidWorkflowKey(
   value: string
@@ -318,7 +301,7 @@ export function stagingRunDir(
 function assertContained(workspaceRoot: string, candidate: string): void {
   const root = path.resolve(runsRoot(workspaceRoot));
   const resolved = path.resolve(candidate);
-  if (!isContainedForPlatform(resolved, root)) {
+  if (!isPathWithinDirectory(resolved, root)) {
     throw new WorkflowPathError(
       `Path escapes .runs root: "${candidate}" (root "${root}")`
     );
@@ -387,7 +370,7 @@ export function parseRunArtifactPath(
 ): ParsedRunArtifactPath | undefined {
   const root = path.resolve(runsRoot(workspaceRoot));
   const resolved = path.resolve(filePath);
-  if (!isContainedForPlatform(resolved, root)) {
+  if (!isPathWithinDirectory(resolved, root)) {
     return undefined;
   }
   const relative = path.relative(root, resolved);
@@ -484,5 +467,3 @@ export async function allocateWorkflowKey(
     `Failed to allocate a unique workflowKey for "${nameHint}" after ${maxAttempts} attempts`
   );
 }
-
-export { pathsEqualForPlatform };

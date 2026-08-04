@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import kill from "tree-kill";
+import { canonicalizeDriveLetter } from "./PathCasing";
 
 /**
  * Options for spawning a CLI process
@@ -17,8 +18,8 @@ export interface SpawnOptions {
    * leave them blocked waiting for input that never arrives. Headless script
    * and end-condition execution (which never expects or wires up user input;
    * interactive script steps use a separate PTY path) should pass "pipe"
-   * instead, since some shells/tools misbehave when a descendant process
-   * expects stdin to exist as a real (non-NUL) handle.
+   * instead, so a script that probes stdin sees a real (non-NUL) handle rather
+   * than a closed one.
    */
   stdin?: "ignore" | "pipe";
   /**
@@ -84,7 +85,12 @@ export class CliProcessManager {
       this.logger?.(`📤 Spawning: ${this.lastSpawnedCommand}`);
 
       const child = spawn(command, args, {
-        cwd: options.cwd || this.workspaceRoot,
+        // Canonical drive letter: the workspace root usually originates from
+        // VS Code, which reports `c:\...`, while a shell reports `C:\...`. Some
+        // tools key internal caches off the cwd string and treat the two as
+        // different roots — `npm test` as a pre/end-condition failed all 114
+        // Vitest suites with "failed to find the runner" purely because of this.
+        cwd: canonicalizeDriveLetter(options.cwd || this.workspaceRoot),
         shell: options.shell ?? false,
         stdio: [options.stdin ?? "ignore", "pipe", "pipe"],
         env: options.env || { ...process.env },
@@ -229,7 +235,7 @@ export class CliProcessManager {
       this.logger?.(`📤 Spawning interactive: ${command} ${args.join(" ")}`);
 
       const child = spawn(command, args, {
-        cwd: workingDirectory,
+        cwd: canonicalizeDriveLetter(workingDirectory),
         stdio: "inherit",
         shell: false,
         windowsVerbatimArguments,

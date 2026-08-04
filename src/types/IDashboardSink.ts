@@ -124,7 +124,10 @@ export interface IDashboardSink {
     stepIndex: number,
     message: string,
     severity?: StatusMessageSeverity,
-    workflowId?: string
+    workflowId?: string,
+    /** Origination time on the extension-host clock. Must be threaded through to
+     *  the webview rather than re-stamped on receipt — see PostMessageDashboardSink. */
+    timestampMs?: number
   ): void;
 
   updateStepsExtended(

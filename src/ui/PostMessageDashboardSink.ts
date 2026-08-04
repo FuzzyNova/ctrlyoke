@@ -233,7 +233,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     stepIndex: number,
     message: string,
     severity: StatusMessageSeverity = STATUS_MESSAGE_SEVERITY.INFO,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.STATUS_MESSAGE,
@@ -241,6 +242,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       message,
       severity,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
     });
   }
 

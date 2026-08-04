@@ -1047,9 +1047,8 @@ export class WorkspaceSnapshotService {
       // Security: prevent path traversal — the resolved path must sit inside one
       // of the trusted roots.
       const normalizedAbs = normalize(absPath);
-      const withinTrusted = trustedRoots.some(
-        (root) =>
-          normalizedAbs === root || normalizedAbs.startsWith(root + path.sep)
+      const withinTrusted = trustedRoots.some((root) =>
+        isPathWithinDirectory(normalizedAbs, root)
       );
       if (!withinTrusted) {
         failedFiles.push({

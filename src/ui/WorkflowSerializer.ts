@@ -39,6 +39,7 @@ import {
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
+import { pathsEqual } from "../utils/PathCasing";
 
 /**
  * WorkflowSerializer
@@ -140,11 +141,7 @@ export class WorkflowSerializer {
     }
 
     const root = path.resolve(workspaceRoot);
-    const contained =
-      process.platform === "win32"
-        ? isPathWithinDirectory(resolved.toLowerCase(), root.toLowerCase())
-        : isPathWithinDirectory(resolved, root);
-    if (!contained || resolved === root) {
+    if (!isPathWithinDirectory(resolved, root) || pathsEqual(resolved, root)) {
       throw new Error("Save location must be inside the open workspace.");
     }
 
@@ -164,14 +161,7 @@ export class WorkflowSerializer {
       }
     }
     const realAncestor = await fs.realpath(ancestor);
-    const realContained =
-      process.platform === "win32"
-        ? isPathWithinDirectory(
-            realAncestor.toLowerCase(),
-            rootRealPath.toLowerCase()
-          )
-        : isPathWithinDirectory(realAncestor, rootRealPath);
-    if (!realContained) {
+    if (!isPathWithinDirectory(realAncestor, rootRealPath)) {
       throw new Error(
         "Save location escapes the open workspace through a symlink."
       );
@@ -856,7 +846,12 @@ export class WorkflowSerializer {
       return undefined;
     }
     let selectedPath = uris[0].fsPath;
-    if (workspaceRoot && selectedPath.startsWith(workspaceRoot)) {
+    // `isPathWithinDirectory` rather than a raw `startsWith`: the dialog returns
+    // a VS Code `fsPath` (lowercase drive letter) while `workspaceRoot` may carry
+    // OS-native casing, and the shared helper also rejects sibling-prefix matches
+    // like `C:\dev\ctrlyoke-evil`. Case-folding preserves length, so the slice
+    // below stays correct.
+    if (workspaceRoot && isPathWithinDirectory(selectedPath, workspaceRoot)) {
       selectedPath = selectedPath
         .slice(workspaceRoot.length)
         .replace(/^[\\/]/, "");

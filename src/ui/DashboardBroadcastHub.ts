@@ -269,10 +269,17 @@ export class DashboardBroadcastHub
     stepIndex: number,
     message: string,
     severity?: StatusMessageSeverity,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number
   ): void {
     for (const client of this.clients) {
-      client.updateStatusMessage?.(stepIndex, message, severity, workflowId);
+      client.updateStatusMessage?.(
+        stepIndex,
+        message,
+        severity,
+        workflowId,
+        timestampMs
+      );
     }
   }
 

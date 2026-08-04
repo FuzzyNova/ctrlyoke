@@ -5,6 +5,7 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import { lowercaseDriveLetter } from "../../../utils/PathCasing";
 
 /**
  * Copilot CLI Notification Monitor
@@ -77,10 +78,8 @@ export class CopilotNotificationMonitor
     // Normalize Windows drive letter to lowercase for stable output (VS Code returns
     // uppercase from GUI launches, lowercase from CLI launches — normalize to avoid
     // spurious diffs in the tracked .github/hooks/ctrlyoke.json file).
-    const normalizeDrive = (p: string) =>
-      p.replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase() + ":");
-    const normalizedScriptPath = normalizeDrive(scriptPath);
-    const normalizedNotifyDir = normalizeDrive(notifyDir);
+    const normalizedScriptPath = lowercaseDriveLetter(scriptPath);
+    const normalizedNotifyDir = lowercaseDriveLetter(notifyDir);
 
     // Bash: Forward slashes (works on Windows and Unix)
     const bashScriptPath = normalizedScriptPath.replace(/\\/g, "/");

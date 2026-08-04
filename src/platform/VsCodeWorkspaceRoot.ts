@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { pathsEqual } from "../utils/PathCasing";
 import {
   resolveWorkspaceRoot,
   resolveTrustedWorkspaceRoots,
@@ -104,7 +105,7 @@ export function getVsCodeWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
     return undefined;
   }
   const root = getVsCodeWorkspaceRoot();
-  const match = folders.find((folder) => folder.uri.fsPath === root);
+  const match = folders.find((folder) => pathsEqual(folder.uri.fsPath, root));
   if (match) {
     return match;
   }

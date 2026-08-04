@@ -612,12 +612,15 @@ export class EndConditionEvaluator {
         onStdout: onOutput,
         shell: viaShell,
         // Pre/end-condition and headless script-step execution never wires up
-        // user input (interactive script steps use a separate PTY path), but
-        // an "ignore" (NUL-bound) stdin can cause tools spawned deep in the
-        // process tree — e.g. Vitest's worker pool when the script is a
-        // multi-stage npm command — to misbehave on Windows. A "pipe" stdin
-        // that nothing ever writes to is behaviorally equivalent for scripts
-        // (no input arrives either way) without handing them a closed handle.
+        // user input (interactive script steps use a separate PTY path), so a
+        // "pipe" stdin nothing ever writes to is equivalent to "ignore" here —
+        // no input arrives either way — without handing the script a NUL-bound
+        // handle that a tool probing stdin could trip over.
+        //
+        // This was previously credited with fixing a Vitest worker-pool failure
+        // on Windows. It did not: that failure was the lowercase drive letter in
+        // `cwd` (see `PathCasing.canonicalizeDriveLetter`), and it reproduces
+        // identically with stdin set to "ignore", "pipe", or "inherit".
         stdin: "pipe",
       });
 

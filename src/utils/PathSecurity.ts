@@ -1,4 +1,5 @@
 import * as path from "path";
+import { foldPathForCompare } from "./PathCasing";
 
 /**
  * Returns true if `candidate` is equal to or a descendant of `directory`.
@@ -7,12 +8,24 @@ import * as path from "path";
  *
  * Using `path.sep` prevents sibling-prefix bypass attacks where a path like
  * `C:\dev\ctrlyoke-evil` would incorrectly match directory `C:\dev\ctrlyoke`.
+ *
+ * Comparison case-folds on win32 (see `PathCasing.foldPathForCompare`), because
+ * Windows filesystems are case-insensitive and ctrlyoke routinely compares a
+ * VS Code-sourced path (lowercase drive letter) against a Node- or git-sourced
+ * one (OS-native casing). These are allowlist checks, so case-sensitivity here
+ * only ever produced false denials — never false grants — and the sibling-prefix
+ * guard below is unaffected by folding.
  */
 export function isPathWithinDirectory(
   candidate: string,
   directory: string
 ): boolean {
-  return candidate === directory || candidate.startsWith(directory + path.sep);
+  const foldedCandidate = foldPathForCompare(candidate);
+  const foldedDirectory = foldPathForCompare(directory);
+  return (
+    foldedCandidate === foldedDirectory ||
+    foldedCandidate.startsWith(foldedDirectory + path.sep)
+  );
 }
 
 /**

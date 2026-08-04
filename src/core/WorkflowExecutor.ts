@@ -1613,13 +1613,20 @@ export class WorkflowExecutor {
     timestampMs?: number
   ): Promise<void> {
     const signedStepIndex = this.getSignedStepIndex(target);
+    const resolvedTimestampMs = timestampMs ?? Date.now();
 
     // Queue steps keep non-negative indices; finalStep loops use negative
     // signed indices (-(loopIndex+1)) to avoid collisions with queue steps.
+    // The webview sorts output rows by timestamp (see core.instructions.md),
+    // so this extension-clock timestamp must ride along with the live message
+    // instead of being re-stamped on receipt — a webview-side Date.now() races
+    // the CLI/script row it's meant to precede.
     context.dashboardProvider?.updateStatusMessage(
       signedStepIndex,
       message,
-      severity as any
+      severity as any,
+      undefined,
+      resolvedTimestampMs
     );
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       context.onStatusMessage?.(target.stepIndex, message, severity);
@@ -1630,7 +1637,7 @@ export class WorkflowExecutor {
     const statusMessage = {
       message,
       severity: severity as any,
-      timestamp: timestampMs ?? Date.now(),
+      timestamp: resolvedTimestampMs,
     };
 
     if (context.historyFilePath && context.outputHistoryManager) {

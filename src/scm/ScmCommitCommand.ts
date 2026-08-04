@@ -4,6 +4,7 @@ import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTr
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { pathsEqual } from "../utils/PathCasing";
 
 interface GitRepository {
   rootUri: vscode.Uri;
@@ -19,7 +20,7 @@ function getGitInputBox(cwd: string): { value: string } | undefined {
       vscode.extensions.getExtension<GitExtension>("vscode.git")?.exports;
     const api = gitExt?.getAPI(1);
     const repo =
-      api?.repositories.find((r) => r.rootUri.fsPath === cwd) ??
+      api?.repositories.find((r) => pathsEqual(r.rootUri.fsPath, cwd)) ??
       api?.repositories[0];
     return repo?.inputBox;
   } catch {

@@ -35,6 +35,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { pathsEqual } from "../utils/PathCasing";
 import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
@@ -3538,10 +3539,7 @@ export class WorkflowInstance {
         const activeWorkingFile = this.promptQueue.getState().workingFilePath;
         if (
           activeWorkingFile &&
-          !WorkflowPaths.pathsEqualForPlatform(
-            activeWorkingFile,
-            deletedFilePath
-          )
+          !pathsEqual(activeWorkingFile, deletedFilePath)
         ) {
           return;
         }

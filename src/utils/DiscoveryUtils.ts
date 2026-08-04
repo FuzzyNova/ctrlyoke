@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
+import { pathsEqual } from "./PathCasing";
 
 /**
  * DiscoveryUtils
@@ -58,7 +59,7 @@ export function resolveWorkspaceFolder(
   }
   if (workspaceRoot) {
     return (
-      folders.find((folder) => folder.uri.fsPath === workspaceRoot) ??
+      folders.find((folder) => pathsEqual(folder.uri.fsPath, workspaceRoot)) ??
       folders[0]
     );
   }

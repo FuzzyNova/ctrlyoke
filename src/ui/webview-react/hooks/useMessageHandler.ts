@@ -1391,15 +1391,21 @@ export function createMessageHandlers(
             kind: FINAL_STEP_PHASES.QUEUE,
             stepIndex: Math.max(0, stepIndex),
           };
+    // Prefer the extension-clock origination timestamp over a webview-side
+    // Date.now(): the two clocks aren't the same domain (worse yet over a
+    // hosted-browser WebSocket), and rows are sorted by timestamp, so
+    // stamping on receipt raced this status row against the CLI/script row
+    // it's meant to precede or follow.
+    const resolvedTimestampMs = message.timestampMs ?? Date.now();
     const entry: OrderedStatusHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target,
       statusMessage: {
         message: message.message,
         severity: message.severity ?? "info",
-        timestamp: Date.now(),
+        timestamp: resolvedTimestampMs,
       },
-      timestampMs: Date.now(),
+      timestampMs: resolvedTimestampMs,
       sequence: store.liveSequence,
     };
     store.appendLiveEntry(entry);

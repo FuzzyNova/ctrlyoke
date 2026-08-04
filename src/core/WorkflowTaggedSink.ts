@@ -215,13 +215,16 @@ export class WorkflowTaggedSink implements IDashboardSink {
   updateStatusMessage(
     stepIndex: number,
     message: string,
-    severity?: StatusMessageSeverity
+    severity?: StatusMessageSeverity,
+    _workflowId?: string,
+    timestampMs?: number
   ): void {
     this.inner.updateStatusMessage(
       stepIndex,
       message,
       severity,
-      this.workflowId
+      this.workflowId,
+      timestampMs
     );
   }
 
