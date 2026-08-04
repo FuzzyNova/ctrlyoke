@@ -14,7 +14,6 @@ import { WorkflowInstance } from "../core/WorkflowInstance";
 import { Log } from "../utils/Log";
 import {
   EXECUTION_MODES,
-  FINAL_STEP_PHASES,
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
@@ -270,6 +269,17 @@ export class CommitMessageGenerator {
       buildCommitWorkflowOverrides(harness, model, mcpServerConfig)
     );
 
+    // Captured directly from the integration rather than read back from a
+    // persisted run history file: this instance is loaded via loadPromptString
+    // (an ephemeral <inline> prompt), which never creates the workflowKey/runRef
+    // a history file lookup would need.
+    let capturedResponseText: string | undefined;
+    const responseCompleteDisposable = detectorIntegration.onResponseComplete(
+      (response) => {
+        capturedResponseText = response;
+      }
+    );
+
     let abortListener: (() => void) | undefined;
     if (token) {
       abortListener = () => {
@@ -281,6 +291,7 @@ export class CommitMessageGenerator {
     try {
       await instance.executeLoadedPromptFile(harness);
     } finally {
+      responseCompleteDisposable.dispose();
       if (token && abortListener) {
         token.removeEventListener("abort", abortListener);
       }
@@ -322,27 +333,14 @@ export class CommitMessageGenerator {
     }
 
     // Fallback: extract from response text (MCP unavailable or tool not called).
-    const state = instance.promptQueue.getState();
-    const firstStep = state.steps[0];
+    const firstStep = instance.promptQueue.getState().steps[0];
     if (!firstStep || isScriptStep(firstStep)) {
       throw new Error(
         "Commit message generation failed: no prompt step executed"
       );
     }
 
-    const { workflowKey, runRef } = state;
-    if (!workflowKey || !runRef) {
-      throw new Error("Commit message generation did not create a run output");
-    }
-    const outputHistoryManager = instance.getOutputHistoryManager();
-    const rawResponse = (
-      await outputHistoryManager
-        .getRunOutputResolver()
-        .resolveLatestAttempts(
-          outputHistoryManager.getHistoryFilePath(workflowKey, runRef),
-          [{ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }]
-        )
-    ).get("queue:0")?.responseText;
+    const rawResponse = capturedResponseText;
     if (!rawResponse?.trim()) {
       throw new Error("Commit message generation produced an empty response");
     }
