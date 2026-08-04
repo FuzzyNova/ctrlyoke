@@ -134,17 +134,16 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
       return (
         <button
           type="button"
-          className="flex min-h-8 w-full min-w-0 items-center gap-1 overflow-hidden rounded px-1 py-1 text-left text-[length:var(--fp-output-font-size-sm)]"
+          className="block min-h-8 w-full min-w-0 whitespace-normal rounded px-1 py-1 text-left text-[length:var(--fp-output-font-size-sm)] [overflow-wrap:anywhere]"
           aria-expanded={false}
           aria-label={`${presentation.label} · ${getCompareLabel(verdict)} · ${actualLabel} · ${action} · ${formatDuration(verdict.durationMs)}`}
           onClick={() => onExpansionChange?.(true)}
         >
-          <span className={`shrink-0 font-semibold ${presentation.className}`}>
+          <span className={`font-semibold ${presentation.className}`}>
             {presentation.icon} {presentation.label}
-          </span>
-          <span className="shrink-0 text-description-fg">·</span>
-          <span className="shrink-0 text-description-fg">
-            {getCompareLabel(verdict)}
+          </span>{" "}
+          <span className="text-description-fg">
+            · {getCompareLabel(verdict)}
             {collapsedExpected != null &&
               verdict.actualSource !== "exitCode" && (
                 <>
@@ -156,29 +155,37 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
               )}
           </span>
           {verdict.outcome === "errored" && verdict.error ? (
-            <span className="min-w-0 truncate text-error-fg">
-              · {verdict.error}
-            </span>
+            <>
+              {" "}
+              <span className="text-error-fg">· {verdict.error}</span>
+            </>
           ) : (
             <>
               {verdict.actualSource === "exitCode" && (
-                <span className="shrink-0 text-description-fg">
-                  · expected{" "}
-                  {highlightText(collapsedExpected ?? "0", expectedFindMatches)}
+                <>
+                  {" "}
+                  <span className="text-description-fg">
+                    · expected{" "}
+                    {highlightText(
+                      collapsedExpected ?? "0",
+                      expectedFindMatches
+                    )}
+                  </span>
+                </>
+              )}{" "}
+              <span className="text-description-fg">
+                · actual{" "}
+                <span className="text-foreground">
+                  {highlightText(actualLabel, actualFindMatches)}
+                  {actualPreview.isTruncated ? "…" : ""}
                 </span>
-              )}
-              <span className="shrink-0 text-description-fg">· actual </span>
-              <span className="min-w-0 truncate text-foreground">
-                {highlightText(actualLabel, actualFindMatches)}
-                {actualPreview.isTruncated ? "…" : ""}
               </span>
             </>
-          )}
-          <span className="shrink-0 text-description-fg">·</span>
-          <span className="shrink-0 text-description-fg">
-            {highlightText(action, actionFindMatches)}
-          </span>
-          <span className="shrink-0 text-description-fg">
+          )}{" "}
+          <span className="text-description-fg">
+            · {highlightText(action, actionFindMatches)}
+          </span>{" "}
+          <span className="text-description-fg">
             · {formatDuration(verdict.durationMs)}
           </span>
         </button>
@@ -186,10 +193,10 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
     }
 
     return (
-      <div className="rounded border border-panel-border bg-sidebar-bg/30 px-2 py-2 text-[length:var(--fp-output-font-size-sm)]">
+      <div className="min-w-0 rounded border border-panel-border bg-sidebar-bg/30 px-2 py-2 text-[length:var(--fp-output-font-size-sm)] [overflow-wrap:anywhere]">
         <button
           type="button"
-          className="mb-2 flex w-full items-center gap-1 text-left"
+          className="mb-2 flex w-full min-w-0 flex-wrap items-center gap-1 text-left"
           aria-expanded={true}
           onClick={() => onExpansionChange?.(false)}
         >
@@ -200,9 +207,9 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             · {formatDuration(verdict.durationMs)}
           </span>
         </button>
-        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
+        <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
           <dt className="text-description-fg">Compare</dt>
-          <dd>{getCompareLabel(verdict)}</dd>
+          <dd className="min-w-0">{getCompareLabel(verdict)}</dd>
           <dt className="text-description-fg">Expected</dt>
           <dd className="min-w-0 break-words">
             {highlightText(expected, expectedFindMatches)}
@@ -212,14 +219,16 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             {highlightText(actualPreview.visibleText || "∅", actualFindMatches)}
           </dd>
           <dt className="text-description-fg">Matched by</dt>
-          <dd>{getMatchedByLabel(verdict)}</dd>
+          <dd className="min-w-0">{getMatchedByLabel(verdict)}</dd>
           <dt className="text-description-fg">Result</dt>
-          <dd>
+          <dd className="min-w-0">
             {presentation.label}
             {verdict.timedOut ? " (timed out)" : ""}
           </dd>
           <dt className="text-description-fg">Action</dt>
-          <dd>{highlightText(action, actionFindMatches)}</dd>
+          <dd className="min-w-0">
+            {highlightText(action, actionFindMatches)}
+          </dd>
           {verdict.error && (
             <>
               <dt className="text-description-fg">Error</dt>

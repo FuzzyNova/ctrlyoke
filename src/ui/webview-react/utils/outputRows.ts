@@ -836,6 +836,45 @@ function estimateScriptOutputHeight(
   );
 }
 
+function estimateCollapsedScriptVerdictHeight(
+  row: ScriptVerdictRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const verdict = row.verdict;
+  const actualPreview = buildCollapsedOutputPreview(verdict.actual, {
+    expanded: false,
+    maxLines: DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+    maxChars: DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+  });
+  const summaryText = [
+    verdict.outcome,
+    verdict.compareSource,
+    verdict.actualSource,
+    verdict.expected == null ? "" : `expected ${verdict.expected}`,
+    `actual ${actualPreview.visibleText.replace(/\s+/g, " ") || "∅"}`,
+    verdict.actionDetail ?? verdict.action,
+    `${(verdict.durationMs / 1000).toFixed(1)}s`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return Math.max(
+    36,
+    estimateTextBlockHeight(
+      summaryText,
+      outputContentWidth,
+      Math.max(11, outputFontSize - 1),
+      {
+        charWidthMultiplier: 0.56,
+        lineHeightMultiplier: 1.45,
+        verticalChrome: 8,
+        chrome: OUTPUT_ROW_HORIZONTAL_PADDING + 8,
+      }
+    )
+  );
+}
+
 /**
  * Height of a ● header line (or a short one-line block that renders like one).
  * Uses the ● block's real geometry: `leading-relaxed` at the base font size
@@ -1309,7 +1348,13 @@ function estimateOutputRowContentHeight(
         outputFontSize
       );
     case "script-verdict":
-      return row.expanded ? 220 : 36;
+      return row.expanded
+        ? 220
+        : estimateCollapsedScriptVerdictHeight(
+            row,
+            outputContentWidth,
+            outputFontSize
+          );
     case "stats":
       return estimateStatsRowHeight(row, outputContentWidth, outputFontSize);
     case "structured-event":
@@ -1369,14 +1414,18 @@ function pushScriptOutputRows({
   capToTail,
   expansionState,
 }: ScriptOutputRowsRequest): void {
+  // Treat row construction as the final UI boundary. Live dashboard messages
+  // are sanitized before delivery, but sanitizing the accumulated text here
+  // also covers restored/legacy data and escape sequences split across chunks.
+  const sanitizedText = sanitizeTerminalOutput(text);
   const toggleKey = `${baseKey}:tail-toggle`;
   const expanded = expansionState?.get(toggleKey) ?? false;
   const tailWindow =
     capToTail && !expanded
-      ? takeTrailingLines(text, SCRIPT_OUTPUT_LINES_PER_ROW)
+      ? takeTrailingLines(sanitizedText, SCRIPT_OUTPUT_LINES_PER_ROW)
       : null;
   const segments = splitTextIntoLineSegments(
-    tailWindow ? tailWindow.text : text,
+    tailWindow ? tailWindow.text : sanitizedText,
     SCRIPT_OUTPUT_LINES_PER_ROW
   );
   if (segments.length === 0) {

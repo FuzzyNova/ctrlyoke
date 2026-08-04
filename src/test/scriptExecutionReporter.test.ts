@@ -10,6 +10,7 @@ import {
 } from "../core/orchestration/ScriptExecutionReporter";
 import {
   EXECUTION_PHASES,
+  FINAL_STEP_PHASES,
   SCRIPT_OUTPUT_SOURCES,
 } from "../types/DashboardConstants";
 import type { CliOutput } from "../types/WebviewMessageTypes";
@@ -40,7 +41,7 @@ function makeReporter(result: EvaluationResult, events: string[]) {
       _vars: Record<string, string> | undefined,
       onOutput: (chunk: string) => void
     ) => {
-      onOutput("chunk");
+      onOutput("\u001b[36mchunk\u001b[39m\u0007");
       return result;
     },
   } as unknown as EndConditionEvaluator;
@@ -127,6 +128,52 @@ suite("ScriptExecutionReporter", () => {
         error: undefined,
       });
     }
+  });
+
+  test("sanitizes final-step streaming chunks before dashboard delivery", async () => {
+    const chunks: string[] = [];
+    const evaluator = {
+      evaluateCondition: async (
+        _condition: unknown,
+        _workingDirectory: string | undefined,
+        _vars: Record<string, string> | undefined,
+        onOutput: (chunk: string) => void
+      ) => {
+        onOutput("\u001b[32mpassed\u001b[0m\r\nnext\u0007");
+        return makeResult();
+      },
+    } as unknown as EndConditionEvaluator;
+    const reporter = new ScriptExecutionReporter(evaluator);
+    const context: ScriptExecutionReporterContext = {
+      dashboardProvider: {
+        updateFinalStepOutput: () => undefined,
+        updateFinalStepStreamingChunk: (_loopIndex: number, chunk: string) => {
+          chunks.push(chunk);
+        },
+        updateStatusMessage: () => undefined,
+      } as any,
+    };
+
+    await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+      properties: {
+        script: "check.sh",
+        compareSource: "stdout",
+        returns: "ok",
+      },
+      phase: EXECUTION_PHASES.END_CONDITION,
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+      signedStepIndex: -1,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+    });
+
+    assert.deepStrictEqual(chunks, ["passed\nnext"]);
   });
 
   test("maps failed and errored evaluations to complete verdicts without caching output", async () => {

@@ -207,13 +207,13 @@ export class ScriptExecutionReporter {
         if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex >= 0) {
           context.dashboardProvider.updateCliStreamingChunk(
             signedStepIndex,
-            chunk,
+            sanitizedChunk,
             phase
           );
         } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
           context.dashboardProvider.updateFinalStepStreamingChunk(
             target.loopIndex,
-            chunk,
+            sanitizedChunk,
             phase
           );
         }

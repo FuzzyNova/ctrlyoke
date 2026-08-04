@@ -107,6 +107,42 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(screen.getByRole("button")).toHaveTextContent("auto → stdout");
   });
 
+  it("wraps a collapsed exit-code verdict without shrinking the actual value away", () => {
+    const row: OutputRenderRow = {
+      key: "verdict-exit-code",
+      target: TARGET,
+      estimateSize: 36,
+      rowKind: "script-verdict",
+      expanded: false,
+      verdict: {
+        compareSource: "auto",
+        expected: "true",
+        actual: "1",
+        actualSource: "exitCode",
+        exitCode: 1,
+        outcome: "failed",
+        matchRule: "none",
+        action: "stopWorkflow",
+        durationMs: 130_600,
+      },
+    };
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+
+    const summary = screen.getByRole("button");
+    expect(summary).toHaveClass(
+      "whitespace-normal",
+      "[overflow-wrap:anywhere]"
+    );
+    expect(summary).not.toHaveClass("overflow-hidden");
+    expect(summary).toHaveTextContent("auto → exit code");
+    expect(summary).toHaveTextContent("expected true");
+    expect(summary).toHaveTextContent("actual 1");
+    expect(summary).toHaveTextContent("stopWorkflow");
+    expect(summary).toHaveTextContent("130.6s");
+    expect(summary.querySelector(".truncate")).toBeNull();
+  });
+
   it("truncates long actual values while collapsed and reveals them when expanded", () => {
     const actual = Array.from(
       { length: 20 },

@@ -173,6 +173,12 @@ describe("outputRows", () => {
     );
     expect(verdictRow?.estimateSize).toBeGreaterThan(0);
     expect(verdictRow).toMatchObject({ expanded: false });
+    if (!verdictRow || verdictRow.rowKind !== "script-verdict") {
+      throw new Error("Expected a script verdict row");
+    }
+    expect(estimateOutputRowHeight(verdictRow, 13, 240)).toBeGreaterThan(
+      estimateOutputRowHeight(verdictRow, 13, 1200)
+    );
   });
 
   it("keeps streaming chunks isolated by execution phase", () => {
@@ -1677,6 +1683,22 @@ describe("outputRows", () => {
 
     const scriptRows = (result: ReturnType<typeof buildOutputRows>) =>
       result.rows.filter((row) => row.rowKind === "script-output");
+
+    it("sanitizes streamed and completed script output before row rendering", () => {
+      const raw = "\u001b[36mcyan\u001b[39m\r\nnext\u0007";
+
+      for (const result of [
+        buildScriptRows({ streaming: raw }),
+        buildScriptRows({ response: raw }),
+      ]) {
+        const rows = scriptRows(result);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].text).toBe("cyan\nnext");
+        expect(rows[0].text).not.toMatch(
+          /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/
+        );
+      }
+    });
 
     it("splits completed output into bounded slices that rejoin to the original", () => {
       const response = scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 3 + 4);
