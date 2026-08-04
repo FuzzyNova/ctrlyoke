@@ -11,7 +11,7 @@
  * tree to run).
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { useWorkflowStore } from "@store/workflowStore";
+import { useWorkflowStore, isStepContentEqual } from "@store/workflowStore";
 import {
   clearUndoRedoRuntimeCacheForTests,
   mergeRuntimeForUndoRedo,
@@ -248,6 +248,23 @@ describe("STEPS_EXTENDED handler simulation", () => {
     );
   });
 
+  it("edit a step property outside the old add/delete allow-list (resumeSession): records 1 entry", () => {
+    // Regression test: STEPS_EXTENDED's content-diff and zundo's equality
+    // check used to each keep their own hand-written field allow-list
+    // (prompt/name/model/harness/enabled). A property edit outside both
+    // lists — e.g. toggling "resume session" in the properties drawer —
+    // never registered as undoable even though the step genuinely changed.
+    loadWorkflow([makePrompt({ resumeSession: false })]);
+
+    store().setPrompts([makePrompt({ resumeSession: true })]);
+
+    temporal().pause();
+    store().setFinalStep(null);
+    temporal().resume();
+
+    expect(temporal().pastStates).toHaveLength(1);
+  });
+
   it("four-undo bug is gone: adding one prompt leaves exactly 1 past state", () => {
     loadWorkflow([makePrompt()]);
 
@@ -398,6 +415,36 @@ describe("undo/redo round-trips", () => {
     // executionState is not in the partialized snapshot — it stays as-is
     expect(store().executionState).toBe(EXECUTION_STATES.RUNNING);
     expect((store().steps[0] as any).prompt).toBe("hello world");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isStepContentEqual — the single source of truth used by both zundo's
+// equality option and the STEPS_EXTENDED handler's content-diff check.
+// ---------------------------------------------------------------------------
+describe("isStepContentEqual", () => {
+  it("detects a difference in a field outside the old hand-written allow-list", () => {
+    const a = makePrompt({ resumeSession: false });
+    const b = makePrompt({ resumeSession: true });
+    expect(isStepContentEqual(a, b)).toBe(false);
+  });
+
+  it("ignores runtime-only fields (_runtime, status)", () => {
+    const a = makePrompt({
+      _runtime: { startedAt: 1 } as any,
+      status: "completed" as any,
+    });
+    const b = makePrompt({
+      _runtime: { startedAt: 2 } as any,
+      status: "pending" as any,
+    });
+    expect(isStepContentEqual(a, b)).toBe(true);
+  });
+
+  it("is key-order independent", () => {
+    const a = { prompt: "hi", harness: "claude-cli" } as PromptStep;
+    const b = { harness: "claude-cli", prompt: "hi" } as PromptStep;
+    expect(isStepContentEqual(a, b)).toBe(true);
   });
 });
 

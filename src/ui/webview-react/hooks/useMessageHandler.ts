@@ -11,7 +11,11 @@
  */
 import { useEffect, useCallback, useMemo } from "react";
 import { getVsCodeApi, isStandalone } from "./useVsCodeApi";
-import { useWorkflowStore } from "../store/workflowStore";
+import {
+  useWorkflowStore,
+  isStepContentEqual,
+  type WorkflowStep,
+} from "../store/workflowStore";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -714,23 +718,17 @@ export function createMessageHandlers(
       `[STEPS_EXTENDED] ${currentSteps.length} → ${newSteps.length} steps${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
     );
     // Only record an undo entry when the user actually changed something.
-    // Count changes cover add/remove. Content changes (same count, different
-    // text/name/model/harness) cover edits. Pure re-syncs (file-watcher firing
-    // after the extension writes the working file) have identical content and
-    // must not pollute the undo stack.
+    // Count changes cover add/remove. Content changes (same count, any
+    // user-editable field different — see isStepContentEqual) cover edits.
+    // Pure re-syncs (file-watcher firing after the extension writes the
+    // working file) have identical content and must not pollute the undo stack.
     const stepCountChanged = newSteps.length !== currentSteps.length;
     const stepContentChanged =
       !stepCountChanged &&
-      newSteps.some((p: any, i: number) => {
-        const cur = currentSteps[i] as any;
-        return (
-          p.prompt !== cur?.prompt ||
-          p.name !== cur?.name ||
-          p.model !== cur?.model ||
-          p.harness !== cur?.harness ||
-          p.enabled !== cur?.enabled
-        );
-      });
+      newSteps.some(
+        (p: WorkflowStep, i: number) =>
+          !isStepContentEqual(p, currentSteps[i] as WorkflowStep)
+      );
     // Also suppress undo recording for the initial auto-load (0 → N steps).
     // Loading from an empty state is a system-driven restore, not a user edit.
     const isInitialAutoLoad = currentSteps.length === 0;

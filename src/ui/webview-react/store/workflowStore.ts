@@ -31,6 +31,57 @@ export type WorkflowStep = PromptStep | ScriptStep;
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
 }
+
+/**
+ * Deep, key-order-independent equality for JSON-shaped values. A key present
+ * with value `undefined` is treated as absent, matching how the rest of the
+ * codebase treats an omitted optional field.
+ */
+function deepValueEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null
+  ) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+    return a.every((item, index) => deepValueEqual(item, b[index]));
+  }
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  const aKeys = Object.keys(ra).filter((key) => ra[key] !== undefined);
+  const bKeys = Object.keys(rb).filter((key) => rb[key] !== undefined);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(
+    (key) => bKeys.includes(key) && deepValueEqual(ra[key], rb[key])
+  );
+}
+
+/**
+ * Whether two workflow steps are equal in every user-editable field — the
+ * single source of truth for "did the user change this step's content."
+ * Ignores runtime-only fields (`status`, `_runtime`) so execution bookkeeping
+ * never pollutes the undo stack.
+ *
+ * Used by both zundo's `equality` option below and the STEPS_EXTENDED handler
+ * in useMessageHandler.ts. Previously each kept its own hand-written allow-list
+ * of fields to compare, so any step property missing from *both* lists (e.g.
+ * `resumeSession`, `mcpServers`, `toolPermissions`, `additionalArgs`) never
+ * registered as undoable no matter which one edited it.
+ */
+export function isStepContentEqual(a: WorkflowStep, b: WorkflowStep): boolean {
+  const { status: _statusA, _runtime: _runtimeA, ...restA } =
+    a as unknown as Record<string, unknown>;
+  const { status: _statusB, _runtime: _runtimeB, ...restB } =
+    b as unknown as Record<string, unknown>;
+  return deepValueEqual(restA, restB);
+}
 import type {
   OrderedHistoryEntry,
   OrderedCliHistoryEntry,
@@ -1396,17 +1447,7 @@ export const useWorkflowStore = create<
           return false;
         }
         for (let i = 0; i < a.steps.length; i++) {
-          const sa = a.steps[i] as any;
-          const sb = b.steps[i] as any;
-          if (
-            sa.prompt !== sb.prompt ||
-            sa.script !== sb.script ||
-            sa.name !== sb.name ||
-            sa.model !== sb.model ||
-            sa.harness !== sb.harness ||
-            sa.type !== sb.type ||
-            sa.enabled !== sb.enabled
-          ) {
+          if (!isStepContentEqual(a.steps[i], b.steps[i])) {
             return false;
           }
         }
