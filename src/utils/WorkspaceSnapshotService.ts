@@ -22,6 +22,7 @@ import {
   SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
   UNDO_FILE_ACTIONS,
+  MAX_CONTENT_SIZE,
   type SnapshotStrategy,
 } from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
@@ -34,8 +35,6 @@ import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 
 const execFileAsync = promisify(execFile);
-
-const MAX_CONTENT_SIZE = 512 * 1024; // 512 KB
 
 /** Normalize Windows line endings to LF before diff computation. */
 function normalizeLf(content: string): string {

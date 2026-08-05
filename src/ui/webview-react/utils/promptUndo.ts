@@ -28,7 +28,10 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import { fromPromptChangeType, type DiffFileCardProps } from "@components/diff";
-import type { DiffChangeType } from "@root/types/DashboardConstants";
+import {
+  MAX_CONTENT_SIZE,
+  type DiffChangeType,
+} from "@root/types/DashboardConstants";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { hasRenderableDiff } from "@utils/diffUtils";
 
@@ -170,6 +173,12 @@ interface FileAccum {
   newContent: string | undefined;
   /** Per-event structured patches collected in order (fallback display when snapshot has none) */
   eventPatches: UnifiedDiffHunk[][];
+  /** True when a FILE_WRITE payload exceeded the content capture limit. */
+  contentCaptureSkipped: boolean;
+}
+
+function exceedsMaxContentSize(content: string): boolean {
+  return new TextEncoder().encode(content).byteLength > MAX_CONTENT_SIZE;
 }
 
 /**
@@ -213,6 +222,7 @@ export function buildUndoCandidatesForOutputs(
       let oldContent = existing?.oldContent;
       let newContent = existing?.newContent;
       const eventPatches = existing?.eventPatches ?? [];
+      let contentCaptureSkipped = existing?.contentCaptureSkipped ?? false;
 
       if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
         const editData = d as FileEditData;
@@ -224,6 +234,14 @@ export function buildUndoCandidatesForOutputs(
         if (editData.structuredPatch && editData.structuredPatch.length > 0) {
           eventPatches.push(editData.structuredPatch);
         }
+      } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
+        const writeData = d as FileWriteData;
+        if (exceedsMaxContentSize(writeData.content)) {
+          newContent = undefined;
+          contentCaptureSkipped = true;
+        } else {
+          newContent = writeData.content;
+        }
       }
 
       // Preserve "created" once set — a FILE_WRITE followed by FILE_EDITs still
@@ -231,11 +249,16 @@ export function buildUndoCandidatesForOutputs(
       const resolvedChangeType =
         existing?.changeType === "created" ? "created" : changeType;
 
+      if (event.type === CLI_EVENT_TYPES.FILE_WRITE && resolvedChangeType === "created") {
+        oldContent = "";
+      }
+
       accumMap.set(filePath, {
         changeType: resolvedChangeType,
         oldContent,
         newContent,
         eventPatches,
+        contentCaptureSkipped,
       });
     }
   }
@@ -278,7 +301,8 @@ export function buildUndoCandidatesForOutputs(
       newContent: displayPatch ? undefined : accum.newContent,
       structuredPatch: displayPatch,
       afterHash: snapEntry?.afterHash,
-      contentCaptureSkipped: snapEntry?.contentCaptureSkipped,
+      contentCaptureSkipped:
+        snapEntry?.contentCaptureSkipped || accum.contentCaptureSkipped,
     };
   });
 

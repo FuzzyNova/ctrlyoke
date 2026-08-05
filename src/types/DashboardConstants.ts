@@ -949,6 +949,9 @@ export const PASTED_IMAGE_MIME_EXTENSIONS: Record<string, string> = {
 /** Maximum size (in bytes) of a pasted image accepted for save (15 MB). */
 export const MAX_PASTED_IMAGE_BYTES = 15 * 1024 * 1024;
 
+/** Maximum UTF-8 content size captured for workspace and undo diffs (512 KB). */
+export const MAX_CONTENT_SIZE = 512 * 1024;
+
 /** File extensions rendered as inline thumbnails in the output pane. */
 export const IMAGE_REF_EXTENSIONS = [
   "png",

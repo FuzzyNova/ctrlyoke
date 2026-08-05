@@ -534,11 +534,16 @@ into `promptUndo.ts` and the component becomes "build groups, render list, send 
 Implemented with no contract deviations; the single-non-empty-group rule also suppresses
 workflow step headings when only one workflow group has files.
 
-**Phase 4a — `FILE_WRITE` content capture.**
+**Phase 4a — `FILE_WRITE` content capture — done.**
 §4.4 cause A only: `MAX_CONTENT_SIZE` moves to `DashboardConstants`, and
-`buildUndoCandidatesForOutputs` starts collecting `FileWriteData.content`. Purely a
-`promptUndo.ts` + constants change; the card built in Phase 2 already renders the result once
-the data exists.
+`buildUndoCandidatesForOutputs` starts collecting `FileWriteData.content`. The change is
+limited to `promptUndo.ts`, the shared constant, and the snapshot-service import; the card built
+in Phase 2 already renders the result once the data exists.
+
+Contract deviations: none. Webview capture uses UTF-8 byte length for the shared 512 KB
+threshold, propagates `contentCaptureSkipped` from oversized writes, and preserves snapshot
+patch precedence for writes to pre-existing files. No extension-host test changes were needed;
+the moved constant has no directly asserted host behavior.
 
 **Phase 4b — Workflow aggregation and ordering.**
 Workflow aggregation for **both** undo and redo (§4.5) plus the paired ordering invariant

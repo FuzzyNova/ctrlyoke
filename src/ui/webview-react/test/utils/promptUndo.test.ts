@@ -14,9 +14,11 @@ import {
   getPromptUndoSummary,
   buildUndoDialogInputForPrompt,
   buildUndoDialogInputForSpecificEvent,
+  buildPromptUndoDialogModel,
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, UNDO_FILE_ACTIONS } from "@/types/messages";
+import { MAX_CONTENT_SIZE } from "@root/types/DashboardConstants";
 import type { CliOutput } from "@/types/cliEvents";
 import type {
   WorkspaceSnapshot,
@@ -61,10 +63,17 @@ function makeFileEditEvent(
   };
 }
 
-function makeFileWriteEvent(path: string, opts: { success?: boolean } = {}) {
+function makeFileWriteEvent(
+  path: string,
+  opts: { content?: string; success?: boolean } = {}
+) {
   return {
     type: CLI_EVENT_TYPES.FILE_WRITE,
-    data: { path, content: "created content", success: opts.success },
+    data: {
+      path,
+      content: opts.content ?? "created content",
+      success: opts.success,
+    },
   };
 }
 
@@ -230,6 +239,83 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
+  it("FILE_WRITE-only step captures content and provides an added diff", () => {
+    const output = makeCliOutput([
+      makeFileWriteEvent("src/new.ts", { content: "created content" }),
+    ]);
+    const snapshot = makeSnapshot([makeCreatedSnap("src/new.ts")]);
+    const candidates = buildUndoCandidatesForOutputs([output], snapshot);
+
+    expect(candidates[0]).toMatchObject({
+      oldContent: "",
+      newContent: "created content",
+      changeType: "created",
+    });
+
+    const model = buildPromptUndoDialogModel({
+      mode: "undo",
+      input: buildUndoDialogInputForPrompt(
+        TARGET,
+        [output],
+        snapshot,
+        "/workspace"
+      ),
+    });
+    expect(model.tier1Rows[0]).toMatchObject({
+      hasDiff: true,
+      source: {
+        kind: "content",
+        oldContent: "",
+        newContent: "created content",
+      },
+    });
+  });
+
+  it("FILE_WRITE onto a modified file keeps the snapshot before-to-after diff", () => {
+    const snapshotPatch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ["-before", "+after"],
+      },
+    ];
+    const output = makeCliOutput([
+      makeFileWriteEvent("src/existing.ts", { content: "after" }),
+    ]);
+    const snapshot = makeSnapshot([
+      {
+        path: "src/existing.ts",
+        changeType: "modified",
+        beforeContent: "before",
+        structuredPatch: snapshotPatch,
+      },
+    ]);
+
+    const candidate = buildUndoCandidatesForOutputs([output], snapshot)[0];
+
+    expect(candidate.changeType).toBe("modified");
+    expect(candidate.oldContent).toBe("before");
+    expect(candidate.newContent).toBeUndefined();
+    expect(candidate.structuredPatch).toEqual(snapshotPatch);
+  });
+
+  it("over-threshold FILE_WRITE skips content capture", () => {
+    const output = makeCliOutput([
+      makeFileWriteEvent("src/large.ts", {
+        content: "x".repeat(MAX_CONTENT_SIZE + 1),
+      }),
+    ]);
+    const snapshot = makeSnapshot([makeCreatedSnap("src/large.ts")]);
+
+    const candidate = buildUndoCandidatesForOutputs([output], snapshot)[0];
+
+    expect(candidate.oldContent).toBe("");
+    expect(candidate.newContent).toBeUndefined();
+    expect(candidate.contentCaptureSkipped).toBe(true);
+  });
+
   it("FILE_DELETE with snapshot contentToRestore → restore-content instruction", () => {
     const output = makeCliOutput([makeFileDeleteEvent("src/gone.ts")]);
     const snapshot = makeSnapshot([
@@ -313,13 +399,24 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
   it("FILE_WRITE followed by FILE_EDIT → changeType stays 'created'", () => {
     const output = makeCliOutput([
-      makeFileWriteEvent("src/new.ts"),
-      makeFileEditEvent("src/new.ts"),
+      makeFileWriteEvent("src/new.ts", { content: "written content" }),
+      makeFileEditEvent("src/new.ts", {
+        oldContent: "written content",
+        newContent: "edited content",
+        structuredPatch: [],
+      }),
+      makeFileEditEvent("src/new.ts", {
+        oldContent: "edited content",
+        newContent: "final content",
+        structuredPatch: [],
+      }),
     ]);
     const snapshot = makeSnapshot([makeCreatedSnap("src/new.ts")]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
     expect(candidates[0].changeType).toBe("created");
+    expect(candidates[0].oldContent).toBe("");
+    expect(candidates[0].newContent).toBe("final content");
   });
 
   it("absolute event path matched to relative snapshot path via sameFilePath", () => {
