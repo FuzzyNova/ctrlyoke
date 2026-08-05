@@ -361,7 +361,7 @@ function FileRow({
         </p>
       )}
 
-      <div className="mt-1 flex flex-col gap-1.5 sm:flex-row sm:items-center">
+      <div className="mt-1 flex flex-col gap-1.5">
         <div className="flex items-center gap-1 flex-wrap">
           {file.locations.map((loc) => (
             <HarnessBadge
@@ -377,7 +377,7 @@ function FileRow({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
+        <div className="flex shrink-0 items-center gap-1.5">
           <FlyoutActionDropdown
             label="Save"
             icon="save"
@@ -502,7 +502,13 @@ export function AgentSkillsManagerSection({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    requestFiles();
+    // Skip the fetch if a previous mount of this component (e.g. before a
+    // mobile/desktop layout remount) already populated the store — avoids a
+    // needless refetch and a "Loading…" flash over content that's still valid.
+    if (managedFiles.length === 0) {
+      requestFiles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestFiles]);
 
   useEffect(() => {

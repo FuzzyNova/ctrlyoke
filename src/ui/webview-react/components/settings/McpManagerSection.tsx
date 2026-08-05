@@ -710,8 +710,16 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   }, [localServers]);
 
   useEffect(() => {
-    requestServers();
-    requestLocalScan();
+    // Skip fetches a previous mount of this component already satisfied
+    // (e.g. before a mobile/desktop layout remount) — avoids needless
+    // refetches and a "Loading…" flash over content that's still valid.
+    if (managedServers === undefined) {
+      requestServers();
+    }
+    if (localServers.length === 0) {
+      requestLocalScan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestServers, requestLocalScan]);
 
   useEffect(() => {
@@ -1182,7 +1190,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                         {getServerSummary(server.config)}
                       </div>
 
-                      <div className="mt-1 flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                      <div className="mt-1 flex flex-col gap-1.5">
                         <div className="flex flex-wrap items-center gap-1">
                           {allLocations.map((location) => (
                             <ScopeBadge
@@ -1194,7 +1202,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           ))}
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           <FlyoutActionDropdown
                             label="Save"
                             icon="save"
