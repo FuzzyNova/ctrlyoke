@@ -771,6 +771,14 @@ const OutputSectionInner: React.FC = () => {
     openFind();
   }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
 
+  const handleToggleFind = useCallback(() => {
+    if (findState.isOpen) {
+      closeFind();
+      return;
+    }
+    handleOpenFind();
+  }, [closeFind, findState.isOpen, handleOpenFind]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
@@ -1129,6 +1137,7 @@ const OutputSectionInner: React.FC = () => {
           activeTerminalSession={activeTerminalSession}
           anyDiffCollapsed={anyDiffCollapsed}
           hasOutput={hasOutput}
+          isFindOpen={findState.isOpen}
           isExecutionActive={isExecutionActive}
           isHeaderNarrow={isHeaderNarrow}
           isHeaderVeryNarrow={isHeaderVeryNarrow}
@@ -1145,6 +1154,7 @@ const OutputSectionInner: React.FC = () => {
           onCollapseAllDiffs={collapseAllDiffs}
           onExpandAllDiffs={expandAllDiffs}
           onExport={outputExport.openModal}
+          onToggleFind={handleToggleFind}
           onNewTerminal={handleSpawnTerminal}
           onOutputFontSizeChange={setOutputFontSize}
           onSelectOutputTab={handleSelectOutputTab}

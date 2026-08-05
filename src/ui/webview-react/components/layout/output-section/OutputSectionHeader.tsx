@@ -11,6 +11,7 @@ export interface OutputSectionHeaderProps {
   activeTerminalSession: TerminalSession | null;
   anyDiffCollapsed: boolean;
   hasOutput: boolean;
+  isFindOpen: boolean;
   isExecutionActive: boolean;
   isHeaderNarrow: boolean;
   isHeaderVeryNarrow: boolean;
@@ -28,6 +29,7 @@ export interface OutputSectionHeaderProps {
   onCollapseAllDiffs: () => void;
   onExpandAllDiffs: () => void;
   onExport: () => void;
+  onToggleFind: () => void;
   onNewTerminal: () => void;
   onSelectOutputTab: () => void;
   onSelectTerminalTab: () => void;
@@ -45,6 +47,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   activeTerminalSession,
   anyDiffCollapsed,
   hasOutput,
+  isFindOpen,
   isExecutionActive,
   isHeaderNarrow,
   isHeaderVeryNarrow,
@@ -61,6 +64,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   onCollapseAllDiffs,
   onExpandAllDiffs,
   onExport,
+  onToggleFind,
   onNewTerminal,
   onSelectOutputTab,
   onSelectTerminalTab,
@@ -252,7 +256,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 title={`Undo workflow changes (${workflowUndoCount} file${workflowUndoCount !== 1 ? "s" : ""})`}
                 onClick={onWorkflowUndo}
               >
-                <i className="codicon codicon-discard text-xs flex-shrink-0" />
+                <i className="codicon codicon-lg codicon-discard flex-shrink-0" />
                 {!isHeaderVeryNarrow && (
                   <span className="text-nowrap">
                     {useCompactLabels
@@ -270,7 +274,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 title={`Redo workflow changes (${workflowRedoCount} file${workflowRedoCount !== 1 ? "s" : ""})`}
                 onClick={onWorkflowRedo}
               >
-                <i className="codicon codicon-redo text-xs flex-shrink-0" />
+                <i className="codicon codicon-lg codicon-redo flex-shrink-0" />
                 {!isHeaderVeryNarrow && (
                   <span>
                     {useCompactLabels
@@ -280,6 +284,20 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 )}
               </button>
             )}
+            <button
+              type="button"
+              className={`icon-btn py-1 px-1 ${
+                isFindOpen
+                  ? "text-widget-highlight-fg hover:text-widget-highlight-fg-hover"
+                  : ""
+              }`}
+              title="Find in output"
+              aria-label="Find in output"
+              aria-pressed={isFindOpen}
+              onClick={onToggleFind}
+            >
+              <i className="codicon codicon-lg codicon-search" />
+            </button>
             {hasOutput && (
               <ExpandCollapseAllDiffsButton
                 anyDiffCollapsed={anyDiffCollapsed}
@@ -295,7 +313,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={onExport}
               disabled={!hasOutput}
             >
-              <i className="codicon codicon-sm codicon-share" />
+              <i className="codicon codicon-lg codicon-share" />
             </button>
           </>
         )}

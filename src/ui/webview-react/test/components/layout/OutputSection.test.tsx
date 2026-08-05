@@ -8,8 +8,11 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 
 const applyScrollTargetSpy = vi.fn();
+const closeFindSpy = vi.fn();
+const openFindSpy = vi.fn();
 let outputWidth = 1200;
 let resizeObserverCallback: (() => void) | null = null;
+let outputFindIsOpen = false;
 
 vi.mock("@hooks/useVsCodeApi", () => ({
   getVsCodeApi: () => null,
@@ -158,10 +161,10 @@ vi.mock("@hooks/useOutputVirtualization", () => ({
 
 vi.mock("@hooks/useOutputFind", () => ({
   useOutputFind: () => ({
-    state: { isOpen: false, query: "", caseSensitive: false },
+    state: { isOpen: outputFindIsOpen, query: "", caseSensitive: false },
     setState: vi.fn(),
-    open: vi.fn(),
-    close: vi.fn(),
+    open: openFindSpy,
+    close: closeFindSpy,
     search: vi.fn(),
     navigate: vi.fn(),
     handleKeyDown: vi.fn(),
@@ -200,13 +203,24 @@ vi.mock("@components/layout/output-section/ExportOutputModal", () => ({
 
 vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
   OutputSectionHeader: ({
+    isFindOpen,
+    onToggleFind,
     onToggleCollapse,
     terminalExecutionRunLabel,
   }: {
+    isFindOpen: boolean;
+    onToggleFind: () => void;
     onToggleCollapse: () => void;
     terminalExecutionRunLabel: string | null;
   }) => (
     <>
+      <button
+        type="button"
+        aria-pressed={isFindOpen}
+        onClick={onToggleFind}
+      >
+        Toggle output find
+      </button>
       <button type="button" onClick={onToggleCollapse}>
         Collapse output
       </button>
@@ -303,7 +317,10 @@ describe("OutputSection", () => {
   beforeEach(() => {
     resetStores();
     applyScrollTargetSpy.mockReset();
+    closeFindSpy.mockReset();
+    openFindSpy.mockReset();
     outputWidth = 1200;
+    outputFindIsOpen = false;
     resizeObserverCallback = null;
   });
 
@@ -329,6 +346,28 @@ describe("OutputSection", () => {
     render(<OutputSection />);
 
     expect(applyScrollTargetSpy).toHaveBeenCalledWith("auto-scroll");
+  });
+
+  it("opens and closes output find from the header toggle", () => {
+    const { unmount } = render(<OutputSection />);
+    const findButton = screen.getByRole("button", {
+      name: "Toggle output find",
+    });
+
+    fireEvent.click(findButton);
+    expect(openFindSpy).toHaveBeenCalledOnce();
+    expect(closeFindSpy).not.toHaveBeenCalled();
+
+    outputFindIsOpen = true;
+    unmount();
+    render(<OutputSection />);
+
+    const openFindButton = screen.getByRole("button", {
+      name: "Toggle output find",
+    });
+    expect(openFindButton).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(openFindButton);
+    expect(closeFindSpy).toHaveBeenCalledOnce();
   });
 
   it("labels terminal ownership with the exact executing run ID while viewing another run", () => {

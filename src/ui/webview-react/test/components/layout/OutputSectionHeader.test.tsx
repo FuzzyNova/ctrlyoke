@@ -1,18 +1,19 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   OutputSectionHeader,
   type OutputSectionHeaderProps,
 } from "@components/layout/output-section/OutputSectionHeader";
 
-function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}): void {
+function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
   const noop = vi.fn();
-  render(
+  return render(
     <OutputSectionHeader
       activeOutputTab="terminal"
       activeTerminalSession={null}
       anyDiffCollapsed={false}
       hasOutput={false}
+      isFindOpen={false}
       isExecutionActive={true}
       isHeaderNarrow={false}
       isHeaderVeryNarrow={false}
@@ -29,6 +30,7 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}): void {
       onCollapseAllDiffs={noop}
       onExpandAllDiffs={noop}
       onExport={noop}
+      onToggleFind={noop}
       onNewTerminal={noop}
       onOutputFontSizeChange={noop}
       onSelectOutputTab={noop}
@@ -74,5 +76,64 @@ describe("OutputSectionHeader terminal execution identity", () => {
     expect(
       screen.getByRole("button", { name: "Terminal" })
     ).not.toHaveAttribute("title");
+  });
+});
+
+describe("OutputSectionHeader find action", () => {
+  it("toggles a highlighted find action from the output tab only", () => {
+    const onToggleFind = vi.fn();
+    const { rerender } = renderHeader({
+      activeOutputTab: "output",
+      isFindOpen: true,
+      onToggleFind,
+    });
+
+    const findButton = screen.getByRole("button", { name: "Find in output" });
+    expect(findButton).toHaveAttribute("aria-pressed", "true");
+    expect(findButton).toHaveClass("text-widget-highlight-fg");
+
+    fireEvent.click(findButton);
+    expect(onToggleFind).toHaveBeenCalledOnce();
+
+    rerender(
+      <OutputSectionHeader
+        activeOutputTab="terminal"
+        activeTerminalSession={null}
+        anyDiffCollapsed={false}
+        hasOutput={false}
+        isFindOpen={false}
+        isExecutionActive={true}
+        isHeaderNarrow={false}
+        isHeaderVeryNarrow={false}
+        isTerminalCompact={false}
+        refCallback={vi.fn()}
+        showTerminalTab
+        terminalCanCloseActiveSession={false}
+        terminalExecutionRunLabel={null}
+        terminalFontSize={14}
+        terminalSessionActive
+        useCompactLabels={false}
+        workflowRedoEntries={[]}
+        workflowUndoEntries={[]}
+        onCollapseAllDiffs={vi.fn()}
+        onExpandAllDiffs={vi.fn()}
+        onExport={vi.fn()}
+        onToggleFind={onToggleFind}
+        onNewTerminal={vi.fn()}
+        onOutputFontSizeChange={vi.fn()}
+        onSelectOutputTab={vi.fn()}
+        onSelectTerminalTab={vi.fn()}
+        onTerminalFontSizeChange={vi.fn()}
+        onTerminalSessionClose={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onWorkflowRedo={vi.fn()}
+        onWorkflowUndo={vi.fn()}
+        outputFontSize={14}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Find in output" })
+    ).not.toBeInTheDocument();
   });
 });

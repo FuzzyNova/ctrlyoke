@@ -19,6 +19,7 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { centerPanelMountDefaults } from "@utils/panelSync";
+import { isEditableElement, isEditableElementFocused } from "@utils/domFocus";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -61,20 +62,6 @@ function isIosWebKitBrowser(): boolean {
   return (
     /iPad|iPhone|iPod/.test(userAgent) ||
     (platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
-
-function isEditableElement(element: HTMLElement): boolean {
-  const tagName = element.tagName;
-  return (
-    tagName === "INPUT" || tagName === "TEXTAREA" || element.isContentEditable
-  );
-}
-
-function isEditableElementFocused(): boolean {
-  const activeElement = document.activeElement;
-  return (
-    activeElement instanceof HTMLElement && isEditableElement(activeElement)
   );
 }
 

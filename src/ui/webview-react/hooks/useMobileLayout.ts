@@ -15,6 +15,8 @@ import {
   centerPanelMountDefaults,
   syncCollapsiblePanel,
 } from "@utils/panelSync";
+import { isEditableElement } from "@utils/domFocus";
+import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -84,6 +86,82 @@ export function useMobileLayout({
     if (!isMobile) return;
     mobileInitializedRef.current = !(outputCollapsed && editorCollapsed);
   }, [uiLayoutReady, isMobile, outputCollapsed, editorCollapsed]);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // KEYBOARD-AWARE COLLAPSE: protect the output panel from the mobile keyboard
+  // ──────────────────────────────────────────────────────────────────────────
+  // The editor panel mounts with groupResizeBehavior="preserve-pixel-size", so
+  // when the mobile keyboard shrinks the visual viewport, 100% of that
+  // shrinkage lands on the output panel (the Group's only
+  // preserve-relative-size panel) — none on the editor. That's the desired
+  // tradeoff while typing in CodeMirror (editor stays put, output yields).
+  // It's wrong when the focused, keyboard-triggering element lives INSIDE the
+  // output panel itself (OutputFindBar's input, TerminalView's xterm
+  // textarea): the output panel shrinks below PANEL_MIN_SIZE_CENTER and
+  // auto-collapses, hiding the very element that had focus — which blurs it,
+  // dismisses the keyboard, and leaves the panel stuck collapsed (collapse is
+  // sticky; nothing re-expands it automatically).
+  //
+  // Fix: when focus lands on an editable element inside #output-section,
+  // proactively collapse the editor panel instead, so the output panel keeps
+  // its share of the viewport. Armed on `focusin` (not the later
+  // keyboard-adjusted resize) so the collapse commits via the store-sync
+  // effect above before the keyboard actually opens — the same timing
+  // exploited by the iOS visual-viewport root pin in App.tsx.
+  const forcedEditorCollapseRef = useRef(false);
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !isEditableElement(target)) {
+        return;
+      }
+      if (!target.closest("#output-section")) return;
+
+      const state = useUiStore.getState();
+      if (state.outputCollapsed || state.editorCollapsed) return;
+
+      forcedEditorCollapseRef.current = true;
+      triggerPanelAnimation();
+      state.setEditorCollapsed(true);
+    };
+
+    const restoreIfForced = () => {
+      if (!forcedEditorCollapseRef.current) return;
+      forcedEditorCollapseRef.current = false;
+      triggerPanelAnimation();
+      useUiStore.getState().setEditorCollapsed(false);
+    };
+
+    const handleFocusOut = () => {
+      // Defer: focusout fires before any new element takes focus, and touch
+      // interactions inside the output section (e.g. repositioning the
+      // terminal cursor) can blur+refocus the same/sibling element within the
+      // same tick. Checking activeElement next frame avoids restoring the
+      // editor for those transient blurs.
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (
+          active instanceof HTMLElement &&
+          isEditableElement(active) &&
+          active.closest("#output-section")
+        ) {
+          return; // focus moved to another editable still inside the output section
+        }
+        restoreIfForced();
+      });
+    };
+
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+      // Never leave the editor collapsed if this hook tears down mid-keyboard.
+      restoreIfForced();
+    };
+  }, [isMobile]);
 
   return {
     // Panel / group refs
