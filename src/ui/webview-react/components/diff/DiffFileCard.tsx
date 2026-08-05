@@ -127,7 +127,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             />
           ))}
         <i
-          className={`codicon codicon-file-diff ${DIFF_CHANGE_ICON[changeType]} shrink-0 text-editor-fg opacity-80`}
+          className={`codicon ${DIFF_CHANGE_ICON[changeType]} shrink-0 text-editor-fg opacity-80`}
           aria-hidden="true"
         />
         <DiffFilePathLabel path={path} oldPath={oldPath} />
