@@ -18,15 +18,26 @@ import {
   toolCallLineHeight,
 } from "./outputLineMetrics";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
+import {
+  DIFF_CHANGE_TYPES,
+  type DiffChangeType,
+} from "@root/types/DashboardConstants";
 
 // ── Multi-file unified diff parsing ──────────────────────────────────────────
 
 export interface ParsedDiffFile {
   path: string;
   oldPath?: string;
+  changeType: DiffChangeType;
   language?: string;
   hunks: HunkData[];
   diffType: DiffType;
+}
+
+const DEV_NULL = "/dev/null";
+
+function realPath(path: string | undefined): string | undefined {
+  return path && path !== DEV_NULL ? path : undefined;
 }
 
 function languageFromPath(filePath: string): string | undefined {
@@ -99,12 +110,22 @@ export function parseUnifiedDiffToFiles(unifiedDiff: string): ParsedDiffFile[] {
   }
 
   return files.map((file) => {
-    const newPath = file.newPath ?? file.oldPath ?? "";
-    const oldPath = file.oldPath !== file.newPath ? file.oldPath : undefined;
+    const oldReal = realPath(file.oldPath);
+    const newReal = realPath(file.newPath);
+    const path = newReal ?? oldReal ?? "";
     return {
-      path: newPath,
-      oldPath,
-      language: languageFromPath(newPath),
+      path,
+      // gitdiff-parser reports renames as type:"modify" with differing real
+      // paths, so rename detection must not depend on file.type.
+      oldPath: oldReal && newReal && oldReal !== newReal ? oldReal : undefined,
+      changeType: newReal
+        ? oldReal
+          ? oldReal !== newReal
+            ? DIFF_CHANGE_TYPES.RENAMED
+            : DIFF_CHANGE_TYPES.MODIFIED
+          : DIFF_CHANGE_TYPES.CREATED
+        : DIFF_CHANGE_TYPES.DELETED,
+      language: languageFromPath(path),
       hunks: (file.hunks ?? []) as HunkData[],
       diffType: (file.type as DiffType) ?? "modify",
     };

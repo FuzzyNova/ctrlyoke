@@ -18,6 +18,7 @@ import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import { hasRenderableDiff } from "@utils/diffUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // shortenPath
@@ -217,6 +218,30 @@ describe("extractKeyParameters", () => {
 });
 
 describe("structured patch helpers", () => {
+  it("treats an empty old content string as a renderable diff", () => {
+    expect(hasRenderableDiff({ oldContent: "", newContent: "new" })).toBe(true);
+  });
+
+  it("rejects a source with no diff data", () => {
+    expect(hasRenderableDiff({})).toBe(false);
+  });
+
+  it("accepts a non-empty structured patch", () => {
+    expect(
+      hasRenderableDiff({
+        structuredPatch: [
+          {
+            oldStart: 1,
+            oldLines: 0,
+            newStart: 1,
+            newLines: 1,
+            lines: ["+new"],
+          },
+        ],
+      })
+    ).toBe(true);
+  });
+
   it("removes exact duplicate hunks while preserving order", () => {
     const hunk: UnifiedDiffHunk = {
       oldStart: 5,

@@ -1,9 +1,11 @@
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { useUiStore } from "@store/uiStore";
 
 const {
   mockGetRenderedDiffStats,
+  mockDiff,
   mockToRdvHunks,
   mockToRdvFromContent,
   mockGetCollapsedLinesCountBetween,
@@ -26,6 +28,22 @@ const {
     removed: 0,
     runs: [],
   })),
+  mockDiff: vi.fn(
+    ({
+      children,
+      diffType,
+      hunks,
+    }: {
+      children: (h: unknown[]) => React.ReactNode;
+      diffType: string;
+      hunks: unknown[];
+    }) =>
+      React.createElement(
+        "div",
+        { className: "diff", "data-diff-type": diffType },
+        children(hunks)
+      )
+  ),
   mockToRdvHunks: vi.fn<() => unknown[]>(() => []),
   mockToRdvFromContent: vi.fn<
     () => {
@@ -65,15 +83,7 @@ vi.mock("@utils/rdvAdapter", () => ({
 vi.mock("react-diff-view", async () => {
   const React = await import("react");
   return {
-    Diff: vi.fn(
-      ({
-        children,
-        hunks,
-      }: {
-        children: (h: unknown[]) => React.ReactNode;
-        hunks: unknown[];
-      }) => React.createElement("div", { className: "diff" }, children(hunks))
-    ),
+    Diff: mockDiff,
     Hunk: vi.fn(() => React.createElement("div", { className: "diff-hunk" })),
     Decoration: vi.fn(({ children }: { children: React.ReactNode }) =>
       React.createElement("div", { className: "diff-decoration" }, children)
@@ -97,6 +107,7 @@ describe("DiffView", () => {
   beforeEach(() => {
     useUiStore.setState({ diffsCollapsed: false, diffResetVersion: 0 });
     mockGetRenderedDiffStats.mockClear();
+    mockDiff.mockClear();
     mockToRdvHunks.mockClear();
     mockToRdvFromContent.mockClear();
     mockGetCollapsedLinesCountBetween.mockClear();
@@ -154,6 +165,31 @@ describe("DiffView", () => {
     expect(getByText(/Show diff/)).toBeTruthy();
     expect(getByText("+1")).toHaveClass("text-minimap-diff-added");
     expect(getByText("-1")).toHaveClass("text-minimap-diff-removed");
+  });
+
+  it("renders an empty base as an all-green added diff", () => {
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -0,0 +1,1 @@",
+          oldStart: 0,
+          oldLines: 0,
+          newStart: 1,
+          newLines: 1,
+          changes: [{ type: "insert", isInsert: true, content: "+new" }],
+        },
+      ],
+      diffType: "add",
+    });
+
+    const { container } = render(
+      <DiffView oldContent="" newContent={"new\n"} globallyCollapsed={false} />
+    );
+
+    expect(mockToRdvFromContent).toHaveBeenCalledWith("", "new\n");
+    expect(
+      container.querySelector(".diff")?.getAttribute("data-diff-type")
+    ).toBe("add");
   });
 
   it("stops re-rendering when collapsed with uncontrolled gap state", () => {

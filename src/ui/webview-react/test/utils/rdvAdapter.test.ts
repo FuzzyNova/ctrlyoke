@@ -268,6 +268,49 @@ Date:   Fri Jun 12 12:00:00 2026 -0500
 
 ${SAMPLE_UNIFIED_DIFF}`;
 
+const SAMPLE_CHANGE_TYPES_DIFF = `diff --git a/src/created.ts b/src/created.ts
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/created.ts
+@@ -0,0 +1,1 @@
++export const created = true;
+diff --git a/src/deleted.ts b/src/deleted.ts
+deleted file mode 100644
+index 2222222..0000000
+--- a/src/deleted.ts
++++ /dev/null
+@@ -1,1 +0,0 @@
+-export const deleted = true;
+diff --git a/src/old-name.ts b/src/new-name.ts
+similarity index 100%
+rename from src/old-name.ts
+rename to src/new-name.ts
+diff --git a/src/modified.ts b/src/modified.ts
+index 3333333..4444444 100644
+--- a/src/modified.ts
++++ b/src/modified.ts
+@@ -1,1 +1,1 @@
+-export const modified = false;
++export const modified = true;
+`;
+
+const SAMPLE_TWO_DELETES_DIFF = `diff --git a/src/first.ts b/src/first.ts
+deleted file mode 100644
+index 5555555..0000000
+--- a/src/first.ts
++++ /dev/null
+@@ -1,1 +0,0 @@
+-first
+diff --git a/src/second.ts b/src/second.ts
+deleted file mode 100644
+index 6666666..0000000
+--- a/src/second.ts
++++ /dev/null
+@@ -1,1 +0,0 @@
+-second
+`;
+
 describe("parseUnifiedDiffToFiles", () => {
   it("returns an empty array for empty input", () => {
     expect(parseUnifiedDiffToFiles("")).toHaveLength(0);
@@ -303,6 +346,39 @@ describe("parseUnifiedDiffToFiles", () => {
     for (const file of files) {
       expect(file.hunks.length).toBeGreaterThan(0);
     }
+  });
+
+  it("normalizes added, deleted, renamed, and modified file metadata", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_CHANGE_TYPES_DIFF);
+
+    expect(
+      files.map(({ path, oldPath, changeType }) => ({
+        path,
+        oldPath,
+        changeType,
+      }))
+    ).toEqual([
+      { path: "src/created.ts", oldPath: undefined, changeType: "created" },
+      { path: "src/deleted.ts", oldPath: undefined, changeType: "deleted" },
+      {
+        path: "src/new-name.ts",
+        oldPath: "src/old-name.ts",
+        changeType: "renamed",
+      },
+      { path: "src/modified.ts", oldPath: undefined, changeType: "modified" },
+    ]);
+    expect(JSON.stringify(files)).not.toContain("/dev/null");
+  });
+
+  it("keeps distinct real paths for multiple deleted files", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_TWO_DELETES_DIFF);
+
+    expect(files.map((file) => file.path)).toEqual([
+      "src/first.ts",
+      "src/second.ts",
+    ]);
+    expect(new Set(files.map((file) => file.path)).size).toBe(2);
+    expect(JSON.stringify(files)).not.toContain("/dev/null");
   });
 
   it("does not throw on malformed / binary-only input", () => {

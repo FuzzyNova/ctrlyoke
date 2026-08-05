@@ -1173,6 +1173,19 @@ export const GIT_CHANGE_KINDS = {
 } as const;
 
 // ============================================================================
+// DIFF CHANGE TYPES - Normalized file change vocabulary for diff surfaces
+// ============================================================================
+export const DIFF_CHANGE_TYPES = {
+  CREATED: "created",
+  MODIFIED: "modified",
+  DELETED: "deleted",
+  RENAMED: "renamed",
+} as const;
+
+export type DiffChangeType =
+  (typeof DIFF_CHANGE_TYPES)[keyof typeof DIFF_CHANGE_TYPES];
+
+// ============================================================================
 // STEP TYPES - Discriminant values for WorkflowStep union type
 // ============================================================================
 export const STEP_TYPES = {

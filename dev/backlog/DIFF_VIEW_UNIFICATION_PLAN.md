@@ -510,11 +510,12 @@ and that is the common case.
 
 Each phase compiles, passes tests, and is independently shippable.
 
-**Phase 1 — Adapter and vocabulary (no visual change).**
+**Phase 1 — Adapter and vocabulary (no visual change) — done.**
 `DIFF_CHANGE_TYPES` in DashboardConstants; `/dev/null` handling + `changeType` in
-`parseUnifiedDiffToFiles` (§4.1); `hasRenderableDiff` helper (§4.4 step 3) wired into the three
-existing call sites. Tests: `rdvAdapter` add/delete/rename/modify fixtures; `DiffView` renders
-an all-green diff for `oldContent: ""`.
+`parseUnifiedDiffToFiles` (§4.1); `hasRenderableDiff` helper (§4.4 step 3) wired into all six
+existing diff-data guard sites. Tests: `rdvAdapter` add/delete/rename/modify fixtures, including
+multiple deletes; direct helper coverage; `DiffView` renders an all-green diff for
+`oldContent: ""`.
 
 **Phase 2 — Shared card layer.**
 Build `components/diff/*`. Convert `WorkspaceDiffPane` to it first (it is the style donor and

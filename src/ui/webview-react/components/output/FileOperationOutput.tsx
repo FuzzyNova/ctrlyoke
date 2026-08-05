@@ -19,6 +19,7 @@ import {
   createFileReferenceChip,
 } from "@utils/atomicReferences";
 import type { RowFindDecoration } from "@utils/outputFind";
+import { hasRenderableDiff } from "@utils/diffUtils";
 
 // ============================================================================
 // Shared primitives
@@ -218,8 +219,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     const hasDiffData =
       !hideDiff &&
       status !== OPERATION_STATUS.FAILED &&
-      ((structuredPatch && structuredPatch.length > 0) ||
-        (oldContent && newContent));
+      hasRenderableDiff({ oldContent, newContent, structuredPatch });
 
     const undoButton =
       onUndoFile &&

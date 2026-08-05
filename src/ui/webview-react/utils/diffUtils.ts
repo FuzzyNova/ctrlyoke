@@ -8,6 +8,17 @@
 import * as Diff from "diff";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
 
+export interface RenderableDiffSource {
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: UnifiedDiffHunk[];
+}
+
+export function hasRenderableDiff(s: RenderableDiffSource): boolean {
+  if (s.structuredPatch && s.structuredPatch.length > 0) return true;
+  return s.oldContent !== undefined && s.newContent !== undefined;
+}
+
 /**
  * A single line in a rendered diff — used by OutputSection and markdownExport.
  */

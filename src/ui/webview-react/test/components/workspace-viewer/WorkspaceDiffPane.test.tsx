@@ -32,6 +32,7 @@ vi.mock("@utils/diff", () => ({
 
 const diffFile: ParsedDiffFile = {
   path: "src/file.ts",
+  changeType: "modified",
   language: "typescript",
   diffType: "modify",
   hunks: [

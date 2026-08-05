@@ -18,6 +18,7 @@ import { useUiStore } from "@store/uiStore";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import { DiffView } from "./ToolCallOutput";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
+import { hasRenderableDiff } from "@utils/diffUtils";
 
 // ============================================================================
 // Types
@@ -165,9 +166,7 @@ const FileRowItem: React.FC<FileRowItemProps> = ({
 }) => {
   const undoable = row.instruction !== null;
   const isDisabled = !undoable;
-  const hasDiff =
-    (row.structuredPatch && row.structuredPatch.length > 0) ||
-    (row.oldContent && row.newContent);
+  const hasDiff = hasRenderableDiff(row);
 
   const nonUndoableReason = row.contentCaptureSkipped
     ? "Content not captured"
@@ -498,22 +497,12 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const hasDiffs = useMemo(() => {
     if (isWorkflowMode) {
-      return workflowRows.some(
-        (r) =>
-          (r.structuredPatch && r.structuredPatch.length > 0) ||
-          (r.oldContent && r.newContent)
-      );
+      return workflowRows.some((r) => hasRenderableDiff(r));
     }
     if (mode === DIALOG_MODE.REDO) {
-      return redoRows.some(
-        (r) => (r.instruction.structuredPatch?.length ?? 0) > 0
-      );
+      return redoRows.some((r) => hasRenderableDiff(r.instruction));
     }
-    return allUndoRows.some(
-      (r) =>
-        (r.structuredPatch && r.structuredPatch.length > 0) ||
-        (r.oldContent && r.newContent)
-    );
+    return allUndoRows.some((r) => hasRenderableDiff(r));
   }, [isWorkflowMode, workflowRows, mode, redoRows, allUndoRows]);
 
   function handleExpandAllDiffs() {
@@ -659,7 +648,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                   {mode === DIALOG_MODE.REDO
                     ? rows.map((row) => {
                         const inst = row.instruction as UndoFileInstruction;
-                        const hasDiff = (inst.structuredPatch?.length ?? 0) > 0;
+                        const hasDiff = hasRenderableDiff(inst);
                         return (
                           <div key={row.key} className="rounded">
                             <div className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg">
@@ -733,8 +722,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           ) : (
             <div className="flex flex-col gap-0.5">
               {redoRows.map((row) => {
-                const hasDiff =
-                  (row.instruction.structuredPatch?.length ?? 0) > 0;
+                const hasDiff = hasRenderableDiff(row.instruction);
                 return (
                   <div key={row.path} className="rounded">
                     <div className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg">
