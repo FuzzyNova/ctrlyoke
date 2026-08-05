@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useState,
+} from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -845,13 +851,24 @@ const OutputSectionInner: React.FC = () => {
     isOutputVirtualized &&
     navigationPendingRowIndex != null &&
     virtualRows.some((row) => row.index === navigationPendingRowIndex);
+  const renderedVirtualRowsIdentityRef = useRef<string | null>(null);
+  const hasRenderedVirtualRowsForCurrentIdentity =
+    renderedVirtualRowsIdentityRef.current === rowRenderIdentity;
+
+  useLayoutEffect(() => {
+    if (isOutputVirtualized && virtualRows.length > 0) {
+      renderedVirtualRowsIdentityRef.current = rowRenderIdentity;
+    }
+  }, [isOutputVirtualized, rowRenderIdentity, virtualRows.length]);
+
   const showVirtualizationOverlay =
     !isOutputScrollSeeking &&
     (isNonVirtualOutputStaging ||
       (isOutputVirtualized &&
         ((hasOutput &&
           rows.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
-          virtualRows.length === 0) ||
+          virtualRows.length === 0 &&
+          !hasRenderedVirtualRowsForCurrentIdentity) ||
           (navigationPendingRowIndex !== null &&
             !isNavigationTargetVirtualized))));
 

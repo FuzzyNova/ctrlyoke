@@ -13,6 +13,9 @@ const openFindSpy = vi.fn();
 let outputWidth = 1200;
 let resizeObserverCallback: (() => void) | null = null;
 let outputFindIsOpen = false;
+let outputRows = [{ key: "row-1" }];
+let outputIsVirtualized = false;
+let outputVirtualRows: Array<{ index: number }> = [];
 
 vi.mock("@hooks/useVsCodeApi", () => ({
   getVsCodeApi: () => null,
@@ -60,7 +63,7 @@ vi.mock("@hooks/useOutputNavigation", () => ({
 vi.mock("@hooks/useOutputRowsModel", () => ({
   useOutputRowsModel: () => ({
     allMessages: [],
-    rows: [{ key: "row-1" }],
+    rows: outputRows,
     uniqueStepTargets: [],
     stepOutputsMap: new Map(),
     lastCliIndexPerStep: new Map(),
@@ -134,7 +137,7 @@ vi.mock("@hooks/useOutputVirtualization", () => ({
     invalidateMeasuredRowForUserResize: vi.fn(),
     isNonVirtualOutputStaging: false,
     isOutputScrollSeeking: false,
-    isOutputVirtualized: false,
+    isOutputVirtualized: outputIsVirtualized,
     measureRowElement: vi.fn(),
     measureStaticRowElement: vi.fn(),
     measurementVersion: 0,
@@ -155,7 +158,7 @@ vi.mock("@hooks/useOutputVirtualization", () => ({
     },
     rowsRef: { current: [{ key: "row-1" }] },
     schedulePendingMeasurementFlush: vi.fn(),
-    virtualRows: [],
+    virtualRows: outputVirtualRows,
   }),
 }));
 
@@ -236,8 +239,10 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
 vi.mock("@components/layout/output-section/OutputPane", () => ({
   OutputPane: ({
     outputRef,
+    showVirtualizationOverlay,
   }: {
     outputRef: React.RefObject<HTMLDivElement | null>;
+    showVirtualizationOverlay: boolean;
   }) => (
     <div
       ref={(node) => {
@@ -252,6 +257,7 @@ vi.mock("@components/layout/output-section/OutputPane", () => ({
         outputRef.current = node;
       }}
       data-testid="output-pane"
+      data-virtualization-overlay={showVirtualizationOverlay}
     />
   ),
 }));
@@ -321,7 +327,47 @@ describe("OutputSection", () => {
     openFindSpy.mockReset();
     outputWidth = 1200;
     outputFindIsOpen = false;
+    outputRows = [{ key: "row-1" }];
+    outputIsVirtualized = false;
+    outputVirtualRows = [];
     resizeObserverCallback = null;
+  });
+
+  it("does not restore the rendering overlay for an appended virtual row", () => {
+    outputRows = Array.from({ length: 20 }, (_, index) => ({
+      key: `row-${index}`,
+    }));
+    outputIsVirtualized = true;
+    outputVirtualRows = [{ index: 0 }];
+
+    const { rerender } = render(<OutputSection />);
+    expect(screen.getByTestId("output-pane")).toHaveAttribute(
+      "data-virtualization-overlay",
+      "false"
+    );
+
+    outputRows = [...outputRows, { key: "row-20" }];
+    outputVirtualRows = [];
+    rerender(<OutputSection />);
+
+    expect(screen.getByTestId("output-pane")).toHaveAttribute(
+      "data-virtualization-overlay",
+      "false"
+    );
+  });
+
+  it("shows the rendering overlay before the first virtual range is ready", () => {
+    outputRows = Array.from({ length: 20 }, (_, index) => ({
+      key: `row-${index}`,
+    }));
+    outputIsVirtualized = true;
+
+    render(<OutputSection />);
+
+    expect(screen.getByTestId("output-pane")).toHaveAttribute(
+      "data-virtualization-overlay",
+      "true"
+    );
   });
 
   it("skips width-change scroll restoration while collapsing the output pane", () => {
