@@ -1,23 +1,13 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { DiffView } from "@components/output/DiffView";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
-import type { ParsedDiffFile } from "@utils/rdvAdapter";
+import {
+  DiffFileList,
+  type DiffFileGroup,
+  fromDiffKind,
+} from "@components/diff";
 import { downloadTextFile } from "@utils/diff";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
-
-function FileHeader({ file }: { file: ParsedDiffFile }) {
-  const displayPath =
-    file.oldPath && file.oldPath !== file.path
-      ? `${file.oldPath} → ${file.path}`
-      : file.path;
-  return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-editor-bg border-b border-panel-border text-xs font-mono text-editor-fg opacity-80 sticky top-0 z-10">
-      <i className="codicon codicon-file-diff flex-shrink-0" />
-      <span className="truncate">{displayPath}</span>
-    </div>
-  );
-}
 
 export const WorkspaceDiffPane: React.FC = () => {
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
@@ -29,11 +19,62 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffRefLabel = useWorkspaceViewerStore((s) => s.diffRefLabel);
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
   const diffCommitInfo = useWorkspaceViewerStore((s) => s.diffCommitInfo);
+  const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
 
   const [downloading, setDownloading] = useState(false);
   const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
   const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
   const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
+
+  const visibleFiles = useMemo(
+    () => (diffFiles ?? []).filter((file) => file.hunks.length > 0),
+    [diffFiles]
+  );
+  const commitGroups = useMemo<DiffFileGroup[]>(
+    () => [
+      {
+        files: visibleFiles.map((file) => ({
+          key: file.path,
+          path: file.path,
+          oldPath: file.oldPath,
+          changeType: file.changeType,
+          language: file.language,
+          source: {
+            kind: "hunks" as const,
+            hunks: file.hunks,
+            diffType: file.diffType,
+          },
+          globallyCollapsed: commitDiffsCollapsed,
+          localResetVersion: commitDiffResetVersion,
+        })),
+      },
+    ],
+    [commitDiffResetVersion, commitDiffsCollapsed, visibleFiles]
+  );
+  const singleFileGroups = useMemo<DiffFileGroup[]>(
+    () =>
+      selectedDiffPath
+        ? [
+            {
+              files: [
+                {
+                  key: selectedDiffPath,
+                  path: selectedDiffPath,
+                  changeType: fromDiffKind(diffKind ?? "modified"),
+                  language: diffLanguage,
+                  source: {
+                    kind: "content" as const,
+                    oldContent: diffOldContent,
+                    newContent: diffNewContent,
+                  },
+                  globallyCollapsed: false,
+                },
+              ],
+            },
+          ]
+        : [],
+    [diffKind, diffLanguage, diffNewContent, diffOldContent, selectedDiffPath]
+  );
 
   useEffect(() => {
     setCommitDetailsExpanded(false);
@@ -99,7 +140,6 @@ export const WorkspaceDiffPane: React.FC = () => {
   }
 
   if (diffFiles !== null) {
-    const visibleFiles = diffFiles.filter((f) => f.hunks.length > 0);
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Ref header banner */}
@@ -180,31 +220,10 @@ export const WorkspaceDiffPane: React.FC = () => {
 
         {/* File list */}
         <div className="flex-1 overflow-auto px-3 py-2">
-          {visibleFiles.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-editor-fg opacity-40 select-none">
-              <p className="text-sm">No text changes to display</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {visibleFiles.map((file) => (
-                <div
-                  key={file.path}
-                  className="border border-panel-border rounded overflow-hidden"
-                >
-                  <FileHeader file={file} />
-                  <DiffView
-                    oldContent=""
-                    newContent=""
-                    language={file.language}
-                    globallyCollapsed={commitDiffsCollapsed}
-                    localResetVersion={commitDiffResetVersion}
-                    hunks={file.hunks}
-                    diffType={file.diffType}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          <DiffFileList
+            groups={commitGroups}
+            emptyMessage="No text changes to display"
+          />
         </div>
       </div>
     );
@@ -231,11 +250,9 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   return (
     <div className="h-full overflow-auto px-3 py-2">
-      <DiffView
-        oldContent={diffOldContent}
-        newContent={diffNewContent}
-        language={diffLanguage}
-        globallyCollapsed={false}
+      <DiffFileList
+        groups={singleFileGroups}
+        emptyMessage="No text changes to display"
       />
     </div>
   );

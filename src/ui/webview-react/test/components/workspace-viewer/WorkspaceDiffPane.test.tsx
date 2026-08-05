@@ -102,6 +102,66 @@ describe("WorkspaceDiffPane commit diff controls", () => {
       "2"
     );
   });
+
+  it("renders added git-ref files with their real path and badge", () => {
+    useWorkspaceViewerStore.setState({
+      diffFiles: [
+        {
+          ...diffFile,
+          path: "src/new.ts",
+          changeType: "created",
+          hunks: diffFile.hunks,
+        },
+      ],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: false,
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(screen.getByText("new.ts")).toBeInTheDocument();
+    expect(screen.getByText("created")).toBeInTheDocument();
+    expect(screen.queryByText("/dev/null")).not.toBeInTheDocument();
+  });
+
+  it("renders git-ref renames with old and new paths", () => {
+    useWorkspaceViewerStore.setState({
+      diffFiles: [
+        {
+          ...diffFile,
+          path: "src/new.ts",
+          oldPath: "src/old.ts",
+          changeType: "renamed",
+        },
+      ],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: false,
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(screen.getByText("old.ts")).toBeInTheDocument();
+    expect(screen.getByText("new.ts")).toBeInTheDocument();
+    expect(screen.getByText("renamed")).toBeInTheDocument();
+  });
+});
+
+describe("WorkspaceDiffPane single-file mode", () => {
+  it("renders the header and badge derived from diffKind", () => {
+    useWorkspaceViewerStore.setState({
+      selectedDiffPath: "src/new.ts",
+      diffOldContent: "",
+      diffNewContent: "const value = 1;",
+      diffKind: "added",
+      diffLoading: false,
+      diffFiles: null,
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(screen.getByText("new.ts")).toBeInTheDocument();
+    expect(screen.getByText("created")).toBeInTheDocument();
+  });
 });
 
 describe("WorkspaceDiffPane commit details section", () => {

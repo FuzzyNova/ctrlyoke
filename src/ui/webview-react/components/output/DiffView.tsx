@@ -124,6 +124,8 @@ interface DiffViewProps {
    */
   viewType?: "split" | "unified";
   className?: string;
+  /** Outer vertical margin. The default is part of virtualized row geometry. */
+  outerMarginClassName?: string;
   /**
    * Pre-parsed react-diff-view hunks (e.g. from parseUnifiedDiffToFiles).
    * When provided, DiffView skips its own content/patch parsing and uses these
@@ -152,6 +154,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   onExpandGap,
   viewType: viewTypeProp,
   className = "",
+  outerMarginClassName = "my-2",
   hunks: externalHunks,
   diffType: externalDiffType,
   findQuery,
@@ -474,7 +477,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
   if (!hasDiff) return null;
 
   return (
-    <div ref={setWrapperRef} className={`my-2 ${className}`}>
+    <div
+      ref={setWrapperRef}
+      className={`${outerMarginClassName} ${className}`.trim()}
+    >
       {/* Summary / toggle header */}
       <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
         <button

@@ -517,7 +517,11 @@ existing diff-data guard sites. Tests: `rdvAdapter` add/delete/rename/modify fix
 multiple deletes; direct helper coverage; `DiffView` renders an all-green diff for
 `oldContent: ""`.
 
-**Phase 2 — Shared card layer.**
+**Phase 2 — Shared card layer — done.**
+
+Contract deviations: none. The DiffFileCardProps, DiffFileGroup, and DiffFileListProps
+contracts were implemented as specified; DiffView additionally accepts the additive
+outerMarginClassName prop while retaining its "my-2" default for virtualized output rows.
 Build `components/diff/*`. Convert `WorkspaceDiffPane` to it first (it is the style donor and
 the smaller consumer), including the single-file mode. Delivers §4.2 and §4.3.
 
