@@ -26,7 +26,7 @@ import type {
   PromptChangeType,
   UndoRecord,
 } from "@root/types/OutputHistoryTypes";
-import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
+import * as Diff from "diff";
 import { fromPromptChangeType, type DiffFileCardProps } from "@components/diff";
 import {
   MAX_CONTENT_SIZE,
@@ -46,10 +46,29 @@ export interface UndoDialogInput {
 
 /** A single step's data for workflow-level undo/redo dialogs. */
 export interface WorkflowStepEntry {
-  target: OutputExecutionTarget;
+  target: UndoExecutionTarget;
   label: string;
   undoCandidates?: UndoFileCandidate[];
   redoInstructions?: UndoFileInstruction[];
+}
+
+export interface AggregatedUndoFile {
+  /** Normalized key used to merge across steps (sameFilePath semantics). */
+  key: string;
+  /** Display path, from the first step that touched it. */
+  path: string;
+  changeType: DiffChangeType;
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: UnifiedDiffHunk[];
+  /** Steps that touched this file, ascending, each with its own instruction. */
+  steps: Array<{
+    target: UndoExecutionTarget;
+    label: string;
+    instruction: UndoFileInstruction;
+  }>;
+  /** True when the aggregate diff could not be composed and is only partial. */
+  isPartialDiff: boolean;
 }
 
 /** Render-ready file data shared by all four undo/redo dialog modes. */
@@ -71,6 +90,7 @@ export interface PromptUndoDialogGroup {
 
 export interface PromptUndoDialogModel {
   workflowRows: PromptUndoDialogRow[];
+  workflowFiles: AggregatedUndoFile[];
   redoRows: PromptUndoDialogRow[];
   tier1Rows: PromptUndoDialogRow[];
   tier2Rows: PromptUndoDialogRow[];
@@ -249,7 +269,10 @@ export function buildUndoCandidatesForOutputs(
       const resolvedChangeType =
         existing?.changeType === "created" ? "created" : changeType;
 
-      if (event.type === CLI_EVENT_TYPES.FILE_WRITE && resolvedChangeType === "created") {
+      if (
+        event.type === CLI_EVENT_TYPES.FILE_WRITE &&
+        resolvedChangeType === "created"
+      ) {
         oldContent = "";
       }
 
@@ -417,6 +440,271 @@ function redoInstructionToDiffChangeType(
   return "modified";
 }
 
+function normalizeFilePath(path: string): string {
+  return path.replace(/\\/g, "/").toLowerCase();
+}
+
+function formatStructuredPatch(
+  path: string,
+  hunks: UnifiedDiffHunk[],
+  reverse = false
+): string {
+  const header = [`--- ${path}`, `+++ ${path}`];
+  const formattedHunks = hunks.map((hunk) => {
+    const oldStart = reverse ? hunk.newStart : hunk.oldStart;
+    const oldLines = reverse ? hunk.newLines : hunk.oldLines;
+    const newStart = reverse ? hunk.oldStart : hunk.newStart;
+    const newLines = reverse ? hunk.oldLines : hunk.newLines;
+    const lines = reverse
+      ? hunk.lines.map((line) => {
+          if (line.startsWith("+")) return `-${line.slice(1)}`;
+          if (line.startsWith("-")) return `+${line.slice(1)}`;
+          return line;
+        })
+      : hunk.lines;
+    return [
+      `@@ -${oldStart},${oldLines} +${newStart},${newLines} @@`,
+      ...lines,
+    ].join("\n");
+  });
+  return `${[...header, ...formattedHunks].join("\n")}\n`;
+}
+
+function applyStructuredPatch(
+  content: string,
+  hunks: UnifiedDiffHunk[],
+  reverse = false
+): string | undefined {
+  const patched = Diff.applyPatch(
+    content.replace(/\r\n/g, "\n"),
+    formatStructuredPatch("workflow-file", hunks, reverse)
+  );
+  return patched === false ? undefined : patched;
+}
+
+interface AggregationPart {
+  path: string;
+  changeType: DiffChangeType;
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: UnifiedDiffHunk[];
+  contentCaptureSkipped?: boolean;
+  step: AggregatedUndoFile["steps"][number];
+}
+
+function getNetChangeType(
+  first: DiffChangeType,
+  last: DiffChangeType
+): DiffChangeType | null {
+  if (first === "created" && last === "deleted") return null;
+  if (first === "created") return "created";
+  if (last === "deleted") return "deleted";
+  if (first === "deleted" && last === "created") return "modified";
+  return "modified";
+}
+
+function composeAggregateDiff(
+  parts: AggregationPart[],
+  changeType: DiffChangeType
+): Pick<
+  AggregatedUndoFile,
+  "oldContent" | "newContent" | "structuredPatch" | "isPartialDiff"
+> {
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const base = first.oldContent ?? (changeType === "created" ? "" : undefined);
+
+  if (base !== undefined) {
+    let composed = base;
+    let composedSuccessfully = true;
+
+    for (const part of parts) {
+      if (part.changeType === "deleted") {
+        composed = "";
+        continue;
+      }
+      if (part.structuredPatch && part.structuredPatch.length > 0) {
+        const patched = applyStructuredPatch(composed, part.structuredPatch);
+        if (patched === undefined) {
+          composedSuccessfully = false;
+          break;
+        }
+        composed = patched;
+      } else if (part.newContent !== undefined) {
+        composed = part.newContent;
+      } else {
+        composedSuccessfully = false;
+        break;
+      }
+    }
+
+    if (composedSuccessfully) {
+      return {
+        oldContent: base,
+        newContent: composed,
+        isPartialDiff: false,
+      };
+    }
+
+    if (last.newContent !== undefined) {
+      return {
+        oldContent: base,
+        newContent: last.newContent,
+        isPartialDiff: false,
+      };
+    }
+  }
+
+  const patches = parts.flatMap((part) => part.structuredPatch ?? []);
+  return {
+    structuredPatch: patches.length > 0 ? patches : undefined,
+    isPartialDiff: patches.length > 0,
+  };
+}
+
+function buildUndoAggregationPart(
+  entry: WorkflowStepEntry,
+  candidate: UndoFileCandidate
+): AggregationPart | null {
+  if (!candidate.instruction) return null;
+  const instruction = candidate.instruction;
+  let oldContent = candidate.oldContent;
+  let newContent = candidate.newContent;
+
+  if (instruction.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT) {
+    oldContent ??= instruction.contentToRestore;
+    if (candidate.changeType === "deleted") newContent = "";
+  } else if (candidate.changeType === "created") {
+    oldContent ??= "";
+  }
+
+  return {
+    path: candidate.path,
+    changeType: fromPromptChangeType(candidate.changeType),
+    oldContent,
+    newContent,
+    structuredPatch: candidate.structuredPatch,
+    contentCaptureSkipped: candidate.contentCaptureSkipped,
+    step: { target: entry.target, label: entry.label, instruction },
+  };
+}
+
+function buildRedoAggregationPart(
+  entry: WorkflowStepEntry,
+  instruction: UndoFileInstruction
+): AggregationPart {
+  const changeType = redoInstructionToDiffChangeType(instruction);
+  let oldContent: string | undefined;
+  let newContent: string | undefined;
+
+  if (instruction.action === UNDO_FILE_ACTIONS.DELETE) {
+    newContent = "";
+  } else if (
+    instruction.structuredPatch &&
+    instruction.contentToRestore !== undefined
+  ) {
+    newContent = instruction.contentToRestore;
+    oldContent = applyStructuredPatch(
+      instruction.contentToRestore,
+      instruction.structuredPatch,
+      true
+    );
+  } else {
+    oldContent = "";
+    newContent = instruction.contentToRestore;
+  }
+
+  return {
+    path: instruction.path,
+    changeType,
+    oldContent,
+    newContent,
+    structuredPatch: instruction.structuredPatch,
+    step: { target: entry.target, label: entry.label, instruction },
+  };
+}
+
+/**
+ * Merge per-step workflow undo or redo data into one row per file.
+ *
+ * Entries are expected in ascending workflow order. Callers select either the
+ * undoCandidates or redoInstructions side before invoking this function.
+ */
+export function aggregateWorkflowUndoFiles(
+  entries: WorkflowStepEntry[]
+): AggregatedUndoFile[] {
+  const partsByFile: AggregationPart[] = [];
+
+  for (const entry of entries) {
+    if (entry.redoInstructions && entry.redoInstructions.length > 0) {
+      partsByFile.push(
+        ...entry.redoInstructions.map((instruction) =>
+          buildRedoAggregationPart(entry, instruction)
+        )
+      );
+    } else {
+      for (const candidate of entry.undoCandidates ?? []) {
+        const part = buildUndoAggregationPart(entry, candidate);
+        if (part) partsByFile.push(part);
+      }
+    }
+  }
+
+  const aggregates: Array<{ parts: AggregationPart[] }> = [];
+  for (const part of partsByFile) {
+    const existing = aggregates.find((aggregate) =>
+      sameFilePath(aggregate.parts[0].path, part.path)
+    );
+    if (existing) existing.parts.push(part);
+    else aggregates.push({ parts: [part] });
+  }
+
+  return aggregates.flatMap(({ parts }) => {
+    const changeType = getNetChangeType(
+      parts[0].changeType,
+      parts[parts.length - 1].changeType
+    );
+    if (!changeType) return [];
+
+    const composed = composeAggregateDiff(parts, changeType);
+    return [
+      {
+        key: normalizeFilePath(parts[0].path),
+        path: parts[0].path,
+        changeType,
+        oldContent: composed.oldContent,
+        newContent: composed.newContent,
+        structuredPatch: composed.structuredPatch,
+        steps: parts.map((part) => part.step),
+        isPartialDiff:
+          composed.isPartialDiff ||
+          parts.some((part) => part.contentCaptureSkipped),
+      },
+    ];
+  });
+}
+
+function buildAggregatedDialogRow(
+  file: AggregatedUndoFile
+): PromptUndoDialogRow {
+  const { oldContent, newContent, structuredPatch } = file;
+  const noteParts = [file.steps.map((step) => step.label).join(", ")];
+  if (file.isPartialDiff) {
+    noteParts.push("diff shown per step; original content unavailable");
+  }
+  return {
+    key: file.key,
+    path: file.path,
+    changeType: file.changeType,
+    source: buildDiffSource(oldContent, newContent, structuredPatch),
+    language: getLanguageFromPath(file.path),
+    globallyCollapsed: true,
+    instruction: file.steps[0]?.instruction ?? null,
+    hasDiff: hasRenderableDiff({ oldContent, newContent, structuredPatch }),
+    note: noteParts.join(" · "),
+  };
+}
+
 function buildRedoDialogRow(
   instruction: UndoFileInstruction,
   key: string
@@ -461,23 +749,25 @@ export function buildPromptUndoDialogModel(options: {
   const isWorkflowMode = (workflowEntries?.length ?? 0) > 0;
 
   if (isWorkflowMode) {
-    const groups = (workflowEntries ?? []).flatMap((entry, entryIdx) => {
-      const files =
-        mode === "redo"
-          ? (entry.redoInstructions ?? []).map((instruction) =>
-              buildRedoDialogRow(
-                instruction,
-                `${entryIdx}::${instruction.path}`
-              )
-            )
-          : (entry.undoCandidates ?? []).map((candidate) =>
-              buildCandidateRow(candidate, `${entryIdx}::${candidate.path}`)
-            );
-      return files.length > 0 ? [{ heading: entry.label, files }] : [];
-    });
-    const workflowRows = groups.flatMap((group) => group.files);
+    const aggregationEntries = (workflowEntries ?? []).map((entry) =>
+      mode === "redo"
+        ? {
+            target: entry.target,
+            label: entry.label,
+            redoInstructions: entry.redoInstructions,
+          }
+        : {
+            target: entry.target,
+            label: entry.label,
+            undoCandidates: entry.undoCandidates,
+          }
+    );
+    const workflowFiles = aggregateWorkflowUndoFiles(aggregationEntries);
+    const workflowRows = workflowFiles.map(buildAggregatedDialogRow);
+    const groups: PromptUndoDialogGroup[] = [{ files: workflowRows }];
     return {
       workflowRows,
+      workflowFiles,
       redoRows: [],
       tier1Rows: [],
       tier2Rows: [],
@@ -534,6 +824,7 @@ export function buildPromptUndoDialogModel(options: {
 
   return {
     workflowRows: [],
+    workflowFiles: [],
     redoRows,
     tier1Rows,
     tier2Rows,

@@ -545,10 +545,16 @@ threshold, propagates `contentCaptureSkipped` from oversized writes, and preserv
 patch precedence for writes to pre-existing files. No extension-host test changes were needed;
 the moved constant has no directly asserted host behavior.
 
-**Phase 4b — Workflow aggregation and ordering.**
+**Phase 4b — Workflow aggregation and ordering — done.**
 Workflow aggregation for **both** undo and redo (§4.5) plus the paired ordering invariant
 (§4.6), including the `UndoRedoCoordinator` coverage. Timeline `FILE_WRITE` rows are explicitly
 not touched (§7 follow-up).
+
+Implementation note: workflow dialog selection expands each aggregated file back into the
+existing per-step payload, sorting undo entries newest-step-first and redo entries
+oldest-step-first. `UndoRedoCoordinator.applySnapshotEntries` preserves that order. Its
+per-entry `afterRestore` callback is order-independent because it persists only the target and
+result passed to that callback; no coordinator or message-protocol change was required.
 
 Phase 4 is split because 4b is the riskiest work in the plan and carries the largest test
 matrix; keeping the content-capture fix separate means a regression in either is bisectable.

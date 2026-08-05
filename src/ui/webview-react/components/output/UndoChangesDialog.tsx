@@ -5,9 +5,11 @@ import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsBu
 import { DiffFileList, type DiffFileGroup } from "@components/diff";
 import { MESSAGE_TYPES } from "../../types/messages";
 import type { UndoFileInstruction } from "../../types/messages";
+import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import type { UndoDialogInput } from "../../utils/promptUndo";
 import {
   buildPromptUndoDialogModel,
+  type AggregatedUndoFile,
   type PromptUndoDialogModel,
   type WorkflowStepEntry,
 } from "../../utils/promptUndo";
@@ -44,6 +46,57 @@ function getAllSelectableRows(
 ) {
   if (isWorkflowMode) return model.workflowRows;
   return mode === DIALOG_MODE.REDO ? model.redoRows : model.allUndoRows;
+}
+
+function workflowTargetOrder(target: OutputExecutionTarget): number {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? target.stepIndex
+    : Number.MAX_SAFE_INTEGER / 2 + target.loopIndex;
+}
+
+function sameWorkflowTarget(
+  left: OutputExecutionTarget,
+  right: OutputExecutionTarget
+): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === FINAL_STEP_PHASES.QUEUE) {
+    return (
+      right.kind === FINAL_STEP_PHASES.QUEUE &&
+      left.stepIndex === right.stepIndex
+    );
+  }
+  return (
+    right.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    left.loopIndex === right.loopIndex
+  );
+}
+
+function expandAggregatedWorkflowSelection(
+  files: AggregatedUndoFile[],
+  checkedPaths: Set<string>,
+  mode: "undo" | "redo"
+): Array<{ target: OutputExecutionTarget; files: UndoFileInstruction[] }> {
+  const selectedSteps = files
+    .filter((file) => checkedPaths.has(file.key))
+    .flatMap((file) => file.steps)
+    .sort((left, right) => {
+      const order =
+        workflowTargetOrder(left.target) - workflowTargetOrder(right.target);
+      return mode === DIALOG_MODE.UNDO ? -order : order;
+    });
+
+  const entries: Array<{
+    target: OutputExecutionTarget;
+    files: UndoFileInstruction[];
+  }> = [];
+  for (const step of selectedSteps) {
+    const existing = entries.find((entry) =>
+      sameWorkflowTarget(entry.target, step.target)
+    );
+    if (existing) existing.files.push(step.instruction);
+    else entries.push({ target: step.target, files: [step.instruction] });
+  }
+  return entries;
 }
 
 export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
@@ -147,35 +200,19 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   function handleConfirm() {
     if (isWorkflowMode) {
-      if (mode === DIALOG_MODE.REDO) {
-        const entries = (workflowEntries ?? []).flatMap((entry, entryIdx) => {
-          const files = (entry.redoInstructions ?? []).filter((instruction) =>
-            checkedPaths.has(`${entryIdx}::${instruction.path}`)
-          );
-          return files.length > 0 ? [{ target: entry.target, files }] : [];
-        });
-        if (entries.length === 0) return;
-        setIsSubmitting(true);
-        sendMessage(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, {
-          data: { requestId, workspacePath, entries },
-        });
-      } else {
-        const entries = (workflowEntries ?? []).flatMap((entry, entryIdx) => {
-          const files = (entry.undoCandidates ?? [])
-            .filter(
-              (candidate) =>
-                candidate.instruction !== null &&
-                checkedPaths.has(`${entryIdx}::${candidate.path}`)
-            )
-            .map((candidate) => candidate.instruction as UndoFileInstruction);
-          return files.length > 0 ? [{ target: entry.target, files }] : [];
-        });
-        if (entries.length === 0) return;
-        setIsSubmitting(true);
-        sendMessage(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, {
-          data: { requestId, workspacePath, entries },
-        });
-      }
+      const entries = expandAggregatedWorkflowSelection(
+        model.workflowFiles,
+        checkedPaths,
+        mode
+      );
+      if (entries.length === 0) return;
+      setIsSubmitting(true);
+      sendMessage(
+        mode === DIALOG_MODE.REDO
+          ? MESSAGE_TYPES.REDO_WORKFLOW_CHANGES
+          : MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
+        { data: { requestId, workspacePath, entries } }
+      );
     } else if (mode === DIALOG_MODE.REDO) {
       const selectedInstructions = model.redoRows
         .filter((row) => checkedPaths.has(row.key))

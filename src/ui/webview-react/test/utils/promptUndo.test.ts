@@ -7,6 +7,7 @@
  * the actual apply step; we only test the candidate/instruction derivation.
  */
 import { describe, it, expect } from "vitest";
+import * as Diff from "diff";
 import {
   sameFilePath,
   getFileEventPaths,
@@ -15,9 +16,11 @@ import {
   buildUndoDialogInputForPrompt,
   buildUndoDialogInputForSpecificEvent,
   buildPromptUndoDialogModel,
+  aggregateWorkflowUndoFiles,
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, UNDO_FILE_ACTIONS } from "@/types/messages";
+import type { UndoFileCandidate, UndoFileInstruction } from "@/types/messages";
 import { MAX_CONTENT_SIZE } from "@root/types/DashboardConstants";
 import type { CliOutput } from "@/types/cliEvents";
 import type {
@@ -809,5 +812,235 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
       action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
       structuredPatch: renderedPatch,
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// aggregateWorkflowUndoFiles
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeForwardPatch(
+  oldContent: string,
+  newContent: string
+): UnifiedDiffHunk[] {
+  return Diff.structuredPatch("file.ts", "file.ts", oldContent, newContent)
+    .hunks as UnifiedDiffHunk[];
+}
+
+function makeWorkflowCandidate(
+  path: string,
+  changeType: "created" | "modified" | "deleted",
+  instruction: UndoFileInstruction,
+  options: Partial<UndoFileCandidate> = {}
+): UndoFileCandidate {
+  return {
+    path,
+    changeType,
+    tier: "tier1",
+    instruction,
+    ...options,
+  };
+}
+
+function makeWorkflowEntry(stepIndex: number, candidate: UndoFileCandidate) {
+  return {
+    target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+    label: `Prompt ${stepIndex + 1}`,
+    undoCandidates: [candidate],
+  };
+}
+
+describe("aggregateWorkflowUndoFiles", () => {
+  it("merges a create followed by an edit into one created diff", () => {
+    const created = "created\n";
+    const edited = "created\nsecond line\n";
+    const files = aggregateWorkflowUndoFiles([
+      makeWorkflowEntry(
+        0,
+        makeWorkflowCandidate(
+          "C:\\repo\\src\\new.ts",
+          "created",
+          {
+            path: "src/new.ts",
+            action: UNDO_FILE_ACTIONS.DELETE,
+          },
+          { oldContent: "", newContent: created }
+        )
+      ),
+      makeWorkflowEntry(
+        1,
+        makeWorkflowCandidate(
+          "src/new.ts",
+          "modified",
+          {
+            path: "src/new.ts",
+            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+            structuredPatch: makeForwardPatch(created, edited),
+          },
+          {
+            oldContent: created,
+            structuredPatch: makeForwardPatch(created, edited),
+          }
+        )
+      ),
+    ]);
+
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({
+      path: "C:\\repo\\src\\new.ts",
+      changeType: "created",
+      oldContent: "",
+      newContent: edited,
+    });
+    expect(files[0]?.steps.map((step) => step.label)).toEqual([
+      "Prompt 1",
+      "Prompt 2",
+    ]);
+  });
+
+  it("composes edits in separate line ranges into one diff", () => {
+    const base = "1\n2\n3\n4\n5\n6\n7\n8\n";
+    const afterFirst = "1\n2\n3\nfour\nfive\n6\n7\n8\n";
+    const afterSecond = "1\n2\n3\nfour\nfive\nsix\nseven\n8\n";
+    const patch1 = makeForwardPatch(base, afterFirst);
+    const patch2 = makeForwardPatch(afterFirst, afterSecond);
+    const files = aggregateWorkflowUndoFiles([
+      makeWorkflowEntry(
+        0,
+        makeWorkflowCandidate(
+          "src/file.ts",
+          "modified",
+          {
+            path: "src/file.ts",
+            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+            structuredPatch: patch1,
+          },
+          { oldContent: base, structuredPatch: patch1 }
+        )
+      ),
+      makeWorkflowEntry(
+        1,
+        makeWorkflowCandidate(
+          "src/file.ts",
+          "modified",
+          {
+            path: "src/file.ts",
+            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+            structuredPatch: patch2,
+          },
+          { oldContent: afterFirst, structuredPatch: patch2 }
+        )
+      ),
+    ]);
+
+    expect(files[0]).toMatchObject({
+      changeType: "modified",
+      oldContent: base,
+      newContent: afterSecond,
+      isPartialDiff: false,
+    });
+  });
+
+  it("drops a create followed by a delete as a net no-op", () => {
+    const files = aggregateWorkflowUndoFiles([
+      makeWorkflowEntry(
+        0,
+        makeWorkflowCandidate(
+          "src/new.ts",
+          "created",
+          {
+            path: "src/new.ts",
+            action: UNDO_FILE_ACTIONS.DELETE,
+          },
+          { oldContent: "", newContent: "created\n" }
+        )
+      ),
+      makeWorkflowEntry(
+        1,
+        makeWorkflowCandidate("src/new.ts", "deleted", {
+          path: "src/new.ts",
+          action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+          contentToRestore: "created\n",
+        })
+      ),
+    ]);
+
+    expect(files).toEqual([]);
+  });
+
+  it("falls back to concatenated patches and marks the diff partial", () => {
+    const patch1 = makeForwardPatch("before\n", "first\n");
+    const patch2 = makeForwardPatch("unrelated\n", "second\n");
+    const files = aggregateWorkflowUndoFiles([
+      makeWorkflowEntry(
+        0,
+        makeWorkflowCandidate(
+          "src/file.ts",
+          "modified",
+          {
+            path: "src/file.ts",
+            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+            structuredPatch: patch1,
+          },
+          { oldContent: "before\n", structuredPatch: patch1 }
+        )
+      ),
+      makeWorkflowEntry(
+        1,
+        makeWorkflowCandidate(
+          "src/file.ts",
+          "modified",
+          {
+            path: "src/file.ts",
+            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+            structuredPatch: patch2,
+          },
+          { structuredPatch: patch2 }
+        )
+      ),
+    ]);
+
+    expect(files[0]?.structuredPatch).toEqual([...patch1, ...patch2]);
+    expect(files[0]?.isPartialDiff).toBe(true);
+  });
+
+  it("merges redo instructions and keeps their steps ascending", () => {
+    const base = "base\n";
+    const afterFirst = "first\n";
+    const afterSecond = "second\n";
+    const patch1 = makeForwardPatch(base, afterFirst);
+    const patch2 = makeForwardPatch(afterFirst, afterSecond);
+    const files = aggregateWorkflowUndoFiles([
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        label: "Prompt 1",
+        redoInstructions: [
+          {
+            path: "src/file.ts",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+            contentToRestore: afterFirst,
+            structuredPatch: patch1,
+          },
+        ],
+      },
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        label: "Prompt 2",
+        redoInstructions: [
+          {
+            path: "C:\\repo\\src\\file.ts",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+            contentToRestore: afterSecond,
+            structuredPatch: patch2,
+          },
+        ],
+      },
+    ]);
+
+    expect(files).toHaveLength(1);
+    expect(files[0]?.steps.map((step) => step.label)).toEqual([
+      "Prompt 1",
+      "Prompt 2",
+    ]);
   });
 });

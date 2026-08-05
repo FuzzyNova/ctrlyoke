@@ -74,7 +74,7 @@ describe("UndoChangesDialog", () => {
       />
     );
 
-    expect(screen.queryByText("Step 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Step 1")).toBeInTheDocument();
     expect(screen.getByLabelText("src/example.ts")).toBeInTheDocument();
     expect(
       screen.queryByText("No file changes found for this prompt.")
@@ -308,6 +308,116 @@ describe("UndoChangesDialog", () => {
           requestId: "workflow-redo-payload",
           workspacePath: "C:/dev/ctrlyoke",
           entries: [{ target: queueTarget, files: [redoInstruction] }],
+        },
+      }
+    );
+  });
+
+  it("renders one aggregated workflow row and sends undo steps newest first", () => {
+    const base = "base\n";
+    const stepOne = "step one\n";
+    const entries = [
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        label: "Prompt 1",
+        undoCandidates: [
+          {
+            path: "src/shared.ts",
+            changeType: "modified" as const,
+            tier: "tier1" as const,
+            oldContent: base,
+            structuredPatch: [
+              {
+                oldStart: 1,
+                oldLines: 1,
+                newStart: 1,
+                newLines: 1,
+                lines: ["-base", "+step one"],
+              },
+            ],
+            instruction: {
+              path: "src/shared.ts",
+              action: "reverse-patch" as const,
+              structuredPatch: [
+                {
+                  oldStart: 1,
+                  oldLines: 1,
+                  newStart: 1,
+                  newLines: 1,
+                  lines: ["-base", "+step one"],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        label: "Prompt 3",
+        undoCandidates: [
+          {
+            path: "C:\\repo\\src\\shared.ts",
+            changeType: "modified" as const,
+            tier: "tier1" as const,
+            oldContent: stepOne,
+            structuredPatch: [
+              {
+                oldStart: 1,
+                oldLines: 1,
+                newStart: 1,
+                newLines: 1,
+                lines: ["-step one", "+step three"],
+              },
+            ],
+            instruction: {
+              path: "src/shared.ts",
+              action: "reverse-patch" as const,
+              structuredPatch: [
+                {
+                  oldStart: 1,
+                  oldLines: 1,
+                  newStart: 1,
+                  newLines: 1,
+                  lines: ["-step one", "+step three"],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+
+    render(
+      <UndoChangesDialog
+        mode="undo"
+        target={queueTarget}
+        workspacePath="C:/dev/ctrlyoke"
+        workflowEntries={entries}
+        requestId="workflow-aggregate-undo"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByLabelText("src/shared.ts")).toHaveLength(1);
+    expect(screen.getByText("Prompt 1, Prompt 3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo Selected (1)" }));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
+      {
+        data: {
+          requestId: "workflow-aggregate-undo",
+          workspacePath: "C:/dev/ctrlyoke",
+          entries: [
+            {
+              target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+              files: [entries[1].undoCandidates[0].instruction],
+            },
+            {
+              target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+              files: [entries[0].undoCandidates[0].instruction],
+            },
+          ],
         },
       }
     );
