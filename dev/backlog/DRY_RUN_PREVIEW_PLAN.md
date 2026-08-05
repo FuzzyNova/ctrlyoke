@@ -30,13 +30,82 @@ Preview must call the same resolvers, prompt builders, capability analyzer, and
 provider preparation logic as real execution. It must not maintain a simplified
 second command builder.
 
+**A dry run is a snapshot.** It is computed once, from an explicit user action,
+and never auto-refreshes — not on keystroke, not on property change, not on any
+push from the backend. Every surface that renders a plan renders the plan it was
+given. Staleness is surfaced to the user and resolved by the user, never repaired
+silently. This is a governing rule, not a UI preference: a preview that changes
+while being read cannot be trusted as the thing you are about to run, and the
+whole point of the feature is to be that thing.
+
 ## Entry Points
 
 ### Dashboard
 
-- Add **Preview** to a step and **Preview workflow** to workflow actions.
-- Show the current editor content, including unsaved working-file changes.
-- Recompute after harness, property, variable, or attachment changes.
+Naming: the action is **Dry Run** everywhere in the UI (matching the CLI
+`--dry-run` flag); the surface it opens is the **Dry Run** modal. Do not
+introduce a second user-facing noun such as "Preview" or "Execution plan".
+
+Three entry points, all opening the same modal with a different scope:
+
+| Entry point                                                             | Scope    | Surface                                       |
+| ----------------------------------------------------------------------- | -------- | --------------------------------------------- |
+| Header **action controls** group — new button between Save and Undo     | workflow | `Header.tsx` (`actionControls` + mobile row 2) |
+| Step context menu — **Dry Run Step** item                               | step     | `useStepContextMenu` (steps panel + chip rail) |
+| Editor properties drawer — icon button in the **Validation** tab header | step     | `PropertiesDrawer.tsx`                         |
+
+Header placement, in both tiers:
+
+```text
+desktop (sm+):  [Save][Dry Run][Undo][Redo][⌄]
+mobile row 2:   [Save][Dry Run][Undo][Redo][Search][Explorer][Settings]
+```
+
+Same relative order in both, so the button does not move between tiers.
+
+Rationale for each:
+
+- The action-controls group is the only header group with room. It is
+  left-anchored next to `WorkflowControls`, near where authoring happens, and on
+  narrow mobile it drops to its own row where the execution controls do not
+  compete with it. Dry run belongs to the same "working on this definition"
+  family as Save.
+- **Do not make the run control a `SplitButton`.** The execution group is a
+  fixed three-slot group; a split button renders as `[Run][⌄][Pause][Stop]`,
+  putting a chevron mid-group and spending a full slot's width on a disclosure
+  affordance in the most space-constrained part of the header. The adjacency
+  argument (dry run is a kind of run) is real but is served by the accelerator
+  below at zero pixel cost.
+- The step context menu is the only per-step action surface that already exists;
+  a hover button on the step row would compete with drag/reorder affordances.
+- The drawer entry point is where harness, model, agent, permission, and MCP
+  edits happen, so it is where "what will this actually send?" is asked. It
+  previews the step currently open in the editor, including unsaved property and
+  text edits.
+
+Zero-space accelerator on the run control: right-click (desktop) or long-press
+(`useLongPress`, already used for mobile step context menus) on `slot1` opens a
+one-item `StepContextMenu` containing **Dry Run**. This gives the run-adjacency
+without consuming layout, and stays a secondary accelerator — the toolbar button
+remains the discoverable entry point.
+
+Implementation note: `Header.tsx` renders the Save button and `UndoRedoControl`
+at two JSX sites — the `actionControls` group and the mobile row-2 group, which
+inlines them rather than reusing `actionControls` because on mobile the whole
+toolbar is one `fp-button-group`. Only one mounts at a time, but the new button
+must be added to both. Prefer extracting the shared button into a small component
+over a third copy.
+
+Rejected entry points: a dedicated always-visible slot in the execution group
+(no room); a third tab in the output pane (output tabs are per-run execution
+artifacts and would blur the pre-execution/post-execution distinction).
+
+Optional follow-up: a VS Code keybinding registered against the panel, matching
+the existing `Ctrl+Shift+*` workflow shortcuts.
+
+Each entry point computes the plan from the current editor state at the moment it
+is invoked, including unsaved working-file changes. It does not recompute after
+that — see **State and lifetime** below.
 
 ### CLI
 
@@ -75,7 +144,12 @@ interface StepExecutionPreview {
 }
 ```
 
-Use preview-safe DTOs rather than returning runtime service objects or secrets.
+Use preview-safe DTOs (data transfer objects — plain serializable snapshots with
+no methods or live service references) rather than returning runtime service
+objects or secrets. Everything preview emits has to survive `JSON.stringify`
+across the webview and hosted-server boundaries anyway, and building an explicit
+DTO gives redaction a single chokepoint instead of letting consumers reach
+through a live object graph.
 
 ## What Preview Shows
 
@@ -146,6 +220,97 @@ promoted to an error by CLI policy.
 - pre/end-condition configuration without executing scripts;
 - retry and error behavior.
 
+## Size Limits and Large Content
+
+Preview must never be the thing that reads a file execution would not have read.
+Three tiers, decided by what the real prompt path does with the content.
+
+### Tier 1 — references: never read
+
+`PromptSections.directFileRefs` become provider-formatted file references
+(`@path`, `#file:`). ctrlyoke passes the path and the harness reads the file, so
+preview has no content to show and must not manufacture any. Show the path, the
+provider-formatted rendering, and metadata from a `stat()` only — size and mtime.
+No `readFile`, at any size. A 10 GB file referenced this way previews in constant
+time.
+
+Emit a diagnostic when a referenced file is implausibly large for the target
+harness rather than silently listing it. Preview is the right place to learn that
+before spending a run on it.
+
+### Tier 2 — inlined content: `stat()` first, cap the read
+
+Agent content, skill content, and excerpt content are read by ctrlyoke and
+embedded in the payload. These are the only file reads preview performs, and each
+one is gated:
+
+1. `stat()` the file;
+2. if `size > MAX_CONTENT_SIZE` (512 KB, `DashboardConstants.ts`), do not read —
+   record the size and emit a diagnostic;
+3. otherwise read, and re-check `Buffer.byteLength` after decoding.
+
+This is exactly `WorkspaceSnapshotService.captureFileState`, which stats first and
+falls back to hash-only above the same constant. Reuse the constant; do not
+introduce a second size ceiling with a different number.
+
+The 10 GB case therefore never allocates. That is not a theoretical concern here:
+the extension host is a Node UtilityProcess and its documented failure mode is a
+V8 heap OOM from *a single large allocation on an already-large heap*, which is
+precisely what an ungated `readFile` on a huge attachment produces. Preview
+running on a debounce while the user types would make it reproducible on demand.
+
+Content that exceeds the cap is still fully represented in the plan — path, byte
+count, and a diagnostic — just not rendered. Preview's job at that size is to
+tell the user the run will fail, not to display the payload.
+
+### Tier 3 — assembled payload: already chunked, render per file
+
+The categorized payload is not one blob. `PromptFileSplitter` splits it at
+`maxTokensPerFile: 10000` / `maxLinesPerFile: 1800` (Claude CLI's per-file
+limits), and the plan already commits to showing the content of each temp file
+that *would* be written. So the natural unit of display is one chunk file, each
+with a bounded ceiling, and there is no unbounded single body to render.
+
+Prior-context XML is the large case that is not a file read at all: it is built
+from prior step outputs by `buildPriorContextXmlFromItems` and can reach
+megabytes on a long workflow. It flows through the same splitter, so it previews
+as chunks like everything else.
+
+In the modal, render each chunk collapsed by default through the existing
+`buildCollapsedOutputPreview` / `formatCollapsedOutputToggleLabel` machinery,
+whose `MAX_COLLAPSED_OUTPUT_MAX_CHARS` (100 KB) hard ceiling already exists for
+this purpose. That code carries a warning worth honoring here: a single logical
+line can hold millions of characters, so a line-count budget must never bypass
+the character budget. Minified files and single-line JSON attachments hit this.
+
+### The DTO is its own limit
+
+The preview crosses a `postMessage` boundary and, in hosted mode, a network one.
+Because it is computed once per explicit user action rather than continuously,
+this is a one-shot cost paid against a spinner — not a per-keystroke cost.
+
+So the plan always carries **metadata** per payload section — category, byte
+count, line count, token estimate, chunk index, content hash. It is small,
+bounded by step count, and is what Summary and the rail render without touching a
+single body. Ship bodies inline alongside it, capped by a total
+`MAX_PREVIEW_BODY_BYTES` budget.
+
+Fetching bodies lazily on section expand is a **later optimization, not a
+starting requirement**. Take it only if real payloads prove large enough to make
+the open-to-render delay noticeable, particularly over a hosted connection. The
+metadata/body separation above is what makes that change additive if it is ever
+needed; building the lazy-fetch channel up front buys nothing at this cadence.
+
+`--json` on the CLI resolves bodies inline under the same budget; above it,
+sections carry metadata plus a truncation marker so the output stays a valid,
+stable document.
+
+Truncation must be visible and precise wherever it happens — never a silent cut.
+State the byte counts and the reason (`reference`, `over inline cap`,
+`chunk collapsed`, `body budget`), so a user reading a preview always knows the
+difference between "the harness will not receive this" and "the modal is not
+showing you this right now".
+
 ## Side-Effect-Free Preparation
 
 Provider preparation currently mixes pure argument construction with file
@@ -176,15 +341,129 @@ they do not perform.
 
 ## Dashboard UX
 
-Use tabs only where they help:
+### Surface
 
-- **Summary** — diagnostics, properties, limits, and workspace side effects.
-- **Payload** — categorized content and token contribution.
-- **Command** — executable, arguments, cwd, and environment key names.
-- **Conditions** — scripts, expected results, retries, and error behavior.
+A new `DryRunModal` in `src/ui/webview-react/components/shared/`, built on the
+shared `Modal` primitive with `size="xl"` and `fullWidthOnNarrow`, and
+`bodyClassName="p-0"` so the master/detail layout owns its own padding.
 
-Include copy actions for the redacted command and payload. There is no **Open temp
-file** action because preview creates no temp files.
+Do **not** extend `ContentPreviewModal`. That component is a single-blob `<pre>`
+viewer whose store slice is `{ title, content, language: "diff" | "xml", ref }`;
+a dry run is a structured DTO with per-step sections, and widening that union
+turns a small component into a dispatcher. `DryRunModal` reuses `Modal`,
+`SplitButton`-free footer buttons, and the same copy/export idiom instead.
+
+If the modal later needs side-by-side panes or its own toolbar, promote it to the
+full-screen overlay pattern (`WorkspaceViewerModal`, `z-workspace-viewer`) rather
+than growing `Modal`'s size vocabulary. A dry run opened from inside the
+workspace viewer must pass `elevated` or it renders behind the overlay.
+
+### Layout
+
+Master/detail, because the plan is `steps[]` and the tab set is per step:
+
+```text
+┌─ Dry Run — <workflow name> ─────────────────────────── [x] ┐
+│ Overview        │ Step 3 · Implement auth    ⬤ claude-cli  │
+│─────────────────│──────────────────────────────────────────│
+│ 1 Plan       ✓  │ [Summary] [Payload] [Command] [Conditions]│
+│ 2 Scaffold   ⚠  │                                           │
+│ 3 Implement  ●  │  <active tab body, scrolls>               │
+│ 4 Verify     ✓  │                                           │
+│─────────────────┴───────────────────────────────────────────│
+│ Copy command   Copy payload   Export        [ Run workflow ] │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- **Left rail** (~200px): a pinned **Overview** entry (workflow summary,
+  workflow-level diagnostics, aggregate token contribution, the consolidated list
+  of workspace mutations across all steps) followed by one row per step —
+  index, name, `HarnessIcon`, and a severity dot for that step's worst
+  diagnostic. Below ~640px (`useElementNarrow`) the rail collapses into a
+  `CustomSelect` above the tab bar.
+- **Right detail**: the four tabs from the contract — **Summary**, **Payload**,
+  **Command**, **Conditions**. Tabs are per step, not per workflow; workflow-wide
+  information lives in Overview, which has no tabs.
+- Step scope (context menu / drawer entry) opens the same component with the rail
+  hidden and no Overview entry. One component, a
+  `scope: { kind: "workflow" } | { kind: "step"; index: number }` prop.
+
+### Tab bar
+
+The tab bar is visually the drawer's, but `DrawerTabBar` is hardwired to
+`DRAWER_TABS` / `DrawerPage`. Extract the rendering into a generic
+`SegmentedTabBar` in `components/shared/` that takes its tabs as a prop, and
+reduce `DrawerTabBar` to a thin wrapper over it. Both then share the active
+underline, hover, and icon-override behaviour instead of forking it.
+
+Reuse `TabIconOverride` from `tabBadgeUtils.ts` to drive tab state: the Summary
+tab shows `codicon-warning` in `text-warning-fg` (or `text-error-fg`) when that
+step carries diagnostics; Permissions-affecting steps reuse the existing
+`getPermissionTabOverride` colours so the same permission mode reads the same in
+the drawer and in the dry run.
+
+### Footer
+
+- **Copy command** — copies `displayCommand` as displayed (redacted).
+- **Copy payload** — copies the categorized payload of the active step.
+- **Export** — mirrors `ContentPreviewModal.handleExport`: `downloadTextFile` of
+  the JSON plan when `isStandalone`, otherwise `EXPORT_CONTENT_PREVIEW` so VS
+  Code opens it as an editor document.
+- **Run workflow** (primary) — closes the modal and dispatches the normal run
+  path. It must re-dispatch through the existing run message, never "execute the
+  previewed plan object": workspace state may have drifted since the plan was
+  computed, which the non-goals already acknowledge.
+
+There is no **Open temp file** action because preview creates no temp files.
+
+### State and lifetime
+
+**Compute once, on open. Do not recompute while the modal is open.**
+
+The modal is modal: `Modal` renders a full-screen backdrop that intercepts clicks
+and closes on Escape, so no dashboard control that feeds the plan — harness,
+model, agent, permissions, variables, attachments, step text — is reachable while
+it is up. There is no edit to react to, and a debounced recompute would be
+answering a question nobody asked.
+
+Add an `executionPreviewStore` following the `compatibilityStore` precedent: a
+snapshot plus a `"checking" | "ready"` status, populated by one request on open
+and cleared on close. Requests still carry a monotonic token, but only so a
+response from a dismissed-and-reopened modal cannot land in the current one.
+
+The plan can still go stale from outside the dashboard — a direct edit to the
+working file, a CLI-managed run, or another hosted client, since multiple browser
+tabs can view the same workflow at once.
+
+Handle that with a **"Definition changed — Refresh" banner**: record the
+`displayedDefinitionRevision` the plan was computed from and compare it against
+the current value. The plumbing already exists and already covers the remote
+case — `RUN_VIEW_LOADED` snapshots arrive requestless from replay/invalidation
+paths carrying `definitionRevision`, and `useMessageHandler` maintains a
+per-address monotonic definition head from them. So an edit in another tab
+reaches this client without new transport work.
+
+The banner is not cosmetic. That same pushed snapshot replaces `workflowStore`
+content underneath the open modal, so without it the modal would keep rendering a
+plan for a definition the dashboard no longer holds, with nothing on screen
+saying so.
+
+Refresh is a button. It recomputes only when pressed. The banner must never
+auto-dismiss itself by refreshing, per the snapshot rule in **Product Decision**.
+
+`analyzeCompatibility` and `resolveExecutionProperties` in `src/types/` are
+already shared between webview and backend and are what `useCompatibilityDiagnostics`
+calls. The preview service must call those same functions, so a diagnostic never
+has two implementations and the dashboard and CLI emit identical codes. Anything
+the client can already derive synchronously stays client-side; the backend plan
+supplies only what the client cannot see — capability probes, provider-native
+permission translation, resolved argument arrays, and workspace mutation targets.
+
+### Redaction at the UI boundary
+
+The modal renders the redacted DTO as received and never holds an unredacted
+copy. Copy actions copy the rendered string, matching `ContentPreviewModal`'s
+existing behaviour. A local reveal flow is out of scope for the first version.
 
 ## CLI Behavior
 
@@ -205,6 +484,18 @@ file** action because preview creates no temp files.
   boundaries.
 - Cover unsupported/partial permission rules and workspace mutation previews.
 - Verify command display escaping independently on Windows and POSIX.
+- Assert preview performs no `readFile` on a Tier 1 reference at any size, and no
+  read above `MAX_CONTENT_SIZE` on Tier 2 content — both by spying on the fs
+  layer, not by asserting on the rendered output.
+- Cover a single-logical-line payload of millions of characters (minified file)
+  to prove the character budget is not bypassed by the line budget.
+- Dashboard tests in `src/ui/webview-react/test/**`: each entry point opens the
+  modal with the right scope, the rail collapses below the narrow breakpoint, the
+  plan is requested exactly once per open, and a response arriving after close
+  cannot populate a subsequently reopened modal.
+- Assert the snapshot rule directly: with a modal open, push a definition change
+  and verify the rendered plan is byte-identical afterwards and only the banner
+  appears; then verify Refresh is what replaces it.
 
 ## Acceptance Criteria
 
@@ -214,6 +505,8 @@ file** action because preview creates no temp files.
 - Every ignored/lossy provider translation is visible.
 - Workspace-setting side effects are named before execution.
 - Preview does not mutate the workspace or harness state.
+- A displayed plan never changes except by explicit user action (Refresh, or
+  reopening). No input event, timer, or backend push rewrites it.
 - CLI and dashboard diagnostics use the same codes and severities.
 
 ## Non-goals
@@ -221,5 +514,7 @@ file** action because preview creates no temp files.
 - Running pre/end-condition scripts.
 - Resolving a "latest session" by opening or changing session state.
 - Creating temporary prompt or harness config files.
+- Live/continuously-updating preview. A dry run is a snapshot; keeping one in
+  sync with ongoing edits is explicitly not a goal.
 - Guaranteeing that external workspace state will not change between preview and
   execution.

@@ -128,7 +128,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
     hasUnpushed && commit.pushed ? "scm-graph-remote" : "scm-graph-local";
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 select-none [-webkit-touch-callout:none]">
       {/* Section header */}
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">

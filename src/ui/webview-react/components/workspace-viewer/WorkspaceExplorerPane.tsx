@@ -422,7 +422,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const directoryListColumn = (
-    <div className="flex flex-col h-full w-full sm:w-64 sm:flex-shrink-0 border-r border-panel-border overflow-hidden">
+    <div className="flex flex-col h-full w-full sm:w-64 sm:flex-shrink-0 border-r border-panel-border overflow-hidden select-none [-webkit-touch-callout:none]">
       {/* Navigation toolbar */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border flex-shrink-0">
         <button
