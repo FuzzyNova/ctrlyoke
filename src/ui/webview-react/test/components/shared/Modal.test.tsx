@@ -53,7 +53,6 @@ describe("Modal", () => {
         body
       </Modal>
     );
-    // The outermost fixed overlay is the backdrop
     const backdrop = container.ownerDocument.querySelector(
       ".fixed.inset-0"
     ) as HTMLElement;
@@ -95,5 +94,42 @@ describe("Modal", () => {
     );
     await user.keyboard("{Escape}");
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("renders the full size as a viewport-filling flex dialog", () => {
+    render(
+      <Modal
+        isOpen
+        title="Full dialog"
+        onClose={() => undefined}
+        size="full"
+        footer={<button type="button">Confirm</button>}
+      >
+        <p>Scrollable body</p>
+      </Modal>
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass(
+      "max-w-none",
+      "w-full",
+      "h-full",
+      "rounded-none",
+      "border-0",
+      "flex",
+      "flex-col"
+    );
+    expect(dialog.parentElement).toHaveClass(
+      "fixed",
+      "inset-0",
+      "flex",
+      "flex-col"
+    );
+    expect(screen.getByText("Scrollable body").parentElement).toHaveClass(
+      "flex-1",
+      "min-h-0",
+      "overflow-y-auto"
+    );
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
   });
 });

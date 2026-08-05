@@ -525,12 +525,14 @@ outerMarginClassName prop while retaining its "my-2" default for virtualized out
 Build `components/diff/*`. Convert `WorkspaceDiffPane` to it first (it is the style donor and
 the smaller consumer), including the single-file mode. Delivers §4.2 and §4.3.
 
-**Phase 3 — Undo dialog conversion.**
+**Phase 3 — Undo dialog conversion — done.**
 Replace all four row implementations with `DiffFileList`, delete
 `redoActionBadgeLabel`/`redoActionBadgeColor`/`FileRowItem`/`CHANGE_TYPE_*`. Add `Modal`
 `size="full"` (§4.7) and the wording change (§4.8). This is also where
 `UndoChangesDialog.tsx` should shed most of its length — the mode-specific *data shaping* moves
 into `promptUndo.ts` and the component becomes "build groups, render list, send message".
+Implemented with no contract deviations; the single-non-empty-group rule also suppresses
+workflow step headings when only one workflow group has files.
 
 **Phase 4a — `FILE_WRITE` content capture.**
 §4.4 cause A only: `MAX_CONTENT_SIZE` moves to `DashboardConstants`, and

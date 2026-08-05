@@ -26,6 +26,11 @@ import type {
   PromptChangeType,
   UndoRecord,
 } from "@root/types/OutputHistoryTypes";
+import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
+import { fromPromptChangeType, type DiffFileCardProps } from "@components/diff";
+import type { DiffChangeType } from "@root/types/DashboardConstants";
+import { getLanguageFromPath } from "@utils/syntaxHighlighting";
+import { hasRenderableDiff } from "@utils/diffUtils";
 
 export interface UndoDialogInput {
   scope: UndoDialogScope;
@@ -34,6 +39,40 @@ export interface UndoDialogInput {
   /** Tier 2 candidates: snapshot-only entries with no corresponding event */
   snapshotOnlyFiles: SnapshotFileChange[];
   workspacePath: string;
+}
+
+/** A single step's data for workflow-level undo/redo dialogs. */
+export interface WorkflowStepEntry {
+  target: OutputExecutionTarget;
+  label: string;
+  undoCandidates?: UndoFileCandidate[];
+  redoInstructions?: UndoFileInstruction[];
+}
+
+/** Render-ready file data shared by all four undo/redo dialog modes. */
+export interface PromptUndoDialogRow extends Omit<
+  DiffFileCardProps,
+  "selection"
+> {
+  key: string;
+  instruction: UndoFileInstruction | null;
+  hasDiff: boolean;
+  disabledReason?: string;
+}
+
+export interface PromptUndoDialogGroup {
+  heading?: string;
+  headingHint?: string;
+  files: PromptUndoDialogRow[];
+}
+
+export interface PromptUndoDialogModel {
+  workflowRows: PromptUndoDialogRow[];
+  redoRows: PromptUndoDialogRow[];
+  tier1Rows: PromptUndoDialogRow[];
+  tier2Rows: PromptUndoDialogRow[];
+  allUndoRows: PromptUndoDialogRow[];
+  groups: PromptUndoDialogGroup[];
 }
 
 export interface SpecificEventDiffFallback {
@@ -293,6 +332,190 @@ function resolveSnapshotUndoInstruction(
     default:
       return null;
   }
+}
+
+function buildDiffSource(
+  oldContent: string | undefined,
+  newContent: string | undefined,
+  structuredPatch: UnifiedDiffHunk[] | undefined
+): DiffFileCardProps["source"] {
+  if (structuredPatch && structuredPatch.length > 0) {
+    return { kind: "patch", structuredPatch, oldContent };
+  }
+  return { kind: "content", oldContent, newContent };
+}
+
+function buildUndoDialogRow(options: {
+  key: string;
+  path: string;
+  changeType: PromptChangeType;
+  instruction: UndoFileInstruction | null;
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: UnifiedDiffHunk[];
+  contentCaptureSkipped?: boolean;
+}): PromptUndoDialogRow {
+  const { oldContent, newContent, structuredPatch } = options;
+  return {
+    key: options.key,
+    path: options.path,
+    changeType: fromPromptChangeType(options.changeType),
+    source: buildDiffSource(oldContent, newContent, structuredPatch),
+    language: getLanguageFromPath(options.path),
+    globallyCollapsed: true,
+    instruction: options.instruction,
+    hasDiff: hasRenderableDiff({
+      oldContent,
+      newContent,
+      structuredPatch,
+    }),
+    disabledReason:
+      options.instruction === null
+        ? options.contentCaptureSkipped
+          ? "Content not captured"
+          : "Cannot undo"
+        : undefined,
+  };
+}
+
+function redoInstructionToDiffChangeType(
+  instruction: UndoFileInstruction
+): DiffChangeType {
+  if (instruction.action === UNDO_FILE_ACTIONS.DELETE) {
+    return "deleted";
+  }
+  if (
+    instruction.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT &&
+    !instruction.structuredPatch
+  ) {
+    return "created";
+  }
+  return "modified";
+}
+
+function buildRedoDialogRow(
+  instruction: UndoFileInstruction,
+  key: string
+): PromptUndoDialogRow {
+  const structuredPatch = instruction.structuredPatch;
+  return {
+    key,
+    path: instruction.path,
+    changeType: redoInstructionToDiffChangeType(instruction),
+    source: buildDiffSource(undefined, undefined, structuredPatch),
+    language: getLanguageFromPath(instruction.path),
+    globallyCollapsed: true,
+    instruction,
+    hasDiff: hasRenderableDiff({ structuredPatch }),
+  };
+}
+
+function buildCandidateRow(
+  candidate: UndoFileCandidate,
+  key = candidate.path
+): PromptUndoDialogRow {
+  return buildUndoDialogRow({
+    key,
+    path: candidate.path,
+    changeType: candidate.changeType,
+    instruction: candidate.instruction,
+    oldContent: candidate.oldContent,
+    newContent: candidate.newContent,
+    structuredPatch: candidate.structuredPatch,
+    contentCaptureSkipped: candidate.contentCaptureSkipped,
+  });
+}
+
+/** Build the render-ready data for all four undo/redo dialog modes. */
+export function buildPromptUndoDialogModel(options: {
+  mode: "undo" | "redo";
+  input?: UndoDialogInput;
+  redoInstructions?: UndoFileInstruction[];
+  workflowEntries?: WorkflowStepEntry[];
+}): PromptUndoDialogModel {
+  const { mode, input, redoInstructions, workflowEntries } = options;
+  const isWorkflowMode = (workflowEntries?.length ?? 0) > 0;
+
+  if (isWorkflowMode) {
+    const groups = (workflowEntries ?? []).flatMap((entry, entryIdx) => {
+      const files =
+        mode === "redo"
+          ? (entry.redoInstructions ?? []).map((instruction) =>
+              buildRedoDialogRow(
+                instruction,
+                `${entryIdx}::${instruction.path}`
+              )
+            )
+          : (entry.undoCandidates ?? []).map((candidate) =>
+              buildCandidateRow(candidate, `${entryIdx}::${candidate.path}`)
+            );
+      return files.length > 0 ? [{ heading: entry.label, files }] : [];
+    });
+    const workflowRows = groups.flatMap((group) => group.files);
+    return {
+      workflowRows,
+      redoRows: [],
+      tier1Rows: [],
+      tier2Rows: [],
+      allUndoRows: [],
+      groups,
+    };
+  }
+
+  const redoRows =
+    mode === "redo"
+      ? (redoInstructions ?? []).map((instruction) =>
+          buildRedoDialogRow(instruction, instruction.path)
+        )
+      : [];
+  const tier1Rows =
+    mode === "undo"
+      ? (input?.eventAttributedFiles ?? []).map((candidate) =>
+          buildCandidateRow(candidate)
+        )
+      : [];
+  const tier2Rows =
+    mode === "undo"
+      ? (input?.snapshotOnlyFiles ?? []).map((snapshotFile) =>
+          buildCandidateRow({
+            path: snapshotFile.path,
+            changeType: snapshotFile.changeType,
+            tier: "tier2",
+            instruction: resolveSnapshotUndoInstruction(snapshotFile),
+            contentCaptureSkipped: snapshotFile.contentCaptureSkipped,
+            oldContent: snapshotFile.beforeContent,
+            structuredPatch: snapshotFile.structuredPatch,
+          })
+        )
+      : [];
+  const allUndoRows = [...tier1Rows, ...tier2Rows];
+
+  const groups: PromptUndoDialogGroup[] =
+    mode === "redo"
+      ? [{ files: redoRows }]
+      : [
+          {
+            heading: "Changes the AI reported",
+            headingHint:
+              "The harness told us it made these edits, so we know exactly what changed.",
+            files: tier1Rows,
+          },
+          {
+            heading: "Other changes we detected",
+            headingHint:
+              "Found by comparing the workspace before and after — may include edits from other tools or another workflow running at the same time.",
+            files: tier2Rows,
+          },
+        ];
+
+  return {
+    workflowRows: [],
+    redoRows,
+    tier1Rows,
+    tier2Rows,
+    allUndoRows,
+    groups,
+  };
 }
 
 /** Summarise a list of candidates for display purposes. */

@@ -34,12 +34,15 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
     );
   }
 
-  const hasHeadings = groups.some((group) => group.heading !== undefined);
+  const nonEmptyGroups = groups.filter((group) => group.files.length > 0);
+  const hasHeadings =
+    nonEmptyGroups.length > 1 &&
+    nonEmptyGroups.some((group) => group.heading !== undefined);
 
   return (
     <div className="flex flex-col gap-3">
       {selectionSummary}
-      {groups.map((group, groupIndex) => (
+      {nonEmptyGroups.map((group, groupIndex) => (
         <React.Fragment key={group.heading ?? `group-${groupIndex}`}>
           {hasHeadings && group.heading && (
             <div className="flex flex-col gap-0.5">

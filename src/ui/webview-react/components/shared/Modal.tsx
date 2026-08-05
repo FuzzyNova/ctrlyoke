@@ -8,7 +8,7 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "full";
   /** Extra content rendered between the title and the close button in the header. */
   headerActions?: React.ReactNode;
   /** Optional subtitle rendered on its own row below the title+actions row in the header. */
@@ -64,7 +64,9 @@ export const Modal: React.FC<ModalProps> = ({
     md: "max-w-lg",
     lg: "max-w-2xl",
     xl: "max-w-4xl",
+    full: "max-w-none w-full h-full rounded-none border-0",
   };
+  const isFullScreen = size === "full";
 
   return createPortal(
     <>
@@ -77,19 +79,19 @@ export const Modal: React.FC<ModalProps> = ({
       />
       {/* Modal content wrapper */}
       <div
-        className={`fixed inset-0 ${contentZ} flex items-center justify-center overflow-y-auto pointer-events-none`}
+        className={`fixed inset-0 ${contentZ} ${isFullScreen ? "flex flex-col overflow-hidden" : "flex items-center justify-center overflow-y-auto"} pointer-events-none`}
       >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, no action triggered */}
         <div
           ref={modalRef}
-          className={`relative w-full ${sizeClasses[size]} ${fullWidthOnNarrow ? "sm:mx-4 sm:rounded-lg" : "mx-4 rounded-lg"} bg-editor-bg shadow-xl border border-panel-border pointer-events-auto`}
+          className={`relative w-full ${sizeClasses[size]} ${isFullScreen ? "flex flex-col" : fullWidthOnNarrow ? "sm:mx-4 sm:rounded-lg" : "mx-4 rounded-lg"} bg-editor-bg shadow-xl ${isFullScreen ? "border-0" : "border border-panel-border"} pointer-events-auto`}
           onClick={(e) => e.stopPropagation()}
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-panel-border">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-panel-border">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-foreground">{title}</h2>
               <div className="flex items-center gap-1">
@@ -105,13 +107,15 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
 
           {/* Body */}
-          <div className="px-6 py-4 max-h-[70vh] overflow-y-auto text-foreground">
+          <div
+            className={`${isFullScreen ? "flex-1 min-h-0 overflow-y-auto" : "max-h-[70vh] overflow-y-auto"} px-6 py-4 text-foreground`}
+          >
             {children}
           </div>
 
           {/* Footer */}
           {footer && (
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-panel-border">
+            <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-panel-border">
               {footer}
             </div>
           )}
