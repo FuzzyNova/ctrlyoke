@@ -1,5 +1,7 @@
 export { DiffFileCard } from "./DiffFileCard";
 export type { DiffFileCardProps } from "./DiffFileCard";
+export { OpenFileButton } from "./OpenFileButton";
+export type { OpenFileButtonProps } from "./OpenFileButton";
 export { DiffFileList } from "./DiffFileList";
 export type { DiffFileGroup, DiffFileListProps } from "./DiffFileList";
 export {

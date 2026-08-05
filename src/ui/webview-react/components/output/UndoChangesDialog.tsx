@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Modal } from "../shared/Modal";
 import { Button } from "../shared/Button";
 import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsButton";
-import { DiffFileList, type DiffFileGroup } from "@components/diff";
+import {
+  DiffFileList,
+  OpenFileButton,
+  type DiffFileGroup,
+} from "@components/diff";
 import { MESSAGE_TYPES } from "../../types/messages";
 import type { UndoFileInstruction } from "../../types/messages";
 import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
@@ -297,6 +301,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
             ...file,
             globallyCollapsed: dialogDiffsCollapsed,
             localResetVersion: dialogDiffResetVersion,
+            headerActions: <OpenFileButton path={file.path} />,
             selection: {
               checked: checkedPaths.has(key),
               onChange: (checked: boolean) => handleToggle(key, checked),

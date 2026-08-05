@@ -208,6 +208,49 @@ describe("UndoChangesDialog", () => {
     );
   });
 
+  it("opens the file when the header's open-file button is clicked", () => {
+    const instruction: UndoFileInstruction = {
+      path: "src/example.ts",
+      action: "reverse-patch",
+      structuredPatch: [],
+    };
+    const input = {
+      scope: { mode: "prompt" as const, target: queueTarget },
+      eventAttributedFiles: [
+        {
+          path: instruction.path,
+          changeType: "modified" as const,
+          tier: "tier1" as const,
+          instruction,
+        },
+      ],
+      snapshotOnlyFiles: [],
+      workspacePath: "C:/dev/ctrlyoke",
+    };
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    render(
+      <UndoChangesDialog
+        mode="undo"
+        target={queueTarget}
+        workspacePath={input.workspacePath}
+        input={input}
+        requestId="open-file-test"
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open src/example.ts" })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path: "src/example.ts",
+    });
+  });
+
   it("keeps the single-step redo payload unchanged", () => {
     const instruction: UndoFileInstruction = {
       path: "src/example.ts",

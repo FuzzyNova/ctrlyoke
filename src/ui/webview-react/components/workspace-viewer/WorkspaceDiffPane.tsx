@@ -5,6 +5,7 @@ import {
   DiffFileList,
   type DiffFileGroup,
   fromDiffKind,
+  OpenFileButton,
 } from "@components/diff";
 import { downloadTextFile } from "@utils/diff";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
@@ -46,6 +47,7 @@ export const WorkspaceDiffPane: React.FC = () => {
           },
           globallyCollapsed: commitDiffsCollapsed,
           localResetVersion: commitDiffResetVersion,
+          headerActions: <OpenFileButton path={file.path} />,
         })),
       },
     ],
@@ -68,6 +70,7 @@ export const WorkspaceDiffPane: React.FC = () => {
                     newContent: diffNewContent,
                   },
                   globallyCollapsed: false,
+                  headerActions: <OpenFileButton path={selectedDiffPath} />,
                 },
               ],
             },

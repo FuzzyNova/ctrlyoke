@@ -5,6 +5,7 @@ import { WorkspaceDiffPane } from "@components/workspace-viewer/WorkspaceDiffPan
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
+import { MESSAGE_TYPES } from "@/types/messages";
 
 vi.mock("@components/output/DiffView", () => ({
   DiffView: ({
@@ -144,6 +145,26 @@ describe("WorkspaceDiffPane commit diff controls", () => {
     expect(screen.getByText("new.ts")).toBeInTheDocument();
     expect(screen.getByTitle("renamed")).toBeInTheDocument();
   });
+
+  it("opens the file when the header's open-file button is clicked", async () => {
+    const user = userEvent.setup();
+    useWorkspaceViewerStore.setState({
+      diffFiles: [diffFile],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: false,
+    });
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    render(<WorkspaceDiffPane />);
+
+    await user.click(screen.getByRole("button", { name: "Open src/file.ts" }));
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path: "src/file.ts",
+    });
+  });
 });
 
 describe("WorkspaceDiffPane single-file mode", () => {
@@ -161,6 +182,29 @@ describe("WorkspaceDiffPane single-file mode", () => {
 
     expect(screen.getByText("new.ts")).toBeInTheDocument();
     expect(screen.getByTitle("created")).toBeInTheDocument();
+  });
+
+  it("opens the file when the header's open-file button is clicked", async () => {
+    const user = userEvent.setup();
+    useWorkspaceViewerStore.setState({
+      selectedDiffPath: "src/new.ts",
+      diffOldContent: "",
+      diffNewContent: "const value = 1;",
+      diffKind: "added",
+      diffLoading: false,
+      diffFiles: null,
+    });
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    render(<WorkspaceDiffPane />);
+
+    await user.click(screen.getByRole("button", { name: "Open src/new.ts" }));
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path: "src/new.ts",
+    });
   });
 });
 
