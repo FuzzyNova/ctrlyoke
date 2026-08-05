@@ -126,6 +126,17 @@ export interface DiffFileCardProps {
 }
 ```
 
+The shared undo/redo contracts the card and the dialog consume — `UndoFileCandidate`,
+`UndoFileInstruction`, `UNDO_FILE_ACTIONS` — live in `src/types/WebviewMessageTypes.ts` and are
+re-exported through `src/ui/webview-react/types/messages.ts`; `SnapshotFileChange` and
+`PromptChangeType` live in `src/types/OutputHistoryTypes.ts`.
+
+**DiffView needs one new prop, not an internals change.** `DiffView` applies `my-2 ${className}`
+at `DiffView.tsx:477`, so a caller-supplied `className` cannot win against `my-2` without
+`!important`. Add an explicit optional margin prop (e.g. `outerMarginClassName?: string`
+defaulting to `"my-2"`) and have `DiffFileCard` pass a tighter value. This is additive and does
+not violate the §Overview non-goal, which is about tokenization / gap expansion / view switching.
+
 Header row layout (mobile-first, one line, wraps to two only below `sm`):
 
 ```
@@ -323,13 +334,28 @@ correct — it tests `oldContent !== undefined && newContent !== undefined`
    `modified` with a patch (`promptUndo.ts:229-231` already prefers the snapshot's change type),
    so a full-file rewrite still renders as a real diff, not as all-green.
 3. Replace every truthiness guard with one exported helper used by `DiffFileCard`,
-   `FileOperationOutput`, and anything else that asks "is there a diff to show":
+   `FileOperationOutput`, and anything else that asks "is there a diff to show". Put it in
+   `src/ui/webview-react/utils/diffUtils.ts` (already the home of `normalizeStructuredPatch`,
+   already imported by `rdvAdapter.ts`, and free of extension-only imports):
+
    ```ts
-   export function hasRenderableDiff(s: DiffSource): boolean {
-     if (s.structuredPatch?.length) return true;
+   export interface RenderableDiffSource {
+     oldContent?: string;
+     newContent?: string;
+     structuredPatch?: UnifiedDiffHunk[];
+   }
+
+   export function hasRenderableDiff(s: RenderableDiffSource): boolean {
+     if (s.structuredPatch && s.structuredPatch.length > 0) return true;
      return s.oldContent !== undefined && s.newContent !== undefined;
    }
    ```
+
+   Call sites to convert (all five, not three — the dialog has four of them):
+   `UndoChangesDialog.tsx:168-170` (`FileRowItem.hasDiff`), `:502-505` and `:512-516` (the two
+   arms of the `hasDiffs` memo), `:662` / `:736-737` (the inline redo rows), and
+   `FileOperationOutput.tsx:218-222` (`hasDiffData`, which keeps its extra `hideDiff` /
+   `status !== FAILED` conditions around the helper).
 Timeline `FILE_WRITE` rows (`OutputRow.tsx:678-707` → `FileWriteOutput`'s raw content block)
 keep showing content, not a diff — **deliberately out of scope**, see the follow-up in §7.
 
@@ -501,13 +527,21 @@ Replace all four row implementations with `DiffFileList`, delete
 `UndoChangesDialog.tsx` should shed most of its length — the mode-specific *data shaping* moves
 into `promptUndo.ts` and the component becomes "build groups, render list, send message".
 
-**Phase 4 — Undo data correctness.**
-`FILE_WRITE` content capture (§4.4 cause A), workflow aggregation for **both** undo and redo
-(§4.5), and the paired ordering invariant (§4.6). Timeline `FILE_WRITE` rows are explicitly not
-touched here (§7 follow-up).
+**Phase 4a — `FILE_WRITE` content capture.**
+§4.4 cause A only: `MAX_CONTENT_SIZE` moves to `DashboardConstants`, and
+`buildUndoCandidatesForOutputs` starts collecting `FileWriteData.content`. Purely a
+`promptUndo.ts` + constants change; the card built in Phase 2 already renders the result once
+the data exists.
 
-Phase 4 is the riskiest and is deliberately last: by then both surfaces render from one
-component, so a data-shape change can be verified in one place.
+**Phase 4b — Workflow aggregation and ordering.**
+Workflow aggregation for **both** undo and redo (§4.5) plus the paired ordering invariant
+(§4.6), including the `UndoRedoCoordinator` coverage. Timeline `FILE_WRITE` rows are explicitly
+not touched (§7 follow-up).
+
+Phase 4 is split because 4b is the riskiest work in the plan and carries the largest test
+matrix; keeping the content-capture fix separate means a regression in either is bisectable.
+Both are deliberately last: by then both surfaces render from one component, so a data-shape
+change can be verified in one place.
 
 ---
 
