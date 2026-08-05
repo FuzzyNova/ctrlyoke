@@ -368,6 +368,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       onClose={onClose}
       size="full"
       footer={footer}
+      bodyClassName="px-3 py-2"
       headerSubtitle={dialogSubtitle}
       headerActions={
         hasDiffs && resultState === RESULT_STATE.IDLE ? (

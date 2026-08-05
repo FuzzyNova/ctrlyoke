@@ -15,6 +15,8 @@ interface ModalProps {
   headerSubtitle?: React.ReactNode;
   /** When true, the modal takes full width (no horizontal margin, no rounded corners) below the sm breakpoint. */
   fullWidthOnNarrow?: boolean;
+  /** Overrides the body's padding classes. Defaults to "px-6 py-4". */
+  bodyClassName?: string;
   /**
    * When true, render above the full-screen workspace viewer overlay
    * (z-workspace-viewer). Required for modals opened from inside the viewer,
@@ -33,6 +35,7 @@ export const Modal: React.FC<ModalProps> = ({
   headerActions,
   headerSubtitle,
   fullWidthOnNarrow = false,
+  bodyClassName = "px-6 py-4",
   elevated = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -108,7 +111,7 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Body */}
           <div
-            className={`${isFullScreen ? "flex-1 min-h-0 overflow-y-auto" : "max-h-[70vh] overflow-y-auto"} px-6 py-4 text-foreground`}
+            className={`${isFullScreen ? "flex-1 min-h-0 overflow-y-auto" : "max-h-[70vh] overflow-y-auto"} ${bodyClassName} text-foreground`}
           >
             {children}
           </div>

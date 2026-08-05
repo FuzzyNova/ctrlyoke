@@ -2,9 +2,16 @@ import React from "react";
 import { DiffView } from "@components/output/DiffView";
 import type { HunkData, DiffType } from "react-diff-view";
 import type { UnifiedDiffHunk } from "@root/types/CliOutputTypes";
-import { DIFF_CHANGE_ICON } from "./diffChangeType";
-import { DiffChangeBadge } from "./DiffChangeBadge";
-import { DiffFilePathLabel } from "./DiffFilePathLabel";
+import {
+  DIFF_CHANGE_COLOR,
+  DIFF_CHANGE_ICON,
+  DIFF_CHANGE_LABEL,
+} from "./diffChangeType";
+import {
+  DiffFileDirectoryLabel,
+  DiffFileNameLabel,
+  diffFilePathTitle,
+} from "./DiffFilePathLabel";
 import type { DiffChangeType } from "@root/types/DashboardConstants";
 
 export interface DiffFileCardProps {
@@ -106,39 +113,52 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
     }
   })();
 
+  const pathTitle = diffFilePathTitle(path, oldPath);
+
   return (
     <div className="border border-panel-border rounded overflow-hidden">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-panel-border bg-editor-bg px-2.5 py-1 text-xs font-mono">
-        {selection &&
-          (selection.disabledReason ? (
-            <span
-              className="shrink-0 text-description-fg italic"
-              title={selection.disabledReason}
-            >
-              {selection.disabledReason}
-            </span>
-          ) : (
-            <input
-              type="checkbox"
-              checked={selection.checked}
-              onChange={(event) => selection.onChange(event.target.checked)}
-              aria-label={`Select ${path}`}
-              className="shrink-0"
-            />
-          ))}
-        <i
-          className={`codicon ${DIFF_CHANGE_ICON[changeType]} shrink-0 text-editor-fg opacity-80`}
-          aria-hidden="true"
-        />
-        <DiffFilePathLabel path={path} oldPath={oldPath} />
-        <DiffChangeBadge changeType={changeType} />
-        {note && (
-          <span className="shrink-0 text-description-fg italic">{note}</span>
-        )}
-        {headerActions && (
-          <div className="ml-auto flex shrink-0 items-center">
-            {headerActions}
+      <div className="sticky top-0 z-10 flex flex-col gap-0.5 border-b border-panel-border bg-editor-bg px-2.5 py-1 text-xs font-mono">
+        <div className="flex items-center gap-2">
+          {selection &&
+            (selection.disabledReason ? (
+              <span
+                className="shrink-0 text-description-fg italic"
+                title={selection.disabledReason}
+              >
+                {selection.disabledReason}
+              </span>
+            ) : (
+              <input
+                type="checkbox"
+                checked={selection.checked}
+                onChange={(event) => selection.onChange(event.target.checked)}
+                aria-label={`Select ${path}`}
+                className="shrink-0"
+              />
+            ))}
+          <i
+            className={`codicon ${DIFF_CHANGE_ICON[changeType]} shrink-0 ${DIFF_CHANGE_COLOR[changeType]}`}
+            title={DIFF_CHANGE_LABEL[changeType]}
+            aria-label={DIFF_CHANGE_LABEL[changeType]}
+          />
+          <div
+            className="flex min-w-0 flex-1 flex-col"
+            title={pathTitle}
+            aria-label={pathTitle}
+          >
+            <DiffFileNameLabel path={path} oldPath={oldPath} />
+            <DiffFileDirectoryLabel path={path} oldPath={oldPath} />
           </div>
+          {headerActions && (
+            <div className="ml-auto flex shrink-0 items-center">
+              {headerActions}
+            </div>
+          )}
+        </div>
+        {note && (
+          <span className="pl-5 text-description-fg italic [overflow-wrap:anywhere]">
+            {note}
+          </span>
         )}
       </div>
       {diffView}

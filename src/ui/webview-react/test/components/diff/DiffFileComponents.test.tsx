@@ -8,7 +8,7 @@ vi.mock("@components/output/DiffView", () => ({
 }));
 
 describe("DiffFileCard", () => {
-  it("shows a real added-file path and created badge", () => {
+  it("shows a real added-file path, no /dev/null, and a created tooltip on the icon", () => {
     render(
       <DiffFileCard
         path="src/new.ts"
@@ -23,8 +23,9 @@ describe("DiffFileCard", () => {
     );
 
     expect(screen.getByText("new.ts")).toBeInTheDocument();
-    expect(screen.getByText("created")).toBeInTheDocument();
+    expect(screen.getByTitle("created")).toBeInTheDocument();
     expect(screen.queryByText("/dev/null")).not.toBeInTheDocument();
+    expect(screen.queryByText("created")).not.toBeInTheDocument();
   });
 
   it("renders rename paths with both basenames and the full title", () => {
@@ -43,7 +44,7 @@ describe("DiffFileCard", () => {
     expect(
       screen.getByTitle("src/old-name.ts → src/new-name.ts")
     ).toBeInTheDocument();
-    expect(screen.getByText("renamed")).toBeInTheDocument();
+    expect(screen.getByTitle("renamed")).toBeInTheDocument();
   });
 
   it("keeps the basename in the DOM while the directory is truncatable", () => {
@@ -59,9 +60,26 @@ describe("DiffFileCard", () => {
     );
 
     expect(screen.getByText("file.ts")).toBeInTheDocument();
-    expect(container.querySelector(".truncate")).toHaveTextContent(
-      "very/long/directory/name/"
+    const truncatableTexts = Array.from(
+      container.querySelectorAll(".truncate")
+    ).map((el) => el.textContent);
+    expect(truncatableTexts).toContain("very/long/directory/name/");
+  });
+
+  it("lets a long note wrap instead of clipping it", () => {
+    const { container } = render(
+      <DiffFileCard
+        path="src/file.ts"
+        changeType="modified"
+        source={{ kind: "hunks", hunks: [], diffType: "modify" }}
+        globallyCollapsed
+        note="Final Step Loop 1, Prompt 1, Prompt 2, Prompt 3, Prompt 4, Prompt 5"
+      />
     );
+
+    const note = screen.getByText(/Final Step Loop 1, Prompt 1/);
+    expect(note.className).not.toContain("shrink-0");
+    expect(container.querySelector(".shrink-0.italic")).toBeNull();
   });
 });
 
