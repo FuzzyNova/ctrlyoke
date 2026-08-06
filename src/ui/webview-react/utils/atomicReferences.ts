@@ -256,6 +256,13 @@ export const CHART_ACCENT_COLORS = {
 // Maps codicon names to the VS Code symbolIcon theme variable that colors the
 // icon. This is the single source for completions and atomic-reference chips.
 export const SYMBOL_ICON_COLORS: Record<string, string> = {
+  // DEFAULT_COMPLETION_ICON must have an entry: a chip whose icon is missing
+  // from this map gets no icon color *and* no accent, because the accent is
+  // driven off the same lookup (--atomic-reference-accent in
+  // AtomicReferenceChip, buildChipAccentShadowRules in codemirrorTheme). A
+  // #sym: reference renders with the fallback icon until its kind resolves, so
+  // without this it would paint as a bare uncolored box in the meantime.
+  [DEFAULT_COMPLETION_ICON]: "var(--vscode-symbolIcon-textForeground, #cccccc)",
   "symbol-text": "var(--vscode-symbolIcon-textForeground, #cccccc)",
   "symbol-method": "var(--vscode-symbolIcon-methodForeground, #b180d7)",
   "symbol-function": "var(--vscode-symbolIcon-functionForeground, #b180d7)",
@@ -475,10 +482,15 @@ export function findContextReferenceMatches(
     directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
     fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
     directory: /@([^\s@#"]+\/)/g,
-    lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
-    lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
-    symbol: /#sym:([^\s:]+):([^:]+):(\d+)-(\d+)/g,
+    // Path and symbol name are colon-delimited fields: quoted, or bare with no
+    // whitespace/`:`/`"`. Must stay in lockstep with the runtime patterns in
+    // src/utils/FileReferenceParser.ts — the two parsers are separate by design
+    // (see the module header), but a reference this one chips while the runtime
+    // one ignores is a reference that renders clickable and silently expands to
+    // nothing.
+    lineRange: /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    symbol:
+      /#sym:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
   const fileMatches: ContextReferenceMatch[] = [];
   const directoryMatches: ContextReferenceMatch[] = [];
@@ -512,13 +524,12 @@ export function findContextReferenceMatches(
         from: offset + match.index,
         to: offset + match.index + match[0].length,
         type: "lineRange",
-        path: match[1],
-        lineStart: match[2],
-        lineEnd: match[3],
+        path: match[1] ?? match[2],
+        lineStart: match[3],
+        lineEnd: match[4],
       });
     }
   };
-  collectLineRangeMatches(patterns.lineRangeQuoted);
   collectLineRangeMatches(patterns.lineRange);
   const collectSymbolMatches = (pattern: RegExp) => {
     const regex = new RegExp(pattern.source, "g");
@@ -527,14 +538,13 @@ export function findContextReferenceMatches(
         from: offset + match.index,
         to: offset + match.index + match[0].length,
         type: "symbol",
-        path: match[1],
-        symbolName: match[2],
-        lineStart: match[3],
-        lineEnd: match[4],
+        path: match[1] ?? match[2],
+        symbolName: match[3] ?? match[4],
+        lineStart: match[5],
+        lineEnd: match[6],
       });
     }
   };
-  collectSymbolMatches(patterns.symbolQuoted);
   collectSymbolMatches(patterns.symbol);
   const filteredDirectoryMatches = directoryMatches.filter(
     (dirMatch) =>

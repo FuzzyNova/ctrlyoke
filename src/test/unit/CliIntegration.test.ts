@@ -1134,9 +1134,11 @@ suite("CliIntegration", () => {
         prompt: "When #sym:root2/b.ts:foo:1-1 runs, log the result.",
       } as PromptStep);
 
+      // Absolute paths carry the drive colon, which is also the #sym: field
+      // separator, so the rewritten path must be quoted to stay parseable.
       assert.strictEqual(
         sections.userPromptText,
-        `When #sym:${secondFile}:foo:1-1 runs, log the result.`
+        `When #sym:"${secondFile}":foo:1-1 runs, log the result.`
       );
     });
 

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ctrlyoke Prompt Schema",
   "type": "object",
-  "description": "Schema for ctrlyoke workflows. Steps should be in final-form format with all context references (e.g., @path/to/file, @path/to/dir/, #file:path, #selection:path:line-line, #sym:path:symbol:line) included directly in the prompt text. ctrlyoke expands these references into inline file/symbol content before sending to the AI.",
+  "description": "Schema for ctrlyoke workflows. Steps should be in final-form format with all context references (e.g., @path/to/file, @path/to/dir/, #selection:path:line-line, #sym:path:symbol:line-line) included directly in the prompt text. ctrlyoke expands these references into inline file/symbol content before sending to the AI.",
   "properties": {
     "_templateMeta": {
       "$ref": "#/definitions/templateMetadata"
@@ -520,7 +520,7 @@
             },
             "prompt": {
               "type": "string",
-              "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #file:path, #selection:path:line-line, or #sym:path:symbol:line for file excerpts and symbols. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
+              "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym:path:symbol:line-line for file excerpts and symbols. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
             },
             "_runtime": {
               "$ref": "#/definitions/promptRuntimeMetadata",

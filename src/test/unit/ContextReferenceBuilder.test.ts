@@ -10,6 +10,7 @@ import {
   buildSelectionReferenceValue,
   buildSymbolReference,
   buildSymbolReferenceValue,
+  quoteReferenceField,
   quoteReferencePath,
 } from "../../completions/ContextReferenceBuilder";
 
@@ -73,5 +74,49 @@ suite("ContextReferenceBuilder", () => {
   test("builds git references", () => {
     assert.strictEqual(buildGitReference("diff"), "~diff");
     assert.strictEqual(buildGitReference("stash:0"), "~stash:0");
+  });
+
+  suite("colon-delimited field quoting", () => {
+    test("quoteReferenceField quotes on whitespace or colon, not otherwise", () => {
+      assert.strictEqual(quoteReferenceField("Foo"), "Foo");
+      assert.strictEqual(quoteReferenceField("Foo<T>"), "Foo<T>");
+      assert.strictEqual(quoteReferenceField("doThing()"), "doThing()");
+      assert.strictEqual(quoteReferenceField("get value"), '"get value"');
+      assert.strictEqual(quoteReferenceField("C:/dev/a.ts"), '"C:/dev/a.ts"');
+    });
+
+    test("quotes a symbol name containing spaces", () => {
+      assert.strictEqual(
+        buildSymbolReference("src/app.ts", "get value", 42, 58),
+        '#sym:src/app.ts:"get value":42-58'
+      );
+    });
+
+    test("leaves symbol names that need no quoting bare", () => {
+      assert.strictEqual(
+        buildSymbolReference("src/app.ts", "Foo<T>", 1, 2),
+        "#sym:src/app.ts:Foo<T>:1-2"
+      );
+    });
+
+    // quoteReferencePath (used by @refs) only quotes on spaces, which left an
+    // absolute path's drive colon bare and made the token unparseable.
+    test("quotes an absolute path in #sym: and #selection:", () => {
+      assert.strictEqual(
+        buildSymbolReference("C:/dev/repo/a.ts", "foo", 1, 1),
+        '#sym:"C:/dev/repo/a.ts":foo:1-1'
+      );
+      assert.strictEqual(
+        buildSelectionReference("C:/dev/repo/a.ts", 10, 20),
+        '#selection:"C:/dev/repo/a.ts":10-20'
+      );
+    });
+
+    test("normalizes separators before quoting", () => {
+      assert.strictEqual(
+        buildSymbolReference("C:\\dev\\my repo\\a.ts", "foo", 1, 1),
+        '#sym:"C:/dev/my repo/a.ts":foo:1-1'
+      );
+    });
   });
 });

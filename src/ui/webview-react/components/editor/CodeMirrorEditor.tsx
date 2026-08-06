@@ -2250,7 +2250,7 @@ function createFencedBlockDecorationExtension() {
   );
 }
 
-// Decorate links (@file, @dir/, #file:, #sym:)
+// Decorate links (@file, @dir/, #selection:, #sym:)
 function createLinkDecorationExtension(
   referenceValidity?: Map<string, boolean>
 ) {

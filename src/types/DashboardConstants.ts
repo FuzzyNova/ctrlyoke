@@ -142,7 +142,7 @@ export const MESSAGE_TYPES = {
   // CodeMirror editor - Webview <-> Extension
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
-  OPEN_FILE: "openFile", // Open file from #file: link
+  OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens

@@ -6,6 +6,24 @@ export function quoteReferencePath(pathValue: string): string {
   return pathValue.includes(" ") ? `"${pathValue}"` : pathValue;
 }
 
+/**
+ * Quote a value that sits in a **colon-delimited field** of a `#selection:` or
+ * `#sym:` reference (their path, and a symbol's name).
+ *
+ * Stricter than {@link quoteReferencePath}, which only quotes on spaces. Inside
+ * `#sym:<path>:<name>:<start>-<end>` a colon is structurally ambiguous — it is
+ * the field separator — so a Windows absolute path (`C:\dev\a.ts`) or a symbol
+ * name containing a colon produces a token no parser can read unless it is
+ * quoted. In an `@ref` there is no following field, so a colon is unambiguous
+ * there and `quoteReferencePath` stays space-only.
+ *
+ * A literal `"` in a path or symbol name is not supported: both the quoted and
+ * the bare form of a field exclude it, and there is no escape syntax.
+ */
+export function quoteReferenceField(value: string): string {
+  return /[\s:]/.test(value) ? `"${value}"` : value;
+}
+
 export function buildFileReferenceValue(relativePath: string): string {
   return quoteReferencePath(normalizeReferencePath(relativePath));
 }
@@ -31,7 +49,8 @@ export function buildSelectionReferenceValue(
   startLine: number,
   endLine: number
 ): string {
-  return `selection:${buildFileReferenceValue(relativePath)}:${startLine}-${endLine}`;
+  const path = quoteReferenceField(normalizeReferencePath(relativePath));
+  return `selection:${path}:${startLine}-${endLine}`;
 }
 
 export function buildSelectionReference(
@@ -48,7 +67,10 @@ export function buildSymbolReferenceValue(
   startLine: number,
   endLine: number
 ): string {
-  return `sym:${buildFileReferenceValue(relativePath)}:${symbolName}:${startLine}-${endLine}`;
+  const path = quoteReferenceField(normalizeReferencePath(relativePath));
+  // Symbol names come verbatim from the language server and routinely contain
+  // spaces (Markdown headings, CSS selectors) or angle brackets/dots/hyphens.
+  return `sym:${path}:${quoteReferenceField(symbolName)}:${startLine}-${endLine}`;
 }
 
 export function buildSymbolReference(

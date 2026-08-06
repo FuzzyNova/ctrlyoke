@@ -27,6 +27,7 @@ import {
   isImageRefPath,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
+import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 
 /**
  * Result of context splitting — separates direct file references from embedded excerpts.
@@ -45,7 +46,6 @@ export interface SplitContext {
  * Handles all ctrlyoke context reference expansion:
  * - @path/to/file (full file)
  * - @path/to/dir/ (directory listing)
- * - #file:path (full file)
  * - #selection:path:line-line (line range)
  * - #sym:path:symbol:line-line (symbol context)
  *
@@ -407,9 +407,14 @@ export class ContextExpander {
       if (!this.effectiveAbsolute) {
         return null;
       }
+      // Not `quotedPath`: these are colon-delimited fields, and effectiveAbsolute
+      // means displayPath is absolute — on Windows `C:\dev\a.ts`, whose drive
+      // colon made the rewritten token unparseable by every ctrlyoke parser
+      // because space-only quoting left it bare.
+      const fieldPath = quoteReferenceField(displayPath);
       return ref.symbolName
-        ? `#sym:${quotedPath}:${ref.symbolName}:${ref.startLine}-${ref.endLine}`
-        : `#selection:${quotedPath}:${ref.startLine}-${ref.endLine}`;
+        ? `#sym:${fieldPath}:${quoteReferenceField(ref.symbolName)}:${ref.startLine}-${ref.endLine}`
+        : `#selection:${fieldPath}:${ref.startLine}-${ref.endLine}`;
     }
 
     // Full-file @ ref — always route through formatFileRef so provider-level

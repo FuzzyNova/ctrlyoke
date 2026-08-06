@@ -4,6 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { ContextExpander } from "../utils/ContextExpander";
+import {
+  parseSelectionReferences,
+  parseSymbolReferences,
+} from "../utils/FileReferenceParser";
 
 suite("ContextExpander.expandContextSplit", () => {
   let workspaceRoot: string;
@@ -819,9 +823,16 @@ suite("ContextExpander.sanitizeReferences", () => {
       "When #sym:root2/b.ts:foo:1-1 runs, log the result."
     );
 
+    // Quoted because an absolute path contains the drive colon, which is also
+    // the field separator — bare, the rewritten token parses back as nothing.
     assert.strictEqual(
       result,
-      `When #sym:${secondFile}:foo:1-1 runs, log the result.`
+      `When #sym:"${secondFile}":foo:1-1 runs, log the result.`
+    );
+    assert.deepStrictEqual(
+      parseSymbolReferences(result).map((ref) => [ref.path, ref.symbolName]),
+      [[secondFile, "foo"]],
+      "rewritten #sym: token must round-trip through the runtime parser"
     );
   });
 
@@ -844,7 +855,15 @@ suite("ContextExpander.sanitizeReferences", () => {
       "See #selection:root2/b.ts:1-2 for context."
     );
 
-    assert.strictEqual(result, `See #selection:${secondFile}:1-2 for context.`);
+    assert.strictEqual(
+      result,
+      `See #selection:"${secondFile}":1-2 for context.`
+    );
+    assert.deepStrictEqual(
+      parseSelectionReferences(result).map((ref) => ref.path),
+      [secondFile],
+      "rewritten #selection: token must round-trip through the runtime parser"
+    );
   });
 
   test("single-root, effectiveAbsolute false: leaves #sym:/#selection: refs unchanged", async () => {

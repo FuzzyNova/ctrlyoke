@@ -50,19 +50,16 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // Matches: @src/ui/, @docs/
     directory: /@([^\s@#"]+\/)/g,
 
-    // #selection:"path with spaces/file":10-20 (quoted path, line range)
-    lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
+    // #selection:<path>:10-20 — path quoted, or bare with no whitespace/`:`/`"`.
+    // Groups: 1 quoted path, 2 bare path, 3 startLine, 4 endLine.
+    lineRange: /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
 
-    // #selection:path:10-20 (unquoted, line range)
-    // Matches: #selection:src/extension.ts:10-20
-    lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
-
-    // #sym:"path with spaces/file":symbol:42-58 (quoted path, symbol reference)
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
-
-    // #sym:path:symbol:42-58 (unquoted, symbol reference)
+    // #sym:<path>:<symbol>:42-58 — both fields quoted or bare, same rule.
+    // Groups: 1/2 quoted/bare path, 3/4 quoted/bare symbol, 5-6 line range.
     // Matches: #sym:src/extension.ts:activate:14-36
-    symbol: /#sym:([^\s:]+):([^:]+):(\d+)-(\d+)/g,
+    //          #sym:"C:/dev/my repo/a.ts":"get value":14-36
+    symbol:
+      /#sym:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
 
   /**
@@ -415,9 +412,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     // Helper to add a line range link from a regex match
     const addLineRangeLink = (match: RegExpExecArray): void => {
-      const relativePath = match[1];
-      const startLine = parseInt(match[2], 10);
-      const endLine = parseInt(match[3], 10);
+      const relativePath = match[1] ?? match[2];
+      const startLine = parseInt(match[3], 10);
+      const endLine = parseInt(match[4], 10);
 
       const decision = this.resolveLinkAccess(
         relativePath,
@@ -453,16 +450,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       links.push(link);
     };
 
-    // Match quoted paths first (#selection:"path with spaces/file":10-20)
-    const quotedPattern = new RegExp(this.patterns.lineRangeQuoted.source, "g");
+    const pattern = new RegExp(this.patterns.lineRange.source, "g");
     let match: RegExpExecArray | null;
-    while ((match = quotedPattern.exec(text)) !== null) {
-      addLineRangeLink(match);
-    }
-
-    // Match plain unquoted paths (#selection:path:10-20)
-    const plainPattern = new RegExp(this.patterns.lineRange.source, "g");
-    while ((match = plainPattern.exec(text)) !== null) {
+    while ((match = pattern.exec(text)) !== null) {
       addLineRangeLink(match);
     }
 
@@ -527,10 +517,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     // Helper to add a symbol link from a regex match
     const addSymbolLink = (match: RegExpExecArray): void => {
-      const relativePath = match[1];
-      const symbolName = match[2];
-      const startLine = parseInt(match[3], 10);
-      const endLine = parseInt(match[4], 10);
+      const relativePath = match[1] ?? match[2];
+      const symbolName = match[3] ?? match[4];
+      const startLine = parseInt(match[5], 10);
+      const endLine = parseInt(match[6], 10);
 
       const decision = this.resolveLinkAccess(
         relativePath,
@@ -570,16 +560,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       links.push(link);
     };
 
-    // Match quoted paths first.
-    const quotedPattern = new RegExp(this.patterns.symbolQuoted.source, "g");
+    const pattern = new RegExp(this.patterns.symbol.source, "g");
     let match: RegExpExecArray | null;
-    while ((match = quotedPattern.exec(text)) !== null) {
-      addSymbolLink(match);
-    }
-
-    // Match plain unquoted paths.
-    const plainPattern = new RegExp(this.patterns.symbol.source, "g");
-    while ((match = plainPattern.exec(text)) !== null) {
+    while ((match = pattern.exec(text)) !== null) {
       addSymbolLink(match);
     }
 

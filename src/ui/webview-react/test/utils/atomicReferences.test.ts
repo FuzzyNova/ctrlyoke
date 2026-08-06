@@ -30,6 +30,67 @@ describe("CodeMirrorEditor context reference parsing", () => {
       },
     ]);
   });
+
+  // These must agree with parseSymbolReferences in src/utils/FileReferenceParser.ts.
+  // The two parsers are separate by design, but a reference this one chips while
+  // the runtime one ignores renders clickable and silently expands to nothing.
+  describe("#sym: field grammar parity with the runtime parser", () => {
+    it.each([
+      ["Foo<T>", "src/a.ts"],
+      ["my-thing", "src/a.ts"],
+      ["Foo.bar", "src/a.ts"],
+      ["#private", "src/a.ts"],
+      ["doThing()", "src/a.ts"],
+    ])("parses the bare symbol name %s", (name, path) => {
+      const token = `#sym:${path}:${name}:1-2`;
+      expect(findContextReferenceMatches(token)).toEqual([
+        {
+          from: 0,
+          to: token.length,
+          type: "symbol",
+          path,
+          symbolName: name,
+          lineStart: "1",
+          lineEnd: "2",
+        },
+      ]);
+    });
+
+    it("parses quoted path and quoted symbol name together", () => {
+      const token = '#sym:"C:/dev/my repo/a.ts":"get value":3-9';
+      expect(findContextReferenceMatches(token)).toEqual([
+        {
+          from: 0,
+          to: token.length,
+          type: "symbol",
+          path: "C:/dev/my repo/a.ts",
+          symbolName: "get value",
+          lineStart: "3",
+          lineEnd: "9",
+        },
+      ]);
+    });
+
+    it("does not let a bare symbol name swallow prose", () => {
+      expect(
+        findContextReferenceMatches("see #sym:a.ts:MyClass, at 12:30-45 ok")
+      ).toEqual([]);
+    });
+
+    it("parses a quoted #selection: path with a drive colon", () => {
+      const token = '#selection:"C:/dev/repo/a.ts":10-20';
+      expect(findContextReferenceMatches(token)).toEqual([
+        {
+          from: 0,
+          to: token.length,
+          type: "lineRange",
+          path: "C:/dev/repo/a.ts",
+          lineStart: "10",
+          lineEnd: "20",
+        },
+      ]);
+    });
+  });
 });
 
 describe("atomic reference presentation", () => {

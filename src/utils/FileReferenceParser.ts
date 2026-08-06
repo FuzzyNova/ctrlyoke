@@ -8,7 +8,11 @@
  * 4. #selection:path:line-line → Line range snippet (ctrlyoke XML)
  * 5. #selection:"path with spaces":line-line → Line range with quoted path
  * 6. #sym:path:SymbolName:line-line → Symbol reference with an encoded line range
- * 7. #sym:"path with spaces":SymbolName:line-line → Quoted-path symbol reference
+ * 7. #sym:"path with spaces":"symbol name":line-line → Quoted symbol reference
+ *
+ * In #selection: and #sym: the path and symbol name are colon-delimited fields:
+ * either bare (no whitespace, `:`, or `"`) or double-quoted. See
+ * ContextReferenceBuilder.quoteReferenceField, which decides that when building.
  *
  * This module provides unified parsing logic used by the HarnessIntegration
  * base class (CLI modes).
@@ -131,12 +135,12 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 
   // Match #selection:path:startLine-endLine for line ranges ONLY
   // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
-  const regex = /#selection:(?:"([^"]+)"|([^\s:]+)):(\d+)-(\d+)/g;
+  const regex = /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
     const [, quotedPath, unquotedPath, startLine, endLine] = match;
-    const filePath = quotedPath || unquotedPath;
+    const filePath = quotedPath ?? unquotedPath;
 
     references.push({
       path: filePath,
@@ -167,37 +171,28 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
 
-  const quotedRegex =
-    /#sym:"([^"]+)":([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
+  // One pattern, quoted-or-bare per field — the same shape
+  // parseSelectionReferences uses. Group 1/2: quoted/bare path, group 3/4:
+  // quoted/bare symbol name, groups 5-6: line range.
+  //
+  // A bare field excludes whitespace, `:`, and `"` so that the only way to
+  // write those is the quoted form (ContextReferenceBuilder.quoteReferenceField
+  // guarantees it). That is what keeps a name from swallowing prose: the older
+  // permissive `[^:]+` name pattern matched "MyClass, at 12" out of
+  // `see #sym:a.ts:MyClass, at 12:30-45`. Everything else a language server
+  // emits — `Foo<T>`, `my-thing`, `Foo.bar`, `#private`, `doThing()` — is a
+  // legal bare name and needs no quoting.
+  const regex =
+    /#sym:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
   let match;
 
-  while ((match = quotedRegex.exec(prompt)) !== null) {
-    const [, filePath, symbolName, startLine, endLine] = match;
-    references.push({
-      path: filePath,
-      symbolName,
-      startLine: parseInt(startLine, 10),
-      endLine: parseInt(endLine, 10),
-      startOffset: match.index,
-      endOffset: match.index + match[0].length,
-    });
-  }
-
-  const plainRegex =
-    /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
-
-  while ((match = plainRegex.exec(prompt)) !== null) {
-    const [, filePath, symbolName, startLine, endLine] = match;
-
-    // Skip if this position was already captured by the quoted regex
-    // (plain regex would match the quoted form too, capturing '"path..."')
-    if (filePath.startsWith('"')) {
-      continue;
-    }
+  while ((match = regex.exec(prompt)) !== null) {
+    const [, quotedPath, barePath, quotedName, bareName, startLine, endLine] =
+      match;
 
     references.push({
-      path: filePath,
-      symbolName,
+      path: quotedPath ?? barePath,
+      symbolName: quotedName ?? bareName,
       startLine: parseInt(startLine, 10),
       endLine: parseInt(endLine, 10),
       startOffset: match.index,

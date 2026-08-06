@@ -246,6 +246,75 @@ suite("FileReferenceParser", () => {
         []
       );
     });
+
+    // A bare symbol name may contain anything except whitespace, ':' and '"'.
+    // These all come straight off a language server and previously failed to
+    // parse, so the reference rendered as a clickable chip but expanded to
+    // nothing.
+    for (const name of [
+      "Foo<T>",
+      "my-thing",
+      "Foo.bar",
+      "#private",
+      "__init__",
+      "operator[]",
+    ]) {
+      test(`parses a bare symbol name containing special characters: ${name}`, () => {
+        const refs = parseSymbolReferences(`#sym:src/a.ts:${name}:1-2`);
+        assert.strictEqual(refs.length, 1);
+        assert.strictEqual(refs[0].symbolName, name);
+      });
+    }
+
+    test("parses a quoted symbol name containing spaces", () => {
+      const refs = parseSymbolReferences('#sym:src/a.ts:"get value":1-2');
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "src/a.ts");
+      assert.strictEqual(refs[0].symbolName, "get value");
+    });
+
+    test("parses a quoted path and a quoted symbol name together", () => {
+      const refs = parseSymbolReferences(
+        '#sym:"C:/dev/my repo/a.ts":"My Heading":3-9'
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "C:/dev/my repo/a.ts");
+      assert.strictEqual(refs[0].symbolName, "My Heading");
+    });
+
+    test("parses a quoted Windows absolute path (drive colon)", () => {
+      const refs = parseSymbolReferences('#sym:"C:\\dev\\repo\\a.ts":foo:1-1');
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "C:\\dev\\repo\\a.ts");
+      assert.strictEqual(refs[0].symbolName, "foo");
+    });
+
+    test("a bare name never swallows surrounding prose", () => {
+      // The permissive `[^:]+` name pattern matched "MyClass, at 12" here.
+      assert.deepStrictEqual(
+        parseSymbolReferences("see #sym:a.ts:MyClass, at 12:30-45 ok"),
+        []
+      );
+    });
+
+    test("a nearby time-like token does not disturb a real reference", () => {
+      const refs = parseSymbolReferences(
+        "the build ran 12:30-45 and #sym:a.ts:Foo:1-2 too"
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].symbolName, "Foo");
+    });
+
+    test("offsets cover the whole token including quoted fields", () => {
+      const token = '#sym:"src/a b.ts":"get value":1-2';
+      const text = `pre ${token} post`;
+      const refs = parseSymbolReferences(text);
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(
+        text.slice(refs[0].startOffset, refs[0].endOffset),
+        token
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
