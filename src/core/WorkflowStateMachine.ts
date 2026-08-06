@@ -398,15 +398,11 @@ export class WorkflowStateMachine {
       return false;
     }
 
-    if (this._pausedTime !== undefined) {
-      this._totalPausedDuration += Date.now() - this._pausedTime;
-      this._pausedTime = undefined;
-    }
+    this.absorbDormantDuration();
 
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.RUNNING;
     this._stopped = false;
-    this._executionEndTime = undefined;
     this.emitTransition("startExecution", previous);
     return true;
   }
@@ -471,14 +467,11 @@ export class WorkflowStateMachine {
       return false;
     }
 
-    if (this._pausedTime !== undefined) {
-      this._totalPausedDuration += Date.now() - this._pausedTime;
-      this._pausedTime = undefined;
-    }
+    this.absorbDormantDuration();
+
     const previous = this.getSnapshot();
     this._stopped = false;
     this._status = EXECUTION_STATES.RUNNING;
-    this._executionEndTime = undefined;
     this.emitTransition("resume", previous);
     return true;
   }
@@ -657,5 +650,43 @@ export class WorkflowStateMachine {
       this._pausedTime = undefined;
     }
     this._executionEndTime = this._startTime !== undefined ? now : undefined;
+  }
+
+  /**
+   * Inverse of finishExecutionTimer(): fold the interval during which the timer
+   * was not advancing into totalPausedDuration, so re-entering RUNNING picks the
+   * clock back up where it stopped.
+   *
+   * Two intervals qualify, and finishExecutionTimer() guarantees at most one is
+   * open at a time:
+   *   - pausedTime        — a confirmed PAUSED window
+   *   - executionEndTime  — a terminal freeze (COMPLETED/STOPPED/ERROR)
+   *
+   * The terminal one is easy to overlook because a terminal run looks finished,
+   * but appending a step to a completed run re-opens that same run rather than
+   * starting a new one — `startExecutionTimer()` is then a no-op (startTime is
+   * already set), so without this the dormant gap is counted as execution time
+   * and the dashboard's elapsed timer reads the age of the run instead of its
+   * duration. A run continued the next day showed "4461:39".
+   *
+   * The reference-time arithmetic mirrors getActiveExecutionTime() exactly, so
+   * the reported elapsed time is continuous across the transition.
+   */
+  private absorbDormantDuration(): void {
+    const now = Date.now();
+    // A terminal freeze stopped the clock, so it — not now — is what any open
+    // pause window was measured against, exactly as getActiveExecutionTime()
+    // resolves its own reference time.
+    const frozenAt = this._executionEndTime ?? now;
+
+    if (this._pausedTime !== undefined) {
+      this._totalPausedDuration += Math.max(0, frozenAt - this._pausedTime);
+      this._pausedTime = undefined;
+    }
+
+    if (this._executionEndTime !== undefined) {
+      this._totalPausedDuration += Math.max(0, now - this._executionEndTime);
+      this._executionEndTime = undefined;
+    }
   }
 }

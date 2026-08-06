@@ -307,6 +307,69 @@ suite("WorkflowStateMachine", () => {
     );
   });
 
+  test("excludes the dormant gap when a completed run is continued days later", async () => {
+    const runtime = new WorkflowStateMachine();
+    const now = Date.now();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+
+    // A run that executed for five minutes and completed three days ago — the
+    // shape an append-to-completed continuation restores before re-running.
+    runtime.restore({
+      status: EXECUTION_STATES.COMPLETED,
+      stopped: false,
+      startTime: now - threeDaysMs - 300_000,
+      totalPausedDuration: 0,
+      executionEndTime: now - threeDaysMs,
+    });
+
+    const completedTime = runtime.getActiveExecutionTime();
+    assert.ok(
+      Math.abs(completedTime - 300_000) < 1_000,
+      `Expected the frozen duration to be the 5min it ran, got ${completedTime}ms`
+    );
+
+    runtime.startExecution();
+
+    // startTime is already set, so the timer is never re-based on continuation.
+    assert.strictEqual(runtime.startExecutionTimer(), false);
+
+    const resumedTime = runtime.getActiveExecutionTime();
+    assert.ok(
+      Math.abs(resumedTime - completedTime) < 1_000,
+      `Expected elapsed time to be continuous across the continuation, got ${resumedTime}ms`
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(
+      runtime.getActiveExecutionTime() > resumedTime,
+      "the timer should advance again once running"
+    );
+  });
+
+  test("excludes the dormant gap when a stopped run is resumed later", async () => {
+    const runtime = new WorkflowStateMachine();
+    const now = Date.now();
+
+    runtime.restore({
+      status: EXECUTION_STATES.STOPPED,
+      stopped: true,
+      startTime: now - 90_000,
+      totalPausedDuration: 0,
+      executionEndTime: now - 60_000,
+    });
+
+    const stoppedTime = runtime.getActiveExecutionTime();
+    assert.ok(Math.abs(stoppedTime - 30_000) < 1_000);
+
+    runtime.resume();
+
+    const resumedTime = runtime.getActiveExecutionTime();
+    assert.ok(
+      Math.abs(resumedTime - stoppedTime) < 1_000,
+      `Expected the stopped interval to be excluded, got ${resumedTime}ms`
+    );
+  });
+
   test("tracks the prompt-phase start separately from the whole-step attempt start", () => {
     const runtime = new WorkflowStateMachine();
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
