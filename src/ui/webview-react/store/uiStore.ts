@@ -11,12 +11,15 @@ import { type FooterPicker } from "../types/messages";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
   HistorySearchIndexState,
+  HistorySearchFilters,
   HistorySearchResult,
   RunSummary,
 } from "@root/types/WorkflowTimelineTypes";
+import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import type {
   WorkflowViewAddress,
   WorkflowRunNavigationSummary,
+  WorkflowKey,
 } from "@root/types/CtrlYokeTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isWorkflowRunning } from "@utils/status";
@@ -28,7 +31,16 @@ import {
 import {
   USER_FEEDBACK_SEVERITY,
   type UserFeedbackSeverity,
+  HISTORY_EVENT_KINDS,
 } from "@root/types/DashboardConstants";
+import {
+  ALL_WORKFLOW_HARNESSES,
+  ALL_WORKFLOW_STATES,
+  DEFAULT_DATE_RANGE_FILTER,
+  getDateEndMs,
+  getDateStartMs,
+  type DateRangeFilter,
+} from "@utils/dateRangeFilter";
 
 let runViewRequestSequence = 0;
 let toastSequence = 0;
@@ -230,6 +242,76 @@ export interface PendingOutputFindRequest {
   preferredTarget?: OutputExecutionTarget;
 }
 
+export const ALL_HISTORY_EVENT_KINDS = Object.values(
+  HISTORY_EVENT_KINDS
+) as HistoryEventKind[];
+
+export interface HistorySearchFilterState {
+  eventKinds: HistoryEventKind[];
+  harnesses: string[];
+  executionStates: string[];
+  pathContains: string;
+  dateRange: DateRangeFilter;
+  workflowOnly: boolean;
+}
+
+export const DEFAULT_HISTORY_SEARCH_FILTERS = {
+  eventKinds: ALL_HISTORY_EVENT_KINDS,
+  harnesses: ALL_WORKFLOW_HARNESSES,
+  executionStates: ALL_WORKFLOW_STATES,
+  pathContains: "",
+  dateRange: { ...DEFAULT_DATE_RANGE_FILTER },
+  workflowOnly: false,
+} satisfies HistorySearchFilterState;
+
+export function createDefaultHistorySearchFilters(): HistorySearchFilterState {
+  return {
+    eventKinds: [...DEFAULT_HISTORY_SEARCH_FILTERS.eventKinds],
+    harnesses: [...DEFAULT_HISTORY_SEARCH_FILTERS.harnesses],
+    executionStates: [...DEFAULT_HISTORY_SEARCH_FILTERS.executionStates],
+    pathContains: DEFAULT_HISTORY_SEARCH_FILTERS.pathContains,
+    dateRange: { ...DEFAULT_HISTORY_SEARCH_FILTERS.dateRange },
+    workflowOnly: DEFAULT_HISTORY_SEARCH_FILTERS.workflowOnly,
+  };
+}
+
+export function getHistorySearchActiveFilterCount(
+  filters: HistorySearchFilterState
+): number {
+  return [
+    filters.eventKinds.length !== ALL_HISTORY_EVENT_KINDS.length,
+    filters.harnesses.length !== ALL_WORKFLOW_HARNESSES.length,
+    filters.executionStates.length !== ALL_WORKFLOW_STATES.length,
+    filters.pathContains.trim().length > 0,
+    filters.dateRange.preset !== DEFAULT_DATE_RANGE_FILTER.preset,
+    filters.dateRange.from.length > 0,
+    filters.dateRange.to.length > 0,
+    filters.workflowOnly,
+  ].filter(Boolean).length;
+}
+
+export function toHistorySearchFilters(
+  filters: HistorySearchFilterState,
+  workflowKey?: WorkflowKey
+): HistorySearchFilters {
+  const since = getDateStartMs(filters.dateRange.from);
+  const until = getDateEndMs(filters.dateRange.to);
+
+  return {
+    eventKinds: filters.eventKinds,
+    harnesses: filters.harnesses,
+    executionStates: filters.executionStates,
+    ...(filters.pathContains.trim()
+      ? { pathContains: filters.pathContains.trim() }
+      : {}),
+    ...(since !== null ? { since } : {}),
+    ...(until !== null ? { until } : {}),
+    ...(filters.workflowOnly && workflowKey
+      ? { workflowKeys: [workflowKey] }
+      : {}),
+  };
+}
+
 export function areOutputScrollTargetsEqual(
   left: OutputScrollTarget | undefined,
   right: OutputScrollTarget | undefined
@@ -303,6 +385,7 @@ interface UiState {
   historySearchNextCursor?: string;
   historySearchHasMore: boolean;
   historySearchIndexState: HistorySearchIndexState;
+  historySearchFilters: HistorySearchFilterState;
   pendingHistorySearchNavigation: {
     address: Extract<WorkflowViewAddress, { kind: "run" }>;
     findQuery: string;
@@ -524,6 +607,8 @@ interface UiActions {
   closeHistorySearch: () => void;
   toggleHistorySearch: () => void;
   setHistorySearchQuery: (query: string) => void;
+  setHistorySearchFilters: (filters: HistorySearchFilterState) => void;
+  resetHistorySearchFilters: () => void;
   setHistorySearchResults: (
     results: HistorySearchResult[],
     loading: boolean,
@@ -748,6 +833,7 @@ const initialState: UiState = {
   historySearchNextCursor: undefined,
   historySearchHasMore: false,
   historySearchIndexState: "ready",
+  historySearchFilters: createDefaultHistorySearchFilters(),
   pendingHistorySearchNavigation: null,
   newWorkflowModalOpen: false,
   templates: [],
@@ -974,6 +1060,28 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchNextCursor: undefined,
           historySearchHasMore: false,
           historySearchTotalCount: 0,
+        }),
+
+      setHistorySearchFilters: (filters) =>
+        set({
+          historySearchFilters: filters,
+          historySearchResults: [],
+          historySearchLoading: false,
+          historySearchLoadingMore: false,
+          historySearchTotalCount: 0,
+          historySearchNextCursor: undefined,
+          historySearchHasMore: false,
+        }),
+
+      resetHistorySearchFilters: () =>
+        set({
+          historySearchFilters: createDefaultHistorySearchFilters(),
+          historySearchResults: [],
+          historySearchLoading: false,
+          historySearchLoadingMore: false,
+          historySearchTotalCount: 0,
+          historySearchNextCursor: undefined,
+          historySearchHasMore: false,
         }),
 
       setHistorySearchResults: (results, loading, options) =>
@@ -1543,6 +1651,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchNextCursor: undefined,
           historySearchHasMore: false,
           historySearchIndexState: "ready",
+          historySearchFilters: createDefaultHistorySearchFilters(),
           pendingHistorySearchNavigation: null,
           pendingFindRequest: null,
           recentWorkflows: [],

@@ -3,15 +3,28 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useUiStore } from "@store/uiStore";
+import {
+  ALL_HISTORY_EVENT_KINDS,
+  createDefaultHistorySearchFilters,
+  getHistorySearchActiveFilterCount,
+  toHistorySearchFilters,
+  type HistorySearchFilterState,
+} from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import { HISTORY_EVENT_KINDS } from "@root/types/DashboardConstants";
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
-import { ExitButton } from "@components/shared";
+import {
+  DateRangeFilterControls,
+  ExitButton,
+  MultiCheckboxDropdown,
+} from "@components/shared";
+import { formatMultiFilterLabel } from "@utils/filterLabels";
 
 const RESULT_LIMIT = 50;
 
@@ -71,6 +84,74 @@ const EVENT_KIND_BADGES: Record<HistoryEventKind, string> = {
     "bg-[var(--status-success)]/20 text-foreground",
 };
 
+const EVENT_KIND_OPTIONS: Array<{
+  value: HistoryEventKind;
+  label: string;
+  group: string;
+}> = [
+  { value: HISTORY_EVENT_KINDS.FILE_READ, label: "File Read", group: "File" },
+  {
+    value: HISTORY_EVENT_KINDS.FILE_WRITE,
+    label: "File Write",
+    group: "File",
+  },
+  { value: HISTORY_EVENT_KINDS.FILE_EDIT, label: "File Edit", group: "File" },
+  {
+    value: HISTORY_EVENT_KINDS.FILE_DELETE,
+    label: "File Delete",
+    group: "File",
+  },
+  { value: HISTORY_EVENT_KINDS.BASH, label: "Bash", group: "Execution" },
+  {
+    value: HISTORY_EVENT_KINDS.CLI_COMMAND,
+    label: "CLI Command",
+    group: "Execution",
+  },
+  { value: HISTORY_EVENT_KINDS.TOOL, label: "Tool", group: "Execution" },
+  {
+    value: HISTORY_EVENT_KINDS.MCP_TOOL,
+    label: "MCP Tool",
+    group: "Execution",
+  },
+  {
+    value: HISTORY_EVENT_KINDS.WEB_SEARCH,
+    label: "Web Search",
+    group: "Execution",
+  },
+  {
+    value: HISTORY_EVENT_KINDS.PROMPT,
+    label: "Prompt",
+    group: "Conversation",
+  },
+  {
+    value: HISTORY_EVENT_KINDS.RESPONSE,
+    label: "Response",
+    group: "Conversation",
+  },
+  {
+    value: HISTORY_EVENT_KINDS.THINKING,
+    label: "Thinking",
+    group: "Conversation",
+  },
+  {
+    value: HISTORY_EVENT_KINDS.COMPACTION,
+    label: "Compaction",
+    group: "Conversation",
+  },
+  { value: HISTORY_EVENT_KINDS.SCRIPT, label: "Script", group: "Script" },
+  {
+    value: HISTORY_EVENT_KINDS.PRE_CONDITION,
+    label: "Pre-condition",
+    group: "Script",
+  },
+  {
+    value: HISTORY_EVENT_KINDS.END_CONDITION,
+    label: "End-condition",
+    group: "Script",
+  },
+  { value: HISTORY_EVENT_KINDS.STATUS, label: "Status", group: "Run" },
+];
+
 function truncateSnippet(snippet: string, maxLength = 80): string {
   const normalized = snippet.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) {
@@ -90,14 +171,47 @@ export function HistorySearchDrawer() {
   const nextCursor = useUiStore((s) => s.historySearchNextCursor);
   const hasMore = useUiStore((s) => s.historySearchHasMore);
   const indexState = useUiStore((s) => s.historySearchIndexState);
+  const historySearchFilters = useUiStore((s) => s.historySearchFilters);
+  const workflowKey = useUiStore((s) => s.displayedViewAddress?.workflowKey);
   const closeHistorySearch = useUiStore((s) => s.closeHistorySearch);
   const setHistorySearchQuery = useUiStore((s) => s.setHistorySearchQuery);
+  const setHistorySearchFilters = useUiStore((s) => s.setHistorySearchFilters);
+  const resetHistorySearchFilters = useUiStore(
+    (s) => s.resetHistorySearchFilters
+  );
   const setHistorySearchResults = useUiStore((s) => s.setHistorySearchResults);
   const setPendingHistorySearchNavigation = useUiStore(
     (s) => s.setPendingHistorySearchNavigation
   );
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const filtersRef = useRef<HistorySearchFilterState>(historySearchFilters);
+  filtersRef.current = historySearchFilters;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const trimmedQuery = query.trim();
+  const activeFilterCount =
+    getHistorySearchActiveFilterCount(historySearchFilters);
+
+  const issueSearch = useCallback(
+    (filters: HistorySearchFilterState) => {
+      if (trimmedQuery.length < 2) {
+        return;
+      }
+
+      setHistorySearchResults([], true, {
+        totalCount: 0,
+        hasMore: false,
+        nextCursor: undefined,
+      });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SEARCH_HISTORY,
+        query: trimmedQuery,
+        limit: RESULT_LIMIT,
+        filters: toHistorySearchFilters(filters, workflowKey),
+      });
+    },
+    [setHistorySearchResults, trimmedQuery, vscode, workflowKey]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -112,7 +226,6 @@ export function HistorySearchDrawer() {
       return;
     }
 
-    const trimmedQuery = query.trim();
     if (trimmedQuery.length < 2) {
       setHistorySearchResults([], false, {
         totalCount: 0,
@@ -124,20 +237,11 @@ export function HistorySearchDrawer() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      setHistorySearchResults([], true, {
-        totalCount: 0,
-        hasMore: false,
-        nextCursor: undefined,
-      });
-      vscode.postMessage({
-        type: MESSAGE_TYPES.SEARCH_HISTORY,
-        query: trimmedQuery,
-        limit: RESULT_LIMIT,
-      });
+      issueSearch(filtersRef.current);
     }, 400);
 
     return () => window.clearTimeout(timeoutId);
-  }, [isOpen, query, setHistorySearchResults, vscode]);
+  }, [isOpen, issueSearch, query, setHistorySearchResults, trimmedQuery]);
 
   const navigateToResult = useCallback(
     (result: HistorySearchResult) => {
@@ -204,7 +308,19 @@ export function HistorySearchDrawer() {
     [closeHistorySearch, navigateToResult, results]
   );
 
-  const trimmedQuery = query.trim();
+  const handleFilterChange = useCallback(
+    (nextFilters: HistorySearchFilterState) => {
+      setHistorySearchFilters(nextFilters);
+      issueSearch(nextFilters);
+    },
+    [issueSearch, setHistorySearchFilters]
+  );
+
+  const handleResetFilters = useCallback(() => {
+    const defaults = createDefaultHistorySearchFilters();
+    resetHistorySearchFilters();
+    issueSearch(defaults);
+  }, [issueSearch, resetHistorySearchFilters]);
 
   const loadMore = useCallback(() => {
     if (!nextCursor || loadingMore || loading || !hasMore) {
@@ -222,24 +338,33 @@ export function HistorySearchDrawer() {
       query: trimmedQuery,
       limit: RESULT_LIMIT,
       cursor: nextCursor,
+      filters: toHistorySearchFilters(historySearchFilters, workflowKey),
     });
   }, [
     hasMore,
     loading,
     loadingMore,
+    historySearchFilters,
     nextCursor,
     setHistorySearchResults,
     totalCount,
     trimmedQuery,
     vscode,
+    workflowKey,
   ]);
 
   const summaryLabel = useMemo(() => {
     if (trimmedQuery.length < 2 || loading || totalCount === 0) {
       return "";
     }
-    return `Showing ${results.length} of ${totalCount}`;
-  }, [loading, results.length, totalCount, trimmedQuery.length]);
+    return `Showing ${results.length} of ${totalCount}${activeFilterCount > 0 ? " (filtered)" : ""}`;
+  }, [
+    activeFilterCount,
+    loading,
+    results.length,
+    totalCount,
+    trimmedQuery.length,
+  ]);
 
   return (
     <div
@@ -282,9 +407,79 @@ export function HistorySearchDrawer() {
                 className="h-9 w-full rounded border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-none focus:border-focus-border"
               />
             </div>
-            {/* Filter controls belong here, as a sibling of the input, so adding
-                them later does not reflow the centered column. */}
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((open) => !open)}
+              aria-label={`History search filters${activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}`}
+              aria-expanded={filtersOpen}
+              aria-controls="history-search-filters"
+              title="History search filters"
+              className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            >
+              <i className="codicon codicon-filter text-sm" />
+              {activeFilterCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-btn-bg px-1 text-[10px] font-semibold text-btn-fg"
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
           </div>
+
+          {filtersOpen && (
+            <div
+              id="history-search-filters"
+              className="mt-2 flex min-w-0 items-start gap-2"
+            >
+              <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto pb-0.5">
+                <div className="flex-shrink-0 text-xs text-description-fg">
+                  <MultiCheckboxDropdown
+                    id="history-event-kind-filter"
+                    selectedValues={historySearchFilters.eventKinds}
+                    onChange={(eventKinds) =>
+                      handleFilterChange({
+                        ...historySearchFilters,
+                        eventKinds: eventKinds as HistoryEventKind[],
+                      })
+                    }
+                    options={EVENT_KIND_OPTIONS}
+                    placeholder="No Events"
+                    buttonLabel={formatMultiFilterLabel(
+                      historySearchFilters.eventKinds,
+                      ALL_HISTORY_EVENT_KINDS,
+                      "Events",
+                      EVENT_KIND_OPTIONS
+                    )}
+                    className="w-fit min-w-[112px]"
+                    dropdownMaxHeight="260px"
+                  />
+                </div>
+
+                <DateRangeFilterControls
+                  value={historySearchFilters.dateRange}
+                  onChange={(dateRange) =>
+                    handleFilterChange({
+                      ...historySearchFilters,
+                      dateRange,
+                    })
+                  }
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                disabled={activeFilterCount === 0}
+                title="Clear history search filters"
+                aria-label="Clear history search filters"
+                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
+              >
+                <i className="codicon codicon-clear-all text-xxs" />
+              </button>
+            </div>
+          )}
 
           {trimmedQuery.length >= 2 && (
             <div className="mt-2 flex h-5 items-center justify-between gap-3 text-sm text-description-fg">

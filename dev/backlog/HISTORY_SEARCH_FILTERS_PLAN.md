@@ -460,10 +460,14 @@ Included filters in the cursor hash and applied them through one shared
 consume them as a pure refactor, with focused utility coverage added.
 
 **Phase 6 — Drawer filter bar.** ✅ R5 landed: `MultiCheckboxDropdown` now has
-grouped section headers and local Escape handling. The remaining toggle button,
-filter bar, uiStore slice, re-issue-on-change, active-count badge, and
-`(filtered)` summary suffix are still pending. Land the dropdown change first
-and on its own — it touches a component three other surfaces already use.
+grouped section headers and local Escape handling. Step 6 is now landed too:
+the drawer stores transient filter state in `uiStore`, exposes the grouped event
+kind and shared date-range controls, re-issues searches immediately on discrete
+filter changes, carries filters through pagination, resets the cursor/results on
+new searches, and shows the active-count badge plus `(filtered)` summary.
+Step 7 still owes the harness, run-outcome, path, and workflow-scope controls
+in the same bar; the store defaults and payload plumbing already include those
+filter dimensions for that work.
 
 **Phase 7 (v2) — Facets and errors.** `isError` on documents; return per-kind
 counts in `HistorySearchResponse` so the event-type dropdown can show
