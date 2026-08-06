@@ -298,9 +298,21 @@ export function toHistorySearchFilters(
   const until = getDateEndMs(filters.dateRange.to);
 
   return {
-    eventKinds: filters.eventKinds,
-    harnesses: filters.harnesses,
-    executionStates: filters.executionStates,
+    // A full selection is not a narrowing, so it is omitted from the payload
+    // entirely. This matters most for `harnesses`: the backend excludes
+    // unattributed documents whenever a harness filter is present, and status
+    // messages and script/pre-condition/end-condition output legitimately have
+    // no harness. Sending the complete list would silently hide every one of
+    // those rows with no filter actually turned on.
+    ...(filters.eventKinds.length < ALL_HISTORY_EVENT_KINDS.length
+      ? { eventKinds: filters.eventKinds }
+      : {}),
+    ...(filters.harnesses.length < ALL_WORKFLOW_HARNESSES.length
+      ? { harnesses: filters.harnesses }
+      : {}),
+    ...(filters.executionStates.length < ALL_WORKFLOW_STATES.length
+      ? { executionStates: filters.executionStates }
+      : {}),
     ...(filters.pathContains.trim()
       ? { pathContains: filters.pathContains.trim() }
       : {}),

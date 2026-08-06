@@ -64,6 +64,28 @@ afterEach(() => {
 });
 
 describe("HistorySearchDrawer filters", () => {
+  it("sends no narrowing filters while every option is still selected", () => {
+    useUiStore.getState().openHistorySearch();
+    useUiStore.getState().setHistorySearchQuery("needle");
+    render(<HistorySearchDrawer />);
+
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+
+    // A full selection must not reach the backend as a filter. `harnesses` is
+    // the dangerous one: the backend drops documents with no harness whenever
+    // that filter is present, and status messages plus script/pre-condition/
+    // end-condition output legitimately have none. Sending the complete list
+    // would hide all of them with no filter actually turned on.
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {},
+    });
+  });
+
   it("re-issues a filtered search immediately and clears the cursor", () => {
     renderSearch();
     act(() => {
@@ -86,8 +108,6 @@ describe("HistorySearchDrawer filters", () => {
       limit: 50,
       filters: {
         eventKinds: ALL_HISTORY_EVENT_KINDS.filter((kind) => kind !== "prompt"),
-        harnesses: ALL_WORKFLOW_HARNESSES,
-        executionStates: ALL_WORKFLOW_STATES,
       },
     });
     expect(useUiStore.getState().historySearchNextCursor).toBeUndefined();
@@ -115,9 +135,6 @@ describe("HistorySearchDrawer filters", () => {
       limit: 50,
       cursor: "next-cursor",
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
-        harnesses: ALL_WORKFLOW_HARNESSES,
-        executionStates: ALL_WORKFLOW_STATES,
         pathContains: "src/ui",
       },
     });
@@ -136,11 +153,9 @@ describe("HistorySearchDrawer filters", () => {
       query: "needle",
       limit: 50,
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
         harnesses: ALL_WORKFLOW_HARNESSES.filter(
           (harness) => harness !== HARNESS_IDS.CLAUDE_CLI
         ),
-        executionStates: ALL_WORKFLOW_STATES,
       },
     });
   });
@@ -160,8 +175,6 @@ describe("HistorySearchDrawer filters", () => {
       query: "needle",
       limit: 50,
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
-        harnesses: ALL_WORKFLOW_HARNESSES,
         executionStates: ALL_WORKFLOW_STATES.filter(
           (state) => state !== EXECUTION_STATES.ERROR
         ),
@@ -194,9 +207,6 @@ describe("HistorySearchDrawer filters", () => {
       query: "needle",
       limit: 50,
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
-        harnesses: ALL_WORKFLOW_HARNESSES,
-        executionStates: ALL_WORKFLOW_STATES,
         pathContains: "webview-react",
       },
     });
@@ -233,9 +243,6 @@ describe("HistorySearchDrawer filters", () => {
       query: "needle",
       limit: 50,
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
-        harnesses: ALL_WORKFLOW_HARNESSES,
-        executionStates: ALL_WORKFLOW_STATES,
         workflowKeys: ["workflow-1"],
       },
     });
@@ -284,9 +291,6 @@ describe("HistorySearchDrawer filters", () => {
 
     expect(useUiStore.getState().historySearchFilters).toEqual(
       expect.objectContaining({
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
-        harnesses: ALL_WORKFLOW_HARNESSES,
-        executionStates: ALL_WORKFLOW_STATES,
         pathContains: "",
         workflowOnly: false,
       })
@@ -297,9 +301,6 @@ describe("HistorySearchDrawer filters", () => {
       query: "needle",
       limit: 50,
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS,
-        harnesses: ALL_WORKFLOW_HARNESSES,
-        executionStates: ALL_WORKFLOW_STATES,
       },
     });
   });

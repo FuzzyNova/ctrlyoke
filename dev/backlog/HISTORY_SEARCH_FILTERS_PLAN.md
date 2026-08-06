@@ -30,8 +30,7 @@ Partial<HistorySearchQuery>` (`src/types/WebviewMessageTypes.ts:1139`).
 - `HistorySearchDrawer` sends **no** `filters` on either the initial search or
   the "Load more" page.
 
-So the backend work is mostly about making the taxonomy worth filtering on, and
-the frontend work is net-new UI.
+Phases 1-6 have all landed; Phase 7 and R7 remain open for v2.
 
 ### The taxonomy problem
 
@@ -476,8 +475,9 @@ materializes the full `matches` array before paging, so bucketing is nearly free
 
 ## Gotchas
 
-- **`MAX_INDEXED_TEXT_LENGTH = 2000`** caps every candidate
-  (`HistorySearchIndexService.ts:46`). Diff bodies are the most likely victim, so
+- **`MAX_INDEXED_TEXT_LENGTH = 2000`** caps every indexed candidate
+  (`HistorySearchIndexService.ts:51`, passed to the extractor as `maxTextLength`;
+  the fallback path deliberately passes none). Diff bodies are the most likely victim, so
   a `fileEdit`+`diff` filter has a real blind spot on large hunks. Do not raise
   the cap — it exists because the index once outgrew the history and OOM'd the
   extension host. Document the limit in the UI only if users hit it.
@@ -492,20 +492,25 @@ materializes the full `matches` array before paging, so bucketing is nearly free
 - **Filter changes must reset the cursor and the accumulated result array**, not
   append. The existing `setHistorySearchResults(..., { append: true })` path is
   only for "Load more".
-- **"Load more" must resend the active filters.** `loadMore` currently posts
-  `{ query, limit, cursor }` (`HistorySearchDrawer.tsx:199-215`). Omitting filters
-  on the paged request would page an unfiltered result set against a filtered
+- **"Load more" must resend the active filters** — it does. Omitting filters on
+  the paged request would page an unfiltered result set against a filtered
   offset — the same class of corruption as the cursor hash, from a different
   direction.
-- **Escape will close the whole drawer while a filter dropdown is open.** The
-  drawer registers a document-level `keydown` listener that unconditionally calls
-  `closeHistorySearch` (`HistorySearchDrawer.tsx:170-179`), and neither
-  `MultiCheckboxDropdown` nor `DropdownPortal` handles Escape at all — so the
-  first Escape dismisses the drawer, the query, the results, and the half-built
-  filter set together. Fix in the dropdown, not the drawer: give
-  `MultiCheckboxDropdown` its own Escape handler that closes the popup and calls
-  `stopPropagation`, so the drawer's listener never sees the event. This also
-  fixes the same latent problem in `WorkflowStatus`.
+- **A full selection must never be sent as a filter.** `matchesFilters` treats a
+  present, non-empty `harnesses` array as a narrowing and therefore drops every
+  document with no harness. Status messages and script / pre-condition /
+  end-condition output legitimately have none, so a client that sends the
+  complete harness list at its all-selected default silently hides all of them
+  with no filter actually turned on. `toHistorySearchFilters`
+  (`src/ui/webview-react/store/uiStore.ts`) omits `eventKinds`, `harnesses`, and
+  `executionStates` whenever the selection still covers every option. Any future
+  filter that gains an "unattributed" value needs the same treatment.
+- **Escape used to close the whole drawer while a filter dropdown was open** —
+  fixed in `MultiCheckboxDropdown`, not the drawer, so `WorkflowStatus` benefits
+  too. The dropdown registers its own **capture-phase** document `keydown`
+  listener and calls `stopPropagation`, so the drawer's bubble-phase listener
+  never sees the event. Keep it capture-phase: a bubble-phase handler on the
+  popup would not beat a document-level listener.
 
 ## Testing
 
