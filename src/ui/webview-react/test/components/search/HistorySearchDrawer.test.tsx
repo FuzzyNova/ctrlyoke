@@ -1,16 +1,19 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { HistorySearchDrawer } from "@components/search/HistorySearchDrawer";
+import { useWorkflowStore } from "@store/workflowStore";
 import {
   ALL_HISTORY_EVENT_KINDS,
   DEFAULT_HISTORY_SEARCH_FILTERS,
   useUiStore,
+  type HistorySearchFilterState,
 } from "@store/uiStore";
 import {
   ALL_WORKFLOW_HARNESSES,
   ALL_WORKFLOW_STATES,
 } from "@utils/dateRangeFilter";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { EXECUTION_STATES, HARNESS_IDS } from "@root/types/DashboardConstants";
 
 const postMessage = vi.mocked(window.vscodeApi!.postMessage);
 
@@ -28,7 +31,9 @@ const result = {
   matchContext: "Prompt 1",
 };
 
-function renderSearch(filters = DEFAULT_HISTORY_SEARCH_FILTERS) {
+function renderSearch(
+  filters: HistorySearchFilterState = DEFAULT_HISTORY_SEARCH_FILTERS
+) {
   useUiStore.getState().openHistorySearch();
   useUiStore.getState().setHistorySearchFilters({
     ...filters,
@@ -50,6 +55,7 @@ function renderSearch(filters = DEFAULT_HISTORY_SEARCH_FILTERS) {
 beforeEach(() => {
   vi.useFakeTimers();
   useUiStore.getState().resetUi();
+  useWorkflowStore.setState({ workflowName: null });
   postMessage.mockClear();
 });
 
@@ -117,6 +123,124 @@ describe("HistorySearchDrawer filters", () => {
     });
   });
 
+  it("re-issues immediately when the harness filter changes", () => {
+    renderSearch();
+    fireEvent.click(
+      screen.getByRole("button", { name: "History search filters" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "All Harnesses" }));
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {
+        eventKinds: ALL_HISTORY_EVENT_KINDS,
+        harnesses: ALL_WORKFLOW_HARNESSES.filter(
+          (harness) => harness !== HARNESS_IDS.CLAUDE_CLI
+        ),
+        executionStates: ALL_WORKFLOW_STATES,
+      },
+    });
+  });
+
+  it("re-issues immediately when the run outcome filter changes", () => {
+    renderSearch();
+    fireEvent.click(
+      screen.getByRole("button", { name: "History search filters" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "All Outcomes" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: EXECUTION_STATES.ERROR })
+    );
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {
+        eventKinds: ALL_HISTORY_EVENT_KINDS,
+        harnesses: ALL_WORKFLOW_HARNESSES,
+        executionStates: ALL_WORKFLOW_STATES.filter(
+          (state) => state !== EXECUTION_STATES.ERROR
+        ),
+      },
+    });
+  });
+
+  it("debounces file path changes", () => {
+    renderSearch();
+    fireEvent.click(
+      screen.getByRole("button", { name: "History search filters" })
+    );
+    const pathInput = screen.getByRole("textbox", {
+      name: "File path contains",
+    });
+
+    fireEvent.change(pathInput, { target: { value: "webview-react" } });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(399);
+    });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {
+        eventKinds: ALL_HISTORY_EVENT_KINDS,
+        harnesses: ALL_WORKFLOW_HARNESSES,
+        executionStates: ALL_WORKFLOW_STATES,
+        pathContains: "webview-react",
+      },
+    });
+  });
+
+  it("hides workflow scope without a lineage and sends its key when checked", () => {
+    renderSearch();
+    fireEvent.click(
+      screen.getByRole("button", { name: "History search filters" })
+    );
+    expect(
+      screen.queryByRole("checkbox", { name: /This workflow only/ })
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: {
+          workflowKey: "workflow-1" as never,
+          kind: "run",
+          runRef: "run-1" as never,
+        },
+      });
+      useWorkflowStore.setState({ workflowName: "Search Workflow" });
+    });
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "This workflow only: Search Workflow",
+      })
+    );
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {
+        eventKinds: ALL_HISTORY_EVENT_KINDS,
+        harnesses: ALL_WORKFLOW_HARNESSES,
+        executionStates: ALL_WORKFLOW_STATES,
+        workflowKeys: ["workflow-1"],
+      },
+    });
+  });
+
   it("shows the number of non-default active filters", () => {
     renderSearch({
       ...DEFAULT_HISTORY_SEARCH_FILTERS,
@@ -134,6 +258,15 @@ describe("HistorySearchDrawer filters", () => {
     renderSearch({
       ...DEFAULT_HISTORY_SEARCH_FILTERS,
       eventKinds: ALL_HISTORY_EVENT_KINDS.slice(0, -1),
+      harnesses: ALL_WORKFLOW_HARNESSES.slice(0, -1),
+      executionStates: ALL_WORKFLOW_STATES.slice(0, -1),
+      pathContains: "src/ui",
+      dateRange: {
+        preset: "custom",
+        from: "2026-01-01",
+        to: "2026-01-02",
+      },
+      workflowOnly: true,
     });
     act(() => {
       useUiStore.getState().setHistorySearchResults([], false, {
@@ -142,7 +275,7 @@ describe("HistorySearchDrawer filters", () => {
       });
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "History search filters (1 active)" })
+      screen.getByRole("button", { name: "History search filters (8 active)" })
     );
 
     fireEvent.click(
@@ -196,5 +329,18 @@ describe("HistorySearchDrawer filters", () => {
     expect(
       screen.getByText("Showing 1 of 2450 (filtered)")
     ).toBeInTheDocument();
+  });
+
+  it("shows when the search is using the fallback index path", () => {
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults([result], false, {
+        totalCount: 1,
+        hasMore: false,
+        indexState: "fallback",
+      });
+    });
+
+    expect(screen.getByText("Using fallback search")).toBeInTheDocument();
   });
 });

@@ -404,7 +404,7 @@ dropdown/date changes — those are discrete choices, not typing.
 
 ## Phases
 
-**Phase 1 — De-duplicate the extractor.** Pull the candidate switch out of
+**Phase 1 — De-duplicate the extractor.** ✅ Done. Pull the candidate switch out of
 `HistorySearchIndexService` and `HistorySearchService` into the single
 `HistoryCandidateExtractor` (`src/core/orchestration/HistoryCandidateExtractor.ts`).
 The module exports `HistoryCandidateExtractor`,
@@ -459,17 +459,16 @@ Included filters in the cursor hash and applied them through one shared
 `src/ui/webview-react/utils/filterLabels.ts`; rewired `WorkflowStatus` to
 consume them as a pure refactor, with focused utility coverage added.
 
-**Phase 6 — Drawer filter bar.** ✅ R5 landed: `MultiCheckboxDropdown` now has
+**Phase 6 — Drawer filter bar.** ✅ Done. R5 landed: `MultiCheckboxDropdown` now has
 grouped section headers and local Escape handling. Step 6 is now landed too:
 the drawer stores transient filter state in `uiStore`, exposes the grouped event
 kind and shared date-range controls, re-issues searches immediately on discrete
 filter changes, carries filters through pagination, resets the cursor/results on
 new searches, and shows the active-count badge plus `(filtered)` summary.
-Step 7 still owes the harness, run-outcome, path, and workflow-scope controls
-in the same bar; the store defaults and payload plumbing already include those
-filter dimensions for that work.
+Step 7 added the harness, run-outcome, path, and workflow-scope controls in the
+same bar, including the debounced path search and visible fallback-mode notice.
 
-**Phase 7 (v2) — Facets and errors.** `isError` on documents; return per-kind
+**Phase 7 (v2) — OPEN.** `isError` on documents; return per-kind
 counts in `HistorySearchResponse` so the event-type dropdown can show
 `File Edit (128)` and grey out kinds with zero matches. The index service already
 materializes the full `matches` array before paging, so bucketing is nearly free
@@ -674,7 +673,7 @@ is applied in both paths rather than maintaining a second implementation. Keep
 `indexState: "fallback"` badge visible in the UI regardless, since the fallback
 also silently caps results differently.
 
-### R7. Result flooding by a single run — **leave it, revisit during testing**
+### R7. Result flooding by a single run — **OPEN for v2; revisit during testing**
 
 A run that edited 40 files produces 40 `fileEdit` documents. Apply an event-kind
 filter and that is exactly what the first page becomes: 50 rows drawn from two
@@ -688,6 +687,6 @@ run headers — are guesses at a shape nobody has felt yet. Both remain availabl
 this is result presentation only, orthogonal to every decision above, so no phase
 depends on which way it goes.
 
-Revisit while testing Phase 6 against real queries. The signal to watch for is a
+Revisit while testing Phase 6 against real queries. The v2 signal to watch for is a
 first page dominated by one or two runs on a _narrowed_ search — that is the case
 filters create and the unfiltered drawer never showed.

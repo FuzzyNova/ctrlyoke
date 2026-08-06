@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import {
   ALL_HISTORY_EVENT_KINDS,
   createDefaultHistorySearchFilters,
@@ -19,6 +20,12 @@ import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import { HISTORY_EVENT_KINDS } from "@root/types/DashboardConstants";
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
+import {
+  ALL_WORKFLOW_HARNESSES,
+  ALL_WORKFLOW_STATES,
+  WORKFLOW_HARNESS_OPTIONS,
+  WORKFLOW_STATE_OPTIONS,
+} from "@utils/dateRangeFilter";
 import {
   DateRangeFilterControls,
   ExitButton,
@@ -173,6 +180,8 @@ export function HistorySearchDrawer() {
   const indexState = useUiStore((s) => s.historySearchIndexState);
   const historySearchFilters = useUiStore((s) => s.historySearchFilters);
   const workflowKey = useUiStore((s) => s.displayedViewAddress?.workflowKey);
+  const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
+  const workflowName = useWorkflowStore((s) => s.workflowName);
   const closeHistorySearch = useUiStore((s) => s.closeHistorySearch);
   const setHistorySearchQuery = useUiStore((s) => s.setHistorySearchQuery);
   const setHistorySearchFilters = useUiStore((s) => s.setHistorySearchFilters);
@@ -187,6 +196,7 @@ export function HistorySearchDrawer() {
   const inputRef = useRef<HTMLInputElement>(null);
   const filtersRef = useRef<HistorySearchFilterState>(historySearchFilters);
   filtersRef.current = historySearchFilters;
+  const pathSearchPendingRef = useRef(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const trimmedQuery = query.trim();
   const activeFilterCount =
@@ -310,17 +320,53 @@ export function HistorySearchDrawer() {
 
   const handleFilterChange = useCallback(
     (nextFilters: HistorySearchFilterState) => {
+      pathSearchPendingRef.current = false;
       setHistorySearchFilters(nextFilters);
       issueSearch(nextFilters);
     },
     [issueSearch, setHistorySearchFilters]
   );
 
+  const handlePathContainsChange = useCallback(
+    (pathContains: string) => {
+      pathSearchPendingRef.current = true;
+      setHistorySearchFilters({
+        ...historySearchFilters,
+        pathContains,
+      });
+    },
+    [historySearchFilters, setHistorySearchFilters]
+  );
+
   const handleResetFilters = useCallback(() => {
+    pathSearchPendingRef.current = false;
     const defaults = createDefaultHistorySearchFilters();
     resetHistorySearchFilters();
     issueSearch(defaults);
   }, [issueSearch, resetHistorySearchFilters]);
+
+  useEffect(() => {
+    if (!pathSearchPendingRef.current) {
+      return;
+    }
+
+    if (!isOpen || trimmedQuery.length < 2) {
+      pathSearchPendingRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      pathSearchPendingRef.current = false;
+      issueSearch(filtersRef.current);
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    historySearchFilters.pathContains,
+    isOpen,
+    issueSearch,
+    trimmedQuery.length,
+  ]);
 
   const loadMore = useCallback(() => {
     if (!nextCursor || loadingMore || loading || !hasMore) {
@@ -365,6 +411,10 @@ export function HistorySearchDrawer() {
     totalCount,
     trimmedQuery.length,
   ]);
+
+  const workflowScopeAvailable =
+    displayedViewAddress?.kind === "run" &&
+    Boolean(workflowKey && workflowName);
 
   return (
     <div
@@ -457,6 +507,86 @@ export function HistorySearchDrawer() {
                   />
                 </div>
 
+                <div className="flex-shrink-0 text-xs text-description-fg">
+                  <MultiCheckboxDropdown
+                    id="history-harness-filter"
+                    selectedValues={historySearchFilters.harnesses}
+                    onChange={(harnesses) =>
+                      handleFilterChange({
+                        ...historySearchFilters,
+                        harnesses,
+                      })
+                    }
+                    options={WORKFLOW_HARNESS_OPTIONS}
+                    placeholder="No Harnesses"
+                    buttonLabel={formatMultiFilterLabel(
+                      historySearchFilters.harnesses,
+                      ALL_WORKFLOW_HARNESSES,
+                      "Harnesses",
+                      WORKFLOW_HARNESS_OPTIONS
+                    )}
+                    className="w-fit min-w-[116px]"
+                    dropdownMaxHeight="260px"
+                  />
+                </div>
+
+                <div className="flex-shrink-0 text-xs text-description-fg">
+                  <MultiCheckboxDropdown
+                    id="history-outcome-filter"
+                    selectedValues={historySearchFilters.executionStates}
+                    onChange={(executionStates) =>
+                      handleFilterChange({
+                        ...historySearchFilters,
+                        executionStates,
+                      })
+                    }
+                    options={WORKFLOW_STATE_OPTIONS}
+                    placeholder="No Outcomes"
+                    buttonLabel={formatMultiFilterLabel(
+                      historySearchFilters.executionStates,
+                      ALL_WORKFLOW_STATES,
+                      "Outcomes",
+                      WORKFLOW_STATE_OPTIONS
+                    )}
+                    className="w-fit min-w-[96px]"
+                    dropdownMaxHeight="260px"
+                  />
+                </div>
+
+                <div className="relative flex-shrink-0">
+                  <i className="codicon codicon-search pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xxs text-description-fg" />
+                  <input
+                    type="text"
+                    value={historySearchFilters.pathContains}
+                    onChange={(event) =>
+                      handlePathContainsChange(event.target.value)
+                    }
+                    placeholder="File path contains..."
+                    aria-label="File path contains"
+                    className="h-7 w-[170px] rounded border border-input-border bg-input-bg pl-7 pr-2 text-xs text-input-fg outline-none focus:border-focus-border"
+                  />
+                </div>
+
+                {workflowScopeAvailable && workflowName && (
+                  <label className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded border border-input-border bg-input-bg px-2 text-xs text-input-fg">
+                    <input
+                      type="checkbox"
+                      checked={historySearchFilters.workflowOnly}
+                      onChange={(event) =>
+                        handleFilterChange({
+                          ...historySearchFilters,
+                          workflowOnly: event.target.checked,
+                        })
+                      }
+                      aria-label={`This workflow only: ${workflowName}`}
+                      className="h-3 w-3 accent-focus-border"
+                    />
+                    <span className="max-w-[180px] truncate">
+                      Only {workflowName}
+                    </span>
+                  </label>
+                )}
+
                 <DateRangeFilterControls
                   value={historySearchFilters.dateRange}
                   onChange={(dateRange) =>
@@ -484,7 +614,13 @@ export function HistorySearchDrawer() {
           {trimmedQuery.length >= 2 && (
             <div className="mt-2 flex h-5 items-center justify-between gap-3 text-sm text-description-fg">
               <span>{summaryLabel}</span>
-              <span>{indexState === "building" ? "Index updating" : ""}</span>
+              <span>
+                {indexState === "building"
+                  ? "Index updating"
+                  : indexState === "fallback"
+                    ? "Using fallback search"
+                    : ""}
+              </span>
             </div>
           )}
         </div>
