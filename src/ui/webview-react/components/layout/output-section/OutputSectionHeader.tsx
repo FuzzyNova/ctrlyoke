@@ -113,7 +113,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={onSelectOutputTab}
             >
               <i
-                className={`codicon codicon-output codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
+                className={`codicon codicon-output ${isHeaderNarrow ? "codicon-lg px-1" : "codicon-sm"}`}
               />
               {!isHeaderNarrow && <span>Output</span>}
             </button>
@@ -132,7 +132,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               }
             >
               <i
-                className={`codicon codicon-terminal codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
+                className={`codicon codicon-terminal ${isHeaderNarrow ? "codicon-lg px-1" : "codicon-sm"}`}
               />
               {!isHeaderNarrow && <span>Terminal</span>}
               {!isHeaderNarrow && terminalExecutionRunLabel && (

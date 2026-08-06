@@ -79,6 +79,29 @@ describe("OutputSectionHeader terminal execution identity", () => {
   });
 });
 
+describe("OutputSectionHeader tab icons", () => {
+  it("uses large icons in narrow headers and small icons otherwise", () => {
+    const narrowHeader = renderHeader({ isHeaderNarrow: true });
+
+    expect(narrowHeader.container.querySelector(".codicon-output")).toHaveClass(
+      "codicon-lg"
+    );
+    expect(
+      narrowHeader.container.querySelector(".codicon-terminal")
+    ).toHaveClass("codicon-lg");
+
+    narrowHeader.unmount();
+    const wideHeader = renderHeader();
+
+    expect(wideHeader.container.querySelector(".codicon-output")).toHaveClass(
+      "codicon-sm"
+    );
+    expect(wideHeader.container.querySelector(".codicon-terminal")).toHaveClass(
+      "codicon-sm"
+    );
+  });
+});
+
 describe("OutputSectionHeader find action", () => {
   it("toggles a highlighted find action from the output tab only", () => {
     const onToggleFind = vi.fn();
