@@ -15,8 +15,6 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   RUNNER_IDS,
-  HARNESS_IDS,
-  HARNESS_INFO,
   TERMINAL_SESSION_STATUS,
   type ExecutionState,
 } from "../../types/messages";
@@ -37,8 +35,8 @@ import type {
   WorkflowKey,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
+import { DateRangeFilterControls, MultiCheckboxDropdown } from "../shared";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
-import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
 import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
@@ -50,13 +48,22 @@ import {
   WORKFLOW_STATUS_BUTTON_SIZES,
   type WorkflowRowTier,
 } from "../../constants";
+import {
+  ALL_WORKFLOW_HARNESSES,
+  ALL_WORKFLOW_STATES,
+  DEFAULT_DATE_RANGE_FILTER,
+  getDateEndMs,
+  getDateStartMs,
+  WORKFLOW_HARNESS_OPTIONS,
+  WORKFLOW_STATE_OPTIONS,
+  type DateRangeFilter,
+} from "../../utils/dateRangeFilter";
+import { formatMultiFilterLabel } from "../../utils/filterLabels";
 
 interface WorkflowStatusProps {
   className?: string;
 }
 
-const ALL_WORKFLOW_STATES = Object.values(EXECUTION_STATES);
-const ALL_WORKFLOW_HARNESSES = Object.values(HARNESS_IDS);
 const WORKFLOW_ROW_SELECTOR =
   ".running-workflow-item, .workflow-menu-item, .run-panel-row";
 const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
@@ -64,36 +71,6 @@ const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
 // slide-out-right animation so a missed animationend cannot strand the
 // dropdown in its departing run-panel state.
 const RUN_PANEL_EXIT_FALLBACK_MS = 320;
-
-const WORKFLOW_STATE_OPTIONS = ALL_WORKFLOW_STATES.map((state) => ({
-  value: state,
-  label: state,
-}));
-
-const WORKFLOW_HARNESS_OPTIONS = ALL_WORKFLOW_HARNESSES.map((harness) => ({
-  value: harness,
-  label: HARNESS_INFO[harness].name,
-}));
-
-type WorkflowDatePreset = "all" | "last7" | "last30" | "lastMonth" | "custom";
-
-interface WorkflowDateFilter {
-  preset: WorkflowDatePreset;
-  from: string;
-  to: string;
-}
-
-const DEFAULT_WORKFLOW_DATE_FILTER: WorkflowDateFilter = {
-  preset: "all",
-  from: "",
-  to: "",
-};
-
-const DATE_INPUT_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
 
 function roundMetric(value: number): number {
   return Math.round(value * 10) / 10;
@@ -107,69 +84,6 @@ function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
 
     return (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0);
   });
-}
-
-function formatDateInput(timestamp: number): string {
-  return DATE_INPUT_FORMATTER.format(new Date(timestamp));
-}
-
-function getDatePresetRange(
-  preset: Exclude<WorkflowDatePreset, "all" | "custom">
-): Pick<WorkflowDateFilter, "from" | "to"> {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  if (preset === "lastMonth") {
-    const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const to = new Date(today.getFullYear(), today.getMonth(), 0);
-    return {
-      from: formatDateInput(from.getTime()),
-      to: formatDateInput(to.getTime()),
-    };
-  }
-
-  const days = preset === "last7" ? 6 : 29;
-  const from = new Date(today);
-  from.setDate(today.getDate() - days);
-
-  return {
-    from: formatDateInput(from.getTime()),
-    to: formatDateInput(today.getTime()),
-  };
-}
-
-function getDateStartMs(date: string): number | null {
-  if (!date) return null;
-  const parsed = new Date(`${date}T00:00:00`);
-  const time = parsed.getTime();
-  return Number.isNaN(time) ? null : time;
-}
-
-function getDateEndMs(date: string): number | null {
-  if (!date) return null;
-  const parsed = new Date(`${date}T23:59:59.999`);
-  const time = parsed.getTime();
-  return Number.isNaN(time) ? null : time;
-}
-
-function formatMultiFilterLabel(
-  selectedValues: string[],
-  allValues: string[],
-  pluralLabel: string,
-  options: Array<{ value: string; label: string }>
-): string {
-  if (selectedValues.length === allValues.length) {
-    return `All ${pluralLabel}`;
-  }
-
-  if (selectedValues.length === 1) {
-    return (
-      options.find((option) => option.value === selectedValues[0])?.label ??
-      selectedValues[0]
-    );
-  }
-
-  return `${selectedValues.length} ${pluralLabel}`;
 }
 
 /**
@@ -345,8 +259,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [selectedWorkflowHarnesses, setSelectedWorkflowHarnesses] = useState<
     string[]
   >(() => [...ALL_WORKFLOW_HARNESSES]);
-  const [workflowDateFilter, setWorkflowDateFilter] =
-    useState<WorkflowDateFilter>(DEFAULT_WORKFLOW_DATE_FILTER);
+  const [workflowDateFilter, setWorkflowDateFilter] = useState<DateRangeFilter>(
+    DEFAULT_DATE_RANGE_FILTER
+  );
   const [favoriteWorkflowsOnly, setFavoriteWorkflowsOnly] = useState(false);
   // Pending workflow path waiting for delete confirmation
   const [pendingDeleteAddress, setPendingDeleteAddress] =
@@ -674,45 +589,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const resetWorkflowFilters = useCallback(() => {
     setSelectedWorkflowStates([...ALL_WORKFLOW_STATES]);
     setSelectedWorkflowHarnesses([...ALL_WORKFLOW_HARNESSES]);
-    setWorkflowDateFilter(DEFAULT_WORKFLOW_DATE_FILTER);
+    setWorkflowDateFilter(DEFAULT_DATE_RANGE_FILTER);
     setFavoriteWorkflowsOnly(false);
   }, []);
 
   const handleToggleFilters = useCallback(() => {
     setFiltersOpen((open) => !open);
   }, []);
-
-  const handleDatePresetChange = useCallback((preset: WorkflowDatePreset) => {
-    if (preset === "all") {
-      setWorkflowDateFilter(DEFAULT_WORKFLOW_DATE_FILTER);
-      return;
-    }
-
-    if (preset === "custom") {
-      setWorkflowDateFilter((current) => ({
-        ...current,
-        preset,
-      }));
-      return;
-    }
-
-    setWorkflowDateFilter({
-      preset,
-      ...getDatePresetRange(preset),
-    });
-  }, []);
-
-  const handleDateBoundChange = useCallback(
-    (bound: "from" | "to", value: string) => {
-      setWorkflowDateFilter((current) => ({
-        ...current,
-        preset:
-          value || current[bound === "from" ? "to" : "from"] ? "custom" : "all",
-        [bound]: value,
-      }));
-    },
-    []
-  );
 
   // Request recent workflows once on mount so the count badge is visible immediately
   useEffect(() => {
@@ -1406,43 +1289,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           />
         </div>
 
-        <select
-          aria-label="Workflow date preset"
-          value={workflowDateFilter.preset}
-          onChange={(event) =>
-            handleDatePresetChange(event.target.value as WorkflowDatePreset)
-          }
-          className="h-7 min-w-[112px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
-        >
-          <option value="all">Any time</option>
-          <option value="last7">Last 7 days</option>
-          <option value="last30">Last 30 days</option>
-          <option value="lastMonth">Last month</option>
-          <option value="custom">Custom range</option>
-        </select>
-
-        {workflowDateFilter.preset === "custom" && (
-          <>
-            <input
-              type="date"
-              aria-label="Workflow date from"
-              value={workflowDateFilter.from}
-              onChange={(event) =>
-                handleDateBoundChange("from", event.target.value)
-              }
-              className="h-7 w-[128px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
-            />
-            <input
-              type="date"
-              aria-label="Workflow date to"
-              value={workflowDateFilter.to}
-              onChange={(event) =>
-                handleDateBoundChange("to", event.target.value)
-              }
-              className="h-7 w-[128px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
-            />
-          </>
-        )}
+        <DateRangeFilterControls
+          value={workflowDateFilter}
+          onChange={setWorkflowDateFilter}
+        />
 
         <button
           type="button"

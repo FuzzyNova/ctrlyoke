@@ -453,10 +453,11 @@ rebuild.
 Included filters in the cursor hash and applied them through one shared
 `matchesFilters(document, filters)` used by both the index and fallback paths (R6).
 
-**Phase 5 — Shared date controls.** Extract to `utils/dateRangeFilter.ts` +
-`shared/DateRangeFilterControls.tsx` + `utils/filterLabels.ts`; rewire
-`WorkflowStatus` to consume them (must be a pure refactor — its behavior is
-covered by existing tests).
+**Phase 5 — Shared date controls.** ✅ Done. Extracted to
+`src/ui/webview-react/utils/dateRangeFilter.ts`,
+`src/ui/webview-react/components/shared/DateRangeFilterControls.tsx`, and
+`src/ui/webview-react/utils/filterLabels.ts`; rewired `WorkflowStatus` to
+consume them as a pure refactor, with focused utility coverage added.
 
 **Phase 6 — Drawer filter bar.** `group` support in `MultiCheckboxDropdown` (R5),
 then the toggle button, filter bar, uiStore slice, re-issue-on-change, active
