@@ -16,15 +16,17 @@ path).
 
 ## Current State
 
-Filter plumbing already exists end to end and is simply never exercised:
+The backend filter plumbing is complete; the remaining phases add the shared
+date controls and drawer UI:
 
-- `HistorySearchQuery.filters` supports `matchTypes`, `workflowKeys`, `since`,
-  `until` (`src/types/WorkflowTimelineTypes.ts:146-155`).
-- `HistorySearchIndexService.search` applies all four against the in-memory
-  document list (`src/core/orchestration/HistorySearchIndexService.ts:119-141`).
+- `HistorySearchQuery.filters` supports `eventKinds`, `workflowKeys`, `since`,
+  `until`, `harnesses`, `executionStates`, and `pathContains`
+  (`src/types/WorkflowTimelineTypes.ts:146-160`).
+- `HistorySearchIndexService.search` applies the shared predicate against the
+  in-memory document list (`src/core/orchestration/HistorySearchIndexService.ts:98-135`).
 - `WebviewMessageRouter` forwards `message.filters` verbatim
   (`src/ui/WebviewMessageRouter.ts:850`), and `SearchHistoryMessage extends
-Partial<HistorySearchQuery>` (`src/types/WebviewMessageTypes.ts:1136`).
+Partial<HistorySearchQuery>` (`src/types/WebviewMessageTypes.ts:1139`).
 - `HistorySearchDrawer` sends **no** `filters` on either the initial search or
   the "Load more" page.
 
@@ -102,14 +104,14 @@ exported from `WorkflowTimelineTypes.ts`.
 
 **The document id must include both fields.** It is currently
 `[workflowKey, runRef, runId, sequence, candidate.eventKind:matchField, candidateIndex]`
-(`buildRunDocuments:454-503`). `candidateIndex` already disambiguates, but the id
+(`buildRunDocuments:446-494`). `candidateIndex` already disambiguates, but the id
 is meant to be readable, so swap `matchType` for `eventKind:matchField` — a
 `fileEdit`+`path` and a `fileEdit`+`diff` document from the same event should be
 distinguishable by id alone.
 
 **Blast radius of the rename** (everything outside the two services that names
-`matchType`): `WorkflowTimelineTypes.ts:129,151,179`;
-`HistorySearchDrawer.tsx:24,329,347,349`;
+`matchType`): `WorkflowTimelineTypes.ts:129,146,172`;
+`HistorySearchDrawer.tsx:329,347,349,352`;
 `src/test/unit/HistorySearchService.test.ts:86,93,159,166,174,179`;
 `src/ui/webview-react/test/hooks/useMessageHandler.test.ts:2040,2067`;
 `src/ui/webview-react/test/store/uiStore.test.ts:137`. The last two build result
@@ -280,7 +282,7 @@ hide rows. Only an explicitly narrowed harness selection excludes them.
 ### 5. Index schema bump → 3.0.0
 
 `INDEX_SCHEMA_VERSION` goes `2.0.0` → `3.0.0`
-(`src/core/orchestration/HistorySearchIndexService.ts:32`). `loadIfPossible`
+(`src/core/orchestration/HistorySearchIndexService.ts:37`). `loadIfPossible`
 already bails on a version mismatch and leaves `loadedManifest` undefined, so
 `ensureReady` performs a full rebuild on first search after upgrade. No migration
 code needed (pre-release, no back-compat constraints), but the first search after
@@ -288,15 +290,15 @@ the change will be slow on a large `.ctrlyoke/.runs` tree — acceptable, and th
 `indexState: "building"` label already covers it in the UI.
 
 **Freshness stays correct for free.** `isManifestFresh` stats only the manifest and
-events files (`HistorySearchIndexService.ts:374-385`). Because harness now comes
+events files (`HistorySearchIndexService.ts:337-348`). Because harness now comes
 from the events themselves rather than the working file, every index input is
 already covered by that check — no new mtime tracking, and no risk of an in-place
 working-file edit silently invalidating indexed harness data.
 
 ### 6. Cursor must hash the filters
 
-`CursorPayload.queryHash` is `hashQuery(query)` — the **query text only**
-(`HistorySearchIndexService.ts:675, 694`). Change a filter while a cursor is
+`CursorPayload.queryHash` now hashes the normalized `{ query, filters }` pair
+(`HistorySearchIndexService.ts:666-707`). Change a filter while a cursor is
 outstanding and `decodeCursorOffset` accepts the old cursor, so "Load more"
 resumes at an offset computed against a different result set — silently skipping
 or duplicating rows.
@@ -446,9 +448,9 @@ field qualifier.
 happening anyway — both changes touch the same function and both require the same
 rebuild.
 
-**Phase 4 — Backend filters.** Rename `filters.matchTypes` → `eventKinds`; add
+**Phase 4 — Backend filters.** ✅ Done. Renamed `filters.matchTypes` → `eventKinds`; added
 `harnesses`, `executionStates`, `pathContains` (not `matchFields` — see §2).
-Include filters in the cursor hash. Apply them through one shared
+Included filters in the cursor hash and applied them through one shared
 `matchesFilters(document, filters)` used by both the index and fallback paths (R6).
 
 **Phase 5 — Shared date controls.** Extract to `utils/dateRangeFilter.ts` +
@@ -478,10 +480,10 @@ materializes the full `matches` array before paging, so bucketing is nearly free
   Run-level events can never be filtered because they are never indexed.
 - **Two rebuild paths.** `retainDocuments: false` (refresh) must stay
   memory-neutral — do not accumulate the new per-run harness map across runs.
-- **The fallback path returns `indexState: "fallback"`** and ignores filters
-  entirely today (`HistorySearchService.searchLegacy` takes only query/limit).
-  Either thread filters through it or make the UI show that filters are inactive
-  in fallback mode. Silently ignoring them is the worst option.
+- **The fallback path returns `indexState: "fallback"`** and applies the shared
+  predicate (`HistorySearchService.searchLegacy:82`, with filters threaded from
+  `search:66`). Keep the badge visible because fallback also caps results
+  differently.
 - **Filter changes must reset the cursor and the accumulated result array**, not
   append. The existing `setHistorySearchResults(..., { append: true })` path is
   only for "Load more".
@@ -505,9 +507,10 @@ materializes the full `matches` array before paging, so bucketing is nearly free
 - `src/test/unit/HistorySearchService.test.ts` — extend with per-kind fixtures:
   a run that reads, writes, edits, and deletes the same path, asserting four
   distinct `eventKind`s and that a `fileEdit`-only filter returns exactly one.
-- New `src/test/unit/HistorySearchIndexService.test.ts` (confirmed absent) — cursor hash
-  must change when filters change; a stale cursor from a different filter set
-  must reset to offset 0.
+- `src/test/unit/HistorySearchIndexService.test.ts` — cursor hash must change
+  when filters change; a stale cursor from a different filter set must reset to
+  offset 0; harness attribution, path normalization, and unattributed rows are
+  covered there as well.
 - **Harness attribution across a re-run** — the case that rules out the working
   file. Fixture: a run with two `CLI_OUTPUT_RECORDED` events for the _same_
   `target.stepIndex`, the first carrying `metadata.harness: "claude-cli"` and the
@@ -655,13 +658,13 @@ Unchanged — `formatMultiFilterLabel` already collapses to `All Events` /
 refinement could render `All File` when a selection is exactly one full group, but
 that is a nicety, not a requirement.
 
-### R6. Filters on the fallback path — **share one predicate, don't thread parameters**
+### R6. Filters on the fallback path — **share one predicate**
 
-`HistorySearchService.searchLegacy` takes only query and limit, so a search that
-falls back to disk scanning would silently ignore every filter — worse than
-failing, because the results look plausible. After Phase 1 both paths produce the
-same candidate shape, so the answer is a single pure `matchesFilters(document,
-filters)` applied in both, not a second filter implementation. Keep the
+`HistorySearchService.searchLegacy` receives filters threaded from `search`, so
+the fallback path applies every filter instead of silently ignoring them — worse
+than failing, because the results look plausible. After Phase 1 both paths produce the
+same candidate shape, so one pure `matchesFilters(document, filters)` predicate
+is applied in both paths rather than maintaining a second implementation. Keep
 `indexState: "fallback"` badge visible in the UI regardless, since the fallback
 also silently caps results differently.
 

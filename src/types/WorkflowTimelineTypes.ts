@@ -147,12 +147,17 @@ export interface HistorySearchQuery {
   query: string;
   limit: number;
   cursor?: string;
-  filters?: {
-    matchTypes?: HistoryEventKind[];
-    workflowKeys?: WorkflowKey[];
-    since?: number;
-    until?: number;
-  };
+  filters?: HistorySearchFilters;
+}
+
+export interface HistorySearchFilters {
+  eventKinds?: HistoryEventKind[];
+  workflowKeys?: WorkflowKey[];
+  since?: number;
+  until?: number;
+  harnesses?: string[];
+  executionStates?: string[];
+  pathContains?: string;
 }
 
 export interface HistorySearchResponse {

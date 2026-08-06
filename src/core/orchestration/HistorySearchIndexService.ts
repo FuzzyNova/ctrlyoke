@@ -10,6 +10,7 @@ import {
   TIMELINE_EVENT_TYPES,
   type CliOutputRecordedEvent,
   type HistorySearchDocument,
+  type HistorySearchFilters,
   type HistorySearchQuery,
   type HistorySearchResponse,
   type HistorySearchResult,
@@ -28,6 +29,10 @@ import {
   HistoryCandidateExtractor,
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
+import {
+  matchesFilters,
+  normalizeHistorySearchFilters,
+} from "./HistorySearchFilters";
 
 const INDEX_SCHEMA_VERSION = "3.0.0" as const;
 const MANIFEST_FILE_NAME = "manifest.json";
@@ -111,32 +116,19 @@ export class HistorySearchIndexService {
       await this.loadIfPossible(workspaceFolderPath);
     }
 
-    const offset = this.decodeCursorOffset(request.cursor, normalizedQuery);
+    const offset = this.decodeCursorOffset(
+      request.cursor,
+      normalizedQuery,
+      request.filters
+    );
     const limit = Math.max(1, request.limit || DEFAULT_LIMIT);
     const lowered = normalizedQuery.toLowerCase();
-    const filters = request.filters;
 
     const matches = this.documents
-      .filter((document) => document.text.toLowerCase().includes(lowered))
-      .filter((document) =>
-        filters?.matchTypes
-          ? filters.matchTypes.includes(document.eventKind)
-          : true
-      )
-      .filter((document) =>
-        filters?.workflowKeys
-          ? filters.workflowKeys.includes(document.workflowKey)
-          : true
-      )
-      .filter((document) =>
-        typeof filters?.since === "number"
-          ? document.startedAt >= filters.since
-          : true
-      )
-      .filter((document) =>
-        typeof filters?.until === "number"
-          ? document.startedAt <= filters.until
-          : true
+      .filter(
+        (document) =>
+          document.text.toLowerCase().includes(lowered) &&
+          matchesFilters(document, request.filters)
       )
       .sort(this.compareDocuments);
 
@@ -151,7 +143,7 @@ export class HistorySearchIndexService {
       nextCursor: hasMore
         ? this.encodeCursor({
             offset: nextOffset,
-            queryHash: this.hashQuery(normalizedQuery),
+            queryHash: this.hashQuery(normalizedQuery, request.filters),
             sortVersion: "startedAt-timestamp-sequence-desc",
           })
         : undefined,
@@ -673,7 +665,8 @@ export class HistorySearchIndexService {
 
   private decodeCursorOffset(
     cursor: string | undefined,
-    query: string
+    query: string,
+    filters: HistorySearchFilters | undefined
   ): number {
     if (!cursor) {
       return 0;
@@ -682,7 +675,7 @@ export class HistorySearchIndexService {
       const payload = JSON.parse(
         Buffer.from(cursor, "base64url").toString("utf8")
       ) as CursorPayload;
-      return payload.queryHash === this.hashQuery(query)
+      return payload.queryHash === this.hashQuery(query, filters)
         ? Math.max(0, payload.offset)
         : 0;
     } catch {
@@ -701,10 +694,18 @@ export class HistorySearchIndexService {
       .digest("hex");
   }
 
-  private hashQuery(query: string): string {
+  private hashQuery(
+    query: string,
+    filters: HistorySearchFilters | undefined
+  ): string {
     return crypto
       .createHash("sha256")
-      .update(query.trim().toLowerCase())
+      .update(
+        JSON.stringify({
+          query: query.trim().toLowerCase(),
+          filters: normalizeHistorySearchFilters(filters),
+        })
+      )
       .digest("hex");
   }
 

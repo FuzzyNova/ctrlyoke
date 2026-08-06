@@ -254,6 +254,20 @@ suite("HistorySearchService", () => {
       ["diff", "path"]
     );
 
+    const filteredEditResults = (
+      await service.search(
+        {
+          query: sharedPath,
+          limit: 50,
+          filters: { eventKinds: ["fileEdit"] },
+        },
+        workspaceRoot
+      )
+    ).results;
+    assert.strictEqual(filteredEditResults.length, 1);
+    assert.strictEqual(filteredEditResults[0]?.eventKind, "fileEdit");
+    assert.strictEqual(filteredEditResults[0]?.matchField, "path");
+
     const writeResults = (
       await service.search("written-content-term", workspaceRoot)
     ).results;

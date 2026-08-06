@@ -10,6 +10,8 @@ import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputRecordedEvent,
+  type HistorySearchDocument,
+  type HistorySearchFilters,
   type HistorySearchQuery,
   type HistorySearchResponse,
   type HistorySearchResult,
@@ -24,6 +26,7 @@ import {
   HistoryCandidateExtractor,
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
+import { matchesFilters } from "./HistorySearchFilters";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
@@ -63,7 +66,8 @@ export class HistorySearchService {
       const results = await this.searchLegacy(
         request.query,
         workspaceFolderPath,
-        request.limit
+        request.limit,
+        request.filters
       );
       return {
         query: request.query.trim(),
@@ -78,7 +82,8 @@ export class HistorySearchService {
   private async searchLegacy(
     query: string,
     workspaceFolderPath: string,
-    limit: number
+    limit: number,
+    filters: HistorySearchFilters | undefined
   ): Promise<HistorySearchResult[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
@@ -161,16 +166,23 @@ export class HistorySearchService {
             break;
           }
 
-          const eventMatches = this.collectEventMatches(
+          const eventDocuments = this.collectEventDocuments(
             event,
-            normalizedQuery,
             manifest,
             metadata,
             workflow.workflowKey,
             run.runRef
           );
 
-          for (const match of eventMatches) {
+          for (const document of eventDocuments) {
+            if (
+              !this.matchesQuery(document.text, normalizedQuery) ||
+              !matchesFilters(document, filters)
+            ) {
+              continue;
+            }
+
+            const match = this.toResult(document, normalizedQuery);
             const dedupeKey = this.getResultKey(match);
             if (seen.has(dedupeKey)) {
               continue;
@@ -255,7 +267,7 @@ export class HistorySearchService {
     }
   }
 
-  private collectEventMatches(
+  private collectEventDocuments(
     event: {
       eventType: string;
       payload: Record<string, unknown>;
@@ -263,26 +275,23 @@ export class HistorySearchService {
       sequence: number;
       timestampMs: number;
     },
-    query: string,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
     workflowKey: WorkflowKey,
     runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchResult[] {
+  ): HistorySearchDocument[] {
     switch (event.eventType) {
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
-        return this.collectCliOutputMatches(
+        return this.collectCliOutputDocuments(
           event as CliOutputRecordedEvent,
-          query,
           manifest,
           metadata,
           workflowKey,
           runRef
         );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
-        return this.collectStatusMatches(
+        return this.collectStatusDocuments(
           event as StatusMessageRecordedEvent,
-          query,
           manifest,
           metadata,
           workflowKey,
@@ -293,75 +302,89 @@ export class HistorySearchService {
     }
   }
 
-  private collectCliOutputMatches(
+  private collectCliOutputDocuments(
     event: CliOutputRecordedEvent,
-    query: string,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
     workflowKey: WorkflowKey,
     runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchResult[] {
+  ): HistorySearchDocument[] {
     const cliOutput = event.payload.cliOutput;
-    const candidates = this.candidateExtractor
-      .collectCliOutputCandidates(cliOutput)
-      .filter((candidate) => this.matchesQuery(candidate.text, query));
+    const candidates = this.candidateExtractor.collectCliOutputCandidates(
+      cliOutput
+    );
 
-    return candidates.map((candidate) =>
-      this.buildResult(
+    return candidates.map((candidate, candidateIndex) =>
+      this.buildDocument(
         manifest,
         metadata,
         workflowKey,
         runRef,
         event.target,
         event.attemptIndex,
-        query,
-        candidate
+        event.sequence,
+        event.timestampMs,
+        candidate,
+        candidateIndex,
+        cliOutput.structured?.metadata
       )
     );
   }
 
-  private collectStatusMatches(
+  private collectStatusDocuments(
     event: StatusMessageRecordedEvent,
-    query: string,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
     workflowKey: WorkflowKey,
     runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchResult[] {
+  ): HistorySearchDocument[] {
     const message = event.payload.statusMessage.message;
-    if (!this.matchesQuery(message, query)) {
-      return [];
-    }
-
     return [
-      this.buildResult(
+      this.buildDocument(
         manifest,
         metadata,
         workflowKey,
         runRef,
         event.target,
         0,
-        query,
+        event.sequence,
+        event.timestampMs,
         {
           eventKind: HISTORY_EVENT_KINDS.STATUS,
           matchField: HISTORY_MATCH_FIELDS.CONTENT,
           text: message,
-        }
+        },
+        0
       ),
     ];
   }
 
-  private buildResult(
+  private buildDocument(
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
     workflowKey: WorkflowKey,
     runRef: import("../../types/CtrlYokeTypes").RunRef,
     target: OutputExecutionTarget,
     attemptIndex: number,
-    query: string,
-    candidate: MatchCandidate
-  ): HistorySearchResult {
+    sequence: number,
+    timestampMs: number,
+    candidate: MatchCandidate,
+    candidateIndex: number,
+    outputMetadata?: {
+      harness?: string;
+      model?: string;
+      sessionId?: string;
+    }
+  ): HistorySearchDocument {
     return {
+      id: [
+        workflowKey,
+        runRef,
+        manifest.runId,
+        sequence,
+        `${candidate.eventKind}:${candidate.matchField}`,
+        candidateIndex,
+      ].join(":"),
       workflowKey,
       runRef,
       workflowName: metadata.workflowName,
@@ -369,11 +392,39 @@ export class HistorySearchService {
       startedAt: manifest.startedAt,
       executionState: manifest.executionState,
       target,
+      attemptIndex,
+      sequence,
+      timestampMs,
       eventKind: candidate.eventKind,
       matchField: candidate.matchField,
-      matchSnippet: this.extractSnippet(candidate.text, query),
-      matchContext: this.formatMatchContext(target, attemptIndex),
+      text: candidate.text,
       filePath: candidate.filePath,
+      harness: outputMetadata?.harness,
+      model: outputMetadata?.model,
+      sessionId: outputMetadata?.sessionId,
+    };
+  }
+
+  private toResult(
+    document: HistorySearchDocument,
+    query: string
+  ): HistorySearchResult {
+    return {
+      workflowKey: document.workflowKey,
+      runRef: document.runRef,
+      workflowName: document.workflowName,
+      runId: document.runId,
+      startedAt: document.startedAt,
+      executionState: document.executionState,
+      target: document.target,
+      eventKind: document.eventKind,
+      matchField: document.matchField,
+      matchSnippet: this.extractSnippet(document.text, query),
+      matchContext: this.formatMatchContext(
+        document.target,
+        document.attemptIndex
+      ),
+      filePath: document.filePath,
     };
   }
 
