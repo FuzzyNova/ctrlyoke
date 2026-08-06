@@ -100,6 +100,21 @@ Both live in `src/types/DashboardConstants.ts` (flow-control strings must be
 single-sourced per the project's coding principles), with the derived unions
 exported from `WorkflowTimelineTypes.ts`.
 
+**The document id must include both fields.** It is currently
+`[workflowKey, runRef, runId, sequence, candidate.matchType, candidateIndex]`
+(`buildRunDocuments:470-478`). `candidateIndex` already disambiguates, but the id
+is meant to be readable, so swap `matchType` for `eventKind:matchField` — a
+`fileEdit`+`path` and a `fileEdit`+`diff` document from the same event should be
+distinguishable by id alone.
+
+**Blast radius of the rename** (everything outside the two services that names
+`matchType`): `WorkflowTimelineTypes.ts:132,152,180`;
+`HistorySearchDrawer.tsx:22,32,297,315,317`;
+`src/test/unit/HistorySearchService.test.ts:85,91,156,162,169,173`;
+`src/ui/webview-react/test/hooks/useMessageHandler.test.ts:2040,2066`;
+`src/ui/webview-react/test/store/uiStore.test.ts:137`. The last two build result
+fixtures and will fail to compile until updated.
+
 Mapping from the existing extractor:
 
 | CLI event                     | `eventKind`                        | `matchField`        |
@@ -128,6 +143,16 @@ Mapping from the existing extractor:
 | pre-condition stdout          | `preCondition`                     | `output`            |
 | end-condition stdout          | `endCondition`                     | `output`            |
 | any script's command line     | (its script kind)                  | `command`           |
+
+**Script kinds are decided by `cliOutput.source`, at the `cliOutput` level — not
+per structured event.** Script output has no `structured.events`; its stdout lands
+in `cliOutput.response` and its command line in `cliOutput.cliCommand`. So when
+`source` is set, *every* `cliOutput`-level candidate takes that script kind:
+`prompt` → `content`, `response` → `output`, `cliCommand` → `command`. The three
+`SCRIPT_OUTPUT_SOURCES` values (`script` / `preCondition` / `endCondition`) are the
+same strings as the three script `HISTORY_EVENT_KINDS` values, but map them through
+an explicit typed `Record<ScriptOutputSource, HistoryEventKind>` rather than casting
+one to the other — the equality is a convenience, not a contract.
 
 **Script output needs its own kinds.** `cliOutput.source` discriminates script
 output from AI output (`isScriptOutput` is literally `output.source != null`,
@@ -239,6 +264,11 @@ path.
 `CLI_OUTPUT_RECORDED` events and stamp `harness` / `model` / `sessionId` onto every
 document produced from that event.
 
+These three go on `HistorySearchDocument` **only**, not on `HistorySearchResult`.
+v1 filters on them but renders none of them, and the result payload is sent to the
+webview on every search — don't widen it for a consumer that does not exist yet.
+Add to the result at the moment a row actually displays a harness.
+
 **Unattributed documents.** Three sources produce documents with no harness, and
 all three are legitimate: `STATUS_MESSAGE_RECORDED` events have no `cliOutput` at
 all; **script / pre-condition / end-condition output never ran on a harness**; and
@@ -280,7 +310,8 @@ filter changes route through the same "new search" path as query changes.
 The date controls are the only genuinely overlapping filter, and they are worth
 sharing exactly as the user proposed.
 
-**Move out of `WorkflowStatus.tsx`** (currently lines 78-153):
+**Move out of `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`**
+(currently lines 78-153):
 
 - `WorkflowDatePreset` → `DateRangePreset` (`all | last7 | last30 | lastMonth | custom`)
 - `WorkflowDateFilter` → `DateRangeFilter` (`{ preset, from, to }`)
@@ -377,6 +408,24 @@ dropdown/date changes — those are discrete choices, not typing.
 DRY prep. Tests: existing `src/test/unit/HistorySearchService.test.ts` should pass
 untouched.
 
+**The two copies are not identical, and the differences are load-bearing.** A
+straight merge silently regresses the fallback path:
+
+- **Text cap.** The index caps every candidate at `MAX_INDEXED_TEXT_LENGTH`
+  (`toCandidate`, line 656); the fallback's `addCandidateIfMatch` does **not**.
+  Applying the cap to both would make the fallback miss matches past offset 2000 —
+  the one path that can still find them. The extractor therefore takes an optional
+  `maxTextLength`: the index passes `MAX_INDEXED_TEXT_LENGTH`, the fallback passes
+  nothing.
+- **Query filtering.** The index collects unconditionally and filters later; the
+  fallback filters at collection time (`addCandidateIfMatch` takes `query`). The
+  shared extractor collects unconditionally, and the fallback filters the returned
+  array by `text.toLowerCase().includes(query)` afterwards. This is per-event, not
+  per-run, so the transient array stays small.
+- **`thinking` is folded into `TEXT`'s case in the index and split into its own
+  case in the fallback** — same output today, but Phase 2 gives them different
+  kinds, so the extractor must keep them as separate cases.
+
 **Phase 2 — Taxonomy.** Add `HISTORY_EVENT_KINDS` / `HISTORY_MATCH_FIELDS`,
 replace `matchType` with `eventKind` + `matchField` on document and result, index
 `fileWrite` content, bump `INDEX_SCHEMA_VERSION` to `3.0.0`, update the drawer's
@@ -447,7 +496,7 @@ materializes the full `matches` array before paging, so bucketing is nearly free
 - `src/test/unit/HistorySearchService.test.ts` — extend with per-kind fixtures:
   a run that reads, writes, edits, and deletes the same path, asserting four
   distinct `eventKind`s and that a `fileEdit`-only filter returns exactly one.
-- New `src/test/unit/HistorySearchIndexService.test.ts` (if absent) — cursor hash
+- New `src/test/unit/HistorySearchIndexService.test.ts` (confirmed absent) — cursor hash
   must change when filters change; a stale cursor from a different filter set
   must reset to offset 0.
 - **Harness attribution across a re-run** — the case that rules out the working
