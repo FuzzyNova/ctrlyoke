@@ -1,11 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  CLI_EVENT_TYPES,
-  FINAL_STEP_PHASES,
-} from "../../types/DashboardConstants";
+import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
-import type { CliEvent } from "../../types/WebviewMessageTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
@@ -20,6 +16,10 @@ import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
+import {
+  HistoryCandidateExtractor,
+  type MatchCandidate,
+} from "./HistoryCandidateExtractor";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
@@ -35,16 +35,11 @@ interface WorkflowRunEntry {
   timestamp: number;
 }
 
-interface MatchCandidate {
-  matchType: HistorySearchResult["matchType"];
-  text: string;
-  filePath?: string;
-}
-
 export class HistorySearchService {
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly indexService = new HistorySearchIndexService();
   private readonly lineageRepository = new WorkflowLineageRepository();
+  private readonly candidateExtractor = new HistoryCandidateExtractor();
 
   async search(
     query: string | HistorySearchQuery,
@@ -303,19 +298,9 @@ export class HistorySearchService {
     runRef: import("../../types/CtrlYokeTypes").RunRef
   ): HistorySearchResult[] {
     const cliOutput = event.payload.cliOutput;
-    const candidates: MatchCandidate[] = [];
-
-    this.addCandidateIfMatch(candidates, "prompt", cliOutput.prompt, query);
-    this.addCandidateIfMatch(candidates, "response", cliOutput.response, query);
-    this.addCandidateIfMatch(candidates, "bash", cliOutput.cliCommand, query);
-
-    if (cliOutput.structured?.events) {
-      for (const structuredEvent of cliOutput.structured.events) {
-        candidates.push(
-          ...this.collectStructuredEventMatches(structuredEvent, query)
-        );
-      }
-    }
+    const candidates = this.candidateExtractor
+      .collectCliOutputCandidates(cliOutput)
+      .filter((candidate) => this.matchesQuery(candidate.text, query));
 
     return candidates.map((candidate) =>
       this.buildResult(
@@ -329,176 +314,6 @@ export class HistorySearchService {
         candidate
       )
     );
-  }
-
-  private collectStructuredEventMatches(
-    event: CliEvent,
-    query: string
-  ): MatchCandidate[] {
-    const candidates: MatchCandidate[] = [];
-    switch (event.type) {
-      case CLI_EVENT_TYPES.TEXT:
-        this.addCandidateIfMatch(
-          candidates,
-          "response",
-          this.getStringValue((event.data as { text?: unknown }).text),
-          query
-        );
-        break;
-      case CLI_EVENT_TYPES.THINKING:
-        this.addCandidateIfMatch(
-          candidates,
-          "response",
-          this.getStringValue((event.data as { text?: unknown }).text),
-          query
-        );
-        break;
-      case CLI_EVENT_TYPES.BASH_COMMAND: {
-        const data = event.data as {
-          command?: unknown;
-          output?: unknown;
-          error?: unknown;
-        };
-        this.addCandidateIfMatch(
-          candidates,
-          "bash",
-          this.getStringValue(data.command),
-          query
-        );
-        this.addCandidateIfMatch(
-          candidates,
-          "bash",
-          this.getStringValue(data.output),
-          query
-        );
-        this.addCandidateIfMatch(
-          candidates,
-          "bash",
-          this.getStringValue(data.error),
-          query
-        );
-        break;
-      }
-      case CLI_EVENT_TYPES.FILE_READ:
-      case CLI_EVENT_TYPES.FILE_WRITE:
-      case CLI_EVENT_TYPES.FILE_EDIT:
-      case CLI_EVENT_TYPES.FILE_DELETE: {
-        const data = event.data as {
-          path?: unknown;
-          structuredPatch?: unknown;
-        };
-        const filePath = this.getStringValue(data.path);
-        this.addCandidateIfMatch(candidates, "file", filePath, query, filePath);
-        if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
-          const diffText = this.flattenStructuredPatch(data.structuredPatch);
-          this.addCandidateIfMatch(
-            candidates,
-            "diff",
-            diffText,
-            query,
-            filePath
-          );
-        }
-        break;
-      }
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const data = event.data as { server?: unknown; tool?: unknown };
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.getStringValue(data.server),
-          query
-        );
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.getStringValue(data.tool),
-          query
-        );
-        break;
-      }
-      case CLI_EVENT_TYPES.TOOL_CALL: {
-        const data = event.data as { name?: unknown; parameters?: unknown };
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.getStringValue(data.name),
-          query
-        );
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.stringifyValue(data.parameters),
-          query
-        );
-        break;
-      }
-      case CLI_EVENT_TYPES.TOOL_RESULT: {
-        const result = (
-          event.data as {
-            result?: { output?: unknown; error?: unknown };
-          }
-        ).result;
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.getStringValue(result?.output),
-          query
-        );
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.getStringValue(result?.error),
-          query
-        );
-        break;
-      }
-      case CLI_EVENT_TYPES.WEB_SEARCH: {
-        const data = event.data as {
-          query?: unknown;
-          results?: Array<{ title?: string; snippet?: string; url?: string }>;
-        };
-        this.addCandidateIfMatch(
-          candidates,
-          "tool",
-          this.getStringValue(data.query),
-          query
-        );
-        for (const result of data.results ?? []) {
-          this.addCandidateIfMatch(
-            candidates,
-            "response",
-            this.getStringValue(result.title),
-            query
-          );
-          this.addCandidateIfMatch(
-            candidates,
-            "response",
-            this.getStringValue(result.snippet),
-            query
-          );
-          this.addCandidateIfMatch(
-            candidates,
-            "response",
-            this.getStringValue(result.url),
-            query
-          );
-        }
-        break;
-      }
-      case CLI_EVENT_TYPES.COMPACTION:
-        this.addCandidateIfMatch(
-          candidates,
-          "response",
-          this.getStringValue((event.data as { summary?: unknown }).summary),
-          query
-        );
-        break;
-      default:
-        break;
-    }
-
-    return candidates;
   }
 
   private collectStatusMatches(
@@ -556,19 +371,6 @@ export class HistorySearchService {
     };
   }
 
-  private addCandidateIfMatch(
-    candidates: MatchCandidate[],
-    matchType: HistorySearchResult["matchType"],
-    text: string | undefined,
-    query: string,
-    filePath?: string
-  ): void {
-    if (!text || !this.matchesQuery(text, query)) {
-      return;
-    }
-    candidates.push({ matchType, text, filePath });
-  }
-
   private matchesQuery(text: string, query: string): boolean {
     return text.toLowerCase().includes(query.toLowerCase());
   }
@@ -601,42 +403,6 @@ export class HistorySearchService {
       return "Final Step";
     }
     return `Prompt ${target.stepIndex + 1}`;
-  }
-
-  private flattenStructuredPatch(structuredPatch: unknown): string | undefined {
-    if (!Array.isArray(structuredPatch)) {
-      return undefined;
-    }
-
-    const lines = structuredPatch.flatMap((hunk) => {
-      if (!hunk || typeof hunk !== "object") {
-        return [];
-      }
-      const hunkLines = (hunk as { lines?: unknown }).lines;
-      return Array.isArray(hunkLines)
-        ? hunkLines.filter((line): line is string => typeof line === "string")
-        : [];
-    });
-
-    return lines.length > 0 ? lines.join("\n") : undefined;
-  }
-
-  private getStringValue(value: unknown): string | undefined {
-    return typeof value === "string" && value.length > 0 ? value : undefined;
-  }
-
-  private stringifyValue(value: unknown): string | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    if (typeof value === "string") {
-      return value;
-    }
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
   }
 
   private deriveWorkflowName(workflowId: string): string {

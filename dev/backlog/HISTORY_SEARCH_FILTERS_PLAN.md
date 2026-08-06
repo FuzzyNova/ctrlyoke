@@ -21,7 +21,7 @@ Filter plumbing already exists end to end and is simply never exercised:
 - `HistorySearchQuery.filters` supports `matchTypes`, `workflowKeys`, `since`,
   `until` (`src/types/WorkflowTimelineTypes.ts:147`).
 - `HistorySearchIndexService.search` applies all four against the in-memory
-  document list (`src/core/orchestration/HistorySearchIndexService.ts:122-144`).
+  document list (`src/core/orchestration/HistorySearchIndexService.ts:120-140`).
 - `WebviewMessageRouter` forwards `message.filters` verbatim
   (`src/ui/WebviewMessageRouter.ts:850`), and `SearchHistoryMessage extends
   Partial<HistorySearchQuery>` (`src/types/WebviewMessageTypes.ts:1136`).
@@ -52,11 +52,11 @@ the path.
 ### The duplication problem
 
 Candidate extraction is implemented **twice** with the same switch statement:
-`HistorySearchIndexService.collectStructuredEventCandidates` (line 534) and
-`HistorySearchService.collectStructuredEventMatches` (line 334, the disk-scan
-fallback used when the index throws). Any taxonomy change must land in both, or
-the fallback silently produces documents the filters cannot match. Extract first,
-then change once.
+`HistoryCandidateExtractor.collectStructuredEventCandidates` (line 40) is now the
+single implementation consumed by both services; the fallback remains the
+disk-scan path used when the index throws. Any taxonomy change should land in the
+extractor once, or the fallback silently produces documents the filters cannot
+match.
 
 ## Decisions
 
@@ -246,7 +246,7 @@ This is strictly better than the working file on every axis:
   attributed.
 - **Free.** The index service already destructures `event.payload.cliOutput` and
   walks `cliOutput.structured?.events`
-  (`HistorySearchIndexService.collectCliOutputCandidates:518-525`). Reading
+  (`HistoryCandidateExtractor.collectCliOutputCandidates:20-31`). Reading
   `cliOutput.structured?.metadata` alongside it costs one property access — no
   extra file reads, no working-file parse, no `Map<stepIndex, …>`.
 - **Correctly grained.** Per recorded attempt, which is finer than per-step and far
@@ -288,7 +288,7 @@ the change will be slow on a large `.ctrlyoke/.runs` tree — acceptable, and th
 `indexState: "building"` label already covers it in the UI.
 
 **Freshness stays correct for free.** `isManifestFresh` stats only the manifest and
-events files (`HistorySearchIndexService.ts:378-384`). Because harness now comes
+events files (`HistorySearchIndexService.ts:374-385`). Because harness now comes
 from the events themselves rather than the working file, every index input is
 already covered by that check — no new mtime tracking, and no risk of an in-place
 working-file edit silently invalidating indexed harness data.
@@ -296,7 +296,7 @@ working-file edit silently invalidating indexed harness data.
 ### 6. Cursor must hash the filters
 
 `CursorPayload.queryHash` is `hashQuery(query)` — the **query text only**
-(`HistorySearchIndexService.ts:825, 844`). Change a filter while a cursor is
+(`HistorySearchIndexService.ts:675, 694`). Change a filter while a cursor is
 outstanding and `decodeCursorOffset` accepts the old cursor, so "Load more"
 resumes at an offset computed against a different result set — silently skipping
 or duplicating rows.
@@ -403,23 +403,30 @@ dropdown/date changes — those are discrete choices, not typing.
 ## Phases
 
 **Phase 1 — De-duplicate the extractor.** Pull the candidate switch out of
-`HistorySearchIndexService` and `HistorySearchService` into a single
-`HistoryCandidateExtractor` (`src/core/orchestration/`). No behavior change; pure
-DRY prep. Tests: existing `src/test/unit/HistorySearchService.test.ts` should pass
+`HistorySearchIndexService` and `HistorySearchService` into the single
+`HistoryCandidateExtractor` (`src/core/orchestration/HistoryCandidateExtractor.ts`).
+The module exports `HistoryCandidateExtractor`,
+`HistoryCandidateExtractorOptions`, and `MatchCandidate`; its public extraction
+API is `collectCliOutputCandidates(cliOutput)` and
+`collectStatusCandidates(message)`, with the optional `maxTextLength` constructor
+option reserved for the bounded index path. No behavior change; pure DRY prep.
+Tests: existing `src/test/unit/HistorySearchService.test.ts` should pass
 untouched.
 
 **The two copies are not identical, and the differences are load-bearing.** A
 straight merge silently regresses the fallback path:
 
 - **Text cap.** The index caps every candidate at `MAX_INDEXED_TEXT_LENGTH`
-  (`toCandidate`, line 656); the fallback's `addCandidateIfMatch` does **not**.
+  (`HistoryCandidateExtractor.ts:161-174`); the fallback's per-event filter in
+  `HistorySearchService.collectCliOutputMatches` (`HistorySearchService.ts:292-303`)
+  does **not** cap.
   Applying the cap to both would make the fallback miss matches past offset 2000 —
   the one path that can still find them. The extractor therefore takes an optional
   `maxTextLength`: the index passes `MAX_INDEXED_TEXT_LENGTH`, the fallback passes
   nothing.
 - **Query filtering.** The index collects unconditionally and filters later; the
-  fallback filters at collection time (`addCandidateIfMatch` takes `query`). The
-  shared extractor collects unconditionally, and the fallback filters the returned
+  fallback filters at collection time. The shared extractor collects
+  unconditionally, and the fallback filters the returned
   array by `text.toLowerCase().includes(query)` afterwards. This is per-event, not
   per-run, so the transient array stays small.
 - **`thinking` is folded into `TEXT`'s case in the index and split into its own
@@ -533,7 +540,7 @@ summary line can't say "3 kinds hidden".
 
 If a kind is ever defaulted off, it should be **`thinking`, not `fileRead`** —
 which inverts the leaning in the earlier draft. `fileRead` documents contain only
-the *path* (`toCandidate("file", filePath, filePath)`), so despite being the
+the *path* (the extractor's file-path candidate), so despite being the
 largest bucket by count they can only match path-ish queries — which is usually
 exactly the file search the user wanted. `thinking` documents carry full prose and
 compete directly with `response` for every natural-language query. Revisit once
