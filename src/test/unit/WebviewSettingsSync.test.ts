@@ -139,6 +139,103 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Regression: INIT is a per-client message, so its workflow half must describe
+  // the receiving client. It used to read PANEL_CLIENT_ID unconditionally, and
+  // `getInstanceForClient` falls back to the panel's instance for any client
+  // with no binding of its own. Browser clients are unbound on every socket
+  // close (`unregisterClient` clears their viewed id), so each reconnect READY
+  // pushed the *panel's* workflow to the browser and the dashboard visibly
+  // jumped off whatever the user was viewing — repeatedly, on a flaky link.
+  // ────────────────────────────────────────────────────────────────────────────
+  suite("sendInitialState workflow scoping", () => {
+    /**
+     * `views` maps a client to the workflow its bound instance holds.
+     * `bound` is the separate viewer-registry answer, mirroring the real
+     * orchestrator: the panel resolves to a lazily created instance even when
+     * it is not registered, every other client resolves to nothing.
+     */
+    function makeViewOrchestrator(
+      views: Record<string, string | undefined>,
+      bound: string[] = Object.keys(views)
+    ) {
+      return {
+        hasViewedWorkflow: (clientId: string) => bound.includes(clientId),
+        getQueueState: (clientId: string) => ({
+          workflowName: views[clientId],
+          steps: views[clientId] ? [{ prompt: "step one" }] : [],
+          status: "idle",
+          currentIndex: 0,
+          results: [],
+        }),
+        getCurrentPromptFile: (clientId: string) =>
+          views[clientId]
+            ? { fileName: `${views[clientId]}.json`, steps: [] }
+            : null,
+        getActivePromptQueue: () => null,
+        getCompatibilityRegistry: () => undefined,
+      } as any;
+    }
+
+    test("sends the requesting client's own workflow, not the panel's", async () => {
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeViewOrchestrator({
+          [PANEL_CLIENT_ID]: "panel-workflow",
+          "browser:1": "browser-workflow",
+        })
+      );
+
+      await sync.sendInitialState(postMessage, "browser:1");
+
+      const init = messages.find((m) => m.type === MESSAGE_TYPES.INIT);
+      assert.strictEqual(
+        init.data.workflowName,
+        "browser-workflow",
+        "INIT must describe the client it is sent to"
+      );
+      assert.strictEqual(init.data.fileName, "browser-workflow.json");
+    });
+
+    test("sends an empty workflow to a client with no view of its own", async () => {
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeViewOrchestrator({ [PANEL_CLIENT_ID]: "panel-workflow" })
+      );
+
+      // A browser client that just reconnected: registered, but not yet bound
+      // to a workflow. handleClientReady replays its real view moments later.
+      await sync.sendInitialState(postMessage, "browser:1");
+
+      const init = messages.find((m) => m.type === MESSAGE_TYPES.INIT);
+      assert.deepStrictEqual(
+        init.data.steps,
+        [],
+        "an empty steps array is what makes the webview's INIT handler leave the client's current view untouched"
+      );
+      assert.strictEqual(init.data.workflowName, "");
+      assert.strictEqual(init.data.fileName, "");
+    });
+
+    test("still describes the panel's lazily created instance for an unbound panel", async () => {
+      const messages: any[] = [];
+      const postMessage = (msg: any) => messages.push(msg);
+      // Nothing is bound in the viewer registry — the state the panel gets here
+      // comes from the instance `getActiveInstance()` creates on demand, which
+      // is the one client legitimately entitled to that fallback.
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeViewOrchestrator({ [PANEL_CLIENT_ID]: "panel-workflow" }, [])
+      );
+
+      await sync.sendInitialState(postMessage);
+
+      const init = messages.find((m) => m.type === MESSAGE_TYPES.INIT);
+      assert.strictEqual(init.data.workflowName, "panel-workflow");
+    });
+  });
+
   suite("handleGlobalSettingsLoadRequest", () => {
     test("should include notifications settings and leaf-level source metadata", async () => {
       const originalGetAll = configService.getAll.bind(configService);
@@ -832,6 +929,39 @@ suite("WebviewSettingsSync", () => {
         sendPropsCalled,
         false,
         "sendWorkflowPropertiesToSettings should not be called when falling back to the serializer (no orchestrator)"
+      );
+    });
+  });
+
+  suite("WebviewMessageRouter — READY handler", () => {
+    test("tells sendInitialState which client the INIT is for", async () => {
+      const initClientIds: string[] = [];
+
+      const mockSettingsSync = {
+        sendInitialState: async (_postMessage: any, clientId: string) => {
+          initClientIds.push(clientId);
+        },
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        {} as any,
+        () => undefined,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+
+      await router.route(
+        { type: MESSAGE_TYPES.READY },
+        { postMessage: () => {}, clientTag: "browser:1" }
+      );
+      await router.route({ type: MESSAGE_TYPES.READY });
+
+      assert.deepStrictEqual(
+        initClientIds,
+        ["browser:1", PANEL_CLIENT_ID],
+        "INIT's workflow payload is client-scoped, so READY must forward the sending client's id"
       );
     });
   });

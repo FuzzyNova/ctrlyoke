@@ -1,10 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useUiStore } from "@store/uiStore";
-import { WebviewLog } from "@utils/logger";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import { getVsCodeApi } from "@hooks/useVsCodeApi";
-
-const SWITCH_TIMEOUT_MS = 30000;
 
 /**
  * WorkflowSwitchOverlay
@@ -16,43 +11,21 @@ const SWITCH_TIMEOUT_MS = 30000;
  * previous workflow's still-rendered panels — an edit made mid-switch would
  * otherwise target the workflow the user just left.
  *
- * Driven by `uiStore.pendingRunViewSwitch`, which `requestRunViewLoad` sets
- * for cross-lineage requests and every pending-request clear path resets
- * (snapshot applied, action failed, backend-initiated switch). Unlike
- * StartupOverlay's safety timeout, a missing RUN_VIEW_LOADED here must not
- * silently dismiss the overlay — that would leave the client addressed to a
- * workflow whose content was never applied. Instead, at the timeout the same
- * request (same requestId) is reissued once so a slow connection recovers
- * without the user having to notice and re-click; RUN_VIEW_LOADED's
- * requestId check accepts a response to either the original or retried send.
- * A later follow-up can add an explicit error/give-up state past this point.
+ * Purely presentational: it renders `uiStore.pendingRunViewSwitch`, which
+ * `requestRunViewLoad` sets for cross-lineage requests and every pending-request
+ * clear path resets (snapshot applied, action failed, backend-initiated switch,
+ * watchdog give-up). Because this overlay swallows pointer events, it must
+ * never be the thing deciding how long a request may stay outstanding —
+ * `useRunViewLoadWatchdog` owns reissuing a lost request and retiring one that
+ * is never answered, for same-lineage loads (no overlay) equally.
  */
 export const WorkflowSwitchOverlay: React.FC = () => {
   const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
-  const [hasRetried, setHasRetried] = useState(false);
-
-  useEffect(() => {
-    setHasRetried(false);
-    if (!pendingRunViewSwitch) return;
-    const { requestId, address } = pendingRunViewSwitch;
-    const id = setTimeout(() => {
-      WebviewLog.warn(
-        `[WorkflowSwitchOverlay] Safety timeout (${SWITCH_TIMEOUT_MS}ms) fired — ` +
-          `RUN_VIEW_LOADED for request ${requestId} never arrived; retrying`
-      );
-      setHasRetried(true);
-      getVsCodeApi().postMessage({
-        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-        address,
-        requestId,
-      });
-    }, SWITCH_TIMEOUT_MS);
-    return () => clearTimeout(id);
-  }, [pendingRunViewSwitch]);
+  const retrying = useUiStore((s) => s.runViewLoadRetrying);
 
   if (!pendingRunViewSwitch) return null;
 
-  const label = hasRetried
+  const label = retrying
     ? "Still loading workflow…"
     : pendingRunViewSwitch.workflowName
       ? `Loading "${pendingRunViewSwitch.workflowName}"…`

@@ -186,20 +186,24 @@ export class WebviewSettingsSync {
   // ============================================================================
 
   /**
-   * Send full initial state to the webview (INIT message).
+   * Send full initial state to one client (INIT message).
    * Called on READY and during resolveWebviewView().
+   *
+   * `clientId` must name the client `postMessage` reaches — the workflow half
+   * of the payload is that client's own view (see `getCurrentState`).
    */
   async sendInitialState(
-    postMessage: PostMessageFn = this.postMessage
+    postMessage: PostMessageFn = this.postMessage,
+    clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const harnessStatuses = Object.entries(this.harnessStatus)
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
     Log.debug(
-      `sendInitialState() — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
+      `sendInitialState() clientId=${clientId} — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
     );
 
-    const workflowState = this.getCurrentState();
+    const workflowState = this.getCurrentState(clientId);
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
     const dev = await this.getDevStatus?.();
@@ -809,15 +813,28 @@ export class WebviewSettingsSync {
   }
 
   /**
-   * Get the current workflow state from WorkflowOrchestrator (or defaults).
+   * Get the workflow state a client is viewing (or defaults).
+   *
+   * Scoped to the client because INIT is a per-client message. A client with no
+   * workflow of its own gets the empty state, never a substitute: browser
+   * clients lose their view registration on every socket close, so reading the
+   * panel's workflow here republished it to a reconnecting browser and silently
+   * replaced whatever that browser was viewing. On a flaky mobile link that
+   * fired on every reconnect. `handleClientReady` delivers the client's real
+   * view moments later, and an empty INIT leaves its existing view untouched.
    */
-  getCurrentState(): any {
+  getCurrentState(clientId: string = PANEL_CLIENT_ID): any {
     const orchestrator = this.getOrchestrator();
-    if (orchestrator) {
-      const queueState = orchestrator.getQueueState(PANEL_CLIENT_ID);
-      const currentFile = orchestrator.getCurrentPromptFile();
+    // The panel is exempt from the binding check: its instance is the lazily
+    // created default, so an unbound panel legitimately resolves to it.
+    if (
+      orchestrator &&
+      (clientId === PANEL_CLIENT_ID || orchestrator.hasViewedWorkflow(clientId))
+    ) {
+      const queueState = orchestrator.getQueueState(clientId);
+      const currentFile = orchestrator.getCurrentPromptFile(clientId);
       const workflowName = queueState.workflowName;
-      const promptQueue = orchestrator.getActivePromptQueue();
+      const promptQueue = orchestrator.getActivePromptQueue(clientId);
       const finalStep = promptQueue?.getWorkflowFile().finalStep ?? null;
       const finalStepRuntime = promptQueue?.getFinalStepRuntime();
       return {

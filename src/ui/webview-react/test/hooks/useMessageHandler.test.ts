@@ -1897,6 +1897,50 @@ describe("run view revision snapshots", () => {
     expect(useUiStore.getState().pendingRunViewRequestId).toBeNull();
   });
 
+  // A rejected navigation must land somewhere coherent. Retiring the request
+  // without undoing its optimistic address move left the header naming the
+  // workflow that failed to load while the panels still rendered the previous
+  // one, with every addressed control aimed at the wrong lineage.
+  it("rolls the view back to the workflow still on screen when a load is rejected", () => {
+    renderHook(() => useMessageHandler());
+    const previousAddress = {
+      workflowKey: "wf-current" as never,
+      kind: "draft" as const,
+    };
+    useUiStore.setState({
+      displayedViewAddress: previousAddress,
+      appliedViewAddress: previousAddress,
+      displayedDefinitionRevision: 9,
+    });
+
+    let requestId = "";
+    act(() => {
+      requestId = useUiStore
+        .getState()
+        .requestRunViewLoad(
+          { workflowKey: "wf-unreachable" as never, kind: "draft" },
+          []
+        );
+    });
+    expect(useUiStore.getState().displayedViewAddress).toEqual({
+      workflowKey: "wf-unreachable",
+      kind: "draft",
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, {
+        action: "load run",
+        error: "ctrlyoke is still starting up — try again in a moment",
+        requestId,
+      });
+    });
+
+    const ui = useUiStore.getState();
+    expect(ui.pendingRunViewRequestId).toBeNull();
+    expect(ui.displayedViewAddress).toEqual(previousAddress);
+    expect(ui.displayedDefinitionRevision).toBe(9);
+  });
+
   it("keeps an unrelated run-view request pending on failure", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({ pendingRunViewRequestId: "run-view-8" });

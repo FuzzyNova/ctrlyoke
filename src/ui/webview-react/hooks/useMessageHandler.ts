@@ -1884,12 +1884,17 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.WORKFLOW_ACTION_FAILED] = (message) => {
     const uiStore = useUiStore.getState();
     // Retire the request this failure answers; otherwise the client keeps
-    // waiting for a snapshot that will never arrive.
+    // waiting for a snapshot that will never arrive. Roll back rather than
+    // merely retire: the request already moved the displayed address
+    // optimistically, so dropping it alone would leave the header naming the
+    // workflow that failed to load while the panels still render the previous
+    // one. A rejected navigation has to end on the view the client is actually
+    // showing — the toast below is what tells the user it did not happen.
     if (
       message.requestId &&
       uiStore.pendingRunViewRequestId === message.requestId
     ) {
-      uiStore.clearPendingRunViewLoad();
+      uiStore.rollbackRunViewLoad();
     }
     uiStore.showToast(
       `Failed to ${message.action}: ${message.error}`,

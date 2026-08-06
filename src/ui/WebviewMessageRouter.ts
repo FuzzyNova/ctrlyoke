@@ -236,7 +236,7 @@ export class WebviewMessageRouter {
         // panel READY immediately stops further nudges from the extension.
         this.callbacks.onPanelReady?.();
       }
-      await this.settingsSync.sendInitialState(ctx.postMessage);
+      await this.settingsSync.sendInitialState(ctx.postMessage, ctx.clientId);
       // Tell the webview its own client identity so it can compute isController
       ctx.emit({
         type: MESSAGE_TYPES.CLIENT_ID_ASSIGNED,
@@ -781,7 +781,18 @@ export class WebviewMessageRouter {
     // ── Output History ───────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.LOAD_RUN_VIEW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
-      if (!orchestrator) return;
+      if (!orchestrator) {
+        // Returning silently leaves the client's request outstanding forever,
+        // which suppresses every requestless run-view push it would otherwise
+        // apply (see the catch below). Answer it instead.
+        await this.mutationCoordinator.reportActionFailure(
+          ctx,
+          "load run",
+          new Error("ctrlyoke is still starting up — try again in a moment"),
+          message.requestId
+        );
+        return;
+      }
       try {
         await orchestrator.loadRunViewForClient(
           message.address,

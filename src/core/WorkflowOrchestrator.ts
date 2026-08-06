@@ -2864,15 +2864,14 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Get the PromptQueue of the currently active workflow instance.
-   * Returns null if no instance exists yet.
+   * Get the PromptQueue of the workflow instance a client is viewing.
+   * Returns null if that client has no instance. Defaults to the panel because
+   * VS Code commands act on what the panel shows.
    */
-  getActivePromptQueue(): PromptQueue | null {
-    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    const viewed = id
-      ? (this.instances.get(id) ?? this.retiredInstances.get(id))
-      : null;
-    return viewed?.promptQueue ?? null;
+  getActivePromptQueue(
+    clientId: string = this.PANEL_CLIENT_ID
+  ): PromptQueue | null {
+    return this.getBoundInstance(clientId)?.promptQueue ?? null;
   }
 
   async updateWorkflowName(
@@ -3000,8 +2999,19 @@ export class WorkflowOrchestrator {
     );
   }
 
-  getCurrentPromptFile(): { fileName: string; steps: unknown[] } | null {
-    return this.getActiveInstance().getCurrentPromptFile();
+  /**
+   * The prompt file a client's bound instance owns. Defaults to the panel,
+   * whose instance is lazily created if it does not exist yet; a non-panel
+   * client that is not bound to an instance resolves to null rather than
+   * borrowing the panel's.
+   */
+  getCurrentPromptFile(
+    clientId: string = this.PANEL_CLIENT_ID
+  ): { fileName: string; steps: unknown[] } | null {
+    if (clientId === this.PANEL_CLIENT_ID) {
+      return this.getActiveInstance().getCurrentPromptFile();
+    }
+    return this.getBoundInstance(clientId)?.getCurrentPromptFile() ?? null;
   }
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
@@ -4675,12 +4685,21 @@ export class WorkflowOrchestrator {
         `getInstanceForClient: unregistered clientId "${clientId}" — falling back to active instance. This is likely a bug.`
       );
     }
+    return this.getBoundInstance(clientId) ?? this.getActiveInstance();
+  }
+
+  /**
+   * The instance a client is bound to, or null — the strict counterpart of
+   * `getInstanceForClient`, which falls back to the panel's instance. Read
+   * paths that describe a *specific* client (its INIT payload, its prompt
+   * file) must use this: the fallback would hand a client with no binding of
+   * its own the panel's workflow, and browser clients are unbound on every
+   * reconnect because `unregisterClient` clears their viewed id.
+   */
+  private getBoundInstance(clientId: string): WorkflowInstance | null {
     const id = this.getViewedWorkflowId(clientId);
-    if (id) {
-      const inst = this.instances.get(id) ?? this.retiredInstances.get(id);
-      if (inst) return inst;
-    }
-    return this.getActiveInstance();
+    if (!id) return null;
+    return this.instances.get(id) ?? this.retiredInstances.get(id) ?? null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

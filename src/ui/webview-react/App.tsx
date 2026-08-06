@@ -11,6 +11,7 @@ import {
   captureAndSendThemeVars,
 } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
+import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useDesktopLayout } from "@hooks/useDesktopLayout";
@@ -577,6 +578,9 @@ function App() {
   // Message handlers with full implementations
   useMessageHandler();
   useUndoRedoKeyHandler();
+  // Bounds how long a run-view request may stay outstanding — a lost one
+  // suppresses every server-initiated view update until it is retired.
+  useRunViewLoadWatchdog();
 
   // Signal ready to extension
   useEffect(() => {

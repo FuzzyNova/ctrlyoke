@@ -45,6 +45,25 @@ import {
 let runViewRequestSequence = 0;
 let toastSequence = 0;
 
+/**
+ * The addressed-view fields `setDisplayedRunView` writes, snapshotted before an
+ * optimistic run-view request so it can be undone. Mirrors that action's write
+ * set exactly — a field added there must be added here, or a failed navigation
+ * leaves it stranded on the workflow that never loaded.
+ */
+export interface RunViewLoadRollback {
+  displayedViewAddress: WorkflowViewAddress | null;
+  runSummaries: RunSummary[];
+  executionRunRef: string | null;
+  displayedDefinitionRevision: number | null;
+  displayedDescriptorRevision: number | null;
+  pendingRewind: {
+    fromStepIndex: number;
+    baseDefinitionRevision: number;
+  } | null;
+  isViewingHistory: boolean;
+}
+
 export interface ToastItem {
   id: string;
   message: string;
@@ -426,6 +445,14 @@ interface UiState {
   /** Latest client-initiated run-view request; not persisted across reloads. */
   pendingRunViewRequestId: string | null;
   /**
+   * The address `pendingRunViewRequestId` asked for. Recorded for *every*
+   * pending request, unlike `pendingRunViewSwitch` (cross-lineage only), so the
+   * run-view watchdog can reissue a lost request in either case. Not read as a
+   * navigation target — that is `displayedViewAddress`, which other messages
+   * may legitimately move while this request is still outstanding.
+   */
+  pendingRunViewAddress: WorkflowViewAddress | null;
+  /**
    * Set while the latest run-view request crosses lineages — i.e. a workflow
    * switch whose snapshot has not arrived yet. Drives the instant header
    * rename and the panel loading overlay. Cleared with the request.
@@ -435,6 +462,24 @@ interface UiState {
     workflowName: string | null;
     address: WorkflowViewAddress;
   } | null;
+  /**
+   * True once the run-view watchdog has had to reissue the pending request, so
+   * the switch overlay can say so rather than looking indistinguishable from a
+   * first attempt. Cleared with the request.
+   */
+  runViewLoadRetrying: boolean;
+  /**
+   * Everything `requestRunViewLoad` overwrote optimistically, captured so a
+   * request that is never answered can be undone instead of abandoned.
+   *
+   * Abandoning it leaves the client *addressed* to the workflow it failed to
+   * load while `workflowStore` still holds the previous one — the header names
+   * one workflow and the panels show another, and every addressed control
+   * (Run/Resume/Stop, the run selector) targets a lineage whose content was
+   * never applied. A failed navigation must land back on a coherent view, not
+   * on a half-applied one, so the give-up path restores this verbatim.
+   */
+  runViewLoadRollback: RunViewLoadRollback | null;
   executionRunRef: string | null;
   /** Optimistic revisions paired with the current addressed definition snapshot. */
   displayedDefinitionRevision: number | null;
@@ -763,6 +808,14 @@ interface UiActions {
     targetWorkflowName?: string
   ) => string;
   clearPendingRunViewLoad: () => void;
+  /** Records that the watchdog has reissued the outstanding run-view request. */
+  markRunViewLoadRetrying: () => void;
+  /**
+   * Retires the pending request *and* undoes its optimistic view move, so a
+   * navigation that could not be completed ends on the workflow the client is
+   * actually showing rather than on a header/content mismatch.
+   */
+  rollbackRunViewLoad: () => void;
 
   // Dropdown hide feature
   hideDropdownOption: (namespace: string, value: string) => void;
@@ -875,7 +928,10 @@ const initialState: UiState = {
   displayedViewAddress: null,
   appliedViewAddress: null,
   pendingRunViewRequestId: null,
+  pendingRunViewAddress: null,
   pendingRunViewSwitch: null,
+  runViewLoadRetrying: false,
+  runViewLoadRollback: null,
   executionRunRef: null,
   displayedDefinitionRevision: null,
   displayedDescriptorRevision: null,
@@ -1396,6 +1452,10 @@ export const useUiStore = create<UiState & UiActions>()(
 
       clearHistoryView: () => set({ isViewingHistory: false }),
 
+      // Adding a field here means adding it to `RunViewLoadRollback` too —
+      // that type is the snapshot `requestRunViewLoad` takes so an unanswered
+      // request can be undone, and a field missing from it stays stranded on
+      // the workflow that never loaded.
       setDisplayedRunView: (
         address,
         summaries,
@@ -1504,8 +1564,20 @@ export const useUiStore = create<UiState & UiActions>()(
         // workflow switch built a header address out of the new workflowKey and
         // the old run — so Stop targeted a run that lineage does not own and
         // silently did nothing.
+        const previous = get();
         const sameLineage =
-          get().displayedViewAddress?.workflowKey === address.workflowKey;
+          previous.displayedViewAddress?.workflowKey === address.workflowKey;
+        // Captured before the optimistic move, so a request that is never
+        // answered can be undone rather than left half-applied.
+        const rollback: RunViewLoadRollback = {
+          displayedViewAddress: previous.displayedViewAddress,
+          runSummaries: previous.runSummaries,
+          executionRunRef: previous.executionRunRef,
+          displayedDefinitionRevision: previous.displayedDefinitionRevision,
+          displayedDescriptorRevision: previous.displayedDescriptorRevision,
+          pendingRewind: previous.pendingRewind,
+          isViewingHistory: previous.isViewingHistory,
+        };
         get().setDisplayedRunView(
           address,
           sameLineage ? summaries : [],
@@ -1513,6 +1585,9 @@ export const useUiStore = create<UiState & UiActions>()(
         );
         set({
           pendingRunViewRequestId: requestId,
+          pendingRunViewAddress: address,
+          runViewLoadRetrying: false,
+          runViewLoadRollback: rollback,
           // A cross-lineage request is a workflow switch: until its snapshot
           // arrives the panels still render the previous workflow, so record
           // the target for instant header feedback and the switch overlay.
@@ -1525,7 +1600,44 @@ export const useUiStore = create<UiState & UiActions>()(
       },
 
       clearPendingRunViewLoad: () =>
-        set({ pendingRunViewRequestId: null, pendingRunViewSwitch: null }),
+        set({
+          pendingRunViewRequestId: null,
+          pendingRunViewAddress: null,
+          pendingRunViewSwitch: null,
+          runViewLoadRetrying: false,
+          runViewLoadRollback: null,
+        }),
+
+      markRunViewLoadRetrying: () => set({ runViewLoadRetrying: true }),
+
+      rollbackRunViewLoad: () =>
+        set((state) => {
+          const rollback = state.runViewLoadRollback;
+          const retired = {
+            pendingRunViewRequestId: null,
+            pendingRunViewAddress: null,
+            pendingRunViewSwitch: null,
+            runViewLoadRetrying: false,
+            runViewLoadRollback: null,
+          };
+          if (!rollback) return retired;
+          return {
+            ...rollback,
+            ...retired,
+            // Restored verbatim, including the descriptor revision: while a
+            // request is pending, WORKFLOW_VIEW_IDENTITY only accepts the
+            // address being switched *to*, so the previous address's revisions
+            // cannot have advanced behind this snapshot's back.
+            //
+            // The restored address's content is resident but not necessarily
+            // whole — navigateToWorkflowAddress clears history outputs up front
+            // when the target is the executing run of the displayed lineage.
+            // Dropping the applied marker keeps a click on the workflow we just
+            // returned to a real reload instead of the inert no-op the
+            // displayed/applied short-circuit would otherwise make it.
+            appliedViewAddress: null,
+          };
+        }),
 
       // ============================================================================
       // DROPDOWN HIDE FEATURE
