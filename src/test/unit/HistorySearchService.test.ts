@@ -8,6 +8,7 @@ import {
   CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  SCRIPT_OUTPUT_SOURCES,
 } from "../../types/DashboardConstants";
 import type { WorkingFile } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
@@ -82,13 +83,15 @@ suite("HistorySearchService", () => {
     assert.strictEqual(results[0]?.workflowKey, workflowId);
     assert.strictEqual(results[0]?.runRef, WorkflowPaths.formatRunRef(2000));
     assert.strictEqual(results[0]?.workflowName, "Demo Workflow");
-    assert.strictEqual(results[0]?.matchType, "status");
+    assert.strictEqual(results[0]?.eventKind, "status");
+    assert.strictEqual(results[0]?.matchField, "content");
     assert.strictEqual(results[0]?.matchContext, "Prompt 2");
 
     assert.strictEqual(results[1]?.startedAt, 1000);
     assert.strictEqual(results[1]?.workflowKey, workflowId);
     assert.strictEqual(results[1]?.runRef, WorkflowPaths.formatRunRef(1000));
-    assert.strictEqual(results[1]?.matchType, "response");
+    assert.strictEqual(results[1]?.eventKind, "response");
+    assert.strictEqual(results[1]?.matchField, "content");
     assert.strictEqual(results[1]?.matchContext, "Prompt 1");
   });
 
@@ -153,24 +156,28 @@ suite("HistorySearchService", () => {
 
     const bashResults = (await service.search("bash-term", workspaceRoot))
       .results;
-    assert.strictEqual(bashResults[0]?.matchType, "bash");
+    assert.strictEqual(bashResults[0]?.eventKind, "bash");
+    assert.strictEqual(bashResults[0]?.matchField, "command");
     assert.strictEqual(bashResults[0]?.matchContext, "Final Step Loop 2");
 
     const fileResults = (
       await service.search("src/history-search.ts", workspaceRoot)
     ).results;
-    assert.strictEqual(fileResults[0]?.matchType, "file");
+    assert.strictEqual(fileResults[0]?.eventKind, "fileEdit");
+    assert.strictEqual(fileResults[0]?.matchField, "path");
     assert.strictEqual(fileResults[0]?.filePath, "src/history-search.ts");
     assert.strictEqual(fileResults[0]?.workflowName, "orphan");
 
     const toolResults = (
       await service.search("tool-result-term", workspaceRoot)
     ).results;
-    assert.strictEqual(toolResults[0]?.matchType, "tool");
+    assert.strictEqual(toolResults[0]?.eventKind, "tool");
+    assert.strictEqual(toolResults[0]?.matchField, "output");
 
     const diffResults = (await service.search("diff-term", workspaceRoot))
       .results;
-    assert.strictEqual(diffResults[0]?.matchType, "diff");
+    assert.strictEqual(diffResults[0]?.eventKind, "fileEdit");
+    assert.strictEqual(diffResults[0]?.matchField, "diff");
     assert.strictEqual(diffResults[0]?.filePath, "src/history-search.ts");
   });
 
@@ -178,6 +185,140 @@ suite("HistorySearchService", () => {
     const response = await service.search("a", workspaceRoot);
     assert.deepStrictEqual(response.results, []);
     assert.strictEqual(response.totalCount, 0);
+  });
+
+  test("keeps file operation kinds distinct and indexes edit paths and diffs", async () => {
+    const workflowId = "file-kinds-2026-06-09T20-00-00";
+    const sharedPath = "src/edited-content-term.ts";
+    await createRun(workflowId, 1, 4000, [
+      createCliOutputDraft(
+        4100,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          prompt: "",
+          response: "",
+          elapsed: 1,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_READ,
+                data: { path: sharedPath },
+              },
+              {
+                type: CLI_EVENT_TYPES.FILE_WRITE,
+                data: { path: sharedPath, content: "written-content-term" },
+              },
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: sharedPath,
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 1,
+                      newStart: 1,
+                      newLines: 1,
+                      lines: ["-old", "+edited-content-term"],
+                    },
+                  ],
+                },
+              },
+              {
+                type: CLI_EVENT_TYPES.FILE_DELETE,
+                data: { path: sharedPath },
+              },
+            ],
+            metadata: {},
+          },
+        }
+      ),
+    ]);
+
+    const pathResults = (await service.search(sharedPath, workspaceRoot))
+      .results;
+    assert.deepStrictEqual(
+      pathResults.map((result) => result.eventKind).sort(),
+      ["fileDelete", "fileEdit", "fileRead", "fileWrite"]
+    );
+    assert.ok(pathResults.every((result) => result.matchField === "path"));
+
+    const editResults = (
+      await service.search("edited-content-term", workspaceRoot)
+    ).results;
+    assert.deepStrictEqual(
+      editResults
+        .filter((result) => result.eventKind === "fileEdit")
+        .map((result) => result.matchField)
+        .sort(),
+      ["diff", "path"]
+    );
+
+    const writeResults = (
+      await service.search("written-content-term", workspaceRoot)
+    ).results;
+    assert.strictEqual(writeResults.length, 1);
+    assert.strictEqual(writeResults[0]?.eventKind, "fileWrite");
+    assert.strictEqual(writeResults[0]?.matchField, "content");
+  });
+
+  test("indexes script output with its source kind", async () => {
+    const workflowId = "script-kinds-2026-06-09T21-00-00";
+    await createRun(workflowId, 1, 5000, [
+      createCliOutputDraft(
+        5100,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          prompt: "",
+          response: "shared script stdout term",
+          cliCommand: "script-command-term",
+          source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+          elapsed: 1,
+          isStreaming: false,
+        }
+      ),
+      createCliOutputDraft(
+        5200,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        {
+          prompt: "",
+          response: "shared script stdout term",
+          cliCommand: "pre-condition-command-term",
+          source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+          elapsed: 1,
+          isStreaming: false,
+        }
+      ),
+      createCliOutputDraft(
+        5300,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        {
+          prompt: "",
+          response: "shared script stdout term",
+          cliCommand: "end-condition-command-term",
+          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+          elapsed: 1,
+          isStreaming: false,
+        }
+      ),
+    ]);
+
+    const stdoutResults = (
+      await service.search("shared script stdout term", workspaceRoot)
+    ).results;
+    assert.deepStrictEqual(
+      stdoutResults.map((result) => result.eventKind).sort(),
+      ["endCondition", "preCondition", "script"]
+    );
+    assert.ok(stdoutResults.every((result) => result.matchField === "output"));
+    assert.ok(stdoutResults.every((result) => result.eventKind !== "response"));
+
+    const commandResults = (
+      await service.search("end-condition-command-term", workspaceRoot)
+    ).results;
+    assert.strictEqual(commandResults.length, 1);
+    assert.strictEqual(commandResults[0]?.eventKind, "endCondition");
+    assert.strictEqual(commandResults[0]?.matchField, "command");
   });
 
   test("returns accurate counts and stable cursor pages", async () => {
@@ -360,6 +501,8 @@ suite("HistorySearchService", () => {
     cliOutput: {
       prompt: string;
       response: string;
+      cliCommand?: string;
+      source?: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES];
       elapsed: number;
       isStreaming: boolean;
       structured?: { events: CliEvent[]; metadata: Record<string, unknown> };

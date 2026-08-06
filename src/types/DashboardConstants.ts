@@ -1237,6 +1237,38 @@ export const SCRIPT_OUTPUT_SOURCES = {
 } as const;
 
 // ============================================================================
+// HISTORY SEARCH TAXONOMY - Independent event and matched-field dimensions
+// ============================================================================
+export const HISTORY_EVENT_KINDS = {
+  PROMPT: "prompt",
+  RESPONSE: "response",
+  THINKING: "thinking",
+  BASH: "bash",
+  FILE_READ: "fileRead",
+  FILE_WRITE: "fileWrite",
+  FILE_EDIT: "fileEdit",
+  FILE_DELETE: "fileDelete",
+  TOOL: "tool",
+  MCP_TOOL: "mcpTool",
+  WEB_SEARCH: "webSearch",
+  COMPACTION: "compaction",
+  CLI_COMMAND: "cliCommand",
+  STATUS: "status",
+  SCRIPT: "script",
+  PRE_CONDITION: "preCondition",
+  END_CONDITION: "endCondition",
+} as const;
+
+export const HISTORY_MATCH_FIELDS = {
+  PATH: "path",
+  CONTENT: "content",
+  DIFF: "diff",
+  COMMAND: "command",
+  OUTPUT: "output",
+  ERROR: "error",
+} as const;
+
+// ============================================================================
 // EXECUTION PHASES - Identity dimension for prompt and condition attempts
 // ============================================================================
 export const EXECUTION_PHASES = {

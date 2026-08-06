@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  HISTORY_EVENT_KINDS,
+  HISTORY_MATCH_FIELDS,
+} from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
@@ -339,7 +343,8 @@ export class HistorySearchService {
         0,
         query,
         {
-          matchType: "status",
+          eventKind: HISTORY_EVENT_KINDS.STATUS,
+          matchField: HISTORY_MATCH_FIELDS.CONTENT,
           text: message,
         }
       ),
@@ -364,7 +369,8 @@ export class HistorySearchService {
       startedAt: manifest.startedAt,
       executionState: manifest.executionState,
       target,
-      matchType: candidate.matchType,
+      eventKind: candidate.eventKind,
+      matchField: candidate.matchField,
       matchSnippet: this.extractSnippet(candidate.text, query),
       matchContext: this.formatMatchContext(target, attemptIndex),
       filePath: candidate.filePath,
@@ -417,7 +423,8 @@ export class HistorySearchService {
       result.workflowKey,
       result.runRef,
       result.runId,
-      result.matchType,
+      result.eventKind,
+      result.matchField,
       result.matchContext,
       result.filePath ?? "",
       result.matchSnippet,

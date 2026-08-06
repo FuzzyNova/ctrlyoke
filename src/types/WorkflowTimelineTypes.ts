@@ -1,4 +1,9 @@
-import type { ExecutionPhase, ExecutionState } from "./DashboardConstants";
+import {
+  HISTORY_EVENT_KINDS,
+  HISTORY_MATCH_FIELDS,
+  type ExecutionPhase,
+  type ExecutionState,
+} from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
@@ -129,14 +134,8 @@ export interface HistorySearchResult {
   startedAt: number;
   executionState: string;
   target: OutputExecutionTarget;
-  matchType:
-    | "response"
-    | "file"
-    | "bash"
-    | "status"
-    | "prompt"
-    | "tool"
-    | "diff";
+  eventKind: HistoryEventKind;
+  matchField: HistoryMatchField;
   matchSnippet: string;
   matchContext: string;
   filePath?: string;
@@ -149,7 +148,7 @@ export interface HistorySearchQuery {
   limit: number;
   cursor?: string;
   filters?: {
-    matchTypes?: HistorySearchResult["matchType"][];
+    matchTypes?: HistoryEventKind[];
     workflowKeys?: WorkflowKey[];
     since?: number;
     until?: number;
@@ -177,10 +176,19 @@ export interface HistorySearchDocument {
   attemptIndex: number;
   sequence: number;
   timestampMs: number;
-  matchType: HistorySearchResult["matchType"];
+  eventKind: HistoryEventKind;
+  matchField: HistoryMatchField;
   text: string;
   filePath?: string;
+  harness?: string;
+  model?: string;
+  sessionId?: string;
 }
+
+export type HistoryEventKind =
+  (typeof HISTORY_EVENT_KINDS)[keyof typeof HISTORY_EVENT_KINDS];
+export type HistoryMatchField =
+  (typeof HISTORY_MATCH_FIELDS)[keyof typeof HISTORY_MATCH_FIELDS];
 
 interface TargetedTimelineEventDraftBase {
   timestampMs: number;

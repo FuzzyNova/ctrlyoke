@@ -29,7 +29,7 @@ import {
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
 
-const INDEX_SCHEMA_VERSION = "2.0.0" as const;
+const INDEX_SCHEMA_VERSION = "3.0.0" as const;
 const MANIFEST_FILE_NAME = "manifest.json";
 const DOCUMENTS_FILE_NAME = "documents.jsonl";
 const MIN_QUERY_LENGTH = 2;
@@ -120,7 +120,7 @@ export class HistorySearchIndexService {
       .filter((document) => document.text.toLowerCase().includes(lowered))
       .filter((document) =>
         filters?.matchTypes
-          ? filters.matchTypes.includes(document.matchType)
+          ? filters.matchTypes.includes(document.eventKind)
           : true
       )
       .filter((document) =>
@@ -464,13 +464,18 @@ export class HistorySearchIndexService {
       if (!target) {
         return [];
       }
+      const outputMetadata =
+        event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+          ? (event as CliOutputRecordedEvent).payload.cliOutput.structured
+              ?.metadata
+          : undefined;
       return candidates.map((candidate, candidateIndex) => ({
         id: [
           workflowKey,
           runRef,
           manifest.runId,
           event.sequence,
-          candidate.matchType,
+          `${candidate.eventKind}:${candidate.matchField}`,
           candidateIndex,
         ].join(":"),
         workflowKey,
@@ -486,9 +491,13 @@ export class HistorySearchIndexService {
             : 0,
         sequence: event.sequence,
         timestampMs: event.timestampMs,
-        matchType: candidate.matchType,
+        eventKind: candidate.eventKind,
+        matchField: candidate.matchField,
         text: candidate.text,
         filePath: candidate.filePath,
+        harness: outputMetadata?.harness,
+        model: outputMetadata?.model,
+        sessionId: outputMetadata?.sessionId,
       }));
     });
   }
@@ -522,7 +531,8 @@ export class HistorySearchIndexService {
       startedAt: document.startedAt,
       executionState: document.executionState,
       target: document.target,
-      matchType: document.matchType,
+      eventKind: document.eventKind,
+      matchField: document.matchField,
       matchSnippet: this.extractSnippet(document.text, query),
       matchContext: this.formatMatchContext(
         document.target,

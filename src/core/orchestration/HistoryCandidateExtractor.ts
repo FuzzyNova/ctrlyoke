@@ -1,9 +1,19 @@
-import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HISTORY_EVENT_KINDS,
+  HISTORY_MATCH_FIELDS,
+  SCRIPT_OUTPUT_SOURCES,
+  type ScriptOutputSource,
+} from "../../types/DashboardConstants";
 import type { CliOutput, CliEvent } from "../../types/WebviewMessageTypes";
-import type { HistorySearchResult } from "../../types/WorkflowTimelineTypes";
+import type {
+  HistoryEventKind,
+  HistoryMatchField,
+} from "../../types/WorkflowTimelineTypes";
 
 export interface MatchCandidate {
-  matchType: HistorySearchResult["matchType"];
+  eventKind: HistoryEventKind;
+  matchField: HistoryMatchField;
   text: string;
   filePath?: string;
 }
@@ -12,16 +22,42 @@ export interface HistoryCandidateExtractorOptions {
   maxTextLength?: number;
 }
 
+const SCRIPT_EVENT_KIND_BY_SOURCE: Record<
+  ScriptOutputSource,
+  HistoryEventKind
+> = {
+  [SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP]: HISTORY_EVENT_KINDS.SCRIPT,
+  [SCRIPT_OUTPUT_SOURCES.PRE_CONDITION]: HISTORY_EVENT_KINDS.PRE_CONDITION,
+  [SCRIPT_OUTPUT_SOURCES.END_CONDITION]: HISTORY_EVENT_KINDS.END_CONDITION,
+};
+
 export class HistoryCandidateExtractor {
   constructor(
     private readonly options: HistoryCandidateExtractorOptions = {}
   ) {}
 
   collectCliOutputCandidates(cliOutput: CliOutput): MatchCandidate[] {
+    const scriptEventKind = cliOutput.source
+      ? SCRIPT_EVENT_KIND_BY_SOURCE[cliOutput.source]
+      : undefined;
     const candidates: MatchCandidate[] = [
-      ...this.toCandidate("prompt", cliOutput.prompt),
-      ...this.toCandidate("response", cliOutput.response),
-      ...this.toCandidate("bash", cliOutput.cliCommand),
+      ...this.toCandidate(
+        scriptEventKind ?? HISTORY_EVENT_KINDS.PROMPT,
+        HISTORY_MATCH_FIELDS.CONTENT,
+        cliOutput.prompt
+      ),
+      ...this.toCandidate(
+        scriptEventKind ?? HISTORY_EVENT_KINDS.RESPONSE,
+        scriptEventKind
+          ? HISTORY_MATCH_FIELDS.OUTPUT
+          : HISTORY_MATCH_FIELDS.CONTENT,
+        cliOutput.response
+      ),
+      ...this.toCandidate(
+        scriptEventKind ?? HISTORY_EVENT_KINDS.CLI_COMMAND,
+        HISTORY_MATCH_FIELDS.COMMAND,
+        cliOutput.cliCommand
+      ),
     ];
 
     for (const structuredEvent of cliOutput.structured?.events ?? []) {
@@ -34,7 +70,11 @@ export class HistoryCandidateExtractor {
   }
 
   collectStatusCandidates(message: string): MatchCandidate[] {
-    return this.toCandidate("status", message);
+    return this.toCandidate(
+      HISTORY_EVENT_KINDS.STATUS,
+      HISTORY_MATCH_FIELDS.CONTENT,
+      message
+    );
   }
 
   private collectStructuredEventCandidates(event: CliEvent): MatchCandidate[] {
@@ -43,7 +83,8 @@ export class HistoryCandidateExtractor {
       case CLI_EVENT_TYPES.TEXT:
         candidates.push(
           ...this.toCandidate(
-            "response",
+            HISTORY_EVENT_KINDS.RESPONSE,
+            HISTORY_MATCH_FIELDS.CONTENT,
             this.getStringValue((event.data as { text?: unknown }).text)
           )
         );
@@ -51,7 +92,8 @@ export class HistoryCandidateExtractor {
       case CLI_EVENT_TYPES.THINKING:
         candidates.push(
           ...this.toCandidate(
-            "response",
+            HISTORY_EVENT_KINDS.THINKING,
+            HISTORY_MATCH_FIELDS.CONTENT,
             this.getStringValue((event.data as { text?: unknown }).text)
           )
         );
@@ -63,13 +105,25 @@ export class HistoryCandidateExtractor {
           error?: unknown;
         };
         candidates.push(
-          ...this.toCandidate("bash", this.getStringValue(data.command))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.BASH,
+            HISTORY_MATCH_FIELDS.COMMAND,
+            this.getStringValue(data.command)
+          )
         );
         candidates.push(
-          ...this.toCandidate("bash", this.getStringValue(data.output))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.BASH,
+            HISTORY_MATCH_FIELDS.OUTPUT,
+            this.getStringValue(data.output)
+          )
         );
         candidates.push(
-          ...this.toCandidate("bash", this.getStringValue(data.error))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.BASH,
+            HISTORY_MATCH_FIELDS.ERROR,
+            this.getStringValue(data.error)
+          )
         );
         break;
       }
@@ -79,14 +133,41 @@ export class HistoryCandidateExtractor {
       case CLI_EVENT_TYPES.FILE_DELETE: {
         const data = event.data as {
           path?: unknown;
+          content?: unknown;
           structuredPatch?: unknown;
         };
         const filePath = this.getStringValue(data.path);
-        candidates.push(...this.toCandidate("file", filePath, filePath));
+        const eventKind =
+          event.type === CLI_EVENT_TYPES.FILE_READ
+            ? HISTORY_EVENT_KINDS.FILE_READ
+            : event.type === CLI_EVENT_TYPES.FILE_WRITE
+              ? HISTORY_EVENT_KINDS.FILE_WRITE
+              : event.type === CLI_EVENT_TYPES.FILE_EDIT
+                ? HISTORY_EVENT_KINDS.FILE_EDIT
+                : HISTORY_EVENT_KINDS.FILE_DELETE;
+        candidates.push(
+          ...this.toCandidate(
+            eventKind,
+            HISTORY_MATCH_FIELDS.PATH,
+            filePath,
+            filePath
+          )
+        );
+        if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
+          candidates.push(
+            ...this.toCandidate(
+              eventKind,
+              HISTORY_MATCH_FIELDS.CONTENT,
+              this.getStringValue(data.content),
+              filePath
+            )
+          );
+        }
         if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
           candidates.push(
             ...this.toCandidate(
-              "diff",
+              eventKind,
+              HISTORY_MATCH_FIELDS.DIFF,
               this.flattenStructuredPatch(data.structuredPatch),
               filePath
             )
@@ -97,20 +178,36 @@ export class HistoryCandidateExtractor {
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const data = event.data as { server?: unknown; tool?: unknown };
         candidates.push(
-          ...this.toCandidate("tool", this.getStringValue(data.server))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.MCP_TOOL,
+            HISTORY_MATCH_FIELDS.CONTENT,
+            this.getStringValue(data.server)
+          )
         );
         candidates.push(
-          ...this.toCandidate("tool", this.getStringValue(data.tool))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.MCP_TOOL,
+            HISTORY_MATCH_FIELDS.CONTENT,
+            this.getStringValue(data.tool)
+          )
         );
         break;
       }
       case CLI_EVENT_TYPES.TOOL_CALL: {
         const data = event.data as { name?: unknown; parameters?: unknown };
         candidates.push(
-          ...this.toCandidate("tool", this.getStringValue(data.name))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.TOOL,
+            HISTORY_MATCH_FIELDS.CONTENT,
+            this.getStringValue(data.name)
+          )
         );
         candidates.push(
-          ...this.toCandidate("tool", this.stringifyValue(data.parameters))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.TOOL,
+            HISTORY_MATCH_FIELDS.CONTENT,
+            this.stringifyValue(data.parameters)
+          )
         );
         break;
       }
@@ -121,10 +218,18 @@ export class HistoryCandidateExtractor {
           }
         ).result;
         candidates.push(
-          ...this.toCandidate("tool", this.getStringValue(result?.output))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.TOOL,
+            HISTORY_MATCH_FIELDS.OUTPUT,
+            this.getStringValue(result?.output)
+          )
         );
         candidates.push(
-          ...this.toCandidate("tool", this.getStringValue(result?.error))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.TOOL,
+            HISTORY_MATCH_FIELDS.ERROR,
+            this.getStringValue(result?.error)
+          )
         );
         break;
       }
@@ -134,19 +239,42 @@ export class HistoryCandidateExtractor {
           results?: Array<{ title?: string; snippet?: string; url?: string }>;
         };
         candidates.push(
-          ...this.toCandidate("tool", this.getStringValue(data.query))
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.WEB_SEARCH,
+            HISTORY_MATCH_FIELDS.COMMAND,
+            this.getStringValue(data.query)
+          )
         );
         for (const result of data.results ?? []) {
-          candidates.push(...this.toCandidate("response", result.title));
-          candidates.push(...this.toCandidate("response", result.snippet));
-          candidates.push(...this.toCandidate("response", result.url));
+          candidates.push(
+            ...this.toCandidate(
+              HISTORY_EVENT_KINDS.WEB_SEARCH,
+              HISTORY_MATCH_FIELDS.CONTENT,
+              result.title
+            )
+          );
+          candidates.push(
+            ...this.toCandidate(
+              HISTORY_EVENT_KINDS.WEB_SEARCH,
+              HISTORY_MATCH_FIELDS.CONTENT,
+              result.snippet
+            )
+          );
+          candidates.push(
+            ...this.toCandidate(
+              HISTORY_EVENT_KINDS.WEB_SEARCH,
+              HISTORY_MATCH_FIELDS.CONTENT,
+              result.url
+            )
+          );
         }
         break;
       }
       case CLI_EVENT_TYPES.COMPACTION:
         candidates.push(
           ...this.toCandidate(
-            "response",
+            HISTORY_EVENT_KINDS.COMPACTION,
+            HISTORY_MATCH_FIELDS.CONTENT,
             this.getStringValue((event.data as { summary?: unknown }).summary)
           )
         );
@@ -159,7 +287,8 @@ export class HistoryCandidateExtractor {
   }
 
   private toCandidate(
-    matchType: HistorySearchResult["matchType"],
+    eventKind: HistoryEventKind,
+    matchField: HistoryMatchField,
     text: string | undefined,
     filePath?: string
   ): MatchCandidate[] {
@@ -171,7 +300,7 @@ export class HistoryCandidateExtractor {
       typeof maxTextLength === "number" && text.length > maxTextLength
         ? text.slice(0, maxTextLength)
         : text;
-    return [{ matchType, text: capped, filePath }];
+    return [{ eventKind, matchField, text: capped, filePath }];
   }
 
   private flattenStructuredPatch(structuredPatch: unknown): string | undefined {

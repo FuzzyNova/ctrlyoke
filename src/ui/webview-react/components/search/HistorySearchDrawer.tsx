@@ -8,6 +8,8 @@ import {
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
+import { HISTORY_EVENT_KINDS } from "@root/types/DashboardConstants";
+import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
 import { ExitButton } from "@components/shared";
 
@@ -19,24 +21,54 @@ const RESULT_LIMIT = 50;
  */
 const CONTENT_COLUMN_CLASS = "mx-auto w-full max-w-4xl";
 
-const MATCH_TYPE_LABELS: Record<HistorySearchResult["matchType"], string> = {
-  response: "Response",
-  file: "File",
-  bash: "Bash",
-  status: "Status",
-  prompt: "Prompt",
-  tool: "Tool",
-  diff: "Diff",
+const EVENT_KIND_LABELS: Record<HistoryEventKind, string> = {
+  [HISTORY_EVENT_KINDS.PROMPT]: "Prompt",
+  [HISTORY_EVENT_KINDS.RESPONSE]: "Response",
+  [HISTORY_EVENT_KINDS.THINKING]: "Thinking",
+  [HISTORY_EVENT_KINDS.BASH]: "Bash",
+  [HISTORY_EVENT_KINDS.FILE_READ]: "File Read",
+  [HISTORY_EVENT_KINDS.FILE_WRITE]: "File Write",
+  [HISTORY_EVENT_KINDS.FILE_EDIT]: "File Edit",
+  [HISTORY_EVENT_KINDS.FILE_DELETE]: "File Delete",
+  [HISTORY_EVENT_KINDS.TOOL]: "Tool",
+  [HISTORY_EVENT_KINDS.MCP_TOOL]: "MCP Tool",
+  [HISTORY_EVENT_KINDS.WEB_SEARCH]: "Web Search",
+  [HISTORY_EVENT_KINDS.COMPACTION]: "Compaction",
+  [HISTORY_EVENT_KINDS.CLI_COMMAND]: "CLI Command",
+  [HISTORY_EVENT_KINDS.STATUS]: "Status",
+  [HISTORY_EVENT_KINDS.SCRIPT]: "Script",
+  [HISTORY_EVENT_KINDS.PRE_CONDITION]: "Pre-condition",
+  [HISTORY_EVENT_KINDS.END_CONDITION]: "End-condition",
 };
 
-const MATCH_TYPE_BADGES: Record<HistorySearchResult["matchType"], string> = {
-  response: "bg-btn-bg/20 text-btn-fg",
-  file: "bg-[var(--status-info)]/20 text-foreground",
-  bash: "bg-[var(--status-warning)]/20 text-foreground",
-  status: "bg-[var(--status-info)]/15 text-description-fg",
-  prompt: "bg-[var(--status-success)]/20 text-foreground",
-  tool: "bg-[var(--status-warning)]/15 text-foreground",
-  diff: "bg-[var(--status-error)]/15 text-foreground",
+const EVENT_KIND_BADGES: Record<HistoryEventKind, string> = {
+  [HISTORY_EVENT_KINDS.PROMPT]: "bg-[var(--status-success)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.RESPONSE]: "bg-btn-bg/20 text-btn-fg",
+  [HISTORY_EVENT_KINDS.THINKING]: "bg-btn-bg/15 text-description-fg",
+  [HISTORY_EVENT_KINDS.BASH]: "bg-[var(--status-warning)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.FILE_READ]:
+    "bg-[var(--status-info)]/15 text-description-fg",
+  [HISTORY_EVENT_KINDS.FILE_WRITE]:
+    "bg-[var(--status-info)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.FILE_EDIT]:
+    "bg-[var(--status-error)]/15 text-foreground",
+  [HISTORY_EVENT_KINDS.FILE_DELETE]:
+    "bg-[var(--status-error)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.TOOL]: "bg-[var(--status-warning)]/15 text-foreground",
+  [HISTORY_EVENT_KINDS.MCP_TOOL]:
+    "bg-[var(--status-warning)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.WEB_SEARCH]:
+    "bg-[var(--status-info)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.COMPACTION]: "bg-btn-bg/15 text-description-fg",
+  [HISTORY_EVENT_KINDS.CLI_COMMAND]:
+    "bg-[var(--status-warning)]/15 text-foreground",
+  [HISTORY_EVENT_KINDS.STATUS]:
+    "bg-[var(--status-info)]/15 text-description-fg",
+  [HISTORY_EVENT_KINDS.SCRIPT]: "bg-btn-bg/20 text-btn-fg",
+  [HISTORY_EVENT_KINDS.PRE_CONDITION]:
+    "bg-[var(--status-success)]/15 text-foreground",
+  [HISTORY_EVENT_KINDS.END_CONDITION]:
+    "bg-[var(--status-success)]/20 text-foreground",
 };
 
 function truncateSnippet(snippet: string, maxLength = 80): string {
@@ -294,7 +326,7 @@ export function HistorySearchDrawer() {
 
               return (
                 <button
-                  key={`${result.workflowKey}:${result.runRef}:${result.target.kind}:${result.matchType}:${index}`}
+                  key={`${result.workflowKey}:${result.runRef}:${result.target.kind}:${result.eventKind}:${result.matchField}:${index}`}
                   type="button"
                   onClick={() => navigateToResult(result)}
                   className="w-full rounded-md border border-transparent px-3 py-3 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none"
@@ -312,9 +344,12 @@ export function HistorySearchDrawer() {
                       </div>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${MATCH_TYPE_BADGES[result.matchType]}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${EVENT_KIND_BADGES[result.eventKind]}`}
                     >
-                      {MATCH_TYPE_LABELS[result.matchType]}
+                      {EVENT_KIND_LABELS[result.eventKind]}
+                    </span>
+                    <span className="shrink-0 pt-0.5 text-[11px] text-description-fg">
+                      · {result.matchField}
                     </span>
                   </div>
 

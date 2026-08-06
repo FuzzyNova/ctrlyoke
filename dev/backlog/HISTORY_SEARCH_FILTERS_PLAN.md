@@ -19,12 +19,12 @@ path).
 Filter plumbing already exists end to end and is simply never exercised:
 
 - `HistorySearchQuery.filters` supports `matchTypes`, `workflowKeys`, `since`,
-  `until` (`src/types/WorkflowTimelineTypes.ts:147`).
+  `until` (`src/types/WorkflowTimelineTypes.ts:146-155`).
 - `HistorySearchIndexService.search` applies all four against the in-memory
-  document list (`src/core/orchestration/HistorySearchIndexService.ts:120-140`).
+  document list (`src/core/orchestration/HistorySearchIndexService.ts:119-141`).
 - `WebviewMessageRouter` forwards `message.filters` verbatim
   (`src/ui/WebviewMessageRouter.ts:850`), and `SearchHistoryMessage extends
-  Partial<HistorySearchQuery>` (`src/types/WebviewMessageTypes.ts:1136`).
+Partial<HistorySearchQuery>` (`src/types/WebviewMessageTypes.ts:1136`).
 - `HistorySearchDrawer` sends **no** `filters` on either the initial search or
   the "Load more" page.
 
@@ -36,14 +36,14 @@ the frontend work is net-new UI.
 `matchType` is a single seven-value union (`response | file | bash | status |
 prompt | tool | diff`) that conflates two independent axes:
 
-| Reality                                                     | Current encoding                    |
-| ----------------------------------------------------------- | ----------------------------------- |
-| `fileRead` / `fileWrite` / `fileEdit` / `fileDelete`        | all collapse to `file`              |
-| matched the file **path** vs matched the **diff body**      | `file` vs `diff` (a *field*, not a kind) |
-| `thinking` block                                            | `response`                          |
-| web-search result title/snippet/url                         | `response`                          |
-| MCP tool call                                               | `tool`                              |
-| the harness command line (`cliOutput.cliCommand`)           | `bash` — it is not a bash tool call |
+| Reality                                                | Current encoding                         |
+| ------------------------------------------------------ | ---------------------------------------- |
+| `fileRead` / `fileWrite` / `fileEdit` / `fileDelete`   | all collapse to `file`                   |
+| matched the file **path** vs matched the **diff body** | `file` vs `diff` (a _field_, not a kind) |
+| `thinking` block                                       | `response`                               |
+| web-search result title/snippet/url                    | `response`                               |
+| MCP tool call                                          | `tool`                                   |
+| the harness command line (`cliOutput.cliCommand`)      | `bash` — it is not a bash tool call      |
 
 Because of the first row, "who edited this file" is unanswerable today: a
 `fileRead` and a `fileEdit` produce identical `file` documents whose text is just
@@ -52,7 +52,7 @@ the path.
 ### The duplication problem
 
 Candidate extraction is implemented **twice** with the same switch statement:
-`HistoryCandidateExtractor.collectStructuredEventCandidates` (line 40) is now the
+`HistoryCandidateExtractor.collectStructuredEventCandidates` (line 80) is now the
 single implementation consumed by both services; the fallback remains the
 disk-scan path used when the index throws. Any taxonomy change should land in the
 extractor once, or the fallback silently produces documents the filters cannot
@@ -101,53 +101,53 @@ single-sourced per the project's coding principles), with the derived unions
 exported from `WorkflowTimelineTypes.ts`.
 
 **The document id must include both fields.** It is currently
-`[workflowKey, runRef, runId, sequence, candidate.matchType, candidateIndex]`
-(`buildRunDocuments:470-478`). `candidateIndex` already disambiguates, but the id
+`[workflowKey, runRef, runId, sequence, candidate.eventKind:matchField, candidateIndex]`
+(`buildRunDocuments:454-503`). `candidateIndex` already disambiguates, but the id
 is meant to be readable, so swap `matchType` for `eventKind:matchField` — a
 `fileEdit`+`path` and a `fileEdit`+`diff` document from the same event should be
 distinguishable by id alone.
 
 **Blast radius of the rename** (everything outside the two services that names
-`matchType`): `WorkflowTimelineTypes.ts:132,152,180`;
-`HistorySearchDrawer.tsx:22,32,297,315,317`;
-`src/test/unit/HistorySearchService.test.ts:85,91,156,162,169,173`;
-`src/ui/webview-react/test/hooks/useMessageHandler.test.ts:2040,2066`;
+`matchType`): `WorkflowTimelineTypes.ts:129,151,179`;
+`HistorySearchDrawer.tsx:24,329,347,349`;
+`src/test/unit/HistorySearchService.test.ts:86,93,159,166,174,179`;
+`src/ui/webview-react/test/hooks/useMessageHandler.test.ts:2040,2067`;
 `src/ui/webview-react/test/store/uiStore.test.ts:137`. The last two build result
-fixtures and will fail to compile until updated.
+fixtures are updated with the two new fields.
 
 Mapping from the existing extractor:
 
-| CLI event                     | `eventKind`                        | `matchField`        |
-| ----------------------------- | ---------------------------------- | ------------------- |
-| `cliOutput.prompt`            | `prompt`                           | `content`           |
-| `cliOutput.response`          | `response`                         | `content`           |
-| `cliOutput.cliCommand`        | `cliCommand`                       | `command`           |
-| `text`                        | `response`                         | `content`           |
-| `thinking`                    | `thinking`                         | `content`           |
-| `bashCommand.command`         | `bash`                             | `command`           |
-| `bashCommand.output`          | `bash`                             | `output`            |
-| `bashCommand.error`           | `bash`                             | `error`             |
-| `fileRead.path`               | `fileRead`                         | `path`              |
-| `fileWrite.path`              | `fileWrite`                        | `path`              |
-| `fileEdit.path`               | `fileEdit`                         | `path`              |
-| `fileEdit.structuredPatch`    | `fileEdit`                         | `diff`              |
-| `fileDelete.path`             | `fileDelete`                       | `path`              |
-| `mcpToolCall.server` / `.tool`| `mcpTool`                          | `content`           |
-| `toolCall.name` / `.parameters`| `tool`                            | `content`           |
-| `toolResult.output` / `.error`| `tool`                             | `output` / `error`  |
-| `webSearch.query`             | `webSearch`                        | `command`           |
-| `webSearch.results[]`         | `webSearch`                        | `content`           |
-| `compaction.summary`          | `compaction`                       | `content`           |
-| status message                | `status`                           | `content`           |
-| script step stdout            | `script`                           | `output`            |
-| pre-condition stdout          | `preCondition`                     | `output`            |
-| end-condition stdout          | `endCondition`                     | `output`            |
-| any script's command line     | (its script kind)                  | `command`           |
+| CLI event                       | `eventKind`       | `matchField`       |
+| ------------------------------- | ----------------- | ------------------ |
+| `cliOutput.prompt`              | `prompt`          | `content`          |
+| `cliOutput.response`            | `response`        | `content`          |
+| `cliOutput.cliCommand`          | `cliCommand`      | `command`          |
+| `text`                          | `response`        | `content`          |
+| `thinking`                      | `thinking`        | `content`          |
+| `bashCommand.command`           | `bash`            | `command`          |
+| `bashCommand.output`            | `bash`            | `output`           |
+| `bashCommand.error`             | `bash`            | `error`            |
+| `fileRead.path`                 | `fileRead`        | `path`             |
+| `fileWrite.path`                | `fileWrite`       | `path`             |
+| `fileEdit.path`                 | `fileEdit`        | `path`             |
+| `fileEdit.structuredPatch`      | `fileEdit`        | `diff`             |
+| `fileDelete.path`               | `fileDelete`      | `path`             |
+| `mcpToolCall.server` / `.tool`  | `mcpTool`         | `content`          |
+| `toolCall.name` / `.parameters` | `tool`            | `content`          |
+| `toolResult.output` / `.error`  | `tool`            | `output` / `error` |
+| `webSearch.query`               | `webSearch`       | `command`          |
+| `webSearch.results[]`           | `webSearch`       | `content`          |
+| `compaction.summary`            | `compaction`      | `content`          |
+| status message                  | `status`          | `content`          |
+| script step stdout              | `script`          | `output`           |
+| pre-condition stdout            | `preCondition`    | `output`           |
+| end-condition stdout            | `endCondition`    | `output`           |
+| any script's command line       | (its script kind) | `command`          |
 
 **Script kinds are decided by `cliOutput.source`, at the `cliOutput` level — not
 per structured event.** Script output has no `structured.events`; its stdout lands
 in `cliOutput.response` and its command line in `cliOutput.cliCommand`. So when
-`source` is set, *every* `cliOutput`-level candidate takes that script kind:
+`source` is set, _every_ `cliOutput`-level candidate takes that script kind:
 `prompt` → `content`, `response` → `output`, `cliCommand` → `command`. The three
 `SCRIPT_OUTPUT_SOURCES` values (`script` / `preCondition` / `endCondition`) are the
 same strings as the three script `HISTORY_EVENT_KINDS` values, but map them through
@@ -178,23 +178,23 @@ Two follow-on wins fall out of this for free:
 
 ### 2. v1 filter set
 
-| Filter          | Control                            | Backed by                                      |
-| --------------- | ---------------------------------- | ---------------------------------------------- |
-| Event type      | `MultiCheckboxDropdown`, grouped   | `filters.eventKinds` (renamed from `matchTypes`) |
-| Date range      | shared preset select + 2 date inputs | `filters.since` / `filters.until`            |
-| Harness         | `MultiCheckboxDropdown`            | new `filters.harnesses` (needs indexing, §4)   |
-| Run outcome     | `MultiCheckboxDropdown`            | new `filters.executionStates` — already on the document |
-| File path       | text input                         | new `filters.pathContains` — `document.filePath` already exists (matching rules: R2) |
-| This workflow   | checkbox, default off              | existing `filters.workflowKeys` (R3)           |
-| Clear all       | icon button                        | resets to defaults                             |
+| Filter        | Control                              | Backed by                                                                            |
+| ------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| Event type    | `MultiCheckboxDropdown`, grouped     | `filters.eventKinds` (renamed from `matchTypes`)                                     |
+| Date range    | shared preset select + 2 date inputs | `filters.since` / `filters.until`                                                    |
+| Harness       | `MultiCheckboxDropdown`              | new `filters.harnesses` (needs indexing, §4)                                         |
+| Run outcome   | `MultiCheckboxDropdown`              | new `filters.executionStates` — already on the document                              |
+| File path     | text input                           | new `filters.pathContains` — `document.filePath` already exists (matching rules: R2) |
+| This workflow | checkbox, default off                | existing `filters.workflowKeys` (R3)                                                 |
+| Clear all     | icon button                          | resets to defaults                                                                   |
 
 **`matchField` is indexed but not filterable in v1.** It ships as a field on the
 document and as the muted qualifier in the result row ("File Edit · diff"), which
 is where its value is — telling a path match apart from a diff match at a glance.
 A seventh control for it would be the least-used thing on the bar. `filters.matchFields`
-is therefore *not* part of the v1 payload; add it when a concrete need appears.
+is therefore _not_ part of the v1 payload; add it when a concrete need appears.
 
-Rationale for `pathContains` as a *separate* input rather than relying on the
+Rationale for `pathContains` as a _separate_ input rather than relying on the
 main query: it composes. "Query `useMemo` AND path contains `webview-react`"
 answers "where in the UI did we touch memoization", which a single text box
 cannot express. It is a cheap `document.filePath.includes()` on a field that is
@@ -218,7 +218,7 @@ already indexed.
 **The working file is the wrong source.** `run-<timestamp>/workflow.ctrlyoke.json`
 is mutable: `Set start position` on an earlier step, change the harness, and
 re-run rewrites that file **in place** rather than forking a new run. Its
-`step.harness` therefore describes the step's *current* configuration, not what
+`step.harness` therefore describes the step's _current_ configuration, not what
 each recorded attempt actually executed on. Indexing from it would retroactively
 relabel every historical event in the run — exactly wrong for a search index whose
 whole value is telling you what happened.
@@ -246,7 +246,7 @@ This is strictly better than the working file on every axis:
   attributed.
 - **Free.** The index service already destructures `event.payload.cliOutput` and
   walks `cliOutput.structured?.events`
-  (`HistoryCandidateExtractor.collectCliOutputCandidates:20-31`). Reading
+  (`HistoryCandidateExtractor.collectCliOutputCandidates:39-69`). Reading
   `cliOutput.structured?.metadata` alongside it costs one property access — no
   extra file reads, no working-file parse, no `Map<stepIndex, …>`.
 - **Correctly grained.** Per recorded attempt, which is finer than per-step and far
@@ -329,7 +329,7 @@ sharing exactly as the user proposed.
   filter bars stay visually identical.
 - `src/ui/webview-react/utils/filterLabels.ts` — `formatMultiFilterLabel`.
 
-**Keep separate:** the *application* of the range. `WorkflowStatus` filters an
+**Keep separate:** the _application_ of the range. `WorkflowStatus` filters an
 already-loaded array client-side with `getDateStartMs`/`getDateEndMs`;
 `HistorySearchDrawer` converts the same two strings to `since`/`until` and sends
 them to the backend. Share the state shape and the ms conversion, not the
@@ -433,16 +433,18 @@ straight merge silently regresses the fallback path:
   case in the fallback** — same output today, but Phase 2 gives them different
   kinds, so the extractor must keep them as separate cases.
 
-**Phase 2 — Taxonomy.** Add `HISTORY_EVENT_KINDS` / `HISTORY_MATCH_FIELDS`,
-replace `matchType` with `eventKind` + `matchField` on document and result, index
-`fileWrite` content, bump `INDEX_SCHEMA_VERSION` to `3.0.0`, update the drawer's
-`MATCH_TYPE_LABELS`/`MATCH_TYPE_BADGES` maps to the new kinds and render the
+**Phase 2 — Taxonomy.** ✅ Done. Added `HISTORY_EVENT_KINDS` /
+`HISTORY_MATCH_FIELDS`, replaced `matchType` with `eventKind` + `matchField` on
+document and result, indexed `fileWrite` content, bumped
+`INDEX_SCHEMA_VERSION` to `3.0.0`, updated the drawer's
+`MATCH_TYPE_LABELS`/`MATCH_TYPE_BADGES` maps to the new kinds, and rendered the
 field qualifier.
 
-**Phase 3 — Harness/model indexing.** Stamp `harness` / `model` / `sessionId` from
-`cliOutput.structured.metadata` onto each document in `buildRunDocuments`. Small
-enough to fold into Phase 2 if the schema bump is happening anyway — both changes
-touch the same function and both require the same rebuild.
+**Phase 3 — Harness/model indexing.** ✅ Done. Stamped `harness` / `model` /
+`sessionId` from `cliOutput.structured.metadata` onto each document in
+`buildRunDocuments`. This folded into Phase 2 because the schema bump was
+happening anyway — both changes touch the same function and both require the same
+rebuild.
 
 **Phase 4 — Backend filters.** Rename `filters.matchTypes` → `eventKinds`; add
 `harnesses`, `executionStates`, `pathContains` (not `matchFields` — see §2).
@@ -463,7 +465,7 @@ on its own — it touches a component three other surfaces already use.
 counts in `HistorySearchResponse` so the event-type dropdown can show
 `File Edit (128)` and grey out kinds with zero matches. The index service already
 materializes the full `matches` array before paging, so bucketing is nearly free
-— compute counts *before* applying the kind filter, after applying the others.
+— compute counts _before_ applying the kind filter, after applying the others.
 
 ## Gotchas
 
@@ -472,7 +474,7 @@ materializes the full `matches` array before paging, so bucketing is nearly free
   a `fileEdit`+`diff` filter has a real blind spot on large hunks. Do not raise
   the cap — it exists because the index once outgrew the history and OOM'd the
   extension host. Document the limit in the UI only if users hit it.
-- **Documents without a `target` are skipped entirely** (`buildRunDocuments:466`).
+- **Documents without a `target` are skipped entirely** (`buildRunDocuments:464`).
   Run-level events can never be filtered because they are never indexed.
 - **Two rebuild paths.** `retainDocuments: false` (refresh) must stay
   memory-neutral — do not accumulate the new per-run harness map across runs.
@@ -484,13 +486,13 @@ materializes the full `matches` array before paging, so bucketing is nearly free
   append. The existing `setHistorySearchResults(..., { append: true })` path is
   only for "Load more".
 - **"Load more" must resend the active filters.** `loadMore` currently posts
-  `{ query, limit, cursor }` (`HistorySearchDrawer.tsx:188-193`). Omitting filters
+  `{ query, limit, cursor }` (`HistorySearchDrawer.tsx:199-215`). Omitting filters
   on the paged request would page an unfiltered result set against a filtered
   offset — the same class of corruption as the cursor hash, from a different
   direction.
 - **Escape will close the whole drawer while a filter dropdown is open.** The
   drawer registers a document-level `keydown` listener that unconditionally calls
-  `closeHistorySearch` (`HistorySearchDrawer.tsx:142-151`), and neither
+  `closeHistorySearch` (`HistorySearchDrawer.tsx:170-179`), and neither
   `MultiCheckboxDropdown` nor `DropdownPortal` handles Escape at all — so the
   first Escape dismisses the drawer, the query, the results, and the half-built
   filter set together. Fix in the dropdown, not the drawer: give
@@ -507,7 +509,7 @@ materializes the full `matches` array before paging, so bucketing is nearly free
   must change when filters change; a stale cursor from a different filter set
   must reset to offset 0.
 - **Harness attribution across a re-run** — the case that rules out the working
-  file. Fixture: a run with two `CLI_OUTPUT_RECORDED` events for the *same*
+  file. Fixture: a run with two `CLI_OUTPUT_RECORDED` events for the _same_
   `target.stepIndex`, the first carrying `metadata.harness: "claude-cli"` and the
   second `"codex-cli"` (as a `Set start position` re-run produces). Assert both
   documents keep their own harness, and that a `harnesses: ["claude-cli"]` filter
@@ -535,12 +537,12 @@ testing.
 
 Mirror `WorkflowStatus`. Silent exclusion is the worst failure mode a search box
 has: "I know it's in there" with no way to see why it isn't. Until facet counts
-exist (Phase 7), the UI has no way to render *why* a kind was skipped, and the
+exist (Phase 7), the UI has no way to render _why_ a kind was skipped, and the
 summary line can't say "3 kinds hidden".
 
 If a kind is ever defaulted off, it should be **`thinking`, not `fileRead`** —
 which inverts the leaning in the earlier draft. `fileRead` documents contain only
-the *path* (the extractor's file-path candidate), so despite being the
+the _path_ (the extractor's file-path candidate), so despite being the
 largest bucket by count they can only match path-ish queries — which is usually
 exactly the file search the user wanted. `thinking` documents carry full prose and
 compete directly with `response` for every natural-language query. Revisit once
@@ -643,7 +645,7 @@ Rules:
    alphabetical. The caller controls sequence by ordering its option list.
 7. **Hidden-options interaction:** `useHideableOptions` partitions into
    visible/hidden before grouping (`MultiCheckboxDropdown.tsx:61-65`). Group the
-   *visible* partition only; the hidden section at the bottom stays flat, since a
+   _visible_ partition only; the hidden section at the bottom stays flat, since a
    handful of hidden rows do not need structure.
 
 #### Trigger label
@@ -667,7 +669,7 @@ also silently caps results differently.
 
 A run that edited 40 files produces 40 `fileEdit` documents. Apply an event-kind
 filter and that is exactly what the first page becomes: 50 rows drawn from two
-runs. Filters make this *more* visible rather than less, because narrowing to one
+runs. Filters make this _more_ visible rather than less, because narrowing to one
 kind strips out the variety that currently disguises it.
 
 Ship v1 without mitigation. The result rows already name their run, so a repetitive
@@ -678,5 +680,5 @@ this is result presentation only, orthogonal to every decision above, so no phas
 depends on which way it goes.
 
 Revisit while testing Phase 6 against real queries. The signal to watch for is a
-first page dominated by one or two runs on a *narrowed* search — that is the case
+first page dominated by one or two runs on a _narrowed_ search — that is the case
 filters create and the unfiltered drawer never showed.
