@@ -234,6 +234,23 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.ok(result.excerptBlocks.includes("    4→end"));
       assert.ok(!result.excerptBlocks.includes("    5→after"));
     });
+
+    test("attaches identical content for kinded and unkinded symbols", async () => {
+      const root = freshWorkspace();
+      fs.writeFileSync(
+        path.join(root, "symbol.ts"),
+        ["before", "start", "end"].join("\n")
+      );
+
+      const unkinded = await new ContextExpander(root).expandContextSplit(
+        "#sym:symbol.ts:notARealSymbol:2-3"
+      );
+      const kinded = await new ContextExpander(root).expandContextSplit(
+        "#sym.class:symbol.ts:notARealSymbol:2-3"
+      );
+
+      assert.deepStrictEqual(kinded, unkinded);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -833,6 +850,40 @@ suite("ContextExpander.sanitizeReferences", () => {
       parseSymbolReferences(result).map((ref) => [ref.path, ref.symbolName]),
       [[secondFile, "foo"]],
       "rewritten #sym: token must round-trip through the runtime parser"
+    );
+  });
+
+  test("preserves the embedded kind when rewriting a multi-root #sym: ref", async () => {
+    const root = freshWorkspace();
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    const secondFile = path.join(secondRoot, "b.ts");
+    fs.writeFileSync(secondFile, "export class Foo {}\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root, secondRoot],
+      [
+        { name: "root1", fsPath: root },
+        { name: "root2", fsPath: secondRoot },
+      ],
+      true
+    );
+    const result = await expander.sanitizeReferences(
+      "When #sym.class:root2/b.ts:Foo:1-1 runs, log the result."
+    );
+
+    assert.strictEqual(
+      result,
+      `When #sym.class:"${secondFile}":Foo:1-1 runs, log the result.`
+    );
+    assert.deepStrictEqual(
+      parseSymbolReferences(result).map((ref) => [
+        ref.path,
+        ref.symbolName,
+        ref.symbolKind,
+      ]),
+      [[secondFile, "Foo", "class"]],
+      "rewritten #sym.class: token must round-trip with its kind"
     );
   });
 

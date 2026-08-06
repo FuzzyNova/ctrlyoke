@@ -1,6 +1,6 @@
 # Symbol Kind In References Plan
 
-> **Status:** Step 1 complete — Steps 2 and 3 pending
+> **Status:** Steps 1 and 2 complete — Step 3 pending
 >
 > **Priority:** P2 — output correctness and cross-surface parity
 

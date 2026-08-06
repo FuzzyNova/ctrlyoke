@@ -11,6 +11,7 @@ import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import { PROMPT_EDITOR_INSERT_MODES } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
+import { mapSymbolKindToReferenceKind } from "./CompletionHelpers";
 
 interface TimelineItemLike {
   id?: unknown;
@@ -198,7 +199,8 @@ export class ContextMenuReferenceCommands {
         relativePath,
         symbol.name,
         symbol.range.start.line + 1,
-        symbol.range.end.line + 1
+        symbol.range.end.line + 1,
+        mapSymbolKindToReferenceKind(symbol.kind)
       );
     } catch (error) {
       Log.warn("ctrlyoke: Failed to resolve symbol for editor context", error);

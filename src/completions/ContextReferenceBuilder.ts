@@ -65,21 +65,30 @@ export function buildSymbolReferenceValue(
   relativePath: string,
   symbolName: string,
   startLine: number,
-  endLine: number
+  endLine: number,
+  symbolKind?: string
 ): string {
   const path = quoteReferenceField(normalizeReferencePath(relativePath));
   // Symbol names come verbatim from the language server and routinely contain
   // spaces (Markdown headings, CSS selectors) or angle brackets/dots/hyphens.
-  return `sym:${path}:${quoteReferenceField(symbolName)}:${startLine}-${endLine}`;
+  const verb = symbolKind ? `sym.${symbolKind}` : "sym";
+  return `${verb}:${path}:${quoteReferenceField(symbolName)}:${startLine}-${endLine}`;
 }
 
 export function buildSymbolReference(
   relativePath: string,
   symbolName: string,
   startLine: number,
-  endLine: number
+  endLine: number,
+  symbolKind?: string
 ): string {
-  return `#${buildSymbolReferenceValue(relativePath, symbolName, startLine, endLine)}`;
+  return `#${buildSymbolReferenceValue(
+    relativePath,
+    symbolName,
+    startLine,
+    endLine,
+    symbolKind
+  )}`;
 }
 
 function buildGitReferenceValue(ref: string): string {

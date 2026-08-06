@@ -24,6 +24,7 @@ import {
   buildSymbolReferenceValue,
   normalizeReferencePath,
 } from "./ContextReferenceBuilder";
+import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
 
 /**
  * Plain completion item (framework-agnostic)
@@ -102,6 +103,27 @@ function mapSymbolKindToCompletionKind(
     default:
       return vscode.CompletionItemKind.Reference;
   }
+}
+
+/**
+ * Convert a vscode.SymbolKind enum value to the persisted kind name used in a
+ * #sym.<kind>: reference. Unknown enum values intentionally remain unkinded so
+ * a newer VS Code kind cannot produce a token the renderer does not recognize.
+ */
+export function mapSymbolKindToReferenceKind(
+  symbolKind: vscode.SymbolKind
+): string | undefined {
+  const enumName = vscode.SymbolKind[symbolKind];
+  if (typeof enumName !== "string") {
+    return undefined;
+  }
+
+  const kindName = enumName
+    .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+    .replace(/^-/, "");
+  return Object.prototype.hasOwnProperty.call(SYMBOL_KIND_ICONS, kindName)
+    ? kindName
+    : undefined;
 }
 
 /**
@@ -786,6 +808,8 @@ async function getSymbolCompletions(
 
       const startLine = symbol.location.range.start.line + 1;
       const endLine = symbol.location.range.end.line + 1;
+      const symbolKindName = vscode.SymbolKind[symbol.kind];
+      const referenceKind = mapSymbolKindToReferenceKind(symbol.kind);
 
       // Insert #sym:path/to/file.ts:SymbolName:123-145
       // Quote paths with spaces so FileReferenceParser can handle them correctly
@@ -793,12 +817,11 @@ async function getSymbolCompletions(
         relativePath,
         symbol.name,
         startLine,
-        endLine
+        endLine,
+        referenceKind
       );
 
       // Show symbol kind and location
-      const symbolKindName = vscode.SymbolKind[symbol.kind];
-
       // Map SymbolKind to CompletionItemKind for proper icon/color
       const completionKind = mapSymbolKindToCompletionKind(symbol.kind);
 
@@ -811,7 +834,7 @@ async function getSymbolCompletions(
           `**Symbol Reference**\n\n` +
           `Type: ${symbolKindName}\n\n` +
           `Location: \`${relativePath}:${startLine}-${endLine}\`\n\n` +
-          `Insert: \`${buildSymbolReference(relativePath, symbol.name, startLine, endLine)}\`\n\n` +
+          `Insert: \`${buildSymbolReference(relativePath, symbol.name, startLine, endLine, referenceKind)}\`\n\n` +
           `_ctrlyoke will attach this symbol's recorded line range._`,
         sortText: symbol.name,
         filterText: `${symbol.name} ${relativePath}`,

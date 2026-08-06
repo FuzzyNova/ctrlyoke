@@ -11,8 +11,10 @@ import {
   getPromptFileCompletions,
   findDocumentSymbolByNameAndRange,
   findWorkspaceSymbolByUriNameAndRange,
+  mapSymbolKindToReferenceKind,
 } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
 
 suite("CompletionHelpers", () => {
   const originalFindFiles = vscode.workspace.findFiles;
@@ -114,6 +116,22 @@ suite("CompletionHelpers", () => {
     });
     ConfigurationUtils.shouldRespectGitignoreForCompletions =
       originalShouldRespectGitignore;
+  });
+
+  test("maps every SymbolKind enum member to a renderer vocabulary key", () => {
+    const symbolKinds = Object.values(vscode.SymbolKind).filter(
+      (value): value is vscode.SymbolKind => typeof value === "number"
+    );
+
+    assert.strictEqual(symbolKinds.length, 26);
+    for (const symbolKind of symbolKinds) {
+      const referenceKind = mapSymbolKindToReferenceKind(symbolKind);
+      assert.ok(referenceKind, `missing kind name for ${symbolKind}`);
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(SYMBOL_KIND_ICONS, referenceKind),
+        `renderer map does not contain ${referenceKind}`
+      );
+    }
   });
 
   test("matches @ completions against the typed directory and child prefix", async () => {

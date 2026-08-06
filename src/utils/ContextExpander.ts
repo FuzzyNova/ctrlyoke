@@ -412,9 +412,15 @@ export class ContextExpander {
       // colon made the rewritten token unparseable by every ctrlyoke parser
       // because space-only quoting left it bare.
       const fieldPath = quoteReferenceField(displayPath);
-      return ref.symbolName
-        ? `#sym:${fieldPath}:${quoteReferenceField(ref.symbolName)}:${ref.startLine}-${ref.endLine}`
-        : `#selection:${fieldPath}:${ref.startLine}-${ref.endLine}`;
+      if (ref.symbolName) {
+        // Keep this reconstruction byte-for-byte compatible with the existing
+        // effectiveAbsolute output: buildSymbolReferenceValue normalizes
+        // backslashes, while this path intentionally preserves native absolute
+        // paths for the harness. Only the parsed kind is newly carried across.
+        const kindSuffix = ref.symbolKind ? `.${ref.symbolKind}` : "";
+        return `#sym${kindSuffix}:${fieldPath}:${quoteReferenceField(ref.symbolName)}:${ref.startLine}-${ref.endLine}`;
+      }
+      return `#selection:${fieldPath}:${ref.startLine}-${ref.endLine}`;
     }
 
     // Full-file @ ref — always route through formatFileRef so provider-level

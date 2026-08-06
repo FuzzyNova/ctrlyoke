@@ -71,6 +71,23 @@ suite("ContextReferenceBuilder", () => {
     );
   });
 
+  test("builds kinded symbol references without quoting the kind", () => {
+    assert.strictEqual(
+      buildSymbolReferenceValue(
+        "src/my folder/app.ts",
+        "get value",
+        42,
+        58,
+        "type-parameter"
+      ),
+      'sym.type-parameter:"src/my folder/app.ts":"get value":42-58'
+    );
+    assert.strictEqual(
+      buildSymbolReference("src/app.ts", "runWorkflow", 42, 58, "method"),
+      "#sym.method:src/app.ts:runWorkflow:42-58"
+    );
+  });
+
   test("builds git references", () => {
     assert.strictEqual(buildGitReference("diff"), "~diff");
     assert.strictEqual(buildGitReference("stash:0"), "~stash:0");
