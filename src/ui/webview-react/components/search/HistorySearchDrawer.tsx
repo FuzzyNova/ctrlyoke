@@ -13,6 +13,12 @@ import { ExitButton } from "@components/shared";
 
 const RESULT_LIMIT = 50;
 
+/**
+ * Shared centered column for the search bar, result summary, and result list so
+ * all three stay aligned on wide screens instead of hugging opposite edges.
+ */
+const CONTENT_COLUMN_CLASS = "mx-auto w-full max-w-4xl";
+
 const MATCH_TYPE_LABELS: Record<HistorySearchResult["matchType"], string> = {
   response: "Response",
   file: "File",
@@ -196,12 +202,9 @@ export function HistorySearchDrawer() {
     vscode,
   ]);
 
-  const footerLabel = useMemo(() => {
-    if (trimmedQuery.length < 2 || loading) {
-      return null;
-    }
-    if (totalCount === 0) {
-      return null;
+  const summaryLabel = useMemo(() => {
+    if (trimmedQuery.length < 2 || loading || totalCount === 0) {
+      return "";
     }
     return `Showing ${results.length} of ${totalCount}`;
   }, [loading, results.length, totalCount, trimmedQuery.length]);
@@ -232,22 +235,35 @@ export function HistorySearchDrawer() {
       </div>
 
       <div className="border-b border-panel-border px-4 py-3 shrink-0">
-        <div className="relative max-w-2xl">
-          <i className="codicon codicon-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-description-fg" />
-          <input
-            ref={inputRef}
-            type="search"
-            value={query}
-            onChange={(event) => setHistorySearchQuery(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder="Search workflow history..."
-            aria-label="Search workflow history"
-            className="h-9 w-full rounded border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-none focus:border-focus-border"
-          />
+        <div className={CONTENT_COLUMN_CLASS}>
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <i className="codicon codicon-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-description-fg" />
+              <input
+                ref={inputRef}
+                type="search"
+                value={query}
+                onChange={(event) => setHistorySearchQuery(event.target.value)}
+                onKeyDown={handleInputKeyDown}
+                placeholder="Search workflow history..."
+                aria-label="Search workflow history"
+                className="h-9 w-full rounded border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-none focus:border-focus-border"
+              />
+            </div>
+            {/* Filter controls belong here, as a sibling of the input, so adding
+                them later does not reflow the centered column. */}
+          </div>
+
+          {trimmedQuery.length >= 2 && (
+            <div className="mt-2 flex h-5 items-center justify-between gap-3 text-sm text-description-fg">
+              <span>{summaryLabel}</span>
+              <span>{indexState === "building" ? "Index updating" : ""}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
         {trimmedQuery.length === 1 && !loading && (
           <div className="px-3 py-6 text-center text-sm text-description-fg">
             Type at least 2 characters
@@ -268,7 +284,7 @@ export function HistorySearchDrawer() {
         )}
 
         {results.length > 0 && (
-          <div className="flex max-w-4xl flex-col gap-1">
+          <div className={`flex flex-col gap-1 ${CONTENT_COLUMN_CLASS}`}>
             {results.map((result, index) => {
               const relativeTime =
                 formatRelativeTimeVerbose(result.startedAt) ?? "Unknown time";
@@ -317,7 +333,7 @@ export function HistorySearchDrawer() {
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="mt-2 flex h-8 items-center justify-center gap-2 rounded border border-btn-border bg-btn-secondary-bg px-3 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60"
+                className="mt-2 flex h-8 items-center justify-center gap-2 self-center rounded border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60"
               >
                 {loadingMore && (
                   <i className="codicon codicon-loading animate-spin" />
@@ -328,13 +344,6 @@ export function HistorySearchDrawer() {
           </div>
         )}
       </div>
-
-      {footerLabel && (
-        <div className="flex items-center justify-between border-t border-panel-border px-4 py-2 text-xs text-description-fg">
-          <span>{indexState === "building" ? "Index updating" : ""}</span>
-          <span>{footerLabel}</span>
-        </div>
-      )}
     </div>
   );
 }
