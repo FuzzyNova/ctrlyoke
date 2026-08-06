@@ -134,6 +134,7 @@ export interface IDashboardSink {
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string,
+    definitionRevision?: number,
     workflowId?: string
   ): void;
 

@@ -879,6 +879,7 @@ suite("WorkflowInstance runtime transitions", () => {
     const promptsExtendedCalls: Array<{
       promptCount: number;
       executionState: string | undefined;
+      definitionRevision: number | undefined;
     }> = [];
     const executionStates: string[] = [];
 
@@ -898,11 +899,13 @@ suite("WorkflowInstance runtime transitions", () => {
       updateStepsExtended: (
         prompts: PromptStep[],
         _finalStep: PromptStep | null,
-        executionState?: string
+        executionState?: string,
+        definitionRevision?: number
       ) => {
         promptsExtendedCalls.push({
           promptCount: prompts.length,
           executionState,
+          definitionRevision,
         });
       },
       updatePromptDeleted: () => {},
@@ -940,6 +943,7 @@ suite("WorkflowInstance runtime transitions", () => {
       ...instance.promptQueue.getState(),
       status: EXECUTION_STATES.IDLE,
       steps: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
+      definitionRevision: 3,
     });
 
     assert.deepStrictEqual(executionStates, [EXECUTION_STATES.RUNNING]);
@@ -947,7 +951,8 @@ suite("WorkflowInstance runtime transitions", () => {
       promptsExtendedCalls.some(
         (call) =>
           call.promptCount === 2 &&
-          call.executionState === EXECUTION_STATES.RUNNING
+          call.executionState === EXECUTION_STATES.RUNNING &&
+          call.definitionRevision === 3
       )
     );
   });

@@ -89,9 +89,13 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
+  notifyCliPromptsExtended(
+    workflowId: string,
+    steps: any[],
+    definitionRevision?: number
+  ): void {
     for (const client of this.clients) {
-      client.notifyCliPromptsExtended(workflowId, steps);
+      client.notifyCliPromptsExtended(workflowId, steps, definitionRevision);
     }
   }
 
@@ -287,6 +291,7 @@ export class DashboardBroadcastHub
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string,
+    definitionRevision?: number,
     workflowId?: string
   ): void {
     for (const client of this.clients) {
@@ -294,6 +299,7 @@ export class DashboardBroadcastHub
         steps,
         finalStep,
         executionState,
+        definitionRevision,
         workflowId
       );
     }

@@ -46,6 +46,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
+import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -2406,6 +2407,46 @@ describe("RETRY_ATTEMPT_CHANGED", () => {
 // ---------------------------------------------------------------------------
 
 describe("STEPS_EXTENDED", () => {
+  it("adopts the appended definition revision before execution completes", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-key" as never,
+        kind: "run",
+        runRef: "run-ref" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 7,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+        definitionRevision: 3,
+      });
+    });
+
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
+    expect(getWorkflowDefinitionMutation()).toMatchObject({
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 7,
+    });
+  });
+
+  it("does not regress the definition revision on a duplicate stale update", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({ displayedDefinitionRevision: 3 });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [makePrompt("Step 0")],
+        definitionRevision: 2,
+      });
+    });
+
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
+  });
+
   it("extends the prompts array", () => {
     renderHook(() => useMessageHandler());
 

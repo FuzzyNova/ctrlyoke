@@ -638,9 +638,16 @@ export class CtrlYokeWebviewProvider
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string,
+    definitionRevision?: number,
     workflowId?: string
   ): void {
-    this.sink.updateStepsExtended(steps, finalStep, executionState, workflowId);
+    this.sink.updateStepsExtended(
+      steps,
+      finalStep,
+      executionState,
+      definitionRevision,
+      workflowId
+    );
   }
   public updatePromptDeleted(
     fileName: string,
@@ -712,11 +719,16 @@ export class CtrlYokeWebviewProvider
    * Called when a CLI-managed workflow dynamically extends its queue.
    * Includes the workflowId so the webview can ignore updates for inactive workflows.
    */
-  public notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
+  public notifyCliPromptsExtended(
+    workflowId: string,
+    steps: any[],
+    definitionRevision?: number
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       workflowId,
       steps,
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
     });
   }
 

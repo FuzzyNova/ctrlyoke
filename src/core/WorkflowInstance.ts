@@ -1967,6 +1967,7 @@ export class WorkflowInstance {
           updatedState.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null,
           undefined,
+          updatedState.definitionRevision,
           this.id
         );
         this.dashboardSink.updateProgress(
@@ -2204,7 +2205,8 @@ export class WorkflowInstance {
       this.dashboardSink.updateStepsExtended(
         currentState.steps,
         this.promptQueue.getWorkflowFile().finalStep ?? null,
-        this.getAuthoritativeExecutionState()
+        this.getAuthoritativeExecutionState(),
+        currentState.definitionRevision
       );
       this.dashboardSink.updateProgress(
         currentState.currentIndex,
@@ -2242,7 +2244,9 @@ export class WorkflowInstance {
       const currentState = this.promptQueue.getState();
       this.dashboardSink.updateStepsExtended(
         currentState.steps,
-        this.promptQueue.getWorkflowFile().finalStep ?? null
+        this.promptQueue.getWorkflowFile().finalStep ?? null,
+        undefined,
+        currentState.definitionRevision
       );
     }
     Log.debug(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
@@ -2539,7 +2543,9 @@ export class WorkflowInstance {
         const updatedState = this.promptQueue.getState();
         this.dashboardSink.updateStepsExtended(
           updatedState.steps,
-          this.promptQueue.getWorkflowFile().finalStep ?? null
+          this.promptQueue.getWorkflowFile().finalStep ?? null,
+          undefined,
+          updatedState.definitionRevision
         );
       }
 
@@ -3737,7 +3743,8 @@ export class WorkflowInstance {
         this.dashboardSink.updateStepsExtended(
           state.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null,
-          executionState
+          executionState,
+          state.definitionRevision
         );
         this.dashboardSink.updateProgress(
           state.currentIndex,

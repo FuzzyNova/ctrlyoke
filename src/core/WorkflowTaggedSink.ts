@@ -231,12 +231,14 @@ export class WorkflowTaggedSink implements IDashboardSink {
   updateStepsExtended(
     steps: any[],
     finalStep?: WorkflowStep | null,
-    executionState?: string
+    executionState?: string,
+    definitionRevision?: number
   ): void {
     this.inner.updateStepsExtended(
       steps,
       finalStep,
       executionState,
+      definitionRevision,
       this.workflowId
     );
   }

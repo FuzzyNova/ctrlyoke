@@ -34,7 +34,11 @@ export interface IDashboardProvider {
   ): void;
 
   /** Notify that a CLI-managed workflow dynamically extended its queue. */
-  notifyCliPromptsExtended(workflowId: string, steps: any[]): void;
+  notifyCliPromptsExtended(
+    workflowId: string,
+    steps: any[],
+    definitionRevision?: number
+  ): void;
 
   // ── Harness availability ──────────────────────────────────────────────────
 

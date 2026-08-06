@@ -266,8 +266,17 @@ export class CtrlYokeHostedServer
     });
   }
 
-  notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
-    this.broadcast({ type: MESSAGE_TYPES.STEPS_EXTENDED, workflowId, steps });
+  notifyCliPromptsExtended(
+    workflowId: string,
+    steps: any[],
+    definitionRevision?: number
+  ): void {
+    this.broadcast({
+      type: MESSAGE_TYPES.STEPS_EXTENDED,
+      workflowId,
+      steps,
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+    });
   }
 
   notifyHarnessAvailability(
@@ -492,9 +501,16 @@ export class CtrlYokeHostedServer
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string,
+    definitionRevision?: number,
     workflowId?: string
   ): void {
-    this.sink.updateStepsExtended(steps, finalStep, executionState, workflowId);
+    this.sink.updateStepsExtended(
+      steps,
+      finalStep,
+      executionState,
+      definitionRevision,
+      workflowId
+    );
   }
   updatePromptDeleted(
     fileName: string,

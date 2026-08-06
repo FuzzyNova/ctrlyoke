@@ -5386,12 +5386,19 @@ export class WorkflowOrchestrator {
           fs.promises
             .readFile(workingFilePath, "utf8")
             .then((content) => {
-              const wf = JSON.parse(content) as { steps?: unknown[] };
+              const wf = JSON.parse(content) as {
+                steps?: unknown[];
+                definitionRevision?: number;
+              };
               if (wf.steps) {
                 Log.debug(
                   `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} → ${updatedSummary.totalSteps} steps`
                 );
-                provider.notifyCliPromptsExtended(workflowId, wf.steps);
+                provider.notifyCliPromptsExtended(
+                  workflowId,
+                  wf.steps,
+                  wf.definitionRevision ?? 1
+                );
               }
             })
             .catch((err) => {

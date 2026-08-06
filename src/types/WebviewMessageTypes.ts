@@ -658,6 +658,9 @@ export interface StepsExtendedMessage {
   type: typeof MESSAGE_TYPES.STEPS_EXTENDED;
   steps: WorkflowStep[];
   finalStep?: WorkflowStep | null;
+  /** The definition head that produced `steps`. Lets a following edit target
+   *  the append immediately, without waiting for long-running execution to end. */
+  definitionRevision?: number;
 }
 
 /**

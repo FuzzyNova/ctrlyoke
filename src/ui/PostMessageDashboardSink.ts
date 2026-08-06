@@ -250,6 +250,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string,
+    definitionRevision?: number,
     workflowId?: string
   ): void {
     this.send({
@@ -257,6 +258,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       steps,
       finalStep: finalStep ?? null,
       ...(executionState !== undefined ? { executionState } : {}),
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

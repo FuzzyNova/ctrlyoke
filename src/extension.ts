@@ -161,7 +161,9 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             const updatedState = promptQueue.getState();
             webviewProvider.updateStepsExtended(
               updatedState.steps,
-              promptQueue.getWorkflowFile().finalStep ?? null
+              promptQueue.getWorkflowFile().finalStep ?? null,
+              undefined,
+              updatedState.definitionRevision
             );
             webviewProvider.updateProgress(
               updatedState.currentIndex,

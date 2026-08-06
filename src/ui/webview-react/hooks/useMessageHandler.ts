@@ -701,6 +701,21 @@ export function createMessageHandlers(
       }
     }
 
+    // Queue growth is a definition mutation. Adopt its revision together with
+    // the visible steps so edits made while the newly appended step is still
+    // running do not submit the previous head and fail as stale. The value is
+    // monotonic only within an address; run-view loads remain responsible for
+    // resetting it when navigation/promotions move to another address.
+    if (message.definitionRevision !== undefined) {
+      const definitionRevision = message.definitionRevision;
+      useUiStore.setState((state) => ({
+        displayedDefinitionRevision:
+          state.displayedDefinitionRevision === null
+            ? definitionRevision
+            : Math.max(state.displayedDefinitionRevision, definitionRevision),
+      }));
+    }
+
     const workflowStore = useWorkflowStore.getState();
 
     // Update steps list (keep existing status for completed steps)
