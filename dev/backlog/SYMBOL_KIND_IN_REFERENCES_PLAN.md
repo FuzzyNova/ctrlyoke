@@ -1,6 +1,6 @@
 # Symbol Kind In References Plan
 
-> **Status:** Backlog — not started
+> **Status:** Step 1 complete — Steps 2 and 3 pending
 >
 > **Priority:** P2 — output correctness and cross-surface parity
 
@@ -345,7 +345,7 @@ into a single pattern, so each parser lost a regex instead of gaining one.
 
 Three steps. Each lands independently and keeps `npm test` green.
 
-### Step 1 — Parse and render the kind (no producers yet)
+### Step 1 — Parse and render the kind (no producers yet) ✅
 
 - Add the kind-name → codicon map to `atomicReferences.ts`. (The `symbol-misc`
   color entry already landed — see **Styling** above.)

@@ -145,6 +145,7 @@ export interface ContextReferenceMatch {
   lineStart?: string;
   lineEnd?: string;
   symbolName?: string;
+  symbolKind?: string;
   ref?: string;
 }
 
@@ -294,6 +295,41 @@ export const SYMBOL_ICON_COLORS: Record<string, string> = {
   book: CHART_ACCENT_COLORS.red,
 };
 
+/**
+ * Maps the persisted lowercased vscode.SymbolKind name embedded in a #sym.
+ * reference to the codicon used by both atomic-reference renderers. The
+ * values intentionally collapse kinds the same way CompletionItemKind icons
+ * do in CodeMirrorEditor.
+ */
+export const SYMBOL_KIND_ICONS: Record<string, string> = {
+  file: "symbol-file",
+  module: "symbol-module",
+  namespace: "symbol-module",
+  package: "symbol-module",
+  class: "symbol-class",
+  method: "symbol-method",
+  property: "symbol-property",
+  field: "symbol-field",
+  constructor: "symbol-constructor",
+  enum: "symbol-enum",
+  interface: "symbol-interface",
+  function: "symbol-function",
+  variable: "symbol-variable",
+  constant: "symbol-constant",
+  string: "symbol-value",
+  number: "symbol-value",
+  boolean: "symbol-value",
+  array: "symbol-value",
+  object: "symbol-value",
+  key: "symbol-property",
+  null: "symbol-value",
+  "enum-member": "symbol-enum-member",
+  struct: "symbol-struct",
+  event: "symbol-event",
+  operator: "symbol-operator",
+  "type-parameter": "symbol-type-parameter",
+};
+
 export type SymbolIconResolver = (
   path: string,
   symbolName: string,
@@ -384,6 +420,7 @@ function describeContextReferenceChip(
               ref.lineStart,
               ref.lineEnd
             )) ||
+          (ref.symbolKind && SYMBOL_KIND_ICONS[ref.symbolKind]) ||
           DEFAULT_COMPLETION_ICON,
         label: ref.symbolName || referenceBasename(ref.path ?? ""),
         title,
@@ -490,7 +527,7 @@ export function findContextReferenceMatches(
     // nothing.
     lineRange: /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
     symbol:
-      /#sym:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+      /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
   const fileMatches: ContextReferenceMatch[] = [];
   const directoryMatches: ContextReferenceMatch[] = [];
@@ -538,10 +575,11 @@ export function findContextReferenceMatches(
         from: offset + match.index,
         to: offset + match.index + match[0].length,
         type: "symbol",
-        path: match[1] ?? match[2],
-        symbolName: match[3] ?? match[4],
-        lineStart: match[5],
-        lineEnd: match[6],
+        ...(match[1] ? { symbolKind: match[1] } : {}),
+        path: match[2] ?? match[3],
+        symbolName: match[4] ?? match[5],
+        lineStart: match[6],
+        lineEnd: match[7],
       });
     }
   };

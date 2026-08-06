@@ -6,6 +6,8 @@ import {
   findContextReferenceMatches,
   projectAtomicReferenceFind,
   referenceBasename,
+  SYMBOL_ICON_COLORS,
+  SYMBOL_KIND_ICONS,
 } from "@utils/atomicReferences";
 
 describe("CodeMirrorEditor context reference parsing", () => {
@@ -67,6 +69,42 @@ describe("CodeMirrorEditor context reference parsing", () => {
           symbolName: "get value",
           lineStart: "3",
           lineEnd: "9",
+        },
+      ]);
+    });
+
+    it.each([
+      ["#sym:src/a.ts:MyClass:1-2", undefined],
+      ["#sym.class:src/a.ts:MyClass:1-2", "class"],
+      [
+        '#sym.type-parameter:"src/my repo/a.ts":"My Type":3-9',
+        "type-parameter",
+      ],
+      ["#sym.widget:src/a.ts:MyClass:1-2", "widget"],
+    ])("parses %s with the embedded kind %s", (token, symbolKind) => {
+      const matches = findContextReferenceMatches(token);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        from: 0,
+        to: token.length,
+        type: "symbol",
+      });
+      expect(matches[0].symbolKind).toBe(symbolKind);
+    });
+
+    it("preserves exact offsets for a kinded reference", () => {
+      const token = '#sym.enum-member:"src/a b.ts":"get value":10-40';
+      const text = `before ${token} after`;
+      expect(findContextReferenceMatches(text)).toEqual([
+        {
+          from: "before ".length,
+          to: "before ".length + token.length,
+          type: "symbol",
+          symbolKind: "enum-member",
+          path: "src/a b.ts",
+          symbolName: "get value",
+          lineStart: "10",
+          lineEnd: "40",
         },
       ]);
     });
@@ -134,6 +172,63 @@ describe("atomic reference presentation", () => {
   it("falls back to a generic symbol icon when the kind hasn't resolved yet", () => {
     const chips = findAtomicReferences("#sym:src/a.ts:MyClass:10-20");
     expect(chips[0]).toMatchObject({ icon: "symbol-misc" });
+  });
+
+  it("uses an embedded kind before falling back to the generic icon", () => {
+    const chips = findAtomicReferences(
+      "#sym.class:src/a.ts:MyClass:10-20"
+    );
+    expect(chips[0]).toMatchObject({ icon: "symbol-class" });
+  });
+
+  it("uses the resolver before an embedded kind", () => {
+    const chips = findAtomicReferences(
+      "#sym.class:src/a.ts:MyClass:10-20",
+      () => "symbol-interface"
+    );
+    expect(chips[0]).toMatchObject({ icon: "symbol-interface" });
+  });
+
+  it("maps every symbol kind to a colored codicon", () => {
+    const expected: Record<string, string> = {
+      file: "symbol-file",
+      module: "symbol-module",
+      namespace: "symbol-module",
+      package: "symbol-module",
+      class: "symbol-class",
+      method: "symbol-method",
+      property: "symbol-property",
+      field: "symbol-field",
+      constructor: "symbol-constructor",
+      enum: "symbol-enum",
+      interface: "symbol-interface",
+      function: "symbol-function",
+      variable: "symbol-variable",
+      constant: "symbol-constant",
+      string: "symbol-value",
+      number: "symbol-value",
+      boolean: "symbol-value",
+      array: "symbol-value",
+      object: "symbol-value",
+      key: "symbol-property",
+      null: "symbol-value",
+      "enum-member": "symbol-enum-member",
+      struct: "symbol-struct",
+      event: "symbol-event",
+      operator: "symbol-operator",
+      "type-parameter": "symbol-type-parameter",
+    };
+
+    expect(SYMBOL_KIND_ICONS).toEqual(expected);
+    for (const icon of Object.values(SYMBOL_KIND_ICONS)) {
+      expect(SYMBOL_ICON_COLORS[icon]).toBeDefined();
+    }
+  });
+
+  it("gives an un-kinded symbol the generic icon with an accent color", () => {
+    const chips = findAtomicReferences("#sym:src/a.ts:MyClass:10-20");
+    expect(chips[0]).toMatchObject({ icon: "symbol-misc" });
+    expect(SYMBOL_ICON_COLORS[chips[0].icon]).toBeDefined();
   });
 
   it("uses the resolved codicon once the symbol's kind is cached", () => {

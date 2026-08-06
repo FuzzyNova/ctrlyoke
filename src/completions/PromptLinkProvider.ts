@@ -54,12 +54,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // Groups: 1 quoted path, 2 bare path, 3 startLine, 4 endLine.
     lineRange: /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
 
-    // #sym:<path>:<symbol>:42-58 — both fields quoted or bare, same rule.
-    // Groups: 1/2 quoted/bare path, 3/4 quoted/bare symbol, 5-6 line range.
+    // #sym[.kind]:<path>:<symbol>:42-58 — both fields quoted or bare, same rule.
+    // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare symbol, 6-7 line range.
     // Matches: #sym:src/extension.ts:activate:14-36
     //          #sym:"C:/dev/my repo/a.ts":"get value":14-36
     symbol:
-      /#sym:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+      /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
 
   /**
@@ -517,10 +517,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     // Helper to add a symbol link from a regex match
     const addSymbolLink = (match: RegExpExecArray): void => {
-      const relativePath = match[1] ?? match[2];
-      const symbolName = match[3] ?? match[4];
-      const startLine = parseInt(match[5], 10);
-      const endLine = parseInt(match[6], 10);
+      const relativePath = match[2] ?? match[3];
+      const symbolName = match[4] ?? match[5];
+      const startLine = parseInt(match[6], 10);
+      const endLine = parseInt(match[7], 10);
 
       const decision = this.resolveLinkAccess(
         relativePath,

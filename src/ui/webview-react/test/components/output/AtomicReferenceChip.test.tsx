@@ -86,6 +86,16 @@ describe("AtomicReferenceChip", () => {
     }
   );
 
+  it("renders an embedded symbol kind with its icon accent", () => {
+    renderReference("#sym.class:src/file.ts:Thing:10-20");
+
+    const button = screen.getByRole("button");
+    expect(button.querySelector(".codicon-symbol-class")).not.toBeNull();
+    expect(button.style.getPropertyValue("--atomic-reference-accent")).toBe(
+      "var(--vscode-symbolIcon-classForeground, #ee9d28)"
+    );
+  });
+
   it("expands and marks a match in a hidden path segment", () => {
     const source = "@ctrlyoke/src/ui/webview-react/utils/codemirrorTheme.ts";
     const hiddenFrom = source.indexOf("webview-react");

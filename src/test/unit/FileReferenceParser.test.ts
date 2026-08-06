@@ -177,8 +177,34 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src/utils.ts");
       assert.strictEqual(refs[0].symbolName, "myFunction");
+      assert.strictEqual(refs[0].symbolKind, undefined);
       assert.strictEqual(refs[0].startLine, 42);
       assert.strictEqual(refs[0].endLine, 58);
+    });
+
+    test("parses an embedded symbol kind", () => {
+      const generic = parseSymbolReferences(
+        "#sym:src/utils.ts:myFunction:42-58"
+      )[0];
+      const kinded = parseSymbolReferences(
+        "#sym.class:src/utils.ts:myFunction:42-58"
+      )[0];
+
+      assert.deepStrictEqual(
+        {
+          path: kinded.path,
+          symbolName: kinded.symbolName,
+          startLine: kinded.startLine,
+          endLine: kinded.endLine,
+        },
+        {
+          path: generic.path,
+          symbolName: generic.symbolName,
+          startLine: generic.startLine,
+          endLine: generic.endLine,
+        }
+      );
+      assert.strictEqual(kinded.symbolKind, "class");
     });
 
     test("parses #sym: reference with method syntax (parentheses)", () => {
@@ -282,6 +308,30 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].symbolName, "My Heading");
     });
 
+    test("parses a kinded quoted path and symbol name", () => {
+      const refs = parseSymbolReferences(
+        '#sym.type-parameter:"C:/dev/my repo/a.ts":"My Type":3-9'
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].symbolKind, "type-parameter");
+      assert.strictEqual(refs[0].path, "C:/dev/my repo/a.ts");
+      assert.strictEqual(refs[0].symbolName, "My Type");
+      assert.strictEqual(refs[0].startLine, 3);
+      assert.strictEqual(refs[0].endLine, 9);
+    });
+
+    test("parses an unrecognized kind without changing the reference fields", () => {
+      const refs = parseSymbolReferences(
+        "#sym.widget:src/a.ts:MyClass:1-2"
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].symbolKind, "widget");
+      assert.strictEqual(refs[0].path, "src/a.ts");
+      assert.strictEqual(refs[0].symbolName, "MyClass");
+      assert.strictEqual(refs[0].startLine, 1);
+      assert.strictEqual(refs[0].endLine, 2);
+    });
+
     test("parses a quoted Windows absolute path (drive colon)", () => {
       const refs = parseSymbolReferences('#sym:"C:\\dev\\repo\\a.ts":foo:1-1');
       assert.strictEqual(refs.length, 1);
@@ -307,6 +357,17 @@ suite("FileReferenceParser", () => {
 
     test("offsets cover the whole token including quoted fields", () => {
       const token = '#sym:"src/a b.ts":"get value":1-2';
+      const text = `pre ${token} post`;
+      const refs = parseSymbolReferences(text);
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(
+        text.slice(refs[0].startOffset, refs[0].endOffset),
+        token
+      );
+    });
+
+    test("offsets cover the whole token including the embedded kind", () => {
+      const token = '#sym.enum-member:"src/a b.ts":"get value":1-2';
       const text = `pre ${token} post`;
       const refs = parseSymbolReferences(text);
       assert.strictEqual(refs.length, 1);
