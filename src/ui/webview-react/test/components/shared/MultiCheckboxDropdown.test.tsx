@@ -103,9 +103,79 @@ describe("MultiCheckboxDropdown", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Select..." }));
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    // Only the new "All" header registers a checkbox role — individual option
+    // rows hide their native checkbox from the a11y tree, as before.
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "LintRun lint" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
+  });
+
+  it("select-all header toggles every visible option, including grouped ones", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <MultiCheckboxDropdown
+        id="events"
+        selectedValues={[]}
+        onChange={onChange}
+        options={groupedOptions}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Select..." }));
+    const allHeader = screen.getByRole("checkbox", { name: "All (0/4)" });
+    expect(allHeader).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(allHeader);
+    expect(onChange).toHaveBeenLastCalledWith(["read", "write", "bash", "tool"]);
+
+    rerender(
+      <MultiCheckboxDropdown
+        id="events"
+        selectedValues={["read", "write", "bash", "tool"]}
+        onChange={onChange}
+        options={groupedOptions}
+      />
+    );
+    const fullyCheckedHeader = screen.getByRole("checkbox", {
+      name: "All (4/4)",
+    });
+    expect(fullyCheckedHeader).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(fullyCheckedHeader);
+    expect(onChange).toHaveBeenLastCalledWith([]);
+  });
+
+  it("marks the select-all header indeterminate when only some options are selected", () => {
+    render(
+      <MultiCheckboxDropdown
+        id="events"
+        selectedValues={["read"]}
+        onChange={vi.fn()}
+        options={groupedOptions}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Read" }));
+    const allHeader = screen.getByRole("checkbox", { name: "All (1/4)" });
+    expect(allHeader).toHaveAttribute("aria-checked", "mixed");
+    expect(allHeader.querySelector("input")).toHaveProperty(
+      "indeterminate",
+      true
+    );
+  });
+
+  it("does not show a select-all header for a single option", () => {
+    render(
+      <MultiCheckboxDropdown
+        id="skills"
+        selectedValues={[]}
+        onChange={vi.fn()}
+        options={[{ value: "lint", label: "Lint" }]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Select..." }));
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });
 
   it("closes on Escape without propagating to the document listener", () => {

@@ -345,7 +345,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     confirmResetOperations: true,
     confirmContinuationDiscardOperations: true,
     hideGitIgnoredFiles: false,
-    atomicContextReferences: false,
+    atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
   },
   server: {

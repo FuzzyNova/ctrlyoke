@@ -483,7 +483,7 @@ export function HistorySearchDrawer() {
               id="history-search-filters"
               className="mt-2 flex min-w-0 items-start gap-2"
             >
-              <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto pb-0.5">
+              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
                 <div className="flex-shrink-0 text-xs text-description-fg">
                   <MultiCheckboxDropdown
                     id="history-event-kind-filter"
@@ -504,6 +504,7 @@ export function HistorySearchDrawer() {
                     )}
                     className="w-fit min-w-[112px]"
                     dropdownMaxHeight="260px"
+                    dropdownMinWidth={180}
                   />
                 </div>
 
@@ -527,6 +528,7 @@ export function HistorySearchDrawer() {
                     )}
                     className="w-fit min-w-[116px]"
                     dropdownMaxHeight="260px"
+                    dropdownMinWidth={170}
                   />
                 </div>
 
@@ -553,7 +555,7 @@ export function HistorySearchDrawer() {
                   />
                 </div>
 
-                <div className="relative flex-shrink-0">
+                <div className="relative w-full flex-shrink-0 sm:w-[170px]">
                   <i className="codicon codicon-search pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xxs text-description-fg" />
                   <input
                     type="text"
@@ -563,7 +565,7 @@ export function HistorySearchDrawer() {
                     }
                     placeholder="File path contains..."
                     aria-label="File path contains"
-                    className="h-7 w-[170px] rounded border border-input-border bg-input-bg pl-7 pr-2 text-xs text-input-fg outline-none focus:border-focus-border"
+                    className="h-7 w-full rounded border border-input-border bg-input-bg pl-7 pr-2 text-xs text-input-fg outline-none focus:border-focus-border"
                   />
                 </div>
 
@@ -581,7 +583,7 @@ export function HistorySearchDrawer() {
                       aria-label={`This workflow only: ${workflowName}`}
                       className="h-3 w-3 accent-focus-border"
                     />
-                    <span className="max-w-[180px] truncate">
+                    <span className="max-w-[110px] truncate sm:max-w-[180px]">
                       Only {workflowName}
                     </span>
                   </label>

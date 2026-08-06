@@ -4,6 +4,7 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
 import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
+import { constrainPopupToViewport } from "@utils/dropdownUtils";
 import {
   dropdownBorderClass,
   dropdownWarningClass,
@@ -29,6 +30,12 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   className?: string;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
+  /**
+   * Minimum popup width in pixels, for option/group labels wider than the
+   * trigger button (which sizes to its own short button label). Omit to keep
+   * the popup matching the trigger's width exactly, as before.
+   */
+  dropdownMinWidth?: number;
   /** Soft validation message for values unavailable in the current workspace. */
   warning?: string;
 }
@@ -57,6 +64,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   onUnhideOption,
   nonHideableValues,
   dropdownMaxHeight = "60vh",
+  dropdownMinWidth,
   warning,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -71,11 +79,27 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     hidden: hiddenOptions,
   } = useHideableOptions(options, (o) => o.value, hiddenValues, namespace);
 
-  const popupPos = useDropdownPortalPosition(
-    buttonRef,
-    isOpen,
-    dropdownMaxHeight
-  );
+  const rawPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  const popupPos =
+    rawPos && dropdownMinWidth
+      ? (() => {
+          const constrained = constrainPopupToViewport({
+            left: rawPos.left,
+            width: rawPos.width,
+            minWidth: Math.max(rawPos.width ?? 0, dropdownMinWidth),
+            preferredWidth: dropdownMinWidth,
+          });
+          return {
+            top: rawPos.top,
+            bottom: rawPos.bottom,
+            left: constrained.left,
+            width: constrained.width,
+            minWidth: constrained.minWidth,
+            maxWidth: constrained.maxWidth,
+            maxHeight: rawPos.maxHeight,
+          };
+        })()
+      : rawPos;
   useClickOutside([buttonRef, popupRef], isOpen, () => {
     setIsOpen(false);
     setShowHidden(false);
@@ -195,6 +219,29 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     group.options.push(option);
   }
 
+  // "Select all" / "select none" header — toggles every visible option
+  // (ungrouped and grouped alike), mirroring the per-group toggle below.
+  const allVisibleValues = visibleOptions.map((option) => option.value);
+  const allSelectedCount = allVisibleValues.filter((value) =>
+    selectedValues.includes(value)
+  ).length;
+  const isAllSelected =
+    allVisibleValues.length > 0 && allSelectedCount === allVisibleValues.length;
+  const isAllPartiallySelected = allSelectedCount > 0 && !isAllSelected;
+
+  const toggleAll = () => {
+    if (isAllSelected) {
+      onChange(
+        selectedValues.filter((value) => !allVisibleValues.includes(value))
+      );
+    } else {
+      onChange([
+        ...selectedValues,
+        ...allVisibleValues.filter((value) => !selectedValues.includes(value)),
+      ]);
+    }
+  };
+
   // Build button label from visible (non-hidden) selected values only
   const visibleSelected = selectedValues.filter(
     (v) => !hiddenValues.includes(v)
@@ -269,6 +316,41 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
 
         {/* Scrollable options area */}
         <div className="overflow-y-auto min-h-0 flex-1">
+          {visibleOptions.length > 1 && (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={
+                isAllPartiallySelected
+                  ? "mixed"
+                  : isAllSelected
+                    ? "true"
+                    : "false"
+              }
+              aria-label={`All (${allSelectedCount}/${allVisibleValues.length})`}
+              onClick={toggleAll}
+              className="sticky top-0 z-20 flex h-7 w-full flex-shrink-0 items-center gap-2 border-b border-dropdown-border bg-dropdown-bg px-2 text-left text-xs cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                ref={(element) => {
+                  if (element) {
+                    element.indeterminate = isAllPartiallySelected;
+                  }
+                }}
+                onChange={() => {}}
+                aria-hidden={true}
+                tabIndex={-1}
+                className="w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+              />
+              <span className="font-medium truncate flex-1">All</span>
+              <span className="text-xxs text-description-fg flex-shrink-0">
+                {allSelectedCount}/{allVisibleValues.length}
+              </span>
+            </button>
+          )}
+
           {visibleOptions.length === 0 && !hideEnabled ? (
             <div className="px-3 py-2 text-xs text-description-fg">
               No skills available
@@ -316,7 +398,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                       }
                       aria-label={`${group.group} (${selectedCount}/${groupValues.length})`}
                       onClick={toggleGroup}
-                      className="sticky top-0 z-10 w-full flex items-center gap-2 px-2 py-1 text-xs text-left bg-dropdown-bg border-b border-dropdown-border cursor-pointer"
+                      className="sticky top-7 z-10 flex h-7 w-full items-center gap-2 border-b border-dropdown-border bg-dropdown-bg px-2 text-left text-xs cursor-pointer"
                     >
                       <input
                         type="checkbox"
