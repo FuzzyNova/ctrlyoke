@@ -407,16 +407,12 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     });
 
     try {
-      expect(
-        view.dom.querySelector(".codicon-symbol-class")
-      ).not.toBeNull();
+      expect(view.dom.querySelector(".codicon-symbol-class")).not.toBeNull();
 
       forceLinting(view);
       await vi.waitFor(() => {
         expect(validateReferences).toHaveBeenCalled();
-        expect(cache.get("src/file.ts::Thing::10-20")).toBe(
-          "symbol-interface"
-        );
+        expect(cache.get("src/file.ts::Thing::10-20")).toBe("symbol-interface");
         expect(
           view.dom.querySelector(".codicon-symbol-interface")
         ).not.toBeNull();

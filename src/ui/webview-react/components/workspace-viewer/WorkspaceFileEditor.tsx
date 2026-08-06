@@ -311,8 +311,14 @@ function findWorkspaceReferenceMatches(
     directory: /@([^\s@#"]+\/)/g,
     lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
     lineRange: /#selection:([^\s:"]+):(\d+)-(\d+)/g,
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
-    symbol: /#sym:([^\s:"]+):([^:]+):(\d+)-(\d+)/g,
+    // Must stay in lockstep with the canonical symbol pattern in
+    // src/ui/webview-react/utils/atomicReferences.ts and
+    // src/utils/FileReferenceParser.ts: one regex, quoted-or-bare per field,
+    // with the optional `.kind` suffix ctrlyoke now emits. A token this parser
+    // misses renders as inert text here while every other surface links it.
+    // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare name, 6-7 range.
+    symbol:
+      /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
 
   const fileMatches: WorkspaceReferenceMatch[] = [];
@@ -366,14 +372,13 @@ function findWorkspaceReferenceMatches(
         from: offset + match.index,
         to: offset + match.index + match[0].length,
         type: "symbol",
-        path: match[1],
-        lineStart: match[3],
-        lineEnd: match[4],
+        path: match[2] ?? match[3],
+        lineStart: match[6],
+        lineEnd: match[7],
       });
     }
   };
 
-  collectSymbolMatches(patterns.symbolQuoted);
   collectSymbolMatches(patterns.symbol);
 
   const filteredDirectoryMatches = directoryMatches.filter((dirMatch) => {

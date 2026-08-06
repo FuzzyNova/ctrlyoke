@@ -175,9 +175,7 @@ describe("atomic reference presentation", () => {
   });
 
   it("uses an embedded kind before falling back to the generic icon", () => {
-    const chips = findAtomicReferences(
-      "#sym.class:src/a.ts:MyClass:10-20"
-    );
+    const chips = findAtomicReferences("#sym.class:src/a.ts:MyClass:10-20");
     expect(chips[0]).toMatchObject({ icon: "symbol-class" });
   });
 

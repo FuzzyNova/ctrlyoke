@@ -321,9 +321,7 @@ suite("FileReferenceParser", () => {
     });
 
     test("parses an unrecognized kind without changing the reference fields", () => {
-      const refs = parseSymbolReferences(
-        "#sym.widget:src/a.ts:MyClass:1-2"
-      );
+      const refs = parseSymbolReferences("#sym.widget:src/a.ts:MyClass:1-2");
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].symbolKind, "widget");
       assert.strictEqual(refs[0].path, "src/a.ts");

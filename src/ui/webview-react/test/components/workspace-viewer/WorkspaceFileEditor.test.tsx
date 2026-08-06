@@ -89,6 +89,39 @@ describe("WorkspaceFileEditor link navigation", () => {
     }
   });
 
+  it("opens a kinded #sym link with a quoted path and name", async () => {
+    const onChange = vi.fn();
+    const onSave = vi.fn();
+
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath="notes.prompt.md"
+        content={'#sym.type-parameter:"src/my utils.ts":"get value":42-58'}
+        onChange={onChange}
+        onSave={onSave}
+      />
+    );
+
+    const link = await waitFor(() => {
+      const el = container.querySelector(".cm-link");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    fireEvent.touchStart(link, {
+      touches: [{ clientX: 10, clientY: 10 }],
+    });
+    fireEvent.touchEnd(link);
+
+    const nav = useWorkspaceViewerStore.getState().pendingNavigation;
+    expect(nav?.type).toBe("file");
+    if (nav?.type === "file") {
+      expect(nav.filePath).toBe("src/my utils.ts");
+      expect(nav.startLine).toBe(42);
+      expect(nav.endLine).toBe(58);
+    }
+  });
+
   it("renders an <img> instead of the editor for a known image type", () => {
     const onChange = vi.fn();
     const onSave = vi.fn();

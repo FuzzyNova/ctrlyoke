@@ -544,9 +544,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       <OutputRow row={row} isExecutionActive={false} atomicContextReferences />
     );
 
-    expect(
-      container.querySelector(".codicon-symbol-class")
-    ).not.toBeNull();
+    expect(container.querySelector(".codicon-symbol-class")).not.toBeNull();
     expect(postMessage).not.toHaveBeenCalled();
   });
 

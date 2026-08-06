@@ -385,11 +385,11 @@ The migration from `#file:path` to `@path` for full files has been completed.
 
 ### Mental Model Summary
 
-| Syntax Type           | Purpose                  | Who Handles      | Example                                 | Notes                                 |
-| --------------------- | ------------------------ | ---------------- | --------------------------------------- | ------------------------------------- |
-| `@path`               | Full file content        | CLI (native)     | `@src/extension.ts`                     | CLI attaches entire file              |
-| `@path/`              | Full directory structure | FlightPath (XML) | `@src/flightpath/`                      | Trailing slash = directory tree (XML) |
-| `#selection::-`       | Line range snippet       | FlightPath (XML) | `#selection::-`                         | Extracts specific lines               |
+| Syntax Type                | Purpose                  | Who Handles      | Example                                    | Notes                                 |
+| -------------------------- | ------------------------ | ---------------- | ------------------------------------------ | ------------------------------------- |
+| `@path`                    | Full file content        | CLI (native)     | `@src/extension.ts`                        | CLI attaches entire file              |
+| `@path/`                   | Full directory structure | FlightPath (XML) | `@src/flightpath/`                         | Trailing slash = directory tree (XML) |
+| `#selection::-`            | Line range snippet       | FlightPath (XML) | `#selection::-`                            | Extracts specific lines               |
 | `#sym:path:name:start-end` | Symbol snippet           | FlightPath (XML) | `#sym:src/file.ts:FlightPathManager:42-42` | Resolves to exact symbol location     |
 
 **Note**: There is no `#selection` syntax. The completion provider shows `$(selection)` as a label but inserts `file:path:line-line`.
@@ -409,20 +409,20 @@ The migration from `#file:path` to `@path` for full files has been completed.
 
 ## Implementation Status
 
-| Feature                          | Status  | Priority | Notes                                                            |
-| -------------------------------- | ------- | -------- | ---------------------------------------------------------------- |
-| `@` trigger for file completions | ✅ Done | -        | Workspace files with 5s cache, max 500 items                     |
-| `@path` file references          | ✅ Done | -        | Parsed in all integrations (CLI + Chat)                          |
-| - ✅ `#` trigger for selections  | ✅ Done | -        | Selections shown when typing `#`                                 |
-| - ✅ `#` symbol completions      | ✅ Done | -        | Shows immediately with `#`, filters code files, 500 max          |
-| `#selection::-` line ranges      | ✅ Done | -        | Manual typing, XML attachment in all integrations                |
-| Selection completions            | ✅ Done | -        | Inserts `file:path:line-line` from editor selections             |
-| Symbol completions               | ✅ Done | -        | Inserts `sym:path:name:line`, dynamic refresh as you type        |
-| Model completions                | ✅ Done | -        | Dynamic model list in "model" field                              |
-| Migration script                 | ✅ Done | -        | `scripts/migrate-prompt-syntax.mjs`                              |
-| `@path/` directory refs          | ✅ Done | -        | Completions + runtime XML tree via `buildDirectoryAttachmentXml` |
+| Feature                               | Status  | Priority | Notes                                                            |
+| ------------------------------------- | ------- | -------- | ---------------------------------------------------------------- |
+| `@` trigger for file completions      | ✅ Done | -        | Workspace files with 5s cache, max 500 items                     |
+| `@path` file references               | ✅ Done | -        | Parsed in all integrations (CLI + Chat)                          |
+| - ✅ `#` trigger for selections       | ✅ Done | -        | Selections shown when typing `#`                                 |
+| - ✅ `#` symbol completions           | ✅ Done | -        | Shows immediately with `#`, filters code files, 500 max          |
+| `#selection::-` line ranges           | ✅ Done | -        | Manual typing, XML attachment in all integrations                |
+| Selection completions                 | ✅ Done | -        | Inserts `file:path:line-line` from editor selections             |
+| Symbol completions                    | ✅ Done | -        | Inserts `sym:path:name:line`, dynamic refresh as you type        |
+| Model completions                     | ✅ Done | -        | Dynamic model list in "model" field                              |
+| Migration script                      | ✅ Done | -        | `scripts/migrate-prompt-syntax.mjs`                              |
+| `@path/` directory refs               | ✅ Done | -        | Completions + runtime XML tree via `buildDirectoryAttachmentXml` |
 | `#sym:path:name:start-end` resolution | ✅ Done | -        | Resolves symbols to exact line range using document symbols      |
-| Deprecation warnings             | ⬜ TODO | LOW      | Show hints when using `#file:` for full files                    |
+| Deprecation warnings                  | ⬜ TODO | LOW      | Show hints when using `#file:` for full files                    |
 
 ---
 

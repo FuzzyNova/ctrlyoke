@@ -74,10 +74,10 @@ rows cannot see it, and history rows reference symbols the editor never parsed.
 Both producers of a `#sym:` token hold a real `vscode.SymbolKind` at the moment
 they build the string:
 
-| Producer                                  | Kind source     |
-| ----------------------------------------- | --------------- |
-| `CompletionHelpers.ts:792` (`#` completions) | `symbol.kind`   |
-| `ContextMenuReferenceCommands.ts:197`     | `symbol.kind`   |
+| Producer                                     | Kind source   |
+| -------------------------------------------- | ------------- |
+| `CompletionHelpers.ts:792` (`#` completions) | `symbol.kind` |
+| `ContextMenuReferenceCommands.ts:197`        | `symbol.kind` |
 
 Neither currently passes it to `buildSymbolReferenceValue`
 (`ContextReferenceBuilder.ts:45-61`), so it is discarded and then re-derived
@@ -100,7 +100,7 @@ Rejected for three reasons:
    runs have no VS Code symbol provider, so those surfaces would stay generic
    permanently.
 2. **Wrong semantics.** Output is a historical record. Resolving at render time
-   reports what the symbol *is now*, not what was referenced then. A renamed or
+   reports what the symbol _is now_, not what was referenced then. A renamed or
    deleted symbol yields a wrong icon or none at all.
 3. **Cost shape.** One async provider query per reference, per virtualized row,
    for information that was already known — and thrown away — at insert time.
@@ -164,11 +164,17 @@ the collapsing `COMPLETION_KIND_ICONS` already performs (`namespace`/`package`
 
 `COMPLETION_KIND_ICONS` currently lives in `CodeMirrorEditor.tsx:203`, keyed by
 `CompletionItemKind` ordinal. Output needs a kind→icon map too, so add a
-**kind-name → codicon** map in `src/ui/webview-react/utils/atomicReferences.ts`
-alongside `SYMBOL_ICON_COLORS`, and have both render engines consume it. This
+**kind-name → codicon** map and have both render engines consume it. This
 removes the last editor-owned presentation table the output path would otherwise
 have to duplicate — the same coupling Step 1 of
 `dev/implemented/GLOBAL_ATOMIC_REFERENCES_PLAN.md` removed for the parser.
+
+**As built:** the map is `SYMBOL_KIND_ICONS` in
+`src/types/SymbolKindConstants.ts`, not in `atomicReferences.ts` as originally
+written here. It has to be reachable from both the extension host (the
+`SymbolKind → name` producer helper validates against it) and the webview, and
+`src/types/` is the only tree both may import; `atomicReferences.ts` re-exports
+it so webview call sites keep a single import.
 
 The numeric `COMPLETION_KIND_ICONS` stays where it is: it serves the completions
 dropdown, which is genuinely `CompletionItemKind`-keyed.
@@ -194,12 +200,12 @@ correct asymmetry: the editor describes live code, output describes history.
 
 ### Producers
 
-| File                                             | Change                                                                             |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `src/completions/ContextReferenceBuilder.ts:45-61` | `buildSymbolReferenceValue` / `buildSymbolReference` accept an optional kind name   |
-| `src/completions/CompletionHelpers.ts:792`       | Pass `symbol.kind` through a `SymbolKind → kind name` helper                        |
-| `src/completions/ContextMenuReferenceCommands.ts:197` | Pass `symbol.kind` the same way                                                 |
-| `src/utils/ContextExpander.ts:411`               | Preserve the kind when reconstructing the token for the simple-prompt fast path     |
+| File                                                  | Change                                                                            |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `src/completions/ContextReferenceBuilder.ts:45-61`    | `buildSymbolReferenceValue` / `buildSymbolReference` accept an optional kind name |
+| `src/completions/CompletionHelpers.ts:792`            | Pass `symbol.kind` through a `SymbolKind → kind name` helper                      |
+| `src/completions/ContextMenuReferenceCommands.ts:197` | Pass `symbol.kind` the same way                                                   |
+| `src/utils/ContextExpander.ts:411`                    | Preserve the kind when reconstructing the token for the simple-prompt fast path   |
 
 The `SymbolKind → kind name` helper belongs next to `mapSymbolKindToCompletionKind`
 (`CompletionHelpers.ts:46`) or in `ContextReferenceBuilder.ts`; it must not be
@@ -213,13 +219,13 @@ loses its kind on the way to the harness.
 
 ### Consumers
 
-| File                                                | Change                                                                       |
-| --------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `src/utils/FileReferenceParser.ts:171,187`          | Optional kind group on both the quoted and plain regexes; populate `symbolKind` |
-| `src/ui/webview-react/utils/atomicReferences.ts:480-481` | Same on `symbolQuoted` / `symbol`; carry `symbolKind` on `ContextReferenceMatch` |
-| `src/ui/webview-react/utils/atomicReferences.ts`    | `describeContextReferenceChip` prefers the embedded kind over `getSymbolIcon`; add the kind-name → codicon map |
-| `src/completions/PromptLinkProvider.ts:61,65`       | Optional kind group so Ctrl+Click still resolves kinded tokens                 |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Resolver becomes the corrector; embedded kind is the initial value    |
+| File                                                          | Change                                                                                                         |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `src/utils/FileReferenceParser.ts:171,187`                    | Optional kind group on both the quoted and plain regexes; populate `symbolKind`                                |
+| `src/ui/webview-react/utils/atomicReferences.ts:480-481`      | Same on `symbolQuoted` / `symbol`; carry `symbolKind` on `ContextReferenceMatch`                               |
+| `src/ui/webview-react/utils/atomicReferences.ts`              | `describeContextReferenceChip` prefers the embedded kind over `getSymbolIcon`; add the kind-name → codicon map |
+| `src/completions/PromptLinkProvider.ts:61,65`                 | Optional kind group so Ctrl+Click still resolves kinded tokens                                                 |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Resolver becomes the corrector; embedded kind is the initial value                                             |
 
 Icon precedence in `describeContextReferenceChip`: resolver result (editor only,
 authoritative) → embedded kind → `DEFAULT_COMPLETION_ICON`.
@@ -250,7 +256,7 @@ the still-valid generic form.
 
 **Status: Done.** Found while verifying this plan's citations; pre-existing and
 unrelated to kinds, but it landed in the same regexes Step 1 edits, so it was
-fixed first. Recorded here because the kind suffix must extend *this* grammar.
+fixed first. Recorded here because the kind suffix must extend _this_ grammar.
 
 Both fields of a `#sym:` reference (and the path of a `#selection:`) are now
 **quoted, or bare with no whitespace, `:`, or `"`** — one regex per reference
@@ -274,7 +280,7 @@ Three defects this closed:
    out of `see #sym:a.ts:MyClass, at 12:30-45`.
 3. **Windows absolute paths.** `ContextExpander.sanitizeReferences` emitted
    `#sym:C:\dev\repo\a.ts:foo:1-1` in multi-root/`effectiveAbsolute` mode —
-   unparseable by *every* ctrlyoke parser, because space-only quoting left the
+   unparseable by _every_ ctrlyoke parser, because space-only quoting left the
    drive colon bare. Two extension tests asserted exactly that broken output;
    they now assert the quoted form and additionally round-trip it back through
    `parseSymbolReferences`.
@@ -285,12 +291,12 @@ Three defects this closed:
 Found while verifying this plan's citations; **pre-existing, unrelated to kinds,
 but it lands in the same two regexes Step 1 edits**, so decide it first.
 
-The UI and runtime parsers disagree on what a symbol *name* may contain:
+The UI and runtime parsers disagree on what a symbol _name_ may contain:
 
-| Parser                                     | Symbol-name pattern                  |
-| ------------------------------------------ | ------------------------------------ |
-| `atomicReferences.ts:481` (UI)             | `([^:]+)`                            |
-| `FileReferenceParser.ts:187` (runtime)     | `([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?)`  |
+| Parser                                 | Symbol-name pattern                 |
+| -------------------------------------- | ----------------------------------- |
+| `atomicReferences.ts:481` (UI)         | `([^:]+)`                           |
+| `FileReferenceParser.ts:187` (runtime) | `([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?)` |
 
 Verified behavior — the UI parser accepts all of these, the runtime parser
 matches none of them:
@@ -310,7 +316,7 @@ pattern too), but `parseSymbolReferences` never matches it, so
 symbol's code.
 
 It is reachable. `getSymbolCompletions` (`CompletionHelpers.ts:792`) inserts
-`symbol.name` verbatim from `executeWorkspaceSymbolProvider` across *all* file
+`symbol.name` verbatim from `executeWorkspaceSymbolProvider` across _all_ file
 types, and `quoteReferencePath` only ever quotes the path — never the symbol
 name. Markdown heading symbols, CSS class symbols, and C++/Rust generic names
 all routinely contain spaces or hyphens.
@@ -334,7 +340,7 @@ expanded at runtime.
 **Outcome:** option 2 (quoting), because option 1 would have propagated the
 prose-swallowing `[^:]+` name into the runtime parser rather than removing it.
 The feared cost of option 2 — "a fourth pattern in every parser" — did not
-materialize: alternation per field collapses the existing quoted/plain *pair*
+materialize: alternation per field collapses the existing quoted/plain _pair_
 into a single pattern, so each parser lost a regex instead of gaining one.
 
 </details>
@@ -370,7 +376,7 @@ After this step a hand-written `#sym.class:…` renders correctly everywhere and
 nothing else has changed. Committing the reader before the writer means no
 window exists where produced tokens cannot be parsed.
 
-### Step 2 — Emit the kind
+### Step 2 — Emit the kind ✅
 
 - Add the kind parameter to `ContextReferenceBuilder`, the `SymbolKind → name`
   helper, and both call sites.
@@ -382,7 +388,7 @@ window exists where produced tokens cannot be parsed.
 
 - Make the validation round trip override rather than populate the icon; confirm
   the invalid-state path is unaffected. Step 1's precedence already gives the
-  resolver priority, so this step is mostly *verification plus tests* — the
+  resolver priority, so this step is mostly _verification plus tests_ — the
   editor-side behavior change is that a chip now paints its correct icon before
   validation returns, instead of flashing generic.
 - **Keep** the completion `apply` handler's seeding of `symbolIconCacheRef`
@@ -441,6 +447,29 @@ window exists where produced tokens cannot be parsed.
   (the `effectiveAbsolute` path at `ContextExpander.ts:407`).
 
 ---
+
+## Found during review — a fourth `#sym:` parser
+
+This plan named three parsers (`FileReferenceParser`, `atomicReferences`,
+`PromptLinkProvider`). There is a **fourth**:
+`findWorkspaceReferenceMatches` in
+`src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx`,
+which links references inside the workspace viewer's file editor. It was missed
+both here and by the earlier field-grammar fix, so it still carried the old
+two-regex `symbolQuoted`/`symbol` pair with the prose-swallowing `([^:]+)` name.
+
+Once Step 2 started emitting `#sym.<kind>:`, that parser stopped matching
+ctrlyoke's own tokens and they rendered as inert text in that one surface. It is
+now the same single pattern as the other three, covered by a test in
+`WorkspaceFileEditor.test.tsx`.
+
+**When touching the `#sym:` grammar, there are four parsers to keep in lockstep,
+not three.**
+
+`useAttachmentTokenCount.extractRawReferences` also rebuilds a `#sym:` token and
+drops the kind, but that is deliberate and harmless: the reconstruction only
+feeds the token counter, and a kinded and un-kinded reference expand to
+byte-identical content.
 
 ## Acceptance criteria
 

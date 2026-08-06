@@ -49,14 +49,14 @@ Session reuse is provider-aware. ctrlyoke does not try to resume a Claude sessio
 
 Prompts can include structured references that the prompt editor understands:
 
-| Syntax                                      | Purpose                      |
-| ------------------------------------------- | ---------------------------- |
-| `@path/to/file.ts`                          | Attach a full file           |
-| `@path/to/dir/`                             | Attach a directory tree      |
-| `#selection:path/to/file.ts:10-25`          | Attach a line range          |
+| Syntax                                         | Purpose                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@path/to/file.ts`                             | Attach a full file                                                                                                  |
+| `@path/to/dir/`                                | Attach a directory tree                                                                                             |
+| `#selection:path/to/file.ts:10-25`             | Attach a line range                                                                                                 |
 | `#sym.<kind>:path/to/file.ts:SymbolName:42-60` | Attach a symbol definition; ctrlyoke inserts the kind, while `#sym:path:SymbolName:42-60` remains valid and generic |
-| `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context    |
-| `$previous`, `$all`, `$step:1`              | Inject prior ctrlyoke output |
+| `~diff`, `~staged`, `~stash:0`, `~<commit>`    | Attach git change context                                                                                           |
+| `$previous`, `$all`, `$step:1`                 | Inject prior ctrlyoke output                                                                                        |
 
 ## End conditions and pre-conditions
 
