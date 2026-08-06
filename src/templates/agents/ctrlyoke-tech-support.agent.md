@@ -162,7 +162,7 @@ Prompt references:
 - `@path/to/file.ts`: attach a file.
 - `@path/to/dir/`: attach a directory tree.
 - `#selection:path/to/file.ts:10-25`: attach a line range.
-- `#sym:path/to/file.ts:SymbolName:42`: attach a symbol definition.
+- `#sym.<kind>:path/to/file.ts:SymbolName:42-60`: attach a symbol definition. This is the form ctrlyoke inserts; hand-authored `#sym:path/to/file.ts:SymbolName:42-60` remains valid and generic.
 - `~diff`, `~staged`, `~stash:0`, `~<commit>`: attach git change context.
 - `$previous`, `$all`, `$step:1`: inject prior ctrlyoke outputs.
 

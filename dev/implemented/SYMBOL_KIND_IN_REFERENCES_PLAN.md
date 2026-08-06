@@ -1,6 +1,6 @@
 # Symbol Kind In References Plan
 
-> **Status:** Steps 1 and 2 complete — Step 3 pending
+> **Status:** Complete — Steps 1–3 implemented 2026-08-06
 >
 > **Priority:** P2 — output correctness and cross-surface parity
 
@@ -378,6 +378,8 @@ window exists where produced tokens cannot be parsed.
 
 ### Step 3 — Editor corrector, docs, and fixtures
 
+✅ **Done.**
+
 - Make the validation round trip override rather than populate the icon; confirm
   the invalid-state path is unaffected. Step 1's precedence already gives the
   resolver priority, so this step is mostly *verification plus tests* — the
@@ -389,14 +391,15 @@ window exists where produced tokens cannot be parsed.
   resolver correct for hand-edited tokens. Do not remove it.
 - Update schema descriptions, docs, the agent template, and manual-test
   fixtures.
-- While there: the doc examples use an **obsolete no-range form** —
+- While there: the doc examples used an **obsolete no-range form** —
   `#sym:path/to/file.ts:SymbolName:42` (`docs/guide/concepts.md:57`,
   `docs/workflows/context-files.md:21`,
   `src/templates/agents/ctrlyoke-tech-support.agent.md:165`,
   `manual-test/README.md:273,439`, `manual-test/attachment-test.prompt.md:8`,
   `manual-test/prompt-links-test.ctrlyoke.json:4`). Every parser requires
   `:<start>-<end>`, so those examples do not parse. Correct them to the range
-  form as part of this pass.
+  form as part of this pass. A repo-wide audit also corrected the same obsolete
+  examples in the checked-in large prompt and implemented design documents.
 
 ---
 
@@ -449,3 +452,24 @@ window exists where produced tokens cannot be parsed.
 - The editor's validity and stale-kind correction behavior is unchanged.
 - Kind names, kind → codicon mapping, and accent colors each have exactly one
   source of truth shared by the editor and output renderers.
+
+### Step 3 completion record
+
+All acceptance criteria hold:
+
+- ✅ Kinded output chips use the embedded kind, including the class icon and
+  amber accent, without a host lookup.
+- ✅ Hosted output uses the same React chip/parser path and therefore renders
+  the same kinded chip.
+- ✅ Generic `#sym:` references remain parseable, expandable, and accented.
+- ✅ Unknown kinds still parse and expand, then fall back to `symbol-misc`.
+- ✅ Editor validation still owns validity and corrects a stale embedded kind;
+  the completion cache seeding remains in place.
+- ✅ `SYMBOL_KIND_ICONS`, `SYMBOL_ICON_COLORS`, and the persisted kind names
+  remain single-sourced across the renderers.
+
+Deliberately left out: output-time symbol resolution, removal of the editor
+validation round trip or its `symbolKind` response field, and removal of the
+completion `symbolIconCacheRef` seeding. The live-harness test suite was also
+not run, as required by the task gate. The unit test that explicitly verifies
+the obsolete single-line form is rejected remains intentionally unchanged.

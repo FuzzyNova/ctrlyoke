@@ -270,7 +270,7 @@ echo 0 > counter.txt
   1. Full file (@manual-test/simple-prompt-test.prompt.md)
   2. Directory structure (@manual-test/sample-code/)
   3. Line range (#file:src/extension.ts:1-20)
-  4. Symbol (#sym:src/extension.ts:activate:14)
+  4. Symbol (#sym.function:src/extension.ts:activate:14-36)
 - LLM responds "All attachments received" if successful
 
 ### 9. preCondition Gating
@@ -436,7 +436,7 @@ echo 0 > multi-step-counter.txt
    - Ctrl+Click to reveal in Explorer
 4. **Line range links** (`#file:path:10-20`):
    - Ctrl+Click to open file with lines selected
-5. **Symbol links** (`#sym:path:symbol:42`):
+5. **Symbol links** (`#sym.<kind>:path:symbol:42-60`; hand-authored `#sym:path:symbol:42-60` is also valid):
    - Ctrl+Click to navigate to symbol definition
 
 **Expected Behavior:**

@@ -29,7 +29,7 @@ The output of every action should be a valid FlightPath reference string inserte
 - `@path/to/file.ts`
 - `@path/to/dir/`
 - `#selection:path:10-20`
-- `#sym:path:SymbolName:42`
+- `#sym:path:SymbolName:42-42`
 - `~diff`
 - `~staged`
 - `~stash:N`

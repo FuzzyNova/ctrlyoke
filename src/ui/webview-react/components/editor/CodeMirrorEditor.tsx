@@ -118,7 +118,7 @@ interface CodeMirrorEditorProps {
   onInsertApplied?: (requestId: string) => void;
 }
 
-interface ContextReferenceValidationResult {
+export interface ContextReferenceValidationResult {
   id: string;
   exists: boolean;
   message?: string;
@@ -1963,7 +1963,7 @@ function createSpellCheckExtension(
   );
 }
 
-function createContextReferenceLintExtension(
+export function createContextReferenceLintExtension(
   validateReferences: (
     references: Array<ContextReferenceMatch & { id: string }>
   ) => Promise<ContextReferenceValidationResult[]>,

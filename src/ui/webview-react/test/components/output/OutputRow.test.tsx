@@ -529,6 +529,27 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(window.vscodeApi?.postMessage).toHaveBeenCalled();
   });
 
+  it("renders an embedded symbol kind in output without a host lookup", () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const row: OutputRenderRow = {
+      key: "row-prompt-kind-chip",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "Review #sym.class:src/app.ts:Widget:2-8",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} atomicContextReferences />
+    );
+
+    expect(
+      container.querySelector(".codicon-symbol-class")
+    ).not.toBeNull();
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
   it("keeps prompt references as selectable links when atomic formatting is off", () => {
     const row: OutputRenderRow = {
       key: "row-prompt-links",

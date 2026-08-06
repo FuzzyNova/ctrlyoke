@@ -527,7 +527,7 @@ Explain the structure of #file:src/ui
 When used in a prompt, this provides targeted code context for a specific symbol:
 
 ```markdown
-Refactor #sym:src/flightpath/harness/CliIntegration.ts:executePrompt:42 to improve error handling
+Refactor #sym:src/flightpath/harness/CliIntegration.ts:executePrompt:42-42 to improve error handling
 ```
 
 **CLI Support**: ❌ Not natively supported by Copilot or Claude CLI
@@ -537,10 +537,10 @@ Refactor #sym:src/flightpath/harness/CliIntegration.ts:executePrompt:42 to impro
 - `FileReferenceParser.parseSymbolReferences()` parses `#sym:` references from prompts
 - `ContextExpander` resolves symbol references to file + line range
 - Converted to XML `<attachment>` blocks (same as `#file:path:start-end` line ranges)
-- Quoted path syntax supported: `#sym:"path with spaces/file.ts":SymbolName:123`
+- Quoted path syntax supported: `#sym:"path with spaces/file.ts":SymbolName:123-123`
 - IntelliSense completions available via `#` trigger character in `.flightpath.json` / `.prompt.md` files
 
-**Syntax format**: `#sym:path:SymbolName:lineNumber` or `#sym:"path with spaces":SymbolName:lineNumber`
+**Syntax format**: `#sym:path:SymbolName:start-end` or `#sym:"path with spaces":SymbolName:start-end`
 
 ## Version Compatibility
 

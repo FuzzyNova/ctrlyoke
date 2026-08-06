@@ -1749,6 +1749,6 @@ const indicatorVisible = recentOutputLower.includes(escapeIndicator);
 - VS Code Shell Integration: https://code.visualstudio.com/api/references/vscode-api#TerminalShellIntegration
 - Node.js child_process: https://nodejs.org/api/child_process.html
 
-Here is the entire contents of #sym:src/flightpath/cli/BaseCliIntegration.ts:BaseCliIntegration:55
+Here is the entire contents of #sym:src/flightpath/cli/BaseCliIntegration.ts:BaseCliIntegration:55-55
 
 If you got all of that then the test passed. respond with "test passed" and summarize the info above.

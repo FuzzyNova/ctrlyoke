@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { forceLinting } from "@codemirror/lint";
 import {
   buildCodeMirrorCompletionResult,
   buildPromptReferenceInsertion,
   createAtomicReferenceExtension,
   createClickHandlerExtension,
+  createContextReferenceLintExtension,
   destroyOrphanedMouseSelection,
   getRetryPlaceholderCompletions,
   keyboardTooltipSpace,
@@ -362,6 +364,90 @@ describe("CodeMirrorEditor orphaned mouse-selection guard", () => {
 });
 
 describe("CodeMirrorEditor atomic reference chips", () => {
+  it("uses an embedded symbol kind on first render without contacting the host", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const view = new EditorView({
+      parent,
+      doc: "#sym.class:src/file.ts:Thing:10-20",
+      extensions: [createAtomicReferenceExtension()],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.querySelector(".codicon-symbol-class")).not.toBeNull();
+      expect(postMessage).not.toHaveBeenCalled();
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("lets validation correct a stale embedded symbol kind", async () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const cache = new Map<string, string>();
+    const token = "#sym.class:src/file.ts:Thing:10-20";
+    const validateReferences = vi.fn(async (references: { id: string }[]) =>
+      references.map((reference) => ({
+        id: reference.id,
+        exists: true,
+        symbolKind: 7, // CompletionItemKind.Interface
+      }))
+    );
+    const view = new EditorView({
+      parent,
+      doc: token,
+      extensions: [
+        createAtomicReferenceExtension(cache),
+        createContextReferenceLintExtension(validateReferences, cache),
+      ],
+    });
+
+    try {
+      expect(
+        view.dom.querySelector(".codicon-symbol-class")
+      ).not.toBeNull();
+
+      forceLinting(view);
+      await vi.waitFor(() => {
+        expect(validateReferences).toHaveBeenCalled();
+        expect(cache.get("src/file.ts::Thing::10-20")).toBe(
+          "symbol-interface"
+        );
+        expect(
+          view.dom.querySelector(".codicon-symbol-interface")
+        ).not.toBeNull();
+      });
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("keeps an unresolvable symbol chip marked invalid", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const token = "#sym.class:src/missing.ts:Thing:10-20";
+    const validity = new Map<string, boolean>([[token, false]]);
+    const view = new EditorView({
+      parent,
+      doc: token,
+      extensions: [createAtomicReferenceExtension(new Map(), validity)],
+    });
+
+    try {
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(chip?.getAttribute("data-invalid")).toBe("true");
+      expect(chip?.querySelector(".codicon-symbol-class")).not.toBeNull();
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("opens on a plain click without starting a CodeMirror mouse selection", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);

@@ -18,11 +18,11 @@ ctrlyoke prompt files support structured references that help you attach the rig
 
 ```text
 #selection:src/cli.ts:45-103
-#sym:src/ctrlyoke/WorkflowExecutor.ts:runLoop:88
+#sym.function:src/ctrlyoke/WorkflowExecutor.ts:runLoop:88-110
 ```
 
 - `#selection:` attaches a line range
-- `#sym:` attaches a symbol definition using file, symbol name, and line number
+- `#sym.<kind>:` attaches a symbol definition using file, symbol name, and a line range; this is the form ctrlyoke inserts. Hand-authored `#sym:` references remain valid and use the generic icon.
 
 ## Git references
 
@@ -78,5 +78,5 @@ Large generated categories are split conservatively by token and line count befo
 ## Tips
 
 1. Use `@` for whole files and directories.
-2. Use `#selection:` and `#sym:` when the full file would be noisy.
+2. Use `#selection:` and `#sym.<kind>:` when the full file would be noisy. Hand-authored `#sym:` references remain valid.
 3. Prefer prior-output references over repeating large summaries by hand.

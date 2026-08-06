@@ -1,7 +1,7 @@
 {
   "steps": [
     {
-      "prompt": "This tests clickable links in ctrlyoke prompts.\n\nFile: @src/extension.ts\nDirectory: @src/completions/\nLine range: #file:src/extension.ts:1-20\nSymbol: #sym:src/extension.ts:activate:14\n\nAll references above should be Ctrl+Click-able in the editor. Just respond with 'Links test acknowledged.'",
+      "prompt": "This tests clickable links in ctrlyoke prompts.\n\nFile: @src/extension.ts\nDirectory: @src/completions/\nLine range: #file:src/extension.ts:1-20\nSymbol: #sym.function:src/extension.ts:activate:14-36\n\nAll references above should be Ctrl+Click-able in the editor. Just respond with 'Links test acknowledged.'",
       "model": "claude-haiku-4.5"
     }
   ]

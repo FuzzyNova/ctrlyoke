@@ -160,20 +160,20 @@ Line ranges (`#selection::-`) continue to use `#file:` syntax.
 
 **Note**: There is no `#selection` prompt syntax. The completion provider automatically converts selections to `#selection::-` format.
 
-#### Symbol References: `#sym:path:name:line` ✅ FULLY IMPLEMENTED
+#### Symbol References: `#sym:path:name:start-end` ✅ FULLY IMPLEMENTED
 
 **Format**:
 
 ```
-#sym:path/to/file.ts:symbolName:123        # Variable, function, class at specific line
-#sym:path/to/file.ts:methodName():456      # Method with parentheses
+#sym:path/to/file.ts:symbolName:123-123        # Variable, function, class at specific line
+#sym:path/to/file.ts:methodName():456-456      # Method with parentheses
 ```
 
 **Example**:
 
 ```json
 {
-  "prompt": "Refactor #sym:src/flightpath/FlightPathManager.ts:FlightPathManager:42 to improve modularity"
+  "prompt": "Refactor #sym:src/flightpath/FlightPathManager.ts:FlightPathManager:42-42 to improve modularity"
 }
 ```
 
@@ -191,7 +191,7 @@ Line ranges (`#selection::-`) continue to use `#file:` syntax.
 
 All integrations (Copilot CLI, Claude CLI, Chat) support symbol resolution:
 
-- `parseSymbolReferences()` extracts `#sym:path:name:line` patterns from prompt text
+- `parseSymbolReferences()` extracts `#sym:path:name:start-end` patterns from prompt text
 - `resolveSymbol("path:name:line")` queries VS Code's `executeDocumentSymbolProvider`
 - Matches both symbol name AND line number for exact disambiguation
 - Returns `FileReference` with path, line range, and symbolName
@@ -390,7 +390,7 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | `@path`               | Full file content        | CLI (native)     | `@src/extension.ts`                     | CLI attaches entire file              |
 | `@path/`              | Full directory structure | FlightPath (XML) | `@src/flightpath/`                      | Trailing slash = directory tree (XML) |
 | `#selection::-`       | Line range snippet       | FlightPath (XML) | `#selection::-`                         | Extracts specific lines               |
-| `#sym:path:name:line` | Symbol snippet           | FlightPath (XML) | `#sym:src/file.ts:FlightPathManager:42` | Resolves to exact symbol location     |
+| `#sym:path:name:start-end` | Symbol snippet           | FlightPath (XML) | `#sym:src/file.ts:FlightPathManager:42-42` | Resolves to exact symbol location     |
 
 **Note**: There is no `#selection` syntax. The completion provider shows `$(selection)` as a label but inserts `file:path:line-line`.
 
@@ -421,7 +421,7 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | Model completions                | ✅ Done | -        | Dynamic model list in "model" field                              |
 | Migration script                 | ✅ Done | -        | `scripts/migrate-prompt-syntax.mjs`                              |
 | `@path/` directory refs          | ✅ Done | -        | Completions + runtime XML tree via `buildDirectoryAttachmentXml` |
-| `#sym:path:name:line` resolution | ✅ Done | -        | Resolves symbols to exact line range using document symbols      |
+| `#sym:path:name:start-end` resolution | ✅ Done | -        | Resolves symbols to exact line range using document symbols      |
 | Deprecation warnings             | ⬜ TODO | LOW      | Show hints when using `#file:` for full files                    |
 
 ---
@@ -472,7 +472,7 @@ _User typed `#`, selected "Current Selection" from completions, which inserted `
 
 ```json
 {
-  "prompt": "Refactor #sym:src/flightpath/FlightPathManager.ts:executeWorkflow():156 to improve error handling"
+  "prompt": "Refactor #sym:src/flightpath/FlightPathManager.ts:executeWorkflow():156-156 to improve error handling"
 }
 ```
 
