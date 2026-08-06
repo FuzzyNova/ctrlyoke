@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
@@ -12,11 +12,18 @@ import type { HideableProps } from "./CustomSelect";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
 
+interface MultiCheckboxDropdownOption {
+  value: string;
+  label: string;
+  description?: string;
+  group?: string;
+}
+
 export interface MultiCheckboxDropdownProps extends HideableProps {
   id: string;
   selectedValues: string[];
   onChange: (values: string[]) => void;
-  options: Array<{ value: string; label: string; description?: string }>;
+  options: MultiCheckboxDropdownOption[];
   placeholder?: string;
   buttonLabel?: string;
   className?: string;
@@ -74,6 +81,22 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     setShowHidden(false);
   });
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      event.stopPropagation();
+      setIsOpen(false);
+      setShowHidden(false);
+    };
+
+    // Capture Escape before document-level drawer/dropdown listeners see it.
+    document.addEventListener("keydown", handleEscape, true);
+    return () => document.removeEventListener("keydown", handleEscape, true);
+  }, [isOpen]);
+
   const toggleValue = (value: string) => {
     if (selectedValues.includes(value)) {
       onChange(selectedValues.filter((v) => v !== value));
@@ -100,6 +123,77 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
 
   const canHide = (value: string) =>
     hideEnabled && !nonHideable.includes(value);
+
+  const renderVisibleOption = (option: MultiCheckboxDropdownOption) => {
+    const isSelected = selectedValues.includes(option.value);
+    return (
+      <div
+        key={option.value}
+        className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
+          isSelected
+            ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+            : "hover:bg-list-hover-bg hover:text-list-highlight-fg fp-dropdown-row"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => toggleValue(option.value)}
+          className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => {}}
+            aria-hidden={true}
+            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+            tabIndex={-1}
+          />
+          <span className="flex flex-col min-w-0">
+            <span className="font-medium truncate">{option.label}</span>
+            {option.description && (
+              <span className="text-xxs text-description-fg truncate">
+                {option.description}
+              </span>
+            )}
+          </span>
+        </button>
+        {/* Eye-closed hide button — hover-only */}
+        {canHide(option.value) && (
+          <button
+            type="button"
+            title="Hide this option"
+            aria-label="Hide this option"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleHide(option.value);
+            }}
+            className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+          >
+            <i className="codicon codicon-eye-closed text-xs" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const ungroupedOptions = visibleOptions.filter(
+    (option) => option.group === undefined
+  );
+  const groupedOptions: Array<{
+    group: string;
+    options: MultiCheckboxDropdownOption[];
+  }> = [];
+  const groupsByName = new Map<string, (typeof groupedOptions)[number]>();
+  for (const option of visibleOptions) {
+    if (option.group === undefined) continue;
+    let group = groupsByName.get(option.group);
+    if (!group) {
+      group = { group: option.group, options: [] };
+      groupsByName.set(option.group, group);
+      groupedOptions.push(group);
+    }
+    group.options.push(option);
+  }
 
   // Build button label from visible (non-hidden) selected values only
   const visibleSelected = selectedValues.filter(
@@ -179,60 +273,78 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             <div className="px-3 py-2 text-xs text-description-fg">
               No skills available
             </div>
-          ) : (
-            visibleOptions.map((option) => {
-              const isSelected = selectedValues.includes(option.value);
-              return (
-                <div
-                  key={option.value}
-                  className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
-                    isSelected
-                      ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
-                      : "hover:bg-list-hover-bg hover:text-list-highlight-fg fp-dropdown-row"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleValue(option.value)}
-                    className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => {}}
-                      aria-hidden={true}
-                      className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                      tabIndex={-1}
-                    />
-                    <span className="flex flex-col min-w-0">
-                      <span className="font-medium truncate">
-                        {option.label}
-                      </span>
-                      {option.description && (
-                        <span className="text-xxs text-description-fg truncate">
-                          {option.description}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  {/* Eye-closed hide button — hover-only */}
-                  {canHide(option.value) && (
+          ) : visibleOptions.some((option) => option.group !== undefined) ? (
+            <>
+              {ungroupedOptions.map(renderVisibleOption)}
+              {groupedOptions.map((group) => {
+                const groupValues = group.options.map((option) => option.value);
+                const selectedCount = groupValues.filter((value) =>
+                  selectedValues.includes(value)
+                ).length;
+                const isFullySelected = selectedCount === groupValues.length;
+                const isPartiallySelected =
+                  selectedCount > 0 && !isFullySelected;
+
+                const toggleGroup = () => {
+                  if (isFullySelected) {
+                    onChange(
+                      selectedValues.filter(
+                        (value) => !groupValues.includes(value)
+                      )
+                    );
+                  } else {
+                    onChange([
+                      ...selectedValues,
+                      ...groupValues.filter(
+                        (value) => !selectedValues.includes(value)
+                      ),
+                    ]);
+                  }
+                };
+
+                return (
+                  <React.Fragment key={group.group}>
                     <button
                       type="button"
-                      title="Hide this option"
-                      aria-label="Hide this option"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleHide(option.value);
-                      }}
-                      className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+                      role="checkbox"
+                      aria-checked={
+                        isPartiallySelected
+                          ? "mixed"
+                          : isFullySelected
+                            ? "true"
+                            : "false"
+                      }
+                      aria-label={`${group.group} (${selectedCount}/${groupValues.length})`}
+                      onClick={toggleGroup}
+                      className="sticky top-0 z-10 w-full flex items-center gap-2 px-2 py-1 text-xs text-left bg-dropdown-bg border-b border-dropdown-border cursor-pointer"
                     >
-                      <i className="codicon codicon-eye-closed text-xs" />
+                      <input
+                        type="checkbox"
+                        checked={isFullySelected}
+                        ref={(element) => {
+                          if (element) {
+                            element.indeterminate = isPartiallySelected;
+                          }
+                        }}
+                        onChange={() => {}}
+                        aria-hidden={true}
+                        tabIndex={-1}
+                        className="w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                      />
+                      <span className="font-medium truncate flex-1">
+                        {group.group}
+                      </span>
+                      <span className="text-xxs text-description-fg flex-shrink-0">
+                        {selectedCount}/{groupValues.length}
+                      </span>
                     </button>
-                  )}
-                </div>
-              );
-            })
+                    {group.options.map(renderVisibleOption)}
+                  </React.Fragment>
+                );
+              })}
+            </>
+          ) : (
+            visibleOptions.map(renderVisibleOption)
           )}
 
           {/* Hidden section (inside scroll area) */}

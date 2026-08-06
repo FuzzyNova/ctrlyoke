@@ -459,10 +459,11 @@ Included filters in the cursor hash and applied them through one shared
 `src/ui/webview-react/utils/filterLabels.ts`; rewired `WorkflowStatus` to
 consume them as a pure refactor, with focused utility coverage added.
 
-**Phase 6 — Drawer filter bar.** `group` support in `MultiCheckboxDropdown` (R5),
-then the toggle button, filter bar, uiStore slice, re-issue-on-change, active
-count badge, and `(filtered)` summary suffix. Land the dropdown change first and
-on its own — it touches a component three other surfaces already use.
+**Phase 6 — Drawer filter bar.** ✅ R5 landed: `MultiCheckboxDropdown` now has
+grouped section headers and local Escape handling. The remaining toggle button,
+filter bar, uiStore slice, re-issue-on-change, active-count badge, and
+`(filtered)` summary suffix are still pending. Land the dropdown change first
+and on its own — it touches a component three other surfaces already use.
 
 **Phase 7 (v2) — Facets and errors.** `isError` on documents; return per-kind
 counts in `HistorySearchResponse` so the event-type dropdown can show
