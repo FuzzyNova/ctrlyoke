@@ -1924,7 +1924,10 @@ export class WorkflowOrchestrator {
         await this.loadRunViewForClient(
           options.preferredViewAddress,
           send,
-          clientId
+          clientId,
+          undefined,
+          undefined,
+          true
         );
         // Record the replayed workflowId after the first successful panel startup replay.
         if (
@@ -2290,7 +2293,8 @@ export class WorkflowOrchestrator {
     send: (message: unknown) => void,
     clientId: string,
     requestId?: string,
-    definitionRollback?: DefinitionRollbackInvalidation
+    definitionRollback?: DefinitionRollbackInvalidation,
+    announceReplayBoundary = false
   ): Promise<void> {
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) {
@@ -2314,7 +2318,8 @@ export class WorkflowOrchestrator {
       clientId,
       boundWorkflowId,
       requestId,
-      definitionRollback
+      definitionRollback,
+      announceReplayBoundary
     );
   }
 
@@ -2444,7 +2449,8 @@ export class WorkflowOrchestrator {
     clientId: string,
     boundWorkflowId: string | null,
     requestId?: string,
-    definitionRollback?: DefinitionRollbackInvalidation
+    definitionRollback?: DefinitionRollbackInvalidation,
+    announceReplayBoundary = false
   ): void {
     const { workingFile } = view;
     const executionRunRef = this.findExecutionRunRef(address.workflowKey);
@@ -2490,21 +2496,27 @@ export class WorkflowOrchestrator {
     const boundInstance = runtimeWorkflowId
       ? this.findInstance(runtimeWorkflowId)
       : undefined;
-    if (boundWorkflowId) {
+    const announcedWorkflowId =
+      boundWorkflowId ??
+      (announceReplayBoundary ? this.getViewedWorkflowId(clientId) : null);
+    if (announcedWorkflowId) {
+      const announcedInstance = this.findInstance(announcedWorkflowId);
       // Announce the new active instance before transferring the potentially
-      // large history snapshot. This lets the client route subsequent tagged
-      // live events correctly and prevents the switch indicator from sitting
-      // behind megabytes of snapshot processing.
+      // large history snapshot. Client-ready preferred-address replays must do
+      // this even when the instance binding is unchanged: a resumed mobile page
+      // can retain workflowStore content that no longer matches its retained
+      // applied address, and the requestless announcement invalidates that
+      // association before the authoritative snapshot reaches the stale guard.
       send({
         type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
         workflows: this.getActiveTerminalWorkflowRefs(),
       });
       send({
         type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
-        workflowId: boundWorkflowId,
+        workflowId: announcedWorkflowId,
         workingFilePath:
-          boundInstance?.getSummary().workingFilePath ??
-          this.cliSessions.get(boundWorkflowId)?.summary.workingFilePath ??
+          announcedInstance?.getSummary().workingFilePath ??
+          this.cliSessions.get(announcedWorkflowId)?.summary.workingFilePath ??
           null,
         // Announcing before the snapshot must not read as a backend-initiated
         // switch: without the requestId the client cancels its own in-flight

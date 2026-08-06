@@ -459,6 +459,68 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
 });
 
 suite("WorkflowOrchestrator handleClientReady", () => {
+  test("announces a replay boundary before restoring a retained preferred view", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const clientId = "browser:mobile";
+    const workflowId = "workflow-output-pane";
+    const workflowKey = "output-pane-rendering-overlay" as never;
+    const runRef = "run-2026-08-05T23-41-43-745Z" as never;
+    const address = { workflowKey, kind: "run" as const, runRef };
+    const instance = {
+      id: workflowId,
+      getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
+      getQueueState: () => ({
+        workflowKey,
+        runRef,
+        status: EXECUTION_STATES.RUNNING,
+      }),
+      getExecutionRunRef: () => runRef,
+      replayBufferedOutputTo: () => undefined,
+    };
+
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.currentWorkspaceFolder = { uri: { fsPath: "C:\\dev\\ctrlyoke" } };
+    internal.viewerRegistry = new Map([[clientId, workflowId]]);
+    internal.viewAddressRegistry = new Map([[clientId, address]]);
+    internal.viewMessageSinks = new Map();
+    internal.instances = new Map([[workflowId, instance]]);
+    internal.retiredInstances = new Map();
+    internal.cliSessions = new Map();
+    internal.getActiveTerminalWorkflowRefs = () => [];
+    internal.readAddressedRunView = async () => ({
+      workingFile: {
+        workflowName: "Output pane rendering overlay",
+        definitionRevision: 1,
+        steps: [{ prompt: "current" }],
+      },
+      history: null,
+      runSummaries: [],
+      workflowProperties: {},
+      descriptorRevision: 1,
+    });
+    internal.getWorkflowSummaries = () => [];
+
+    const sent: Array<{ type?: string; workflowId?: string }> = [];
+    await orchestrator.handleClientReady(
+      clientId,
+      (message) => sent.push(message as { type?: string; workflowId?: string }),
+      { preferredViewAddress: address }
+    );
+
+    const announcementIndex = sent.findIndex(
+      (message) => message.type === MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED
+    );
+    const snapshotIndex = sent.findIndex(
+      (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
+    );
+    assert.ok(announcementIndex >= 0);
+    assert.strictEqual(sent[announcementIndex]?.workflowId, workflowId);
+    assert.ok(snapshotIndex > announcementIndex);
+  });
+
   test("keeps client run views independent from the execution target", () => {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype
