@@ -347,12 +347,24 @@ Three steps. Each lands independently and keeps `npm test` green.
 
 ### Step 1 — Parse and render the kind (no producers yet)
 
-- Add the kind-name → codicon map and `symbol-misc` color to
-  `atomicReferences.ts`.
-- Add the optional kind group to both UI parser patterns, both
-  `FileReferenceParser` patterns, and `PromptLinkProvider`; thread `symbolKind`
-  onto `ContextReferenceMatch` and `FileReference`.
+- Add the kind-name → codicon map to `atomicReferences.ts`. (The `symbol-misc`
+  color entry already landed — see **Styling** above.)
+- Add the optional kind group to the UI `symbol` pattern, the
+  `parseSymbolReferences` pattern, and `PromptLinkProvider.symbol`; thread
+  `symbolKind` onto `ContextReferenceMatch` and `FileReference`.
 - Apply the icon precedence in `describeContextReferenceChip`.
+
+Each of the three parsers is now a **single** symbol pattern with quoted/bare
+alternation per field, so there is one regex per parser to edit, not two. Adding
+`(?:\.([a-z-]+))?` after `sym` shifts every existing capture group index by one —
+`FileReferenceParser.ts:190`, `atomicReferences.ts:537-545`, and
+`PromptLinkProvider`'s match destructuring all read groups positionally, so all
+three must be renumbered together.
+
+No `data-symbol-kind` attribute is needed. `OutputRow` reconstructs a
+`ContextReferenceMatch` from `descriptor.attrs`, but uses it only for the tooltip
+and `openContextReference`; the icon travels on `descriptor.icon`, which
+`findAtomicReferences` already computed.
 
 After this step a hand-written `#sym.class:…` renders correctly everywhere and
 nothing else has changed. Committing the reader before the writer means no
@@ -367,9 +379,24 @@ window exists where produced tokens cannot be parsed.
 ### Step 3 — Editor corrector, docs, and fixtures
 
 - Make the validation round trip override rather than populate the icon; confirm
-  the invalid-state path is unaffected.
+  the invalid-state path is unaffected. Step 1's precedence already gives the
+  resolver priority, so this step is mostly *verification plus tests* — the
+  editor-side behavior change is that a chip now paints its correct icon before
+  validation returns, instead of flashing generic.
+- **Keep** the completion `apply` handler's seeding of `symbolIconCacheRef`
+  (`CodeMirrorEditor.tsx`, via `buildCodeMirrorCompletionResult`). It is
+  redundant once tokens carry their kind, but it costs nothing and keeps the
+  resolver correct for hand-edited tokens. Do not remove it.
 - Update schema descriptions, docs, the agent template, and manual-test
   fixtures.
+- While there: the doc examples use an **obsolete no-range form** —
+  `#sym:path/to/file.ts:SymbolName:42` (`docs/guide/concepts.md:57`,
+  `docs/workflows/context-files.md:21`,
+  `src/templates/agents/ctrlyoke-tech-support.agent.md:165`,
+  `manual-test/README.md:273,439`, `manual-test/attachment-test.prompt.md:8`,
+  `manual-test/prompt-links-test.ctrlyoke.json:4`). Every parser requires
+  `:<start>-<end>`, so those examples do not parse. Correct them to the range
+  form as part of this pass.
 
 ---
 
