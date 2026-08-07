@@ -1,10 +1,24 @@
+import * as crypto from "crypto";
+import * as fs from "fs";
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,
   type SplitConfig,
 } from "../../../utils/PromptFileSplitter";
-import { TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  HARNESS_IDS,
+  MAX_CONTENT_SIZE,
+  MAX_PREVIEW_BODY_BYTES,
+  PREVIEW_PROMPT_CATEGORIES,
+  PREVIEW_TRUNCATION_REASONS,
+  TEMP_FILE_CATEGORIES,
+  type PreviewPromptCategory,
+} from "../../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
@@ -15,10 +29,42 @@ import type {
   PromptSections,
 } from "../../HarnessIntegration";
 import { refToPriorContext } from "../../HarnessIntegration";
+import type {
+  CategorizedPromptPreview,
+  CategorizedPromptSectionPreview,
+} from "../../../types/ExecutionPreviewTypes";
+import type {
+  CompatibilityDiagnostic,
+  CompatibilityDiagnosticSeverity,
+} from "../../../types/CompatibilityTypes";
+import type { PreparedMutation } from "./interfaces/PreparedMutation";
+
+const PROMPT_DIAGNOSTIC_CODES = {
+  LARGE_REFERENCE: "prompt.reference.implausibly-large",
+  OVER_INLINE_CAP: "prompt.content.over-inline-cap",
+} as const;
+
+export interface PlannedPromptFile {
+  readonly path: string;
+  readonly category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES];
+  readonly reference: string;
+  readonly content: string;
+  readonly chunkIndex: number;
+}
 
 export interface PromptFileResult {
   tempFilePaths: string[];
   promptWithInstruction: string;
+}
+
+/** Pure categorized prompt preparation plus deferred temp-file mutations. */
+export interface PromptPreparationPlan {
+  readonly tempFilePaths: string[];
+  readonly promptWithInstruction: string;
+  readonly files: readonly PlannedPromptFile[];
+  readonly mutations: readonly PreparedMutation[];
+  readonly promptPreview: CategorizedPromptPreview;
+  readonly diagnostics: readonly CompatibilityDiagnostic[];
 }
 
 export interface CliPromptPreparerDeps {
@@ -49,13 +95,18 @@ export interface CliPromptPreparerDeps {
 export class CliPromptPreparer {
   constructor(private readonly deps: CliPromptPreparerDeps) {}
 
-  async preparePrompt(
+  /**
+   * Compute the exact categorized payload without creating any temp file.
+   * Referenced files are inspected with stat only; inline payloads are split
+   * into the same chunks that live execution writes.
+   */
+  async planPrompt(
     prompt: PromptStep,
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
     injectMode = false
-  ): Promise<PromptFileResult> {
+  ): Promise<PromptPreparationPlan> {
     const originalPromptText = prompt.prompt.trim();
     const slashCommand =
       this.deps.extractLeadingSlashCommand(originalPromptText);
@@ -66,10 +117,7 @@ export class CliPromptPreparer {
       Log.debug(
         `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
       );
-      return {
-        promptWithInstruction: originalPromptText,
-        tempFilePaths: [],
-      };
+      return this.createInlinePlan(originalPromptText);
     }
 
     const promptIndex = workflowContext?.promptIndex ?? 0;
@@ -103,7 +151,6 @@ export class CliPromptPreparer {
     const hasPriorContext =
       (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") ||
       inlineRefs.length > 0;
-
     const hasExtras =
       !!sections.agentContent ||
       !!sections.skillContent ||
@@ -111,17 +158,13 @@ export class CliPromptPreparer {
       !!sections.excerptContent ||
       hasPriorContext;
     const inlineCheck = this.makeInlineCheck(injectMode);
+
     if (!hasExtras && inlineCheck(sections.userPromptText)) {
-      return {
-        promptWithInstruction: sections.userPromptText,
-        tempFilePaths: [],
-      };
+      return this.createInlinePlan(sections.userPromptText);
     }
 
-    // Fast path: only @file references as extras, and the full text qualifies
-    // as an inline prompt — send it directly so "fully implement @Plan.md" is
-    // not wrapped in a categorized instruction. SAFE_CHARS_PATTERN includes `\`
-    // and `~` so common Windows/Unix path characters pass without stripping.
+    // Preserve the live fast path: direct references remain inline when the
+    // rest of the prompt is safe to send as-is.
     if (
       sections.directFileRefs.length > 0 &&
       !sections.agentContent &&
@@ -130,10 +173,11 @@ export class CliPromptPreparer {
       !hasPriorContext &&
       inlineCheck(sections.userPromptText)
     ) {
-      return {
-        promptWithInstruction: sections.userPromptText,
-        tempFilePaths: [],
-      };
+      return this.createInlinePlanWithReferences(
+        sections.userPromptText,
+        sections.directFileRefs,
+        resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI
+      );
     }
 
     const contextItems = hasPriorContext
@@ -155,19 +199,51 @@ export class CliPromptPreparer {
         ? this.deps.buildPriorContextXmlFromItems(contextItems)
         : undefined;
 
-    const preparedPrompt = await this.createCategorizedPromptFiles(
+    const plan = await this.createCategorizedPromptPlan(
       sections,
       workflowContext,
-      resolvedContextContent
+      resolvedContextContent,
+      resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI
     );
-
     if (!slashCommand) {
-      return preparedPrompt;
+      return plan;
     }
-
     return {
-      ...preparedPrompt,
-      promptWithInstruction: `${slashCommand} ${preparedPrompt.promptWithInstruction.trimStart()}`,
+      ...plan,
+      promptWithInstruction: `${slashCommand} ${plan.promptWithInstruction.trimStart()}`,
+    };
+  }
+
+  /** Apply a plan for real execution while retaining the legacy result shape. */
+  async preparePrompt(
+    prompt: PromptStep,
+    workflowContext: WorkflowContext | undefined,
+    resolvedProperties: ResolvedProperties | undefined,
+    resolvedSessionId: string | undefined,
+    injectMode = false
+  ): Promise<PromptFileResult> {
+    const plan = await this.planPrompt(
+      prompt,
+      workflowContext,
+      resolvedProperties,
+      resolvedSessionId,
+      injectMode
+    );
+    const appliedMutations: PreparedMutation[] = [];
+    try {
+      for (const mutation of plan.mutations) {
+        await mutation.apply();
+        appliedMutations.push(mutation);
+      }
+    } catch (error) {
+      for (const mutation of appliedMutations.reverse()) {
+        await mutation.restore?.();
+      }
+      throw error;
+    }
+    return {
+      tempFilePaths: [...plan.tempFilePaths],
+      promptWithInstruction: plan.promptWithInstruction,
     };
   }
 
@@ -178,11 +254,97 @@ export class CliPromptPreparer {
       : this.deps.isSimplePrompt;
   }
 
-  private async createCategorizedPromptFiles(
+  private createInlinePlan(promptText: string): PromptPreparationPlan {
+    const body = this.createBodySection(
+      PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
+      promptText,
+      0,
+      MAX_PREVIEW_BODY_BYTES
+    );
+    return {
+      tempFilePaths: [],
+      promptWithInstruction: promptText,
+      files: [],
+      mutations: [],
+      promptPreview: {
+        sections: [body.section],
+        totalByteCount: body.fullByteCount,
+        includedBodyByteCount: body.includedByteCount,
+        bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
+      },
+      diagnostics: [],
+    };
+  }
+
+  private async createInlinePlanWithReferences(
+    promptText: string,
+    directFileRefs: string[],
+    harnessId: ResolvedProperties["harness"]
+  ): Promise<PromptPreparationPlan> {
+    const promptBody = this.createBodySection(
+      PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
+      promptText,
+      0,
+      MAX_PREVIEW_BODY_BYTES
+    );
+    const sections: CategorizedPromptSectionPreview[] = [];
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    for (let i = 0; i < directFileRefs.length; i++) {
+      const absolutePath = directFileRefs[i];
+      let stat: fs.Stats | undefined;
+      try {
+        stat = await fs.promises.stat(absolutePath);
+      } catch {
+        // The live fast path keeps the user's text even if the reference
+        // disappears between expansion and preview.
+      }
+      if (stat && stat.size > MAX_CONTENT_SIZE) {
+        diagnostics.push(
+          this.createDiagnostic(
+            PROMPT_DIAGNOSTIC_CODES.LARGE_REFERENCE,
+            harnessId,
+            `Referenced file ${absolutePath} is ${stat.size} bytes; the target harness may not be able to process it.`
+          )
+        );
+      }
+      sections.push({
+        category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
+        byteCount: stat?.size ?? 0,
+        lineCount: null,
+        tokenEstimate: null,
+        chunkIndex: i,
+        contentHash: null,
+        truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
+        path: absolutePath,
+        providerReference: this.deps.formatDirectFileRef(absolutePath),
+        ...(stat ? { modifiedTimeMs: stat.mtimeMs } : {}),
+      });
+    }
+    sections.push(promptBody.section);
+    return {
+      tempFilePaths: [],
+      promptWithInstruction: promptText,
+      files: [],
+      mutations: [],
+      promptPreview: {
+        sections,
+        totalByteCount: sections.reduce(
+          (sum, section) => sum + section.byteCount,
+          0
+        ),
+        includedBodyByteCount: promptBody.includedByteCount,
+        bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
+      },
+      diagnostics,
+    };
+  }
+
+  private async createCategorizedPromptPlan(
     sections: PromptSections,
-    workflowContext?: WorkflowContext,
-    contextContent?: string
-  ): Promise<PromptFileResult> {
+    workflowContext: WorkflowContext | undefined,
+    contextContent: string | undefined,
+    harnessId: ResolvedProperties["harness"]
+  ): Promise<PromptPreparationPlan> {
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace root available for categorized temp files");
@@ -190,96 +352,328 @@ export class CliPromptPreparer {
 
     const tempMgr = new TempFileManager(workspaceRoot);
     const splitter = new PromptFileSplitter(this.deps.getTempFileSplitConfig());
-    const allTempFilePaths: string[] = [];
+    const plannedFiles: PlannedPromptFile[] = [];
+    const mutations: PreparedMutation[] = [];
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    const previewSections: CategorizedPromptSectionPreview[] = [];
+    let remainingBodyBytes = MAX_PREVIEW_BODY_BYTES;
     const filePath = workflowContext?.workflowName ?? workflowContext?.filePath;
     const stepNumber = workflowContext
       ? workflowContext.promptIndex + 1
       : undefined;
+    // TempFileManager uses second-resolution names. One timestamp keeps the
+    // planned paths byte-for-byte identical to the files applied below.
+    const timestamp = Math.floor(Date.now() / 1000);
 
-    const fmtRef = (filePathToFormat: string) =>
-      this.deps.formatTempFileRef(tempMgr, filePathToFormat);
+    const formatTempRef = (plannedPath: string): string =>
+      this.deps.formatTempFileRef(tempMgr, plannedPath);
+
+    const addChunkFiles = (
+      category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES],
+      previewCategory: PreviewPromptCategory,
+      chunks: string[],
+      tokenCounts: number[],
+      lineCounts: number[]
+    ): string[] => {
+      const refs: string[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const partNumber = chunks.length > 1 ? i + 1 : undefined;
+        const plannedPath = tempMgr.getCategoryFilePath(
+          category,
+          filePath,
+          stepNumber,
+          partNumber,
+          timestamp
+        );
+        const reference = formatTempRef(plannedPath);
+        plannedFiles.push({
+          path: plannedPath,
+          category,
+          reference,
+          content: chunks[i],
+          chunkIndex: i,
+        });
+        mutations.push({
+          path: plannedPath,
+          intendedContent: chunks[i],
+          apply: () => tempMgr.writeCategoryFile(plannedPath, chunks[i]),
+          restore: () => tempMgr.deleteFiles([plannedPath]),
+        });
+        const chunkByteCount = Buffer.byteLength(chunks[i], "utf8");
+        const isOverInlineCap =
+          this.isTierTwoCategory(previewCategory) &&
+          chunkByteCount > MAX_CONTENT_SIZE;
+        const body = this.createBodySection(
+          previewCategory,
+          chunks[i],
+          i,
+          isOverInlineCap
+            ? 0
+            : this.isTierTwoCategory(previewCategory)
+              ? Math.min(remainingBodyBytes, MAX_CONTENT_SIZE)
+              : remainingBodyBytes,
+          tokenCounts[i],
+          lineCounts[i]
+        );
+        if (this.isTierTwoCategory(previewCategory) && isOverInlineCap) {
+          diagnostics.push(
+            this.createDiagnostic(
+              PROMPT_DIAGNOSTIC_CODES.OVER_INLINE_CAP,
+              harnessId,
+              `${previewCategory} content is ${body.fullByteCount} bytes and exceeds the ${MAX_CONTENT_SIZE}-byte inline content cap.`
+            )
+          );
+          body.section.truncationReason =
+            PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP;
+        }
+        remainingBodyBytes -= body.includedByteCount;
+        previewSections.push(body.section);
+        refs.push(reference);
+      }
+      return refs;
+    };
 
     const agentRefs: string[] = [];
     if (sections.agentContent) {
-      const agentText = `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`;
-      const agentPaths = await tempMgr.createCategorySplitFiles(
-        splitter.split(agentText).chunks,
-        TEMP_FILE_CATEGORIES.AGENT,
-        filePath,
-        stepNumber
+      const content = `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`;
+      const split = splitter.split(content);
+      agentRefs.push(
+        ...addChunkFiles(
+          TEMP_FILE_CATEGORIES.AGENT,
+          PREVIEW_PROMPT_CATEGORIES.AGENT_INSTRUCTIONS,
+          split.chunks,
+          split.tokenCounts,
+          split.lineCounts
+        )
       );
-      allTempFilePaths.push(...agentPaths);
-      agentRefs.push(...agentPaths.map(fmtRef));
     }
 
     const skillRefs: string[] = [];
     if (sections.skillContent) {
-      const skillPaths = await tempMgr.createCategorySplitFiles(
-        splitter.split(sections.skillContent).chunks,
-        TEMP_FILE_CATEGORIES.SKILLS,
-        filePath,
-        stepNumber
+      const split = splitter.split(sections.skillContent);
+      skillRefs.push(
+        ...addChunkFiles(
+          TEMP_FILE_CATEGORIES.SKILLS,
+          PREVIEW_PROMPT_CATEGORIES.SKILL_CONTENT,
+          split.chunks,
+          split.tokenCounts,
+          split.lineCounts
+        )
       );
-      allTempFilePaths.push(...skillPaths);
-      skillRefs.push(...skillPaths.map(fmtRef));
     }
 
-    const directRefs = sections.directFileRefs.map((absolutePath) =>
-      this.deps.formatDirectFileRef(absolutePath)
-    );
+    const directRefs: string[] = [];
+    for (let i = 0; i < sections.directFileRefs.length; i++) {
+      const absolutePath = sections.directFileRefs[i];
+      const reference = this.deps.formatDirectFileRef(absolutePath);
+      directRefs.push(reference);
+      let stat: fs.Stats | undefined;
+      try {
+        stat = await fs.promises.stat(absolutePath);
+      } catch {
+        // Keep the reference if the file disappeared after context expansion.
+      }
+      if (stat && stat.size > MAX_CONTENT_SIZE) {
+        diagnostics.push(
+          this.createDiagnostic(
+            PROMPT_DIAGNOSTIC_CODES.LARGE_REFERENCE,
+            harnessId,
+            `Referenced file ${absolutePath} is ${stat.size} bytes; the target harness may not be able to process it.`
+          )
+        );
+      }
+      previewSections.push({
+        category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
+        byteCount: stat?.size ?? 0,
+        lineCount: null,
+        tokenEstimate: null,
+        chunkIndex: i,
+        contentHash: null,
+        truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
+        path: absolutePath,
+        providerReference: reference,
+        ...(stat ? { modifiedTimeMs: stat.mtimeMs } : {}),
+      });
+    }
 
     const contextRefs: string[] = [];
     if (contextContent) {
-      const contextPaths = await tempMgr.createCategorySplitFiles(
-        splitter.splitContextContent(contextContent).chunks,
-        TEMP_FILE_CATEGORIES.CONTEXT,
-        filePath,
-        stepNumber
+      const split = splitter.splitContextContent(contextContent);
+      contextRefs.push(
+        ...addChunkFiles(
+          TEMP_FILE_CATEGORIES.CONTEXT,
+          PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+          split.chunks,
+          split.tokenCounts,
+          split.lineCounts
+        )
       );
-      allTempFilePaths.push(...contextPaths);
-      contextRefs.push(...contextPaths.map(fmtRef));
     }
 
     const excerptRefs: string[] = [];
     if (sections.excerptContent) {
-      const excerptPaths = await tempMgr.createCategorySplitFiles(
-        splitter.split(sections.excerptContent).chunks,
-        TEMP_FILE_CATEGORIES.EXCERPTS,
-        filePath,
-        stepNumber
+      const split = splitter.split(sections.excerptContent);
+      excerptRefs.push(
+        ...addChunkFiles(
+          TEMP_FILE_CATEGORIES.EXCERPTS,
+          PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE,
+          split.chunks,
+          split.tokenCounts,
+          split.lineCounts
+        )
       );
-      allTempFilePaths.push(...excerptPaths);
-      excerptRefs.push(...excerptPaths.map(fmtRef));
     }
 
     const promptSplit = splitter.split(sections.userPromptText);
     const promptPaths: string[] = [];
     for (let i = 0; i < promptSplit.chunks.length; i++) {
       const partNumber = promptSplit.chunks.length > 1 ? i + 1 : undefined;
-      const promptPath = await tempMgr.createCategoryFile(
-        promptSplit.chunks[i],
+      const promptPath = tempMgr.getCategoryFilePath(
         TEMP_FILE_CATEGORIES.PROMPT,
         filePath,
         stepNumber,
-        partNumber
+        partNumber,
+        timestamp
       );
+      const reference = formatTempRef(promptPath);
       promptPaths.push(promptPath);
+      plannedFiles.push({
+        path: promptPath,
+        category: TEMP_FILE_CATEGORIES.PROMPT,
+        reference,
+        content: promptSplit.chunks[i],
+        chunkIndex: i,
+      });
+      mutations.push({
+        path: promptPath,
+        intendedContent: promptSplit.chunks[i],
+        apply: () =>
+          tempMgr.writeCategoryFile(promptPath, promptSplit.chunks[i]),
+        restore: () => tempMgr.deleteFiles([promptPath]),
+      });
+      const body = this.createBodySection(
+        PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
+        promptSplit.chunks[i],
+        i,
+        remainingBodyBytes,
+        promptSplit.tokenCounts[i],
+        promptSplit.lineCounts[i]
+      );
+      remainingBodyBytes -= body.includedByteCount;
+      previewSections.push(body.section);
     }
-    allTempFilePaths.push(...promptPaths);
-    const promptRefs = promptPaths.map(fmtRef);
-
-    Log.info(`📁 Categorized prompt files: ${allTempFilePaths.length} file(s)`);
+    const promptRefs = plannedFiles
+      .filter((file) => file.category === TEMP_FILE_CATEGORIES.PROMPT)
+      .map((file) => file.reference);
+    const promptWithInstruction = this.deps.formatCategorizedReferences(
+      agentRefs,
+      skillRefs,
+      directRefs,
+      contextRefs,
+      excerptRefs,
+      promptRefs
+    );
 
     return {
-      tempFilePaths: allTempFilePaths,
-      promptWithInstruction: this.deps.formatCategorizedReferences(
-        agentRefs,
-        skillRefs,
-        directRefs,
-        contextRefs,
-        excerptRefs,
-        promptRefs
-      ),
+      tempFilePaths: plannedFiles.map((file) => file.path),
+      promptWithInstruction,
+      files: plannedFiles,
+      mutations,
+      promptPreview: {
+        sections: previewSections,
+        totalByteCount: previewSections.reduce(
+          (sum, section) => sum + section.byteCount,
+          0
+        ),
+        includedBodyByteCount: previewSections.reduce(
+          (sum, section) =>
+            sum + (section.body ? Buffer.byteLength(section.body, "utf8") : 0),
+          0
+        ),
+        bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
+      },
+      diagnostics,
     };
   }
+
+  private createBodySection(
+    category: PreviewPromptCategory,
+    content: string,
+    chunkIndex: number,
+    bodyBudgetBytes: number,
+    tokenEstimate?: number,
+    lineCount?: number
+  ): {
+    section: CategorizedPromptSectionPreview;
+    fullByteCount: number;
+    includedByteCount: number;
+  } {
+    const fullByteCount = Buffer.byteLength(content, "utf8");
+    const contentHash = crypto
+      .createHash("sha256")
+      .update(content, "utf8")
+      .digest("hex");
+    const body = truncateUtf8(content, bodyBudgetBytes);
+    const includedByteCount = Buffer.byteLength(body, "utf8");
+    return {
+      section: {
+        category,
+        byteCount: fullByteCount,
+        lineCount: lineCount ?? countLines(content),
+        tokenEstimate: tokenEstimate ?? null,
+        chunkIndex,
+        contentHash,
+        ...(body ? { body } : {}),
+        ...(includedByteCount < fullByteCount
+          ? { truncationReason: PREVIEW_TRUNCATION_REASONS.BODY_BUDGET }
+          : {}),
+      },
+      fullByteCount,
+      includedByteCount,
+    };
+  }
+
+  private isTierTwoCategory(category: PreviewPromptCategory): boolean {
+    return (
+      category === PREVIEW_PROMPT_CATEGORIES.AGENT_INSTRUCTIONS ||
+      category === PREVIEW_PROMPT_CATEGORIES.SKILL_CONTENT ||
+      category === PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE
+    );
+  }
+
+  private createDiagnostic(
+    code: string,
+    harnessId: ResolvedProperties["harness"],
+    message: string,
+    severity: CompatibilityDiagnosticSeverity = COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+  ): CompatibilityDiagnostic {
+    return {
+      code,
+      severity,
+      harnessId,
+      capability: "promptInputs",
+      state: {
+        fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+        mechanism: CAPABILITY_MECHANISMS.NONE,
+        verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+      },
+      message,
+    };
+  }
+}
+
+function countLines(content: string): number {
+  return content ? content.split("\n").length : 0;
+}
+
+/** Truncate by UTF-8 bytes without splitting a multi-byte code point. */
+function truncateUtf8(content: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return "";
+  }
+  if (Buffer.byteLength(content, "utf8") <= maxBytes) {
+    return content;
+  }
+  const buffer = Buffer.from(content, "utf8").subarray(0, maxBytes);
+  return buffer.toString("utf8").replace(/\uFFFD$/, "");
 }

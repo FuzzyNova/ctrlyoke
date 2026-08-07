@@ -211,17 +211,41 @@ export class TempFileManager {
     partNumber?: number
   ): Promise<string> {
     await this.ensureTempDir();
-    const timestamp = Math.floor(Date.now() / 1000);
+    const filePath = this.getCategoryFilePath(
+      category,
+      originalFilePath,
+      stepNumber,
+      partNumber
+    );
+    await this.writeCategoryFile(filePath, content);
+    return filePath;
+  }
+
+  /**
+   * Return the path a categorized file would use without touching the file
+   * system. The caller can pass the result to writeCategoryFile later.
+   */
+  getCategoryFilePath(
+    category: TempFileCategory,
+    originalFilePath?: string,
+    stepNumber?: number,
+    partNumber?: number,
+    timestamp = Math.floor(Date.now() / 1000)
+  ): string {
     const basename = originalFilePath
       ? this.sanitizeBasename(originalFilePath)
       : "prompt";
     const stepSuffix = stepNumber ? `-${stepNumber}` : "";
     const partSuffix = partNumber !== undefined ? `.${partNumber}` : "";
     const filename = `${timestamp}-${basename}${stepSuffix}.${category}${partSuffix}.md`;
-    const filePath = path.join(this.tempDir, filename);
+    return path.join(this.tempDir, filename);
+  }
+
+  /** Write a previously planned categorized file at its exact planned path. */
+  async writeCategoryFile(filePath: string, content: string): Promise<void> {
+    await this.ensureTempDir();
     try {
       await fs.promises.writeFile(filePath, content, "utf-8");
-      return filePath;
     } catch (err) {
       Log.error(`Failed to write category temp file: ${err}`);
       throw new Error(`Cannot write category temp file: ${filePath}`);

@@ -21,6 +21,12 @@
 > preparation, diagnostics, and deferred mutations. Golden coverage exercises
 > all six harnesses in interactive and headless mode.
 >
+> **Step 4 landed:** categorized prompt preparation now has a pure planning mode
+> that computes deterministic chunk paths, provider references, payload metadata,
+> bounded preview bodies, and deferred temp-file mutations. Live preparation
+> applies the same mutations, preserving the existing delivery order and
+> reference formatting. Direct references are stat-only and never read.
+>
 > **Priority:** P1
 
 ---

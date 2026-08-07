@@ -1,9 +1,17 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import type { PromptSections } from "../../core/HarnessIntegration";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
+import {
+  MAX_CONTENT_SIZE,
+  MAX_PREVIEW_BODY_BYTES,
+  PREVIEW_PROMPT_CATEGORIES,
+} from "../../types/DashboardConstants";
 
 function createSections(overrides?: Partial<PromptSections>): PromptSections {
   return {
@@ -533,5 +541,211 @@ suite("CliPromptPreparer", () => {
         "shell-special chars should use file path in strict mode"
       );
     });
+  });
+
+  test("plans direct references with stat metadata without reading them", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
+    );
+    const referencePath = path.join(workspaceRoot, "large-reference.txt");
+    await fs.promises.writeFile(referencePath, "not-read", "utf8");
+    await fs.promises.truncate(referencePath, 10 * 1024 * 1024 * 1024);
+
+    const originalReadFile = fs.promises.readFile;
+    let readFileCalls = 0;
+    fs.promises.readFile = (async (
+      ..._args: Parameters<typeof originalReadFile>
+    ) => {
+      readFileCalls++;
+      throw new Error("Tier 1 references must never be read");
+    }) as typeof originalReadFile;
+
+    try {
+      const preparer = new CliPromptPreparer({
+        shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+        buildPromptSections: async () =>
+          createSections({
+            directFileRefs: [referencePath],
+            userPromptText: "inspect this reference",
+          }),
+        extractLeadingSlashCommand: () => null,
+        isSimplePrompt: () => false,
+        buildPriorContextXmlFromItems: () => "",
+        getWorkspaceRoot: () => workspaceRoot,
+        getTempFileSplitConfig: () => undefined,
+        formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+        formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+        formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+      });
+
+      const result = await preparer.planPrompt(
+        { prompt: "inspect this reference" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+
+      const referenceSection = result.promptPreview.sections.find(
+        (section) =>
+          section.category === PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE
+      );
+      assert.strictEqual(readFileCalls, 0);
+      assert.strictEqual(referenceSection?.byteCount, 10 * 1024 * 1024 * 1024);
+      assert.strictEqual(referenceSection?.path, referencePath);
+      assert.ok(result.diagnostics.length > 0);
+    } finally {
+      fs.promises.readFile = originalReadFile;
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("withholds oversized inline content without a file read", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
+    );
+    const originalReadFile = fs.promises.readFile;
+    let readFileCalls = 0;
+    fs.promises.readFile = (async (
+      ..._args: Parameters<typeof originalReadFile>
+    ) => {
+      readFileCalls++;
+      throw new Error("oversized Tier 2 content must not be read");
+    }) as typeof originalReadFile;
+
+    try {
+      const preparer = new CliPromptPreparer({
+        shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+        buildPromptSections: async () =>
+          createSections({
+            agentContent: "x".repeat(MAX_CONTENT_SIZE + 1),
+            userPromptText: "use the agent",
+          }),
+        extractLeadingSlashCommand: () => null,
+        isSimplePrompt: () => false,
+        buildPriorContextXmlFromItems: () => "",
+        getWorkspaceRoot: () => workspaceRoot,
+        getTempFileSplitConfig: () => undefined,
+        formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+        formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+        formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+      });
+
+      const result = await preparer.planPrompt(
+        { prompt: "use the agent" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+      const agentSection = result.promptPreview.sections.find(
+        (section) =>
+          section.category === PREVIEW_PROMPT_CATEGORIES.AGENT_INSTRUCTIONS
+      );
+      assert.strictEqual(readFileCalls, 0);
+      assert.strictEqual(agentSection?.body, undefined);
+      assert.strictEqual(agentSection?.truncationReason, "over-inline-cap");
+      assert.ok(
+        result.diagnostics.some((diagnostic) =>
+          diagnostic.code.includes("over-inline-cap")
+        )
+      );
+    } finally {
+      fs.promises.readFile = originalReadFile;
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps preview bodies under the byte budget for a minified payload", async () => {
+    const payload = "x".repeat(MAX_PREVIEW_BODY_BYTES * 2 + 17);
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ userPromptText: payload }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    const result = await preparer.planPrompt(
+      { prompt: payload } as PromptStep,
+      undefined,
+      { harness: "codex-cli" } as any,
+      undefined
+    );
+
+    const promptSections = result.promptPreview.sections.filter(
+      (section) => section.category === PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT
+    );
+    assert.ok(promptSections.length > 1);
+    assert.ok(
+      result.promptPreview.includedBodyByteCount <= MAX_PREVIEW_BODY_BYTES
+    );
+    assert.ok(
+      promptSections.some(
+        (section) => section.truncationReason === "body-budget"
+      )
+    );
+  });
+
+  test("planning does not create categorized files and apply preserves the plan", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
+    );
+    try {
+      const preparer = new CliPromptPreparer({
+        shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+        buildPromptSections: async () =>
+          createSections({
+            agentContent: "agent instructions",
+            skillContent: "skill instructions",
+            excerptContent: "<attachment>excerpt</attachment>",
+            userPromptText: "prompt text",
+          }),
+        extractLeadingSlashCommand: () => null,
+        isSimplePrompt: () => false,
+        buildPriorContextXmlFromItems: () => "",
+        getWorkspaceRoot: () => workspaceRoot,
+        getTempFileSplitConfig: () => undefined,
+        formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+        formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+        formatCategorizedReferences: (...refs) => refs.flat().join(" | "),
+      });
+
+      const plan = await preparer.planPrompt(
+        { prompt: "prompt text" } as PromptStep,
+        { workflowName: "workflow", promptIndex: 0, allPrompts: [] } as any,
+        { harness: "copilot-cli" } as any,
+        undefined
+      );
+      assert.ok(plan.mutations.length >= 4);
+      assert.strictEqual(
+        await fs.promises
+          .access(path.join(workspaceRoot, ".ctrlyoke", "temp"))
+          .then(() => true)
+          .catch(() => false),
+        false
+      );
+
+      const prepared = await preparer.preparePrompt(
+        { prompt: "prompt text" } as PromptStep,
+        { workflowName: "workflow", promptIndex: 0, allPrompts: [] } as any,
+        { harness: "copilot-cli" } as any,
+        undefined
+      );
+      assert.deepStrictEqual(prepared.tempFilePaths, plan.tempFilePaths);
+      assert.strictEqual(
+        prepared.promptWithInstruction,
+        plan.promptWithInstruction
+      );
+      for (const filePath of plan.tempFilePaths) {
+        await fs.promises.access(filePath);
+      }
+    } finally {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });
