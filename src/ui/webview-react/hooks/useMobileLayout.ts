@@ -5,7 +5,7 @@
  * panels (output + editor). Prompts and settings are now drawers/overlays
  * controlled by uiStore mobile state, not react-resizable-panels.
  */
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type {
   PanelImperativeHandle,
   GroupImperativeHandle,
@@ -17,6 +17,7 @@ import {
 } from "@utils/panelSync";
 import { isEditableElement } from "@utils/domFocus";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { useMediaQuery } from "@hooks/useMediaQuery";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -108,9 +109,21 @@ export function useMobileLayout({
   // keyboard-adjusted resize) so the collapse commits via the store-sync
   // effect above before the keyboard actually opens — the same timing
   // exploited by the iOS visual-viewport root pin in App.tsx.
+  //
+  // `isMobile` alone is just the (max-width: 639px) breakpoint (see
+  // useMediaQuery.ts) — it also flips on a desktop browser window resized
+  // narrow, where there is no on-screen keyboard and this collapse would be
+  // pure regression. Gate on touch capability too (same
+  // pointer:coarse + maxTouchPoints combo used by useMobileTerminalBar.ts) so
+  // this only fires on devices that actually raise a virtual keyboard.
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
+  const hasTouchCapability = useMemo(
+    () => typeof navigator !== "undefined" && navigator.maxTouchPoints > 0,
+    []
+  );
   const forcedEditorCollapseRef = useRef(false);
   useEffect(() => {
-    if (!isMobile) return;
+    if (!isMobile || !isCoarsePointer || !hasTouchCapability) return;
 
     const handleFocusIn = (event: FocusEvent) => {
       const target = event.target;
@@ -161,7 +174,7 @@ export function useMobileLayout({
       // Never leave the editor collapsed if this hook tears down mid-keyboard.
       restoreIfForced();
     };
-  }, [isMobile]);
+  }, [isMobile, isCoarsePointer, hasTouchCapability]);
 
   return {
     // Panel / group refs
