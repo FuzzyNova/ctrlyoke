@@ -43,6 +43,10 @@
 > instance creation, so it cannot start a harness, run scripts, or apply
 > deferred mutations. Capability probes are not run during dry-run, so
 > version-dependent diagnostics remain explicitly unverified.
+
+> **Step 7 landed:** the dashboard tab-bar rendering is now shared by the
+> generic `SegmentedTabBar`; `DrawerTabBar` remains a typed wrapper around the
+> drawer tab definitions, preserving the existing icon overrides and styling.
 >
 > **Priority:** P1
 

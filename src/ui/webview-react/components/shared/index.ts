@@ -25,6 +25,11 @@ export {
   type HarnessDropdownProps,
 } from "./HarnessDropdown";
 export { HarnessIcon } from "./HarnessIcon";
+export {
+  SegmentedTabBar,
+  type SegmentedTab,
+  type SegmentedTabBarProps,
+} from "./SegmentedTabBar";
 export { DrawerTabBar } from "./DrawerTabBar";
 export { DrawerRow } from "./DrawerRow";
 export {
