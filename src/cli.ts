@@ -18,6 +18,7 @@ import {
   FINAL_STEP_PHASES,
   PERMISSION_MODES,
   RUNNER_IDS,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
 } from "./types/DashboardConstants";
 import type { HarnessId, PermissionMode } from "./types/DashboardConstants";
 import {
@@ -37,7 +38,10 @@ import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
-import { buildCliJsonResult } from "./cli/CliJsonResultBuilder";
+import {
+  buildCliJsonResult,
+  buildCliPreviewJsonResult,
+} from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
@@ -63,6 +67,11 @@ import {
   type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
+import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
+import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
+import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
+import { PropertyResolver } from "./utils/PropertyResolver";
+import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -376,6 +385,25 @@ async function runCommand(
   const factory = new IntegrationFactory(platform, userFeedbackSink);
   const harness = config.harness as HarnessId;
 
+  if (
+    operation.kind === "run" &&
+    isRunCommandOptions(options) &&
+    options.dryRun
+  ) {
+    await dryRunCommand(
+      resolvedFile,
+      options,
+      config,
+      harness,
+      workingDir,
+      hostCanProvidePty,
+      platform,
+      factory,
+      userFeedbackSink
+    );
+    return;
+  }
+
   if (options.verbose && !options.json) {
     console.log(
       chalk.dim(
@@ -604,6 +632,182 @@ async function runCommand(
     }
     process.exit(2);
   }
+}
+
+async function dryRunCommand(
+  resolvedFile: string | undefined,
+  options: RunOptions,
+  config: ResolvedCliConfig,
+  harness: HarnessId,
+  workingDir: string,
+  hostCanProvidePty: boolean,
+  platform: CliAdapter,
+  factory: IntegrationFactory,
+  userFeedbackSink: ConsoleUserFeedbackSink
+): Promise<void> {
+  try {
+    assertHarnessId(harness);
+    const parser = new PromptFileParser(platform, userFeedbackSink);
+    const workflow = options.prompt
+      ? { steps: [{ prompt: options.prompt }] }
+      : await parser.parsePromptFile(resolvedFile!);
+    if (!workflow) {
+      throw new Error(`Failed to load workflow file: ${resolvedFile}`);
+    }
+
+    const previewWorkflow = applyDryRunSessionOverrides(workflow, config);
+    collectWorkflowHarnesses(previewWorkflow, harness);
+    const capabilityRegistry = createCliCapabilityRegistry();
+    let capabilities;
+    try {
+      capabilities = await capabilityRegistry.getSnapshot();
+    } finally {
+      capabilityRegistry.dispose();
+    }
+    const defaultsContext = PropertyResolver.createContext({
+      hostCanProvidePty,
+    });
+    const defaults = {
+      ...defaultsContext.defaults,
+      harness,
+      modelsByHarness: {
+        ...defaultsContext.defaults.modelsByHarness,
+        ...(config.model ? { [harness]: config.model } : {}),
+      },
+    };
+    const integrations = new Map<
+      HarnessId,
+      ReturnType<IntegrationFactory["createForPreview"]>
+    >();
+    const service = new ExecutionPreviewService({
+      defaults,
+      capabilities,
+      getHarness: (harnessId) => {
+        let integration = integrations.get(harnessId);
+        if (!integration) {
+          integration = factory.createForPreview(harnessId);
+          integrations.set(harnessId, integration);
+        }
+        return integration.getExecutionPreviewHarness();
+      },
+      workspaceRoot: workingDir,
+      workspaceRoots: platform.getWorkspaceRoots(),
+      extensionPath: platform.getExtensionPath(),
+      hostCanProvidePty,
+      cwd: workingDir,
+      platform: process.platform,
+      dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
+    });
+
+    let preview: WorkflowExecutionPreview;
+    try {
+      preview = await service.build({
+        workflow: previewWorkflow,
+        sourcePath: resolvedFile,
+        variables: config.vars,
+      });
+    } finally {
+      for (const integration of integrations.values()) {
+        integration.dispose();
+      }
+    }
+
+    const output = buildCliPreviewJsonResult(preview);
+    if (options.json) {
+      process.stdout.write(JSON.stringify(output) + "\n");
+    } else if (!options.quiet) {
+      CliTerminalFormatter.renderExecutionPreview(output);
+    }
+
+    const hasErrors = output.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
+    process.exit(hasErrors ? 1 : 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(chalk.red("Error: " + message));
+    process.exit(2);
+  }
+}
+
+function assertHarnessId(value: string): asserts value is HarnessId {
+  if (!(Object.values(HARNESS_IDS) as string[]).includes(value)) {
+    throw new Error(`Invalid harness: ${value}`);
+  }
+}
+
+function collectWorkflowHarnesses(
+  workflow: PromptFile,
+  defaultHarness: HarnessId
+): Set<HarnessId> {
+  const values = [
+    defaultHarness,
+    workflow.harness,
+    ...(workflow.steps ?? [])
+      .filter((step) => !isScriptStep(step))
+      .map((step) => step.harness),
+    ...(workflow.finalStep && !isScriptStep(workflow.finalStep)
+      ? [workflow.finalStep.harness]
+      : []),
+  ].filter((value): value is HarnessId => value !== undefined);
+  for (const value of values) {
+    assertHarnessId(value);
+  }
+  return new Set(values as HarnessId[]);
+}
+
+function isRunCommandOptions(
+  options: RunOptions | RerunOptions | AppendOptions | ContinueOptions
+): options is RunOptions {
+  return "dryRun" in options;
+}
+
+function createCliCapabilityRegistry(): HarnessCapabilityRegistry {
+  const registry = new HarnessCapabilityRegistry({
+    sourceFactory: (harnessId): HarnessCapabilitySource => {
+      const provider = IntegrationFactory.createCapabilityProvider(harnessId);
+      return {
+        provider: {
+          config: provider.config,
+          toolPermissionMapper: provider.toolPermissionMapper,
+          // Dry-run must not launch a harness, including a --version probe.
+          // Static declarations are therefore intentionally unverified; the
+          // shared analyzer still reports their exact fidelity diagnostics.
+          checkAvailability: async () => true,
+        },
+      };
+    },
+  });
+  return registry;
+}
+
+function applyDryRunSessionOverrides(
+  workflow: PromptFile,
+  config: ResolvedCliConfig
+): PromptFile {
+  const steps = (workflow.steps ?? []).map((step) => ({ ...step }));
+  if (config.sessionId && steps.length > 0) {
+    const firstStep = steps[0];
+    if (!isScriptStep(firstStep)) {
+      firstStep.sessionId = config.sessionId;
+      firstStep.resumeSession = true;
+    }
+  } else if (config.resumeSession === false) {
+    for (const step of steps) {
+      if (!isScriptStep(step)) {
+        delete step.sessionId;
+        step.resumeSession = false;
+      }
+    }
+  } else if (config.resumeSession === true) {
+    for (const step of steps) {
+      if (!isScriptStep(step)) {
+        step.resumeSession = true;
+      }
+    }
+  }
+  return { ...workflow, steps };
 }
 
 async function resolveCliJsonOutputProjection(

@@ -35,6 +35,15 @@ import {
   type TimelineAttemptStartReason,
   type TimelineAttemptTerminalState,
 } from "../types/WorkflowTimelineTypes";
+import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
+import { redactExecutionPreview } from "../types/PreviewRedactor";
+
+/** Redact again at the standalone CLI serialization boundary. */
+export function buildCliPreviewJsonResult(
+  preview: WorkflowExecutionPreview
+): WorkflowExecutionPreview {
+  return redactExecutionPreview(preview);
+}
 
 export interface CliJsonCondition {
   passed: boolean;

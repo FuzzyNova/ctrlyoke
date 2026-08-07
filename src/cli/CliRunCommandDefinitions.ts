@@ -43,6 +43,7 @@ export interface ContinueOptions extends CliExecutionOptions {
 export interface RunCommandOptions extends CliExecutionOptions {
   harness: string;
   var: Record<string, string>;
+  dryRun?: boolean;
 }
 
 export interface RunScopedCommandHandlers {
@@ -87,6 +88,10 @@ export function registerRunCommand(
         "Variable substitution: key=value (repeatable). Replaces {{key}} in prompt text, model, hooks, and endCondition.",
         collectVar,
         {} as Record<string, string>
+      )
+      .option(
+        "--dry-run",
+        "Show the redacted execution preview without starting a harness"
       )
   ).action(async (file: string | undefined, options: RunCommandOptions) =>
     handler(file, options)

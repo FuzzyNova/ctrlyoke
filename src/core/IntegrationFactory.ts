@@ -128,7 +128,7 @@ export class IntegrationFactory {
   createForHarness(
     harness: HarnessId,
     registerWithContext: boolean = true
-  ): HarnessIntegration {
+  ): CliIntegration {
     switch (harness) {
       case HARNESS_IDS.CLAUDE_CLI:
         return this.createClaudeCli(registerWithContext);
@@ -159,6 +159,13 @@ export class IntegrationFactory {
    * - Must be disposed by the caller (WorkflowInstance.startWorkflowExecution finally block).
    */
   createForExecution(harness: HarnessId): HarnessIntegration {
+    const integration = this.createForHarness(harness, false);
+    integration.markAsReady();
+    return integration;
+  }
+
+  /** Create the same planning helpers as execution without starting a harness. */
+  createForPreview(harness: HarnessId): CliIntegration {
     const integration = this.createForHarness(harness, false);
     integration.markAsReady();
     return integration;

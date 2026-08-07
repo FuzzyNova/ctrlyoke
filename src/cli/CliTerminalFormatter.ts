@@ -24,6 +24,8 @@ import type {
   PromptCompleteData,
   PromptStartData,
 } from "../core/WorkflowInstance";
+import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
+import { PREVIEW_TRUNCATION_REASONS } from "../types/DashboardConstants";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -146,6 +148,77 @@ function renderDiffBlock(data: FileEditData): void {
  * Used by the standalone ctrlyoke CLI to stream structured output to stdout.
  */
 export class CliTerminalFormatter {
+  /** Render a complete, redacted dry-run snapshot with diagnostics first. */
+  static renderExecutionPreview(
+    preview: WorkflowExecutionPreview,
+    writeLine: (line: string) => void = (line) => console.log(line)
+  ): void {
+    writeLine(chalk.bold(`Dry run: ${preview.workflow.name}`));
+    writeLine(
+      chalk.dim(
+        `${preview.workflow.stepCount} step(s) · ${preview.workflow.totalByteCount} payload bytes · ${preview.workflow.workspaceMutationCount} planned workspace mutation(s)`
+      )
+    );
+    writeLine("");
+
+    if (preview.diagnostics.length > 0) {
+      writeLine(chalk.bold("Diagnostics"));
+      for (const diagnostic of preview.diagnostics) {
+        writeLine(
+          `${formatDiagnosticSeverity(diagnostic.severity)} ${diagnostic.code}: ${diagnostic.message}`
+        );
+      }
+      writeLine("");
+    }
+
+    writeLine(chalk.bold("Steps"));
+    for (const step of preview.steps) {
+      const name = step.stepName ? ` — ${step.stepName}` : "";
+      writeLine(`Step ${step.stepIndex + 1}${name} (${step.type})`);
+      writeLine(`  Harness: ${step.resolvedProperties.harnessId}`);
+      if (step.resolvedProperties.model) {
+        writeLine(`  Model: ${step.resolvedProperties.model}`);
+      }
+      if (step.command) {
+        writeLine(`  Command: ${step.command.displayCommand}`);
+      }
+      for (const variable of step.variables) {
+        writeLine(`  Variable: ${variable.name}=${variable.value}`);
+      }
+      for (const section of step.prompt?.sections ?? []) {
+        const includedBytes = section.body
+          ? Buffer.byteLength(section.body, "utf8")
+          : 0;
+        const lineInfo = section.lineCount === null ? "?" : section.lineCount;
+        writeLine(
+          `  Payload: ${section.category} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
+        );
+        if (section.body) {
+          for (const line of section.body.split("\n")) {
+            writeLine(`    ${line}`);
+          }
+        }
+        if (section.truncationReason) {
+          const delivery =
+            section.truncationReason === PREVIEW_TRUNCATION_REASONS.REFERENCE
+              ? "the harness receives the provider reference, not inline content"
+              : "the full planned payload remains available to the harness";
+          writeLine(
+            chalk.yellow(
+              `    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`
+            )
+          );
+        }
+      }
+      for (const mutation of step.workspaceMutations) {
+        writeLine(
+          `  Mutation: ${mutation.operation} ${mutation.path} — ${mutation.warning}`
+        );
+      }
+      writeLine("");
+    }
+  }
+
   /**
    * Live streaming state — tracks which block type is currently streaming so we
    * print the THINKING header once and write each chunk directly to stdout as it
@@ -501,4 +574,8 @@ export class CliTerminalFormatter {
       console.log(chalk.dim(parts.join(" | ")));
     }
   }
+}
+
+function formatDiagnosticSeverity(severity: string): string {
+  return `[${severity}]`;
 }

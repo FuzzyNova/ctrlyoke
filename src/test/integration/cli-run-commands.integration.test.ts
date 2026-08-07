@@ -170,6 +170,20 @@ suite("CLI run command parser", () => {
     assert.deepStrictEqual(calls.run?.options.var, { foo: "bar", baz: "qux" });
   });
 
+  test("parses --dry-run without changing the normal run options", async () => {
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
+    await createRunProgram(calls).parseAsync(
+      ["run", "workflow.ctrlyoke.yaml", "--dry-run", "--json"],
+      { from: "user" }
+    );
+
+    assert.strictEqual(calls.run?.options.dryRun, true);
+    assert.strictEqual(calls.run?.options.json, true);
+    assert.deepStrictEqual(calls.run?.options.var, {});
+  });
+
   test("parses repeatable --allow-tool/--deny-tool and negatable --no-color", async () => {
     const calls: {
       run?: { file: string | undefined; options: RunCommandOptions };

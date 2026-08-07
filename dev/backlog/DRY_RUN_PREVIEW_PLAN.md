@@ -1,6 +1,6 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Step 5 landed. The compatibility contract it depends on has
+> **Status:** Step 6 landed. The compatibility contract it depends on has
 > landed (`src/types/CompatibilityTypes.ts`, `CompatibilityAnalyzer.ts`,
 > `ExecutionPropertyResolver.ts`, and the harness capability registry). The
 > redaction contract has **not** — see **Redaction and Access**, which now
@@ -34,6 +34,15 @@
 > mutations into preview DTOs and passes the result through the redactor before
 > returning. `CliIntegration.getExecutionPreviewHarness()` exposes the exact
 > live planning helpers to future dashboard/CLI entry points.
+
+> **Step 6 landed:** the standalone `run --dry-run` command now consumes the
+> shared preview service and execution-plan helpers. Human output lists shared
+> diagnostics before step details; `--json` emits the redacted preview DTO;
+> CLI variable overrides are passed at the preview boundary without mutating
+> the loaded workflow. The dry-run path stops before detector or workflow
+> instance creation, so it cannot start a harness, run scripts, or apply
+> deferred mutations. Capability probes are not run during dry-run, so
+> version-dependent diagnostics remain explicitly unverified.
 >
 > **Priority:** P1
 
