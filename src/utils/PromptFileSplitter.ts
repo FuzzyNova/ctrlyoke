@@ -1,4 +1,5 @@
 import { encode } from "gpt-tokenizer";
+import { ESTIMATED_CHARS_PER_TOKEN } from "../types/DashboardConstants";
 import { Log } from "./Log";
 
 // gpt-tokenizer applies BPE merges to each regex match. A large minified or
@@ -189,7 +190,7 @@ export class PromptFileSplitter {
         `Token counting failed, using character approximation: ${error}`
       );
       // Fallback: rough approximation (1 token ≈ 4 characters for English)
-      return Math.ceil(text.length / 4);
+      return Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
     }
   }
 

@@ -853,6 +853,15 @@ export class PromptEditorSupportService {
             return;
           }
 
+          // Bare full-file @refs are capped the same way the dry-run preview
+          // caps its Tier 1 file references — see estimateFileReferenceTokens.
+          const fileEstimate =
+            await expander.estimateFileReferenceTokens(rawRef);
+          if (fileEstimate !== null) {
+            counts[rawRef] = fileEstimate.tokens;
+            return;
+          }
+
           const expanded = await expander.expandContext(rawRef);
 
           if (expanded === rawRef) {

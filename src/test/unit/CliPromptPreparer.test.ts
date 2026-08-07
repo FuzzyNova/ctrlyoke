@@ -7,7 +7,9 @@ import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import type { PromptSections } from "../../core/HarnessIntegration";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
+import { encode } from "gpt-tokenizer";
 import {
+  ESTIMATED_CHARS_PER_TOKEN,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
   PREVIEW_PROMPT_CATEGORIES,
@@ -543,13 +545,14 @@ suite("CliPromptPreparer", () => {
     });
   });
 
-  test("plans direct references with stat metadata without reading them", async () => {
+  test("plans an oversized direct reference with an approximate token estimate, never reading it", async () => {
     const workspaceRoot = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
     );
     const referencePath = path.join(workspaceRoot, "large-reference.txt");
     await fs.promises.writeFile(referencePath, "not-read", "utf8");
-    await fs.promises.truncate(referencePath, 10 * 1024 * 1024 * 1024);
+    const hugeByteCount = 10 * 1024 * 1024 * 1024;
+    await fs.promises.truncate(referencePath, hugeByteCount);
 
     const originalReadFile = fs.promises.readFile;
     let readFileCalls = 0;
@@ -557,7 +560,7 @@ suite("CliPromptPreparer", () => {
       ..._args: Parameters<typeof originalReadFile>
     ) => {
       readFileCalls++;
-      throw new Error("Tier 1 references must never be read");
+      throw new Error("Tier 1 references over MAX_CONTENT_SIZE must never be read");
     }) as typeof originalReadFile;
 
     try {
@@ -590,11 +593,65 @@ suite("CliPromptPreparer", () => {
           section.category === PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE
       );
       assert.strictEqual(readFileCalls, 0);
-      assert.strictEqual(referenceSection?.byteCount, 10 * 1024 * 1024 * 1024);
+      assert.strictEqual(referenceSection?.byteCount, hugeByteCount);
       assert.strictEqual(referenceSection?.path, referencePath);
+      assert.strictEqual(
+        referenceSection?.tokenEstimate,
+        Math.ceil(hugeByteCount / ESTIMATED_CHARS_PER_TOKEN)
+      );
       assert.ok(result.diagnostics.length > 0);
     } finally {
       fs.promises.readFile = originalReadFile;
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("plans a direct reference under MAX_CONTENT_SIZE with an exact token count", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
+    );
+    const referencePath = path.join(workspaceRoot, "small-reference.ts");
+    const fileContent = "export const greeting = 'hello world';\n".repeat(20);
+    await fs.promises.writeFile(referencePath, fileContent, "utf8");
+
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: [referencePath],
+          userPromptText: "inspect this reference",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const result = await preparer.planPrompt(
+        { prompt: "inspect this reference" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+
+      const referenceSection = result.promptPreview.sections.find(
+        (section) =>
+          section.category === PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE
+      );
+      assert.strictEqual(
+        referenceSection?.tokenEstimate,
+        encode(fileContent).length
+      );
+      assert.strictEqual(
+        referenceSection?.byteCount,
+        Buffer.byteLength(fileContent, "utf8")
+      );
+    } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
     }
   });

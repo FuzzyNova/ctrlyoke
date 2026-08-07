@@ -1,5 +1,4 @@
 import * as crypto from "crypto";
-import * as fs from "fs";
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
@@ -24,6 +23,10 @@ import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
+import {
+  estimateFileTokens,
+  type FileTokenEstimate,
+} from "../../../utils/FileTokenEstimator";
 import type {
   PriorContextItem,
   PromptSections,
@@ -290,34 +293,14 @@ export class CliPromptPreparer {
     const sections: CategorizedPromptSectionPreview[] = [];
     const diagnostics: CompatibilityDiagnostic[] = [];
     for (let i = 0; i < directFileRefs.length; i++) {
-      const absolutePath = directFileRefs[i];
-      let stat: fs.Stats | undefined;
-      try {
-        stat = await fs.promises.stat(absolutePath);
-      } catch {
-        // The live fast path keeps the user's text even if the reference
-        // disappears between expansion and preview.
-      }
-      if (stat && stat.size > MAX_CONTENT_SIZE) {
-        diagnostics.push(
-          this.createDiagnostic(
-            PROMPT_DIAGNOSTIC_CODES.LARGE_REFERENCE,
-            harnessId,
-            `Referenced file ${absolutePath} is ${stat.size} bytes; the target harness may not be able to process it.`
-          )
-        );
-      }
-      sections.push({
-        category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
-        byteCount: stat?.size ?? 0,
-        lineCount: null,
-        tokenEstimate: null,
-        chunkIndex: i,
-        contentHash: null,
-        truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
-        path: absolutePath,
-        ...(stat ? { modifiedTimeMs: stat.mtimeMs } : {}),
-      });
+      sections.push(
+        await this.buildFileReferenceSection(
+          directFileRefs[i],
+          i,
+          harnessId,
+          diagnostics
+        )
+      );
     }
     sections.push(promptBody.section);
     return {
@@ -470,33 +453,15 @@ export class CliPromptPreparer {
       const absolutePath = sections.directFileRefs[i];
       const reference = this.deps.formatDirectFileRef(absolutePath);
       directRefs.push(reference);
-      let stat: fs.Stats | undefined;
-      try {
-        stat = await fs.promises.stat(absolutePath);
-      } catch {
-        // Keep the reference if the file disappeared after context expansion.
-      }
-      if (stat && stat.size > MAX_CONTENT_SIZE) {
-        diagnostics.push(
-          this.createDiagnostic(
-            PROMPT_DIAGNOSTIC_CODES.LARGE_REFERENCE,
-            harnessId,
-            `Referenced file ${absolutePath} is ${stat.size} bytes; the target harness may not be able to process it.`
-          )
-        );
-      }
-      previewSections.push({
-        category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
-        byteCount: stat?.size ?? 0,
-        lineCount: null,
-        tokenEstimate: null,
-        chunkIndex: i,
-        contentHash: null,
-        truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
-        path: absolutePath,
-        providerReference: reference,
-        ...(stat ? { modifiedTimeMs: stat.mtimeMs } : {}),
-      });
+      previewSections.push(
+        await this.buildFileReferenceSection(
+          absolutePath,
+          i,
+          harnessId,
+          diagnostics,
+          reference
+        )
+      );
     }
 
     const contextRefs: string[] = [];
@@ -597,6 +562,49 @@ export class CliPromptPreparer {
         bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
       },
       diagnostics,
+    };
+  }
+
+  /**
+   * Build a FILE_REFERENCE (Tier 1) preview section for one `@path` reference.
+   * Token estimation is single-sourced via `estimateFileTokens` — exact for
+   * files at or under MAX_CONTENT_SIZE, a size-based approximation above it —
+   * so this number agrees with the live editor's attachment token count
+   * (`ContextExpander.estimateFileReferenceTokens`) for the same file.
+   */
+  private async buildFileReferenceSection(
+    absolutePath: string,
+    chunkIndex: number,
+    harnessId: ResolvedProperties["harness"],
+    diagnostics: CompatibilityDiagnostic[],
+    providerReference?: string
+  ): Promise<CategorizedPromptSectionPreview> {
+    let estimate: FileTokenEstimate | undefined;
+    try {
+      estimate = await estimateFileTokens(absolutePath);
+    } catch {
+      // Keep the reference if the file disappeared after context expansion.
+    }
+    if (estimate?.estimated) {
+      diagnostics.push(
+        this.createDiagnostic(
+          PROMPT_DIAGNOSTIC_CODES.LARGE_REFERENCE,
+          harnessId,
+          `Referenced file ${absolutePath} is ${estimate.byteCount} bytes; the target harness may not be able to process it.`
+        )
+      );
+    }
+    return {
+      category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
+      byteCount: estimate?.byteCount ?? 0,
+      lineCount: null,
+      tokenEstimate: estimate?.tokens ?? null,
+      chunkIndex,
+      contentHash: null,
+      truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
+      path: absolutePath,
+      ...(providerReference ? { providerReference } : {}),
+      ...(estimate ? { modifiedTimeMs: estimate.mtimeMs } : {}),
     };
   }
 

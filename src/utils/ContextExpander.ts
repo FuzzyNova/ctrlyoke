@@ -8,6 +8,10 @@ import {
 } from "./FileReferenceParser";
 import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
 import { estimateImageTokens } from "./ImageTokenEstimator";
+import {
+  estimateFileTokens,
+  type FileTokenEstimate,
+} from "./FileTokenEstimator";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
 import {
   resolveNamedRelativePath,
@@ -190,6 +194,33 @@ export class ContextExpander {
       const absolutePath = this.resolveWorkspacePath(ref.path);
       await fs.access(absolutePath);
       return estimateImageTokens(absolutePath);
+    } catch {
+      // Unreadable / out-of-workspace — let the normal path handle (and log) it.
+      return null;
+    }
+  }
+
+  /**
+   * If `rawRef` is a bare full-file `@` reference (no line range, not a
+   * directory), return its token estimate via {@link estimateFileTokens};
+   * otherwise return null so the caller falls back to `expandContext`'s
+   * attachment-XML tokenization for directory/selection/symbol/git refs.
+   *
+   * This is the same full-file reference category the dry-run preview calls
+   * "Tier 1" and treats identically — see `CliPromptPreparer`'s use of the
+   * same `estimateFileTokens` helper — so the live editor count and the
+   * dry-run total agree for these references.
+   */
+  async estimateFileReferenceTokens(
+    rawRef: string
+  ): Promise<FileTokenEstimate | null> {
+    const ref = parseAtReferences(this.maskBacktickBlocks(rawRef))[0];
+    if (!ref || ref.isDirectory) {
+      return null;
+    }
+    try {
+      const absolutePath = this.resolveWorkspacePath(ref.path);
+      return await estimateFileTokens(absolutePath);
     } catch {
       // Unreadable / out-of-workspace — let the normal path handle (and log) it.
       return null;

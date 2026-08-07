@@ -1010,6 +1010,15 @@ export const MAX_PASTED_IMAGE_BYTES = 15 * 1024 * 1024;
 /** Maximum UTF-8 content size captured for workspace and undo diffs (512 KB). */
 export const MAX_CONTENT_SIZE = 512 * 1024;
 
+/**
+ * Rough token-length heuristic (OpenAI's documented "~4 characters per token
+ * for English text" rule of thumb) used wherever a file/content is too large
+ * to tokenize exactly without risking a single huge allocation. Single-sourced
+ * so `FileTokenEstimator` and `PromptFileSplitter`'s tokenizer-failure fallback
+ * agree on the same approximation.
+ */
+export const ESTIMATED_CHARS_PER_TOKEN = 4;
+
 /** File extensions rendered as inline thumbnails in the output pane. */
 export const IMAGE_REF_EXTENSIONS = [
   "png",

@@ -33,6 +33,15 @@ Two implementation notes worth keeping:
   read, and the `MAX_CONTENT_SIZE` cap governs what crosses the DTO boundary. An
   ungated `readFile` still exists inside `AgentExpander` itself; tightening it
   would change execution behavior and belongs to its own change.
+- **Tier 1's token estimate is a deliberate, scoped exception to "reads nothing
+  execution wouldn't."** ctrlyoke's own process never reads a `directFileRefs`
+  file during real execution — the harness does — so any read here is new, not
+  reused. It was added anyway because the live editor's attachment token count
+  already does this same read, uncapped, and a dry-run total that silently
+  omits Tier 1 references reads as "much lower" than reality with no visible
+  cause. The fix is single-sourced (`FileTokenEstimator.estimateFileTokens`) and
+  still refuses the actual failure mode — a single huge allocation — by never
+  reading past `MAX_CONTENT_SIZE`; see **Tier 1** below.
 
 ---
 
@@ -255,18 +264,32 @@ promoted to an error by CLI policy.
 Preview must never be the thing that reads a file execution would not have read.
 Three tiers, decided by what the real prompt path does with the content.
 
-### Tier 1 — references: never read
+### Tier 1 — references: `stat()` first, cap the read, same as Tier 2
 
 `PromptSections.directFileRefs` become provider-formatted file references
 (`@path`, `#file:`). ctrlyoke passes the path and the harness reads the file, so
-preview has no content to show and must not manufacture any. Show the path, the
-provider-formatted rendering, and metadata from a `stat()` only — size and mtime.
-No `readFile`, at any size. A 10 GB file referenced this way previews in constant
-time.
+preview never embeds this content in the payload — the body shown for a
+FILE_REFERENCE section is always just the path, the provider-formatted
+rendering, and `stat()` metadata (size, mtime).
+
+The token *estimate* is a deliberate exception to "preview reads nothing
+execution wouldn't": the live editor's attachment token count
+(`useAttachmentTokenCount` / `ContextExpander.estimateFileReferenceTokens`)
+already reads these files in full to tell the user what they'll cost once the
+harness reads them, and the two numbers must agree — a dry run that reports a
+much lower total than the editor for the same workflow is worse than one that
+does a bounded read. `FileTokenEstimator.estimateFileTokens` (`src/utils/`) is
+the single source for both: `stat()` the file; at or under `MAX_CONTENT_SIZE`
+(512 KB), read and tokenize exactly with `gpt-tokenizer`; above it, never read —
+approximate from the byte size using `ESTIMATED_CHARS_PER_TOKEN` (4,
+`DashboardConstants.ts`, the same rule of thumb `PromptFileSplitter`'s
+tokenizer-failure fallback already used). A 10 GB file referenced this way still
+never allocates.
 
 Emit a diagnostic when a referenced file is implausibly large for the target
-harness rather than silently listing it. Preview is the right place to learn that
-before spending a run on it.
+harness rather than silently listing it — this fires exactly when the token
+estimate falls back to the size-based approximation, i.e. `estimated: true`.
+Preview is the right place to learn that before spending a run on it.
 
 ### Tier 2 — inlined content: `stat()` first, cap the read
 
@@ -581,9 +604,11 @@ existing behaviour. A local reveal flow is out of scope for the first version.
   a value-carrying field, which a masking-only test would not catch.
 - Cover unsupported/partial permission rules and workspace mutation previews.
 - Verify command display escaping independently on Windows and POSIX.
-- Assert preview performs no `readFile` on a Tier 1 reference at any size, and no
-  read above `MAX_CONTENT_SIZE` on Tier 2 content — both by spying on the fs
-  layer, not by asserting on the rendered output.
+- Assert preview performs no `readFile` above `MAX_CONTENT_SIZE` on a Tier 1
+  reference (token estimate falls back to the size-based approximation instead)
+  or on Tier 2 content — both by spying on the fs layer, not by asserting on the
+  rendered output. Assert a Tier 1 reference at or under the cap gets an exact
+  token count matching `gpt-tokenizer`'s `encode()`.
 - Cover a single-logical-line payload of millions of characters (minified file)
   to prove the character budget is not bypassed by the line budget.
 - Dashboard tests in `src/ui/webview-react/test/**`: each entry point opens the
