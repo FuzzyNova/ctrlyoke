@@ -1357,12 +1357,16 @@ export class WorkflowInstance {
         ...this.promptQueue.getWorkflowFile(),
         steps: this.promptQueue.getState().steps,
       });
-      this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
       const compatibilityErrors = compatibilityDiagnostics.filter(
         (diagnostic) =>
           diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
       );
       if (compatibilityErrors.length > 0) {
+        // Report here (rather than after EXECUTION_STARTED, like the success
+        // path below) because this early-return means EXECUTION_STARTED is
+        // never sent at all — nothing will ever reset the dashboard's runtime
+        // state to make room for it otherwise.
+        this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
         Log.error(
           "ctrlyoke: Compatibility preflight failed:",
           compatibilityErrors.map((diagnostic) => diagnostic.message).join(" ")
@@ -1697,6 +1701,15 @@ export class WorkflowInstance {
           );
         }
       }
+
+      // Reported only now, after EXECUTION_STARTED has already gone out: a
+      // fresh (non-continuation) start makes the dashboard wipe its live
+      // status-message feed to make room for the new run (see
+      // EXECUTION_STARTED's webview handler). Reporting any earlier races
+      // that reset — the diagnostic lands, then gets discarded a message
+      // later — so the warning silently never appears live, only resurfacing
+      // once the run ends and history is reloaded from disk.
+      this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
 
       if (totalSteps > 0) {
         const currentIndex = currentQueueState.currentIndex;
