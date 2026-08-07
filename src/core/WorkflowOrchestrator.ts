@@ -2018,7 +2018,8 @@ export class WorkflowOrchestrator {
    */
   async buildExecutionPreviewForClient(
     clientId: string,
-    scope: ExecutionPreviewScope
+    scope: ExecutionPreviewScope,
+    editorSnapshot?: import("../types/WebviewMessageTypes").ExecutionPreviewEditorSnapshot
   ): Promise<{
     address: WorkflowViewAddress;
     displayedDefinitionRevision: number;
@@ -2074,6 +2075,25 @@ export class WorkflowOrchestrator {
         ...instance.promptQueue.getWorkflowFile(),
         steps: state.steps,
       };
+    }
+
+    // The editor is intentionally local until Update is pressed. Overlay its
+    // one-shot snapshot so a dry run answers the question the user just asked,
+    // including unsaved text and property changes, without mutating the queue
+    // or working file.
+    if (editorSnapshot) {
+      workflow = { ...workflow };
+      if (editorSnapshot.isFinalStep) {
+        workflow.finalStep = editorSnapshot.step;
+      } else if (
+        editorSnapshot.stepIndex !== undefined &&
+        editorSnapshot.stepIndex >= 0 &&
+        editorSnapshot.stepIndex <= (workflow.steps ?? []).length
+      ) {
+        const steps = [...(workflow.steps ?? [])];
+        steps[editorSnapshot.stepIndex] = editorSnapshot.step;
+        workflow.steps = steps;
+      }
     }
 
     const workspaceRoot = this.requireWorkspaceRoot();

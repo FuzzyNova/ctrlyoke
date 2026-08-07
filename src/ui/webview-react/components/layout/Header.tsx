@@ -9,7 +9,10 @@ import {
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
+import { useLongPress } from "@hooks/useLongPress";
 import { WebviewLog } from "@utils/logger";
+import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
@@ -18,6 +21,11 @@ import { FileBrowserModal } from "../workflow/FileBrowserModal";
 import { SuffixEditConfirmModal } from "../shared/SuffixEditConfirmModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
+import { DryRunModal } from "../shared/DryRunModal";
+import {
+  StepContextMenu,
+  type StepContextMenuState,
+} from "../shared/StepContextMenu";
 import { HEADER_BUTTON_SIZES } from "../../constants";
 import {
   getWorkflowExecutionControls,
@@ -30,6 +38,32 @@ let saveRequestSequence = 0;
 function nextSaveRequestId(): string {
   saveRequestSequence += 1;
   return `save-${Date.now()}-${saveRequestSequence}`;
+}
+
+function DryRunButton({
+  btnSize,
+  onClick,
+  disabled,
+}: {
+  btnSize: (typeof HEADER_BUTTON_SIZES)[keyof typeof HEADER_BUTTON_SIZES];
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+        disabled
+          ? "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+          : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+      }`}
+      onClick={onClick}
+      disabled={disabled}
+      title="Dry Run"
+      aria-label="Dry Run"
+    >
+      <i className={`codicon codicon-preview ${btnSize.icon}`} />
+    </button>
+  );
 }
 
 /**
@@ -200,6 +234,7 @@ export const Header: React.FC<{
         currentStep === 0 &&
         !hasStepProgress,
     });
+  const dryRunScope = useExecutionPreviewStore((state) => state.scope);
 
   const handleStopCliRun = useCallback(() => {
     if (activeWorkflowId) {
@@ -223,6 +258,33 @@ export const Header: React.FC<{
       address: displayedViewAddress,
     });
   }, [vscode, canSave, displayedViewAddress]);
+
+  const openDryRunWorkflow = useCallback(() => {
+    useExecutionPreviewStore
+      .getState()
+      .open({ kind: "workflow" }, getExecutionPreviewEditorSnapshot());
+  }, []);
+
+  const [runContextMenu, setRunContextMenu] =
+    React.useState<StepContextMenuState | null>(null);
+  const openRunDryRunMenu = useCallback(
+    (x: number, y: number) => {
+      setRunContextMenu({
+        x,
+        y,
+        items: [
+          {
+            label: "Dry Run",
+            icon: "codicon-preview",
+            disabled: false,
+            onClick: openDryRunWorkflow,
+          },
+        ],
+      });
+    },
+    [openDryRunWorkflow]
+  );
+  const runSlotLongPressHandlers = useLongPress(openRunDryRunMenu);
 
   // Handlers
   const postViewedRunAction = useCallback(
@@ -384,6 +446,14 @@ export const Header: React.FC<{
 
       <div className="fp-button-group-divider" />
 
+      <DryRunButton
+        btnSize={btnSize}
+        onClick={openDryRunWorkflow}
+        disabled={!displayedViewAddress}
+      />
+
+      <div className="fp-button-group-divider" />
+
       {/* Undo / Redo / History */}
       <UndoRedoControl
         isRunning={isRunning}
@@ -430,6 +500,11 @@ export const Header: React.FC<{
               : `${slot1NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot1.action)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            openRunDryRunMenu(event.clientX, event.clientY);
+          }}
+          {...runSlotLongPressHandlers}
           disabled={!slot1.enabled || isCLIManaged}
           title={
             isCLIManaged ? "Workflow is running via ctrlyoke CLI" : slot1.title
@@ -483,6 +558,12 @@ export const Header: React.FC<{
           <i className={`codicon ${slot3.icon} ${btnSize.icon}`} />
         </button>
       </div>
+      {runContextMenu && (
+        <StepContextMenu
+          {...runContextMenu}
+          onClose={() => setRunContextMenu(null)}
+        />
+      )}
     </div>
   );
 
@@ -540,6 +621,12 @@ export const Header: React.FC<{
             >
               <i className={`codicon codicon-save ${btnSize.icon}`} />
             </button>
+            <div className="fp-button-group-divider" />
+            <DryRunButton
+              btnSize={btnSize}
+              onClick={openDryRunWorkflow}
+              disabled={!displayedViewAddress}
+            />
             <div className="fp-button-group-divider" />
             {/* Undo / Redo / History */}
             <UndoRedoControl
@@ -655,6 +742,8 @@ export const Header: React.FC<{
           onConfirm={handleConfirmSuffixEditDiscard}
           onCancel={handleCancelSuffixEditConfirmation}
         />
+
+        {dryRunScope && <DryRunModal scope={dryRunScope} />}
 
         {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
             move into the shared center lane so they can negotiate width together. */}

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStepContextMenu } from "@hooks/useStepContextMenu";
 import { EXECUTION_STATES, STEP_TYPES } from "@/types/messages";
 import type { WorkflowStep } from "@store/workflowStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 
 function TestHarness({
   step,
@@ -48,6 +49,7 @@ describe("useStepContextMenu", () => {
   const readText = vi.fn();
 
   beforeEach(() => {
+    useExecutionPreviewStore.getState().reset();
     readText.mockReset();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -79,6 +81,7 @@ describe("useStepContextMenu", () => {
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
+      "Dry Run Step",
       "Paste Step",
       "Set Start Position",
       "Disable",
@@ -107,6 +110,17 @@ describe("useStepContextMenu", () => {
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
+  });
+
+  it("opens a step-scoped Dry Run from the step menu", () => {
+    render(<TestHarness step={{ prompt: "Original prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dry Run Step" }));
+
+    expect(useExecutionPreviewStore.getState().scope).toEqual({
+      kind: "step",
+      stepIndex: 0,
+    });
   });
 
   it("adds discard continuation only at the rewind boundary", () => {

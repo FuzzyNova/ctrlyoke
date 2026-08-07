@@ -1,10 +1,10 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Step 9 landed. The compatibility contract it depends on has
-> landed (`src/types/CompatibilityTypes.ts`, `CompatibilityAnalyzer.ts`,
-> `ExecutionPropertyResolver.ts`, and the harness capability registry). The
-> redaction contract has **not** — see **Redaction and Access**, which now
-> specifies what preview does in its absence rather than blocking on it.
+> **Status:** Implemented. Steps 1–10 are shipped: CLI `--dry-run`, the shared
+> side-effect-free preview service and DTO contract, dashboard entry points,
+> the Dry Run modal, request correlation, and explicit staleness refresh.
+> Deliberately deferred: the lazy body-fetch optimization, `--fail-on lossy`,
+> the local reveal flow, and the optional VS Code keybinding.
 
 > **Step 1 landed:** the serializable execution-preview DTO contract, shared
 > preview constants, and the pure `PreviewRedactor` chokepoint with unit tests
@@ -53,14 +53,15 @@
 > addressed working file at request time and redacts again at the final
 > webview boundary. The webview store performs one request per open, drops
 > superseded responses, clears on close, and tracks definition-head staleness
-> from existing requestless view snapshots. No modal or refresh trigger is
-> included yet.
+> from existing requestless view snapshots. Unsaved editor snapshots are
+> overlaid for the one request without mutating the working file.
 
 > **Step 9 landed:** `DryRunModal` now renders the redacted preview DTO in
 > workflow master/detail and step-only scopes. It uses the shared modal,
 > segmented tabs, narrow-layout selector, collapsed payload utility, diagnostic
-> badges, and the established copy/export/run actions. Entry-point wiring is
-> intentionally deferred to Step 10.
+> badges, and the established copy/export/run actions. Step 10 adds all
+> dashboard entry points, the run-slot accelerator, and explicit refresh for
+> stale definitions.
 >
 > **Priority:** P1
 

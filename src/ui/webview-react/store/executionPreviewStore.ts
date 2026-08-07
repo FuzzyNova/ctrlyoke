@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { MESSAGE_TYPES } from "../types/messages";
 import type {
   ExecutionPreviewResultMessage,
+  ExecutionPreviewEditorSnapshot,
   ExecutionPreviewScope,
 } from "@root/types/WebviewMessageTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
@@ -24,7 +25,10 @@ interface ExecutionPreviewState {
 }
 
 interface ExecutionPreviewActions {
-  open: (scope: ExecutionPreviewScope) => number;
+  open: (
+    scope: ExecutionPreviewScope,
+    editorSnapshot?: ExecutionPreviewEditorSnapshot
+  ) => number;
   resolve: (message: ExecutionPreviewResultMessage) => void;
   observeDefinitionRevision: (
     address: WorkflowViewAddress,
@@ -69,7 +73,7 @@ export const useExecutionPreviewStore = create<
 >((set, get) => ({
   ...initialState,
 
-  open: (scope) => {
+  open: (scope, editorSnapshot) => {
     requestSequence += 1;
     const requestToken = requestSequence;
     set({
@@ -83,6 +87,7 @@ export const useExecutionPreviewStore = create<
     });
     sendMessage(MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW, {
       scope,
+      ...(editorSnapshot ? { editorSnapshot } : {}),
       requestToken,
     });
     return requestToken;

@@ -21,6 +21,7 @@ import {
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
+  STEP_TYPES,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
 import {
@@ -70,6 +71,8 @@ import {
 import { HooksEditor } from "./HooksEditor";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -111,6 +114,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     getModelsForHarness,
   } = useSettingsStore();
   const steps = useWorkflowStore((s) => s.steps);
+  const hasEditorContent = useEditorStore((s) =>
+    s.stepType === STEP_TYPES.SCRIPT
+      ? s.scriptCommand.trim().length > 0
+      : s.promptText.trim().length > 0
+  );
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
   const handleResetAllToInherit = useCallback(() => {
@@ -296,6 +304,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const reviewCompatibility = () => {
     const focusId = firstCompatibilityProperty(permissionDiagnostics, "prop");
     onRequestPage?.(DRAWER_PAGES.PERMISSIONS, focusId);
+  };
+
+  const openDryRunStep = () => {
+    if (selectedPromptIndex === null && !hasEditorContent) return;
+    const stepIndex = selectedPromptIndex ?? steps.length;
+    useExecutionPreviewStore
+      .getState()
+      .open(
+        { kind: "step", stepIndex },
+        getExecutionPreviewEditorSnapshot()
+      );
   };
   // Resolved permission mode (prompt → workflow fallback) used for tab icon styling
   const resolvedPermMode =
@@ -833,6 +852,21 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Validation */}
         {activePage === DRAWER_PAGES.VALIDATION && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-panel-border pb-2">
+              <h4 className="text-xs font-semibold uppercase text-description-fg">
+                Validation
+              </h4>
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={openDryRunStep}
+                disabled={!hasEditorContent}
+                title="Dry Run Step"
+                aria-label="Dry Run Step"
+              >
+                <i className="codicon codicon-preview" aria-hidden="true" />
+              </button>
+            </div>
             {/* Pre-Condition Section */}
             <div className="space-y-2">
               <label

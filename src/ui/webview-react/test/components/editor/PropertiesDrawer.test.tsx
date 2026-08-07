@@ -11,6 +11,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DRAWER_PAGES } from "@/types/drawerPages";
 import { EXECUTION_MODES } from "@root/types/DashboardConstants";
 
@@ -19,6 +20,7 @@ function resetStores(): void {
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
   useWorkflowStore.getState().resetWorkflow();
+  useExecutionPreviewStore.getState().reset();
 }
 
 function renderHarnessDrawer() {
@@ -27,6 +29,16 @@ function renderHarnessDrawer() {
       isOpen
       onClose={() => undefined}
       activePage={DRAWER_PAGES.HARNESS}
+    />
+  );
+}
+
+function renderValidationDrawer() {
+  return render(
+    <PropertiesDrawer
+      isOpen
+      onClose={() => undefined}
+      activePage={DRAWER_PAGES.VALIDATION}
     />
   );
 }
@@ -120,6 +132,24 @@ describe("PropertiesDrawer execution mode", () => {
       "title",
       expect.stringContaining("TUI continuity")
     );
+  });
+});
+
+describe("PropertiesDrawer Dry Run entry point", () => {
+  beforeEach(resetStores);
+
+  afterEach(cleanup);
+
+  it("opens a step-scoped Dry Run for the current unsaved editor step", () => {
+    useEditorStore.getState().setPromptText("unsaved prompt");
+    renderValidationDrawer();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dry Run Step" }));
+
+    expect(useExecutionPreviewStore.getState().scope).toEqual({
+      kind: "step",
+      stepIndex: 0,
+    });
   });
 });
 

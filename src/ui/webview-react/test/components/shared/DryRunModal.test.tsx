@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DryRunModal } from "@components/shared/DryRunModal";
+
+const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
+vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
 
 const clipboardWriteText = vi.fn<(text: string) => Promise<void>>();
 
@@ -147,6 +150,8 @@ function openPreview(scope: { kind: "workflow" } | { kind: "step"; stepIndex: nu
     preview,
     status: "ready",
     scope,
+    displayedDefinitionRevision: 1,
+    displayedAddress: { workflowKey: "workflow-a" as never, kind: "draft" },
     isStale: false,
   });
 }
@@ -253,5 +258,34 @@ describe("DryRunModal", () => {
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the displayed plan byte-identical until Refresh is pressed", async () => {
+    const user = userEvent.setup();
+    const address = { workflowKey: "workflow-a" as never, kind: "draft" } as const;
+    openPreview({ kind: "workflow" });
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    const before = screen.getByRole("dialog").textContent;
+    act(() => {
+      useExecutionPreviewStore
+        .getState()
+        .observeDefinitionRevision(address, 2);
+    });
+
+    expect(screen.getByText("Definition changed —")).toBeInTheDocument();
+    const afterBanner = screen
+      .getByRole("dialog")
+      .textContent?.replace("Definition changed —Refresh", "");
+    expect(afterBanner).toBe(before);
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ scope: { kind: "workflow" } })
+    );
   });
 });

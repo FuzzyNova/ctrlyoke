@@ -22,6 +22,8 @@ import {
 import { useUiStore } from "@store/uiStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
@@ -138,6 +140,19 @@ export function useStepContextMenu({
             onClick: () => {
               if (!outputText) return;
               void writeClipboardText(outputText);
+            },
+          },
+          {
+            label: "Dry Run Step",
+            icon: "codicon-preview",
+            disabled: false,
+            onClick: () => {
+              useExecutionPreviewStore
+                .getState()
+                .open(
+                  { kind: "step", stepIndex: deleteIndex },
+                  getExecutionPreviewEditorSnapshot()
+                );
             },
           },
           {

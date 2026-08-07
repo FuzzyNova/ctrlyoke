@@ -789,7 +789,8 @@ export class WebviewMessageRouter {
       }
       const result = await orchestrator.buildExecutionPreviewForClient(
         ctx.clientId,
-        message.scope
+        message.scope,
+        message.editorSnapshot
       );
       // Keep redaction at the final webview transport boundary as well as in
       // ExecutionPreviewService. Hosted browser messages use this same route.

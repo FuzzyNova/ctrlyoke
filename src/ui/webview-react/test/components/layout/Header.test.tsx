@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Header } from "@components/layout/Header";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { EXECUTION_STATES, MESSAGE_TYPES } from "@/types/messages";
 
 const postMessage = vi.fn();
@@ -19,6 +20,7 @@ describe("Header execution controls", () => {
   beforeEach(() => {
     useWorkflowStore.getState().resetWorkflow();
     useUiStore.getState().resetUi();
+    useExecutionPreviewStore.getState().reset();
     postMessage.mockReset();
     Object.defineProperty(window, "vscodeApi", {
       configurable: true,
@@ -56,6 +58,33 @@ describe("Header execution controls", () => {
   });
 
   afterEach(cleanup);
+
+  it("opens the workflow-scoped Dry Run from the action controls", () => {
+    render(<Header />);
+
+    const actionGroup = screen.getByRole("group", {
+      name: "Workflow action controls",
+    });
+    const labels = Array.from(actionGroup.querySelectorAll("button")).map(
+      (button) => button.getAttribute("aria-label")
+    );
+    expect(labels.indexOf("Dry Run")).toBeGreaterThan(labels.indexOf("Save workflow"));
+    expect(labels.indexOf("Dry Run")).toBeLessThan(labels.indexOf("Undo"));
+
+    fireEvent.click(
+      within(actionGroup).getByRole("button", { name: "Dry Run" })
+    );
+
+    expect(useExecutionPreviewStore.getState().scope).toEqual({
+      kind: "workflow",
+    });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW,
+        scope: { kind: "workflow" },
+      })
+    );
+  });
 
   it("shows Restart/Continue/Stop and places discard in the continuation banner", () => {
     render(<Header />);

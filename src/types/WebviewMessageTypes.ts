@@ -1227,10 +1227,24 @@ export type ExecutionPreviewScope =
   | { kind: typeof PREVIEW_SCOPES.WORKFLOW }
   | { kind: typeof PREVIEW_SCOPES.STEP; stepIndex: number };
 
+/**
+ * Unsaved editor state to overlay on the addressed working definition for a
+ * single preview request. The dashboard owns this snapshot; it is never
+ * persisted or reused after the request is answered.
+ */
+export interface ExecutionPreviewEditorSnapshot {
+  step: WorkflowStep;
+  /** Queue index when the editor is showing a queue step or new queue draft. */
+  stepIndex?: number;
+  /** True when the editor is showing the workflow's final step. */
+  isFinalStep?: boolean;
+}
+
 /** Webview → Extension: compute one side-effect-free execution snapshot. */
 export interface RequestExecutionPreviewMessage {
   type: typeof MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW;
   scope: ExecutionPreviewScope;
+  editorSnapshot?: ExecutionPreviewEditorSnapshot;
   /** Monotonic only within the webview; used to discard late modal responses. */
   requestToken: number;
 }

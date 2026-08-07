@@ -16,6 +16,7 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { downloadTextFile } from "@utils/diff";
 import {
   buildCollapsedOutputPreview,
@@ -635,6 +636,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
   const status = useExecutionPreviewStore((state) => state.status);
   const preview = useExecutionPreviewStore((state) => state.preview);
   const isStale = useExecutionPreviewStore((state) => state.isStale);
+  const open = useExecutionPreviewStore((state) => state.open);
   const close = useExecutionPreviewStore((state) => state.close);
   const [selection, setSelection] = useState<RailSelection>(
     scope.kind === "step" ? scope.stepIndex : "overview"
@@ -693,6 +695,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
     close();
     sendMessage(MESSAGE_TYPES.RUN);
   }, [close]);
+
+  const handleRefresh = useCallback(() => {
+    open(scope, getExecutionPreviewEditorSnapshot());
+  }, [open, scope]);
 
   if (!sameScope(storeScope, scope)) return null;
 
@@ -777,7 +783,14 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
           {isStale && (
             <div className="flex items-center gap-2 border-b border-warning-fg border-opacity-40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg" role="status">
               <i className="codicon codicon-warning" aria-hidden="true" />
-              The workflow changed after this preview was computed. Run workflow will recompute it.
+              <span>Definition changed —</span>
+              <button
+                type="button"
+                className="ml-auto rounded px-2 py-1 font-semibold underline hover:bg-toolbar-hover-bg"
+                onClick={handleRefresh}
+              >
+                Refresh
+              </button>
             </div>
           )}
           {workflowNarrow && (
