@@ -1,69 +1,38 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Implemented. Steps 1–10 are shipped: CLI `--dry-run`, the shared
-> side-effect-free preview service and DTO contract, dashboard entry points,
-> the Dry Run modal, request correlation, and explicit staleness refresh.
-> Deliberately deferred: the lazy body-fetch optimization, `--fail-on lossy`,
-> the local reveal flow, and the optional VS Code keybinding.
-
-> **Step 1 landed:** the serializable execution-preview DTO contract, shared
-> preview constants, and the pure `PreviewRedactor` chokepoint with unit tests
-> are now in place. No preview consumers or side effects are included yet.
->
-> **Step 2 landed:** MCP and hook preparation now expose side-effect-free plans
-> with deferred mutations across all six CLI providers. Legacy preparation
-> methods apply those same plans, preserving existing argument arrays. OpenCode
-> process-local inline configuration is represented as a pathless mutation.
->
-> **Step 3 landed:** execution-plan assembly now lives in
-> `src/core/harness/shared/ExecutionPlanBuilder.ts`. Real CLI execution and
-> preview consume the same resolved launcher, complete argv, permission/MCP
-> preparation, diagnostics, and deferred mutations. Golden coverage exercises
-> all six harnesses in interactive and headless mode.
->
-> **Step 4 landed:** categorized prompt preparation now has a pure planning mode
-> that computes deterministic chunk paths, provider references, payload metadata,
-> bounded preview bodies, and deferred temp-file mutations. Live preparation
-> applies the same mutations, preserving the existing delivery order and
-> reference formatting. Direct references are stat-only and never read.
->
-> **Step 5 landed:** `ExecutionPreviewService` assembles the complete
-> side-effect-free workflow or step snapshot from the shared property resolver,
-> compatibility analyzer, prompt planner, and execution-plan builder. It maps
-> commands, permissions, MCP, variables, conditions, limits, and deferred
-> mutations into preview DTOs and passes the result through the redactor before
-> returning. `CliIntegration.getExecutionPreviewHarness()` exposes the exact
-> live planning helpers to future dashboard/CLI entry points.
-
-> **Step 6 landed:** the standalone `run --dry-run` command now consumes the
-> shared preview service and execution-plan helpers. Human output lists shared
-> diagnostics before step details; `--json` emits the redacted preview DTO;
-> CLI variable overrides are passed at the preview boundary without mutating
-> the loaded workflow. The dry-run path stops before detector or workflow
-> instance creation, so it cannot start a harness, run scripts, or apply
-> deferred mutations. Capability probes are not run during dry-run, so
-> version-dependent diagnostics remain explicitly unverified.
-
-> **Step 7 landed:** the dashboard tab-bar rendering is now shared by the
-> generic `SegmentedTabBar`; `DrawerTabBar` remains a typed wrapper around the
-> drawer tab definitions, preserving the existing icon overrides and styling.
-
-> **Step 8 landed:** execution-preview request/response messages now cross the
-> VS Code and hosted browser routes. The router computes from the client's
-> addressed working file at request time and redacts again at the final
-> webview boundary. The webview store performs one request per open, drops
-> superseded responses, clears on close, and tracks definition-head staleness
-> from existing requestless view snapshots. Unsaved editor snapshots are
-> overlaid for the one request without mutating the working file.
-
-> **Step 9 landed:** `DryRunModal` now renders the redacted preview DTO in
-> workflow master/detail and step-only scopes. It uses the shared modal,
-> segmented tabs, narrow-layout selector, collapsed payload utility, diagnostic
-> badges, and the established copy/export/run actions. Step 10 adds all
-> dashboard entry points, the run-slot accelerator, and explicit refresh for
-> stale definitions.
+> **Status:** Implemented.
 >
 > **Priority:** P1
+
+Shipped in this order:
+
+| Layer                        | Where it lives                                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Preview DTO + redaction      | `src/types/ExecutionPreviewTypes.ts`, `src/types/PreviewRedactor.ts`                                     |
+| Side-effect-free preparation | `PreparedMutation` + `plan*` variants on `ICliProvider`, all six providers                               |
+| Shared plan assembly         | `src/core/harness/shared/ExecutionPlanBuilder.ts` (real execution and preview consume the same `plan()`) |
+| Prompt payload planning      | `CliPromptPreparer` planning mode with the Tier 1/2/3 size rules                                         |
+| Preview service              | `src/core/ExecutionPreviewService.ts`                                                                    |
+| CLI                          | `run --dry-run`, `--dry-run --json`                                                                      |
+| Dashboard                    | `SegmentedTabBar`, `executionPreviewStore`, `DryRunModal`, three entry points + run-slot accelerator     |
+
+Deliberately deferred, all explicitly out of scope in this document: the lazy
+body-fetch optimization, `--fail-on lossy`, the local reveal flow, and the
+optional VS Code keybinding.
+
+Two implementation notes worth keeping:
+
+- **Capability probes do not run during preview.** `getVersion()`/
+  `checkAvailability()` spawn the harness CLI, which the no-spawn rule forbids.
+  The preview service takes a `HarnessCapabilityRegistrySnapshot` as an injected
+  dependency instead, so version-dependent diagnostics stay explicitly
+  unverified rather than being fabricated.
+- **Tier 2 gating caps the preview body, not the upstream read.** Agent and skill
+  content reaches the planner already in memory, because `AgentExpander` reads it
+  for execution too. Preview therefore reads nothing execution would not have
+  read, and the `MAX_CONTENT_SIZE` cap governs what crosses the DTO boundary. An
+  ungated `readFile` still exists inside `AgentExpander` itself; tightening it
+  would change execution behavior and belongs to its own change.
 
 ---
 
@@ -109,8 +78,8 @@ introduce a second user-facing noun such as "Preview" or "Execution plan".
 
 Three entry points, all opening the same modal with a different scope:
 
-| Entry point                                                             | Scope    | Surface                                       |
-| ----------------------------------------------------------------------- | -------- | --------------------------------------------- |
+| Entry point                                                             | Scope    | Surface                                        |
+| ----------------------------------------------------------------------- | -------- | ---------------------------------------------- |
 | Header **action controls** group — new button between Save and Undo     | workflow | `Header.tsx` (`actionControls` + mobile row 2) |
 | Step context menu — **Dry Run Step** item                               | step     | `useStepContextMenu` (steps panel + chip rail) |
 | Editor properties drawer — icon button in the **Validation** tab header | step     | `PropertiesDrawer.tsx`                         |
@@ -316,7 +285,7 @@ introduce a second size ceiling with a different number.
 
 The 10 GB case therefore never allocates. That is not a theoretical concern here:
 the extension host is a Node UtilityProcess and its documented failure mode is a
-V8 heap OOM from *a single large allocation on an already-large heap*, which is
+V8 heap OOM from _a single large allocation on an already-large heap_, which is
 precisely what an ungated `readFile` on a huge attachment produces. Preview
 running on a debounce while the user types would make it reproducible on demand.
 
@@ -329,7 +298,7 @@ tell the user the run will fail, not to display the payload.
 The categorized payload is not one blob. `PromptFileSplitter` splits it at
 `maxTokensPerFile: 10000` / `maxLinesPerFile: 1800` (Claude CLI's per-file
 limits), and the plan already commits to showing the content of each temp file
-that *would* be written. So the natural unit of display is one chunk file, each
+that _would_ be written. So the natural unit of display is one chunk file, each
 with a bounded ceiling, and there is no unbounded single body to render.
 
 Prior-context XML is the large case that is not a file read at all: it is built
@@ -446,11 +415,11 @@ through a single `PreviewRedactor` module that every preview DTO passes through
 immediately before it is returned by the preview service, i.e. before any
 webview, hosted-server, log, or CLI-output boundary. First version applies
 conservative pattern-based masking of common credential shapes plus a
-`RedactionRule` list, and marks each masked span so the UI can render *that a
-value was redacted* rather than silently showing a plausible-looking wrong value.
+`RedactionRule` list, and marks each masked span so the UI can render _that a
+value was redacted_ rather than silently showing a plausible-looking wrong value.
 
 When the central service from `SECRETS_AND_REDACTION_PLAN.md` lands it replaces
-the *internals* of `PreviewRedactor`; the call sites and the DTO shape do not
+the _internals_ of `PreviewRedactor`; the call sites and the DTO shape do not
 change. Keeping that single chokepoint is what makes the swap additive, so do not
 scatter masking logic into individual builders or into the modal.
 
