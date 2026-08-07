@@ -50,12 +50,31 @@ interface RedactedText {
   spans: RedactionSpan[];
 }
 
-function redactText(
+export function redactPreviewText(
   text: string,
-  existing: RedactionSpan[] = []
+  existing: RedactionSpan[] = [],
+  exactSecrets: readonly string[] = []
 ): RedactedText {
   let currentText = text;
   let spans = [...existing];
+
+  for (const secret of [...exactSecrets]
+    .filter((value) => value.length > 0)
+    .sort((left, right) => right.length - left.length)) {
+    let start = currentText.indexOf(secret);
+    while (start >= 0) {
+      const end = start + secret.length;
+      currentText =
+        currentText.slice(0, start) + REDACTION_MARKER + currentText.slice(end);
+      spans.push({
+        start,
+        end: start + REDACTION_MARKER.length,
+        ruleId: "exact-secret",
+        replacement: REDACTION_MARKER,
+      });
+      start = currentText.indexOf(secret, start + REDACTION_MARKER.length);
+    }
+  }
 
   for (const rule of REDACTION_RULES) {
     const matches = [...currentText.matchAll(rule.pattern)];
@@ -105,14 +124,14 @@ function redactText(
 function redactVariable(
   variable: VariableResolutionPreview
 ): VariableResolutionPreview {
-  const redacted = redactText(variable.value, variable.redactions);
+  const redacted = redactPreviewText(variable.value, variable.redactions);
   return { ...variable, value: redacted.text, redactions: redacted.spans };
 }
 
 function redactHook(hook: HookPreview): HookPreview {
-  const command = redactText(hook.command, hook.redactions);
+  const command = redactPreviewText(hook.command, hook.redactions);
   const inlineConfig = hook.inlineConfigFragment
-    ? redactText(hook.inlineConfigFragment, hook.inlineConfigRedactions)
+    ? redactPreviewText(hook.inlineConfigFragment, hook.inlineConfigRedactions)
     : undefined;
   const redactedHook: HookPreview = {
     ...hook,
@@ -130,7 +149,10 @@ function redactHook(hook: HookPreview): HookPreview {
 
 function redactMcpServer(server: McpServerPreview): McpServerPreview {
   const inlineConfig = server.inlineConfigFragment
-    ? redactText(server.inlineConfigFragment, server.inlineConfigRedactions)
+    ? redactPreviewText(
+        server.inlineConfigFragment,
+        server.inlineConfigRedactions
+      )
     : undefined;
   const redactedServer: McpServerPreview = {
     ...server,
@@ -151,6 +173,13 @@ function redactSection(
 }
 
 function redactStep(step: StepExecutionPreview): StepExecutionPreview {
+  const redactedCommand = step.command
+    ? {
+        ...step.command,
+        args: step.command.args.map((arg) => redactPreviewText(arg).text),
+        displayCommand: redactPreviewText(step.command.displayCommand).text,
+      }
+    : undefined;
   const redactedStep: StepExecutionPreview = {
     ...step,
     resolvedProperties: {
@@ -169,7 +198,7 @@ function redactStep(step: StepExecutionPreview): StepExecutionPreview {
           },
         }
       : {}),
-    ...(step.command ? { command: step.command } : {}),
+    ...(redactedCommand ? { command: redactedCommand } : {}),
     ...(step.mcpApplication
       ? {
           mcpApplication: {

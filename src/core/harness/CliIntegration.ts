@@ -44,6 +44,7 @@ import { CliResponseCollector } from "./shared/CliResponseCollector";
 import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
 import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import { ExecutionPlanBuilder } from "./shared/ExecutionPlanBuilder";
+import type { ExecutionPreviewHarness } from "../ExecutionPreviewService";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
@@ -292,6 +293,15 @@ export class CliIntegration extends HarnessIntegration {
    */
   setWorkflowName(name: string | undefined): void {
     this.workflowName = name;
+  }
+
+  /** Expose the exact shared planning helpers to execution-preview consumers. */
+  public getExecutionPreviewHarness(): ExecutionPreviewHarness {
+    return {
+      provider: this.provider,
+      promptPreparer: this.promptPreparer,
+      executionPlanBuilder: this.executionPlanBuilder,
+    };
   }
 
   // ============================================================

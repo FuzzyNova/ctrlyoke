@@ -1,6 +1,6 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Ready to build. The compatibility contract it depends on has
+> **Status:** Step 5 landed. The compatibility contract it depends on has
 > landed (`src/types/CompatibilityTypes.ts`, `CompatibilityAnalyzer.ts`,
 > `ExecutionPropertyResolver.ts`, and the harness capability registry). The
 > redaction contract has **not** — see **Redaction and Access**, which now
@@ -26,6 +26,14 @@
 > bounded preview bodies, and deferred temp-file mutations. Live preparation
 > applies the same mutations, preserving the existing delivery order and
 > reference formatting. Direct references are stat-only and never read.
+>
+> **Step 5 landed:** `ExecutionPreviewService` assembles the complete
+> side-effect-free workflow or step snapshot from the shared property resolver,
+> compatibility analyzer, prompt planner, and execution-plan builder. It maps
+> commands, permissions, MCP, variables, conditions, limits, and deferred
+> mutations into preview DTOs and passes the result through the redactor before
+> returning. `CliIntegration.getExecutionPreviewHarness()` exposes the exact
+> live planning helpers to future dashboard/CLI entry points.
 >
 > **Priority:** P1
 
