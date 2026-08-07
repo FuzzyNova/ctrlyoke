@@ -144,7 +144,7 @@ export function useStepContextMenu({
           },
           {
             label: "Dry Run Step",
-            icon: "codicon-preview",
+            icon: "codicon-telescope",
             disabled: false,
             onClick: () => {
               useExecutionPreviewStore

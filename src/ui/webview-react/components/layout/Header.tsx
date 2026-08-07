@@ -61,7 +61,7 @@ function DryRunButton({
       title="Dry Run"
       aria-label="Dry Run"
     >
-      <i className={`codicon codicon-preview ${btnSize.icon}`} />
+      <i className={`codicon codicon-telescope ${btnSize.icon}`} />
     </button>
   );
 }
@@ -275,7 +275,7 @@ export const Header: React.FC<{
         items: [
           {
             label: "Dry Run",
-            icon: "codicon-preview",
+            icon: "codicon-telescope",
             disabled: false,
             onClick: openDryRunWorkflow,
           },

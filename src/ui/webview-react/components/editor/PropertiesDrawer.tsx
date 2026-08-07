@@ -311,10 +311,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     const stepIndex = selectedPromptIndex ?? steps.length;
     useExecutionPreviewStore
       .getState()
-      .open(
-        { kind: "step", stepIndex },
-        getExecutionPreviewEditorSnapshot()
-      );
+      .open({ kind: "step", stepIndex }, getExecutionPreviewEditorSnapshot());
   };
   // Resolved permission mode (prompt → workflow fallback) used for tab icon styling
   const resolvedPermMode =
@@ -864,7 +861,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 title="Dry Run Step"
                 aria-label="Dry Run Step"
               >
-                <i className="codicon codicon-preview" aria-hidden="true" />
+                <i className="codicon codicon-telescope" aria-hidden="true" />
               </button>
             </div>
             {/* Pre-Condition Section */}
