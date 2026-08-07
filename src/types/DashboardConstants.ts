@@ -588,6 +588,62 @@ export const HARNESS_IDS = {
 } as const;
 
 // ============================================================================
+// EXECUTION PREVIEW - Shared preview contract discriminants and limits
+// ============================================================================
+export const PREVIEW_SCOPES = {
+  WORKFLOW: "workflow",
+  STEP: "step",
+} as const;
+
+export const PREVIEW_STATUSES = {
+  CHECKING: "checking",
+  READY: "ready",
+} as const;
+
+export const PREVIEW_STEP_TYPES = {
+  PROMPT: "prompt",
+  SCRIPT: "script",
+} as const;
+
+export const PREVIEW_PERMISSION_ACTIONS = {
+  ALLOW: "allow",
+  DENY: "deny",
+} as const;
+
+export const PREVIEW_PERMISSION_RULE_STATUSES = {
+  APPLIED: "applied",
+  IGNORED: "ignored",
+  PARTIAL: "partial",
+  UNVERIFIED: "unverified",
+} as const;
+
+export const PREVIEW_PROPERTY_SOURCES = {
+  PROMPT: "prompt",
+  WORKFLOW: "workflow",
+  GLOBAL_DEFAULT: "global-default",
+} as const;
+
+export const PREVIEW_PROMPT_CATEGORIES = {
+  AGENT_INSTRUCTIONS: "agent-instructions",
+  SKILL_CONTENT: "skill-content",
+  PROMPT_TEXT: "prompt-text",
+  PRIOR_CONTEXT: "prior-context",
+  INLINE_REFERENCE: "inline-reference",
+  FILE_REFERENCE: "file-reference",
+  IMAGE_METADATA: "image-metadata",
+} as const;
+
+export const PREVIEW_TRUNCATION_REASONS = {
+  REFERENCE: "reference",
+  OVER_INLINE_CAP: "over-inline-cap",
+  CHUNK_COLLAPSED: "chunk-collapsed",
+  BODY_BUDGET: "body-budget",
+} as const;
+
+/** Total UTF-8 body budget for one serialized execution preview. */
+export const MAX_PREVIEW_BODY_BYTES = 1024 * 1024;
+
+// ============================================================================
 // CAPABILITY VOCABULARY - Shared compatibility contract discriminants
 // ============================================================================
 export const CAPABILITY_FIDELITIES = {
@@ -1637,6 +1693,21 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+export type PreviewScope = (typeof PREVIEW_SCOPES)[keyof typeof PREVIEW_SCOPES];
+export type PreviewStatus =
+  (typeof PREVIEW_STATUSES)[keyof typeof PREVIEW_STATUSES];
+export type PreviewStepType =
+  (typeof PREVIEW_STEP_TYPES)[keyof typeof PREVIEW_STEP_TYPES];
+export type PreviewPermissionAction =
+  (typeof PREVIEW_PERMISSION_ACTIONS)[keyof typeof PREVIEW_PERMISSION_ACTIONS];
+export type PreviewPermissionRuleStatus =
+  (typeof PREVIEW_PERMISSION_RULE_STATUSES)[keyof typeof PREVIEW_PERMISSION_RULE_STATUSES];
+export type PreviewPropertySource =
+  (typeof PREVIEW_PROPERTY_SOURCES)[keyof typeof PREVIEW_PROPERTY_SOURCES];
+export type PreviewPromptCategory =
+  (typeof PREVIEW_PROMPT_CATEGORIES)[keyof typeof PREVIEW_PROMPT_CATEGORIES];
+export type PreviewTruncationReason =
+  (typeof PREVIEW_TRUNCATION_REASONS)[keyof typeof PREVIEW_TRUNCATION_REASONS];
 /**
  * All valid target IDs for the file manager — harness IDs plus special dirs.
  * "ctrlyoke" → .ctrlyoke/agents|skills (workspace) or ~/.ctrlyoke/agents|skills (user)

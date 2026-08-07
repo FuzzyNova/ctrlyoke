@@ -5,6 +5,10 @@
 > `ExecutionPropertyResolver.ts`, and the harness capability registry). The
 > redaction contract has **not** — see **Redaction and Access**, which now
 > specifies what preview does in its absence rather than blocking on it.
+
+> **Step 1 landed:** the serializable execution-preview DTO contract, shared
+> preview constants, and the pure `PreviewRedactor` chokepoint with unit tests
+> are now in place. No preview consumers or side effects are included yet.
 >
 > **Priority:** P1
 
