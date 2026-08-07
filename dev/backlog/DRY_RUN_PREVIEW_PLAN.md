@@ -1,6 +1,6 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Step 8 landed. The compatibility contract it depends on has
+> **Status:** Step 9 landed. The compatibility contract it depends on has
 > landed (`src/types/CompatibilityTypes.ts`, `CompatibilityAnalyzer.ts`,
 > `ExecutionPropertyResolver.ts`, and the harness capability registry). The
 > redaction contract has **not** — see **Redaction and Access**, which now
@@ -55,6 +55,12 @@
 > superseded responses, clears on close, and tracks definition-head staleness
 > from existing requestless view snapshots. No modal or refresh trigger is
 > included yet.
+
+> **Step 9 landed:** `DryRunModal` now renders the redacted preview DTO in
+> workflow master/detail and step-only scopes. It uses the shared modal,
+> segmented tabs, narrow-layout selector, collapsed payload utility, diagnostic
+> badges, and the established copy/export/run actions. Entry-point wiring is
+> intentionally deferred to Step 10.
 >
 > **Priority:** P1
 
