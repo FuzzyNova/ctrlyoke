@@ -1,6 +1,10 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Proposed — needs the compatibility and redaction contracts
+> **Status:** Ready to build. The compatibility contract it depends on has
+> landed (`src/types/CompatibilityTypes.ts`, `CompatibilityAnalyzer.ts`,
+> `ExecutionPropertyResolver.ts`, and the harness capability registry). The
+> redaction contract has **not** — see **Redaction and Access**, which now
+> specifies what preview does in its absence rather than blocking on it.
 >
 > **Priority:** P1
 
@@ -323,14 +327,76 @@ mutation in some harnesses. Split it into:
 
 Real execution and preview both call `plan`; preview never calls `apply`.
 
-This contract is shared with tool-permission workspace configuration and should
-also replace misleading provider methods whose comments promise side effects
-they do not perform.
+**This contract already exists for permissions — extend it, do not invent a
+second one.** `ToolPermissionApplication` in
+`src/core/harness/shared/interfaces/IToolPermissionMapper.ts` already returns
+`{ cliArgs, workspaceMutation?, diagnostics }`, and `WorkspacePermissionMutation`
+already carries `path` plus deferred `apply()` / `restore()` callbacks that
+`CliIntegration` invokes at launch time. That is exactly the plan/apply/release
+shape, already shipped across all six mappers. The remaining work is bringing the
+other side-effecting preparation steps up to it.
+
+The side effects still fused into argument construction are:
+
+- **MCP config files** — `getMcpConfigArgs()` writes a config file as a side
+  effect of returning args (`getMcpConfigFilePath()` exists only so cleanup can
+  find it afterwards).
+- **Hook files** — `buildNotificationHookArgs()` /
+  `buildHeadlessUserHookArgs()` write hook settings while returning args, and
+  `cleanupPreviousPromptHooks()` deletes the previous prompt's files.
+- **Temp prompt files** — `CliPromptPreparer.createCategorizedPromptFiles()`
+  writes every categorized chunk through `TempFileManager` before returning the
+  reference string.
+
+Each becomes a planned mutation carrying its target path, its intended content,
+and a deferred `apply`, so that the argument array is computable without touching
+the filesystem.
+
+The assembly itself is currently inline in
+`CliIntegration.runExecutionSession()` — `buildCliArgs`, then hook args, then
+`prepareToolPermissions`, then `buildCliSuffix`. Extract that ordering into one
+shared builder so preview cannot drift from execution by reimplementing the
+order; `runExecutionSession()` then becomes plan-then-apply over the same
+builder. Preserving the existing arg order exactly is a hard requirement, not a
+nicety: the suffix/prepend rules encode real CLI parsing bugs (Codex `resume`
+after global flags, Claude hook args before variadic `--disallowedTools`).
 
 ## Redaction and Access
 
-- Run all preview DTOs through the centralized secrets/redaction service before
-  crossing a process, webview, hosted-server, log, or CLI-output boundary.
+**There is no centralized secrets/redaction service yet.**
+`SECRETS_AND_REDACTION_PLAN.md` is still Proposed, and the only redaction in the
+tree today is `ICliProvider.redactHeadlessStderr()` — a narrow per-provider
+stderr scrubber, not a DTO pipeline. Dry run must not block on that plan, and
+must not quietly ship without redaction either. It does two things instead:
+
+**1. Structural omission first.** The primary defense is that secrets never enter
+the DTO at all, which is stronger than scrubbing them afterwards and cannot be
+defeated by a pattern that fails to match. This is already the shape the contract
+implies and it must be enforced, not assumed:
+
+- `CommandPreview.environmentKeys: string[]` — key names only. The DTO has no
+  field capable of holding an environment value.
+- MCP servers contribute IDs, transports, and tool filters. `env` blocks
+  contribute key names only.
+- Session state contributes presence and resolution source, never content.
+- Tier 1 references contribute a path and `stat()` metadata, never bytes.
+
+A value that has no field to live in cannot leak through one.
+
+**2. One chokepoint for what remains.** What genuinely needs value-level
+treatment — variable values, hook command strings, inline config fragments — goes
+through a single `PreviewRedactor` module that every preview DTO passes through
+immediately before it is returned by the preview service, i.e. before any
+webview, hosted-server, log, or CLI-output boundary. First version applies
+conservative pattern-based masking of common credential shapes plus a
+`RedactionRule` list, and marks each masked span so the UI can render *that a
+value was redacted* rather than silently showing a plausible-looking wrong value.
+
+When the central service from `SECRETS_AND_REDACTION_PLAN.md` lands it replaces
+the *internals* of `PreviewRedactor`; the call sites and the DTO shape do not
+change. Keeping that single chokepoint is what makes the swap additive, so do not
+scatter masking logic into individual builders or into the modal.
+
 - Default to redacted values in the UI and CLI.
 - A reveal action, if added, must be local-only, explicit, and separately
   authorized; it must not make hosted transport carry the original secret.
@@ -482,6 +548,11 @@ existing behaviour. A local reveal flow is out of scope for the first version.
 - Cover categorized multi-file prompts and every provider.
 - Cover redaction at DTO, webview-message, hosted-transport, log, and CLI output
   boundaries.
+- Assert structural omission directly, not just masking: give a step an MCP
+  server with an `env` block and a secret-bearing environment, then assert the
+  serialized DTO contains the key names and does not contain the values
+  anywhere in `JSON.stringify(plan)`. This test must fail if someone later adds
+  a value-carrying field, which a masking-only test would not catch.
 - Cover unsupported/partial permission rules and workspace mutation previews.
 - Verify command display escaping independently on Windows and POSIX.
 - Assert preview performs no `readFile` on a Tier 1 reference at any size, and no
