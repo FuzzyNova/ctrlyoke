@@ -40,6 +40,82 @@ function cloneEvent(event: CliEvent): CliEvent {
   };
 }
 
+/**
+ * Provider streams and legacy histories can carry rich content blocks even
+ * though the shared ToolResult contract is string-only. Collapse them at the
+ * event-normalization boundary so every downstream renderer sees that contract.
+ */
+function normalizeToolResultText(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value == null) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((part) => {
+        if (typeof part === "string") {
+          return part;
+        }
+        if (
+          part != null &&
+          typeof part === "object" &&
+          "text" in part &&
+          typeof part.text === "string"
+        ) {
+          return part.text;
+        }
+        return JSON.stringify(part);
+      })
+      .filter((part): part is string => typeof part === "string")
+      .join("\n");
+  }
+
+  return JSON.stringify(value);
+}
+
+function normalizeToolResult(result: ToolResult): ToolResult {
+  const output = normalizeToolResultText(result.output);
+  const error = normalizeToolResultText(result.error);
+  if (output === result.output && error === result.error) {
+    return result;
+  }
+  return { ...result, output, error };
+}
+
+function normalizeEventToolResult(event: CliEvent): CliEvent {
+  switch (event.type) {
+    case CLI_EVENT_TYPES.TOOL_RESULT: {
+      const data = event.data as ToolResultData;
+      return {
+        ...event,
+        data: { ...data, result: normalizeToolResult(data.result) },
+      };
+    }
+    case CLI_EVENT_TYPES.TOOL_CALL: {
+      const data = event.data as ToolCall;
+      return data.result
+        ? {
+            ...event,
+            data: { ...data, result: normalizeToolResult(data.result) },
+          }
+        : event;
+    }
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const data = event.data as McpToolCallData;
+      return data.result
+        ? {
+            ...event,
+            data: { ...data, result: normalizeToolResult(data.result) },
+          }
+        : event;
+    }
+    default:
+      return event;
+  }
+}
+
 function normalizePath(pathValue: string | undefined): string | undefined {
   if (!pathValue) {
     return undefined;
@@ -523,7 +599,7 @@ export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
   const pending: PendingEvent[] = [];
 
   for (const originalEvent of events) {
-    const event = cloneEvent(originalEvent);
+    const event = normalizeEventToolResult(cloneEvent(originalEvent));
 
     if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
       const resultData = event.data as ToolResultData;
