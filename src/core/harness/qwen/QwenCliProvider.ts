@@ -124,6 +124,34 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
+    prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<string[]> {
+    const preparation = await this.planCliArgs(
+      prompt,
+      isInteractive,
+      extensionPath,
+      workspaceRoot,
+      sessionId,
+      workflowContext,
+      workspaceRoots
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planCliArgs(
     _prompt: PromptStep,
     _isInteractive: boolean,
     extensionPath: string,
@@ -135,8 +163,9 @@ export class QwenCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
-    }
-  ): Promise<string[]> {
+    },
+    _workspaceRoots?: readonly string[]
+  ): Promise<CliProviderPreparation> {
     const args: string[] = [];
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
@@ -145,12 +174,12 @@ export class QwenCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension or user MCP servers are enabled)
-    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(
+        this.planMcpConfigArgs(
           serverPath,
           wsRoot,
           workingFile,
@@ -158,8 +187,11 @@ export class QwenCliProvider implements ICliProvider {
           userServers
         )
     );
-    if (mcpArgs.length > 0) {
-      args.push(...mcpArgs);
+    if (
+      mcpPreparation.cliArgs.length > 0 ||
+      mcpPreparation.mutations.length > 0
+    ) {
+      args.push(...mcpPreparation.cliArgs);
       Log.debug("🔧 ctrlyoke MCP config added inline for Qwen");
     }
 
@@ -211,7 +243,11 @@ export class QwenCliProvider implements ICliProvider {
       `🔧 Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
     );
 
-    return args;
+    return {
+      cliArgs: args,
+      mutations: mcpPreparation.mutations,
+      diagnostics: mcpPreparation.diagnostics,
+    };
   }
 
   private redactMcpConfigArgs(args: string[]): string[] {

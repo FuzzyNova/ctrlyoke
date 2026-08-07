@@ -29,11 +29,7 @@ import {
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
-import type {
-  PermissionContext,
-  ToolPermissionApplication,
-  ToolPermissionConfig,
-} from "./shared/interfaces/IToolPermissionMapper";
+import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
 import {
   CliExecutionSession,
@@ -47,10 +43,10 @@ import { CliPromptRuntimeCoordinator } from "./shared/CliPromptRuntimeCoordinato
 import { CliResponseCollector } from "./shared/CliResponseCollector";
 import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
 import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
+import { ExecutionPlanBuilder } from "./shared/ExecutionPlanBuilder";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
-import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
@@ -78,6 +74,7 @@ interface CliIntegrationServices {
   promptRuntimeCoordinator: CliPromptRuntimeCoordinator;
   transportCoordinator: CliTransportCoordinator;
   executionRunner: CliExecutionRunner;
+  executionPlanBuilder: ExecutionPlanBuilder;
 }
 
 /**
@@ -164,6 +161,9 @@ export class CliIntegration extends HarnessIntegration {
   /** Execution orchestration helper extracted from CliIntegration. */
   private readonly executionRunner: CliExecutionRunner;
 
+  /** Shared side-effect-free execution-plan assembly used by launch paths. */
+  private readonly executionPlanBuilder: ExecutionPlanBuilder;
+
   /** Workflow display name used for logging */
   private workflowName?: string;
 
@@ -208,6 +208,7 @@ export class CliIntegration extends HarnessIntegration {
     this.promptRuntimeCoordinator = services.promptRuntimeCoordinator;
     this.transportCoordinator = services.transportCoordinator;
     this.executionRunner = services.executionRunner;
+    this.executionPlanBuilder = services.executionPlanBuilder;
   }
 
   // ============================================================
@@ -769,6 +770,16 @@ export class CliIntegration extends HarnessIntegration {
       },
     });
 
+    const executionPlanBuilder = new ExecutionPlanBuilder({
+      provider: this.provider,
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getWorkspaceRoots: () => this.getWorkspaceRoots(),
+      getExtensionPath: () => this.platform.getExtensionPath(),
+      getExecutionMode: () => this.getExecutionMode(),
+      getEnabledHookNotificationEvents: () =>
+        this.getEnabledHookNotificationEvents(),
+    });
+
     const executionRunner = new CliExecutionRunner({
       provider: this.provider,
       transportCoordinator,
@@ -806,6 +817,7 @@ export class CliIntegration extends HarnessIntegration {
       promptRuntimeCoordinator,
       transportCoordinator,
       executionRunner,
+      executionPlanBuilder,
     };
   }
 
@@ -890,110 +902,9 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     const workspaceRoot = this.getWorkspaceRoot();
-    const extensionPath = this.platform.getExtensionPath();
-
-    const baseArgs = await this.provider.buildCliArgs(
-      session.prompt,
-      isInteractive,
-      extensionPath,
-      workspaceRoot,
-      session.resolvedSessionId,
-      session.workflowContext,
-      this.getWorkspaceRoots()
-    );
-
-    // Dispatch hook setup at the integration layer so providers don't have to
-    // remember to handle both interactive and headless cases in buildCliArgs().
-    if (workspaceRoot) {
-      const resolvedHooks = session.workflowContext?.resolvedProperties?.hooks;
-      const hooksExplicitlyDisabled = resolvedHooks === null;
-      const userHooks = resolvedHooks ?? undefined;
-      const enabledNotificationHookEvents = hooksExplicitlyDisabled
-        ? []
-        : this.getEnabledHookNotificationEvents();
-      const promptIndex = session.workflowContext?.promptIndex ?? 0;
-      const workingFilePath = session.workflowContext?.workingFilePath;
-
-      // Remove hook artifacts from the previous prompt before setting up new ones.
-      // Providers that write per-prompt files (Copilot: .github/hooks/*.json,
-      // Claude: .ctrlyoke/temp/claude-hook-settings-*.json) implement this so
-      // that hooks from earlier prompts don't persist into the current prompt's run.
-      // Skip when hooks are explicitly disabled (null) — no prior hooks to clean up.
-      if (!hooksExplicitlyDisabled) {
-        await this.provider.cleanupPreviousPromptHooks?.(workspaceRoot);
-      }
-
-      if (isInteractive) {
-        // Notification hooks (ctrlyoke completion detection + user hooks combined)
-        const hookArgs =
-          (await this.provider.buildNotificationHookArgs?.(
-            extensionPath,
-            workspaceRoot,
-            promptIndex,
-            workingFilePath,
-            userHooks,
-            enabledNotificationHookEvents
-          )) ?? [];
-        baseArgs.push(...hookArgs);
-      } else if (
-        this.provider.buildHeadlessUserHookArgs &&
-        !hooksExplicitlyDisabled
-      ) {
-        // Headless: call when the provider supports it (unless hooks explicitly disabled),
-        // even with no user hooks — guarantees hooks from a previous prompt are cleared
-        // before this prompt runs (providers with per-prompt files or settings.json
-        // registration both handle the empty-hooks case correctly).
-        const hookArgs =
-          (await this.provider.buildHeadlessUserHookArgs(
-            extensionPath,
-            workspaceRoot,
-            promptIndex,
-            workingFilePath,
-            userHooks,
-            enabledNotificationHookEvents
-          )) ?? [];
-        // Prepend so hook args appear before --disallowedTools (Claude variadic flag issue)
-        baseArgs.unshift(...hookArgs);
-      }
-    }
-
-    // Prepare permissions through one contract so CLI args, workspace mutations,
-    // and lossy-translation diagnostics cannot be separated by the call path.
-    // Use session.resolvedProperties (prompt > workflow > settings) so prompt-level
-    // overrides take precedence over workflow-level defaults.
-    // Merge any server-level deniedTools from McpServerConfig objects before dispatching.
-    const effectiveToolPermissions = mergeServerDeniedTools(
-      session.resolvedProperties?.toolPermissions,
-      session.resolvedProperties?.mcpServers
-    );
-    const permissionContext: PermissionContext = {
-      isInteractive,
-      workspaceRoot,
-      workingFilePath: session.workflowContext?.workingFilePath,
-    };
-    const permissionApplication: ToolPermissionApplication = this.provider
-      .prepareToolPermissions
-      ? await this.provider.prepareToolPermissions(
-          effectiveToolPermissions,
-          permissionContext
-        )
-      : effectiveToolPermissions === null ||
-          typeof this.provider.toolPermissionMapper.prepare !== "function"
-        ? { cliArgs: [], diagnostics: [] }
-        : await this.provider.toolPermissionMapper.prepare(
-            effectiveToolPermissions ?? {
-              mode: ConfigurationUtils.getCliToolPermissions(),
-              allowedTools: ConfigurationUtils.getCliAllowedTools(),
-              deniedTools: ConfigurationUtils.getCliDeniedTools(),
-            },
-            permissionContext
-          );
-
-    if (permissionApplication.workspaceMutation) {
-      await permissionApplication.workspaceMutation.apply();
-    }
-    const routedDiagnostics = permissionApplication.diagnostics.map(
-      (diagnostic) => {
+    const executionPlan = await this.executionPlanBuilder.plan(session);
+    const routedDiagnostics =
+      executionPlan.permissionApplication.diagnostics.map((diagnostic) => {
         const workflowContext = session.workflowContext;
         if (!workflowContext) {
           return diagnostic;
@@ -1008,28 +919,14 @@ export class CliIntegration extends HarnessIntegration {
                 }
               : { kind: FINAL_STEP_PHASES.FINAL_STEP },
         };
-      }
-    );
+      });
     for (const diagnostic of routedDiagnostics) {
       Log.warn(`[PermissionCompatibility] ${diagnostic.message}`);
     }
     session.workflowContext?.reportCompatibilityDiagnostics?.(
       routedDiagnostics
     );
-    baseArgs.push(...permissionApplication.cliArgs);
-
-    // Append suffix args last — these are args that must follow ALL global flags.
-    // Used by Codex for "resume <session-id>": a subcommand that must come after
-    // --enable hooks and -c hooks.state=... to avoid them being misread as subcommand args.
-    const suffixArgs =
-      this.provider.buildCliSuffix?.(
-        session.resolvedSessionId,
-        session.workflowContext
-      ) ?? [];
-    if (suffixArgs.length > 0) {
-      baseArgs.push(...suffixArgs);
-    }
-
+    await this.executionPlanBuilder.apply(executionPlan);
     const executionSidecar = workspaceRoot
       ? this.provider.startExecutionSidecar?.({
           workspaceRoot,
@@ -1043,13 +940,21 @@ export class CliIntegration extends HarnessIntegration {
     let success: boolean;
     try {
       success = isInteractive
-        ? await this.executionRunner.executeInteractive(session, baseArgs)
+        ? await this.executionRunner.executeInteractive(
+            session,
+            executionPlan.cliArgs,
+            executionPlan.resolvedCommand
+          )
         : await (() => {
             this.warnIfHeadlessWithoutPermissions(
-              effectiveToolPermissions,
+              executionPlan.effectiveToolPermissions,
               mode
             );
-            return this.executionRunner.executeHeadless(session, baseArgs);
+            return this.executionRunner.executeHeadless(
+              session,
+              executionPlan.cliArgs,
+              executionPlan.resolvedCommand
+            );
           })();
     } finally {
       executionSidecar?.stop();

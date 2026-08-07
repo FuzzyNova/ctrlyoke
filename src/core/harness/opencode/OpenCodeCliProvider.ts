@@ -36,7 +36,6 @@ import {
   resolveOpenCodePermissionCollisionContext,
   type OpenCodeInlineConfig,
   type OpenCodeInlineConfigBuildOptions,
-  type OpenCodePermissionCollisionContext,
 } from "./OpenCodeInlineConfig";
 
 /**
@@ -101,8 +100,6 @@ export class OpenCodeCliProvider implements ICliProvider {
   private pendingUserHooksEnv: string | undefined;
   /** Artifacts created only by the documented fallback path. */
   private fallbackPluginArtifactPaths: string[] = [];
-  private pendingPermissionCollisionContext: OpenCodePermissionCollisionContext =
-    { topLevelKeys: new Set(), nestedKeysByTool: new Map() };
 
   /**
    * Build the ctrlyoke-owned OpenCode config without performing any I/O.
@@ -174,6 +171,34 @@ export class OpenCodeCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt — that's handled separately)
    */
   async buildCliArgs(
+    prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<string[]> {
+    const preparation = await this.planCliArgs(
+      prompt,
+      isInteractive,
+      extensionPath,
+      workspaceRoot,
+      sessionId,
+      workflowContext,
+      workspaceRoots
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planCliArgs(
     _prompt: PromptStep,
     isInteractive: boolean,
     extensionPath: string,
@@ -185,16 +210,13 @@ export class OpenCodeCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
-    }
-  ): Promise<string[]> {
+    },
+    _workspaceRoots?: readonly string[]
+  ): Promise<CliProviderPreparation> {
     // The integration is reused across prompts in one workflow. Reset before
     // optional MCP or permission preparation so a later prompt cannot inherit
     // either slice when its workspace or policy is absent.
-    this.pendingInlineConfig = { plugin: [] };
-    this.pendingUserHooksEnv = undefined;
-    this.pendingPermissionCollisionContext =
-      await resolveOpenCodePermissionCollisionContext(workspaceRoot);
-    this.pendingInlineConfig.plugin = this.buildInlineConfig({
+    const inlinePlugin = this.buildInlineConfig({
       extensionPath,
     }).plugin;
 
@@ -206,12 +228,12 @@ export class OpenCodeCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(
+        this.planMcpConfigArgs(
           serverPath,
           wsRoot,
           workingFile,
@@ -219,8 +241,11 @@ export class OpenCodeCliProvider implements ICliProvider {
           userServers
         )
     );
-    if (mcpArgs.length > 0) {
-      args.push(...mcpArgs);
+    if (
+      mcpPreparation.cliArgs.length > 0 ||
+      mcpPreparation.mutations.length > 0
+    ) {
+      args.push(...mcpPreparation.cliArgs);
       Log.debug("🔧 ctrlyoke MCP config prepared for OpenCode inline delivery");
     }
 
@@ -234,7 +259,6 @@ export class OpenCodeCliProvider implements ICliProvider {
     // Model selection — use resolved property if available
     const model = this.getModel(resolvedModel);
     if (model) {
-      this.resolvedCurrentModel = model;
       args.push("-m", model);
     }
 
@@ -260,13 +284,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     }
 
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
-    this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
     if (workspaceRoot) {
-      await this.ensureExternalPluginIsLoadable(
-        workspaceRoot,
-        extensionPath,
-        userHooks
-      );
+      // Plugin verification and the compatibility fallback are deferred until
+      // the execution plan is applied immediately before process start.
     }
 
     // Extra CLI flags from additionalArgs (appended before prompt positional arg)
@@ -278,7 +298,36 @@ export class OpenCodeCliProvider implements ICliProvider {
       Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
-    return args;
+    return {
+      cliArgs: args,
+      mutations: [
+        {
+          description: "Prepare OpenCode inline execution state",
+          apply: async () => {
+            this.pendingInlineConfig = { plugin: inlinePlugin };
+            this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
+            if (model) {
+              this.resolvedCurrentModel = model;
+            }
+          },
+        },
+        ...(workspaceRoot
+          ? [
+              {
+                description: "Verify OpenCode completion plugin",
+                apply: async () =>
+                  this.ensureExternalPluginIsLoadable(
+                    workspaceRoot,
+                    extensionPath,
+                    userHooks
+                  ),
+              },
+            ]
+          : []),
+        ...mcpPreparation.mutations,
+      ],
+      diagnostics: mcpPreparation.diagnostics,
+    };
   }
 
   /**
@@ -428,24 +477,61 @@ export class OpenCodeCliProvider implements ICliProvider {
     toolPermissions: ToolPermissionConfig | null | undefined,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    const application = await this.planToolPermissions(
+      toolPermissions,
+      context
+    );
+    await applyPreparedMutations(application.mutations ?? []);
+    return application;
+  }
+
+  async planToolPermissions(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
     if (toolPermissions === null || toolPermissions === undefined) {
-      delete this.pendingInlineConfig.permission;
-      return { cliArgs: [], diagnostics: [] };
+      return {
+        cliArgs: [],
+        mutations: [
+          {
+            description: "Clear OpenCode inline permission configuration",
+            apply: async () => {
+              delete this.pendingInlineConfig.permission;
+            },
+          },
+        ],
+        diagnostics: [],
+      };
     }
+    const collisionContext =
+      context.permissionCollisionContext ??
+      (await resolveOpenCodePermissionCollisionContext(context.workspaceRoot));
     const policy = toolPermissions
       ? this.toolPermissionMapper.buildPermissionPolicy(
           toolPermissions,
-          context.permissionCollisionContext ??
-            this.pendingPermissionCollisionContext
+          collisionContext
         )
       : undefined;
-
-    if (policy) {
-      this.pendingInlineConfig.permission = policy;
-    } else {
-      delete this.pendingInlineConfig.permission;
-    }
-    return this.toolPermissionMapper.prepare(toolPermissions, context);
+    const application = await this.toolPermissionMapper.prepare(
+      toolPermissions,
+      context
+    );
+    return {
+      ...application,
+      mutations: [
+        ...(application.mutations ?? []),
+        {
+          description: "Set OpenCode inline permission configuration",
+          apply: async () => {
+            if (policy) {
+              this.pendingInlineConfig.permission = policy;
+            } else {
+              delete this.pendingInlineConfig.permission;
+            }
+          },
+        },
+      ],
+    };
   }
 
   async cleanupWorkspaceArtifacts(

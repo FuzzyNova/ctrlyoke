@@ -139,7 +139,7 @@ export class CodexCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
-    _prompt: PromptStep,
+    prompt: PromptStep,
     isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,
@@ -153,6 +153,34 @@ export class CodexCliProvider implements ICliProvider {
     },
     workspaceRoots?: readonly string[]
   ): Promise<string[]> {
+    const preparation = await this.planCliArgs(
+      prompt,
+      isInteractive,
+      extensionPath,
+      workspaceRoot,
+      sessionId,
+      workflowContext,
+      workspaceRoots
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planCliArgs(
+    _prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<CliProviderPreparation> {
     const args: string[] = [];
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
@@ -163,12 +191,12 @@ export class CodexCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(
+        this.planMcpConfigArgs(
           serverPath,
           wsRoot,
           workingFile,
@@ -176,8 +204,11 @@ export class CodexCliProvider implements ICliProvider {
           userServers
         )
     );
-    if (mcpArgs.length > 0) {
-      args.push(...mcpArgs);
+    if (
+      mcpPreparation.cliArgs.length > 0 ||
+      mcpPreparation.mutations.length > 0
+    ) {
+      args.push(...mcpPreparation.cliArgs);
       Log.debug("🔧 MCP server config added for dynamic queue extension");
     }
 
@@ -238,7 +269,11 @@ export class CodexCliProvider implements ICliProvider {
     // Note: "resume <session-id>" is NOT added here — it must appear AFTER all global
     // flags (hooks, permissions). See buildCliSuffix().
 
-    return args;
+    return {
+      cliArgs: args,
+      mutations: mcpPreparation.mutations,
+      diagnostics: mcpPreparation.diagnostics,
+    };
   }
 
   /**

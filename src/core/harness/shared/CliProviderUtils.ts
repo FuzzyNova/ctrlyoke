@@ -10,6 +10,10 @@ import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/ICliProvider";
+import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+} from "./interfaces/PreparedMutation";
 
 const execFileAsync = promisify(execFile);
 
@@ -291,39 +295,86 @@ export class CliProviderUtils {
       userServers?: McpServerConfig[]
     ) => Promise<string[] | null>
   ): Promise<string[]> {
+    const preparation = await CliProviderUtils.planMcpConfigBlock(
+      workflowContext,
+      workspaceRoot,
+      extensionPath,
+      async (
+        mcpServerPath,
+        resolvedWorkspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers
+      ) => ({
+        cliArgs:
+          (await getMcpConfigArgs(
+            mcpServerPath,
+            resolvedWorkspaceRoot,
+            workingFilePath,
+            additionalEnv,
+            userServers
+          )) ?? [],
+        mutations: [],
+        diagnostics: [],
+      })
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  /**
+   * Resolve the shared MCP decision without applying the provider's deferred
+   * mutation.  Execution-plan assembly uses this method so preview and launch
+   * consume the same provider preparation result.
+   */
+  static async planMcpConfigBlock(
+    workflowContext:
+      | {
+          promptIndex: number;
+          allPrompts: unknown[];
+          filePath?: string;
+          resolvedProperties?: ResolvedProperties;
+          workingFilePath?: string;
+        }
+      | undefined,
+    workspaceRoot: string | undefined,
+    extensionPath: string,
+    planMcpConfigArgs: (
+      mcpServerPath: string | undefined,
+      workspaceRoot: string,
+      workingFilePath?: string,
+      additionalEnv?: Record<string, string>,
+      userServers?: McpServerConfig[]
+    ) => Promise<CliProviderPreparation>
+  ): Promise<CliProviderPreparation> {
     if (!workflowContext || !workspaceRoot) {
-      return [];
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
     const mcpServers = workflowContext.resolvedProperties?.mcpServers;
-
-    // A McpServerConfig object with id === "ctrlyoke" is treated as the built-in
-    // ctrlyoke server — it may carry a deniedTools list for per-tool access control.
     const ctrlyokeServerObj = (mcpServers ?? []).find(
-      (s): s is McpServerConfig =>
-        typeof s === "object" && s !== null && s.id === "ctrlyoke"
+      (server): server is McpServerConfig =>
+        typeof server === "object" &&
+        server !== null &&
+        server.id === "ctrlyoke"
     );
     const hasCtrlYokeServer =
       (mcpServers != null && mcpServers.includes("ctrlyoke")) ||
       !!ctrlyokeServerObj;
-
-    // Extract user-defined server configs (objects with id !== "ctrlyoke")
     const userServers = (mcpServers ?? []).filter(
-      (s): s is McpServerConfig =>
-        typeof s === "object" && s !== null && s.id !== "ctrlyoke"
+      (server): server is McpServerConfig =>
+        typeof server === "object" &&
+        server !== null &&
+        server.id !== "ctrlyoke"
     );
 
-    // Trigger MCP config if "ctrlyoke" is listed OR user-defined servers are present
     if (!hasCtrlYokeServer && userServers.length === 0) {
-      return [];
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
-    // Only include the ctrlyoke server path when "ctrlyoke" is in the list
     const mcpServerPath = hasCtrlYokeServer
       ? path.join(extensionPath, "out/mcp-server.js")
       : undefined;
-
-    // ctrlyoke-specific env vars — only relevant when the ctrlyoke server is included
     const additionalEnv: Record<string, string> | undefined = hasCtrlYokeServer
       ? (() => {
           const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
@@ -337,20 +388,13 @@ export class CliProviderUtils {
         })()
       : undefined;
 
-    const mcpArgs = await getMcpConfigArgs(
+    return planMcpConfigArgs(
       mcpServerPath,
       workspaceRoot,
       workflowContext.workingFilePath,
       additionalEnv,
       userServers.length > 0 ? userServers : undefined
     );
-
-    if (mcpArgs) {
-      Log.debug("🔧 MCP server config added for dynamic queue extension");
-      return mcpArgs;
-    }
-
-    return [];
   }
 
   /**

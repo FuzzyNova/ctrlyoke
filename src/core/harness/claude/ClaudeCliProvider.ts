@@ -136,6 +136,34 @@ export class ClaudeCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
+    prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<string[]> {
+    const preparation = await this.planCliArgs(
+      prompt,
+      isInteractive,
+      extensionPath,
+      workspaceRoot,
+      sessionId,
+      workflowContext,
+      workspaceRoots
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planCliArgs(
     _prompt: PromptStep,
     _isInteractive: boolean,
     extensionPath: string,
@@ -149,7 +177,7 @@ export class ClaudeCliProvider implements ICliProvider {
       workingFilePath?: string;
     },
     workspaceRoots?: readonly string[]
-  ): Promise<string[]> {
+  ): Promise<CliProviderPreparation> {
     const args: string[] = [];
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
@@ -158,12 +186,12 @@ export class ClaudeCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(
+        this.planMcpConfigArgs(
           serverPath,
           wsRoot,
           workingFile,
@@ -171,8 +199,11 @@ export class ClaudeCliProvider implements ICliProvider {
           userServers
         )
     );
-    if (mcpArgs.length > 0) {
-      args.push(...mcpArgs);
+    if (
+      mcpPreparation.cliArgs.length > 0 ||
+      mcpPreparation.mutations.length > 0
+    ) {
+      args.push(...mcpPreparation.cliArgs);
       // Auto-approve ctrlyoke MCP tools only when the ctrlyoke server is included
       // Claude uses mcp__servername pattern to match all tools from a server
       const mcpServersResolved =
@@ -275,7 +306,11 @@ export class ClaudeCliProvider implements ICliProvider {
     // Note: Prompt is NOT included here - it's a positional argument
     // handled by the execution methods
 
-    return args;
+    return {
+      cliArgs: args,
+      mutations: mcpPreparation.mutations,
+      diagnostics: mcpPreparation.diagnostics,
+    };
   }
 
   /**

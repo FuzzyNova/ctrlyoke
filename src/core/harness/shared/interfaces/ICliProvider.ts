@@ -18,6 +18,7 @@ import type {
   McpServerConfig,
   UserHookConfig,
 } from "../../../../types/CtrlYokeTypes";
+import type { ResolvedProperties } from "../../../../utils/PropertyResolver";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type { HarnessId } from "../../../../types/DashboardConstants";
 import type { CliEvent } from "../../../../types/CliOutputTypes";
@@ -212,6 +213,26 @@ export interface ICliProvider {
   ): Promise<string[]>;
 
   /**
+   * Assemble provider arguments and deferred provider-owned mutations without
+   * touching the workspace or process state.
+   */
+  planCliArgs?(
+    prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<CliProviderPreparation>;
+
+  /**
    * Build CLI arguments for headless mode
    * Handles both direct prompts and file references identically
    * @param baseArgs Base arguments array
@@ -352,6 +373,12 @@ export interface ICliProvider {
    * outputs must be returned through this application contract.
    */
   prepareToolPermissions?(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication>;
+
+  /** Pure permission preparation for shared execution-plan assembly. */
+  planToolPermissions?(
     toolPermissions: ToolPermissionConfig | null | undefined,
     context: PermissionContext
   ): Promise<ToolPermissionApplication>;

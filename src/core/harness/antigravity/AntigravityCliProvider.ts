@@ -137,6 +137,34 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   async buildCliArgs(
+    prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<string[]> {
+    const preparation = await this.planCliArgs(
+      prompt,
+      isInteractive,
+      extensionPath,
+      workspaceRoot,
+      sessionId,
+      workflowContext,
+      workspaceRoots
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planCliArgs(
     _prompt: PromptStep,
     _isInteractive: boolean,
     extensionPath: string,
@@ -150,26 +178,8 @@ export class AntigravityCliProvider implements ICliProvider {
       workingFilePath?: string;
     },
     workspaceRoots?: readonly string[]
-  ): Promise<string[]> {
-    this.statusLineToken = randomUUID();
-    this.statusLineDirectory = undefined;
-    this.statusLineEnabledForPrompt = false;
-    this.statusLineForwardCommand = undefined;
-    this.statusLineSidecar = undefined;
-    this.streamJsonUsage.reset();
-    this.logParser.setStatuslineSnapshot();
-    this.logParser.setStreamJsonUsage();
-
-    if (
-      workspaceRoot &&
-      ConfigurationUtils.shouldTrackAntigravityStatusLine()
-    ) {
-      await this.registerStatusLine(
-        extensionPath,
-        workspaceRoot,
-        workflowContext?.workingFilePath ?? workspaceRoot
-      );
-    }
+  ): Promise<CliProviderPreparation> {
+    const statusLineToken = randomUUID();
 
     const args: string[] = [];
     const resolvedModel = workflowContext?.resolvedProperties?.model;
@@ -179,12 +189,12 @@ export class AntigravityCliProvider implements ICliProvider {
     // MCP configuration (experimental — see isMcpEnabled). agy auto-discovers
     // .agents/mcp_config.json, so no CLI arg is returned; this just writes the
     // file via the tracker when enabled.
-    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(
+        this.planMcpConfigArgs(
           serverPath,
           wsRoot,
           workingFile,
@@ -192,8 +202,11 @@ export class AntigravityCliProvider implements ICliProvider {
           userServers
         )
     );
-    if (mcpArgs.length > 0) {
-      args.push(...mcpArgs);
+    if (
+      mcpPreparation.cliArgs.length > 0 ||
+      mcpPreparation.mutations.length > 0
+    ) {
+      args.push(...mcpPreparation.cliArgs);
     }
 
     const model = this.validateAndGetModel(resolvedModel);
@@ -220,7 +233,36 @@ export class AntigravityCliProvider implements ICliProvider {
       args.push(...parseArgString(additionalArgs));
     }
 
-    return args;
+    return {
+      cliArgs: args,
+      mutations: [
+        {
+          description: "Prepare Antigravity prompt runtime state",
+          apply: async () => {
+            this.statusLineToken = statusLineToken;
+            this.statusLineDirectory = undefined;
+            this.statusLineEnabledForPrompt = false;
+            this.statusLineForwardCommand = undefined;
+            this.statusLineSidecar = undefined;
+            this.streamJsonUsage.reset();
+            this.logParser.setStatuslineSnapshot();
+            this.logParser.setStreamJsonUsage();
+            if (
+              workspaceRoot &&
+              ConfigurationUtils.shouldTrackAntigravityStatusLine()
+            ) {
+              await this.registerStatusLine(
+                extensionPath,
+                workspaceRoot,
+                workflowContext?.workingFilePath ?? workspaceRoot
+              );
+            }
+          },
+        },
+        ...mcpPreparation.mutations,
+      ],
+      diagnostics: mcpPreparation.diagnostics,
+    };
   }
 
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {

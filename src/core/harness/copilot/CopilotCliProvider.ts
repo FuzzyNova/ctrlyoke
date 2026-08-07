@@ -19,7 +19,6 @@ import {
   PATH_CONSTANTS,
 } from "../../../utils/ConfigurationUtils";
 import {
-  initializeModelRegistry,
   isCliModelSupported,
   isRegistryInitialized,
 } from "../../../utils/ModelRegistry";
@@ -140,6 +139,34 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
+    prompt: PromptStep,
+    isInteractive: boolean,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workingFilePath?: string;
+    },
+    workspaceRoots?: readonly string[]
+  ): Promise<string[]> {
+    const preparation = await this.planCliArgs(
+      prompt,
+      isInteractive,
+      extensionPath,
+      workspaceRoot,
+      sessionId,
+      workflowContext,
+      workspaceRoots
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planCliArgs(
     _prompt: PromptStep,
     _isInteractive: boolean,
     extensionPath: string,
@@ -153,13 +180,11 @@ export class CopilotCliProvider implements ICliProvider {
       workingFilePath?: string;
     },
     workspaceRoots?: readonly string[]
-  ): Promise<string[]> {
-    this.enablePromptModeRepoHooksForHeadlessRun = false;
-
+  ): Promise<CliProviderPreparation> {
     // Generate a fresh per-invocation OTel export path (or clear it) every prompt.
     // Must run unconditionally — the parser/provider instances are reused across
     // prompts, so a stale path from a previous invocation must never leak forward.
-    this.otelFilePath = workspaceRoot
+    const otelFilePath = workspaceRoot
       ? path.join(
           workspaceRoot,
           PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -170,8 +195,6 @@ export class CopilotCliProvider implements ICliProvider {
           )
         )
       : undefined;
-    this.logParser.setOtelFilePath(this.otelFilePath);
-
     const args: string[] = [];
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
@@ -181,12 +204,12 @@ export class CopilotCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+    const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
       workflowContext,
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(
+        this.planMcpConfigArgs(
           serverPath,
           wsRoot,
           workingFile,
@@ -194,8 +217,11 @@ export class CopilotCliProvider implements ICliProvider {
           userServers
         )
     );
-    if (mcpArgs.length > 0) {
-      args.push(...mcpArgs);
+    if (
+      mcpPreparation.cliArgs.length > 0 ||
+      mcpPreparation.mutations.length > 0
+    ) {
+      args.push(...mcpPreparation.cliArgs);
       // Auto-approve ctrlyoke MCP tools only when the ctrlyoke server is included
       const mcpServersResolved =
         workflowContext?.resolvedProperties?.mcpServers ?? [];
@@ -281,7 +307,21 @@ export class CopilotCliProvider implements ICliProvider {
 
     Log.debug(`🔧 CLI arguments: ${JSON.stringify(args)}`);
 
-    return args;
+    return {
+      cliArgs: args,
+      mutations: [
+        {
+          description: "Prepare Copilot prompt runtime state",
+          apply: async () => {
+            this.enablePromptModeRepoHooksForHeadlessRun = false;
+            this.otelFilePath = otelFilePath;
+            this.logParser.setOtelFilePath(otelFilePath);
+          },
+        },
+        ...mcpPreparation.mutations,
+      ],
+      diagnostics: mcpPreparation.diagnostics,
+    };
   }
 
   /**
@@ -300,11 +340,11 @@ export class CopilotCliProvider implements ICliProvider {
       return "";
     }
 
-    // Lazily initialize the registry if not yet done (CLI mode).
-    // queryCopilotCliModels() runs `copilot help config` — no VS Code context needed.
-    // queryLmModels() falls back to the static list via the vscode shim.
+    // Planning must remain side-effect free. The registry is normally loaded
+    // during extension startup; when it is not, preserve the requested model
+    // rather than spawning a discovery command while assembling a plan.
     if (!isRegistryInitialized()) {
-      await initializeModelRegistry();
+      return requestedModel;
     }
 
     // Check if model is supported by CLI (using dynamically discovered models)

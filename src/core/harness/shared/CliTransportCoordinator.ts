@@ -61,13 +61,15 @@ export interface CliExecutionTransportCoordinator {
     args: string[],
     promptArgument: string,
     tempFilePaths: string[],
-    resolvedSessionId?: string
+    resolvedSessionId?: string,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<{ success: boolean; sessionId?: string }>;
   startInteractiveProcess(
     args: string[],
     promptArgument: string,
     workflowContext?: WorkflowContext,
-    env?: Record<string, string>
+    env?: Record<string, string>,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<void>;
   executeHeadless(
     args: string[],
@@ -80,7 +82,8 @@ export interface CliExecutionTransportCoordinator {
       headlessLogTail?: HeadlessLogTail;
     }) => Promise<boolean>,
     env?: Record<string, string>,
-    source?: HeadlessStreamingSource
+    source?: HeadlessStreamingSource,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -104,14 +107,15 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     args: string[],
     promptArgument: string,
     tempFilePaths: string[],
-    resolvedSessionId?: string
+    resolvedSessionId?: string,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
-      const interactiveArgs = this.deps.provider.buildInteractiveArgs(
-        args,
-        promptArgument
-      );
-      const command = await this.resolveProviderCommand(interactiveArgs);
+      const command =
+        resolvedCommand ??
+        (await this.resolveProviderCommand(
+          this.deps.provider.buildInteractiveArgs(args, promptArgument)
+        ));
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
@@ -191,13 +195,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     args: string[],
     promptArgument: string,
     workflowContext?: WorkflowContext,
-    env?: Record<string, string>
+    env?: Record<string, string>,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<void> {
-    const interactiveArgs = this.deps.provider.buildInteractiveArgs(
-      args,
-      promptArgument
-    );
-    const command = await this.resolveProviderCommand(interactiveArgs);
+    const command =
+      resolvedCommand ??
+      (await this.resolveProviderCommand(
+        this.deps.provider.buildInteractiveArgs(args, promptArgument)
+      ));
 
     this.deps.hostCallbacks.onBeforeInteractiveStart(workflowContext);
     this.deps.hostCallbacks.onCommandPrepared({
@@ -361,7 +366,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       headlessLogTail?: HeadlessLogTail;
     }) => Promise<boolean>,
     env?: Record<string, string>,
-    source?: HeadlessStreamingSource
+    source?: HeadlessStreamingSource,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<boolean> {
     try {
       if (tempFilePaths.length > 0) {
@@ -372,11 +378,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         Log.info("🚀 Starting headless mode with direct prompt (fast path)");
       }
 
-      const headlessArgs = this.deps.provider.buildHeadlessArgs(
-        args,
-        promptArgument
-      );
-      const command = await this.resolveProviderCommand(headlessArgs);
+      const command =
+        resolvedCommand ??
+        (await this.resolveProviderCommand(
+          this.deps.provider.buildHeadlessArgs(args, promptArgument)
+        ));
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,

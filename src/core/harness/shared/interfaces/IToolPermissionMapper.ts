@@ -46,6 +46,8 @@ export type WorkspacePermissionMutation = PreparedMutation;
 export interface ToolPermissionApplication {
   readonly cliArgs: string[];
   readonly workspaceMutation?: WorkspacePermissionMutation;
+  /** Additional process-local or workspace mutations owned by the provider. */
+  readonly mutations?: PreparedMutation[];
   readonly diagnostics: CompatibilityDiagnostic[];
 }
 

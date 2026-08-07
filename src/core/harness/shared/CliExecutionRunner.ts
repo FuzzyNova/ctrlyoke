@@ -22,6 +22,7 @@ import { HookEventMonitor } from "./HookEventMonitor";
 import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
 import type { CliExecutionTransportCoordinator } from "./CliTransportCoordinator";
+import type { CliResolvedCommand } from "./CliLauncherResolver";
 
 interface CliInteractiveStartupCoordinatorLike {
   resolveSession(params: {
@@ -115,9 +116,14 @@ export class CliExecutionRunner {
 
   async executeInteractive(
     session: CliExecutionSession,
-    baseArgs: string[]
+    baseArgs: string[],
+    resolvedCommand?: CliResolvedCommand
   ): Promise<boolean> {
-    const result = await this.executeInTerminal(baseArgs, session);
+    const result = await this.executeInTerminal(
+      baseArgs,
+      session,
+      resolvedCommand
+    );
     await this.persistResolvedSessionId(session, result.sessionId);
 
     if (
@@ -315,7 +321,8 @@ export class CliExecutionRunner {
 
   async executeHeadless(
     session: CliExecutionSession,
-    baseArgs: string[]
+    baseArgs: string[],
+    resolvedCommand?: CliResolvedCommand
   ): Promise<boolean> {
     const source = this.createHeadlessStreamingSource(session);
     const responseCallback = this.buildHeadlessResponseCallback(
@@ -364,7 +371,8 @@ export class CliExecutionRunner {
         stderr: string;
         exitCode: number;
         headlessLogTail?: HeadlessLogTail;
-      }) => Promise<boolean>
+      }) => Promise<boolean>,
+      command?: CliResolvedCommand
     ): Promise<boolean> => {
       try {
         return await this.deps.transportCoordinator.executeHeadless(
@@ -373,7 +381,8 @@ export class CliExecutionRunner {
           session.tempFilePaths,
           activeCallback,
           headlessEnv,
-          activeSource
+          activeSource,
+          command
         );
       } catch (error) {
         if (this.deps.provider.isRecoverableSessionError?.(error) ?? false) {
@@ -424,7 +433,8 @@ export class CliExecutionRunner {
       const success = await executeWithRecovery(
         baseArgs,
         source,
-        responseCallback
+        responseCallback,
+        resolvedCommand
       );
       hookMonitor?.stop();
       if (!success && this.deps.runtimeState.isCancelling()) {
@@ -441,7 +451,8 @@ export class CliExecutionRunner {
 
   private async executeInteractiveCliProcess(
     args: string[],
-    session: CliExecutionSession
+    session: CliExecutionSession,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
       if (session.workflowContext && session.workflowContext.promptIndex > 0) {
@@ -456,7 +467,8 @@ export class CliExecutionRunner {
         args,
         session.promptArgument,
         session.tempFilePaths,
-        session.resolvedSessionId
+        session.resolvedSessionId,
+        resolvedCommand
       );
     } catch (error) {
       Log.error("❌ CLI interactive execution error", error);
@@ -506,10 +518,11 @@ export class CliExecutionRunner {
 
   private async executeInTerminal(
     args: string[],
-    session: CliExecutionSession
+    session: CliExecutionSession,
+    resolvedCommand?: CliResolvedCommand
   ): Promise<{ success: boolean; sessionId?: string }> {
     if (!this.deps.runtimeState.isVsCodeContext()) {
-      return this.executeInteractiveCliProcess(args, session);
+      return this.executeInteractiveCliProcess(args, session, resolvedCommand);
     }
 
     try {
@@ -579,7 +592,8 @@ export class CliExecutionRunner {
         args,
         session.promptArgument,
         session.workflowContext,
-        terminalEnv
+        terminalEnv,
+        resolvedCommand
       );
 
       const startupCoordinator =

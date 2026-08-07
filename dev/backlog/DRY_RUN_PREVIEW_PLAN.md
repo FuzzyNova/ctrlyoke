@@ -15,6 +15,12 @@
 > methods apply those same plans, preserving existing argument arrays. OpenCode
 > process-local inline configuration is represented as a pathless mutation.
 >
+> **Step 3 landed:** execution-plan assembly now lives in
+> `src/core/harness/shared/ExecutionPlanBuilder.ts`. Real CLI execution and
+> preview consume the same resolved launcher, complete argv, permission/MCP
+> preparation, diagnostics, and deferred mutations. Golden coverage exercises
+> all six harnesses in interactive and headless mode.
+>
 > **Priority:** P1
 
 ---
