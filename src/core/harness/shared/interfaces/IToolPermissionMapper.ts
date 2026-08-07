@@ -151,6 +151,7 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
         message: getCompatibilityDiagnosticMessage(code, {
           harnessId,
           capability: key,
+          caveatCode: declaration.caveatCode,
         }),
       });
     }
@@ -176,6 +177,7 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
       message: getCompatibilityDiagnosticMessage(code, {
         harnessId,
         capability,
+        caveatCode: declaration.caveatCode,
       }),
     };
   }

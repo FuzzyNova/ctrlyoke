@@ -274,6 +274,36 @@ export class WorkflowInstance {
     }
   >();
 
+  /**
+   * Compatibility facts already posted to the dashboard for the run in
+   * progress, keyed by code/harness/capability/message. Compatibility is
+   * checked from more than one place — the preflight analysis in
+   * `executeLoadedPromptFile()` and the per-launch permission translation in
+   * `CliIntegration.runExecutionSession()` — and both can legitimately fire
+   * more than once per run (step continuations, inject-mode fallback,
+   * resumed sessions). Without this, the same "Allowed/Denied Tools are NOT
+   * ENFORCED" sentence repeats once per firing. Cleared at the start of each
+   * fresh (non-continuation) run in `executeLoadedPromptFile()` so a later
+   * run still reports its own applicable warnings.
+   */
+  private reportedCompatibilityDiagnosticKeys = new Set<string>();
+
+  /**
+   * Compatibility facts already written to this run's history, tracked
+   * separately from `reportedCompatibilityDiagnosticKeys`. The earliest
+   * report — the preflight analysis in `executeLoadedPromptFile()` — fires
+   * before this run's history file exists (`resolveHistoryFilePath()`
+   * resolves to "" until `startWorkflowExecution` sets
+   * `activeHistoryFilePath`, since falling back to the queue's `runRef` at
+   * that point risks writing into the *previous*, already-completed run —
+   * see the `promotedRunRef` comment in `executeLoadedPromptFile()`). A
+   * single shared "already reported" set would let that first, unwritable
+   * occurrence permanently suppress the later occurrence that actually has
+   * somewhere to persist to. Cleared alongside
+   * `reportedCompatibilityDiagnosticKeys`.
+   */
+  private persistedCompatibilityDiagnosticKeys = new Set<string>();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Streaming event forwarding — aggregates events from all execution integrations
   // so callers (e.g. the standalone CLI) can subscribe once on the instance.
@@ -453,17 +483,63 @@ export class WorkflowInstance {
   private reportCompatibilityDiagnostics(
     diagnostics: readonly CompatibilityDiagnostic[]
   ): void {
+    const historyFilePath = this.resolveHistoryFilePath();
+
     for (const diagnostic of diagnostics) {
+      const key = JSON.stringify([
+        diagnostic.code,
+        diagnostic.harnessId,
+        diagnostic.capability,
+        diagnostic.message,
+      ]);
       const stepIndex =
         diagnostic.consumer?.kind === FINAL_STEP_PHASES.QUEUE
           ? diagnostic.consumer.stepIndex
           : 0;
-      this.dashboardSink?.updateStatusMessage(
-        stepIndex,
-        diagnostic.message,
-        diagnostic.severity,
-        this.id
-      );
+      const timestampMs = Date.now();
+
+      // Same fact, live-pushed once per run regardless of how many times this
+      // method fires — see `reportedCompatibilityDiagnosticKeys`.
+      if (!this.reportedCompatibilityDiagnosticKeys.has(key)) {
+        this.reportedCompatibilityDiagnosticKeys.add(key);
+        this.dashboardSink?.updateStatusMessage(
+          stepIndex,
+          diagnostic.message,
+          diagnostic.severity,
+          this.id,
+          timestampMs
+        );
+      }
+
+      // Persist alongside the live push so the warning survives navigating
+      // away and back — same pattern as WorkflowExecutor.trackStatusMessage().
+      // Tracked independently of the live-push dedup above: the earliest call
+      // (preflight, before this run's history file exists) has nothing to
+      // persist to, so it must not block a later call — once execution is
+      // underway and a history file exists — from writing it. See
+      // `persistedCompatibilityDiagnosticKeys`.
+      if (
+        historyFilePath &&
+        !this.persistedCompatibilityDiagnosticKeys.has(key)
+      ) {
+        this.persistedCompatibilityDiagnosticKeys.add(key);
+        this.outputHistoryManager
+          .appendStatusMessage(
+            historyFilePath,
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+            {
+              message: diagnostic.message,
+              severity: diagnostic.severity,
+              timestamp: timestampMs,
+            }
+          )
+          .catch((err) =>
+            Log.warn(
+              "Failed to append compatibility diagnostic to history:",
+              err
+            )
+          );
+      }
     }
   }
 
@@ -1261,6 +1337,15 @@ export class WorkflowInstance {
     // this: on a later run's failed start that still holds the *previous*,
     // legitimately completed run.
     let promotedRunRef: RunRef | undefined;
+
+    // A genuinely fresh run (not a step continuation, append, or idle-rewind
+    // resume) starts a new compatibility-reporting window so this run's
+    // applicable warnings are reported at least once, even if the previous
+    // run already reported the identical fact.
+    if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation) {
+      this.reportedCompatibilityDiagnosticKeys.clear();
+      this.persistedCompatibilityDiagnosticKeys.clear();
+    }
 
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);

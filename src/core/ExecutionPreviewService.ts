@@ -866,6 +866,15 @@ export class ExecutionPreviewService {
     );
   }
 
+  /**
+   * Collapse diagnostics that state the same fact in the same words. Keyed on
+   * the rendered message rather than `consumer`/`propertyPointer` so that two
+   * independent emitters of an identical fact — the compatibility analyzer's
+   * per-step diagnostic and a provider mapper's own translation diagnostic
+   * (see `ToolPermissionMapperBase.getToolTranslationDiagnostics`), or the
+   * same analyzer fact repeated across several Codex/Antigravity steps —
+   * collapse into a single entry instead of repeating the same sentence.
+   */
   private dedupeDiagnostics(
     diagnostics: readonly CompatibilityDiagnostic[]
   ): CompatibilityDiagnostic[] {
@@ -873,9 +882,9 @@ export class ExecutionPreviewService {
     return diagnostics.filter((diagnostic) => {
       const key = JSON.stringify([
         diagnostic.code,
-        diagnostic.consumer,
-        diagnostic.propertyPointer,
         diagnostic.harnessId,
+        diagnostic.capability,
+        diagnostic.message,
       ]);
       if (seen.has(key)) return false;
       seen.add(key);
