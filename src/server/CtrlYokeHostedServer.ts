@@ -12,9 +12,11 @@ import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
   CliOutput,
+  ExecutionPreviewResultMessage,
   UndoExecutionTarget,
   UserFeedbackMessage,
 } from "../types/WebviewMessageTypes";
+import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import {
@@ -67,6 +69,24 @@ import type {
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
+
+/** Final hosted-socket guard for the one DTO that can contain sensitive text. */
+function redactHostedTransportMessage(message: unknown): unknown {
+  if (
+    !message ||
+    typeof message !== "object" ||
+    !("type" in message) ||
+    message.type !== MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT ||
+    !("preview" in message)
+  ) {
+    return message;
+  }
+  const previewMessage = message as ExecutionPreviewResultMessage;
+  return {
+    ...previewMessage,
+    preview: redactExecutionPreview(previewMessage.preview),
+  };
+}
 
 /**
  * Theme vars are spliced verbatim into a server-rendered `<style>` block
@@ -1469,7 +1489,9 @@ export class CtrlYokeHostedServer
         `[hosted-server] WebSocket connected clientId=${clientTag} connectedCount=${this.connections.size} ip=${req.socket.remoteAddress ?? ""} ua=${req.headers["user-agent"] ?? ""} origin=${req.headers.origin ?? ""}`
       );
       const send = (reply: unknown): void => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(redactHostedTransportMessage(reply)));
+        }
       };
       this.sendInitialState(ws);
       ws.on("message", (raw) => {
@@ -1738,7 +1760,7 @@ export class CtrlYokeHostedServer
   }
 
   private broadcast(message: unknown): void {
-    const json = JSON.stringify(message);
+    const json = JSON.stringify(redactHostedTransportMessage(message));
     for (const ws of this.connections) {
       if (ws.readyState === WebSocket.OPEN) ws.send(json);
     }

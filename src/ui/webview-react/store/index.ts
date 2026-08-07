@@ -18,6 +18,7 @@ export {
 } from "./editorStore";
 export { useSettingsStore } from "./settingsStore";
 export { useCompatibilityStore } from "./compatibilityStore";
+export { useExecutionPreviewStore } from "./executionPreviewStore";
 export { useTerminalStore } from "./terminalStore";
 export { useWorkspaceViewerStore } from "./workspaceViewerStore";
 export {
@@ -60,3 +61,8 @@ export type {
   CompatibilityState,
   CompatibilityActions,
 } from "./compatibilityStore";
+export type {
+  ExecutionPreviewStatus,
+  ExecutionPreviewState,
+  ExecutionPreviewActions,
+} from "./executionPreviewStore";

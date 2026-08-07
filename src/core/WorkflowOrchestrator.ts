@@ -6,6 +6,10 @@ import { CliIntegration } from "./harness/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { WorkflowInstance } from "./WorkflowInstance";
+import {
+  ExecutionPreviewService,
+  type ExecutionPreviewHarness,
+} from "./ExecutionPreviewService";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import {
@@ -63,6 +67,7 @@ import type {
   RunSummariesLoadedMessage,
   WorkflowDefinitionMutation,
   WorkflowViewIdentityMessage,
+  ExecutionPreviewScope,
 } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -90,6 +95,7 @@ import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import { PropertyResolver } from "../utils/PropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { notifyUserFeedback } from "./UserFeedbackSink";
 import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
@@ -2003,6 +2009,122 @@ export class WorkflowOrchestrator {
 
   getQueueState(clientId: string): QueueState {
     return this.getInstanceForClient(clientId).getQueueState();
+  }
+
+  /**
+   * Build one dry-run snapshot from the definition currently addressed by a
+   * dashboard client. The addressed file is read at request time so external
+   * and unsaved working-file changes are included; no preview state is cached.
+   */
+  async buildExecutionPreviewForClient(
+    clientId: string,
+    scope: ExecutionPreviewScope
+  ): Promise<{
+    address: WorkflowViewAddress;
+    displayedDefinitionRevision: number;
+    preview: import("../types/ExecutionPreviewTypes").WorkflowExecutionPreview;
+  }> {
+    const instance =
+      clientId === this.PANEL_CLIENT_ID
+        ? this.getActiveInstance()
+        : this.getBoundInstance(clientId);
+    const state = instance?.getQueueState();
+    const address = this.getViewAddress(clientId) ?? lineageAddressOf(state);
+    if (!address) {
+      throw new Error("No workflow is loaded");
+    }
+
+    const sourcePath = this.getViewFilePath(clientId);
+    const instanceAddress = lineageAddressOf(state);
+    const canUseCurrentInstanceState =
+      !!instance &&
+      (sourcePath === null || sameViewAddress(address, instanceAddress));
+    let workflow: WorkingFile | undefined;
+    if (sourcePath) {
+      try {
+        workflow = JSON.parse(
+          await fs.promises.readFile(sourcePath, "utf8")
+        ) as WorkingFile;
+      } catch (error) {
+        if (!canUseCurrentInstanceState) {
+          throw error;
+        }
+      }
+    }
+    if (!workflow && canUseCurrentInstanceState && instance) {
+      const queueWorkflow = instance.promptQueue.getWorkflowFile();
+      workflow = {
+        ...queueWorkflow,
+        workflowName: state?.workflowName ?? "",
+        startedAt: 0,
+        definitionRevision: state?.definitionRevision ?? 1,
+        steps: state?.steps ?? queueWorkflow.steps ?? [],
+      };
+    }
+    if (!workflow) {
+      throw new Error("The addressed workflow file is unavailable");
+    }
+
+    // Queue edits are the in-memory editor state. Overlay them only when the
+    // instance owns this exact addressed lineage; a client browsing an older
+    // run must remain sourced from that run's working file.
+    if (canUseCurrentInstanceState && instance && state) {
+      workflow = {
+        ...workflow,
+        ...instance.promptQueue.getWorkflowFile(),
+        steps: state.steps,
+      };
+    }
+
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const platform = new VsCodeAdapter(this.context);
+    const previewSourcePath = sourcePath ?? state?.workingFilePath;
+    const service = new ExecutionPreviewService({
+      defaults: PropertyResolver.createContext({ hostCanProvidePty: true })
+        .defaults,
+      capabilities: await this.compatibilityRegistry.getSnapshot(),
+      getHarness: (harnessId) => this.getExecutionPreviewHarness(harnessId),
+      workspaceRoot,
+      workspaceRoots: platform.getWorkspaceRoots(),
+      extensionPath: platform.getExtensionPath(),
+      hostCanProvidePty: true,
+      cwd: workspaceRoot,
+      platform: process.platform,
+      dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
+    });
+    const preview = await service.build({
+      workflow,
+      scope,
+      workflowName: workflow.workflowName,
+      sourcePath: previewSourcePath,
+      workingFilePath: previewSourcePath,
+      definitionRevision: workflow.definitionRevision,
+    });
+    return {
+      address,
+      displayedDefinitionRevision: workflow.definitionRevision,
+      preview,
+    };
+  }
+
+  private getExecutionPreviewHarness(
+    harnessId: HarnessId
+  ): ExecutionPreviewHarness {
+    switch (harnessId) {
+      case HARNESS_IDS.CLAUDE_CLI:
+        return this.claudeCliIntegration.getExecutionPreviewHarness();
+      case HARNESS_IDS.CODEX_CLI:
+        return this.codexCliIntegration.getExecutionPreviewHarness();
+      case HARNESS_IDS.OPENCODE_CLI:
+        return this.openCodeCliIntegration.getExecutionPreviewHarness();
+      case HARNESS_IDS.QWEN_CLI:
+        return this.qwenCliIntegration.getExecutionPreviewHarness();
+      case HARNESS_IDS.ANTIGRAVITY_CLI:
+        return this.antigravityCliIntegration.getExecutionPreviewHarness();
+      case HARNESS_IDS.COPILOT_CLI:
+      default:
+        return this.copilotCliIntegration.getExecutionPreviewHarness();
+    }
   }
 
   getViewAddress(clientId: string): WorkflowViewAddress | null {

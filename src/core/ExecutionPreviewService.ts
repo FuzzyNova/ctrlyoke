@@ -29,6 +29,7 @@ import type {
   ScriptStep,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
+import type { ExecutionPreviewScope } from "../types/WebviewMessageTypes";
 import { isScriptStep, type DynamicQueueConfig } from "../types/CtrlYokeTypes";
 import type {
   ExecutionPropertyDefaults,
@@ -67,10 +68,6 @@ import {
 } from "./harness/shared/ExecutionPlanBuilder";
 import { escapeCmdArgument } from "./harness/shared/WindowsCmdEscaping";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
-
-export type ExecutionPreviewScope =
-  | { kind: typeof PREVIEW_SCOPES.WORKFLOW }
-  | { kind: typeof PREVIEW_SCOPES.STEP; stepIndex: number };
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {

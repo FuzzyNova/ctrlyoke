@@ -127,6 +127,9 @@ export {
   type IncomingMessage,
   type SearchHistoryMessage,
   type SearchHistoryResultsMessage,
+  type ExecutionPreviewScope,
+  type RequestExecutionPreviewMessage,
+  type ExecutionPreviewResultMessage,
 
   // Prompt and workflow types
   type PromptStep,

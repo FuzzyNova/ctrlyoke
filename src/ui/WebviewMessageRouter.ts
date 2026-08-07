@@ -56,6 +56,7 @@ import {
   type WebviewClientContext,
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
+import { redactExecutionPreview } from "../types/PreviewRedactor";
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -779,6 +780,29 @@ export class WebviewMessageRouter {
 
   private registerOutputHistory(table: DispatchTable): void {
     // ── Output History ───────────────────────────────────────────────────
+    table.set(MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW, async (message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) {
+        throw new Error(
+          "ctrlyoke is still starting up — try again in a moment"
+        );
+      }
+      const result = await orchestrator.buildExecutionPreviewForClient(
+        ctx.clientId,
+        message.scope
+      );
+      // Keep redaction at the final webview transport boundary as well as in
+      // ExecutionPreviewService. Hosted browser messages use this same route.
+      ctx.emit({
+        type: MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT,
+        requestToken: message.requestToken,
+        scope: message.scope,
+        address: result.address,
+        displayedDefinitionRevision: result.displayedDefinitionRevision,
+        preview: redactExecutionPreview(result.preview),
+      });
+    });
+
     table.set(MESSAGE_TYPES.LOAD_RUN_VIEW, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) {

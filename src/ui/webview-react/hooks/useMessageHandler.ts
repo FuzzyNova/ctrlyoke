@@ -58,6 +58,7 @@ import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { useMcpManagerStore } from "../store/useMcpManagerStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { useCompatibilityStore } from "../store/compatibilityStore";
+import { useExecutionPreviewStore } from "../store/executionPreviewStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -708,6 +709,12 @@ export function createMessageHandlers(
     // resetting it when navigation/promotions move to another address.
     if (message.definitionRevision !== undefined) {
       const definitionRevision = message.definitionRevision;
+      const displayedAddress = useUiStore.getState().displayedViewAddress;
+      if (displayedAddress) {
+        useExecutionPreviewStore
+          .getState()
+          .observeDefinitionRevision(displayedAddress, definitionRevision);
+      }
       useUiStore.setState((state) => ({
         displayedDefinitionRevision:
           state.displayedDefinitionRevision === null
@@ -1857,6 +1864,11 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY] = (message) => {
     const { address, definitionRevision, descriptorRevision } = message;
     if (!address) return;
+    if (typeof definitionRevision === "number") {
+      useExecutionPreviewStore
+        .getState()
+        .observeDefinitionRevision(address, definitionRevision);
+    }
     const ui = useUiStore.getState();
     // A run view switch that is still in flight owns the address, so identity
     // for a *different* address would re-point the client at the run it is
@@ -1949,6 +1961,11 @@ export function createMessageHandlers(
     useRunSummaryCacheStore.getState().resolveRunSummaries(message);
   };
 
+  // EXECUTION_PREVIEW_RESULT - one request-correlated, redacted snapshot
+  handlers[MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT] = (message) => {
+    useExecutionPreviewStore.getState().resolve(message);
+  };
+
   // --------------------------------------------------------------------------
   // RUN_VIEW_LOADED - one addressed definition/settings/output snapshot
   // --------------------------------------------------------------------------
@@ -1963,6 +1980,10 @@ export function createMessageHandlers(
       pendingRewind,
     } = message;
     if (!address || !workingFile) return;
+    const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
+    useExecutionPreviewStore
+      .getState()
+      .observeDefinitionRevision(address, incomingDefinitionRevision);
     // A late response from a previous selector click must not overwrite the
     // most recently requested address.
     const uiStore = useUiStore.getState();
@@ -1984,7 +2005,6 @@ export function createMessageHandlers(
     // per-address monotonic definition head here. Equal revisions must not shrink
     // the step list either: live queue growth reaches the client before the
     // follow-up WORKFLOW_VIEW_IDENTITY is published when execution completes.
-    const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
     // Compared against the address whose *content* is actually loaded into
     // workflowStore, not the optimistic navigation target. An identity-only
     // publish (WORKFLOW_VIEW_IDENTITY) can advance displayedViewAddress/

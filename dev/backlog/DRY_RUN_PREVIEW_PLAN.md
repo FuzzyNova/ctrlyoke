@@ -1,6 +1,6 @@
 # Dry Run / Execution Preview Plan
 
-> **Status:** Step 6 landed. The compatibility contract it depends on has
+> **Status:** Step 8 landed. The compatibility contract it depends on has
 > landed (`src/types/CompatibilityTypes.ts`, `CompatibilityAnalyzer.ts`,
 > `ExecutionPropertyResolver.ts`, and the harness capability registry). The
 > redaction contract has **not** — see **Redaction and Access**, which now
@@ -47,6 +47,14 @@
 > **Step 7 landed:** the dashboard tab-bar rendering is now shared by the
 > generic `SegmentedTabBar`; `DrawerTabBar` remains a typed wrapper around the
 > drawer tab definitions, preserving the existing icon overrides and styling.
+
+> **Step 8 landed:** execution-preview request/response messages now cross the
+> VS Code and hosted browser routes. The router computes from the client's
+> addressed working file at request time and redacts again at the final
+> webview boundary. The webview store performs one request per open, drops
+> superseded responses, clears on close, and tracks definition-head staleness
+> from existing requestless view snapshots. No modal or refresh trigger is
+> included yet.
 >
 > **Priority:** P1
 

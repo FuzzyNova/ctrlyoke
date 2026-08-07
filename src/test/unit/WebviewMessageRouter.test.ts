@@ -190,3 +190,76 @@ suite(
     });
   }
 );
+
+suite("WebviewMessageRouter — execution preview transport", () => {
+  test("redacts the preview immediately before emitting it", async () => {
+    const emitted: any[] = [];
+    const router = new WebviewMessageRouter(
+      (message: unknown) => emitted.push(message),
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () =>
+        ({
+          buildExecutionPreviewForClient: async () => ({
+            address: { workflowKey: "workflow-a", kind: "draft" },
+            displayedDefinitionRevision: 7,
+            preview: {
+              workflow: {
+                name: "Workflow A",
+                stepCount: 1,
+                harnessIds: [],
+                totalByteCount: 0,
+                totalTokenEstimate: 0,
+                workspaceMutationCount: 0,
+              },
+              steps: [
+                {
+                  stepIndex: 0,
+                  type: "prompt",
+                  resolvedProperties: {
+                    harnessId: "copilot-cli",
+                    session: { present: false },
+                    skills: [],
+                    mcpServerIds: [],
+                    hooks: [],
+                    permissions: { allowedRules: [], deniedRules: [] },
+                    limits: {},
+                    conditions: { pre: [], end: [], retry: { maxAttempts: 1 } },
+                    propertySources: {},
+                  },
+                  command: {
+                    executable: "harness",
+                    args: ["api_key=supersecret"],
+                    displayCommand: "harness api_key=supersecret",
+                    cwd: "C:\\workspace",
+                    environmentKeys: [],
+                  },
+                  workspaceMutations: [],
+                  variables: [],
+                  conditions: { pre: [], end: [], retry: { maxAttempts: 1 } },
+                  diagnostics: [],
+                },
+              ],
+              diagnostics: [],
+            },
+          }),
+        }) as any,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW,
+      scope: { kind: "workflow" },
+      requestToken: 12,
+    });
+
+    const result = emitted.find(
+      (message) => message.type === MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT
+    );
+    assert.ok(result);
+    assert.strictEqual(result.requestToken, 12);
+    assert.strictEqual(result.displayedDefinitionRevision, 7);
+    assert.ok(!JSON.stringify(result.preview).includes("supersecret"));
+  });
+});

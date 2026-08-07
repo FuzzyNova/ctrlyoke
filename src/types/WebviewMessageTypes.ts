@@ -26,6 +26,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
   STEP_TYPES,
+  PREVIEW_SCOPES,
   type ScriptOutputSource,
   type ExecutionPhase,
   type UndoFileAction,
@@ -77,6 +78,7 @@ import type {
 } from "./WorkflowTimelineTypes";
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
+import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -1221,6 +1223,28 @@ export interface WorkflowActionFailedMessage {
   requestId?: string;
 }
 
+export type ExecutionPreviewScope =
+  | { kind: typeof PREVIEW_SCOPES.WORKFLOW }
+  | { kind: typeof PREVIEW_SCOPES.STEP; stepIndex: number };
+
+/** Webview → Extension: compute one side-effect-free execution snapshot. */
+export interface RequestExecutionPreviewMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW;
+  scope: ExecutionPreviewScope;
+  /** Monotonic only within the webview; used to discard late modal responses. */
+  requestToken: number;
+}
+
+/** Extension/hosted server → Webview: the redacted snapshot for one request. */
+export interface ExecutionPreviewResultMessage {
+  type: typeof MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT;
+  scope: ExecutionPreviewScope;
+  requestToken: number;
+  address: WorkflowViewAddress;
+  displayedDefinitionRevision: number;
+  preview: WorkflowExecutionPreview;
+}
+
 /** Stable target and optimistic revisions required for a definition mutation. */
 export interface WorkflowDefinitionMutation {
   address: WorkflowViewAddress;
@@ -1895,6 +1919,7 @@ export type IncomingMessage =
   | WorkflowDismissedMessage
   | WorkflowSummaryUpdatedMessage
   | ActiveWorkflowChangedMessage
+  | ExecutionPreviewResultMessage
   | PromptEditorInsertMessage
   | GlobalSettingsUpdatedMessage
   | SearchHistoryResultsMessage
