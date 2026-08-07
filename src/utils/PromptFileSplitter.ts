@@ -1,6 +1,14 @@
 import { encode } from "gpt-tokenizer";
 import { Log } from "./Log";
 
+// gpt-tokenizer applies BPE merges to each regex match. A large minified or
+// same-character input can become one enormous match and make the merge pass
+// effectively block the extension host. Chunking is conservative (a boundary
+// can prevent a merge and slightly over-count) and keeps every tokenizer call
+// bounded without weakening the configured per-file limits.
+const MAX_TOKENIZER_INPUT_CHARS = 8 * 1024;
+const TOKENIZER_BOUNDARY_RESERVE_RATIO = 0.01;
+
 /**
  * Result of prompt splitting operation
  */
@@ -64,6 +72,20 @@ export class PromptFileSplitter {
       ...PromptFileSplitter.DEFAULT_CONFIG,
       ...config,
     };
+  }
+
+  /**
+   * Bounded tokenization can conservatively count a few extra tokens where an
+   * artificial boundary prevents a BPE merge. Reserve a small packing margin
+   * so the published chunk counts still honor maxTokensPerFile.
+   */
+  private get packingTokenLimit(): number {
+    return Math.max(
+      1,
+      Math.floor(
+        this.config.maxTokensPerFile * (1 - TOKENIZER_BOUNDARY_RESERVE_RATIO)
+      )
+    );
   }
 
   /**
@@ -143,7 +165,25 @@ export class PromptFileSplitter {
    */
   private countTokens(text: string): number {
     try {
-      return encode(text).length;
+      if (text.length <= MAX_TOKENIZER_INPUT_CHARS) {
+        return encode(text).length;
+      }
+
+      let tokenCount = 0;
+      for (let start = 0; start < text.length; ) {
+        let end = Math.min(start + MAX_TOKENIZER_INPUT_CHARS, text.length);
+        // Keep a UTF-16 surrogate pair together at an artificial boundary.
+        if (
+          end < text.length &&
+          text.charCodeAt(end - 1) >= 0xd800 &&
+          text.charCodeAt(end - 1) <= 0xdbff
+        ) {
+          end--;
+        }
+        tokenCount += encode(text.slice(start, end)).length;
+        start = end;
+      }
+      return tokenCount;
     } catch (error) {
       Log.warn(
         `Token counting failed, using character approximation: ${error}`
@@ -239,7 +279,7 @@ export class PromptFileSplitter {
       // Flush current chunk when adding this segment would exceed limits
       if (
         currentChunk &&
-        (currentTokens + segTokens > this.config.maxTokensPerFile ||
+        (currentTokens + segTokens > this.packingTokenLimit ||
           currentLines + segLines > this.config.maxLinesPerFile)
       ) {
         chunks.push(currentChunk.trim());
@@ -250,7 +290,7 @@ export class PromptFileSplitter {
 
       // Oversized single segment: sub-split with paragraph method
       if (
-        segTokens > this.config.maxTokensPerFile ||
+        segTokens > this.packingTokenLimit ||
         segLines > this.config.maxLinesPerFile
       ) {
         if (currentChunk.trim()) {
@@ -302,7 +342,7 @@ export class PromptFileSplitter {
       // Check if adding this paragraph would exceed limits
       if (
         currentChunk &&
-        (currentTokens + paraTokens > this.config.maxTokensPerFile ||
+        (currentTokens + paraTokens > this.packingTokenLimit ||
           currentLines + paraLines > this.config.maxLinesPerFile)
       ) {
         // Finalize the current chunk if it meets the minimum size.
@@ -311,7 +351,7 @@ export class PromptFileSplitter {
         // currentChunk so it gets bundled with the first lines of that
         // paragraph rather than becoming a tiny isolated standalone file.
         const nextParaOversized =
-          paraTokens > this.config.maxTokensPerFile ||
+          paraTokens > this.packingTokenLimit ||
           paraLines > this.config.maxLinesPerFile;
         if (
           currentTokens >= this.config.minChunkSize ||
@@ -326,7 +366,7 @@ export class PromptFileSplitter {
 
       // If single paragraph exceeds limits, need to split it further
       if (
-        paraTokens > this.config.maxTokensPerFile ||
+        paraTokens > this.packingTokenLimit ||
         paraLines > this.config.maxLinesPerFile
       ) {
         // Split on lines within paragraph
@@ -338,7 +378,7 @@ export class PromptFileSplitter {
           // Check if adding this line would exceed limits
           if (
             currentChunk &&
-            (currentTokens + lineTokens > this.config.maxTokensPerFile ||
+            (currentTokens + lineTokens > this.packingTokenLimit ||
               currentLines + 1 > this.config.maxLinesPerFile)
           ) {
             chunks.push(currentChunk.trim());
@@ -348,10 +388,10 @@ export class PromptFileSplitter {
           }
 
           // If single line exceeds token limit, force character-level split
-          if (lineTokens > this.config.maxTokensPerFile) {
+          if (lineTokens > this.packingTokenLimit) {
             const lineParts = this.forceCharacterSplit(
               line,
-              this.config.maxTokensPerFile
+              this.packingTokenLimit
             );
             for (const part of lineParts) {
               if (currentChunk) {
@@ -440,7 +480,7 @@ export class PromptFileSplitter {
     for (const step of steps) {
       const stepTokens = this.countTokens(step);
       if (
-        currentTokens + stepTokens > this.config.maxTokensPerFile &&
+        currentTokens + stepTokens > this.packingTokenLimit &&
         currentSteps.length > 0
       ) {
         // Flush current chunk

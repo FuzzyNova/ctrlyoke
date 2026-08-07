@@ -316,7 +316,6 @@ export class CliPromptPreparer {
         contentHash: null,
         truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
         path: absolutePath,
-        providerReference: this.deps.formatDirectFileRef(absolutePath),
         ...(stat ? { modifiedTimeMs: stat.mtimeMs } : {}),
       });
     }
@@ -373,9 +372,22 @@ export class CliPromptPreparer {
       previewCategory: PreviewPromptCategory,
       chunks: string[],
       tokenCounts: number[],
-      lineCounts: number[]
+      lineCounts: number[],
+      sourceByteCount?: number
     ): string[] => {
       const refs: string[] = [];
+      const isOverInlineCap =
+        this.isTierTwoCategory(previewCategory) &&
+        (sourceByteCount ?? 0) > MAX_CONTENT_SIZE;
+      if (isOverInlineCap) {
+        diagnostics.push(
+          this.createDiagnostic(
+            PROMPT_DIAGNOSTIC_CODES.OVER_INLINE_CAP,
+            harnessId,
+            `${previewCategory} content is ${sourceByteCount} bytes and exceeds the ${MAX_CONTENT_SIZE}-byte inline content cap.`
+          )
+        );
+      }
       for (let i = 0; i < chunks.length; i++) {
         const partNumber = chunks.length > 1 ? i + 1 : undefined;
         const plannedPath = tempMgr.getCategoryFilePath(
@@ -399,10 +411,6 @@ export class CliPromptPreparer {
           apply: () => tempMgr.writeCategoryFile(plannedPath, chunks[i]),
           restore: () => tempMgr.deleteFiles([plannedPath]),
         });
-        const chunkByteCount = Buffer.byteLength(chunks[i], "utf8");
-        const isOverInlineCap =
-          this.isTierTwoCategory(previewCategory) &&
-          chunkByteCount > MAX_CONTENT_SIZE;
         const body = this.createBodySection(
           previewCategory,
           chunks[i],
@@ -415,14 +423,7 @@ export class CliPromptPreparer {
           tokenCounts[i],
           lineCounts[i]
         );
-        if (this.isTierTwoCategory(previewCategory) && isOverInlineCap) {
-          diagnostics.push(
-            this.createDiagnostic(
-              PROMPT_DIAGNOSTIC_CODES.OVER_INLINE_CAP,
-              harnessId,
-              `${previewCategory} content is ${body.fullByteCount} bytes and exceeds the ${MAX_CONTENT_SIZE}-byte inline content cap.`
-            )
-          );
+        if (isOverInlineCap) {
           body.section.truncationReason =
             PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP;
         }
@@ -443,7 +444,8 @@ export class CliPromptPreparer {
           PREVIEW_PROMPT_CATEGORIES.AGENT_INSTRUCTIONS,
           split.chunks,
           split.tokenCounts,
-          split.lineCounts
+          split.lineCounts,
+          Buffer.byteLength(content, "utf8")
         )
       );
     }
@@ -457,7 +459,8 @@ export class CliPromptPreparer {
           PREVIEW_PROMPT_CATEGORIES.SKILL_CONTENT,
           split.chunks,
           split.tokenCounts,
-          split.lineCounts
+          split.lineCounts,
+          Buffer.byteLength(sections.skillContent, "utf8")
         )
       );
     }
@@ -519,7 +522,8 @@ export class CliPromptPreparer {
           PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE,
           split.chunks,
           split.tokenCounts,
-          split.lineCounts
+          split.lineCounts,
+          Buffer.byteLength(sections.excerptContent, "utf8")
         )
       );
     }

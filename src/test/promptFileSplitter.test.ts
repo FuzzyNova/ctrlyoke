@@ -322,6 +322,19 @@ suite("PromptFileSplitter Tests", () => {
       });
     });
 
+    test("should bound tokenizer work for a large minified repeated line", () => {
+      const splitter = new PromptFileSplitter();
+      const minifiedPrompt = "x".repeat(512 * 1024 + 1);
+
+      const result = splitter.split(minifiedPrompt);
+
+      assert.strictEqual(result.needsSplit, true);
+      assert.ok(result.chunks.length > 1);
+      result.tokenCounts.forEach((count, idx) => {
+        assert.ok(count <= 10000, `Chunk ${idx} exceeds token limit`);
+      });
+    });
+
     test("should produce non-empty chunks", () => {
       const splitter = new PromptFileSplitter();
       const lines: string[] = [];
