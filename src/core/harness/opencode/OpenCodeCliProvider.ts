@@ -27,6 +27,10 @@ import type {
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+} from "../shared/interfaces/PreparedMutation";
+import {
   buildOpenCodeMcpEntries,
   OPENCODE_INLINE_CONFIG_MAX_BYTES,
   resolveOpenCodePermissionCollisionContext,
@@ -360,10 +364,40 @@ export class OpenCodeCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
+    const hasMcp =
+      !!mcpServerPath || (userServers !== undefined && userServers.length > 0);
+    const preparation = await this.planMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return hasMcp ? preparation.cliArgs : null;
+  }
+
+  async planMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation> {
     const hasUserServers = userServers && userServers.length > 0;
     if (!mcpServerPath && !hasUserServers) {
-      delete this.pendingInlineConfig.mcp;
-      return null;
+      return {
+        cliArgs: [],
+        mutations: [
+          {
+            description: "Clear OpenCode inline MCP configuration",
+            apply: async () => {
+              delete this.pendingInlineConfig.mcp;
+            },
+          },
+        ],
+        diagnostics: [],
+      };
     }
     const mcpEntries = buildOpenCodeMcpEntries(
       mcpServerPath,
@@ -372,8 +406,18 @@ export class OpenCodeCliProvider implements ICliProvider {
       additionalEnv,
       userServers
     );
-    this.pendingInlineConfig.mcp = mcpEntries;
-    return [];
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          description: "Set OpenCode inline MCP configuration",
+          apply: async () => {
+            this.pendingInlineConfig.mcp = mcpEntries;
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -422,8 +466,39 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
-    return [];
+    const preparation = await this.planNotificationHookArgs(
+      _extensionPath,
+      _workspaceRoot,
+      _promptIndex,
+      _workingFilePath,
+      userHooks,
+      _enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planNotificationHookArgs(
+    _extensionPath: string,
+    _workspaceRoot: string,
+    _promptIndex: number,
+    _workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    _enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
+    const serializedHooks = this.serializeUserHooks(userHooks);
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          description: "Set OpenCode process-local notification hooks",
+          apply: async () => {
+            this.pendingUserHooksEnv = serializedHooks;
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   async buildHeadlessUserHookArgs(
@@ -434,8 +509,39 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
-    return [];
+    const preparation = await this.planHeadlessUserHookArgs(
+      _extensionPath,
+      _workspaceRoot,
+      _promptIndex,
+      _workingFilePath,
+      userHooks,
+      _enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planHeadlessUserHookArgs(
+    _extensionPath: string,
+    _workspaceRoot: string,
+    _promptIndex: number,
+    _workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    _enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
+    const serializedHooks = this.serializeUserHooks(userHooks);
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          description: "Set OpenCode process-local headless hooks",
+          apply: async () => {
+            this.pendingUserHooksEnv = serializedHooks;
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {

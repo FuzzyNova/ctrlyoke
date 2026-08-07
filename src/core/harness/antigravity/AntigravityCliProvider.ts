@@ -39,6 +39,10 @@ import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapp
 import { AntigravityLogParser } from "./AntigravityLogParser";
 import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
 import { AntigravityStreamJsonUsageAccumulator } from "./AntigravityStreamJsonUsage";
+import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+} from "../shared/interfaces/PreparedMutation";
 
 const ANTIGRAVITY_MIN_VERSION = "1.0.15";
 
@@ -381,6 +385,26 @@ export class AntigravityCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      _promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planNotificationHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const workflowKey = workingFilePath ?? workspaceRoot;
     const scriptPath = path.join(
       extensionPath,
@@ -407,11 +431,21 @@ export class AntigravityCliProvider implements ICliProvider {
       throw new Error("Unexpected Antigravity hook config type");
     }
 
-    await this.writeGlobalHooksConfig(
-      workflowKey,
-      hookConfig.config as Record<string, AntigravityHookGroup>
-    );
-    return [];
+    const config = hookConfig.config as Record<string, AntigravityHookGroup>;
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          path: this.getGlobalHooksPath(),
+          intendedContent: JSON.stringify(config, null, 2),
+          description: "Register Antigravity notification hooks",
+          apply: async () => {
+            await this.writeGlobalHooksConfig(workflowKey, config);
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   async buildHeadlessUserHookArgs(
@@ -422,12 +456,32 @@ export class AntigravityCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planHeadlessUserHookArgs(
+      extensionPath,
+      workspaceRoot,
+      _promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planHeadlessUserHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const workflowKey = workingFilePath ?? workspaceRoot;
     if (
       (userHooks?.length ?? 0) === 0 &&
       enabledNotificationHookEvents.length === 0
     ) {
-      return [];
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
     const hookConfig = this.notificationMonitor.buildHookConfig(
@@ -446,11 +500,21 @@ export class AntigravityCliProvider implements ICliProvider {
       throw new Error("Unexpected Antigravity hook config type");
     }
 
-    await this.writeGlobalHooksConfig(
-      workflowKey,
-      hookConfig.config as Record<string, AntigravityHookGroup>
-    );
-    return [];
+    const config = hookConfig.config as Record<string, AntigravityHookGroup>;
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          path: this.getGlobalHooksPath(),
+          intendedContent: JSON.stringify(config, null, 2),
+          description: "Register Antigravity headless hooks",
+          apply: async () => {
+            await this.writeGlobalHooksConfig(workflowKey, config);
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   async cleanupWorkspaceArtifacts(
@@ -570,8 +634,26 @@ export class AntigravityCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
+    const preparation = await this.planMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.mutations.length > 0 ? preparation.cliArgs : null;
+  }
+
+  async planMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
     try {
@@ -591,18 +673,29 @@ export class AntigravityCliProvider implements ICliProvider {
       );
 
       const workflowKey = workingFilePath ?? workspaceRoot;
-      await AntigravityCliProvider.mcpTracker.registerServers(
-        workflowKey,
-        workspaceRoot,
-        mcpEntries
-      );
-      Log.debug(
-        "🔧 Antigravity MCP servers written to .agents/mcp_config.json"
-      );
-      return [];
+      return {
+        cliArgs: [],
+        mutations: [
+          {
+            path: path.join(workspaceRoot, ".agents", "mcp_config.json"),
+            description: "Register Antigravity MCP servers",
+            apply: async () => {
+              await AntigravityCliProvider.mcpTracker.registerServers(
+                workflowKey,
+                workspaceRoot,
+                mcpEntries
+              );
+              Log.debug(
+                "🔧 Antigravity MCP servers written to .agents/mcp_config.json"
+              );
+            },
+          },
+        ],
+        diagnostics: [],
+      };
     } catch (error) {
       Log.warn(`Failed to register Antigravity MCP servers: ${error}`);
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }
 

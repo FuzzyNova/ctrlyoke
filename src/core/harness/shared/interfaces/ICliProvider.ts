@@ -5,6 +5,11 @@ import type {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "./IToolPermissionMapper";
+import type { CliProviderPreparation } from "./PreparedMutation";
+export type {
+  CliProviderPreparation,
+  PreparedMutation,
+} from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type {
   HookEvent,
@@ -258,6 +263,15 @@ export interface ICliProvider {
     userServers?: McpServerConfig[]
   ): Promise<string[] | null>;
 
+  /** Plan MCP arguments and deferred mutations without touching the filesystem. */
+  planMcpConfigArgs?(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation>;
+
   /**
    * Return the path of the MCP config file this provider writes (optional).
    *
@@ -357,6 +371,16 @@ export interface ICliProvider {
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]>;
 
+  /** Plan notification-hook arguments and deferred mutations without side effects. */
+  planNotificationHookArgs?(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation>;
+
   /**
    * Set up user-defined hooks for headless execution.
    * Called only in headless mode when userHooks are defined and workspaceRoot is set.
@@ -371,6 +395,16 @@ export interface ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]>;
+
+  /** Plan headless hook arguments and deferred mutations without side effects. */
+  planHeadlessUserHookArgs?(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation>;
 
   /**
    * Check if CLI is available on the system

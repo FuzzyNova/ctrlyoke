@@ -15,6 +15,9 @@ import {
   getCompatibilityDiagnosticMessage,
 } from "../../../../types/CompatibilityTypes";
 import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTypes";
+import type { PreparedMutation } from "./PreparedMutation";
+
+export type { PreparedMutation } from "./PreparedMutation";
 
 export type {
   ToolPermissionConfig,
@@ -37,11 +40,7 @@ export interface PermissionContext {
 }
 
 /** A workspace-side effect to apply before launching the harness. */
-export interface WorkspacePermissionMutation {
-  readonly path: string;
-  readonly apply: () => Promise<void>;
-  readonly restore?: () => Promise<void>;
-}
+export type WorkspacePermissionMutation = PreparedMutation;
 
 /** Complete result of preparing one permission policy for one harness launch. */
 export interface ToolPermissionApplication {

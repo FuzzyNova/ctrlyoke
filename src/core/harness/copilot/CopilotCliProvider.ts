@@ -37,6 +37,11 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+  type PreparedMutation,
+} from "../shared/interfaces/PreparedMutation";
 
 /**
  * Copilot CLI Harness
@@ -332,6 +337,26 @@ export class CopilotCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planNotificationHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
     const hookScriptPath = path.join(
@@ -355,10 +380,19 @@ export class CopilotCliProvider implements ICliProvider {
       promptIndex,
       workingFilePath
     );
-    await this.createHookFile(hookConfig, workspaceRoot, hookFileName);
-    Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
-    // No additional CLI args needed - Copilot auto-discovers hooks in .github/hooks/
-    return [];
+    const hookPath = this.getHookFilePath(workspaceRoot, hookFileName);
+    return {
+      cliArgs: [],
+      mutations: [
+        this.createHookMutation(
+          workspaceRoot,
+          hookPath,
+          JSON.stringify((hookConfig as { config?: object }).config, null, 2),
+          "Write Copilot notification hook"
+        ),
+      ],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -375,13 +409,35 @@ export class CopilotCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planHeadlessUserHookArgs(
+      extensionPath,
+      workspaceRoot,
+      promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planHeadlessUserHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const hasUserHooks = userHooks && userHooks.length > 0;
-    this.enablePromptModeRepoHooksForHeadlessRun =
-      hasUserHooks || enabledNotificationHookEvents.length > 0;
+    const hasPromptModeHooks =
+      !!hasUserHooks || enabledNotificationHookEvents.length > 0;
     if (!hasUserHooks && enabledNotificationHookEvents.length === 0) {
-      // Nothing to configure — skip hook file creation.
-      // Cleanup of any previous prompt's hook file is handled by cleanupPreviousPromptHooks.
-      return [];
+      return {
+        cliArgs: [],
+        mutations: [this.createHeadlessHookStateMutation(hasPromptModeHooks)],
+        diagnostics: [],
+      };
     }
     const config =
       enabledNotificationHookEvents.length > 0
@@ -407,9 +463,57 @@ export class CopilotCliProvider implements ICliProvider {
       promptIndex,
       workingFilePath
     );
-    await this.createHookFile(config, workspaceRoot, hookFileName);
-    Log.debug(`🔔 Configured user hooks for headless mode`);
-    return [];
+    const hookPath = this.getHookFilePath(workspaceRoot, hookFileName);
+    return {
+      cliArgs: [],
+      mutations: [
+        this.createHeadlessHookStateMutation(hasPromptModeHooks),
+        this.createHookMutation(
+          workspaceRoot,
+          hookPath,
+          JSON.stringify((config as { config?: object }).config, null, 2),
+          "Write Copilot headless hook"
+        ),
+      ],
+      diagnostics: [],
+    };
+  }
+
+  private getHookFilePath(workspaceRoot: string, hookFileName: string): string {
+    return path.join(workspaceRoot, ".github", "hooks", hookFileName);
+  }
+
+  private createHeadlessHookStateMutation(enabled: boolean): PreparedMutation {
+    return {
+      description: "Set Copilot headless repository-hook mode",
+      apply: async () => {
+        this.enablePromptModeRepoHooksForHeadlessRun = enabled;
+      },
+    };
+  }
+
+  private createHookMutation(
+    workspaceRoot: string,
+    hookPath: string,
+    content: string,
+    description: string
+  ): PreparedMutation {
+    const hookFileName = path.basename(hookPath);
+    return {
+      path: hookPath,
+      intendedContent: content,
+      description,
+      apply: async () => {
+        await this.createHookFile(
+          { type: "json", config: JSON.parse(content) },
+          workspaceRoot,
+          hookFileName
+        );
+      },
+      restore: async () => {
+        await fs.unlink(hookPath).catch(() => undefined);
+      },
+    };
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
@@ -715,6 +819,24 @@ export class CopilotCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
+    const preparation = await this.planMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
+  }
+
+  async planMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation> {
     try {
       // Generate MCP config JSON using shared utility
       // Copilot CLI requires "type": "local" and "tools" field for ctrlyoke server;
@@ -749,7 +871,7 @@ export class CopilotCliProvider implements ICliProvider {
           copilotUserServerConfig
         );
       } else {
-        return null;
+        return { cliArgs: [], mutations: [], diagnostics: [] };
       }
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
@@ -757,14 +879,20 @@ export class CopilotCliProvider implements ICliProvider {
         workingFilePath,
         workspaceRoot
       )!;
-      await fs.mkdir(path.dirname(configPath), { recursive: true });
-      await fs.writeFile(configPath, configJson, "utf-8");
-
-      // Return --additional-mcp-config @file argument
-      return ["--additional-mcp-config", `@${configPath}`];
+      return {
+        cliArgs: ["--additional-mcp-config", `@${configPath}`],
+        mutations: [
+          CliMcpConfigGenerator.createFileMutation(
+            configPath,
+            configJson,
+            "Write Copilot MCP configuration"
+          ),
+        ],
+        diagnostics: [],
+      };
     } catch (error) {
       // MCP config generation failed - return null to continue without MCP
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }
 

@@ -10,6 +10,11 @@
 > preview constants, and the pure `PreviewRedactor` chokepoint with unit tests
 > are now in place. No preview consumers or side effects are included yet.
 >
+> **Step 2 landed:** MCP and hook preparation now expose side-effect-free plans
+> with deferred mutations across all six CLI providers. Legacy preparation
+> methods apply those same plans, preserving existing argument arrays. OpenCode
+> process-local inline configuration is represented as a pathless mutation.
+>
 > **Priority:** P1
 
 ---

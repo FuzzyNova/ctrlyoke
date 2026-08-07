@@ -32,6 +32,11 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+  type PreparedMutation,
+} from "../shared/interfaces/PreparedMutation";
 
 /**
  * Claude CLI Harness
@@ -319,6 +324,26 @@ export class ClaudeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planNotificationHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -343,21 +368,22 @@ export class ClaudeCliProvider implements ICliProvider {
     if (hookConfig.type !== "json-string") {
       throw new Error("Unexpected hook config type for Claude CLI");
     }
-    const tempDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
-    await fs.mkdir(tempDir, { recursive: true });
     const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
       promptIndex,
       workingFilePath
     );
-    const settingsPath = path.join(tempDir, hookFileName);
-    this.hookSettingsPaths.push(settingsPath);
-    await fs.writeFile(settingsPath, hookConfig.config, "utf-8");
-    Log.debug(`🔔 Configured stop hook for completion detection`);
-    return ["--settings", settingsPath];
+    const settingsPath = this.getHookSettingsPath(workspaceRoot, hookFileName);
+    return {
+      cliArgs: ["--settings", settingsPath],
+      mutations: [
+        this.createHookSettingsMutation(
+          settingsPath,
+          hookConfig.config,
+          "Write Claude notification hook settings"
+        ),
+      ],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -394,6 +420,26 @@ export class ClaudeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planHeadlessUserHookArgs(
+      extensionPath,
+      workspaceRoot,
+      promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planHeadlessUserHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const settingsJson =
       enabledNotificationHookEvents.length > 0
         ? (() => {
@@ -415,21 +461,55 @@ export class ClaudeCliProvider implements ICliProvider {
             return hookConfig.config;
           })()
         : ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks ?? []);
-    const tempDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
-    await fs.mkdir(tempDir, { recursive: true });
     const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
       promptIndex,
       workingFilePath
     );
-    const settingsPath = path.join(tempDir, hookFileName);
-    this.hookSettingsPaths.push(settingsPath);
-    await fs.writeFile(settingsPath, settingsJson, "utf-8");
-    Log.debug(`🔔 Configured user hooks for headless mode`);
-    return ["--settings", settingsPath];
+    const settingsPath = this.getHookSettingsPath(workspaceRoot, hookFileName);
+    return {
+      cliArgs: ["--settings", settingsPath],
+      mutations: [
+        this.createHookSettingsMutation(
+          settingsPath,
+          settingsJson,
+          "Write Claude headless hook settings"
+        ),
+      ],
+      diagnostics: [],
+    };
+  }
+
+  private getHookSettingsPath(
+    workspaceRoot: string,
+    hookFileName: string
+  ): string {
+    return path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
+      hookFileName
+    );
+  }
+
+  private createHookSettingsMutation(
+    settingsPath: string,
+    content: string,
+    description: string
+  ): PreparedMutation {
+    return {
+      path: settingsPath,
+      intendedContent: content,
+      description,
+      apply: async () => {
+        await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+        await fs.writeFile(settingsPath, content, "utf-8");
+        this.hookSettingsPaths.push(settingsPath);
+        Log.debug(`🔔 Configured Claude hook settings`);
+      },
+      restore: async () => {
+        await fs.unlink(settingsPath).catch(() => undefined);
+      },
+    };
   }
 
   /**
@@ -530,9 +610,25 @@ export class ClaudeCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
-    try {
-      const fs = require("fs/promises");
+    const preparation = await this.planMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
+  }
 
+  async planMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation> {
+    try {
       // Generate MCP config JSON using shared utility
       // Claude CLI requires "type": "stdio"
       let configJson: string;
@@ -560,7 +656,7 @@ export class ClaudeCliProvider implements ICliProvider {
         configJson =
           CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
       } else {
-        return null;
+        return { cliArgs: [], mutations: [], diagnostics: [] };
       }
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
@@ -568,14 +664,20 @@ export class ClaudeCliProvider implements ICliProvider {
         workingFilePath,
         workspaceRoot
       )!;
-      await fs.mkdir(path.dirname(configPath), { recursive: true });
-      await fs.writeFile(configPath, configJson, "utf-8");
-
-      // Return --mcp-config <file> argument
-      return ["--mcp-config", configPath];
+      return {
+        cliArgs: ["--mcp-config", configPath],
+        mutations: [
+          CliMcpConfigGenerator.createFileMutation(
+            configPath,
+            configJson,
+            "Write Claude MCP configuration"
+          ),
+        ],
+        diagnostics: [],
+      };
     } catch (error) {
       // MCP config generation failed - return null to continue without MCP
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }
 

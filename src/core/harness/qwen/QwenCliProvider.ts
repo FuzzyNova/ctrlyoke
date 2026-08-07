@@ -27,6 +27,10 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+} from "../shared/interfaces/PreparedMutation";
 
 /**
  * Qwen Code CLI Harness
@@ -235,6 +239,26 @@ export class QwenCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      _promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planNotificationHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -271,16 +295,27 @@ export class QwenCliProvider implements ICliProvider {
     const ctrlyokeHookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
 
     const workflowKey = workingFilePath ?? workspaceRoot;
-    await this.registerHooksInSettings(
-      workspaceRoot,
-      workflowKey,
-      ctrlyokeHooksSection,
-      ctrlyokeHookKeys,
-      userHooks,
-      wrappedCtrlYokeEvents
-    );
-    Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
-    return [];
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          path: path.join(workspaceRoot, ".qwen", "settings.json"),
+          description: "Register Qwen notification hooks and trust keys",
+          apply: async () => {
+            await this.registerHooksInSettings(
+              workspaceRoot,
+              workflowKey,
+              ctrlyokeHooksSection,
+              ctrlyokeHookKeys,
+              userHooks,
+              wrappedCtrlYokeEvents
+            );
+            Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -296,6 +331,26 @@ export class QwenCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planHeadlessUserHookArgs(
+      extensionPath,
+      workspaceRoot,
+      _promptIndex,
+      workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planHeadlessUserHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const workflowKey = workingFilePath ?? workspaceRoot;
     const ctrlyokeHooksSection =
       enabledNotificationHookEvents.length > 0
@@ -317,16 +372,27 @@ export class QwenCliProvider implements ICliProvider {
             }
           ).config.hooks
         : {};
-    await this.registerHooksInSettings(
-      workspaceRoot,
-      workflowKey,
-      ctrlyokeHooksSection,
-      this.buildTrustedHookKeys(ctrlyokeHooksSection),
-      userHooks,
-      enabledNotificationHookEvents
-    );
-    Log.debug(`🔔 Configured user hooks for Qwen headless mode`);
-    return [];
+    return {
+      cliArgs: [],
+      mutations: [
+        {
+          path: path.join(workspaceRoot, ".qwen", "settings.json"),
+          description: "Register Qwen headless hooks and trust keys",
+          apply: async () => {
+            await this.registerHooksInSettings(
+              workspaceRoot,
+              workflowKey,
+              ctrlyokeHooksSection,
+              this.buildTrustedHookKeys(ctrlyokeHooksSection),
+              userHooks,
+              enabledNotificationHookEvents
+            );
+            Log.debug(`🔔 Configured user hooks for Qwen headless mode`);
+          },
+        },
+      ],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -550,8 +616,26 @@ export class QwenCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
+    const preparation = await this.planMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
+  }
+
+  async planMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
     const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
@@ -562,7 +646,11 @@ export class QwenCliProvider implements ICliProvider {
       userServers
     );
 
-    return ["--mcp-config", JSON.stringify({ mcpServers: mcpEntries })];
+    return {
+      cliArgs: ["--mcp-config", JSON.stringify({ mcpServers: mcpEntries })],
+      mutations: [],
+      diagnostics: [],
+    };
   }
 
   /**

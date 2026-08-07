@@ -30,6 +30,10 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import {
+  applyPreparedMutations,
+  type CliProviderPreparation,
+} from "../shared/interfaces/PreparedMutation";
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
 const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
@@ -278,6 +282,26 @@ export class CodexCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      _promptIndex,
+      _workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planNotificationHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    _workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const hookEvents = [
       ...new Set<HookEvent>([
         "sessionStart",
@@ -294,7 +318,11 @@ export class CodexCliProvider implements ICliProvider {
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
-    return [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs];
+    return {
+      cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
+      mutations: [],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -311,6 +339,26 @@ export class CodexCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const preparation = await this.planHeadlessUserHookArgs(
+      extensionPath,
+      workspaceRoot,
+      _promptIndex,
+      _workingFilePath,
+      userHooks,
+      enabledNotificationHookEvents
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs;
+  }
+
+  async planHeadlessUserHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    _workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
+  ): Promise<CliProviderPreparation> {
     const { hookArgs, trustArgs } = this.writeCodexHooks(
       extensionPath,
       workspaceRoot,
@@ -318,7 +366,11 @@ export class CodexCliProvider implements ICliProvider {
       enabledNotificationHookEvents
     );
     Log.debug(`🔔 Configured user hooks for Codex headless mode`);
-    return [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs];
+    return {
+      cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
+      mutations: [],
+      diagnostics: [],
+    };
   }
 
   /**
@@ -539,8 +591,26 @@ export class CodexCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
+    const preparation = await this.planMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      userServers
+    );
+    await applyPreparedMutations(preparation.mutations);
+    return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
+  }
+
+  async planMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
+  ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
     try {
@@ -629,10 +699,14 @@ export class CodexCliProvider implements ICliProvider {
         );
       }
 
-      return configArgs.length > 0 ? configArgs : null;
+      return {
+        cliArgs: configArgs,
+        mutations: [],
+        diagnostics: [],
+      };
     } catch (error) {
       Log.error("Failed to generate MCP config for Codex CLI", error);
-      return null;
+      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }
 

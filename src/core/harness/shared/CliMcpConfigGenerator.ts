@@ -1,6 +1,8 @@
 import * as path from "path";
+import * as fs from "fs/promises";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import type { PreparedMutation } from "./interfaces/PreparedMutation";
 
 /**
  * MCP configuration format
@@ -69,6 +71,29 @@ export interface InlineTomlMcpServerOptions {
  * Each harness integration calls the appropriate methods directly.
  */
 export class CliMcpConfigGenerator {
+  /**
+   * Describe a file write without performing it. The returned mutation is
+   * owned by the caller and may be applied immediately before process start.
+   */
+  static createFileMutation(
+    filePath: string,
+    content: string,
+    description = "Write generated MCP configuration"
+  ): PreparedMutation {
+    return {
+      path: filePath,
+      intendedContent: content,
+      description,
+      apply: async () => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, content, "utf-8");
+      },
+      restore: async () => {
+        await fs.unlink(filePath).catch(() => undefined);
+      },
+    };
+  }
+
   private static quoteInlineTomlString(value: string): string {
     return `'${value.replace(/'/g, "''")}'`;
   }
