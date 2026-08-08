@@ -7,6 +7,10 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 
+const { attachmentTokenCount } = vi.hoisted(() => ({
+  attachmentTokenCount: { value: 128 },
+}));
+
 vi.mock("../../../components/editor/PromptEditor", () => ({
   PromptEditor: () => <div data-testid="prompt-editor" />,
 }));
@@ -33,7 +37,7 @@ vi.mock("../../../components/shared", () => ({
 }));
 
 vi.mock("../../../hooks/useAttachmentTokenCount", () => ({
-  useAttachmentTokenCount: () => 128,
+  useAttachmentTokenCount: () => attachmentTokenCount.value,
 }));
 
 vi.mock("../../../hooks/useElementNarrow", () => ({
@@ -55,6 +59,7 @@ function resetStores() {
 
 describe("EditorSection", () => {
   beforeEach(() => {
+    attachmentTokenCount.value = 128;
     resetStores();
   });
 
@@ -91,5 +96,13 @@ describe("EditorSection", () => {
     expect(toggleButton).toHaveAttribute("aria-pressed", "true");
     expect(toggleButton).toHaveClass("text-warning-fg");
     expect(screen.getByText("Editing: Prompt 1 of 1")).toBeInTheDocument();
+  });
+
+  it("uses the shared magnitude formatter for large token counts", () => {
+    attachmentTokenCount.value = 1_234_567;
+
+    render(<EditorSection />);
+
+    expect(screen.getByText("1.2M tokens")).toBeInTheDocument();
   });
 });

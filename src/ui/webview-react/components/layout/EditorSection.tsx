@@ -6,6 +6,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
+import { formatMagnitude } from "../../utils/number";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
@@ -286,10 +287,7 @@ const EditorSectionInner: React.FC = () => {
                           : ""
                     }`}
                   >
-                    {tokenCount >= 1_000
-                      ? `${(tokenCount / 1_000).toFixed(1)}K`
-                      : tokenCount.toString()}{" "}
-                    tokens
+                    {formatMagnitude(tokenCount)} tokens
                   </span>
                 </>
               ) : null)}

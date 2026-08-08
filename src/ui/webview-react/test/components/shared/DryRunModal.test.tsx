@@ -3,6 +3,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
 import {
+  PERMISSION_MODES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
@@ -208,7 +209,9 @@ describe("DryRunModal", () => {
     render(<DryRunModal scope={{ kind: "workflow" }} />);
 
     expect(screen.getByText("Workflow summary")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Dry run sections" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Dry run sections" })
+    ).toBeInTheDocument();
     expect(screen.getByTitle("Prepare")).toBeInTheDocument();
     expect(screen.getByText("Workflow timeline")).toBeInTheDocument();
   });
@@ -218,8 +221,12 @@ describe("DryRunModal", () => {
 
     render(<DryRunModal scope={{ kind: "workflow" }} />);
 
-    expect(screen.queryByRole("navigation", { name: "Dry run sections" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Select dry run section" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Dry run sections" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Select dry run section" })
+    ).toBeInTheDocument();
   });
 
   it("renders step scope without Overview or the rail", async () => {
@@ -229,11 +236,134 @@ describe("DryRunModal", () => {
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
     expect(screen.queryByText("Workflow summary")).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Dry run sections" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Dry run sections" })
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Resolved execution")).toBeInTheDocument();
 
     await user.click(screen.getByTitle("Command"));
     expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
+
+    await user.click(screen.getByTitle("Conditions"));
+    expect(
+      screen.getByText("Maximum attempts").parentElement
+    ).toHaveTextContent("Maximum attempts2");
+  });
+
+  it("keeps tab order and primary icon shapes stable while showing severity and permission badges", () => {
+    const diagnosticPreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [
+        {
+          ...preview.steps[0],
+          resolvedProperties: {
+            ...preview.steps[0].resolvedProperties,
+            permissions: {
+              ...preview.steps[0].resolvedProperties.permissions,
+              mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+            },
+          },
+          diagnostics: [preview.steps[1].diagnostics[0]],
+          permissionApplication: {
+            ...preview.steps[0].permissionApplication!,
+            diagnostics: [preview.diagnostics[0]],
+          },
+        },
+      ],
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, diagnosticPreview);
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    const tabBar = screen.getByTitle("Summary").parentElement as HTMLElement;
+    expect(
+      Array.from(tabBar.querySelectorAll("button")).map(
+        (button) => button.title
+      )
+    ).toEqual(["Summary", "Command", "Payload", "Conditions"]);
+
+    const summary = screen.getByTitle("Summary");
+    expect(summary.querySelector(".codicon-map-vertical")).toBeInTheDocument();
+    expect(summary.querySelector(".codicon-error")).toBeInTheDocument();
+    expect(summary.querySelector(".codicon-warning")).not.toBeInTheDocument();
+
+    const command = screen.getByTitle("Command");
+    expect(command.querySelector(".codicon-terminal")).toBeInTheDocument();
+    expect(command.querySelector(".codicon-shield")).toBeInTheDocument();
+    expect(command.querySelector(".codicon-error")).not.toBeInTheDocument();
+    expect(command.querySelector(".codicon-warning")).not.toBeInTheDocument();
+    expect(command).toHaveClass("text-error-fg");
+
+    expect(
+      screen.getByTitle("Conditions").querySelector(".codicon-coverage")
+    ).toBeInTheDocument();
+  });
+
+  it("omits the command permission badge for none mode", () => {
+    const noneModePreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [
+        {
+          ...preview.steps[0],
+          resolvedProperties: {
+            ...preview.steps[0].resolvedProperties,
+            permissions: {
+              ...preview.steps[0].resolvedProperties.permissions,
+              mode: PERMISSION_MODES.NONE,
+            },
+          },
+        },
+      ],
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, noneModePreview);
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(
+      screen.getByTitle("Command").querySelector(".codicon-terminal")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTitle("Command").querySelector(".codicon-shield")
+    ).not.toBeInTheDocument();
+  });
+
+  it("formats byte and token magnitudes while keeping plain counts exact", () => {
+    const magnitude = 1_234_567;
+    const magnitudePreview: WorkflowExecutionPreview = {
+      ...preview,
+      workflow: {
+        ...preview.workflow,
+        totalByteCount: magnitude,
+        totalTokenEstimate: magnitude,
+      },
+      steps: preview.steps.map((step) =>
+        step.stepIndex === 0
+          ? {
+              ...step,
+              prompt: {
+                ...step.prompt!,
+                totalByteCount: magnitude,
+                includedBodyByteCount: magnitude,
+                sections: step.prompt!.sections.map((section) => ({
+                  ...section,
+                  byteCount: magnitude,
+                  tokenEstimate: magnitude,
+                })),
+              },
+            }
+          : step
+      ),
+    };
+    openPreview({ kind: "workflow" }, magnitudePreview);
+
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    const summary = screen.getByText("Workflow summary")
+      .parentElement as HTMLElement;
+    expect(summary).toHaveTextContent("Payload bytes1.2M");
+    expect(summary).toHaveTextContent("Token estimate1.2M");
+    expect(summary).toHaveTextContent("Steps2");
+    expect(summary).toHaveTextContent("Workspace mutations1");
   });
 
   it("renders the workflow timeline in step order and skips empty steps", () => {
@@ -256,12 +386,16 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 0 });
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
-    await user.click(screen.getByRole("button", { name: "View in Payload tab" }));
+    await user.click(
+      screen.getByRole("button", { name: "View in Payload tab" })
+    );
     expect(screen.getByText("Categorized payload")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     await user.click(screen.getByTitle("Summary"));
-    await user.click(screen.getByRole("button", { name: "View in Command tab" }));
+    await user.click(
+      screen.getByRole("button", { name: "View in Command tab" })
+    );
     expect(screen.getByText("(PowerShell)")).toBeInTheDocument();
   });
 
@@ -316,15 +450,29 @@ describe("DryRunModal", () => {
     const displayedPreview = useExecutionPreviewStore.getState().preview;
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
-    expect(screen.getByRole("button", { name: /3 internal changes/ })).toBeInTheDocument();
-    expect(screen.queryByText("C:/workspace/.ctrlyoke/temp/one.json")).not.toBeInTheDocument();
-    expect(screen.queryByText("Merges into existing keys:")).not.toBeInTheDocument();
-    expect(screen.queryByText("Workspace-wide side effect")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /3 internal changes/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("C:/workspace/.ctrlyoke/temp/one.json")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Merges into existing keys:")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Workspace-wide side effect")
+    ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /3 internal changes/ }));
+    await user.click(
+      screen.getByRole("button", { name: /3 internal changes/ })
+    );
 
-    expect(screen.getByText("C:/workspace/.ctrlyoke/temp/one.json")).toBeInTheDocument();
-    expect(screen.getByText("C:/workspace/.ctrlyoke/temp/two.json")).toBeInTheDocument();
+    expect(
+      screen.getByText("C:/workspace/.ctrlyoke/temp/one.json")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("C:/workspace/.ctrlyoke/temp/two.json")
+    ).toBeInTheDocument();
     expect(
       screen.getAllByText("Internal — .ctrlyoke/temp, cleared after this run")
     ).toHaveLength(3);
@@ -335,8 +483,12 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 0 });
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
-    expect(screen.getByText("Workspace-wide side effect: May replace owned keys.")).toBeInTheDocument();
-    expect(screen.getByText("Merges into existing keys: permissions")).toBeInTheDocument();
+    expect(
+      screen.getByText("Workspace-wide side effect: May replace owned keys.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Merges into existing keys: permissions")
+    ).toBeInTheDocument();
   });
 
   it("shows the per-step tabs and every DTO truncation reason", async () => {
@@ -385,13 +537,19 @@ describe("DryRunModal", () => {
     };
     openPreview({ kind: "step", stepIndex: 0 }, fileReferencePreview);
 
-    const { container } = render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+    const { container } = render(
+      <DryRunModal scope={{ kind: "step", stepIndex: 0 }} />
+    );
     await user.click(screen.getByTitle("Payload"));
 
-    expect(screen.getByText("File reference DRY_RUN_PREVIEW_PLAN.md")).toBeInTheDocument();
+    expect(
+      screen.getByText("File reference DRY_RUN_PREVIEW_PLAN.md")
+    ).toBeInTheDocument();
     expect(screen.getByText(filePath)).toBeInTheDocument();
     expect(
-      screen.getByText(PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.REFERENCE])
+      screen.getByText(
+        PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.REFERENCE]
+      )
     ).toBeInTheDocument();
     expect(screen.queryByText(/chunk/i)).not.toBeInTheDocument();
     expect(container.querySelector(".codicon-warning")).not.toBeInTheDocument();
@@ -426,13 +584,17 @@ describe("DryRunModal", () => {
     };
     openPreview({ kind: "step", stepIndex: 0 }, placeholderPreview);
 
-    const { container } = render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+    const { container } = render(
+      <DryRunModal scope={{ kind: "step", stepIndex: 0 }} />
+    );
     await user.click(screen.getByTitle("Payload"));
 
     expect(screen.getByText("Prior context · chunk 1")).toBeInTheDocument();
     expect(
       screen.getByText(
-        PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE]
+        PREVIEW_TRUNCATION_REASON_COPY[
+          PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+        ]
       )
     ).toBeInTheDocument();
     expect(container.querySelector(".codicon-warning")).not.toBeInTheDocument();
@@ -469,10 +631,16 @@ describe("DryRunModal", () => {
     await user.click(screen.getByTitle("Payload"));
 
     expect(
-      screen.getByText(PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP])
+      screen.getByText(
+        PREVIEW_TRUNCATION_REASON_COPY[
+          PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP
+        ]
+      )
     ).toBeInTheDocument();
     expect(
-      screen.getByText(PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.BODY_BUDGET])
+      screen.getByText(
+        PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.BODY_BUDGET]
+      )
     ).toBeInTheDocument();
     expect(document.querySelectorAll(".codicon-warning")).toHaveLength(2);
     expect(document.querySelectorAll(".text-warning-fg")).toHaveLength(2);
@@ -518,7 +686,9 @@ describe("DryRunModal", () => {
     const copyCommand = screen.getByRole("button", { name: "Copy command" });
     expect(copyCommand).not.toBeDisabled();
     await user.click(copyCommand);
-    expect(clipboardWriteText).toHaveBeenLastCalledWith("claude --print [REDACTED]");
+    expect(clipboardWriteText).toHaveBeenLastCalledWith(
+      "claude --print [REDACTED]"
+    );
 
     await user.click(screen.getByRole("button", { name: "Copy payload" }));
     expect(clipboardWriteText).toHaveBeenLastCalledWith(
@@ -541,12 +711,16 @@ describe("DryRunModal", () => {
 
     await user.click(screen.getByRole("button", { name: "Command Prompt" }));
     expect(screen.getByText("(Command Prompt)")).toBeInTheDocument();
-    expect(screen.queryByText("claude --print [REDACTED]")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("claude --print [REDACTED]")
+    ).not.toBeInTheDocument();
     expect(screen.getByText('^"claude^" ^"--print^"')).toBeInTheDocument();
 
     const copyCommand = screen.getByRole("button", { name: "Copy command" });
     await user.click(copyCommand);
-    expect(clipboardWriteText).toHaveBeenLastCalledWith('^"claude^" ^"--print^"');
+    expect(clipboardWriteText).toHaveBeenLastCalledWith(
+      '^"claude^" ^"--print^"'
+    );
   });
 
   it("does not offer a shell toggle for a script step's POSIX command", async () => {
@@ -555,8 +729,12 @@ describe("DryRunModal", () => {
     render(<DryRunModal scope={{ kind: "step", stepIndex: 1 }} />);
 
     await user.click(screen.getByTitle("Command"));
-    expect(screen.queryByRole("button", { name: "PowerShell" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Command Prompt" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "PowerShell" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Command Prompt" })
+    ).not.toBeInTheDocument();
   });
 
   it("does not render for a different store scope", () => {
@@ -569,15 +747,16 @@ describe("DryRunModal", () => {
 
   it("keeps the displayed plan byte-identical until Refresh is pressed", async () => {
     const user = userEvent.setup();
-    const address = { workflowKey: "workflow-a" as never, kind: "draft" } as const;
+    const address = {
+      workflowKey: "workflow-a" as never,
+      kind: "draft",
+    } as const;
     openPreview({ kind: "workflow" });
     render(<DryRunModal scope={{ kind: "workflow" }} />);
 
     const before = screen.getByRole("dialog").textContent;
     act(() => {
-      useExecutionPreviewStore
-        .getState()
-        .observeDefinitionRevision(address, 2);
+      useExecutionPreviewStore.getState().observeDefinitionRevision(address, 2);
     });
 
     expect(screen.getByText("Definition changed —")).toBeInTheDocument();

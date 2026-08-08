@@ -1,6 +1,6 @@
 # Dry Run Mutation Timeline Plan
 
-**Status:** Steps 1–5 complete — step 6 pending
+**Status:** Steps 1–6 complete — Command and Conditions tab content redesigns deferred
 **Priority:** P2
 
 Follow-up to [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md) (Implemented).
@@ -11,7 +11,7 @@ the shipped `DryRunModal`, tab by tab, while keeping the original filename for
 continuity. Sections are added per tab as they're worked through — Summary/
 Overview (the timeline), Payload, and the tab bar itself (order, icons,
 number formatting) are covered below; Command and Conditions tab *content*
-are still to come.
+redesigns remain deferred follow-up work.
 
 ## Implementation Sequencing
 
@@ -46,7 +46,7 @@ all edit `DryRunModal.tsx` and would conflict if overlapped.
    have a dedicated basename/path/count layout without false chunk semantics;
    category labels and truncation copy are shared with the CLI, and reference/
    not-yet-available states render neutrally.
-6. **`DryRunModal` tab bar and formatting** — tab order, Conditions/Summary
+6. **✅ `DryRunModal` tab bar and formatting — complete.** Tab order, Conditions/Summary
    icons, Summary/Command badges, `formatCount` → `formatMagnitude` call
    sites, and the `EditorSection` refactor onto the shared formatter.
 
@@ -69,8 +69,9 @@ Steps 1–3 are mutually independent and could be reordered; 4–6 each depend
 on 3 (and 4/5 on 1/2 respectively for the fields they render).
 
 Step 5 landed with focused coverage for file-reference layout, shared delivery
-copy, neutral prior-context placeholders, and display labels. Step 6 remains
-the tab-bar and number-formatting pass.
+copy, neutral prior-context placeholders, and display labels. Step 6 completes
+the tab-bar and number-formatting pass. The Command and Conditions tab content
+redesigns remain deliberately deferred; this plan does not implement them.
 
 ### Placement corrections (verified against the current tree)
 

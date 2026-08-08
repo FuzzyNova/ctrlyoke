@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   HARNESS_INFO,
   MESSAGE_TYPES,
@@ -43,17 +49,12 @@ import {
   formatCollapsedOutputToggleLabel,
   MAX_COLLAPSED_OUTPUT_MAX_CHARS,
 } from "@utils/outputTruncation";
+import { formatMagnitude } from "@utils/number";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import { HarnessIcon } from "./HarnessIcon";
 import { Modal } from "./Modal";
-import {
-  SegmentedTabBar,
-  type SegmentedTab,
-} from "./SegmentedTabBar";
-import {
-  getPermissionTabOverride,
-  type TabIconOverride,
-} from "./tabBadgeUtils";
+import { SegmentedTabBar, type SegmentedTab } from "./SegmentedTabBar";
+import { getPermissionModeBadge, type TabIconOverride } from "./tabBadgeUtils";
 
 const DRY_RUN_TABS = {
   SUMMARY: "summary",
@@ -66,13 +67,13 @@ type DryRunTab = (typeof DRY_RUN_TABS)[keyof typeof DRY_RUN_TABS];
 type RailSelection = "overview" | number;
 
 const DRY_RUN_TAB_DEFINITIONS = [
-  { id: DRY_RUN_TABS.SUMMARY, label: "Summary", codicon: "info" },
-  { id: DRY_RUN_TABS.PAYLOAD, label: "Payload", codicon: "file-code" },
+  { id: DRY_RUN_TABS.SUMMARY, label: "Summary", codicon: "map-vertical" },
   { id: DRY_RUN_TABS.COMMAND, label: "Command", codicon: "terminal" },
+  { id: DRY_RUN_TABS.PAYLOAD, label: "Payload", codicon: "file-code" },
   {
     id: DRY_RUN_TABS.CONDITIONS,
     label: "Conditions",
-    codicon: "symbol-event",
+    codicon: "coverage",
   },
 ] satisfies readonly SegmentedTab<DryRunTab>[];
 
@@ -100,7 +101,10 @@ export interface DryRunModalProps {
   elevated?: boolean;
 }
 
-function sameScope(left: ExecutionPreviewScope | null, right: ExecutionPreviewScope) {
+function sameScope(
+  left: ExecutionPreviewScope | null,
+  right: ExecutionPreviewScope
+) {
   return (
     left?.kind === right.kind &&
     (right.kind !== "step" ||
@@ -147,17 +151,11 @@ function formatJson(value: unknown): string {
 }
 
 function getTokenContribution(step: StepExecutionPreview): number {
-  return step.prompt?.sections.reduce(
-    (total, section) => total + (section.tokenEstimate ?? 0),
-    0
-  ) ?? 0;
-}
-
-function getPermissionOverride(step: StepExecutionPreview): TabIconOverride | undefined {
-  const diagnostics = step.permissionApplication?.diagnostics ?? [];
-  return getPermissionTabOverride(
-    step.resolvedProperties.permissions.mode ?? "",
-    diagnostics.some((diagnostic) => diagnostic.severity !== "info")
+  return (
+    step.prompt?.sections.reduce(
+      (total, section) => total + (section.tokenEstimate ?? 0),
+      0
+    ) ?? 0
   );
 }
 
@@ -222,7 +220,9 @@ type TimelineBlock =
       mutations: readonly WorkspaceMutationPreview[];
     };
 
-function buildTimelineBlocks(entries: readonly StepTimelineEntry[]): TimelineBlock[] {
+function buildTimelineBlocks(
+  entries: readonly StepTimelineEntry[]
+): TimelineBlock[] {
   const blocks: TimelineBlock[] = [];
   let index = 0;
 
@@ -275,8 +275,12 @@ function TimelineEntryRow({
     return (
       <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
         <div className="min-w-0 truncate text-editor-fg">
-          <i className="codicon codicon-file-code mr-2 text-description-fg" aria-hidden="true" />
-          Payload — {formatPayloadFileCount(entry.fileCount)}, {formatCount(entry.totalByteCount)} bytes
+          <i
+            className="codicon codicon-file-code mr-2 text-description-fg"
+            aria-hidden="true"
+          />
+          Payload — {formatPayloadFileCount(entry.fileCount)},{" "}
+          {formatMagnitude(entry.totalByteCount)} bytes
         </div>
         <button
           type="button"
@@ -293,8 +297,12 @@ function TimelineEntryRow({
     return (
       <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
         <div className="min-w-0 truncate text-editor-fg">
-          <i className="codicon codicon-terminal mr-2 text-description-fg" aria-hidden="true" />
-          Command — <code>{entry.executable}</code> · cwd: <code>{entry.cwd}</code>
+          <i
+            className="codicon codicon-terminal mr-2 text-description-fg"
+            aria-hidden="true"
+          />
+          Command — <code>{entry.executable}</code> · cwd:{" "}
+          <code>{entry.cwd}</code>
         </div>
         <button
           type="button"
@@ -318,16 +326,22 @@ function TimelineEntryRow({
       }`}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        {mutation.path && <code className="break-all text-editor-fg">{mutation.path}</code>}
+        {mutation.path && (
+          <code className="break-all text-editor-fg">{mutation.path}</code>
+        )}
         <span className={isShared ? "text-warning-fg" : "text-description-fg"}>
           {mutation.operation}
         </span>
       </div>
       {isShared ? (
         <div className="mt-1 flex items-start gap-1 text-warning-fg">
-          <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
+          <i
+            className="codicon codicon-warning mt-px flex-shrink-0"
+            aria-hidden="true"
+          />
           <span>
-            Workspace-wide side effect{mutation.warning ? `: ${mutation.warning}` : "."}
+            Workspace-wide side effect
+            {mutation.warning ? `: ${mutation.warning}` : "."}
           </span>
         </div>
       ) : (
@@ -352,7 +366,9 @@ function TimelineSection({
   onNavigate: (tab: DryRunTab) => void;
 }): React.ReactElement {
   const blocks = useMemo(() => buildTimelineBlocks(entries), [entries]);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+    {}
+  );
 
   if (blocks.length === 0) {
     return <p className="text-xs text-description-fg">No timeline entries.</p>;
@@ -387,7 +403,10 @@ function TimelineSection({
                 className="self-start text-xxs text-link-fg hover:underline"
                 aria-expanded="true"
                 onClick={() =>
-                  setExpandedGroups((current) => ({ ...current, [block.groupId]: false }))
+                  setExpandedGroups((current) => ({
+                    ...current,
+                    [block.groupId]: false,
+                  }))
                 }
               >
                 Collapse internal changes
@@ -403,11 +422,16 @@ function TimelineSection({
             className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-left text-xs text-description-fg hover:text-foreground"
             aria-expanded="false"
             onClick={() =>
-              setExpandedGroups((current) => ({ ...current, [block.groupId]: true }))
+              setExpandedGroups((current) => ({
+                ...current,
+                [block.groupId]: true,
+              }))
             }
           >
             <span>
-              {block.mutations.length} internal {block.mutations.length === 1 ? "change" : "changes"} — .ctrlyoke/temp, cleared after this run
+              {block.mutations.length} internal{" "}
+              {block.mutations.length === 1 ? "change" : "changes"} —
+              .ctrlyoke/temp, cleared after this run
             </span>
             <span aria-hidden="true">▸</span>
           </button>
@@ -417,13 +441,19 @@ function TimelineSection({
   );
 }
 
-function StepTimelineHeading({ step }: { step: StepExecutionPreview }): React.ReactElement {
+function StepTimelineHeading({
+  step,
+}: {
+  step: StepExecutionPreview;
+}): React.ReactElement {
   return (
     <div
       className="flex items-center gap-2 rounded px-2 py-2 text-left text-xs text-description-fg"
       aria-label={`Step ${step.stepIndex + 1}: ${stepLabel(step)}`}
     >
-      <span className="w-4 flex-shrink-0 text-right text-xxs">{step.stepIndex + 1}</span>
+      <span className="w-4 flex-shrink-0 text-right text-xxs">
+        {step.stepIndex + 1}
+      </span>
       <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={15} />
       <span className="min-w-0 flex-1 truncate">{stepLabel(step)}</span>
     </div>
@@ -444,16 +474,26 @@ function OverviewPanel({
   return (
     <div className="flex flex-col gap-5 p-4">
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Workflow summary</h3>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">
+          Workflow summary
+        </h3>
         <DefinitionList
           entries={[
             ["Steps", formatCount(preview.workflow.stepCount)],
-            ["Payload bytes", formatCount(preview.workflow.totalByteCount)],
-            ["Token estimate", formatCount(preview.workflow.totalTokenEstimate)],
+            ["Payload bytes", formatMagnitude(preview.workflow.totalByteCount)],
+            [
+              "Token estimate",
+              formatMagnitude(preview.workflow.totalTokenEstimate),
+            ],
             ["Workspace mutations", formatCount(mutations.length)],
             ["Harnesses", preview.workflow.harnessIds.join(", ") || "None"],
             ...(preview.workflow.sourcePath
-              ? [["Source path", preview.workflow.sourcePath] as [string, React.ReactNode]]
+              ? [
+                  ["Source path", preview.workflow.sourcePath] as [
+                    string,
+                    React.ReactNode,
+                  ],
+                ]
               : []),
           ]}
         />
@@ -466,7 +506,9 @@ function OverviewPanel({
         {preview.diagnostics.length > 0 ? (
           <DiagnosticList diagnostics={preview.diagnostics} />
         ) : (
-          <p className="text-xs text-description-fg">No workflow diagnostics.</p>
+          <p className="text-xs text-description-fg">
+            No workflow diagnostics.
+          </p>
         )}
       </section>
 
@@ -502,10 +544,15 @@ function SummaryPanel({
   return (
     <div className="flex flex-col gap-5 p-4">
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Resolved execution</h3>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">
+          Resolved execution
+        </h3>
         <DefinitionList
           entries={[
-            ["Harness", HARNESS_INFO[properties.harnessId]?.name ?? properties.harnessId],
+            [
+              "Harness",
+              HARNESS_INFO[properties.harnessId]?.name ?? properties.harnessId,
+            ],
             ["Harness version", properties.harnessVersion ?? "Not reported"],
             ["Model", properties.model ?? "Default"],
             ["Execution mode", properties.executionMode ?? "Default"],
@@ -513,13 +560,15 @@ function SummaryPanel({
             ["Session", properties.session.present ? "Present" : "Not present"],
             ["Permission mode", permissionMode],
             ["MCP servers", properties.mcpServerIds.join(", ") || "None"],
-            ["Token contribution", formatCount(getTokenContribution(step))],
+            ["Token contribution", formatMagnitude(getTokenContribution(step))],
           ]}
         />
       </section>
 
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Diagnostics</h3>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">
+          Diagnostics
+        </h3>
         {step.diagnostics.length > 0 ? (
           <DiagnosticList diagnostics={step.diagnostics} />
         ) : (
@@ -529,7 +578,10 @@ function SummaryPanel({
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-foreground">Timeline</h3>
-        <TimelineSection entries={buildStepTimeline(step)} onNavigate={onNavigate} />
+        <TimelineSection
+          entries={buildStepTimeline(step)}
+          onNavigate={onNavigate}
+        />
       </section>
     </div>
   );
@@ -567,16 +619,24 @@ function FileReferenceSection({
     <section className="rounded border border-panel-border">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-border px-3 py-2">
         <div className="min-w-0 text-xs font-semibold text-foreground">
-          {PREVIEW_PROMPT_CATEGORY_LABELS[PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE]} {basename}
+          {
+            PREVIEW_PROMPT_CATEGORY_LABELS[
+              PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE
+            ]
+          }{" "}
+          {basename}
         </div>
         <div className="text-xxs text-description-fg">
-          {formatCount(section.byteCount)} bytes
-          {section.tokenEstimate != null && ` · ${formatCount(section.tokenEstimate)} tokens`}
+          {formatMagnitude(section.byteCount)} bytes
+          {section.tokenEstimate != null &&
+            ` · ${formatMagnitude(section.tokenEstimate)} tokens`}
         </div>
       </div>
       <div className="flex flex-col gap-2 px-3 py-2">
         {section.path && (
-          <div className="break-all text-xxs text-description-fg">{section.path}</div>
+          <div className="break-all text-xxs text-description-fg">
+            {section.path}
+          </div>
         )}
         <p className="text-xxs text-description-fg" role="note">
           {PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.REFERENCE]}
@@ -610,11 +670,13 @@ function PayloadSection({
     <section className="rounded border border-panel-border">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-border px-3 py-2">
         <div className="min-w-0 text-xs font-semibold text-foreground">
-          {PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} · chunk {section.chunkIndex + 1}
+          {PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} · chunk{" "}
+          {section.chunkIndex + 1}
         </div>
         <div className="text-xxs text-description-fg">
-          {formatCount(section.byteCount)} bytes
-          {section.tokenEstimate != null && ` · ${formatCount(section.tokenEstimate)} tokens`}
+          {formatMagnitude(section.byteCount)} bytes
+          {section.tokenEstimate != null &&
+            ` · ${formatMagnitude(section.tokenEstimate)} tokens`}
         </div>
       </div>
       <div className="flex flex-col gap-2 px-3 py-2">
@@ -633,7 +695,10 @@ function PayloadSection({
             role="note"
           >
             {!isNeutralTruncationReason(section.truncationReason) && (
-              <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
+              <i
+                className="codicon codicon-warning mt-px flex-shrink-0"
+                aria-hidden="true"
+              />
             )}
             <span>{reason}</span>
           </div>
@@ -652,7 +717,9 @@ function PayloadSection({
             </button>
           </>
         ) : (
-          <p className="text-xs text-description-fg">No inline body in this preview.</p>
+          <p className="text-xs text-description-fg">
+            No inline body in this preview.
+          </p>
         )}
       </div>
     </section>
@@ -672,10 +739,13 @@ function PayloadPanel({
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-foreground">Categorized payload</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          Categorized payload
+        </h3>
         {step.prompt && (
           <span className="text-xxs text-description-fg">
-            {formatCount(step.prompt.includedBodyByteCount)} of {formatCount(step.prompt.totalByteCount)} body bytes shown
+            {formatMagnitude(step.prompt.includedBodyByteCount)} of{" "}
+            {formatMagnitude(step.prompt.totalByteCount)} body bytes shown
           </span>
         )}
       </div>
@@ -691,7 +761,9 @@ function PayloadPanel({
           />
         ))
       ) : (
-        <p className="text-xs text-description-fg">This step has no categorized payload.</p>
+        <p className="text-xs text-description-fg">
+          This step has no categorized payload.
+        </p>
       )}
     </div>
   );
@@ -729,7 +801,11 @@ function CommandPanel({
 }): React.ReactElement {
   const command = step.command;
   if (!command) {
-    return <p className="p-4 text-xs text-description-fg">This step has no command.</p>;
+    return (
+      <p className="p-4 text-xs text-description-fg">
+        This step has no command.
+      </p>
+    );
   }
   const activeShell = selectedShell ?? command.displayShell;
   const displayText = resolveCommandDisplayText(command, activeShell);
@@ -769,7 +845,8 @@ function CommandPanel({
         </pre>
         {command.requiresShellVerbatimArgs && (
           <p className="mt-2 text-xxs text-description-fg">
-            This launcher requires cmd.exe; no other shell rendering is available.
+            This launcher requires cmd.exe; no other shell rendering is
+            available.
           </p>
         )}
       </section>
@@ -808,9 +885,13 @@ function ConditionList({
               key={`${condition.kind}-${condition.scriptPath ?? ""}-${index}`}
               className="rounded border border-panel-border px-3 py-2 text-xs"
             >
-              <div className="font-semibold text-foreground">{condition.kind}</div>
+              <div className="font-semibold text-foreground">
+                {condition.kind}
+              </div>
               <div className="text-description-fg">
-                {condition.configured ? condition.description ?? "Configured" : "Not configured"}
+                {condition.configured
+                  ? (condition.description ?? "Configured")
+                  : "Not configured"}
               </div>
               {condition.scriptPath && (
                 <code className="mt-1 block break-all text-xxs text-editor-fg">
@@ -825,7 +906,11 @@ function ConditionList({
   );
 }
 
-function ConditionsPanel({ step }: { step: StepExecutionPreview }): React.ReactElement {
+function ConditionsPanel({
+  step,
+}: {
+  step: StepExecutionPreview;
+}): React.ReactElement {
   const conditions = step.conditions;
   return (
     <div className="flex flex-col gap-5 p-4">
@@ -836,7 +921,12 @@ function ConditionsPanel({ step }: { step: StepExecutionPreview }): React.ReactE
         <DefinitionList
           entries={[
             ["Maximum attempts", formatCount(conditions.retry.maxAttempts)],
-            ["Backoff", conditions.retry.backoffSeconds == null ? "None" : `${conditions.retry.backoffSeconds}s`],
+            [
+              "Backoff",
+              conditions.retry.backoffSeconds == null
+                ? "None"
+                : `${conditions.retry.backoffSeconds}s`,
+            ],
             ["Error behavior", conditions.errorBehavior ?? "Default"],
           ]}
         />
@@ -867,17 +957,21 @@ function StepDetail({
   const tabOverrides = useMemo(() => {
     const overrides: Partial<Record<DryRunTab, TabIconOverride>> = {};
     const worst = getWorstSeverity(step.diagnostics);
-    const permissionOverride = getPermissionOverride(step);
     if (worst) {
       const style = DIAGNOSTIC_SEVERITY_STYLE[worst];
       overrides[DRY_RUN_TABS.SUMMARY] = {
-        codicon: "warning",
         color: style.text,
         hoverColor: style.text.replace("text-", "hover:text-"),
         activeColor: style.text,
+        badgeCodicon: style.icon,
+        badgeColor: style.text,
       };
-    } else if (permissionOverride) {
-      overrides[DRY_RUN_TABS.SUMMARY] = permissionOverride;
+    }
+    const permissionBadge = getPermissionModeBadge(
+      step.resolvedProperties.permissions.mode ?? ""
+    );
+    if (permissionBadge) {
+      overrides[DRY_RUN_TABS.COMMAND] = permissionBadge;
     }
     return overrides;
   }, [step]);
@@ -886,13 +980,23 @@ function StepDetail({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-panel-border px-4 py-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-foreground">{stepLabel(step)}</div>
+          <div className="truncate text-sm font-semibold text-foreground">
+            {stepLabel(step)}
+          </div>
           <div className="mt-1 flex items-center gap-2 text-xxs text-description-fg">
-            <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={14} />
-            <span>{HARNESS_INFO[step.resolvedProperties.harnessId]?.name ?? step.resolvedProperties.harnessId}</span>
+            <HarnessIcon
+              harnessId={step.resolvedProperties.harnessId}
+              size={14}
+            />
+            <span>
+              {HARNESS_INFO[step.resolvedProperties.harnessId]?.name ??
+                step.resolvedProperties.harnessId}
+            </span>
           </div>
         </div>
-        <span className="flex-shrink-0 text-xxs text-description-fg">Step {step.stepIndex + 1}</span>
+        <span className="flex-shrink-0 text-xxs text-description-fg">
+          Step {step.stepIndex + 1}
+        </span>
       </div>
       <SegmentedTabBar
         tabs={DRY_RUN_TAB_DEFINITIONS}
@@ -920,7 +1024,9 @@ function StepDetail({
             onSelectShell={onSelectShell}
           />
         )}
-        {activeTab === DRY_RUN_TABS.CONDITIONS && <ConditionsPanel step={step} />}
+        {activeTab === DRY_RUN_TABS.CONDITIONS && (
+          <ConditionsPanel step={step} />
+        )}
       </div>
     </div>
   );
@@ -936,7 +1042,10 @@ function Rail({
   onSelect: (selection: RailSelection) => void;
 }): React.ReactElement {
   return (
-    <nav className="flex w-[200px] flex-shrink-0 flex-col border-r border-panel-border bg-sidebar-bg p-2" aria-label="Dry run sections">
+    <nav
+      className="flex w-[200px] flex-shrink-0 flex-col border-r border-panel-border bg-sidebar-bg p-2"
+      aria-label="Dry run sections"
+    >
       <button
         type="button"
         className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === "overview" ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
@@ -949,7 +1058,9 @@ function Rail({
       <div className="flex min-h-0 flex-col gap-1 overflow-y-auto">
         {preview.steps.map((step) => {
           const severity = getWorstSeverity(step.diagnostics);
-          const style = severity ? DIAGNOSTIC_SEVERITY_STYLE[severity] : undefined;
+          const style = severity
+            ? DIAGNOSTIC_SEVERITY_STYLE[severity]
+            : undefined;
           return (
             <button
               key={step.stepIndex}
@@ -958,8 +1069,13 @@ function Rail({
               onClick={() => onSelect(step.stepIndex)}
               title={stepLabel(step)}
             >
-              <span className="w-4 flex-shrink-0 text-right text-xxs">{step.stepIndex + 1}</span>
-              <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={15} />
+              <span className="w-4 flex-shrink-0 text-right text-xxs">
+                {step.stepIndex + 1}
+              </span>
+              <HarnessIcon
+                harnessId={step.resolvedProperties.harnessId}
+                size={15}
+              />
               <span className="min-w-0 flex-1 truncate">{stepLabel(step)}</span>
               {style && (
                 <span
@@ -976,7 +1092,10 @@ function Rail({
   );
 }
 
-export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = false }) => {
+export const DryRunModal: React.FC<DryRunModalProps> = ({
+  scope,
+  elevated = false,
+}) => {
   const storeScope = useExecutionPreviewStore((state) => state.scope);
   const status = useExecutionPreviewStore((state) => state.status);
   const preview = useExecutionPreviewStore((state) => state.preview);
@@ -987,11 +1106,15 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
     scope.kind === "step" ? scope.stepIndex : "overview"
   );
   const [activeTabs, setActiveTabs] = useState<Record<number, DryRunTab>>({});
-  const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>({});
+  const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>(
+    {}
+  );
   const [selectedShells, setSelectedShells] = useState<
     Record<number, CommandDisplayShell>
   >({});
-  const [copiedAction, setCopiedAction] = useState<"command" | "payload" | null>(null);
+  const [copiedAction, setCopiedAction] = useState<
+    "command" | "payload" | null
+  >(null);
   const [contentRef, isNarrow] = useElementNarrow(640);
   const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scopeStepIndex = scope.kind === "step" ? scope.stepIndex : null;
@@ -1076,14 +1199,18 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
     activeStep?.command && activeCommandShell
       ? resolveCommandDisplayText(activeStep.command, activeCommandShell)
       : undefined;
-  const payloadText = activeStep?.prompt ? formatJson(activeStep.prompt) : undefined;
+  const payloadText = activeStep?.prompt
+    ? formatJson(activeStep.prompt)
+    : undefined;
   const workflowNarrow = scope.kind === "workflow" && isNarrow;
   const selectOptions: SelectOption[] = [
     { value: "overview", label: "Overview", description: "Workflow summary" },
     ...(preview?.steps.map((step) => ({
       value: String(step.stepIndex),
       label: `${step.stepIndex + 1}. ${stepLabel(step)}`,
-      description: HARNESS_INFO[step.resolvedProperties.harnessId]?.name ?? step.resolvedProperties.harnessId,
+      description:
+        HARNESS_INFO[step.resolvedProperties.harnessId]?.name ??
+        step.resolvedProperties.harnessId,
     })) ?? []),
   ];
 
@@ -1104,7 +1231,9 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
             onClick={() => void handleCopy("command", commandText)}
             disabled={!commandText}
           >
-            <i className={`codicon ${copiedAction === "command" ? "codicon-check" : "codicon-copy"}`} />
+            <i
+              className={`codicon ${copiedAction === "command" ? "codicon-check" : "codicon-copy"}`}
+            />
             Copy command
           </button>
           <button
@@ -1113,7 +1242,9 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
             onClick={() => void handleCopy("payload", payloadText)}
             disabled={!payloadText}
           >
-            <i className={`codicon ${copiedAction === "payload" ? "codicon-check" : "codicon-copy"}`} />
+            <i
+              className={`codicon ${copiedAction === "payload" ? "codicon-check" : "codicon-copy"}`}
+            />
             Copy payload
           </button>
           <button
@@ -1144,7 +1275,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
       ) : (
         <div ref={contentRef} className="flex min-h-[28rem] min-w-0 flex-col">
           {isStale && (
-            <div className="flex items-center gap-2 border-b border-warning-fg border-opacity-40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg" role="status">
+            <div
+              className="flex items-center gap-2 border-b border-warning-fg border-opacity-40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg"
+              role="status"
+            >
               <i className="codicon codicon-warning" aria-hidden="true" />
               <span>Definition changed —</span>
               <button
@@ -1160,7 +1294,11 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
             <div className="flex-shrink-0 border-b border-panel-border p-3">
               <CustomSelect
                 value={String(selection)}
-                onChange={(value) => setSelection(value === "overview" ? "overview" : Number(value))}
+                onChange={(value) =>
+                  setSelection(
+                    value === "overview" ? "overview" : Number(value)
+                  )
+                }
                 options={selectOptions}
                 triggerAriaLabel="Select dry run section"
               />
@@ -1168,7 +1306,11 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
           )}
           <div className="flex min-h-0 flex-1">
             {!workflowNarrow && scope.kind === "workflow" && (
-              <Rail preview={preview} selection={selection} onSelect={setSelection} />
+              <Rail
+                preview={preview}
+                selection={selection}
+                onSelect={setSelection}
+              />
             )}
             {selection === "overview" && scope.kind === "workflow" ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1182,7 +1324,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
                 step={activeStep}
                 activeTab={activeTab}
                 onTabChange={(tab) =>
-                  setActiveTabs((current) => ({ ...current, [activeStep.stepIndex]: tab }))
+                  setActiveTabs((current) => ({
+                    ...current,
+                    [activeStep.stepIndex]: tab,
+                  }))
                 }
                 onNavigateToTab={(tab) =>
                   setActiveTabs((current) => ({
@@ -1193,7 +1338,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
                 expandedChunks={expandedChunks}
                 onToggleChunk={(chunkIndex) => {
                   const key = `${activeStep.stepIndex}:${chunkIndex}`;
-                  setExpandedChunks((current) => ({ ...current, [key]: !current[key] }));
+                  setExpandedChunks((current) => ({
+                    ...current,
+                    [key]: !current[key],
+                  }));
                 }}
                 selectedShell={selectedShells[activeStep.stepIndex]}
                 onSelectShell={(shell) =>
