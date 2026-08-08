@@ -986,7 +986,7 @@ function StepDetail({
   }, [step]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-panel-border px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-foreground">
@@ -1228,50 +1228,58 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
       isOpen
       title={`Dry Run${preview ? ` — ${preview.workflow.name}` : ""}`}
       onClose={close}
-      size="xl"
-      fullWidthOnNarrow
+      size="full"
       bodyClassName="p-0"
       elevated={elevated}
       footer={
         <>
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors ${commandText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
+            className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded transition-colors sm:px-3 ${commandText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
             onClick={() => void handleCopy("command", commandText)}
             disabled={!commandText}
+            title="Copy command"
+            aria-label="Copy command"
           >
             <i
               className={`codicon ${copiedAction === "command" ? "codicon-check" : "codicon-copy"}`}
             />
-            Copy command
+            <span className="sm:hidden">Command</span>
+            <span className="hidden sm:inline">Copy command</span>
           </button>
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors ${payloadText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
+            className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded transition-colors sm:px-3 ${payloadText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
             onClick={() => void handleCopy("payload", payloadText)}
             disabled={!payloadText}
+            title="Copy payload"
+            aria-label="Copy payload"
           >
             <i
               className={`codicon ${copiedAction === "payload" ? "codicon-check" : "codicon-copy"}`}
             />
-            Copy payload
+            <span className="sm:hidden">Payload</span>
+            <span className="hidden sm:inline">Copy payload</span>
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-description-fg hover:text-foreground rounded transition-colors"
+            className="inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-description-fg transition-colors hover:text-foreground sm:px-3"
             onClick={handleExport}
             disabled={!preview}
+            title="Export"
+            aria-label="Export"
           >
             <i className="codicon codicon-cloud-download" />
-            Export
+            <span className="hidden sm:inline">Export</span>
           </button>
           <button
             type="button"
-            className="ml-auto inline-flex items-center gap-1.5 rounded bg-btn-bg px-3 py-1.5 text-sm text-btn-fg transition-colors hover:bg-btn-hover"
+            className="ml-auto inline-flex items-center gap-1.5 rounded bg-btn-bg px-2 py-1.5 text-sm text-btn-fg transition-colors hover:bg-btn-hover sm:px-3"
             onClick={handleRun}
           >
             <i className="codicon codicon-play" />
-            Run workflow
+            <span className="min-[360px]:hidden">Run</span>
+            <span className="hidden min-[360px]:inline">Run workflow</span>
           </button>
         </>
       }
