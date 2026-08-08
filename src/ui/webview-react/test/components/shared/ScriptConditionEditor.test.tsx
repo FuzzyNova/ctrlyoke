@@ -177,4 +177,101 @@ describe("ScriptConditionEditor", () => {
       }
     );
   });
+
+  describe("scriptStep execution mode override", () => {
+    function chooseExecutionMode(label: string): void {
+      const current = screen.getByRole("button", { name: "Execution Mode" });
+      fireEvent.click(current);
+      const option = screen
+        .getAllByText(label)
+        .map((element) => element.closest("button"))
+        .find((button) => button && button !== current);
+      if (!option) throw new Error(`Execution mode option not found: ${label}`);
+      fireEvent.click(option);
+    }
+
+    it("renders an Execution Mode dropdown only for the scriptStep variant", () => {
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Execution Mode" })
+      ).toBeInTheDocument();
+    });
+
+    it.each(["endCondition", "preCondition"] as const)(
+      "%s: never renders an Execution Mode dropdown — conditions always run headless",
+      (variant) => {
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test", returns: "true" }}
+            onChange={vi.fn()}
+            idPrefix="test-condition"
+          />
+        );
+
+        expect(
+          screen.queryByRole("button", { name: "Execution Mode" })
+        ).not.toBeInTheDocument();
+      }
+    );
+
+    it("defaults to Inherit when unset", () => {
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Execution Mode" })
+      ).toHaveTextContent(/Inherit/);
+    });
+
+    it("commits an explicit interactive override", () => {
+      const onChange = vi.fn();
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={onChange}
+          idPrefix="test-condition"
+        />
+      );
+
+      chooseExecutionMode("Interactive");
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ executionMode: "interactive" })
+      );
+    });
+
+    it("clears back to inherit when Inherit is re-selected", () => {
+      const onChange = vi.fn();
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test", executionMode: "headless" }}
+          onChange={onChange}
+          idPrefix="test-condition"
+        />
+      );
+
+      chooseExecutionMode("Inherit (Interactive)");
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ executionMode: undefined })
+      );
+    });
+  });
 });

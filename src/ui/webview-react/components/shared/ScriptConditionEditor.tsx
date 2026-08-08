@@ -10,6 +10,12 @@ import {
 import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { getDictionaryUris } from "@utils/dictionaryUris";
+import { useSettingsStore } from "@store/settingsStore";
+import {
+  EXECUTION_MODE_HELP_TEXT,
+  EXECUTION_MODE_OPTIONS,
+  type ExecutionMode,
+} from "@root/types/DashboardConstants";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as CompareSource[]
@@ -46,6 +52,9 @@ export interface ScriptConditionValue {
   timeout?: number;
   onPass?: string;
   onFail?: string;
+  // scriptStep-only field — inherits from workflow/settings when undefined.
+  // Pre/end conditions always run headless and never expose this.
+  executionMode?: ExecutionMode;
   // endCondition-only fields
   maxRetries?: number;
   retryPrompt?: string;
@@ -90,6 +99,10 @@ interface ScriptConditionEditorProps {
  *   - Resume Session on Retry checkbox
  *
  * preCondition variant uses "Continue / Skip Prompt / Stop Workflow" for action options.
+ *
+ * scriptStep variant additionally renders an Execution Mode dropdown (paired with
+ * Timeout) — interactive/headless/inherit for this step. Pre/end conditions never
+ * get this control; they always run headless (see PER_STEP_EXECUTION_MODE_PLAN.md).
  */
 export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   value,
@@ -170,6 +183,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const compareSource = (v.compareSource ??
     COMPARE_SOURCES.AUTO) as CompareSource;
   const { affUri, dicUri } = getDictionaryUris();
+
+  // scriptStep-only: resolved inherited execution mode (workflow -> global settings),
+  // used to label the "Inherit" option the same way PropertiesDrawer labels it for prompt steps.
+  const resolvedExecutionMode = useSettingsStore(
+    (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
+  );
+  const defaultExecutionModeLabel = `Inherit (${
+    EXECUTION_MODE_OPTIONS.find((option) => option.value === resolvedExecutionMode)
+      ?.label ?? resolvedExecutionMode
+  })`;
   const compareSourceHint =
     compareSource === COMPARE_SOURCES.AUTO
       ? "'true'/'false' check exit code; other values compare stdout"
@@ -352,6 +375,52 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <span className="text-xxs text-description-fg">
               Use -1 for unlimited retries
             </span>
+          </div>
+        </DrawerRow>
+      ) : variant === "scriptStep" ? (
+        <DrawerRow narrow={narrow}>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`${idPrefix}-timeout`}
+              className="text-xs font-medium text-foreground"
+            >
+              Timeout (ms)
+            </label>
+            <input
+              type="number"
+              id={`${idPrefix}-timeout`}
+              value={timeoutInput}
+              onChange={(e) => setTimeoutInput(e.target.value)}
+              onBlur={commitTimeout}
+              min={0}
+              placeholder="Default (from settings)"
+              disabled={disabled}
+              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`${idPrefix}-execution-mode`}
+              className="text-xs font-medium text-foreground"
+              title={EXECUTION_MODE_HELP_TEXT}
+            >
+              Execution Mode
+            </label>
+            <CustomSelect
+              id={`${idPrefix}-execution-mode`}
+              value={v.executionMode ?? "default"}
+              onChange={(val) =>
+                update({
+                  executionMode:
+                    val === "default" ? undefined : (val as ExecutionMode),
+                })
+              }
+              options={[
+                { value: "default", label: defaultExecutionModeLabel },
+                ...EXECUTION_MODE_OPTIONS,
+              ]}
+              disabled={disabled}
+            />
           </div>
         </DrawerRow>
       ) : (

@@ -10,6 +10,7 @@ import {
 } from "@/types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@/types/messages";
+import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +26,14 @@ function makePromptStep(overrides: Partial<PromptStep> = {}): PromptStep {
     name: "My Prompt",
     harness: "claude-cli",
     model: "claude-opus-4",
+    ...overrides,
+  };
+}
+
+function makeScriptStep(overrides: Partial<ScriptStep> = {}): ScriptStep {
+  return {
+    type: STEP_TYPES.SCRIPT,
+    script: "npm test",
     ...overrides,
   };
 }
@@ -375,6 +384,59 @@ describe("step enabled state", () => {
     store().enterEditMode(0, makePromptStep({ enabled: false }));
 
     expect(store().stepEnabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Script step execution mode override
+// ---------------------------------------------------------------------------
+
+describe("script step executionMode", () => {
+  it("defaults to undefined (inherit) for a new script step", () => {
+    store().setStepType(STEP_TYPES.SCRIPT);
+    expect(store().scriptExecutionMode).toBeUndefined();
+  });
+
+  it("setScriptExecutionMode updates the value and marks dirty", () => {
+    store().setScriptExecutionMode("interactive");
+    expect(store().scriptExecutionMode).toBe("interactive");
+    expect(store().isDirty).toBe(true);
+  });
+
+  it("enterEditMode loads executionMode from an existing script step", () => {
+    store().enterEditMode(0, makeScriptStep({ executionMode: "headless" }));
+    expect(store().scriptExecutionMode).toBe("headless");
+  });
+
+  it("enterEditMode leaves executionMode undefined when the step has no override", () => {
+    store().enterEditMode(0, makeScriptStep());
+    expect(store().scriptExecutionMode).toBeUndefined();
+  });
+
+  it("preserves an unsaved executionMode change in pending edits across deselect", () => {
+    store().enterEditMode(0, makeScriptStep({ executionMode: "headless" }));
+    store().setScriptExecutionMode("interactive");
+    store().deselect();
+
+    store().enterEditMode(0, makeScriptStep({ executionMode: "headless" }));
+
+    expect(store().scriptExecutionMode).toBe("interactive");
+  });
+
+  it("cancelEdit discards an unsaved executionMode change", () => {
+    store().enterEditMode(0, makeScriptStep({ executionMode: "headless" }));
+    store().setScriptExecutionMode("interactive");
+    store().cancelEdit();
+
+    store().enterEditMode(0, makeScriptStep({ executionMode: "headless" }));
+
+    expect(store().scriptExecutionMode).toBe("headless");
+  });
+
+  it("resetEditor clears executionMode back to undefined", () => {
+    store().setScriptExecutionMode("interactive");
+    store().resetEditor();
+    expect(store().scriptExecutionMode).toBeUndefined();
   });
 });
 

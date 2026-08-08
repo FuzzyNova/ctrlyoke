@@ -69,12 +69,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnFail,
     scriptCompareSource,
     scriptReturns,
+    scriptExecutionMode,
     setScriptCommand,
     setScriptTimeout,
     setScriptOnPass,
     setScriptOnFail,
     setScriptCompareSource,
     setScriptReturns,
+    setScriptExecutionMode,
     pendingPromptEditorInserts,
     consumePromptEditorInsert,
   } = useEditorStore();
@@ -517,6 +519,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               compareSource: scriptCompareSource,
             }),
             ...(scriptReturns && { returns: scriptReturns }),
+            ...(scriptExecutionMode !== undefined && {
+              executionMode: scriptExecutionMode,
+            }),
             ...(!stepEnabled && { enabled: false }),
           },
           action: finalAction,
@@ -569,6 +574,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptOnFail,
       scriptCompareSource,
       scriptReturns,
+      scriptExecutionMode,
       stepEnabled,
       promptText,
       promptName,
@@ -595,6 +601,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           compareSource: scriptCompareSource,
         }),
         ...(scriptReturns && { returns: scriptReturns }),
+        ...(scriptExecutionMode !== undefined && {
+          executionMode: scriptExecutionMode,
+        }),
         ...(!stepEnabled && { enabled: false }),
       };
       const clearProperties = stepEnabled ? ["enabled"] : undefined;
@@ -627,6 +636,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               compareSource: scriptCompareSource,
             }),
             ...(scriptReturns && { returns: scriptReturns }),
+            ...(scriptExecutionMode !== undefined && {
+              executionMode: scriptExecutionMode,
+            }),
             ...(!stepEnabled && { enabled: false }),
           },
           clearProperties,
@@ -678,6 +690,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnFail,
     scriptCompareSource,
     scriptReturns,
+    scriptExecutionMode,
     stepEnabled,
     selectionTarget,
     promptText,
@@ -769,6 +782,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptOnFail(updated.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
       setScriptCompareSource(updated.compareSource ?? COMPARE_SOURCES.AUTO);
       setScriptReturns(updated.returns ?? "");
+      setScriptExecutionMode(updated.executionMode);
     },
     [
       setScriptCommand,
@@ -777,6 +791,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptOnFail,
       setScriptCompareSource,
       setScriptReturns,
+      setScriptExecutionMode,
     ]
   );
 
@@ -858,6 +873,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               onFail: scriptOnFail,
               compareSource: scriptCompareSource,
               returns: scriptReturns,
+              executionMode: scriptExecutionMode,
             }}
             onChange={handleScriptChange}
             scriptLabel="Script command"
