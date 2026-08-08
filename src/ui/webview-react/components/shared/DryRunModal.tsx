@@ -212,10 +212,19 @@ function DefinitionList({
   );
 }
 
+const TIMELINE_BLOCK_KINDS = {
+  ENTRY: "entry",
+  RUN_LOCAL_GROUP: "run-local-group",
+} as const;
+
 type TimelineBlock =
-  | { kind: "entry"; entry: StepTimelineEntry; index: number }
   | {
-      kind: "run-local-group";
+      kind: typeof TIMELINE_BLOCK_KINDS.ENTRY;
+      entry: StepTimelineEntry;
+      index: number;
+    }
+  | {
+      kind: typeof TIMELINE_BLOCK_KINDS.RUN_LOCAL_GROUP;
       groupId: string;
       mutations: readonly WorkspaceMutationPreview[];
     };
@@ -246,14 +255,14 @@ function buildTimelineBlocks(
         index += 1;
       }
       blocks.push({
-        kind: "run-local-group",
+        kind: TIMELINE_BLOCK_KINDS.RUN_LOCAL_GROUP,
         groupId: `run-local-${groupStart}`,
         mutations,
       });
       continue;
     }
 
-    blocks.push({ kind: "entry", entry, index });
+    blocks.push({ kind: TIMELINE_BLOCK_KINDS.ENTRY, entry, index });
     index += 1;
   }
 
@@ -377,7 +386,7 @@ function TimelineSection({
   return (
     <div className="flex flex-col gap-2">
       {blocks.map((block) => {
-        if (block.kind === "entry") {
+        if (block.kind === TIMELINE_BLOCK_KINDS.ENTRY) {
           return (
             <TimelineEntryRow
               key={`timeline-${block.index}`}
