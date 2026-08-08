@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
+import {
+  PREVIEW_PROMPT_CATEGORIES,
+  PREVIEW_TRUNCATION_REASON_COPY,
+  PREVIEW_TRUNCATION_REASONS,
+} from "@root/types/DashboardConstants";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DryRunModal } from "@components/shared/DryRunModal";
 
@@ -348,6 +353,157 @@ describe("DryRunModal", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("redacted prompt body")).toBeInTheDocument();
+  });
+
+  it("renders file references as direct references without chunk or warning styling", async () => {
+    const user = userEvent.setup();
+    const filePath = "C:\\workspace\\dev\\backlog\\DRY_RUN_PREVIEW_PLAN.md";
+    const fileReferencePreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [
+        {
+          ...preview.steps[0],
+          prompt: {
+            totalByteCount: 34126,
+            includedBodyByteCount: 0,
+            bodyBudgetBytes: 1024,
+            sections: [
+              {
+                category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
+                byteCount: 34126,
+                lineCount: null,
+                tokenEstimate: 7290,
+                chunkIndex: 0,
+                contentHash: null,
+                truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
+                path: filePath,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, fileReferencePreview);
+
+    const { container } = render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+    await user.click(screen.getByTitle("Payload"));
+
+    expect(screen.getByText("File reference DRY_RUN_PREVIEW_PLAN.md")).toBeInTheDocument();
+    expect(screen.getByText(filePath)).toBeInTheDocument();
+    expect(
+      screen.getByText(PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.REFERENCE])
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/chunk/i)).not.toBeInTheDocument();
+    expect(container.querySelector(".codicon-warning")).not.toBeInTheDocument();
+    expect(container.querySelector(".text-warning-fg")).not.toBeInTheDocument();
+  });
+
+  it("uses category labels and neutral styling for the prior-context placeholder", async () => {
+    const user = userEvent.setup();
+    const placeholderPreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [
+        {
+          ...preview.steps[0],
+          prompt: {
+            totalByteCount: 0,
+            includedBodyByteCount: 0,
+            bodyBudgetBytes: 1024,
+            sections: [
+              {
+                category: PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+                byteCount: 0,
+                lineCount: null,
+                tokenEstimate: 0,
+                chunkIndex: 0,
+                contentHash: null,
+                truncationReason: PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, placeholderPreview);
+
+    const { container } = render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+    await user.click(screen.getByTitle("Payload"));
+
+    expect(screen.getByText("Prior context · chunk 1")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE]
+      )
+    ).toBeInTheDocument();
+    expect(container.querySelector(".codicon-warning")).not.toBeInTheDocument();
+    expect(container.querySelector(".text-warning-fg")).not.toBeInTheDocument();
+  });
+
+  it("keeps warning styling for content omitted by preview limits", async () => {
+    const user = userEvent.setup();
+    const warningPreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [
+        {
+          ...preview.steps[0],
+          prompt: {
+            ...preview.steps[0].prompt!,
+            sections: [
+              {
+                ...preview.steps[0].prompt!.sections[0],
+                truncationReason: PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP,
+              },
+              {
+                ...preview.steps[0].prompt!.sections[0],
+                chunkIndex: 1,
+                truncationReason: PREVIEW_TRUNCATION_REASONS.BODY_BUDGET,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, warningPreview);
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+    await user.click(screen.getByTitle("Payload"));
+
+    expect(
+      screen.getByText(PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP])
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.BODY_BUDGET])
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll(".codicon-warning")).toHaveLength(2);
+    expect(document.querySelectorAll(".text-warning-fg")).toHaveLength(2);
+  });
+
+  it("renders Excerpts instead of the raw inline-reference category", async () => {
+    const user = userEvent.setup();
+    const excerptPreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [
+        {
+          ...preview.steps[0],
+          prompt: {
+            ...preview.steps[0].prompt!,
+            sections: [
+              {
+                ...preview.steps[0].prompt!.sections[0],
+                category: PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, excerptPreview);
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+    await user.click(screen.getByTitle("Payload"));
+
+    expect(screen.getByText("Excerpts · chunk 1")).toBeInTheDocument();
+    expect(screen.queryByText(/inline-reference/)).not.toBeInTheDocument();
   });
 
   it("copies the redacted command and categorized payload", async () => {

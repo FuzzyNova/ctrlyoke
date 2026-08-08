@@ -3,10 +3,49 @@ import * as path from "path";
 import type {
   PriorContext,
   WorkflowRunAddress,
+  WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import type { PriorContextItem } from "../HarnessIntegration";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { RunOutputResolver } from "./RunOutputResolver";
+
+export interface PriorContextResolverOptions {
+  readonly workspaceRoot?: string;
+  readonly historyFilePath?: string;
+  readonly outputResolver: RunOutputResolver;
+}
+
+/**
+ * Build the timeline-backed prior-context callback shared by live execution
+ * and dry-run preview. An absent root or history path means there is no run
+ * history to resolve yet, which is a valid preview state.
+ */
+export function createPriorContextResolver({
+  workspaceRoot,
+  historyFilePath,
+  outputResolver,
+}: PriorContextResolverOptions): (
+  contexts: readonly PriorContext[],
+  allPrompts: readonly WorkflowStep[],
+  promptIndex: number
+) => Promise<PriorContextItem[]> {
+  return async (contexts, allPrompts, promptIndex) => {
+    if (!workspaceRoot || !historyFilePath) {
+      return [];
+    }
+    return new AddressedPriorContextResolver(
+      workspaceRoot,
+      outputResolver
+    ).resolve(contexts, (sameRunContexts) =>
+      outputResolver.resolvePriorContextItems(
+        historyFilePath,
+        sameRunContexts,
+        allPrompts,
+        promptIndex
+      )
+    );
+  };
+}
 
 /**
  * Resolves explicitly-addressed prior context without accepting a caller path.

@@ -13,6 +13,7 @@ import {
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
   PREVIEW_PROMPT_CATEGORIES,
+  PREVIEW_TRUNCATION_REASONS,
 } from "../../types/DashboardConstants";
 
 function createSections(overrides?: Partial<PromptSections>): PromptSections {
@@ -262,6 +263,145 @@ suite("CliPromptPreparer", () => {
     assert.strictEqual(capturedInlineRefCount, 1);
     assert.ok(
       result.tempFilePaths.some((filePath) => filePath.endsWith(".context.md"))
+    );
+  });
+
+  test("should preview an unresolved prior-context reference without creating a file or mutation", async () => {
+    const tempReferences: string[] = [];
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: ["/workspace/Plan.md"],
+          excerptContent: "<attachment>excerpt</attachment>",
+          userPromptText: "summarize the plan",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => {
+        throw new Error("unresolvable context must not be serialized");
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => {
+        tempReferences.push(absolutePath);
+        return `@${absolutePath}`;
+      },
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        directRefs,
+        contextRefs,
+        excerptRefs,
+        promptRefs
+      ) =>
+        [...directRefs, ...contextRefs, ...excerptRefs, ...promptRefs].join(
+          " | "
+        ),
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: "summarize the plan" } as PromptStep,
+      {
+        workflowName: "workflow",
+        promptIndex: 1,
+        allPrompts: [{ prompt: "summarize the plan" } as PromptStep],
+        resolvePriorContextItems: async () => [],
+      } as WorkflowContext,
+      { priorContext: "allPrevious" } as any,
+      undefined
+    );
+
+    const priorSections = plan.promptPreview.sections.filter(
+      (section) =>
+        section.category === PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT
+    );
+    assert.strictEqual(priorSections.length, 1);
+    assert.deepStrictEqual(priorSections[0], {
+      category: PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+      byteCount: 0,
+      tokenEstimate: 0,
+      chunkIndex: 0,
+      lineCount: null,
+      contentHash: null,
+      truncationReason: PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
+    });
+    assert.deepStrictEqual(
+      plan.promptPreview.sections.map((section) => section.category),
+      [
+        PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
+        PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+        PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE,
+        PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
+      ]
+    );
+    assert.strictEqual(
+      tempReferences.some((filePath) => filePath.endsWith(".context.md")),
+      false
+    );
+    assert.strictEqual(
+      plan.mutations.some((mutation) => mutation.path?.endsWith(".context.md")),
+      false
+    );
+  });
+
+  test("should preview resolved prior-context items as the real context payload", async () => {
+    const priorContextXml =
+      "<priorContext><step>prior output</step></priorContext>";
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ userPromptText: "continue from prior output" }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: (items) => {
+        assert.deepStrictEqual(items, [{ index: 0, text: "prior output" }]);
+        return priorContextXml;
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        _directRefs,
+        contextRefs,
+        _excerptRefs,
+        promptRefs
+      ) => [...contextRefs, ...promptRefs].join(" | "),
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: "continue from prior output" } as PromptStep,
+      {
+        workflowName: "workflow",
+        promptIndex: 1,
+        allPrompts: [
+          { prompt: "first" } as PromptStep,
+          { prompt: "continue from prior output" } as PromptStep,
+        ],
+        resolvePriorContextItems: async () => [
+          { index: 0, text: "prior output" },
+        ],
+      } as WorkflowContext,
+      { priorContext: "allPrevious" } as any,
+      undefined
+    );
+
+    const priorSection = plan.promptPreview.sections.find(
+      (section) =>
+        section.category === PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT
+    );
+    assert.ok(priorSection);
+    assert.strictEqual(priorSection.body, priorContextXml);
+    assert.strictEqual(
+      priorSection.byteCount,
+      Buffer.byteLength(priorContextXml, "utf8")
+    );
+    assert.ok(
+      plan.mutations.some((mutation) => mutation.path?.endsWith(".context.md"))
     );
   });
 

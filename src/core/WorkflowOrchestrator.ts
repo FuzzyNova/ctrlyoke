@@ -12,6 +12,7 @@ import {
 } from "./ExecutionPreviewService";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
+import { createPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
 import {
   buildClearUpdates,
   buildDefinitionSnapshot,
@@ -2099,6 +2100,14 @@ export class WorkflowOrchestrator {
     const workspaceRoot = this.requireWorkspaceRoot();
     const platform = new VsCodeAdapter(this.context);
     const previewSourcePath = sourcePath ?? state?.workingFilePath;
+    const outputHistoryManager = this.getOutputHistoryManager();
+    const historyFilePath =
+      address.kind === "run"
+        ? outputHistoryManager.getHistoryFilePath(
+            address.workflowKey,
+            address.runRef
+          )
+        : "";
     const service = new ExecutionPreviewService({
       defaults: PropertyResolver.createContext({ hostCanProvidePty: true })
         .defaults,
@@ -2111,6 +2120,11 @@ export class WorkflowOrchestrator {
       cwd: workspaceRoot,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
+      resolvePriorContextItems: createPriorContextResolver({
+        workspaceRoot,
+        historyFilePath,
+        outputResolver: outputHistoryManager.getRunOutputResolver(),
+      }),
     });
     const preview = await service.build({
       workflow,

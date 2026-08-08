@@ -19,7 +19,10 @@ import type {
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_MUTATION_SCOPES,
+  PREVIEW_TRUNCATION_REASON_COPY,
+  PREVIEW_TRUNCATION_REASONS,
   STATUS_MESSAGE_SEVERITY,
 } from "../types/DashboardConstants";
 import type {
@@ -27,7 +30,6 @@ import type {
   PromptStartData,
 } from "../core/WorkflowInstance";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
-import { PREVIEW_TRUNCATION_REASONS } from "../types/DashboardConstants";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -195,7 +197,7 @@ export class CliTerminalFormatter {
           : 0;
         const lineInfo = section.lineCount === null ? "?" : section.lineCount;
         writeLine(
-          `  Payload: ${section.category} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
+          `  Payload: ${PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
         );
         if (section.body) {
           for (const line of section.body.split("\n")) {
@@ -205,12 +207,21 @@ export class CliTerminalFormatter {
         if (section.truncationReason) {
           const delivery =
             section.truncationReason === PREVIEW_TRUNCATION_REASONS.REFERENCE
-              ? "the harness receives the provider reference, not inline content"
-              : "the full planned payload remains available to the harness";
+                ? PREVIEW_TRUNCATION_REASON_COPY[
+                    PREVIEW_TRUNCATION_REASONS.REFERENCE
+                  ]
+                : section.truncationReason ===
+                    PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+                ? PREVIEW_TRUNCATION_REASON_COPY[
+                    PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+                  ]
+                : "the full planned payload remains available to the harness";
+          const line = `    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`;
           writeLine(
-            chalk.yellow(
-              `    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`
-            )
+            section.truncationReason ===
+              PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+              ? line
+              : chalk.yellow(line)
           );
         }
       }

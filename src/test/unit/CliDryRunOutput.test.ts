@@ -1,8 +1,16 @@
 import * as assert from "assert";
+import chalk from "chalk";
 import { suite, test } from "mocha";
 import { buildCliPreviewJsonResult } from "../../cli/CliJsonResultBuilder";
 import { CliTerminalFormatter } from "../../cli/CliTerminalFormatter";
 import type { WorkflowExecutionPreview } from "../../types/ExecutionPreviewTypes";
+import {
+  PREVIEW_PROMPT_CATEGORIES,
+  PREVIEW_PROMPT_CATEGORY_LABELS,
+  PREVIEW_TRUNCATION_REASON_COPY,
+  PREVIEW_TRUNCATION_REASONS,
+  type PreviewPromptCategory,
+} from "../../types/DashboardConstants";
 
 function previewFixture(): WorkflowExecutionPreview {
   return {
@@ -76,6 +84,15 @@ function previewFixture(): WorkflowExecutionPreview {
 }
 
 suite("CLI dry-run output", () => {
+  test("keeps category labels exhaustive", () => {
+    const labels: Record<PreviewPromptCategory, string> =
+      PREVIEW_PROMPT_CATEGORY_LABELS;
+    assert.deepStrictEqual(
+      Object.keys(labels).sort(),
+      Object.values(PREVIEW_PROMPT_CATEGORIES).sort()
+    );
+  });
+
   test("redacts again at the JSON output boundary without changing the contract", () => {
     const output = buildCliPreviewJsonResult(previewFixture());
     const serialized = JSON.stringify(output);
@@ -120,6 +137,86 @@ suite("CLI dry-run output", () => {
     assert.ok(
       lines.some((line) =>
         line.includes("showing 7 of 20 bytes; reason=body-budget")
+      )
+    );
+  });
+
+  test("renders not-yet-available prior context neutrally with distinct delivery copy", () => {
+    const previousLevel = chalk.level;
+    chalk.level = 1;
+    try {
+      const preview = previewFixture();
+      preview.steps[0].prompt = {
+        sections: [
+          {
+            category: PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+            byteCount: 0,
+            lineCount: null,
+            tokenEstimate: 0,
+            chunkIndex: 0,
+            contentHash: null,
+            truncationReason:
+              PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
+          },
+        ],
+        totalByteCount: 0,
+        includedBodyByteCount: 0,
+        bodyBudgetBytes: 7,
+      };
+
+      const lines: string[] = [];
+      CliTerminalFormatter.renderExecutionPreview(preview, (line) =>
+        lines.push(line)
+      );
+
+      const delivery = lines.find((line) =>
+        line.includes("reason=not-yet-available")
+      );
+      assert.ok(delivery);
+      assert.ok(
+        delivery.includes(
+          PREVIEW_TRUNCATION_REASON_COPY[
+            PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+          ]
+        )
+      );
+      assert.ok(!delivery.includes("the harness receives the provider reference"));
+      assert.ok(!delivery.includes("the full planned payload remains available"));
+      assert.ok(!delivery.includes("\u001b[33m"));
+      assert.ok(lines.some((line) => line.includes("Prior context")));
+    } finally {
+      chalk.level = previousLevel;
+    }
+  });
+
+  test("shares direct-reference delivery copy with the dashboard", () => {
+    const preview = previewFixture();
+    preview.steps[0].prompt = {
+      sections: [
+        {
+          category: PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE,
+          byteCount: 24,
+          lineCount: null,
+          tokenEstimate: 6,
+          chunkIndex: 0,
+          contentHash: null,
+          truncationReason: PREVIEW_TRUNCATION_REASONS.REFERENCE,
+          path: "C:\\workspace\\README.md",
+        },
+      ],
+      totalByteCount: 24,
+      includedBodyByteCount: 0,
+      bodyBudgetBytes: 7,
+    };
+
+    const lines: string[] = [];
+    CliTerminalFormatter.renderExecutionPreview(preview, (line) => lines.push(line));
+
+    assert.ok(
+      lines.some((line) =>
+        line.includes(
+          PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.REFERENCE]
+        )
       )
     );
   });

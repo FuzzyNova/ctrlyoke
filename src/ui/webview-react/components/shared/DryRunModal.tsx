@@ -3,6 +3,10 @@ import {
   HARNESS_INFO,
   MESSAGE_TYPES,
   PREVIEW_MUTATION_SCOPES,
+  PREVIEW_PROMPT_CATEGORIES,
+  PREVIEW_PROMPT_CATEGORY_LABELS,
+  PREVIEW_TRUNCATION_REASON_COPY,
+  PREVIEW_TRUNCATION_REASONS,
 } from "@root/types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
@@ -89,17 +93,6 @@ const DIAGNOSTIC_SEVERITY_STYLE: Record<
   warning: { icon: "warning", text: "text-warning-fg", dot: "bg-warning-fg" },
   error: { icon: "error", text: "text-error-fg", dot: "bg-error-fg" },
 };
-
-const TRUNCATION_REASON_COPY: Record<string, string> = {
-  reference:
-    "Harness will not receive this content: it is represented as a reference.",
-  "over-inline-cap":
-    "Harness will not receive this content: it exceeded the inline content cap.",
-  "chunk-collapsed":
-    "Modal view is collapsed: expand this chunk to inspect its body.",
-  "body-budget":
-    "Harness will not receive this content: the preview body budget omitted it.",
-} as const;
 
 export interface DryRunModalProps {
   scope: ExecutionPreviewScope;
@@ -545,7 +538,52 @@ function SummaryPanel({
 function truncationReasonLabel(
   reason: CategorizedPromptSectionPreview["truncationReason"]
 ): string | undefined {
-  return reason ? TRUNCATION_REASON_COPY[reason] : undefined;
+  return reason ? PREVIEW_TRUNCATION_REASON_COPY[reason] : undefined;
+}
+
+function isNeutralTruncationReason(
+  reason: CategorizedPromptSectionPreview["truncationReason"]
+): boolean {
+  return (
+    reason === PREVIEW_TRUNCATION_REASONS.REFERENCE ||
+    reason === PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+  );
+}
+
+function getPathBasename(path: string): string {
+  const segments = path.split(/[\\/]/);
+  return segments[segments.length - 1] || path;
+}
+
+function FileReferenceSection({
+  section,
+}: {
+  section: CategorizedPromptSectionPreview;
+}): React.ReactElement {
+  const path = section.path ?? section.providerReference ?? "";
+  const basename = section.path ? getPathBasename(section.path) : path;
+
+  return (
+    <section className="rounded border border-panel-border">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-border px-3 py-2">
+        <div className="min-w-0 text-xs font-semibold text-foreground">
+          {PREVIEW_PROMPT_CATEGORY_LABELS[PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE]} {basename}
+        </div>
+        <div className="text-xxs text-description-fg">
+          {formatCount(section.byteCount)} bytes
+          {section.tokenEstimate != null && ` · ${formatCount(section.tokenEstimate)} tokens`}
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 px-3 py-2">
+        {section.path && (
+          <div className="break-all text-xxs text-description-fg">{section.path}</div>
+        )}
+        <p className="text-xxs text-description-fg" role="note">
+          {PREVIEW_TRUNCATION_REASON_COPY[PREVIEW_TRUNCATION_REASONS.REFERENCE]}
+        </p>
+      </div>
+    </section>
+  );
 }
 
 function PayloadSection({
@@ -557,6 +595,10 @@ function PayloadSection({
   expanded: boolean;
   onToggle: () => void;
 }): React.ReactElement {
+  if (section.category === PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE) {
+    return <FileReferenceSection section={section} />;
+  }
+
   const body = section.body ?? "";
   const collapsed = buildCollapsedOutputPreview(body, {
     expanded,
@@ -568,7 +610,7 @@ function PayloadSection({
     <section className="rounded border border-panel-border">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-border px-3 py-2">
         <div className="min-w-0 text-xs font-semibold text-foreground">
-          {section.category} · chunk {section.chunkIndex + 1}
+          {PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} · chunk {section.chunkIndex + 1}
         </div>
         <div className="text-xxs text-description-fg">
           {formatCount(section.byteCount)} bytes
@@ -582,8 +624,17 @@ function PayloadSection({
           </div>
         )}
         {reason && (
-          <div className="flex items-start gap-1 text-xxs text-warning-fg" role="note">
-            <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
+          <div
+            className={`flex items-start gap-1 text-xxs ${
+              isNeutralTruncationReason(section.truncationReason)
+                ? "text-description-fg"
+                : "text-warning-fg"
+            }`}
+            role="note"
+          >
+            {!isNeutralTruncationReason(section.truncationReason) && (
+              <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
+            )}
             <span>{reason}</span>
           </div>
         )}

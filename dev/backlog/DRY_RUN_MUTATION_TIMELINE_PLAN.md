@@ -1,6 +1,6 @@
 # Dry Run Mutation Timeline Plan
 
-**Status:** Steps 1–4 complete — steps 5–6 pending
+**Status:** Steps 1–5 complete — step 6 pending
 **Priority:** P2
 
 Follow-up to [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md) (Implemented).
@@ -42,8 +42,10 @@ all edit `DryRunModal.tsx` and would conflict if overlapped.
    mutations collapse into an expandable local summary; shared mutations keep
    warning styling and merge-key details. Payload and command anchors switch
    tabs in place, selecting the step first when launched from Overview.
-5. **`DryRunModal` Payload tab** — file-reference branch, category labels,
-   corrected delivery copy, `not-yet-available` placeholder rendering.
+5. **✅ `DryRunModal` Payload tab — complete.** File-reference sections now
+   have a dedicated basename/path/count layout without false chunk semantics;
+   category labels and truncation copy are shared with the CLI, and reference/
+   not-yet-available states render neutrally.
 6. **`DryRunModal` tab bar and formatting** — tab order, Conditions/Summary
    icons, Summary/Command badges, `formatCount` → `formatMagnitude` call
    sites, and the `EditorSection` refactor onto the shared formatter.
@@ -65,6 +67,10 @@ temp file, planned file, mutation, or context reference.
 
 Steps 1–3 are mutually independent and could be reordered; 4–6 each depend
 on 3 (and 4/5 on 1/2 respectively for the fields they render).
+
+Step 5 landed with focused coverage for file-reference layout, shared delivery
+copy, neutral prior-context placeholders, and display labels. Step 6 remains
+the tab-bar and number-formatting pass.
 
 ### Placement corrections (verified against the current tree)
 

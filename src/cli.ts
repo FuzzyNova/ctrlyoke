@@ -53,6 +53,7 @@ import { WorkingFileManager } from "./core/WorkingFileManager";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
+import { createPriorContextResolver } from "./core/orchestration/AddressedPriorContextResolver";
 import { PromptFileParser } from "./core/PromptFileParser";
 import { WorkflowLockManager } from "./utils/WorkflowLockManager";
 import { LOCK_STATUS } from "./types/DashboardConstants";
@@ -679,6 +680,16 @@ async function dryRunCommand(
       HarnessId,
       ReturnType<IntegrationFactory["createForPreview"]>
     >();
+    const outputHistoryManager = new OutputHistoryManager(workingDir);
+    const runAddress = resolvedFile
+      ? WorkflowPaths.parseRunFilePath(workingDir, resolvedFile)
+      : undefined;
+    const historyFilePath = runAddress
+      ? outputHistoryManager.getHistoryFilePath(
+          runAddress.workflowKey,
+          runAddress.runRef
+        )
+      : "";
     const service = new ExecutionPreviewService({
       defaults,
       capabilities,
@@ -697,6 +708,11 @@ async function dryRunCommand(
       cwd: workingDir,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
+      resolvePriorContextItems: createPriorContextResolver({
+        workspaceRoot: workingDir,
+        historyFilePath,
+        outputResolver: outputHistoryManager.getRunOutputResolver(),
+      }),
     });
 
     let preview: WorkflowExecutionPreview;

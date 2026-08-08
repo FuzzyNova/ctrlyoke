@@ -74,7 +74,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
 import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
-import { AddressedPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
+import { createPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
 import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
@@ -3007,28 +3007,12 @@ export class WorkflowInstance {
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
-      resolvePriorContextItems: async (contexts, allPrompts, promptIndex) => {
-        if (!historyFilePath) {
-          return [];
-        }
-        const workspaceRoot =
-          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-        if (!workspaceRoot) {
-          return [];
-        }
-        const resolver = this.outputHistoryManager.getRunOutputResolver();
-        return new AddressedPriorContextResolver(
-          workspaceRoot,
-          resolver
-        ).resolve(contexts, (sameRunContexts) =>
-          resolver.resolvePriorContextItems(
-            historyFilePath,
-            sameRunContexts,
-            allPrompts,
-            promptIndex
-          )
-        );
-      },
+      resolvePriorContextItems: createPriorContextResolver({
+        workspaceRoot:
+          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+        historyFilePath,
+        outputResolver: this.outputHistoryManager.getRunOutputResolver(),
+      }),
       targetRunIndices,
       getIntegrationForPrompt: (
         prompt: PromptStep,

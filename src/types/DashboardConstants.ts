@@ -640,12 +640,36 @@ export const PREVIEW_PROMPT_CATEGORIES = {
   IMAGE_METADATA: "image-metadata",
 } as const;
 
+export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<PreviewPromptCategory, string> = {
+  "agent-instructions": "Agent instructions",
+  "skill-content": "Skill content",
+  "prompt-text": "Prompt text",
+  "prior-context": "Prior context",
+  "inline-reference": "Excerpts",
+  "file-reference": "File reference",
+  "image-metadata": "Image metadata",
+};
+
 export const PREVIEW_TRUNCATION_REASONS = {
   REFERENCE: "reference",
   OVER_INLINE_CAP: "over-inline-cap",
   CHUNK_COLLAPSED: "chunk-collapsed",
   BODY_BUDGET: "body-budget",
+  NOT_YET_AVAILABLE: "not-yet-available",
 } as const;
+
+export const PREVIEW_TRUNCATION_REASON_COPY: Record<PreviewTruncationReason, string> = {
+  [PREVIEW_TRUNCATION_REASONS.REFERENCE]:
+    "The harness receives the provider reference, not inline content.",
+  [PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP]:
+    "Harness will not receive this content: it exceeded the inline content cap.",
+  [PREVIEW_TRUNCATION_REASONS.CHUNK_COLLAPSED]:
+    "Modal view is collapsed: expand this chunk to inspect its body.",
+  [PREVIEW_TRUNCATION_REASONS.BODY_BUDGET]:
+    "Harness will not receive this content: the preview body budget omitted it.",
+  [PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE]:
+    "No prior context to preview yet: this reference resolves against run history that doesn't exist until the step runs.",
+};
 
 /** Total UTF-8 body budget for one serialized execution preview. */
 export const MAX_PREVIEW_BODY_BYTES = 1024 * 1024;

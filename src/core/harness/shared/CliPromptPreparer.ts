@@ -206,6 +206,7 @@ export class CliPromptPreparer {
       sections,
       workflowContext,
       resolvedContextContent,
+      hasPriorContext,
       resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI
     );
     if (!slashCommand) {
@@ -325,6 +326,7 @@ export class CliPromptPreparer {
     sections: PromptSections,
     workflowContext: WorkflowContext | undefined,
     contextContent: string | undefined,
+    hasPriorContext: boolean,
     harnessId: ResolvedProperties["harness"]
   ): Promise<PromptPreparationPlan> {
     const workspaceRoot = this.deps.getWorkspaceRoot();
@@ -476,6 +478,17 @@ export class CliPromptPreparer {
           split.lineCounts
         )
       );
+    }
+    if (hasPriorContext && !contextContent) {
+      previewSections.push({
+        category: PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT,
+        byteCount: 0,
+        tokenEstimate: 0,
+        chunkIndex: 0,
+        lineCount: null,
+        contentHash: null,
+        truncationReason: PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
+      });
     }
 
     const excerptRefs: string[] = [];
