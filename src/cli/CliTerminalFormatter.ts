@@ -19,6 +19,7 @@ import type {
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  PREVIEW_MUTATION_SCOPES,
   STATUS_MESSAGE_SEVERITY,
 } from "../types/DashboardConstants";
 import type {
@@ -214,8 +215,13 @@ export class CliTerminalFormatter {
         }
       }
       for (const mutation of step.workspaceMutations) {
+        const mutationPath = mutation.path ? ` ${mutation.path}` : "";
+        const warning =
+          mutation.scope === PREVIEW_MUTATION_SCOPES.SHARED && mutation.warning
+            ? ` — ${mutation.warning}`
+            : "";
         writeLine(
-          `  Mutation: ${mutation.operation} ${mutation.path} — ${mutation.warning}`
+          `  Mutation: ${mutation.operation}${mutationPath}${warning}`
         );
       }
       writeLine("");

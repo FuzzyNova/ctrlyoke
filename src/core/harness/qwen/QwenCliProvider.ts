@@ -329,6 +329,9 @@ export class QwenCliProvider implements ICliProvider {
       ]),
     ];
     const ctrlyokeHookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
+    const ownedKeys = [
+      ...new Set([...Object.keys(ctrlyokeHooksSection), ...ctrlyokeHookKeys]),
+    ];
 
     const workflowKey = workingFilePath ?? workspaceRoot;
     return {
@@ -336,6 +339,7 @@ export class QwenCliProvider implements ICliProvider {
       mutations: [
         {
           path: path.join(workspaceRoot, ".qwen", "settings.json"),
+          ownedKeys,
           description: "Register Qwen notification hooks and trust keys",
           apply: async () => {
             await this.registerHooksInSettings(
@@ -408,18 +412,23 @@ export class QwenCliProvider implements ICliProvider {
             }
           ).config.hooks
         : {};
+    const ctrlyokeHookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
+    const ownedKeys = [
+      ...new Set([...Object.keys(ctrlyokeHooksSection), ...ctrlyokeHookKeys]),
+    ];
     return {
       cliArgs: [],
       mutations: [
         {
           path: path.join(workspaceRoot, ".qwen", "settings.json"),
+          ownedKeys,
           description: "Register Qwen headless hooks and trust keys",
           apply: async () => {
             await this.registerHooksInSettings(
               workspaceRoot,
               workflowKey,
               ctrlyokeHooksSection,
-              this.buildTrustedHookKeys(ctrlyokeHooksSection),
+              ctrlyokeHookKeys,
               userHooks,
               enabledNotificationHookEvents
             );

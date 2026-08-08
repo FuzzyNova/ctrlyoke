@@ -6,6 +6,12 @@ export interface PreparedMutation {
   readonly path?: string;
   /** Exact content intended for a file mutation, when applicable. */
   readonly intendedContent?: string;
+  /**
+   * Explicit, provider-supplied set of keys a partial merge into a shared file
+   * will touch. ExecutionPreviewService.extractOwnedKeys is only a fallback
+   * when this value is absent.
+   */
+  readonly ownedKeys?: string[];
   /** Human-readable description for process-local or merged-file mutations. */
   readonly description?: string;
   /** Apply the mutation immediately before the consuming process starts. */

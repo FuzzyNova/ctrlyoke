@@ -597,6 +597,11 @@ export const PREVIEW_SCOPES = {
   STEP: "step",
 } as const;
 
+export const PREVIEW_MUTATION_SCOPES = {
+  RUN_LOCAL: "run-local",
+  SHARED: "shared",
+} as const;
+
 export const PREVIEW_STATUSES = {
   CHECKING: "checking",
   READY: "ready",
@@ -1705,6 +1710,8 @@ export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 export type PreviewScope = (typeof PREVIEW_SCOPES)[keyof typeof PREVIEW_SCOPES];
+export type PreviewMutationScope =
+  (typeof PREVIEW_MUTATION_SCOPES)[keyof typeof PREVIEW_MUTATION_SCOPES];
 export type PreviewStatus =
   (typeof PREVIEW_STATUSES)[keyof typeof PREVIEW_STATUSES];
 export type PreviewStepType =

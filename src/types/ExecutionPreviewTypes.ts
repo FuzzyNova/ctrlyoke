@@ -2,6 +2,7 @@ import {
   type HarnessId,
   type PreviewPermissionAction,
   type PreviewPermissionRuleStatus,
+  type PreviewMutationScope,
   type PreviewPropertySource,
   type PreviewPromptCategory,
   type PreviewStepType,
@@ -15,6 +16,7 @@ export type { CommandDisplayShell } from "./CommandDisplayFormatter";
 export type {
   PreviewPermissionAction,
   PreviewPermissionRuleStatus,
+  PreviewMutationScope,
   PreviewPropertySource,
   PreviewPromptCategory,
   PreviewStepType,
@@ -173,10 +175,11 @@ export interface McpServerPreview {
 }
 
 export interface WorkspaceMutationPreview {
-  path: string;
+  path?: string;
+  scope: PreviewMutationScope;
   ownedKeys: string[];
   operation: string;
-  warning: string;
+  warning?: string;
 }
 
 export interface VariableResolutionPreview {

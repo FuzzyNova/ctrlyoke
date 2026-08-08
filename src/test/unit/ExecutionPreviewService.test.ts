@@ -12,10 +12,17 @@ import { renderCommandForDisplay } from "../../types/CommandDisplayFormatter";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
-import { HARNESS_IDS, PREVIEW_SCOPES } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PREVIEW_MUTATION_SCOPES,
+  PREVIEW_SCOPES,
+} from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import type { ExecutionPropertyDefaults } from "../../types/ExecutionPropertyResolver";
+import type { ExecutionPlan } from "../../core/harness/shared/ExecutionPlanBuilder";
+import type { PreparedMutation } from "../../core/harness/shared/interfaces/PreparedMutation";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 const fsPromises = fs.promises;
 let temporaryRoots: string[] = [];
@@ -110,8 +117,40 @@ function createHarness(workspaceRoot?: string): ExecutionPreviewHarness {
   };
 }
 
-function createService(workspaceRoot?: string): ExecutionPreviewService {
+function createExecutionPlan(mutations: PreparedMutation[]): ExecutionPlan {
+  const providerPreparation = {
+    cliArgs: [],
+    mutations,
+    diagnostics: [],
+  };
+  const resolvedCommand = {
+    command: "claude",
+    args: [],
+    displayCommand: "claude",
+    launcherKind: "direct" as const,
+  };
+  return {
+    resolvedCommand,
+    args: [],
+    cliArgs: [],
+    mutations,
+    providerPreparation,
+    permissionApplication: { cliArgs: [], diagnostics: [] },
+    mcpApplication: providerPreparation,
+    effectiveToolPermissions: undefined,
+    diagnostics: [],
+  };
+}
+
+function createService(
+  workspaceRoot?: string,
+  plannedMutations?: PreparedMutation[]
+): ExecutionPreviewService {
   const harness = createHarness(workspaceRoot);
+  if (plannedMutations) {
+    harness.executionPlanBuilder.plan = async () =>
+      createExecutionPlan(plannedMutations);
+  }
   return new ExecutionPreviewService({
     defaults: createDefaults(),
     capabilities: createCapabilities(),
@@ -268,5 +307,99 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(conditionExecuted, true);
     assert.strictEqual(preview.steps[0].conditions.end[0].configured, true);
     assert.ok(preview.steps[0].conditions.pre[0].scriptPath);
+  });
+
+  test("classifies mutation scope, warnings, and owned keys", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-workspace-")
+    );
+    temporaryRoots.push(workspaceRoot);
+
+    const tempPath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
+      "hook-settings.json"
+    );
+    const reportedTempPath =
+      process.platform === "win32"
+        ? tempPath
+            .replace(/\\/g, "/")
+            .replace(/\.ctrlyoke\/temp/i, ".CTRLYOKE/TEMP")
+        : tempPath;
+    const mutations: PreparedMutation[] = [
+      {
+        path: reportedTempPath,
+        intendedContent: '{"hooks": []}',
+        description: "run-local hook settings",
+        apply: async () => {},
+      },
+      {
+        path: path.join(workspaceRoot, ".qwen", "settings.json"),
+        ownedKeys: ["hooks", "trustedHooks"],
+        description: "shared Qwen settings",
+        apply: async () => {},
+      },
+      {
+        path: path.join(os.homedir(), ".gemini", "config", "hooks.json"),
+        description: "Antigravity global hooks",
+        apply: async () => {},
+      },
+      {
+        intendedContent: '{"fallbackKey": true}',
+        description: "process state",
+        apply: async () => {},
+      },
+    ];
+
+    const preview = await createService(workspaceRoot, mutations).build({
+      workflow: { steps: [{ prompt: "classify mutations" }] },
+    });
+    const actual = preview.steps[0].workspaceMutations;
+
+    assert.deepStrictEqual(
+      actual.map((mutation) => mutation.scope),
+      [
+        PREVIEW_MUTATION_SCOPES.RUN_LOCAL,
+        PREVIEW_MUTATION_SCOPES.SHARED,
+        PREVIEW_MUTATION_SCOPES.SHARED,
+        PREVIEW_MUTATION_SCOPES.RUN_LOCAL,
+      ]
+    );
+    assert.deepStrictEqual(actual[0].ownedKeys, ["hooks"]);
+    assert.deepStrictEqual(actual[1].ownedKeys, ["hooks", "trustedHooks"]);
+    assert.deepStrictEqual(actual[3].ownedKeys, ["fallbackKey"]);
+    assert.strictEqual(actual[0].warning, undefined);
+    assert.ok(actual[1].warning);
+    assert.ok(actual[2].warning);
+    assert.strictEqual(actual[3].warning, undefined);
+    assert.strictEqual(actual[3].path, undefined);
+    assert.strictEqual(actual[3].operation, "process-local");
+  });
+
+  test("classifies the cleanup mutation by its temp directory path", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-cleanup-")
+    );
+    temporaryRoots.push(workspaceRoot);
+
+    const preview = await createService(workspaceRoot).build({
+      workflow: {
+        hooks: [],
+        steps: [{ prompt: "prepare hooks" }],
+      },
+    });
+    const tempDirectory = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const cleanup = preview.steps[0].workspaceMutations.find(
+      (mutation) => mutation.path === tempDirectory
+    );
+
+    assert.ok(cleanup);
+    assert.strictEqual(cleanup.scope, PREVIEW_MUTATION_SCOPES.RUN_LOCAL);
+    assert.strictEqual(cleanup.warning, undefined);
   });
 });

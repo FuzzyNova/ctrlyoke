@@ -1,6 +1,6 @@
 # Dry Run Mutation Timeline Plan
 
-**Status:** In progress — sequenced into the 6 steps below
+**Status:** Step 1 complete — steps 2–6 pending
 **Priority:** P2
 
 Follow-up to [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md) (Implemented).
@@ -23,7 +23,7 @@ section, or a later step can't compile against types an earlier one hasn't
 added yet. Steps must run **sequentially, never concurrently**: steps 4–6
 all edit `DryRunModal.tsx` and would conflict if overlapped.
 
-1. **Mutation scope/ownedKeys (backend).** `WorkspaceMutationPreview.scope`
+1. **✅ Mutation scope/ownedKeys (backend) — complete.** `WorkspaceMutationPreview.scope`
    + optional `path`/`warning` (`ExecutionPreviewTypes.ts`),
    `PreparedMutation.ownedKeys`, `ExecutionPreviewService.toWorkspaceMutation`
    classification, `ExecutionPlanBuilder`'s directory-scoped cleanup path,

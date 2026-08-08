@@ -1,4 +1,8 @@
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import * as path from "path";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
@@ -123,6 +127,11 @@ export class ExecutionPlanBuilder {
         this.deps.provider.cleanupPreviousPromptHooks
       ) {
         mutations.push({
+          path: path.join(
+            workspaceRoot,
+            PATH_CONSTANTS.CTRLYOKE_DIR,
+            PATH_CONSTANTS.TEMP_DIR
+          ),
           description: "Remove previous prompt hook artifacts",
           apply: async () =>
             this.deps.provider.cleanupPreviousPromptHooks!(workspaceRoot),

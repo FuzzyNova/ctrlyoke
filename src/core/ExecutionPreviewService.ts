@@ -11,6 +11,7 @@ import {
   COMPARE_SOURCES,
   FINAL_STEP_PHASES,
   PREVIEW_PERMISSION_ACTIONS,
+  PREVIEW_MUTATION_SCOPES,
   PREVIEW_PERMISSION_RULE_STATUSES,
   PREVIEW_PROPERTY_SOURCES,
   PREVIEW_SCOPES,
@@ -19,6 +20,7 @@ import {
   type PreviewPermissionAction,
   type PreviewPropertySource,
 } from "../types/DashboardConstants";
+import * as path from "path";
 import type {
   EndCondition,
   ErrorBehavior,
@@ -69,6 +71,8 @@ import {
   type ExecutionPlan,
 } from "./harness/shared/ExecutionPlanBuilder";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
+import type { PreparedMutation } from "./harness/shared/interfaces/PreparedMutation";
+import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
@@ -703,24 +707,53 @@ export class ExecutionPreviewService {
     return plan.mutations.map((mutation) => this.toWorkspaceMutation(mutation));
   }
 
-  private toWorkspaceMutation(mutation: {
-    path?: string;
-    intendedContent?: string;
-    description?: string;
-  }): WorkspaceMutationPreview {
-    const pathValue = mutation.path ?? "(process-local)";
-    const isProcessLocal = !mutation.path;
+  private toWorkspaceMutation(
+    mutation: PreparedMutation
+  ): WorkspaceMutationPreview {
+    const tempRoot = this.options.workspaceRoot
+      ? this.normalizeComparisonPath(
+          path.resolve(
+            this.options.workspaceRoot,
+            PATH_CONSTANTS.CTRLYOKE_DIR,
+            PATH_CONSTANTS.TEMP_DIR
+          )
+        )
+      : undefined;
+    const mutationPath = mutation.path
+      ? this.normalizeComparisonPath(path.resolve(mutation.path))
+      : undefined;
+    const relativePath =
+      tempRoot && mutationPath
+        ? path.relative(tempRoot, mutationPath)
+        : undefined;
+    const isRunLocal =
+      !mutationPath ||
+      (relativePath !== undefined &&
+        relativePath !== ".." &&
+        !relativePath.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relativePath));
+    const scope = isRunLocal
+      ? PREVIEW_MUTATION_SCOPES.RUN_LOCAL
+      : PREVIEW_MUTATION_SCOPES.SHARED;
     return {
-      path: pathValue,
-      ownedKeys: mutation.intendedContent
-        ? this.extractOwnedKeys(mutation.intendedContent)
-        : [],
-      operation: isProcessLocal ? "process-local" : "write-or-update",
-      warning: isProcessLocal
-        ? (mutation.description ??
-          "Process-local preparation; no workspace file is written.")
-        : `Workspace-wide side effect: ${mutation.description ?? "the harness configuration will be updated"}.`,
+      ...(mutation.path ? { path: mutation.path } : {}),
+      scope,
+      ownedKeys:
+        mutation.ownedKeys ??
+        (mutation.intendedContent
+          ? this.extractOwnedKeys(mutation.intendedContent)
+          : []),
+      operation: mutation.path ? "write-or-update" : "process-local",
+      ...(scope === PREVIEW_MUTATION_SCOPES.SHARED
+        ? {
+            warning: `Workspace-wide side effect: ${mutation.description ?? "the harness configuration will be updated"}.`,
+          }
+        : {}),
     };
+  }
+
+  private normalizeComparisonPath(value: string): string {
+    return process.platform === "win32" ? value.toLowerCase() : value;
   }
 
   private extractOwnedKeys(content: string): string[] {

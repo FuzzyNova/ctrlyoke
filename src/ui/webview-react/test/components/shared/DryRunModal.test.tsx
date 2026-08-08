@@ -83,6 +83,7 @@ const preview: WorkflowExecutionPreview = {
       workspaceMutations: [
         {
           path: "C:/workspace/.claude/settings.json",
+          scope: "shared",
           ownedKeys: ["permissions"],
           operation: "write",
           warning: "May replace owned keys.",
