@@ -179,7 +179,7 @@ export class CtrlYokeMCPServer {
       {
         name: "ctrlyoke_append_queue",
         description:
-          "Add follow-up steps to your workflow. Use this when work you have discovered deserves its own step instead of being crammed into the one you are on. Call ctrlyoke_capabilities first if you want to choose a harness or model for the new steps.",
+          "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call ctrlyoke_capabilities first if you want to choose a harness or model for the new steps.",
         inputSchema: {
           type: "object",
           properties: {
@@ -191,6 +191,11 @@ export class CtrlYokeMCPServer {
                   prompt: {
                     type: "string",
                     description: "What the step should do.",
+                  },
+                  name: {
+                    type: "string",
+                    description:
+                      "Short display label for this step (e.g. 'Implement security'). The UI already shows the step's position (e.g. '2 of 6'), so don't repeat that here.",
                   },
                   model: {
                     type: "string",

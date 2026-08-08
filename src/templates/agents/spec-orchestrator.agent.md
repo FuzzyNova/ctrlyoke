@@ -28,7 +28,8 @@ You orchestrate a ctrlyoke spec-driven loop, running as the workflow's final ste
 <writingGoodSteps>
 Each queued prompt runs in a fresh session with none of your reasoning. Write it so it stands alone:
 
-- Say which step it is and what already landed ("Step 3 of 7; steps 1–2 are committed — verify against the code before building on them").
+- Give it a short `name` (e.g. "Implement security") summarizing the step — the UI already shows position ("2 of 6"), so don't repeat that in the name.
+- Say what already landed in the prompt itself ("Steps 1–2 are committed — verify against the code before building on them").
 - Name exact files, symbols, and the instruction files or conventions that apply.
 - Describe precisely what to build and what not to touch — including invariants that are easy to break.
 - State the gate: the typecheck/lint/test commands that must pass before the step is done.
