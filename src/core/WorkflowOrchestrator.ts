@@ -2075,6 +2075,15 @@ export class WorkflowOrchestrator {
         ...workflow,
         ...instance.promptQueue.getWorkflowFile(),
         steps: state.steps,
+        // getWorkflowFile() is typed as PromptFile but the object behind it
+        // is the WorkingFile captured at load time, so its definitionRevision
+        // is frozen at whatever the file held on load — updateWorkflowProperty
+        // patches individual keys into that same object without ever
+        // advancing this one. state.definitionRevision is the queue's live
+        // counter (kept current by setDefinitionRevision on every property
+        // write) and is what the dry-run response must report, or every
+        // preview after the first property edit permanently reads as stale.
+        definitionRevision: state.definitionRevision,
       };
     }
 
