@@ -71,4 +71,53 @@ describe("SegmentedTabBar", () => {
     expect(summary).toHaveClass("text-focus-highlight");
     expect(summary).not.toHaveClass("text-description-fg");
   });
+
+  it("renders a distinct corner badge for active and inactive tabs", () => {
+    render(
+      <SegmentedTabBar
+        tabs={tabs}
+        activeTab="summary"
+        onTabChange={vi.fn()}
+        tabOverrides={{
+          summary: { badgeCodicon: "shield", badgeColor: "text-error-fg" },
+          details: { badgeCodicon: "warning", badgeColor: "text-warning-fg" },
+        }}
+      />
+    );
+
+    const summaryBadge = screen
+      .getByTitle("Summary")
+      .querySelector(".codicon-shield");
+    const detailsBadge = screen
+      .getByTitle("Details")
+      .querySelector(".codicon-warning");
+
+    expect(summaryBadge).toHaveStyle({ fontSize: "11px" });
+    expect(detailsBadge).toHaveStyle({ fontSize: "11px" });
+    expect(summaryBadge?.parentElement).toHaveClass(
+      "absolute",
+      "bg-sidebar-bg"
+    );
+    expect(detailsBadge?.parentElement).toHaveClass(
+      "absolute",
+      "bg-sidebar-bg"
+    );
+    expect(summaryBadge?.parentElement).toHaveAttribute("aria-hidden", "true");
+    expect(detailsBadge?.parentElement).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByTitle("Summary")).toHaveAttribute("title", "Summary");
+    expect(screen.getByTitle("Details")).toHaveAttribute("title", "Details");
+  });
+
+  it("does not render a badge when the override omits one", () => {
+    render(
+      <SegmentedTabBar
+        tabs={tabs}
+        activeTab="summary"
+        onTabChange={vi.fn()}
+        tabOverrides={{ summary: { color: "text-error-fg" } }}
+      />
+    );
+
+    expect(screen.getByTitle("Summary").querySelector(".absolute")).toBeNull();
+  });
 });

@@ -1,6 +1,6 @@
 # Dry Run Mutation Timeline Plan
 
-**Status:** Step 1 complete — steps 2–6 pending
+**Status:** Steps 1–3 complete — steps 4–6 pending
 **Priority:** P2
 
 Follow-up to [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md) (Implemented).
@@ -28,12 +28,12 @@ all edit `DryRunModal.tsx` and would conflict if overlapped.
    `PreparedMutation.ownedKeys`, `ExecutionPreviewService.toWorkspaceMutation`
    classification, `ExecutionPlanBuilder`'s directory-scoped cleanup path,
    `QwenCliProvider`'s explicit `ownedKeys`.
-2. **Payload backend.** `PREVIEW_PROMPT_CATEGORY_LABELS` +
+2. **✅ Payload backend.** `PREVIEW_PROMPT_CATEGORY_LABELS` +
    `PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE` (`DashboardConstants.ts`),
    `CliPromptPreparer`'s prior-context placeholder section,
    `resolvePriorContextItems` wiring (`WorkflowOrchestrator.ts`, `cli.ts`),
    `CliTerminalFormatter`'s three-way `delivery` ternary and shared labels.
-3. **Shared UI primitives, no `DryRunModal.tsx` edits.** `formatMagnitude`,
+3. **✅ Shared UI primitives, no `DryRunModal.tsx` edits.** `formatMagnitude`,
    `buildStepTimeline` + `StepTimelineEntry`, `getPermissionModeBadge`,
    the `TabIconOverride` badge fields, `SegmentedTabBar`'s badge rendering.
 4. **`DryRunModal` timeline rendering** — per-step Summary tab and Overview
@@ -43,6 +43,20 @@ all edit `DryRunModal.tsx` and would conflict if overlapped.
 6. **`DryRunModal` tab bar and formatting** — tab order, Conditions/Summary
    icons, Summary/Command badges, `formatCount` → `formatMagnitude` call
    sites, and the `EditorSection` refactor onto the shared formatter.
+
+Step 3 landed with shared UI primitives only: magnitude formatting, a pure
+payload → mutation → command timeline builder, permission-mode badge styling,
+and corner-badge rendering in `SegmentedTabBar`. `DryRunModal.tsx` remains
+unchanged for the next steps to consume these primitives.
+
+Step 2 landed with one implementation correction: the timeline-backed prior
+context callback is shared by `WorkflowInstance`, the dashboard preview, and
+CLI dry runs through `createPriorContextResolver`. The dashboard derives its
+history manifest from the addressed run (not the active instance), while CLI
+dry runs derive it only when the input is a promoted run file; drafts and
+ordinary workflow files return no history. An unresolved prior-context
+reference therefore gets a preview-only placeholder section and does not add a
+temp file, planned file, mutation, or context reference.
 
 Steps 1–3 are mutually independent and could be reordered; 4–6 each depend
 on 3 (and 4/5 on 1/2 respectively for the fields they render).

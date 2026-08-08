@@ -10,6 +10,10 @@ export interface TabIconOverride {
   hoverColor?: string;
   /** Tailwind text-color class to apply when the tab is active; defaults to text-foreground */
   activeColor?: string;
+  /** Small secondary icon rendered in the lower-right corner of the tab's main icon. */
+  badgeCodicon?: string;
+  /** Tailwind text-color class for the badge icon. */
+  badgeColor?: string;
 }
 
 export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
@@ -59,6 +63,32 @@ export function getPermissionTabOverride(
     default:
       return undefined;
   }
+}
+
+/**
+ * Returns the permission-mode badge styling for a tab that keeps its primary
+ * icon shape. None returns undefined (use default styling).
+ */
+export function getPermissionModeBadge(
+  mode: string
+):
+  | Pick<
+      TabIconOverride,
+      "color" | "hoverColor" | "activeColor" | "badgeCodicon" | "badgeColor"
+    >
+  | undefined {
+  const override = getPermissionTabOverride(mode);
+  if (!override) {
+    return undefined;
+  }
+
+  return {
+    color: override.color,
+    hoverColor: override.hoverColor,
+    activeColor: override.activeColor,
+    badgeCodicon: "shield",
+    badgeColor: override.color,
+  };
 }
 
 /** Focus-border (blue) icon if any hooks are configured in the resolved value */

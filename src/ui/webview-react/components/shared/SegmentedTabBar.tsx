@@ -64,10 +64,23 @@ export function SegmentedTabBar<Id extends string>({
             onClick={() => onTabChange(tab.id)}
           >
             {codicon ? (
-              <span
-                className={`codicon codicon-${codicon}`}
-                style={{ fontSize: 20 }}
-              />
+              <span className="relative inline-flex">
+                <span
+                  className={`codicon codicon-${codicon}`}
+                  style={{ fontSize: 20 }}
+                />
+                {override?.badgeCodicon ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -bottom-1 -right-1 flex h-[13px] w-[13px] items-center justify-center rounded-full bg-sidebar-bg"
+                  >
+                    <span
+                      className={`codicon codicon-${override.badgeCodicon} ${override.badgeColor ?? ""}`}
+                      style={{ fontSize: 11 }}
+                    />
+                  </span>
+                ) : null}
+              </span>
             ) : harnessId ? (
               <HarnessIcon
                 harnessId={harnessId}
