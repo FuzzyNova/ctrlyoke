@@ -660,13 +660,13 @@ export const PREVIEW_TRUNCATION_REASONS = {
 
 export const PREVIEW_TRUNCATION_REASON_COPY: Record<PreviewTruncationReason, string> = {
   [PREVIEW_TRUNCATION_REASONS.REFERENCE]:
-    "The harness receives the provider reference, not inline content.",
+    "The harness receives this as a file reference directly in the prompt, not the file's inline content.",
   [PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP]:
-    "Harness will not receive this content: it exceeded the inline content cap.",
+    "Preview only: this chunk's body is hidden because it exceeds the inline content cap. The harness still receives it in full via the referenced file.",
   [PREVIEW_TRUNCATION_REASONS.CHUNK_COLLAPSED]:
     "Modal view is collapsed: expand this chunk to inspect its body.",
   [PREVIEW_TRUNCATION_REASONS.BODY_BUDGET]:
-    "Harness will not receive this content: the preview body budget omitted it.",
+    "Preview only: the dry-run preview budget cut off this chunk's body here. The harness still receives it in full.",
   [PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE]:
     "No prior context to preview yet: this reference resolves against run history that doesn't exist until the step runs.",
 };

@@ -501,7 +501,7 @@ describe("DryRunModal", () => {
     expect(screen.getByText("Categorized payload")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Harness will not receive this content: the preview body budget omitted it."
+        "Preview only: the dry-run preview budget cut off this chunk's body here. The harness still receives it in full."
       )
     ).toBeInTheDocument();
     expect(screen.getByText("redacted prompt body")).toBeInTheDocument();
