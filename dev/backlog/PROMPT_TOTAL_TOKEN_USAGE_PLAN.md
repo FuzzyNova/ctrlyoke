@@ -1,106 +1,248 @@
-# Prompt and Workflow Total Token Usage Plan
+# Prompt, Workflow Token Usage And Cost Plan
 
-**Status:** Proposed  
-**Created:** July 9, 2026  
-**Revised:** July 28, 2026
+**Status:** Proposed
+**Created:** July 9, 2026
+**Revised:** August 8, 2026 — re-audited against current code; scope now includes cost estimation; all open UX/cost questions decided
 **Related:** `HARNESS_USAGE_TRACKING_PLAN.md`, `WORKFLOW_VARIANTS_PLAN.md`
+
+---
+
+## What Changed Since The Last Revision
+
+The July revision assumed ctrlyoke had only last-turn context-window numbers and
+would have to *derive* cumulative prompt usage from compaction boundaries. That
+is no longer true. Every log parser already accumulates real cumulative usage
+for the whole prompt attempt, and Antigravity gained two independent token
+sources. The remaining work is therefore much smaller than the original plan
+implied, and its shape is different:
+
+- **The parsers are not the gap.** `TokenUsage.inputTokens` / `outputTokens` /
+  `totalTokens` are already cumulative across all API turns of one attempt;
+  `contextWindowUsedTokens` is separately the last turn's window occupancy.
+- **The lossy boundary is `WorkflowExecutor.resolveTokenCounts`**
+  (`src/core/WorkflowExecutor.ts:1556`), which maps `TokenUsage` → `TokenStats`
+  and *drops* `totalTokens` and `reasoningOutputTokens`. Downstream UI then
+  recomputes `total = prompt + completion`
+  (`src/ui/webview-react/components/output/OutputRow.tsx:1071`,
+  `src/cli/CliTerminalFormatter.ts:563`), which discards provider totals and
+  mis-sums every harness whose cache tokens sit outside `input_tokens`.
+- **The derived-compaction estimator is no longer needed** as a source of
+  totals. Compaction count survives only as explanatory context for why the
+  context bar dropped.
+- **Per-attempt durability is already free.** `CLI_OUTPUT_RECORDED` timeline
+  events carry the whole `CliOutput`, including `tokens`
+  (`src/types/WorkflowTimelineTypes.ts:254`). Widening `TokenStats` makes
+  per-attempt totals durable with no new persistence code. The old plan's
+  "persist `promptTotalTokens` into prompt `_runtime`" step is wrong and is
+  dropped — `PromptQueue` deliberately strips display-only token fields out of
+  working-file step runtime (`src/core/PromptQueue.ts:2038-2052`).
+- **Cost is now in scope** because two harnesses self-report dollars and the
+  rest can be priced from a table (see [Cost Model](#cost-model)).
+
+### Per-harness token source audit (August 8, 2026)
+
+| Harness | Cumulative per-attempt totals | Context window (last turn) | Cache split | Reasoning tokens | Self-reported cost |
+| --- | --- | --- | --- | --- | --- |
+| `claude-cli` | Yes — sums every assistant `message.usage`, prefers `result.usage.total_tokens` (`ClaudeLogParser.ts:278-288, 362-378`) | `input + cache_creation + cache_read` of last turn (`:345-353`) | `cache_read` and `cache_creation` **disjoint** from `input_tokens` | No | **Yes** — `result.total_cost_usd` + `modelUsage` (not parsed today) |
+| `codex-cli` | Yes — `token_count.info.total_token_usage` (`CodexLogParser.ts:230-240`) | `last_token_usage.total_tokens` (`:241-249`) | `cached_input_tokens` is a **subset** of `input_tokens` (`:242-243`) | Yes — `reasoning_output_tokens` (parsed, then dropped downstream) | No |
+| `qwen-cli` | Yes — sums `usageMetadata` per assistant turn (`QwenLogParser.ts:244-253`) | last turn `promptTokenCount` (`:322-326`) | `cachedContentTokenCount` is a **subset** of `promptTokenCount` (Gemini semantics — verify) | Folded into output (`thoughtsTokenCount`), not reported separately | No |
+| `opencode-cli` | Yes — accumulates every `step_finish` (`OpenCodeEventMapper.ts:52-67`) | last step's `tokens.total` | `tokens.cache.read` accumulated; `cache.write` **not** captured | Emitted by the CLI as `tokens.reasoning`, **not** captured | **Yes** — `step_finish.part.cost` (USD), **not** captured |
+| `antigravity-cli` | Yes — stream-json `result.usage.total_tokens` (`AntigravityStreamJsonUsage.ts:39-54`) | statusline sidecar snapshot (`AntigravityStatuslineSidecar.ts:237-243`) | `cache_read_tokens` | Yes — `thinking_tokens` | No |
+| `copilot-cli` | **No** — OTel keeps only the *last* chat span's input (`CopilotLogParser.ts:132, 217`); output is cumulative (`:134, 221`) | `otelLastInputTokens` (`:230-237`) | None | None | No (bills in AI credits — see below) |
+
+Two defects fall out of this table and are part of this plan:
+
+1. **Antigravity discards its own billing totals.**
+   `AntigravityLogParser.extractTokenUsage` short-circuits on the statusline
+   snapshot and returns it wholesale, keeping only `reasoningOutputTokens` from
+   stream-json (`AntigravityLogParser.ts:954-964`). The statusline is
+   *context-window shaped* (`contextWindowUsedTokens = input + output`,
+   `AntigravityStatuslineSidecar.ts:240`); stream-json's `result.usage` is the
+   *billing* record. Statusline must win for context fields only; stream-json
+   must win for `inputTokens` / `outputTokens` / `totalTokens` /
+   `cachedInputTokens`.
+2. **Copilot has no cumulative input.** Fixing it is a one-line accumulator
+   (`otelCumulativeInputTokens += input` alongside the existing output sum), and
+   is the difference between Copilot showing a real attempt total and showing a
+   lower bound.
 
 ---
 
 ## Problem
 
-ctrlyoke currently shows context-window fullness per prompt in two places:
+ctrlyoke shows context-window fullness per prompt in four places today:
 
-- `src/ui/webview-react/components/prompts/WorkflowStep.tsx` renders the vertical percent bar from `contextWindowUsed/contextWindowSize`.
-- `src/ui/webview-react/components/output/OutputRow.tsx` `StatsRowView` renders `Context: used/size (%)` and puts the current prompt/completion token details in the hover text.
+- `src/ui/webview-react/components/prompts/WorkflowStep.tsx:327-349` — the
+  vertical percent bar.
+- `src/ui/webview-react/hooks/useContextPct.ts` — the shared percentage
+  resolver used by `WorkflowStepsPanel` and the mobile `PromptChipRail`.
+- `src/ui/webview-react/components/output/OutputRow.tsx:1062-1091` —
+  `StatsRowView`'s `Context: used/size (%)`, with the token breakdown hidden in
+  hover text.
+- `src/cli/CliTerminalFormatter.ts:551-581` — `renderStats` for CLI users.
 
-That is accurate for the **final/current conversation state**, but misleading for long prompts that cross compaction boundaries. Example: a 200k context window fills, compacts, fills again, compacts again, then finishes with 10k tokens in the final window. The UI correctly shows `10k/200k (5%)`, but the prompt actually consumed roughly `410k` tokens across the full run.
+That is accurate for the **final conversation state** but misleading for long
+prompts crossing compaction boundaries: a run that fills and compacts a 200k
+window twice, then ends at 10k, correctly shows `10k/200k (5%)` while having
+actually consumed ~410k tokens. Users need three distinct signals:
 
-Users need both signals:
+- **Current context window** — how full the conversation is right now.
+- **Prompt attempt total** — how much work this attempt actually consumed.
+- **Workflow run total** — observed tokens across every AI attempt in the run.
 
-- **Current context window usage:** "How full is the conversation right now?"
-- **Total prompt usage:** "How much work did this prompt actually consume?"
-- **Total workflow usage:** "How many observed tokens did this run consume
-  across all of its AI attempts?"
+Do not replace the context-window display. Add cumulative usage beside it.
 
-Do not replace the current context-window display. Add a separate per-prompt cumulative usage concept.
+The workflow dropdown also lacks any token total, which makes harness
+comparison laborious: duplicate a workflow, switch harness, run both, then open
+each run and read its steps one by one. The latest run's observed total belongs
+in `src/ui/webview-react/components/workflow/WorkflowList.tsx` directly.
 
-The workflow dropdown also lacks a token total. That makes a common comparison
-flow unnecessarily laborious: duplicate a workflow, select a different harness,
-run both variants, then open each run and inspect its individual steps. The
-latest run's observed total should be visible directly in
-`src/ui/webview-react/components/workflow/WorkflowList.tsx`.
+Finally, tokens alone do not answer "which harness was cheaper" when models
+differ by 30x in price. Cost estimation is the point of the exercise for most
+users, so it is planned here rather than deferred indefinitely.
 
 ---
 
 ## Product Decision
 
-Use total tokens as the primary user-facing metric, with compaction count as context.
+Total tokens is the primary metric; cost is a secondary, clearly-labelled
+estimate; compaction count is explanatory context.
 
-Recommended UX:
+1. Keep the existing context percentage bar in the steps panel unchanged, and
+   surface the attempt total beside it **only when the context was compacted** —
+   the one case where the bar actively misleads.
+2. In the output stats row, show context, attempt total, and cost as distinct
+   visible stats — not hover-only.
+3. Show cost only when it is either harness-reported or priced from a known
+   model, and always label it as an estimate at list prices.
+4. Aggregate attempt totals into one run-scoped workflow total shown in every
+   workflow-list row.
+5. Never render an unknown value as zero. Partial coverage renders as a lower
+   bound (`≥410k`); unavailable renders as nothing plus a tooltip.
 
-1. Keep the existing context percentage bar in the steps panel unchanged.
-2. Add a compact badge/tooltip when a prompt spans compactions:
-   - `410k total`
-   - optionally `2 compactions`
-3. In the output stats row, show both concepts when available:
-   - `Context: 10.0k/200.0k (5%)`
-   - `Prompt total: 410.0k`
-   - `Compacted 2x`
-4. Tooltips should explain the split:
-   - context usage is the final/current window only
-   - prompt total is cumulative usage across API turns and compactions
-5. Aggregate prompt-attempt totals into one run-scoped workflow total and show
-   it in every workflow-list row:
-   - completed recent workflow: `410k tokens`
-   - active workflow: `183k tokens` with an accessible "observed so far" label
-   - incomplete provider coverage: `≥183k tokens`
-   - unavailable usage: omit the value or show `Tokens unavailable` in the
-     tooltip; never show zero
-
-Rationale:
-
-- A compaction count alone is too coarse for cost and performance. Two compactions on a 200k model suggest a lower bound, but not the actual token shape or output/cached/reasoning mix.
-- Total tokens can later feed effective-cost display, prompt-level analytics, and harness comparison.
-- Compaction count remains useful because users understand why the context percentage dropped after a long run.
-- An aligned workflow total makes lightweight harness comparison possible
-  without introducing a dedicated comparison view.
+Rationale: compaction count alone is too coarse for cost or performance; total
+tokens feed harness comparison and the observed-usage rollups in
+`HARNESS_USAGE_TRACKING_PLAN.md`; an aligned workflow total makes lightweight
+comparison possible without a dedicated comparison view.
 
 ---
 
 ## Data Model
 
-Extend the existing token contracts instead of creating a separate UI-only field.
+### Widen `TokenStats` — flat, not nested
 
-Current `TokenStats` in `src/types/WebviewMessageTypes.ts`:
+The July plan proposed a nested `PromptTokenTotals` object plus a parallel set
+of `promptTotal*` fields on `TokenUsage`. Both are now redundant: the parsers
+already produce cumulative attempt totals, so there is no second "total" concept
+to model. Extend the existing contracts in place.
+
+`src/types/WebviewMessageTypes.ts`:
 
 ```typescript
 export interface TokenStats {
+  /** Cumulative input tokens for this attempt (see per-harness cache semantics). */
   prompt: number;
+  /** Cumulative output tokens for this attempt. */
   completion: number;
+  /** Cache-read tokens (billed at reduced rate). */
   cached?: number;
+  /** Cache-creation tokens — Claude only. */
   cacheCreated?: number;
+  /** Cumulative reasoning output tokens, when reported separately. */
+  reasoning?: number;
+  /**
+   * Provider-reported billing total for the attempt. Prefer this over
+   * `prompt + completion`: whether cache tokens are already inside `prompt`
+   * varies by harness, so the sum is wrong for at least half of them.
+   */
+  total?: number;
+  /** Total input tokens occupying the context window (last API turn). */
   contextWindowUsed?: number;
+  /** Model's total context window capacity in tokens. */
   contextWindowSize?: number;
+  /** Compaction events observed during this attempt. Context, not a total source. */
+  compactionCount?: number;
+  /** Sum of known pre-compaction window sizes. Best effort, display only. */
+  compactedContextTokens?: number;
+  /** Where `total` came from. Drives whether the UI may compare it as exact. */
+  totalConfidence?: TokenTotalConfidence;
+  /** Cost estimate for this attempt. Absent when unpriceable. */
+  cost?: AttemptCostEstimate;
 }
 ```
 
-Add one shared run-scoped summary type in `src/types/CtrlYokeTypes.ts` and reuse
-it from `WorkflowSummary`, `RecentWorkflowsMessage`, and the React
-`RecentWorkflow` projection:
+Add to `src/types/DashboardConstants.ts` (flow-control strings must be
+constants, per the project's coding principles):
+
+```typescript
+export const TOKEN_TOTAL_CONFIDENCE = {
+  /** Provider reported a cumulative total for the whole attempt. */
+  PROVIDER: "provider",
+  /** Summed from provider per-turn usage by a ctrlyoke parser. */
+  ACCUMULATED: "accumulated",
+  /** Known to be incomplete (e.g. a harness that only reports the last turn). */
+  PARTIAL: "partial",
+} as const;
+```
+
+`src/types/CliOutputTypes.ts` `TokenUsage` needs no new *concepts* — only that
+`resolveTokenCounts` stop discarding what it already carries. Add
+`totalConfidence` (and, once wired, `costUsd`) so the parser can state its own
+provenance rather than the executor guessing.
+
+### Attempt cost
+
+```typescript
+export interface AttemptCostEstimate {
+  /** Total estimated cost in USD for this attempt. */
+  usd: number;
+  /** Where the number came from — governs the label and the disclaimer. */
+  source: AttemptCostSource;
+  /** Model the price table was keyed on; shown in the tooltip. */
+  modelId?: string;
+  /** Optional component breakdown for the tooltip. */
+  breakdown?: {
+    inputUsd?: number;
+    outputUsd?: number;
+    cachedInputUsd?: number;
+    cacheWriteUsd?: number;
+    reasoningUsd?: number;
+  };
+}
+```
+
+```typescript
+export const ATTEMPT_COST_SOURCES = {
+  /** The harness itself reported dollars (Claude `total_cost_usd`, OpenCode `part.cost`). */
+  HARNESS_REPORTED: "harness-reported",
+  /** Computed by ctrlyoke from the bundled price table. */
+  PRICE_TABLE: "price-table",
+  /** Priced, but from an incomplete token breakdown — lower bound. */
+  PARTIAL: "partial",
+} as const;
+```
+
+### Workflow run totals
+
+One shared type in `src/types/CtrlYokeTypes.ts`, reused by `WorkflowSummary`,
+`RecentWorkflowsMessage`, the React `RecentWorkflow` projection, and `RunSummary`:
 
 ```typescript
 export interface WorkflowTokenTotals {
-  /** Sum of all normalized AI attempt totals observed in this run. */
+  /** Sum of every AI attempt's `TokenStats.total` observed in this run. */
   total: number;
   /** Complete only when every executed AI attempt reported a usable total. */
   coverage: "complete" | "partial";
-  /** Number of AI attempts included in `total`. */
+  /** AI attempts included in `total`. */
   reportedAttemptCount: number;
-  /** Number of AI attempts executed, including retries and manual reruns. */
+  /** AI attempts executed, including retries and manual reruns. */
   attemptCount: number;
-  /** False while the workflow can still add more usage. */
+  /** False while the run can still add usage. */
   isFinal: boolean;
+  /** Summed attempt cost. Absent when no attempt was priceable. */
+  costUsd?: number;
+  /** True when at least one included attempt could not be priced. */
+  costPartial?: boolean;
 }
 
 export interface WorkflowSummary {
@@ -109,357 +251,471 @@ export interface WorkflowSummary {
 }
 ```
 
-Keep this as a shared contract rather than spelling the same optional fields
-independently in backend messages and UI stores. `total` is an observed token
-total, not a cost estimate. When `coverage === "partial"`, it is a lower bound
-and the UI must format it with `≥`.
+`total` is an observed token total, not a cost. When `coverage === "partial"`
+it is a lower bound and the UI must format it with `≥`.
 
-### Workflow Total Semantics
+### Workflow total semantics
 
-A workflow total is scoped to one run, not the entire lineage:
+A workflow total is scoped to **one run**, not the lineage:
 
-- Include every executed AI attempt in the run: ordinary prompts, final steps,
-  automatic retries, manual step reruns, and dynamically added AI steps.
-- Count each attempt's cumulative `promptTotal.total` exactly once. Streaming
-  updates replace that attempt's current snapshot; they are not summed as new
-  usage.
+- Include every executed AI attempt: ordinary prompts, final steps, automatic
+  retries, manual step reruns, and dynamically added AI steps.
+- Count each attempt's `TokenStats.total` exactly once. Streaming updates
+  *replace* that attempt's snapshot; they are never summed as new usage.
 - Exclude script steps unless a future script-backed harness reports normalized
-  AI usage.
+  AI usage. `TIMELINE_ATTEMPT_KINDS.AI` is the discriminator
+  (`src/types/WorkflowTimelineTypes.ts:67-71`) — do not infer kind from runtime
+  fields.
 - Do not include earlier runs from the lineage.
-- A draft that has never executed has no total, not a zero total.
+- A draft that never executed has no total, not a zero total.
 - A running workflow exposes an observed-so-far total with `isFinal: false`.
-- If any executed AI attempt lacks a usable total, preserve the known sum with
-  `coverage: "partial"` rather than comparing it as complete.
+- If any executed AI attempt lacks a usable total, keep the known sum and set
+  `coverage: "partial"`.
 
-For retries, the per-step UI may choose whether to emphasize the latest attempt,
-but the workflow total includes every attempt because all of them consumed
-tokens.
+### Persistence
 
-Add cumulative prompt fields:
+Three tiers, all reusing storage that already exists:
 
-```typescript
-export interface PromptTokenTotals {
-  /** Cumulative input tokens observed during this prompt attempt. */
-  input: number;
-  /** Cumulative output tokens observed during this prompt attempt. */
-  output: number;
-  /** Billing/display total. Prefer provider total when available. */
-  total: number;
-  /** Cumulative cache-read input tokens, when reported separately. */
-  cachedInput?: number;
-  /** Cumulative cache-creation input tokens, when reported separately. */
-  cacheCreatedInput?: number;
-  /** Cumulative reasoning output tokens, when reported separately. */
-  reasoningOutput?: number;
-  /** Number of compaction events observed during this prompt attempt. */
-  compactionCount?: number;
-  /** Sum of known pre-compaction window token counts. Best effort. */
-  compactedContextTokens?: number;
-  /** Whether totals came directly from provider cumulative usage or were derived. */
-  confidence: "provider-cumulative" | "derived" | "partial";
-}
+| Scope | Where | Why |
+| --- | --- | --- |
+| Per attempt | `CLI_OUTPUT_RECORDED` events in `events.jsonl` (already carry `CliOutput.tokens`) | Free once `TokenStats` is widened; survives history reload, undo/redo, and run navigation with no new code |
+| Per run (fast path) | `WorkingFileRuntime.tokenTotals` in the run's `workflow.ctrlyoke.json` | `WorkflowSerializer.getRecentWorkflows` already parses this file per row (`src/ui/WorkflowSerializer.ts:1098-1119`) and `RunSummaryCache` already caches it — the workflow list gets totals for zero extra I/O |
+| Per run (run list) | `WorkflowRunManifest` → projected into `RunSummary` | `RunSummaryRow.tsx` can then show the same total without loading events |
 
-export interface TokenStats {
-  prompt: number;
-  completion: number;
-  cached?: number;
-  cacheCreated?: number;
-  contextWindowUsed?: number;
-  contextWindowSize?: number;
-  promptTotal?: PromptTokenTotals;
-}
-```
-
-Also extend lower-level shared usage metadata in `src/types/CliOutputTypes.ts`:
-
-```typescript
-export interface TokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  cachedInputTokens?: number;
-  cacheCreatedTokens?: number;
-  reasoningOutputTokens?: number;
-  contextWindowUsedTokens?: number;
-  contextWindowSize?: number;
-  promptTotalTokens?: number;
-  promptTotalInputTokens?: number;
-  promptTotalOutputTokens?: number;
-  promptTotalCachedInputTokens?: number;
-  promptTotalCacheCreatedTokens?: number;
-  promptTotalReasoningOutputTokens?: number;
-  promptCompactionCount?: number;
-  promptCompactedContextTokens?: number;
-  promptTokenTotalConfidence?: "provider-cumulative" | "derived" | "partial";
-}
-```
-
-Persist durable completed-step fields in `src/types/CtrlYokeTypes.ts` runtime metadata so undo/redo, pause/resume, and history restore the same UI:
-
-```typescript
-promptTotalTokens?: number;
-promptCompactionCount?: number;
-promptCompactedContextTokens?: number;
-```
-
-If the detailed breakdown is needed in history/search later, persist the full prompt total object instead of only the three summary fields.
+Do **not** add per-step token fields to `PromptRuntimeMetadata`. Normal
+execution does not persist display-only token state into working-file steps, and
+`PromptQueue` actively strips it on undo/redo sync (`src/core/PromptQueue.ts:2038-2052`).
+The timeline is the durable per-attempt record.
 
 ---
 
 ## Collection Strategy
 
-### Provider-Cumulative Path
+### Normalize at the parser, aggregate in the executor, render in React
 
-Use this when a harness already reports cumulative usage for the whole run/prompt attempt.
+1. **Parsers** keep doing what they do, plus: set `totalConfidence`, stop
+   dropping reasoning tokens, and (Copilot, Antigravity) fix the two defects
+   listed above.
+2. **`WorkflowExecutor.resolveTokenCounts`** becomes lossless — it is the single
+   `TokenUsage` → `TokenStats` conversion point and must forward `totalTokens`,
+   `reasoningOutputTokens`, and confidence.
+3. **A per-attempt compaction counter** in the harness integration layer counts
+   `CLI_EVENT_TYPES.COMPACTION` events for the active attempt and sums
+   `CompactionData.preTokens` where present. All of `claude-cli`, `codex-cli`,
+   `opencode-cli`, and `antigravity-cli` emit these today.
+4. **One pure run aggregator** over normalized attempt totals, owned by the
+   executor/history layer. `WorkflowList.tsx` must never walk output rows or
+   reconstruct provider usage.
+5. **React renders normalized fields only** — no arithmetic over provider
+   shapes in components.
 
-Known candidates:
+The aggregator's responsibilities:
 
-- Codex `token_count.info.total_token_usage`
-- Qwen result/usage totals
-- OpenCode step token accumulation, if it already covers all API turns for the prompt
-- Claude final/result usage when it represents total API usage for the prompt attempt
-
-In this mode:
-
-- `promptTotal.total` should use provider cumulative `total_tokens` if present.
-- `contextWindowUsed` should continue to use last-turn/current-window usage.
-- `confidence = "provider-cumulative"`.
-
-### Derived Compaction Path
-
-Use this when only final context-window usage plus compaction events are available.
-
-Formula:
-
-```text
-prompt total estimate = sum(known compaction.preTokens) + final contextWindowUsed
-```
-
-If only the count is known, show `Compacted 2x` but do not fabricate `410k total`.
-
-In this mode:
-
-- `promptTotal.compactionCount` is exact when compaction events are observed.
-- `promptTotal.compactedContextTokens` is set only when pre-compaction token counts are reported.
-- `confidence = "derived"` when all needed counts are present.
-- `confidence = "partial"` when compactions are known but token counts are incomplete.
-
-### Event Aggregation
-
-Maintain a per-prompt attempt usage accumulator in the harness integration layer, not in React components.
-
-Responsibilities:
-
-- Count `CLI_EVENT_TYPES.COMPACTION` events during the active prompt attempt.
-- Sum `CompactionData.preTokens` where available.
-- Merge provider usage snapshots from parser metadata.
-- Emit one normalized `TokenUsage` object on prompt completion and during streaming updates when available.
-
-React should only render the normalized fields.
-
-### Workflow Aggregation
-
-Add one pure workflow-token aggregator over normalized per-attempt totals. The
-executor/history layer owns it; `WorkflowList.tsx` must not walk output rows or
-reconstruct provider usage.
-
-Responsibilities:
-
-- identify attempts by stable execution target plus attempt/rerun identity;
-- replace streaming snapshots for an attempt instead of double-counting them;
+- identify attempts by execution target + attempt index (the timeline already
+  keys events this way);
+- replace streaming snapshots for an attempt rather than double-counting;
 - include retries, final steps, manual reruns, and dynamic steps;
-- track reported-versus-executed attempt coverage;
-- persist the latest aggregate with the run's durable runtime summary so
-  pause/resume, history reload, CLI-managed runs, and hosted clients agree;
-- expose the same `WorkflowTokenTotals` through live `WorkflowSummary` and
+- track reported-vs-executed attempt coverage;
+- persist the latest aggregate into the run's `WorkingFileRuntime` and manifest
+  so pause/resume, history reload, CLI-managed runs, and hosted clients agree;
+- publish the same `WorkflowTokenTotals` through live `WorkflowSummary` and
   recent-workflow list messages.
 
-The recent-workflow path already reads the addressed working file in
-`WorkflowSerializer.getRecentWorkflows`; use the persisted aggregate from that
-file rather than loading every `events.jsonl`. The running path should publish
-the same aggregate from the active workflow summary.
+---
+
+## Cost Model
+
+### Where the raw price data comes from
+
+Three tiers, most trustworthy first. The tier used is recorded in
+`AttemptCostEstimate.source` and surfaced in the tooltip.
+
+**Tier 1 — harness-reported dollars.** Preferred whenever present, because the
+harness knows its own model routing, its own discounts, and its own cache
+accounting.
+
+- `claude-cli`: `result.total_cost_usd`, plus a per-model `modelUsage` breakdown
+  (documented in `dev/implemented/CLAUDE_CLI_STREAM_JSON_FORMAT.md:408-414,
+  748-754`; ctrlyoke parses the sibling `usage` object today but not the cost).
+  **Caveat:** an upstream bug reported April 2026 has `total_cost_usd`
+  over-reporting by roughly 10x on some models
+  ([anthropics/claude-code#53371](https://github.com/anthropics/claude-code/issues/53371)).
+  Before shipping, cross-check it against the price-table computation for the
+  same attempt and prefer the table when they disagree by more than ~2x; log the
+  discrepancy rather than silently trusting either.
+- `opencode-cli`: `step_finish.part.cost` in USD per step, summed across steps.
+  This is the *only* viable source for OpenCode, because OpenCode proxies
+  arbitrary providers and models that no bundled table can enumerate.
+
+**Tier 2 — a bundled per-model price table.** Add `src/utils/ModelPricing.ts`
+beside `ModelConstants.ts`, keyed **per harness then per model id**, mirroring
+how context-window sizes are already keyed
+(`COPILOT_CLI_CONTEXT_WINDOW_SIZES`, `CODEX_CLI_CONTEXT_WINDOW_SIZES`) — the
+same model id can be priced differently by different harnesses.
+
+```typescript
+export interface ModelPricing {
+  /** USD per 1M non-cached input tokens. */
+  inputPerMTok: number;
+  /** USD per 1M output tokens (reasoning included unless priced separately). */
+  outputPerMTok: number;
+  /** USD per 1M cache-read input tokens. */
+  cachedInputPerMTok?: number;
+  /** USD per 1M cache-write tokens — Claude only. */
+  cacheWritePerMTok?: number;
+  /** USD per 1M reasoning tokens, when a provider prices them apart from output. */
+  reasoningPerMTok?: number;
+  /** Provider doc URL the numbers were read from. Asserted as fact — keep current. */
+  sourceUrl: string;
+  /** ISO date the entry was last verified against `sourceUrl`. */
+  verifiedOn: string;
+}
+```
+
+Rejected alternative: vendoring LiteLLM's
+[`model_prices_and_context_window.json`](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json)
+(MIT-licensed, community-maintained, covers 100+ providers). It is multi-megabyte
+and covers thousands of models ctrlyoke will never run; ctrlyoke lists a few
+dozen across all six harnesses (`ModelConstants.ts`). Keep a curated table and
+use LiteLLM's file as a cross-check when refreshing prices, not as a dependency.
+
+Also rejected: fetching prices at runtime. It adds a network dependency and a
+privacy surface to a feature that must work offline, and prices change on the
+order of months.
+
+**Tier 3 — unpriceable.** Show tokens, omit cost, and say why in the tooltip.
+Applies to unknown/BYO models, OpenCode runs where `part.cost` is missing, and
+any attempt with `totalConfidence: "partial"`.
+
+Add a user override so a table miss is not a dead end:
+
+```json
+"ctrlyoke.modelPricing": {
+  "<harnessId>": { "<modelId>": { "inputPerMTok": 3, "outputPerMTok": 15 } }
+}
+```
+
+### The calculation — and why the cache split matters
+
+The naive formula (`input * inRate + output * outRate`) is wrong for most
+harnesses, because **whether cache tokens are already inside the input count
+differs per harness**, and cached input is typically 10x cheaper while often
+being the *majority* of tokens in an agentic run. Getting this wrong skews cost
+estimates by more than the harness differences the feature exists to compare.
+
+| Harness | Relationship | Billable non-cached input |
+| --- | --- | --- |
+| `claude-cli` | `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` are **disjoint** | `prompt` as-is |
+| `codex-cli` | `cached_input_tokens` ⊂ `input_tokens` (asserted in `CodexLogParser.ts:242-243`) | `prompt − cached` |
+| `qwen-cli` | `cachedContentTokenCount` ⊂ `promptTokenCount` (Gemini semantics — **verify against a live run before shipping**) | `prompt − cached` |
+| `opencode-cli` | `tokens.cache.read` believed disjoint from `tokens.input` — **verify** | n/a (use `part.cost`) |
+| `antigravity-cli` | `cache_read_tokens` vs `input_tokens` — **verify** | verify |
+| `copilot-cli` | No cache reporting at all | `prompt` as-is |
+
+So the calculation must be driven by a per-harness declaration, not a global
+assumption:
+
+```typescript
+const nonCachedInput = harnessCachedIsSubsetOfInput(harnessId)
+  ? Math.max(prompt - (cached ?? 0), 0)
+  : prompt;
+
+usd =
+  (nonCachedInput      / 1e6) * pricing.inputPerMTok +
+  ((cached ?? 0)       / 1e6) * (pricing.cachedInputPerMTok ?? pricing.inputPerMTok) +
+  ((cacheCreated ?? 0) / 1e6) * (pricing.cacheWritePerMTok ?? pricing.inputPerMTok) +
+  (billableOutput      / 1e6) * pricing.outputPerMTok +
+  (separatelyPricedReasoning / 1e6) * (pricing.reasoningPerMTok ?? 0);
+```
+
+`billableOutput` also needs a per-harness rule: Qwen already folds
+`thoughtsTokenCount` into `outputTokens` (`QwenLogParser.ts:248-250`), so adding
+`reasoning` again would double-count, whereas Codex and Antigravity report it
+separately. Encode both facts as a per-harness token-semantics descriptor —
+one `const` object keyed by `HarnessId` — so the rules are stated once and
+statically checked rather than re-derived at each call site.
+
+### Cost is not spend
+
+Say this plainly in the UI, because it is the single most likely source of user
+complaints:
+
+- **Subscription harnesses do not bill per token.** Claude Pro/Max, Codex on a
+  ChatGPT plan, and Antigravity consume plan quota; a Claude Max user who "spent
+  $40" of tokens spent $0 incrementally. Label the number **"≈$0.41 at API list
+  prices"**, never "cost" alone.
+- **Copilot does not bill in tokens at all.** It bills in premium requests / AI
+  credits (1 credit = $0.01; see `HARNESS_USAGE_TRACKING_PLAN.md`). Dollar
+  estimates from token counts are meaningless there. Show tokens and, once the
+  usage plan lands, credits — not a synthesized dollar figure.
+- Keep the cost display **on by default but clearly marked**, with a setting to
+  hide it entirely for users who find it noise.
 
 ---
 
 ## UX Details
 
-### Steps Panel
+### Steps panel — `WorkflowStep.tsx`
 
-`WorkflowStep.tsx` should continue to render the vertical context bar from `contextWindowUsed/contextWindowSize`.
+Keep the vertical context bar exactly as-is (it is the row's primary visual and
+already tight on space). Cumulative usage is **tooltip-only by default**, and
+becomes visible in exactly one case:
 
-Add a tiny secondary text/badge only when it adds information:
+- **`compactionCount > 0` → render the total (`410k`) beside the percentage.**
+- `compactionCount === 0` → tooltip only, no label.
 
-- If `promptTotal.total` exists and differs materially from final `contextWindowUsed`, show `410k`.
-- If `promptTotal.compactionCount > 0`, include `2x` or `2 compactions` in the tooltip.
-- Avoid crowding the row. The bar remains the primary visual; total usage can be a small label below or a compact chip beside the percentage.
+The gate is compaction, not a size heuristic, because compaction is precisely
+the event that severs the bar's meaning: the window is emptied mid-attempt, so
+the final percentage reads *low* on the attempt that consumed the *most*. A
+visible total there is not decoration — it is the indicator that the context
+bar no longer reflects what this step actually cost, and its presence alone
+tells the user a compaction happened. Absent compaction the bar and the total
+tell the same story, and a second number would be noise.
 
-Tooltip example:
+This also means the label must be driven by `TokenStats.compactionCount`, not
+by comparing `total` against `contextWindowUsed`. Do not substitute a magnitude
+heuristic if the compaction count is unavailable for a harness — stay silent
+instead, because a visible total that does *not* imply compaction destroys the
+signal for every harness that does report it.
 
 ```text
 Current context window: 10.0k / 200.0k (5%)
-Prompt total: 410.0k tokens across this attempt
+Attempt total: 410.0k tokens (Claude reported)
+  8.0k input · 12.0k output · 390.0k cache read
+Estimated: ≈$0.41 at API list prices
 Compactions: 2
 ```
 
-### Output Stats Row
+The mobile `PromptChipRail` (via `useContextPct`) stays percentage-only — there
+is no room, and the output row covers it.
 
-`StatsRowView` should render separate stat parts:
+### Output stats row — `OutputRow.tsx` `StatsRowView`
 
-```text
-Context: 10.0k/200.0k (5%) | Prompt total: 410.0k | Compacted 2x
-```
-
-When no current-window context exists, keep the existing token breakdown behavior.
-
-When only compaction count exists:
+Visible parts, pipe-separated, in this order:
 
 ```text
-Tokens: 8k in / 2k out / 10k total | Compacted 2x
+Context: 10.0k/200.0k (5%) | Total: 410.0k | ≈$0.41 | Compacted 2x
 ```
 
-Do not hide prompt/completion/cache details in hover-only UI once cumulative prompt total exists. The visible row should answer the main question; the tooltip can provide the breakdown.
+- When there is no current-window data, lead with the token breakdown as today.
+- When only compaction count is known: `Tokens: 8k in / 2k out / 10k total | Compacted 2x`.
+- When unpriceable, omit the cost part entirely — never `$0.00`.
+- Move the input/output/cache breakdown out of hover-only into the tooltip
+  *plus* keep the headline answerable at a glance. The visible row answers "how
+  much"; the tooltip answers "made of what".
 
-### CLI Terminal Formatter
+### CLI — `CliTerminalFormatter.renderStats`
 
-Mirror the stats row in `src/cli/CliTerminalFormatter.ts` so CLI users see the same distinction:
+Mirror the same terminology and ordering so CLI and dashboard users describe the
+same numbers the same way:
 
 ```text
-Context: 10.0k/200.0k (5%)  Prompt total: 410.0k  Compacted 2x
+Context: 10.0k/200.0k (5%)  Total: 410.0k  ≈$0.41  Compacted 2x
 ```
 
-### Workflow List
+### Workflow list — `WorkflowList.tsx` + `RunningWorkflowItem.tsx`
 
-Show the addressed run's `WorkflowTokenTotals` in
-`src/ui/webview-react/components/workflow/WorkflowList.tsx`.
+Show the addressed run's `WorkflowTokenTotals`:
 
 - Recent rows show the total for the row's current/latest run.
-- Running rows show the live observed-so-far total. Because
-  `WorkflowList.tsx` delegates those rows to `RunningWorkflowItem.tsx`, update
-  that component too; the two row kinds must not diverge.
-- Extend `WorkflowRowLayout.tsx` with a dedicated usage metadata slot so totals
-  align vertically in flat rows and join the second metadata line in
-  stacked/compact rows.
-- Update the centralized row-track widths and responsive tier thresholds when
-  adding the flat usage column.
-- Use the existing shared token formatter:
-  - complete: `410k`
-  - partial: `≥410k`
-  - absent: no numeric label
-- Include the full phrase in the accessible row name, for example
-  `410,000 total tokens` or `at least 410,000 observed tokens`.
-- The tooltip explains coverage and whether the value is still increasing.
-- Do not label a partial or unavailable value as a comparable exact total.
+- Running rows show the live observed-so-far total. `WorkflowList.tsx` delegates
+  those to `RunningWorkflowItem.tsx`; update both — the two row kinds must not
+  diverge.
+- Add a dedicated usage slot to `WorkflowRowLayout.tsx` so totals align
+  vertically in flat rows and join the second metadata line when stacked/compact.
+  `WorkflowRowLayout` currently exposes `harness | label | count | glyph | badge
+  | time`; the usage slot goes between `count` and `glyph`.
+- Add the new track to `WORKFLOW_ROW_TRACKS` in
+  `src/ui/webview-react/constants.ts:106-136` and re-derive the responsive tier
+  thresholds from it. Sizing lives there, not in CSS — a track widened in CSS
+  alone silently collapses the name column. Budget ~56px (fits `≥1.2M`).
+- At the `compact` tier, drop the usage slot rather than shrink the name column.
+- Formatting via the shared formatter: complete `410k`; partial `≥410k`; absent
+  renders nothing.
+- Accessible row name carries the full phrase: `410,000 total tokens` or
+  `at least 410,000 observed tokens`.
+- Tooltip explains coverage, whether the value is still increasing, and cost
+  when known.
+- Never label a partial or unavailable value as a comparable exact total.
 
-The workflow list is the initial aggregate surface. Run-summary rows, sorting,
-and token filters may reuse the same contract later, but are not required for
-this plan.
+### Run list — `RunSummaryRow.tsx`
+
+Once `RunSummary` carries `tokenTotals`, render the same slot with the same
+formatter. This is where per-run harness comparison actually happens (same
+lineage, different runs), so it is worth doing in the same pass as the workflow
+list rather than deferring.
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Contracts And Rendering
+### Phase 1: Stop losing the numbers we already have
 
-- [ ] Extend shared token types with cumulative prompt total fields.
-- [ ] Add shared `WorkflowTokenTotals` and thread it through live workflow
-      summaries, recent-workflow messages, and the React store.
-- [ ] Add formatting helpers in `src/ui/webview-react/utils/tokenUtils.ts` for token counts and prompt-total labels.
-- [ ] Update `OutputRow.tsx` stats row to show context, prompt total, and compaction count as distinct stats.
-- [ ] Update `WorkflowStep.tsx` to expose total prompt usage without changing the current context bar semantics.
-- [ ] Update `CliTerminalFormatter.ts` to use the same terminology.
-- [ ] Add a dedicated workflow-total metadata slot to `WorkflowRowLayout.tsx`
-      and render it from both recent and running rows in `WorkflowList.tsx`.
-- [ ] Add React tests for stats-row rendering with current-window-only, total-only, and compaction cases.
-- [ ] Add workflow-list tests for complete, partial, running, and unavailable
-      totals at flat, stacked, and compact tiers.
+- [ ] Widen `TokenStats` with `total`, `reasoning`, `compactionCount`,
+      `compactedContextTokens`, `totalConfidence`.
+- [ ] Add `TOKEN_TOTAL_CONFIDENCE` to `DashboardConstants.ts`.
+- [ ] Make `WorkflowExecutor.resolveTokenCounts` lossless.
+- [ ] Add token/total formatting helpers to
+      `src/ui/webview-react/utils/tokenUtils.ts` (it currently holds only
+      `calcContextPct`).
+- [ ] Render total + breakdown in `StatsRowView` and `CliTerminalFormatter`.
+- [ ] Expose the total in the `WorkflowStep` tooltip without changing the bar,
+      and render the visible total **only** when `compactionCount > 0`.
+- [ ] React tests: context-only, total-only, compacted (label visible),
+      uncompacted-with-large-total (label absent), and
+      compaction-count-unavailable (label absent) cases.
 
-### Phase 2: Harness Accumulators
+### Phase 2: Close the two harness gaps
 
-- [ ] Add a shared prompt-attempt usage accumulator for compaction count and pre-token sums.
-- [ ] Wire parser metadata into the accumulator so provider cumulative totals win over derived estimates.
-- [ ] Persist summary fields into prompt `_runtime` metadata after completion.
-- [ ] Restore prompt totals from runtime metadata in the steps panel after undo/redo and history reload.
-- [ ] Add the shared workflow-token aggregator and persist its run-scoped
-      summary without replaying history events for every workflow-list refresh.
-- [ ] Publish rolling totals through `WorkflowSummary` and durable totals
-      through the recent-workflow list.
-- [ ] Add unit tests for compaction aggregation and runtime persistence.
-- [ ] Add unit tests proving streaming replacement, retry/manual-rerun
-      inclusion, partial coverage, dynamic-step inclusion, and run isolation.
+- [ ] Copilot: accumulate input tokens per chat span
+      (`CopilotLogParser.ts:214-222`) and report cumulative input from
+      `getFinalOtelUsage`; mark `totalConfidence: PARTIAL` when no OTel span was
+      seen.
+- [ ] Antigravity: let the statusline snapshot win for context-window fields
+      only, and stream-json `result.usage` win for billing totals
+      (`AntigravityLogParser.ts:946-1000`).
+- [ ] Capture OpenCode `tokens.reasoning` and `tokens.cache.write`.
+- [ ] Capture Codex `reasoning_output_tokens` through to `TokenStats`.
+- [ ] Add the per-attempt compaction counter in the harness integration layer.
+- [ ] Unit tests per harness asserting cumulative-vs-last-turn separation.
 
-### Phase 3: Harness-Specific Accuracy
+### Phase 3: Run aggregation
 
-- [ ] Codex: map `token_count.info.total_token_usage` into prompt totals and `last_token_usage` into context-window usage.
-- [ ] Claude: verify whether final result usage is cumulative for the prompt attempt; otherwise derive from compact boundaries plus final context.
-- [ ] OpenCode: verify whether accumulated step tokens span compactions; if not, combine with compaction events.
-- [ ] Qwen: map final `usage.total_tokens` into prompt totals.
-- [ ] Copilot: map any available session usage into prompt totals; otherwise show compaction count only when known.
+- [ ] Add the pure run-scoped aggregator over `TIMELINE_ATTEMPT_KINDS.AI`
+      attempts.
+- [ ] Persist `WorkflowTokenTotals` into `WorkingFileRuntime` and the run
+      manifest; project into `RunSummary`.
+- [ ] Publish rolling totals via `WorkflowSummary`, durable totals via
+      `RECENT_WORKFLOWS`.
+- [ ] Add the usage slot to `WorkflowRowLayout.tsx`, `WORKFLOW_ROW_TRACKS`, and
+      both row kinds; render in `RunSummaryRow.tsx`.
+- [ ] Tests: streaming replacement, retry/manual-rerun inclusion, partial
+      coverage, dynamic-step inclusion, run isolation, and workflow-list refresh
+      not reading `events.jsonl`.
+- [ ] Workflow-list tests at flat, stacked, and compact tiers for complete,
+      partial, running, and unavailable totals.
 
-### Phase 4: Cost Readiness
+### Phase 4: Cost
 
-- [ ] Add optional per-model pricing metadata lookup after prompt totals are stable.
-- [ ] Compute effective prompt cost from cumulative token breakdown, not context-window usage.
-- [ ] Distinguish cached-input, cache-created, reasoning-output, and output pricing where harness/model metadata supports it.
-- [ ] Keep cost display opt-in or clearly marked approximate when pricing is inferred.
+- [ ] Add `src/utils/ModelPricing.ts` with per-harness price tables, `sourceUrl`
+      and `verifiedOn` per entry.
+- [ ] Add the per-harness token-semantics descriptor (cache subset? reasoning
+      folded into output?) as one typed `const` keyed by `HarnessId`.
+- [ ] Verify the cache-subset and reasoning-folding assumptions for Qwen,
+      OpenCode, and Antigravity against live runs; correct the table above.
+- [ ] Parse `claude-cli` `total_cost_usd` / `modelUsage` and `opencode-cli`
+      `part.cost`; cross-check Claude's value against the table, prefer the
+      table on >2x divergence, note the substitution in the tooltip, and log the
+      discrepancy.
+- [ ] Compute and render attempt cost + run cost with explicit list-price
+      labelling; suppress dollars for `copilot-cli`.
+- [ ] Add the `ctrlyoke.modelPricing` override setting and a hide-cost setting.
+- [ ] Tests: subset vs disjoint cache math, reasoning double-count guard,
+      unknown-model omission, and harness-reported-vs-table divergence.
 
 ---
 
 ## Edge Cases
 
-- Retries should track totals per attempt, not merge all attempts into a single visible number unless the UI explicitly says "all attempts".
+- Track totals per attempt; do not merge attempts into one visible number unless
+  the label says "all attempts".
 - The workflow total intentionally sums all retry and manual-rerun attempts,
-  even when the step row emphasizes only the latest attempt.
-- Final steps should use the same fields as normal prompt steps.
-- Script steps should not show AI token totals unless a future script harness reports them.
-- Streaming updates may show partial totals; completed output should replace them with durable totals.
-- If compaction happens without token counts, display compaction count but do not estimate total token usage.
-- If provider cumulative totals reset after compaction, mark confidence `partial` and fall back to compaction-derived values only when token counts are present.
-- Unknown attempt usage makes the workflow aggregate partial; it must not turn
-  into zero.
-- Editing a completed run into a draft does not carry the prior run's total into
-  the future run. Duplicate/Fork copy authored definitions, never usage.
+  even when the step row emphasizes only the latest.
+- Final steps use the same fields as normal prompt steps.
+- Script steps show no AI token totals.
+- Streaming updates may show partial totals; the completed output replaces them.
+- Compaction without token counts → show the count, estimate nothing.
+- If a provider's cumulative total resets after compaction, mark
+  `totalConfidence: PARTIAL` — do not paper over it with a derived estimate.
+- Unknown attempt usage makes the run aggregate partial, never zero.
+- Editing a completed run into a draft does not carry the prior run's total
+  forward. Duplicate/Fork copy authored definitions, never usage.
+- A model missing from the price table suppresses cost for that attempt and
+  marks the run's `costPartial: true` — it must not silently price at $0.
 
 ---
 
 ## Relationship To Harness Usage Tracking
 
-This plan is narrower than `HARNESS_USAGE_TRACKING_PLAN.md`.
+This plan is the per-run half; `HARNESS_USAGE_TRACKING_PLAN.md` is the
+cross-session half.
 
-- This plan: per-prompt usage for a single ctrlyoke workflow step/attempt.
-- This plan also rolls those normalized prompt attempts into a single-run
-  workflow total for list display.
-- Harness usage plan: cross-session provider quota, observed usage rollups, and billing/limit windows.
+- Here: per-attempt usage and cost for one ctrlyoke workflow step, rolled into
+  one run total for list display.
+- There: cross-session provider quota, observed usage rollups, billing/limit
+  windows.
 
-The per-prompt totals from this plan should eventually feed the observed usage rollups from the harness usage plan. Avoid building a second storage pipeline for aggregate usage here.
+The normalized attempt totals from this plan are the **only** input the usage
+plan's `ctrlyoke-observed` source should use. Do not build a second usage
+pipeline there.
 
 ---
 
 ## Open Questions
 
-1. Should the steps panel show `410k` visibly, or only expose it in the tooltip to avoid row clutter?
-2. Should total prompt usage include cache-read tokens in the headline total, or should the headline use provider `total_tokens` exactly and leave billing-adjusted totals for the future cost UI?
-3. For retries, should collapsed output groups show the latest attempt total, all-attempt total, or both?
-4. Which harnesses can guarantee provider-cumulative totals across compactions, and which require derived estimates?
+Resolved since the last revision:
 
-Workflow aggregate semantics are not open: every incurred attempt belongs in
-the run total, partial coverage is labeled as a lower bound, and totals never
-span multiple runs.
+- ~~Which harnesses can guarantee provider-cumulative totals?~~ All six can,
+  after the Copilot input-accumulation fix; see the audit table.
+- ~~Should the headline use provider `total_tokens` or a billing-adjusted sum?~~
+  Provider `total_tokens` for the headline; billing adjustment happens only
+  inside the cost calculation, where the cache-subset rules apply.
+- ~~Where does raw price data come from?~~ Harness-reported first, then a
+  curated `ModelPricing.ts`; LiteLLM's file as a refresh cross-check only.
+
+Decided August 8, 2026 — implement these as written; do not relitigate:
+
+1. **Steps panel visibility → compaction-gated.** The total is tooltip-only
+   except when `compactionCount > 0`, where it renders visibly beside the
+   percentage. See [Steps panel](#steps-panel--workflowsteptsx) for why the gate
+   is the compaction event and not a magnitude heuristic.
+2. **Retries in collapsed output groups → both, by level.** A collapsed group
+   shows the all-attempt sum, because that is what the step actually consumed.
+   Expanding reveals per-attempt totals. The collapsed label must say so
+   (`3 attempts · 410k total`) so the sum is never mistaken for one attempt.
+3. **Claude `total_cost_usd` trust → prefer the table on divergence, mark it,
+   log it.** Compute both, use the harness-reported value when they agree within
+   ~2x, otherwise fall back to the price-table figure, note the substitution in
+   the tooltip (not the headline — the headline stays a single number), and log
+   the discrepancy. Silent substitution is wrong because it hides an upstream
+   regression; showing both numbers is wrong because it asks the user to
+   adjudicate a bug they cannot see.
+4. **Cost display default → on, labelled.** Always with the list-price
+   qualifier, with a setting to hide it. A hidden estimate answers nobody's
+   question.
+5. **Qwen / OpenCode / Antigravity cache semantics → verify before pricing.**
+   Until each is empirically confirmed against a live run, those harnesses price
+   with `ATTEMPT_COST_SOURCES.PARTIAL` rather than assuming a disjointness rule.
+
+Genuinely still open:
+
+- Nothing blocking. Phase 4 carries research tasks (the cache-semantics
+  verifications above), but no design decision is outstanding.
+
+Workflow aggregate semantics are **not** open: every incurred attempt belongs in
+the run total, partial coverage is labelled as a lower bound, and totals never
+span runs.
 
 ---
 
 ## Acceptance Criteria
 
-- Current context, cumulative prompt usage, and cumulative workflow usage remain
-  distinct concepts in contracts and labels.
-- A completed workflow row displays the addressed run's observed total without
-  opening the run.
-- A running workflow row updates its observed-so-far total without
-  double-counting streaming snapshots.
+- Current context, cumulative attempt usage, and cumulative run usage remain
+  three distinct concepts in contracts, labels, and tooltips.
+- A step row shows a visible token total if and only if that attempt compacted,
+  so the label's presence is itself a reliable "the bar under-reports this step"
+  signal.
+- No conversion step between a parser and a rendered stat discards a token field
+  the parser produced.
+- A completed workflow row displays its run's observed total without opening the
+  run; a running row updates without double-counting streaming snapshots.
 - Automatic retries, manual reruns, final steps, and dynamic AI steps contribute
   exactly once per attempt.
-- Partial provider coverage renders as a lower bound; unavailable usage never
-  renders as zero.
-- Recent and running rows use the same formatter, summary type, and responsive
-  layout slot.
-- Workflow-list refresh does not read every historical output event.
-- Duplicate and fork operations do not copy token usage into the new lineage.
+- Partial coverage renders as a lower bound; unavailable usage never renders as
+  zero, and unavailable cost never renders as `$0.00`.
+- Recent rows, running rows, and run-summary rows use the same formatter,
+  summary type, and layout slot.
+- Workflow-list refresh reads no historical output events.
+- Duplicate and fork do not copy usage into the new lineage.
+- Cost is never presented as money billed on a subscription plan, and is never
+  synthesized in dollars for `copilot-cli`.
