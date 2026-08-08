@@ -227,6 +227,8 @@ interface CommandPreview {
   executable: string;
   args: string[];
   displayCommand: string;
+  displayShell: CommandDisplayShell; // "cmd" | "powershell" | "posix"
+  requiresShellVerbatimArgs: boolean;
   cwd: string;
   environmentKeys: string[];
 }
@@ -234,6 +236,22 @@ interface CommandPreview {
 
 Never construct `displayCommand` by joining unescaped arguments. Do not expose
 environment values.
+
+`displayCommand` defaults to PowerShell quoting on Windows, not cmd.exe —
+PowerShell is the default integrated shell for this audience's terminals (VS
+Code, Windows Terminal), and cmd.exe's caret-escaped output does not paste
+into it (cmd's `^` escape char means nothing to PowerShell, whose own escape
+char is a backtick). `DryRunModal`'s Command tab offers a PowerShell/Command
+Prompt toggle for Windows commands, re-rendering `args` for the other dialect
+client-side via `renderCommandForDisplay`
+(`src/types/CommandDisplayFormatter.ts`, dependency-free so it loads in both
+the extension host and the webview bundle). The toggle is hidden for POSIX
+commands (nothing to toggle to) and for the rare `.cmd`/`.bat` launcher
+fallback where `args` is already a fully cmd.exe-escaped verbatim payload
+(`requiresShellVerbatimArgs: true`) — re-escaping that for another shell would
+mangle it. The default rendering the DTO ships (`displayCommand`) is never
+recomputed on the client; only an explicit toggle click substitutes a
+re-rendered string, preserving the snapshot rule.
 
 ### Permissions and compatibility
 

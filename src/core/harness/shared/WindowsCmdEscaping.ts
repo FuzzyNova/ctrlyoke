@@ -1,4 +1,8 @@
 import * as path from "path";
+import {
+  escapeCmdArgument,
+  escapeCmdMetaChars,
+} from "../../../types/CommandDisplayFormatter";
 
 /**
  * Escaping for arguments that must survive a mandatory `cmd.exe` hop on Windows.
@@ -37,39 +41,12 @@ import * as path from "path";
  * `.cmd`/`.bat` files that don't match the bypassable template.
  */
 
-const CMD_META_CHARS_REGEXP = /([()\][%!^"`<>&|;, *?])/g;
-
 /** cmd.exe-shim located under `node_modules/.bin/`: its own template re-invokes
  * cmd.exe a second time internally, so metacharacters must be escaped twice. */
 const CMD_SHIM_IN_NODE_MODULES_BIN_REGEXP =
   /node_modules[\\/]\.bin[\\/][^\\/]+\.cmd$/i;
 
-export function escapeCmdMetaChars(value: string): string {
-  return value.replace(CMD_META_CHARS_REGEXP, "^$1");
-}
-
-export function escapeCmdArgument(
-  value: string,
-  doubleEscapeMetaChars: boolean
-): string {
-  let arg = `${value}`;
-
-  // Sequence of backslashes followed by a double quote: double up all the
-  // backslashes and escape the double quote.
-  arg = arg.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"');
-  // Sequence of backslashes at the end of the string (which will become a
-  // double quote next): double up all the backslashes.
-  arg = arg.replace(/(?=(\\+?)?)\1$/, "$1$1");
-  // Quote the whole thing.
-  arg = `"${arg}"`;
-  // Escape cmd.exe metacharacters.
-  arg = arg.replace(CMD_META_CHARS_REGEXP, "^$1");
-  if (doubleEscapeMetaChars) {
-    arg = arg.replace(CMD_META_CHARS_REGEXP, "^$1");
-  }
-
-  return arg;
-}
+export { escapeCmdArgument, escapeCmdMetaChars };
 
 /**
  * Build the `/d /s /c "..."` payload for launching `resolvedFilePath` (a

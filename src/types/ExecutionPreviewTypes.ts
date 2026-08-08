@@ -8,6 +8,9 @@ import {
   type PreviewTruncationReason,
 } from "./DashboardConstants";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
+import type { CommandDisplayShell } from "./CommandDisplayFormatter";
+
+export type { CommandDisplayShell } from "./CommandDisplayFormatter";
 
 export type {
   PreviewPermissionAction,
@@ -126,6 +129,14 @@ export interface CommandPreview {
   executable: string;
   args: string[];
   displayCommand: string;
+  /** Shell dialect `displayCommand` is quoted for; the dashboard offers a
+   * toggle to re-render `args` for another dialect (see
+   * `CommandDisplayFormatter.renderCommandForDisplay`). */
+  displayShell: CommandDisplayShell;
+  /** True when `args` is already a fully cmd.exe-escaped verbatim payload
+   * (the `.cmd`/`.bat` launcher fallback) — re-rendering for another shell
+   * would mangle it, so the dashboard must not offer the toggle. */
+  requiresShellVerbatimArgs: boolean;
   cwd: string;
   environmentKeys: string[];
 }

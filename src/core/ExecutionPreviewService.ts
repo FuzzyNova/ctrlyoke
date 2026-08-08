@@ -39,6 +39,7 @@ import { resolveExecutionProperties } from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import {
   type CommandPreview,
+  type CommandDisplayShell,
   type ConditionDefinitionPreview,
   type ConditionPreview,
   type ExecutionLimitsPreview,
@@ -54,6 +55,7 @@ import {
   type WorkflowPreviewSummary,
   type WorkspaceMutationPreview,
 } from "../types/ExecutionPreviewTypes";
+import { renderCommandForDisplay } from "../types/CommandDisplayFormatter";
 import {
   redactExecutionPreview,
   redactPreviewText,
@@ -66,7 +68,6 @@ import {
   ExecutionPlanBuilder,
   type ExecutionPlan,
 } from "./harness/shared/ExecutionPlanBuilder";
-import { escapeCmdArgument } from "./harness/shared/WindowsCmdEscaping";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 
 /** The already-wired shared planners for one CLI harness. */
@@ -536,11 +537,16 @@ export class ExecutionPreviewService {
     );
     const executable = plan.resolvedCommand.command;
     const platform = this.options.platform ?? process.platform;
-    const displayCommand = renderPreviewCommand(
+    const requiresShellVerbatimArgs =
+      plan.resolvedCommand.requiresShellVerbatimArgs ?? false;
+    const displayShell: CommandDisplayShell = requiresShellVerbatimArgs
+      ? "cmd"
+      : defaultCommandDisplayShell(platform);
+    const displayCommand = renderCommandForDisplay(
       executable,
       redactedArgs,
-      platform,
-      plan.resolvedCommand.requiresShellVerbatimArgs
+      displayShell,
+      { requiresShellVerbatimArgs }
     );
     const environmentKeys = new Set<string>([
       ...Object.keys(
@@ -553,6 +559,8 @@ export class ExecutionPreviewService {
       executable,
       args: redactedArgs,
       displayCommand,
+      displayShell,
+      requiresShellVerbatimArgs,
       cwd: this.options.cwd ?? this.options.workspaceRoot ?? process.cwd(),
       environmentKeys: [...environmentKeys],
     };
@@ -807,22 +815,29 @@ export class ExecutionPreviewService {
   }
 
   private buildScriptCommand(step: ScriptStep): CommandPreview {
-    const executable =
-      (this.options.platform ?? process.platform) === "win32"
-        ? (process.env.ComSpec ?? "cmd.exe")
-        : (process.env.SHELL ?? "/bin/sh");
-    const args =
-      (this.options.platform ?? process.platform) === "win32"
-        ? ["/d", "/s", "/c", step.script]
-        : ["-c", step.script];
-    const displayCommand =
-      (this.options.platform ?? process.platform) === "win32"
-        ? [executable, ...args].join(" ")
-        : [executable, ...args].map(shellEscapePosix).join(" ");
+    const isWindows = (this.options.platform ?? process.platform) === "win32";
+    const executable = isWindows
+      ? (process.env.ComSpec ?? "cmd.exe")
+      : (process.env.SHELL ?? "/bin/sh");
+    const args = isWindows
+      ? ["/d", "/s", "/c", step.script]
+      : ["-c", step.script];
+    // The whole script text is one verbatim argument to the shell
+    // interpreter, not a per-arg-quoted command line, on either platform —
+    // there is no other dialect to toggle to.
+    const displayShell: CommandDisplayShell = isWindows ? "cmd" : "posix";
+    const displayCommand = renderCommandForDisplay(
+      executable,
+      args,
+      displayShell,
+      { requiresShellVerbatimArgs: isWindows }
+    );
     return {
       executable,
       args,
       displayCommand,
+      displayShell,
+      requiresShellVerbatimArgs: isWindows,
       cwd: this.options.cwd ?? this.options.workspaceRoot ?? process.cwd(),
       environmentKeys: [],
     };
@@ -911,24 +926,11 @@ export class ExecutionPreviewService {
   }
 }
 
-export function renderPreviewCommand(
-  executable: string,
-  args: readonly string[],
-  platform: NodeJS.Platform,
-  requiresShellVerbatimArgs = false
-): string {
-  if (platform === "win32") {
-    if (requiresShellVerbatimArgs) {
-      return [executable, ...args].join(" ");
-    }
-    return [executable, ...args]
-      .map((value) => escapeCmdArgument(value, false))
-      .join(" ");
-  }
-  return [executable, ...args].map(shellEscapePosix).join(" ");
-}
-
-function shellEscapePosix(value: string): string {
-  if (value.length === 0) return "''";
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
+/** PowerShell is the default shell for this audience's terminals (VS Code
+ * integrated terminal, Windows Terminal) — cmd.exe stays available as an
+ * explicit dashboard toggle, not the default rendering. */
+export function defaultCommandDisplayShell(
+  platform: NodeJS.Platform
+): CommandDisplayShell {
+  return platform === "win32" ? "powershell" : "posix";
 }

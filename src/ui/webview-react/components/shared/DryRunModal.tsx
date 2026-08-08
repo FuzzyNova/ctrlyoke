@@ -6,12 +6,18 @@ import type {
 } from "@root/types/CompatibilityTypes";
 import type {
   CategorizedPromptSectionPreview,
+  CommandPreview,
   ConditionDefinitionPreview,
   StepExecutionPreview,
   WorkflowExecutionPreview,
   WorkspaceMutationPreview,
 } from "@root/types/ExecutionPreviewTypes";
 import type { ExecutionPreviewScope } from "@root/types/WebviewMessageTypes";
+import {
+  COMMAND_DISPLAY_SHELL_LABELS,
+  renderCommandForDisplay,
+  type CommandDisplayShell,
+} from "@root/types/CommandDisplayFormatter";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
@@ -428,19 +434,81 @@ function PayloadPanel({
   );
 }
 
-function CommandPanel({ step }: { step: StepExecutionPreview }): React.ReactElement {
+/** On the default shell, return the DTO's own `displayCommand` byte-for-byte
+ * (the snapshot rule: the plan renders what it was given). Only a shell the
+ * user explicitly toggled to is recomputed from `args`. */
+function resolveCommandDisplayText(
+  command: CommandPreview,
+  shell: CommandDisplayShell
+): string {
+  if (shell === command.displayShell) return command.displayCommand;
+  return renderCommandForDisplay(command.executable, command.args, shell, {
+    requiresShellVerbatimArgs: command.requiresShellVerbatimArgs,
+  });
+}
+
+/** Windows commands can be rendered for either terminal; POSIX ones and the
+ * rare `.cmd`/`.bat` verbatim fallback have exactly one valid rendering. */
+function canToggleCommandShell(command: CommandPreview): boolean {
+  return command.displayShell !== "posix" && !command.requiresShellVerbatimArgs;
+}
+
+const WINDOWS_COMMAND_DISPLAY_SHELLS = ["powershell", "cmd"] as const;
+
+function CommandPanel({
+  step,
+  selectedShell,
+  onSelectShell,
+}: {
+  step: StepExecutionPreview;
+  selectedShell: CommandDisplayShell | undefined;
+  onSelectShell: (shell: CommandDisplayShell) => void;
+}): React.ReactElement {
   const command = step.command;
   if (!command) {
     return <p className="p-4 text-xs text-description-fg">This step has no command.</p>;
   }
+  const activeShell = selectedShell ?? command.displayShell;
+  const displayText = resolveCommandDisplayText(command, activeShell);
 
   return (
     <div className="flex flex-col gap-5 p-4">
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Command</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">
+            Command{" "}
+            <span className="font-normal text-description-fg">
+              ({COMMAND_DISPLAY_SHELL_LABELS[activeShell]})
+            </span>
+          </h3>
+          {canToggleCommandShell(command) && (
+            <div className="inline-flex overflow-hidden rounded border border-panel-border text-xxs">
+              {WINDOWS_COMMAND_DISPLAY_SHELLS.map((shell) => (
+                <button
+                  key={shell}
+                  type="button"
+                  aria-pressed={activeShell === shell}
+                  className={`px-2 py-1 transition-colors ${
+                    activeShell === shell
+                      ? "bg-btn-bg text-btn-fg"
+                      : "text-description-fg hover:text-foreground"
+                  }`}
+                  onClick={() => onSelectShell(shell)}
+                >
+                  {COMMAND_DISPLAY_SHELL_LABELS[shell]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <pre className="overflow-auto whitespace-pre-wrap break-words rounded bg-input-bg p-3 font-mono text-xs text-editor-fg">
-          {command.displayCommand}
+          {displayText}
         </pre>
+        {command.requiresShellVerbatimArgs && (
+          <p className="mt-2 text-xxs text-description-fg">
+            This launcher requires cmd.exe; no other shell rendering is available.
+          </p>
+        )}
       </section>
       <DefinitionList
         entries={[
@@ -520,12 +588,16 @@ function StepDetail({
   onTabChange,
   expandedChunks,
   onToggleChunk,
+  selectedShell,
+  onSelectShell,
 }: {
   step: StepExecutionPreview;
   activeTab: DryRunTab;
   onTabChange: (tab: DryRunTab) => void;
   expandedChunks: Readonly<Record<string, boolean>>;
   onToggleChunk: (chunkIndex: number) => void;
+  selectedShell: CommandDisplayShell | undefined;
+  onSelectShell: (shell: CommandDisplayShell) => void;
 }): React.ReactElement {
   const tabOverrides = useMemo(() => {
     const overrides: Partial<Record<DryRunTab, TabIconOverride>> = {};
@@ -574,7 +646,13 @@ function StepDetail({
             onToggleChunk={onToggleChunk}
           />
         )}
-        {activeTab === DRY_RUN_TABS.COMMAND && <CommandPanel step={step} />}
+        {activeTab === DRY_RUN_TABS.COMMAND && (
+          <CommandPanel
+            step={step}
+            selectedShell={selectedShell}
+            onSelectShell={onSelectShell}
+          />
+        )}
         {activeTab === DRY_RUN_TABS.CONDITIONS && <ConditionsPanel step={step} />}
       </div>
     </div>
@@ -643,6 +721,9 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
   );
   const [activeTabs, setActiveTabs] = useState<Record<number, DryRunTab>>({});
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>({});
+  const [selectedShells, setSelectedShells] = useState<
+    Record<number, CommandDisplayShell>
+  >({});
   const [copiedAction, setCopiedAction] = useState<"command" | "payload" | null>(null);
   const [contentRef, isNarrow] = useElementNarrow(640);
   const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -652,6 +733,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
     setSelection(scopeStepIndex ?? "overview");
     setActiveTabs({});
     setExpandedChunks({});
+    setSelectedShells({});
   }, [scope.kind, scopeStepIndex]);
 
   useEffect(
@@ -712,7 +794,13 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
   const activeTab = activeStep
     ? (activeTabs[activeStep.stepIndex] ?? DRY_RUN_TABS.SUMMARY)
     : DRY_RUN_TABS.SUMMARY;
-  const commandText = activeStep?.command?.displayCommand;
+  const activeCommandShell = activeStep?.command
+    ? (selectedShells[activeStep.stepIndex] ?? activeStep.command.displayShell)
+    : undefined;
+  const commandText =
+    activeStep?.command && activeCommandShell
+      ? resolveCommandDisplayText(activeStep.command, activeCommandShell)
+      : undefined;
   const payloadText = activeStep?.prompt ? formatJson(activeStep.prompt) : undefined;
   const workflowNarrow = scope.kind === "workflow" && isNarrow;
   const selectOptions: SelectOption[] = [
@@ -823,6 +911,13 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
                   const key = `${activeStep.stepIndex}:${chunkIndex}`;
                   setExpandedChunks((current) => ({ ...current, [key]: !current[key] }));
                 }}
+                selectedShell={selectedShells[activeStep.stepIndex]}
+                onSelectShell={(shell) =>
+                  setSelectedShells((current) => ({
+                    ...current,
+                    [activeStep.stepIndex]: shell,
+                  }))
+                }
               />
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-sm text-description-fg">

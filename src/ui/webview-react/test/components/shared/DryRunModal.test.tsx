@@ -75,6 +75,8 @@ const preview: WorkflowExecutionPreview = {
         executable: "claude",
         args: ["--print"],
         displayCommand: "claude --print [REDACTED]",
+        displayShell: "powershell",
+        requiresShellVerbatimArgs: false,
         cwd: "C:/workspace",
         environmentKeys: ["TOKEN"],
       },
@@ -119,6 +121,15 @@ const preview: WorkflowExecutionPreview = {
           retry: { maxAttempts: 1 },
         },
         propertySources: {},
+      },
+      command: {
+        executable: "/bin/sh",
+        args: ["-c", "npm test"],
+        displayCommand: "/bin/sh -c 'npm test'",
+        displayShell: "posix",
+        requiresShellVerbatimArgs: false,
+        cwd: "C:/workspace",
+        environmentKeys: [],
       },
       workspaceMutations: [],
       variables: [],
@@ -250,6 +261,39 @@ describe("DryRunModal", () => {
     expect(clipboardWriteText).toHaveBeenLastCalledWith(
       JSON.stringify(preview.steps[0].prompt, null, 2)
     );
+  });
+
+  it("toggles the command shell and copies the re-rendered text, without touching the DTO's own rendering", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: clipboardWriteText },
+    });
+    openPreview({ kind: "step", stepIndex: 0 });
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    await user.click(screen.getByTitle("Command"));
+    expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
+    expect(screen.getByText("(PowerShell)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Command Prompt" }));
+    expect(screen.getByText("(Command Prompt)")).toBeInTheDocument();
+    expect(screen.queryByText("claude --print [REDACTED]")).not.toBeInTheDocument();
+    expect(screen.getByText('^"claude^" ^"--print^"')).toBeInTheDocument();
+
+    const copyCommand = screen.getByRole("button", { name: "Copy command" });
+    await user.click(copyCommand);
+    expect(clipboardWriteText).toHaveBeenLastCalledWith('^"claude^" ^"--print^"');
+  });
+
+  it("does not offer a shell toggle for a script step's POSIX command", async () => {
+    const user = userEvent.setup();
+    openPreview({ kind: "step", stepIndex: 1 });
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 1 }} />);
+
+    await user.click(screen.getByTitle("Command"));
+    expect(screen.queryByRole("button", { name: "PowerShell" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Command Prompt" })).not.toBeInTheDocument();
   });
 
   it("does not render for a different store scope", () => {

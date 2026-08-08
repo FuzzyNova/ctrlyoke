@@ -5,9 +5,10 @@ import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import {
   ExecutionPreviewService,
-  renderPreviewCommand,
+  defaultCommandDisplayShell,
   type ExecutionPreviewHarness,
 } from "../../core/ExecutionPreviewService";
+import { renderCommandForDisplay } from "../../types/CommandDisplayFormatter";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
@@ -216,19 +217,30 @@ suite("ExecutionPreviewService", () => {
     }
   });
 
-  test("renders Windows and POSIX command displays independently", () => {
-    const windows = renderPreviewCommand(
+  test("defaults Windows command display to PowerShell and POSIX to sh-style quoting", () => {
+    assert.strictEqual(defaultCommandDisplayShell("win32"), "powershell");
+    assert.strictEqual(defaultCommandDisplayShell("linux"), "posix");
+
+    const windows = renderCommandForDisplay(
       "node",
       ["a path/file.ts", "x&y"],
-      "win32"
+      defaultCommandDisplayShell("win32")
     );
-    assert.ok(windows.includes("^&"));
-    assert.ok(windows.includes("a^ path/file.ts"));
+    assert.ok(windows.includes("'a path/file.ts'"));
+    assert.ok(windows.includes("'x&y'"));
 
-    const posix = renderPreviewCommand(
+    const cmd = renderCommandForDisplay(
+      "node",
+      ["a path/file.ts", "x&y"],
+      "cmd"
+    );
+    assert.ok(cmd.includes("^&"));
+    assert.ok(cmd.includes("a^ path/file.ts"));
+
+    const posix = renderCommandForDisplay(
       "/usr/bin/node",
       ["a path/file.ts", "it's ready"],
-      "linux"
+      defaultCommandDisplayShell("linux")
     );
     assert.ok(posix.includes("'a path/file.ts'"));
     assert.ok(posix.includes(`'it'"'"'s ready'`));

@@ -15,3 +15,11 @@ Yes. Use `type: script` inside `steps`.
 ## Can I keep using `.prompt.md` files?
 
 Yes. They are still the quickest way to run a single prompt. Move to YAML or JSON when you need structure, validation, or session control.
+
+## Why do I sometimes see `cmd.exe` involved instead of PowerShell on Windows?
+
+ctrlyoke does not run harness CLIs through a shell at all, on any OS. It spawns the harness executable directly with an argument array — no `cmd.exe`, no PowerShell, no `sh` in between. Routing text from a shared workflow (file paths, prompt content) through a shell risks command injection, so ctrlyoke avoids the shell entirely wherever the operating system allows it.
+
+The one exception is Windows-only, and it is an OS constraint rather than a preference: some npm-installed CLIs ship a legacy `.cmd` launcher file, and Windows can only execute those through `cmd.exe` — there is no way to run a `.cmd` file directly. ctrlyoke tries to avoid even this hop: it looks inside the shim and, when possible, calls the underlying `node.exe <script>` (or PowerShell, for a `.ps1` shim) directly instead. Only when a `.cmd` file does not match a recognized, safely-bypassable shape does ctrlyoke fall back to invoking it through `cmd.exe`, with careful escaping — that is the one place a shell is genuinely in the process tree.
+
+This is not a blanket "prefer cmd.exe" policy. Interactive terminal sessions actively prefer PowerShell (`pwsh`, falling back to Windows PowerShell). If the Dry Run **Copy command** preview shows a `cmd.exe`-style escaped command, that is just the display rendering for that dialect — use the Command tab's shell toggle to switch it to PowerShell if that's what you'd paste into your terminal.

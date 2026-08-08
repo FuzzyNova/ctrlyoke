@@ -49,6 +49,8 @@ function previewFixture(): WorkflowExecutionPreview {
           executable: "claude",
           args: ["--header", "Bearer abcdefghijklmnopqrst"],
           displayCommand: "claude --header Bearer abcdefghijklmnopqrst",
+          displayShell: "posix",
+          requiresShellVerbatimArgs: false,
           cwd: "workspace",
           environmentKeys: ["PRIVATE_API_KEY"],
         },

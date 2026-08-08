@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import * as Diff from "diff";
+import { COMMAND_DISPLAY_SHELL_LABELS } from "../types/CommandDisplayFormatter";
 import type { CliEvent } from "../types/CliOutputTypes";
 import type {
   TextData,
@@ -180,7 +181,9 @@ export class CliTerminalFormatter {
         writeLine(`  Model: ${step.resolvedProperties.model}`);
       }
       if (step.command) {
-        writeLine(`  Command: ${step.command.displayCommand}`);
+        writeLine(
+          `  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}`
+        );
       }
       for (const variable of step.variables) {
         writeLine(`  Variable: ${variable.name}=${variable.value}`);

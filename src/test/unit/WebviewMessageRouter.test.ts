@@ -231,6 +231,8 @@ suite("WebviewMessageRouter — execution preview transport", () => {
                     executable: "harness",
                     args: ["api_key=supersecret"],
                     displayCommand: "harness api_key=supersecret",
+                    displayShell: "powershell",
+                    requiresShellVerbatimArgs: false,
                     cwd: "C:\\workspace",
                     environmentKeys: [],
                   },
