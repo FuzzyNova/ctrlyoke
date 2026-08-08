@@ -1,6 +1,6 @@
 # Dry Run Mutation Timeline Plan
 
-**Status:** Proposed
+**Status:** In progress — sequenced into the 6 steps below
 **Priority:** P2
 
 Follow-up to [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md) (Implemented).
@@ -18,37 +18,60 @@ are still to come.
 Every section below eventually edits `DryRunModal.tsx` — the timeline
 rendering, the file-reference layout, the tab order/icons, and the
 byte/token formatting call sites all land in that one file. Splitting
-implementation into two chats therefore needs to split along a real
-dependency line, not by section, or the second chat can't compile against
-types the first hasn't added yet:
+implementation therefore has to split along real dependency lines, not by
+section, or a later step can't compile against types an earlier one hasn't
+added yet. Steps must run **sequentially, never concurrently**: steps 4–6
+all edit `DryRunModal.tsx` and would conflict if overlapped.
 
-- **Chat A — types, constants, and standalone helpers; no `DryRunModal.tsx`
-  edits.** `WorkspaceMutationPreview.scope` + `PreparedMutation.ownedKeys`
-  (`ExecutionPreviewService.ts`, `ExecutionPlanBuilder.ts`,
-  `QwenCliProvider.ts`); `PREVIEW_PROMPT_CATEGORY_LABELS` +
-  `PREVIEW_TRUNCATION_REASONS.not-yet-available`
-  (`DashboardConstants.ts`); `CliPromptPreparer.ts` (file-reference
-  basename, prior-context placeholder emission); `resolvePriorContextItems`
-  wiring (`WorkflowOrchestrator.ts`, `cli.ts`); `CliTerminalFormatter.ts`
-  (three-way `delivery` ternary, shared category labels); the new
-  `formatMagnitude` util; the new `getPermissionModeBadge` function
-  (`tabBadgeUtils.ts`); `SegmentedTabBar.tsx`'s new badge rendering and the
-  `TabIconOverride` type extension. All of this is additive to existing
-  files/functions or lives in new files — nothing here requires
-  `DryRunModal.tsx` to already look a certain way.
-- **Chat B — `DryRunModal.tsx` and its immediate helpers.** Timeline
-  rendering (`buildStepTimeline`, `StepDetail`, `OverviewPanel`), the
-  file-reference dedicated rendering branch, tab order/icon wiring, the
-  `formatCount` → `formatMagnitude` call-site swaps, and the `EditorSection`
-  refactor to call the shared formatter. This consumes every export Chat A
-  adds, so it depends on Chat A having landed — not just designed.
+1. **Mutation scope/ownedKeys (backend).** `WorkspaceMutationPreview.scope`
+   + optional `path`/`warning` (`ExecutionPreviewTypes.ts`),
+   `PreparedMutation.ownedKeys`, `ExecutionPreviewService.toWorkspaceMutation`
+   classification, `ExecutionPlanBuilder`'s directory-scoped cleanup path,
+   `QwenCliProvider`'s explicit `ownedKeys`.
+2. **Payload backend.** `PREVIEW_PROMPT_CATEGORY_LABELS` +
+   `PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE` (`DashboardConstants.ts`),
+   `CliPromptPreparer`'s prior-context placeholder section,
+   `resolvePriorContextItems` wiring (`WorkflowOrchestrator.ts`, `cli.ts`),
+   `CliTerminalFormatter`'s three-way `delivery` ternary and shared labels.
+3. **Shared UI primitives, no `DryRunModal.tsx` edits.** `formatMagnitude`,
+   `buildStepTimeline` + `StepTimelineEntry`, `getPermissionModeBadge`,
+   the `TabIconOverride` badge fields, `SegmentedTabBar`'s badge rendering.
+4. **`DryRunModal` timeline rendering** — per-step Summary tab and Overview
+   tab, collapse behavior, click-through navigation.
+5. **`DryRunModal` Payload tab** — file-reference branch, category labels,
+   corrected delivery copy, `not-yet-available` placeholder rendering.
+6. **`DryRunModal` tab bar and formatting** — tab order, Conditions/Summary
+   icons, Summary/Command badges, `formatCount` → `formatMagnitude` call
+   sites, and the `EditorSection` refactor onto the shared formatter.
 
-Run these **sequentially, not concurrently** — merge Chat A first (or land
-it in the same chat before continuing into B). Two chats editing
-`DryRunModal.tsx` at the same time will conflict; two chats where B starts
-only after A's exports exist will not. If turnaround speed matters more
-than the two-chat split, one chat straight through avoids the handoff
-entirely and is the lower-risk default.
+Steps 1–3 are mutually independent and could be reordered; 4–6 each depend
+on 3 (and 4/5 on 1/2 respectively for the fields they render).
+
+### Placement corrections (verified against the current tree)
+
+- **`formatMagnitude` goes in the existing
+  `src/ui/webview-react/utils/number.ts`**, not a new `formatting.ts`. That
+  file already exists and is already documented as "Numeric utility
+  functions" (it currently holds only `clamp`) — adding a second numeric
+  util module beside it would be the duplication this plan is trying to
+  remove.
+- **`buildStepTimeline` and `StepTimelineEntry` go in a new
+  `src/ui/webview-react/utils/dryRunTimeline.ts`**, not
+  `utils/executionPreview.ts`. Despite its name that file is not a home for
+  "the other preview helpers" — it contains exactly one function,
+  `getExecutionPreviewEditorSnapshot`, which captures unsaved editor state
+  for the preview *request*. It reaches into `useEditorStore`/
+  `useWorkflowStore`; a pure DTO→view-model function does not belong beside
+  it.
+- **The file-reference basename is derived client-side from
+  `section.path`**, not added to the DTO. `CategorizedPromptSectionPreview`
+  already carries the full absolute path, so a `basename` field would be
+  redundant state that can disagree with `path`. Derive it in the modal
+  (split on both `/` and `\` — preview paths are produced on the host OS and
+  the dashboard also runs in a browser, so `path.basename` is unavailable
+  and a platform-specific separator assumption would break).
+  `CliPromptPreparer` therefore needs **no** change for the basename; its
+  only Payload-tab change is the prior-context placeholder.
 
 ## Problem
 
@@ -187,9 +210,9 @@ type StepTimelineEntry =
   below), unchanged position in the sequence.
 
 Composition is a pure client function,
-`buildStepTimeline(step: StepExecutionPreview): StepTimelineEntry[]`, in
-`src/ui/webview-react/utils/executionPreview.ts` alongside the other preview
-helpers:
+`buildStepTimeline(step: StepExecutionPreview): StepTimelineEntry[]`, in a
+new `src/ui/webview-react/utils/dryRunTimeline.ts` (see Placement
+corrections above):
 
 ```text
 [payload?] → [...mutations, in DTO order] → [command?]
@@ -209,6 +232,14 @@ export interface WorkspaceMutationPreview {
   warning?: string; // only present for scope: "shared"
 }
 ```
+
+Both `path` and `warning` are **required** on the shipped
+`WorkspaceMutationPreview`, so relaxing them to optional is a breaking type
+change with one non-obvious consumer outside the modal:
+`CliTerminalFormatter.ts:216-219` renders
+`` `  Mutation: ${mutation.operation} ${mutation.path} — ${mutation.warning}` ``
+unguarded, and would print `undefined` for a pathless or `run-local`
+mutation. It needs a scope-aware line, not just a compile fix.
 
 `toWorkspaceMutation` rule: a mutation whose `path` resolves under
 `<workspaceRoot>/.ctrlyoke/temp` (compare against
@@ -476,6 +507,15 @@ items, `createCategorizedPromptPlan` still emits exactly one `prior-context`
 section (no body, `byteCount: 0`, `tokenEstimate: 0`, `chunkIndex: 0`), so it
 renders through the same title path as a real chunk — "Prior context ·
 chunk 1" — rather than needing a separate placeholder component.
+
+**Threading note.** `createCategorizedPromptPlan` currently receives
+`resolvedContextContent`, which `planPrompt` only computes when
+`contextItems.length > 0` — so "referenced but unresolvable" and "not
+referenced at all" are indistinguishable inside it today. Emitting the
+placeholder requires passing `hasPriorContext` (already computed in
+`planPrompt`) through as its own argument. Both of `planPrompt`'s inline
+fast paths already bail out when `hasPriorContext` is true, so the
+categorized path is the only one that needs to handle this.
 
 This reuses the truncation-reason mechanism rather than adding a parallel
 conditional to `PayloadSection`, but it is not a truncation (nothing was cut
@@ -761,9 +801,10 @@ That inline version also has a latent gap worth fixing at the same time: it
 has no tier above `K`, so a step at or above 1,000,000 tokens would render
 `"1000.0K tokens"` instead of `"1.0M tokens"`.
 
-**Design.** Add one shared magnitude formatter (e.g.
-`src/ui/webview-react/utils/formatting.ts`) used by both `EditorSection` and
-`DryRunModal` instead of maintaining two slightly different versions:
+**Design.** Add one shared magnitude formatter to the existing
+`src/ui/webview-react/utils/number.ts` (see Placement corrections above),
+used by both `EditorSection` and `DryRunModal` instead of maintaining two
+slightly different versions:
 
 ```typescript
 export function formatMagnitude(value: number): string {
