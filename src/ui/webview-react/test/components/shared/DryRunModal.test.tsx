@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -157,9 +157,12 @@ const preview: WorkflowExecutionPreview = {
   ],
 };
 
-function openPreview(scope: { kind: "workflow" } | { kind: "step"; stepIndex: number }) {
+function openPreview(
+  scope: { kind: "workflow" } | { kind: "step"; stepIndex: number },
+  nextPreview: WorkflowExecutionPreview = preview
+) {
   useExecutionPreviewStore.setState({
-    preview,
+    preview: nextPreview,
     status: "ready",
     scope,
     displayedDefinitionRevision: 1,
@@ -202,7 +205,7 @@ describe("DryRunModal", () => {
     expect(screen.getByText("Workflow summary")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dry run sections" })).toBeInTheDocument();
     expect(screen.getByTitle("Prepare")).toBeInTheDocument();
-    expect(screen.getByText("Workspace mutations across all steps")).toBeInTheDocument();
+    expect(screen.getByText("Workflow timeline")).toBeInTheDocument();
   });
 
   it("collapses the workflow rail into CustomSelect below the narrow breakpoint", () => {
@@ -226,6 +229,109 @@ describe("DryRunModal", () => {
 
     await user.click(screen.getByTitle("Command"));
     expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
+  });
+
+  it("renders the workflow timeline in step order and skips empty steps", () => {
+    const emptyStepPreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: preview.steps.map((step) =>
+        step.stepIndex === 1 ? { ...step, command: undefined } : step
+      ),
+    };
+    openPreview({ kind: "workflow" }, emptyStepPreview);
+
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    expect(screen.getByLabelText("Step 1: Prepare")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Step 2: Verify")).not.toBeInTheDocument();
+  });
+
+  it("switches per-step timeline links without closing the modal", async () => {
+    const user = userEvent.setup();
+    openPreview({ kind: "step", stepIndex: 0 });
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    await user.click(screen.getByRole("button", { name: "View in Payload tab" }));
+    expect(screen.getByText("Categorized payload")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.click(screen.getByTitle("Summary"));
+    await user.click(screen.getByRole("button", { name: "View in Command tab" }));
+    expect(screen.getByText("(PowerShell)")).toBeInTheDocument();
+  });
+
+  it("selects the step before switching tabs from the overview timeline", async () => {
+    const user = userEvent.setup();
+    openPreview({ kind: "workflow" });
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    const verifyTimeline = screen.getByLabelText("Step 2: Verify");
+    await user.click(
+      within(verifyTimeline.parentElement as HTMLElement).getByRole("button", {
+        name: "View in Command tab",
+      })
+    );
+
+    expect(screen.getByText("(POSIX shell)")).toBeInTheDocument();
+    expect(screen.getByText("/bin/sh -c 'npm test'")).toBeInTheDocument();
+  });
+
+  it("collapses consecutive run-local mutations while keeping them reachable", async () => {
+    const user = userEvent.setup();
+    const runLocalPreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: preview.steps.map((step) =>
+        step.stepIndex === 0
+          ? {
+              ...step,
+              workspaceMutations: [
+                {
+                  path: "C:/workspace/.ctrlyoke/temp/one.json",
+                  scope: "run-local",
+                  ownedKeys: ["hooks"],
+                  operation: "write",
+                },
+                {
+                  path: "C:/workspace/.ctrlyoke/temp/two.json",
+                  scope: "run-local",
+                  ownedKeys: [],
+                  operation: "delete",
+                },
+                {
+                  scope: "run-local",
+                  ownedKeys: [],
+                  operation: "update environment",
+                },
+              ],
+            }
+          : step
+      ),
+    };
+    openPreview({ kind: "step", stepIndex: 0 }, runLocalPreview);
+    const displayedPreview = useExecutionPreviewStore.getState().preview;
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(screen.getByRole("button", { name: /3 internal changes/ })).toBeInTheDocument();
+    expect(screen.queryByText("C:/workspace/.ctrlyoke/temp/one.json")).not.toBeInTheDocument();
+    expect(screen.queryByText("Merges into existing keys:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Workspace-wide side effect")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /3 internal changes/ }));
+
+    expect(screen.getByText("C:/workspace/.ctrlyoke/temp/one.json")).toBeInTheDocument();
+    expect(screen.getByText("C:/workspace/.ctrlyoke/temp/two.json")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Internal — .ctrlyoke/temp, cleared after this run")
+    ).toHaveLength(3);
+    expect(useExecutionPreviewStore.getState().preview).toBe(displayedPreview);
+  });
+
+  it("renders shared mutations expanded with warning and merge-key details", () => {
+    openPreview({ kind: "step", stepIndex: 0 });
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(screen.getByText("Workspace-wide side effect: May replace owned keys.")).toBeInTheDocument();
+    expect(screen.getByText("Merges into existing keys: permissions")).toBeInTheDocument();
   });
 
   it("shows the per-step tabs and every DTO truncation reason", async () => {

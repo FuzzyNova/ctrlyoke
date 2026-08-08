@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HARNESS_INFO, MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  HARNESS_INFO,
+  MESSAGE_TYPES,
+  PREVIEW_MUTATION_SCOPES,
+} from "@root/types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
   CompatibilityDiagnosticSeverity,
@@ -24,6 +28,11 @@ import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { downloadTextFile } from "@utils/diff";
+import {
+  buildStepTimeline,
+  STEP_TIMELINE_ENTRY_KINDS,
+  type StepTimelineEntry,
+} from "@utils/dryRunTimeline";
 import {
   buildCollapsedOutputPreview,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
@@ -81,7 +90,7 @@ const DIAGNOSTIC_SEVERITY_STYLE: Record<
   error: { icon: "error", text: "text-error-fg", dot: "bg-error-fg" },
 };
 
-const TRUNCATION_REASON_COPY = {
+const TRUNCATION_REASON_COPY: Record<string, string> = {
   reference:
     "Harness will not receive this content: it is represented as a reference.",
   "over-inline-cap":
@@ -212,46 +221,233 @@ function DefinitionList({
   );
 }
 
-function MutationList({
-  mutations,
+type TimelineBlock =
+  | { kind: "entry"; entry: StepTimelineEntry; index: number }
+  | {
+      kind: "run-local-group";
+      groupId: string;
+      mutations: readonly WorkspaceMutationPreview[];
+    };
+
+function buildTimelineBlocks(entries: readonly StepTimelineEntry[]): TimelineBlock[] {
+  const blocks: TimelineBlock[] = [];
+  let index = 0;
+
+  while (index < entries.length) {
+    const entry = entries[index];
+    if (
+      entry.kind === STEP_TIMELINE_ENTRY_KINDS.MUTATION &&
+      entry.mutation.scope === PREVIEW_MUTATION_SCOPES.RUN_LOCAL
+    ) {
+      const mutations: WorkspaceMutationPreview[] = [];
+      const groupStart = index;
+      while (index < entries.length) {
+        const groupedEntry = entries[index];
+        if (
+          groupedEntry.kind !== STEP_TIMELINE_ENTRY_KINDS.MUTATION ||
+          groupedEntry.mutation.scope !== PREVIEW_MUTATION_SCOPES.RUN_LOCAL
+        ) {
+          break;
+        }
+        mutations.push(groupedEntry.mutation);
+        index += 1;
+      }
+      blocks.push({
+        kind: "run-local-group",
+        groupId: `run-local-${groupStart}`,
+        mutations,
+      });
+      continue;
+    }
+
+    blocks.push({ kind: "entry", entry, index });
+    index += 1;
+  }
+
+  return blocks;
+}
+
+function formatPayloadFileCount(fileCount: number): string {
+  return `${fileCount} ${fileCount === 1 ? "file" : "files"}`;
+}
+
+function TimelineEntryRow({
+  entry,
+  onNavigate,
 }: {
-  mutations: readonly WorkspaceMutationPreview[];
+  entry: StepTimelineEntry;
+  onNavigate: (tab: DryRunTab) => void;
 }): React.ReactElement {
-  if (mutations.length === 0) {
-    return <p className="text-xs text-description-fg">No workspace mutations.</p>;
+  if (entry.kind === STEP_TIMELINE_ENTRY_KINDS.PAYLOAD) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
+        <div className="min-w-0 truncate text-editor-fg">
+          <i className="codicon codicon-file-code mr-2 text-description-fg" aria-hidden="true" />
+          Payload — {formatPayloadFileCount(entry.fileCount)}, {formatCount(entry.totalByteCount)} bytes
+        </div>
+        <button
+          type="button"
+          className="flex-shrink-0 text-link-fg hover:underline"
+          onClick={() => onNavigate(DRY_RUN_TABS.PAYLOAD)}
+        >
+          View in Payload tab
+        </button>
+      </div>
+    );
+  }
+
+  if (entry.kind === STEP_TIMELINE_ENTRY_KINDS.COMMAND) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
+        <div className="min-w-0 truncate text-editor-fg">
+          <i className="codicon codicon-terminal mr-2 text-description-fg" aria-hidden="true" />
+          Command — <code>{entry.executable}</code> · cwd: <code>{entry.cwd}</code>
+        </div>
+        <button
+          type="button"
+          className="flex-shrink-0 text-link-fg hover:underline"
+          onClick={() => onNavigate(DRY_RUN_TABS.COMMAND)}
+        >
+          View in Command tab
+        </button>
+      </div>
+    );
+  }
+
+  const { mutation } = entry;
+  const isShared = mutation.scope === PREVIEW_MUTATION_SCOPES.SHARED;
+  return (
+    <div
+      className={`rounded border px-3 py-2 text-xs ${
+        isShared
+          ? "border-warning-fg border-opacity-40 bg-severity-warning-bg"
+          : "border-panel-border"
+      }`}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        {mutation.path && <code className="break-all text-editor-fg">{mutation.path}</code>}
+        <span className={isShared ? "text-warning-fg" : "text-description-fg"}>
+          {mutation.operation}
+        </span>
+      </div>
+      {isShared ? (
+        <div className="mt-1 flex items-start gap-1 text-warning-fg">
+          <i className="codicon codicon-warning mt-px flex-shrink-0" aria-hidden="true" />
+          <span>
+            Workspace-wide side effect{mutation.warning ? `: ${mutation.warning}` : "."}
+          </span>
+        </div>
+      ) : (
+        <div className="mt-1 text-description-fg">
+          Internal — .ctrlyoke/temp, cleared after this run
+        </div>
+      )}
+      {isShared && mutation.ownedKeys.length > 0 && (
+        <div className="mt-1 text-description-fg">
+          Merges into existing keys: {mutation.ownedKeys.join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineSection({
+  entries,
+  onNavigate,
+}: {
+  entries: readonly StepTimelineEntry[];
+  onNavigate: (tab: DryRunTab) => void;
+}): React.ReactElement {
+  const blocks = useMemo(() => buildTimelineBlocks(entries), [entries]);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  if (blocks.length === 0) {
+    return <p className="text-xs text-description-fg">No timeline entries.</p>;
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {mutations.map((mutation, index) => (
-        <div
-          key={`${mutation.path}-${mutation.operation}-${index}`}
-          className="rounded border border-panel-border px-3 py-2 text-xs"
-        >
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <code className="break-all text-editor-fg">{mutation.path}</code>
-            <span className="text-description-fg">{mutation.operation}</span>
-          </div>
-          {mutation.ownedKeys.length > 0 && (
-            <div className="mt-1 text-description-fg">
-              Owned keys: {mutation.ownedKeys.join(", ")}
+      {blocks.map((block) => {
+        if (block.kind === "entry") {
+          return (
+            <TimelineEntryRow
+              key={`timeline-${block.index}`}
+              entry={block.entry}
+              onNavigate={onNavigate}
+            />
+          );
+        }
+
+        const expanded = expandedGroups[block.groupId] ?? false;
+        if (expanded) {
+          return (
+            <div key={block.groupId} className="flex flex-col gap-2">
+              {block.mutations.map((mutation, index) => (
+                <TimelineEntryRow
+                  key={`${block.groupId}-${mutation.path ?? "no-path"}-${mutation.operation}-${index}`}
+                  entry={{ kind: STEP_TIMELINE_ENTRY_KINDS.MUTATION, mutation }}
+                  onNavigate={onNavigate}
+                />
+              ))}
+              <button
+                type="button"
+                className="self-start text-xxs text-link-fg hover:underline"
+                aria-expanded="true"
+                onClick={() =>
+                  setExpandedGroups((current) => ({ ...current, [block.groupId]: false }))
+                }
+              >
+                Collapse internal changes
+              </button>
             </div>
-          )}
-          {mutation.warning && (
-            <div className="mt-1 text-warning-fg">{mutation.warning}</div>
-          )}
-        </div>
-      ))}
+          );
+        }
+
+        return (
+          <button
+            key={block.groupId}
+            type="button"
+            className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-left text-xs text-description-fg hover:text-foreground"
+            aria-expanded="false"
+            onClick={() =>
+              setExpandedGroups((current) => ({ ...current, [block.groupId]: true }))
+            }
+          >
+            <span>
+              {block.mutations.length} internal {block.mutations.length === 1 ? "change" : "changes"} — .ctrlyoke/temp, cleared after this run
+            </span>
+            <span aria-hidden="true">▸</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StepTimelineHeading({ step }: { step: StepExecutionPreview }): React.ReactElement {
+  return (
+    <div
+      className="flex items-center gap-2 rounded px-2 py-2 text-left text-xs text-description-fg"
+      aria-label={`Step ${step.stepIndex + 1}: ${stepLabel(step)}`}
+    >
+      <span className="w-4 flex-shrink-0 text-right text-xxs">{step.stepIndex + 1}</span>
+      <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={15} />
+      <span className="min-w-0 flex-1 truncate">{stepLabel(step)}</span>
     </div>
   );
 }
 
 function OverviewPanel({
   preview,
+  onNavigateToStepTab,
 }: {
   preview: WorkflowExecutionPreview;
+  onNavigateToStepTab: (stepIndex: number, tab: DryRunTab) => void;
 }): React.ReactElement {
   const mutations = preview.steps.flatMap((step) => step.workspaceMutations);
+  const stepsWithTimeline = preview.steps
+    .map((step) => ({ step, entries: buildStepTimeline(step) }))
+    .filter(({ entries }) => entries.length > 0);
   return (
     <div className="flex flex-col gap-5 p-4">
       <div>
@@ -283,15 +479,31 @@ function OverviewPanel({
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-foreground">
-          Workspace mutations across all steps
+          Workflow timeline
         </h3>
-        <MutationList mutations={mutations} />
+        <div className="flex flex-col gap-3">
+          {stepsWithTimeline.map(({ step, entries }) => (
+            <section key={step.stepIndex} className="flex flex-col gap-2">
+              <StepTimelineHeading step={step} />
+              <TimelineSection
+                entries={entries}
+                onNavigate={(tab) => onNavigateToStepTab(step.stepIndex, tab)}
+              />
+            </section>
+          ))}
+        </div>
       </section>
     </div>
   );
 }
 
-function SummaryPanel({ step }: { step: StepExecutionPreview }): React.ReactElement {
+function SummaryPanel({
+  step,
+  onNavigate,
+}: {
+  step: StepExecutionPreview;
+  onNavigate: (tab: DryRunTab) => void;
+}): React.ReactElement {
   const properties = step.resolvedProperties;
   const permissionMode = properties.permissions.mode ?? "none";
   return (
@@ -323,8 +535,8 @@ function SummaryPanel({ step }: { step: StepExecutionPreview }): React.ReactElem
       </section>
 
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Workspace mutations</h3>
-        <MutationList mutations={step.workspaceMutations} />
+        <h3 className="mb-3 text-sm font-semibold text-foreground">Timeline</h3>
+        <TimelineSection entries={buildStepTimeline(step)} onNavigate={onNavigate} />
       </section>
     </div>
   );
@@ -586,6 +798,7 @@ function StepDetail({
   step,
   activeTab,
   onTabChange,
+  onNavigateToTab,
   expandedChunks,
   onToggleChunk,
   selectedShell,
@@ -594,6 +807,7 @@ function StepDetail({
   step: StepExecutionPreview;
   activeTab: DryRunTab;
   onTabChange: (tab: DryRunTab) => void;
+  onNavigateToTab: (tab: DryRunTab) => void;
   expandedChunks: Readonly<Record<string, boolean>>;
   onToggleChunk: (chunkIndex: number) => void;
   selectedShell: CommandDisplayShell | undefined;
@@ -638,7 +852,9 @@ function StepDetail({
         className="flex flex-shrink-0 items-center border-b border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {activeTab === DRY_RUN_TABS.SUMMARY && <SummaryPanel step={step} />}
+        {activeTab === DRY_RUN_TABS.SUMMARY && (
+          <SummaryPanel step={step} onNavigate={onNavigateToTab} />
+        )}
         {activeTab === DRY_RUN_TABS.PAYLOAD && (
           <PayloadPanel
             step={step}
@@ -782,6 +998,14 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
     open(scope, getExecutionPreviewEditorSnapshot());
   }, [open, scope]);
 
+  const handleOverviewTimelineNavigation = useCallback(
+    (stepIndex: number, tab: DryRunTab) => {
+      setSelection(stepIndex);
+      setActiveTabs((current) => ({ ...current, [stepIndex]: tab }));
+    },
+    []
+  );
+
   if (!sameScope(storeScope, scope)) return null;
 
   const activeStep =
@@ -897,7 +1121,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
             )}
             {selection === "overview" && scope.kind === "workflow" ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <OverviewPanel preview={preview} />
+                <OverviewPanel
+                  preview={preview}
+                  onNavigateToStepTab={handleOverviewTimelineNavigation}
+                />
               </div>
             ) : activeStep ? (
               <StepDetail
@@ -905,6 +1132,12 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({ scope, elevated = fals
                 activeTab={activeTab}
                 onTabChange={(tab) =>
                   setActiveTabs((current) => ({ ...current, [activeStep.stepIndex]: tab }))
+                }
+                onNavigateToTab={(tab) =>
+                  setActiveTabs((current) => ({
+                    ...current,
+                    [activeStep.stepIndex]: tab,
+                  }))
                 }
                 expandedChunks={expandedChunks}
                 onToggleChunk={(chunkIndex) => {

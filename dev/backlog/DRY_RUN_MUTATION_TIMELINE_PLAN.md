@@ -1,6 +1,6 @@
 # Dry Run Mutation Timeline Plan
 
-**Status:** Steps 1–3 complete — steps 4–6 pending
+**Status:** Steps 1–4 complete — steps 5–6 pending
 **Priority:** P2
 
 Follow-up to [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md) (Implemented).
@@ -36,8 +36,12 @@ all edit `DryRunModal.tsx` and would conflict if overlapped.
 3. **✅ Shared UI primitives, no `DryRunModal.tsx` edits.** `formatMagnitude`,
    `buildStepTimeline` + `StepTimelineEntry`, `getPermissionModeBadge`,
    the `TabIconOverride` badge fields, `SegmentedTabBar`'s badge rendering.
-4. **`DryRunModal` timeline rendering** — per-step Summary tab and Overview
-   tab, collapse behavior, click-through navigation.
+4. **✅ `DryRunModal` timeline rendering — complete.** Per-step Summary and
+   Overview now render the pure payload → mutation → command timeline in
+   execution order, grouped by step in the Overview. Consecutive run-local
+   mutations collapse into an expandable local summary; shared mutations keep
+   warning styling and merge-key details. Payload and command anchors switch
+   tabs in place, selecting the step first when launched from Overview.
 5. **`DryRunModal` Payload tab** — file-reference branch, category labels,
    corrected delivery copy, `not-yet-available` placeholder rendering.
 6. **`DryRunModal` tab bar and formatting** — tab order, Conditions/Summary
@@ -46,8 +50,9 @@ all edit `DryRunModal.tsx` and would conflict if overlapped.
 
 Step 3 landed with shared UI primitives only: magnitude formatting, a pure
 payload → mutation → command timeline builder, permission-mode badge styling,
-and corner-badge rendering in `SegmentedTabBar`. `DryRunModal.tsx` remains
-unchanged for the next steps to consume these primitives.
+and corner-badge rendering in `SegmentedTabBar`. Step 4 consumed the timeline
+builder in `DryRunModal.tsx` without changing the tab definitions or the
+Payload/Command tab content; those remain for steps 5–6.
 
 Step 2 landed with one implementation correction: the timeline-backed prior
 context callback is shared by `WorkflowInstance`, the dashboard preview, and
