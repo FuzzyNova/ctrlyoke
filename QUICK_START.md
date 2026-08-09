@@ -36,7 +36,7 @@ Subdirectories appear only once something needs them:
 
 ```
 .ctrlyoke/
-  prompts/       # draft single prompts (ctrlyoke: New Draft Prompt)
+  prompts/       # single prompts produced by the editor's convert action
   scripts/       # end condition validation scripts (ctrlyoke: Create End Condition Script)
   templates/     # custom workflow templates (New Template… / Import Workflow Templates)
   agents/        # agents copied in from the Agents & Skills manager
@@ -203,8 +203,7 @@ The script runs in an isolated child process. The `returns` value is compared ag
 | `ctrlyoke: Open ctrlyoke Panel`        | Open the dashboard sidebar                          |
 | `ctrlyoke: Initialize Workspace`       | Create `.ctrlyoke/` directory structure             |
 | `ctrlyoke: New Workflow from Template` | Create a workflow from a built-in template          |
-| `ctrlyoke: Create Prompt File`         | Create a new workflow file                          |
-| `ctrlyoke: New Draft Prompt`           | Create a draft `.prompt.md` in `.ctrlyoke/prompts/` |
+| Editor convert button                 | Write a step prompt to `.ctrlyoke/prompts/`         |
 | `ctrlyoke: Run` (editor title bar)     | Run the active workflow file                        |
 | `ctrlyoke: Pause Execution`            | Pause after the current step completes              |
 | `ctrlyoke: Resume Execution`           | Resume a paused workflow                            |

@@ -44,7 +44,6 @@ suite("CLI Integration Tests", () => {
       "ctrlyoke.pause",
       "ctrlyoke.resume",
       "ctrlyoke.stop",
-      "ctrlyoke.createPromptFile",
       "ctrlyoke.runFromContext",
       "ctrlyoke.loadFromContext",
     ];

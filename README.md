@@ -276,8 +276,7 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 | `ctrlyoke: Open ctrlyoke Panel`         | Open the dashboard in the bottom panel                |
 | `ctrlyoke: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
 | `ctrlyoke: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
-| `ctrlyoke: New Draft Prompt`            | Create a draft `.prompt.md` file                      |
-| `ctrlyoke: Create Prompt File`          | Create a new prompt file in a folder                  |
+| Editor convert button                  | Write a step prompt to `.ctrlyoke/prompts/`           |
 | `ctrlyoke: Run with ctrlyoke`           | Run a prompt file (Explorer / editor context menu)    |
 | `ctrlyoke: Load in ctrlyoke`            | Load a prompt file into the dashboard without running |
 | `ctrlyoke: Queue with ctrlyoke`         | Append prompts to the end of the active queue         |

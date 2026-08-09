@@ -694,14 +694,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Create Prompt File command
-  const createPromptFileCommand = vscode.commands.registerCommand(
-    "ctrlyoke.createPromptFile",
-    async () => {
-      await workflowOrchestrator.createPromptFile();
-    }
-  );
-
   // Pause execution command
   const pauseCommand = vscode.commands.registerCommand(
     "ctrlyoke.pause",
@@ -925,14 +917,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.showOutputPanel",
     () => {
       Log.getOutputChannel().show();
-    }
-  );
-
-  // Create Draft Prompt command (for dashboard New button)
-  const createDraftPromptCommand = vscode.commands.registerCommand(
-    "ctrlyoke.createDraftPrompt",
-    async () => {
-      await workflowOrchestrator.createDraftPrompt();
     }
   );
 
@@ -1296,7 +1280,6 @@ function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     openPanelCommand,
     showGettingStartedCommand,
-    createPromptFileCommand,
     pauseCommand,
     resumeCommand,
     stopCommand,
@@ -1314,7 +1297,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     editCurrentPromptFileCommand,
     runCommand,
     showOutputPanelCommand,
-    createDraftPromptCommand,
     openFileWithSelectionCommand,
     confirmExternalFileTrustCommand,
     clearWorkflowCommand,

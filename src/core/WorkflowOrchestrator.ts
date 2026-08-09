@@ -4711,10 +4711,6 @@ export class WorkflowOrchestrator {
     }
   }
 
-  async createPromptFile(): Promise<void> {
-    await this.workflowCommandHandler.createPromptFile();
-  }
-
   async openPanel(): Promise<void> {
     await this.workflowCommandHandler.openPanel(
       () => this.getDefaultIntegration().getDetailedStatus(),
@@ -4725,30 +4721,6 @@ export class WorkflowOrchestrator {
   async openCurrentPromptFile(): Promise<void> {
     const filePath = this.getActiveInstance().getCurrentPromptFilePath();
     await this.workflowCommandHandler.openCurrentPromptFile(filePath);
-  }
-
-  async createDraftPrompt(): Promise<void> {
-    const result = await this.workflowCommandHandler.createDraftPrompt();
-
-    if (result) {
-      // Expose draft file into the active workflow instance via public accessors
-      // so the instance owns currentPromptFile, watcher setup, etc.
-      const instance = this.getActiveInstance();
-      instance.setCurrentPromptFile(result.filePath, { steps: [] });
-      instance.initializeFileWatcher(result.filePath);
-
-      // Notify the panel about the new draft file via a targeted FILE_SELECTED message.
-      this.storedPanelSend?.({
-        type: MESSAGE_TYPES.FILE_SELECTED,
-        fileName: result.fileName,
-        steps: [],
-        workflowName: undefined,
-        finalStep: null,
-        finalStepStatus: null,
-        finalStepLoopCount: 0,
-        finalStepPhase: null,
-      });
-    }
   }
 
   async createEndConditionScript(): Promise<void> {

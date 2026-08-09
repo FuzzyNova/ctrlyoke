@@ -15,14 +15,13 @@ These are the main user-facing commands registered by the extension.
 
 ## Workflow authoring commands
 
-| Command                                | What it does                               |
-| -------------------------------------- | ------------------------------------------ |
-| `ctrlyoke: Create Prompt File`         | Create a new prompt file                   |
-| `ctrlyoke: New Draft Prompt`           | Create a draft prompt                      |
-| `ctrlyoke: New Workflow from Template` | Start from a template                      |
-| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh |
-| `ctrlyoke: Create New Custom Template` | Create a user template                     |
-| `ctrlyoke: Import Workflow Templates`  | Import bundled templates                   |
+| Command                                | What it does                                           |
+| -------------------------------------- | ------------------------------------------------------ |
+| Editor convert button                  | Write a step prompt to `.ctrlyoke/prompts/`            |
+| `ctrlyoke: New Workflow from Template` | Start from a template                                 |
+| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh            |
+| `ctrlyoke: Create New Custom Template` | Create a user template                                |
+| `ctrlyoke: Import Workflow Templates`  | Import bundled templates                              |
 
 ## Queue and session commands
 

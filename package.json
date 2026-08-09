@@ -87,11 +87,6 @@
         "category": "ctrlyoke"
       },
       {
-        "command": "ctrlyoke.createPromptFile",
-        "title": "Create Prompt File",
-        "category": "ctrlyoke"
-      },
-      {
         "command": "ctrlyoke.pause",
         "title": "Pause Execution",
         "category": "ctrlyoke",
@@ -174,12 +169,6 @@
         "title": "Show Output Panel",
         "category": "ctrlyoke",
         "icon": "$(output)"
-      },
-      {
-        "command": "ctrlyoke.createDraftPrompt",
-        "title": "New Draft Prompt",
-        "category": "ctrlyoke",
-        "icon": "$(new-file)"
       },
       {
         "command": "ctrlyoke.queueFromContext",
@@ -295,9 +284,6 @@
           "command": "ctrlyoke.openPanel"
         },
         {
-          "command": "ctrlyoke.createPromptFile"
-        },
-        {
           "command": "ctrlyoke.resumeSession"
         },
         {
@@ -369,11 +355,6 @@
         }
       ],
       "explorer/context": [
-        {
-          "command": "ctrlyoke.createPromptFile",
-          "when": "explorerResourceIsFolder",
-          "group": "2_workspace"
-        },
         {
           "command": "ctrlyoke.runFromContext",
           "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",

@@ -420,10 +420,6 @@ export class WebviewMessageRouter {
 
   private registerWorkflowControl(table: DispatchTable): void {
     // ── Dashboard — Workflow Control ──────────────────────────────────────
-    table.set(MESSAGE_TYPES.NEW_PROMPT, () => {
-      vscode.commands.executeCommand("ctrlyoke.createDraftPrompt");
-    });
-
     table.set(MESSAGE_TYPES.SELECT_FILE, () => {
       vscode.commands.executeCommand("ctrlyoke.selectPromptFile");
     });
