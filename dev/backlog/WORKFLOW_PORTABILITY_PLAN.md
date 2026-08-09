@@ -290,6 +290,31 @@ workflow, commits it, and hands a teammate a definition whose assets were never 
 incompleteness exists today, but ignoring the directories turns "usually works because the files
 happen to be there" into "never works for anyone else".
 
+### 5.1 Staged execution ledger
+
+The phases above are the design sequence; the table below is how they were split into single-session
+work items across both plans. `PFE` = `PROMPT_FILE_EXTRACTION_PLAN.md`, `WP` = this document.
+**Each step must tick its own row to `done` when it commits** — this table is the cross-session
+record of what has actually landed.
+
+| #   | Step                                              | Covers          | Status |
+| --- | ------------------------------------------------- | --------------- | ------ |
+| 1   | `.gitignore` header + self-ignore warning         | WP §4 / P1      | todo   |
+| 2   | Shared `PromptFileResolver` (refactor only)       | PFE §4.4 / P1   | todo   |
+| 3   | Just-in-time resolution contract                  | PFE §4.4, §3.1a | todo   |
+| 4   | Serializer field completeness (`executionMode`)   | WP §3.4         | todo   |
+| 5   | Bundle analyzer (pure analysis/rewrite plan)      | WP §3.2 / P3    | todo   |
+| 6   | Bundle writer, manifest, Save-As/template wiring  | WP §3.4 / P3    | todo   |
+| 7   | Save-dialog bundle disclosure + plan fingerprint  | WP §3.3 / P3    | todo   |
+| 8   | Gitignore toggle → icon-only; prune label API     | PFE §2.2 / P2   | todo   |
+| 9   | Prompt-file writer + message contract             | PFE §4.1-4.2    | todo   |
+| 10  | Convert button + empty-file UX                    | PFE §2.1, §3.1a | todo   |
+| 11  | Delete `createPromptFile` / `createDraftPrompt`   | PFE §5 / P5     | todo   |
+| 12  | Missing-assets warning, ignore entries, docs      | WP P5-P7        | todo   |
+
+Ordering constraints this split honors: step 3 precedes every consumer of file-backed prompts;
+steps 5-7 (bundling) precede steps 9-10 (the writer), which precede step 12 (the ignore entries).
+
 ## 6. Testing
 
 - Serializer round trip preserves every schema-backed workflow/step field (including

@@ -413,6 +413,10 @@ plan's phase 3: without just-in-time resolution, a converted dashboard step exec
 itself. Phase 4 ships in the same release as phase 3. The portability plan's phase table is the
 cross-plan master sequence: shared resolver → bundler → writer/UX → ignore entries.
 
+**The authoritative work breakdown for both plans is
+`WORKFLOW_PORTABILITY_PLAN.md` §5.1 (staged execution ledger).** Consult it to see which phases have
+already landed, and update the row for the step you are implementing.
+
 ## 8. Testing
 
 - `src/test/**` (Mocha): filename derivation and collision suffixing; empty editor produces an empty
