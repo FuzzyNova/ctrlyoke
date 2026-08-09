@@ -97,7 +97,7 @@ export const Modal: React.FC<ModalProps> = ({
           <div className="flex-shrink-0 px-6 py-4 border-b border-panel-border">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 {headerActions}
                 <ExitButton onClick={onClose} aria-label="Close modal" />
               </div>

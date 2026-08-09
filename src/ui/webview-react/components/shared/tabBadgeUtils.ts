@@ -22,23 +22,8 @@ export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
   activeColor: "text-focus-highlight",
 };
 
-/**
- * Returns the tab icon override for the Permissions tab based on the resolved
- * permission mode. None returns undefined (use default styling).
- */
-export function getPermissionTabOverride(
-  mode: string,
-  hasCompatibilityWarning = false
-): TabIconOverride | undefined {
-  if (hasCompatibilityWarning) {
-    return {
-      codicon: "warning",
-      color: "text-warning-fg",
-      hoverColor: "hover:text-terminal-ansiBrightYellow",
-      activeColor: "text-terminal-ansiBrightYellow",
-    };
-  }
-
+/** Per-mode icon shape/color for the Permissions tab. None returns undefined. */
+function permissionModeIconOverride(mode: string): TabIconOverride | undefined {
   switch (mode) {
     case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
       return {
@@ -66,28 +51,44 @@ export function getPermissionTabOverride(
 }
 
 /**
- * Returns the permission-mode badge styling for a tab that keeps its primary
- * icon shape. None returns undefined (use default styling).
+ * Returns the tab icon override for the Permissions tab based on the resolved
+ * permission mode. A compatibility warning never replaces the mode's icon or
+ * color — the permission state must stay legible — it only adds a warning
+ * badge on top, the same overlay treatment used elsewhere for diagnostics.
+ */
+export function getPermissionTabOverride(
+  mode: string,
+  hasCompatibilityWarning = false
+): TabIconOverride | undefined {
+  const modeOverride = permissionModeIconOverride(mode);
+  if (!hasCompatibilityWarning) {
+    return modeOverride;
+  }
+  return {
+    ...modeOverride,
+    badgeCodicon: "warning",
+    badgeColor: "text-warning-fg",
+  };
+}
+
+/**
+ * Returns a shield badge for a tab that keeps its own primary icon shape
+ * (e.g. Command's terminal icon) instead of swapping to the mode's icon.
+ * Only the badge carries the mode's color — the primary icon stays at its
+ * default color so the badge isn't a redundant same-color copy of it.
+ * None returns undefined (no badge).
  */
 export function getPermissionModeBadge(
   mode: string
-):
-  | Pick<
-      TabIconOverride,
-      "color" | "hoverColor" | "activeColor" | "badgeCodicon" | "badgeColor"
-    >
-  | undefined {
-  const override = getPermissionTabOverride(mode);
-  if (!override) {
+): Pick<TabIconOverride, "badgeCodicon" | "badgeColor"> | undefined {
+  const modeOverride = permissionModeIconOverride(mode);
+  if (!modeOverride?.color) {
     return undefined;
   }
 
   return {
-    color: override.color,
-    hoverColor: override.hoverColor,
-    activeColor: override.activeColor,
     badgeCodicon: "shield",
-    badgeColor: override.color,
+    badgeColor: modeOverride.color,
   };
 }
 

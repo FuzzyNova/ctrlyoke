@@ -964,10 +964,47 @@ second speculative implementation.
   own declaration. Injection is uniform and is not modeled.
 - Images and usage metadata.
 - Generate customer-facing compatibility documentation from the registry.
+- Extend the tab warning-badge overlay to every domain enabled in this phase.
 
 Before implementing usage metadata as a capability domain, re-audit
 Antigravity. If every supported harness then supplies the same normalized usage
 contract, remove usage from this phase and from the registry.
+
+#### Tab warning badges
+
+The Permissions tab already overlays a diagnostic-driven warning badge on its
+existing icon: `getPermissionTabOverride()` in
+[`tabBadgeUtils.ts`](../../src/ui/webview-react/components/shared/tabBadgeUtils.ts)
+takes a `hasCompatibilityWarning` flag and, when true, adds
+`badgeCodicon: "warning"` / `badgeColor: "text-warning-fg"` on top of the
+mode's own icon and color rather than replacing them — the permission state
+must stay legible even while flagging a compatibility issue. This is the only
+tab today with diagnostic-driven badge logic, because `permissions` is
+currently the only enabled capability domain; the other tab-override
+functions in that file (`getHooksTabOverride`, `getMcpTabOverride`,
+`getValidationTabOverride`, `getContextTabOverride`) are "something
+non-default is configured" indicators, not warning/error indicators, and
+take no diagnostics input.
+
+As each Phase 3 domain is enabled, give its corresponding tab the same
+overlay-badge treatment instead of inventing a new visual language:
+
+- **Hooks** — once the `hooks` domain is enabled, `getHooksTabOverride` needs
+  a diagnostics input (or a sibling warning-badge helper) so a hook-event
+  compatibility warning overlays a badge on the tab's existing configured-icon
+  state, the same way permission mode and warning coexist today.
+- **MCP** — once per-server tool filtering (or another MCP capability) is
+  modeled, `getMcpTabOverride` needs the equivalent overlay for a filtering
+  warning, without losing the existing "servers configured" indicator.
+- **Images / usage** — if either becomes a tab-scoped domain with its own
+  authoring surface, give that surface the same warning-badge overlay rather
+  than a bespoke treatment.
+
+Do not replace a tab's base icon/color to signal a compatibility warning; add
+the badge overlay on top, consistent with the Permissions tab precedent. Do
+not build the diagnostics parameter for a tab before that tab's capability
+domain is actually enabled — until then there is no diagnostic data to badge,
+and the parameter would be dead plumbing.
 
 ## Acceptance Criteria
 

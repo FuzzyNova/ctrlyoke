@@ -14,20 +14,48 @@ describe("permission tab badges", () => {
     [PERMISSION_MODES.CUSTOM, "text-terminal-ansiGreen"],
     [PERMISSION_MODES.ALLOW_ALL, "text-warning-fg"],
     [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, "text-error-fg"],
-  ])("uses a shield badge and the %s palette", (mode, color) => {
-    const badge = getPermissionModeBadge(mode);
+  ])(
+    "uses only a shield badge (no primary-icon color) for the %s palette",
+    (mode, color) => {
+      const badge = getPermissionModeBadge(mode);
 
-    expect(badge).toMatchObject({
-      badgeCodicon: "shield",
-      color,
-      badgeColor: color,
-    });
-    expect(badge).not.toHaveProperty("codicon");
-  });
+      expect(badge).toEqual({
+        badgeCodicon: "shield",
+        badgeColor: color,
+      });
+      expect(badge).not.toHaveProperty("codicon");
+      expect(badge).not.toHaveProperty("color");
+    }
+  );
 
   it("preserves the drawer permission shape swap", () => {
     expect(
       getPermissionTabOverride(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
     ).toMatchObject({ codicon: "workspace-untrusted" });
+  });
+
+  it("overlays a warning badge on the permission mode's own icon and color", () => {
+    const override = getPermissionTabOverride(
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      true
+    );
+
+    expect(override).toEqual({
+      codicon: "workspace-untrusted",
+      color: "text-error-fg",
+      hoverColor: "hover:text-terminal-ansiBrightRed",
+      activeColor: "text-terminal-ansiBrightRed",
+      badgeCodicon: "warning",
+      badgeColor: "text-warning-fg",
+    });
+  });
+
+  it("still overlays a warning badge when the mode has no icon override of its own", () => {
+    const override = getPermissionTabOverride(PERMISSION_MODES.NONE, true);
+
+    expect(override).toEqual({
+      badgeCodicon: "warning",
+      badgeColor: "text-warning-fg",
+    });
   });
 });

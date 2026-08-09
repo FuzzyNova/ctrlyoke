@@ -286,13 +286,26 @@ describe("DryRunModal", () => {
     expect(summary.querySelector(".codicon-map-vertical")).toBeInTheDocument();
     expect(summary.querySelector(".codicon-error")).toBeInTheDocument();
     expect(summary.querySelector(".codicon-warning")).not.toBeInTheDocument();
+    // The badge alone carries the severity color; the primary map-vertical
+    // icon stays at its default (active-tab) color.
+    expect(summary).not.toHaveClass("text-error-fg");
+    expect(summary).toHaveClass("text-foreground");
+    expect(summary.querySelector(".codicon-error")).toHaveClass(
+      "text-error-fg"
+    );
 
     const command = screen.getByTitle("Command");
     expect(command.querySelector(".codicon-terminal")).toBeInTheDocument();
     expect(command.querySelector(".codicon-shield")).toBeInTheDocument();
     expect(command.querySelector(".codicon-error")).not.toBeInTheDocument();
     expect(command.querySelector(".codicon-warning")).not.toBeInTheDocument();
-    expect(command).toHaveClass("text-error-fg");
+    // The badge alone carries the permission-mode color; the primary
+    // terminal icon stays at its default (inactive-tab) color.
+    expect(command).not.toHaveClass("text-error-fg");
+    expect(command).toHaveClass("text-description-fg");
+    expect(command.querySelector(".codicon-shield")).toHaveClass(
+      "text-error-fg"
+    );
 
     expect(
       screen.getByTitle("Conditions").querySelector(".codicon-coverage")

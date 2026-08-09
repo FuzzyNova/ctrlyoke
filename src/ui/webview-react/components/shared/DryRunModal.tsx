@@ -969,9 +969,6 @@ function StepDetail({
     if (worst) {
       const style = DIAGNOSTIC_SEVERITY_STYLE[worst];
       overrides[DRY_RUN_TABS.SUMMARY] = {
-        color: style.text,
-        hoverColor: style.text.replace("text-", "hover:text-"),
-        activeColor: style.text,
         badgeCodicon: style.icon,
         badgeColor: style.text,
       };
