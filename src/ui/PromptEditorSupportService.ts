@@ -15,7 +15,10 @@ import {
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
 import { TempFileManager } from "../utils/TempFileManager";
-import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
+import {
+  buildFileReferenceValue,
+  buildPromptFileReferenceValue,
+} from "../completions/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import {
@@ -28,6 +31,7 @@ import {
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 import { PromptFileResolver } from "../core/PromptFileResolver";
+import { PromptFileWriter } from "../utils/PromptFileWriter";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -178,7 +182,9 @@ export class PromptEditorSupportService {
    */
   async handleFileRefValidation(
     ctx: WebviewClientContext,
-    filePath: string
+    filePath: string,
+    seq?: number,
+    _address?: unknown
   ): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
@@ -187,19 +193,123 @@ export class PromptEditorSupportService {
       workspaceRoot: workspaceRoot ?? undefined,
       namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : [],
     });
-    const sourceDefinitionPath = await this.getOrchestrator()?.getViewSourceDefinitionPath(
-      ctx.clientId
-    );
-    const resolution = await resolver.resolvePath(
+    const sourceDefinitionPath =
+      await this.getOrchestrator()?.getViewSourceDefinitionPath(ctx.clientId);
+    const resolution = await resolver.resolve(
       filePath.trim(),
       sourceDefinitionPath ?? undefined
     );
 
     ctx.emit({
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
-      exists: resolution.status === "resolved",
+      seq,
       filePath,
+      exists: resolution.status === "resolved" || resolution.status === "empty",
+      isEmpty: resolution.status === "empty",
+      resolvedPath:
+        resolution.status === "resolved" || resolution.status === "empty"
+          ? resolution.path
+          : undefined,
     });
+  }
+
+  async handleConvertPromptToFile(
+    ctx: WebviewClientContext,
+    message: {
+      seq?: number;
+      text?: string;
+      suggestedName?: string;
+    }
+  ): Promise<void> {
+    const { seq } = message;
+    try {
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
+        throw new Error("No workspace folder open");
+      }
+      if (typeof message.text !== "string") {
+        throw new Error("Missing prompt text");
+      }
+
+      const result = await new PromptFileWriter(workspaceRoot).createPromptFile(
+        message.text,
+        message.suggestedName
+      );
+      ctx.emit({
+        type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+        seq,
+        reference: buildPromptFileReferenceValue(
+          path.posix.join(
+            PATH_CONSTANTS.CTRLYOKE_DIR,
+            PATH_CONSTANTS.PROMPTS_DIR,
+            result.fileName
+          )
+        ),
+        resolvedPath: result.filePath,
+      });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      Log.error(`Failed to create prompt file: ${errorMessage}`);
+      ctx.emit({
+        type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+        seq,
+        reference: undefined,
+        resolvedPath: undefined,
+        error: errorMessage,
+      });
+    }
+  }
+
+  async handleOpenPromptFile(
+    ctx: WebviewClientContext,
+    filePath: string
+  ): Promise<void> {
+    try {
+      if (!vscode.workspace.workspaceFolders?.length) {
+        throw new Error("No workspace folder open");
+      }
+      const workspaceRoot = getVsCodeWorkspaceRoot();
+      const resolver = new PromptFileResolver({
+        workspaceRoot,
+        namedRoots: getVsCodeNamedWorkspaceRoots(),
+      });
+      const resolution = await resolver.resolve(filePath.trim());
+      if (resolution.status !== "resolved" && resolution.status !== "empty") {
+        throw new Error(`Prompt file could not be found: ${filePath}`);
+      }
+
+      const resolvedPath = await fs.promises.realpath(resolution.path);
+      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+      const approvedExternalRoots =
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          workspaceIdentity
+        );
+      const target: FileOpenTarget = {
+        path: resolvedPath,
+        openAsText: true,
+        viewColumn: ConfigurationUtils.shouldOpenPromptsInSecondGroup()
+          ? vscode.ViewColumn.Two
+          : undefined,
+      };
+      const decision = evaluateFileAccess(resolvedPath, {
+        workspaceRoots: trustedRoots,
+        approvedExternalRoots,
+      });
+      if (!decision.allowed) {
+        await confirmExternalFileTrustAndOpen(target);
+        return;
+      }
+      await openResolvedTarget(target);
+    } catch (error) {
+      Log.error("Error opening prompt file:", error);
+      ctx.emit({
+        type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+        action: "open prompt file",
+        error: `Failed to open: ${filePath}`,
+      });
+    }
   }
 
   private getTempFileManager(): TempFileManager {

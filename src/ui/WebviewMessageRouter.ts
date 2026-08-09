@@ -640,8 +640,18 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message, ctx) => {
       await this.promptEditorSupport.handleFileRefValidation(
         ctx,
-        message.filePath
+        message.filePath,
+        message.seq,
+        message.address
       );
+    });
+
+    table.set(MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE, async (message, ctx) => {
+      await this.promptEditorSupport.handleConvertPromptToFile(ctx, message);
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_PROMPT_FILE, async (message, ctx) => {
+      await this.promptEditorSupport.handleOpenPromptFile(ctx, message.path);
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_CONTEXT_REFS, async (message, ctx) => {

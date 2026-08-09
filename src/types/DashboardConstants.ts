@@ -143,6 +143,7 @@ export const MESSAGE_TYPES = {
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
+  OPEN_PROMPT_FILE: "openPromptFile", // Open a lone prompt-file reference
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens
@@ -150,13 +151,15 @@ export const MESSAGE_TYPES = {
   REQUEST_PRIOR_CONTEXT_PREVIEW: "requestPriorContextPreview", // Webview -> Extension: request prior-context XML for preview modal
   PRIOR_CONTEXT_PREVIEW_RESULT: "priorContextPreviewResult", // Extension -> Webview: { ref, content } XML for modal
   EXPORT_CONTENT_PREVIEW: "exportContentPreview", // Webview -> Extension: open preview content in VS Code editor
-  VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: Check if a file-ref path resolves
-  FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
+  VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: { seq, filePath, address }
+  FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: addressed file-ref result
   VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references
   CONTEXT_REFS_VALIDATION: "contextRefsValidation", // Extension -> Webview: Inline context reference validation results
   INSERT_PROMPT_REFERENCES: "insertPromptReferences", // Extension -> Webview: insert raw context references into the live prompt editor
 
   // Image paste - Webview <-> Extension
+  CONVERT_PROMPT_TO_FILE: "convertPromptToFile", // Webview -> Extension: write prompt text to a prompt file
+  PROMPT_FILE_CREATED: "promptFileCreated", // Extension -> Webview: { seq, reference, resolvedPath } or { seq, error }
   SAVE_PASTED_IMAGE: "savePastedImage", // Webview -> Extension: save a pasted clipboard image to disk
   PASTED_IMAGE_SAVED: "pastedImageSaved", // Extension -> Webview: { seq, relativePath } or { seq, error }
   REQUEST_FILE_PREVIEW_URI: "requestFilePreviewUri", // Webview -> Extension: resolve a workspace file path to a displayable webview URI

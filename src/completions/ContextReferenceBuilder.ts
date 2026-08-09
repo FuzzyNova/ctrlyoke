@@ -28,6 +28,18 @@ export function buildFileReferenceValue(relativePath: string): string {
   return quoteReferencePath(normalizeReferencePath(relativePath));
 }
 
+/**
+ * Build a canonical lone prompt-file reference. Unlike an @-reference, the
+ * leading `./` is part of the path syntax in a single-root workspace and the
+ * value must never be quoted.
+ */
+export function buildPromptFileReferenceValue(relativePath: string): string {
+  const normalizedPath = normalizeReferencePath(relativePath)
+    .replace(/^\.\/+/, "")
+    .replace(/^\/+/, "");
+  return `./${normalizedPath}`;
+}
+
 export function buildFileReference(relativePath: string): string {
   return `@${buildFileReferenceValue(relativePath)}`;
 }

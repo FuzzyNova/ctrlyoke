@@ -17,6 +17,8 @@ export interface FileOpenTarget {
   isDirectory?: boolean;
   startLine?: number;
   endLine?: number;
+  openAsText?: boolean;
+  viewColumn?: vscode.ViewColumn;
 }
 
 /**
@@ -36,6 +38,20 @@ export async function openResolvedTarget(
       await vscode.commands.executeCommand("revealInExplorer", targetUri);
     } catch {
       await vscode.commands.executeCommand("revealFileInOS", targetUri);
+    }
+    return;
+  }
+
+  if (target.openAsText) {
+    const document = await vscode.workspace.openTextDocument(targetUri);
+    if (target.viewColumn === undefined) {
+      await vscode.window.showTextDocument(document);
+    } else {
+      await vscode.window.showTextDocument(document, {
+        viewColumn: target.viewColumn,
+        preview: false,
+        preserveFocus: false,
+      });
     }
     return;
   }

@@ -1,10 +1,12 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { looksLikeFilePath } from "../../utils/promptPathUtils";
 import {
   buildDirectoryReference,
   buildDirectoryReferenceValue,
   buildFileReference,
   buildFileReferenceValue,
+  buildPromptFileReferenceValue,
   buildGitReference,
   buildSelectionReference,
   buildSelectionReferenceValue,
@@ -35,6 +37,22 @@ suite("ContextReferenceBuilder", () => {
     assert.strictEqual(
       buildFileReference("src/my folder/file.ts"),
       '@"src/my folder/file.ts"'
+    );
+  });
+
+  test("builds an unquoted canonical lone prompt-file reference", () => {
+    const reference = buildPromptFileReferenceValue(
+      ".ctrlyoke\\prompts\\fix-tests.prompt.md"
+    );
+    assert.strictEqual(reference, "./.ctrlyoke/prompts/fix-tests.prompt.md");
+    assert.strictEqual(looksLikeFilePath(reference), true);
+    assert.strictEqual(
+      looksLikeFilePath(reference, { allowWorkspaceFolderPrefix: true }),
+      true
+    );
+    assert.strictEqual(
+      buildPromptFileReferenceValue("./.ctrlyoke/prompts/fix-tests.prompt.md"),
+      "./.ctrlyoke/prompts/fix-tests.prompt.md"
     );
   });
 
