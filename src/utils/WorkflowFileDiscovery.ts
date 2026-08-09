@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 
 export interface WorkflowFileEntry {
   path: string;
@@ -57,7 +58,13 @@ export function findWorkflowFilesInWorkspace(
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!IGNORED_WORKFLOW_SCAN_DIRS.has(entry.name)) {
+        const isBundleAssetsDirectory =
+          entry.name.endsWith(".assets") &&
+          fs.existsSync(path.join(fullPath, BUNDLE_MANIFEST_FILE_NAME));
+        if (
+          !IGNORED_WORKFLOW_SCAN_DIRS.has(entry.name) &&
+          !isBundleAssetsDirectory
+        ) {
           visit(fullPath);
         }
         continue;

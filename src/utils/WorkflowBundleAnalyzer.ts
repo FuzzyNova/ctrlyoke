@@ -18,8 +18,9 @@ import {
   isPathWithinAnyDirectory,
   isPathWithinDirectory,
 } from "./PathSecurity";
+import { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 
-export const BUNDLE_MANIFEST_FILE_NAME = ".ctrlyoke-assets.json";
+export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 export const BUNDLE_MANIFEST_VERSION = 1;
 
 export type BundleGeneratedStore = "attachments" | "prompts" | "temp";

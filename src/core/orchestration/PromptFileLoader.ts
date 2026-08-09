@@ -373,14 +373,18 @@ export class PromptFileLoader {
     workflow: PromptFile,
     workspaceFolderPath?: string
   ): Promise<void> {
-    const promptTexts = (workflow.steps ?? [])
-      .filter((step): step is Exclude<typeof step, { type: "script" }> =>
-        typeof step === "object" &&
-        step !== null &&
-        "prompt" in step &&
-        typeof step.prompt === "string"
-      )
-      .map((step) => step.prompt);
+    const promptTexts =
+      typeof workflow.prompt === "string" ? [workflow.prompt] : [];
+    promptTexts.push(
+      ...(workflow.steps ?? [])
+        .filter((step): step is Exclude<typeof step, { type: "script" }> =>
+          typeof step === "object" &&
+          step !== null &&
+          "prompt" in step &&
+          typeof step.prompt === "string"
+        )
+        .map((step) => step.prompt)
+    );
 
     if (workflow.finalStep && "prompt" in workflow.finalStep) {
       const finalPrompt = workflow.finalStep.prompt;

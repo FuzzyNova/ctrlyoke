@@ -22,6 +22,9 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Name of the manifest that identifies a ctrlyoke-managed bundle assets directory. */
+export const BUNDLE_MANIFEST_FILE_NAME = ".ctrlyoke-assets.json";
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================

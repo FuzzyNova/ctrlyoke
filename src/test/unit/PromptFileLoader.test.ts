@@ -575,5 +575,50 @@ suite("PromptFileLoader Tests", () => {
         severity: "warning",
       });
     });
+
+    test("reports missing assets referenced by the top-level prompt", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-top-level-assets-warning-")
+      );
+      tempDirs.push(workspaceRoot);
+
+      const statusMessages: Array<{
+        stepIndex: number;
+        message: string;
+        severity: string;
+      }> = [];
+      const loader = new PromptFileLoader(
+        new PromptFileParser(),
+        new PromptQueue(),
+        () =>
+          ({
+            updateFileSelected: async () => {},
+            updateStatusMessage: (
+              stepIndex: number,
+              message: string,
+              severity: string
+            ) => statusMessages.push({ stepIndex, message, severity }),
+          }) as any
+      );
+
+      await loader.loadFromMemory(
+        {
+          prompt: "Review @single-workflow.assets/missing.prompt.md",
+          steps: [],
+          finalStep: { type: "script", script: "echo final" },
+        },
+        "single-workflow.ctrlyoke.yaml",
+        workspaceRoot
+      );
+
+      assert.deepStrictEqual(statusMessages, [
+        {
+          stepIndex: 0,
+          message:
+            "Workflow references missing exported assets: single-workflow.assets. Restore the sibling *.assets/ directory or use Save As to create a portable copy.",
+          severity: "warning",
+        },
+      ]);
+    });
   });
 });

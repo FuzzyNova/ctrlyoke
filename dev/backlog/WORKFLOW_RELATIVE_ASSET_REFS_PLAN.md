@@ -605,7 +605,7 @@ checkable rather than assumed.
 
 | # | Step                                                                                  |
 | - | ------------------------------------------------------------------------------------- |
-| 0 | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) |
+| 0 | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) — **landed** |
 | 1 | `resolveReferencePath` + `PromptFileResolver` containment fix (§3, §4) — no behavior change to emitted refs yet |
 | 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix |
 | 3 | Parity sites (§5.3), webview payload included                                          |
