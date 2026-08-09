@@ -111,6 +111,51 @@ suite("WorkflowBundleAnalyzer", () => {
     }
   });
 
+  test("bundles a bare generated-store ref shadowed by a same-named file beside the workflow", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-shadow-");
+    try {
+      await fs.writeFile(
+        path.join(workspace, ".ctrlyoke", "attachments", "shot.txt"),
+        "real attachment",
+        "utf8"
+      );
+      // A file at <workflowDir>/<the exact ref path>. A bare reference is
+      // workspace-relative, so this must not shadow the real target.
+      const decoyDir = path.join(
+        workspace,
+        "authored",
+        ".ctrlyoke",
+        "attachments"
+      );
+      await fs.mkdir(decoyDir, { recursive: true });
+      await fs.writeFile(path.join(decoyDir, "shot.txt"), "decoy", "utf8");
+
+      const result = await analyze(
+        workspace,
+        { steps: [{ prompt: "@.ctrlyoke/attachments/shot.txt" }] },
+        {
+          sourceDefinitionPath: path.join(
+            workspace,
+            "authored",
+            "source.yaml"
+          ),
+        }
+      );
+
+      assert.strictEqual(result.plan.copies.length, 1);
+      assert.strictEqual(
+        await fs.readFile(result.plan.copies[0].sourcePath, "utf8"),
+        "real attachment"
+      );
+      assert.strictEqual(
+        (result.workflow.steps as any[])[0].prompt,
+        "@./fix-tests.assets/shot.txt"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("resolves generated-store fallback paths and never inlines inline prompt refs", async () => {
     const workspace = await makeWorkspace("ctrlyoke-bundle-fallback-");
     try {

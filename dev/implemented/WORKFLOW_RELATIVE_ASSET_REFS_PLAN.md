@@ -653,6 +653,24 @@ The §9.1 deferrals remain deliberate: the keep-prompt-files escape hatch, the c
 destination choice, the Save-As `originalFile` nicety, and symlink hardening for reference reads
 were not built as part of this execution.
 
+**Fixed during review.** `resolveInlineReference` classifies inline references through
+`PromptFileResolver.getCandidatePaths` — the lone-prompt probing API — and step 5 threaded
+`sourceDefinitionPath` into it for *every* reference, not just `./`-prefixed ones. That put the
+workflow directory ahead of the workspace root for bare references, reintroducing §2.1 inside the
+analyzer: a file at `<workflowDir>/<the exact ref path>` shadowed the real target, so
+`@.ctrlyoke/attachments/a.png` was classified as an ordinary repo file and silently left
+un-bundled, exporting a reference into the gitignored scratch store. The source-dir candidate is
+now gated on `isWorkflowRelativeReference`, matching §2.2's rule that only an explicit `./` or
+`../` selects the workflow base, with a regression test in `WorkflowBundleAnalyzer.test.ts`.
+
+**Accepted, not fixed.** For a `./`-prefixed reference the analyzer still keeps the workspace and
+`.ctrlyoke/` fallback candidates behind the workflow-base candidate, so it can resolve to a
+same-named root-level file when the sibling assets directory is missing. This is the same tradeoff
+§1.2.1 accepts for lone prompts — it needs both a missing assets directory and a root-level name
+collision to bite — and the §3.1 missing-assets warning is the safety net. Execution-path
+resolution is unaffected: `ContextExpander` uses `resolveReferencePath` and has exactly one base
+per token.
+
 ## 10. Rejected
 
 - **Two-base probing (source-dir first, workspace fallback).** §2.1: silently changes the meaning of

@@ -559,9 +559,16 @@ async function resolveInlineReference(
   trustedRoots: readonly string[],
   sourceDefinitionPath?: string
 ): Promise<ResolvedReference> {
+  // Only an explicit `./` or `../` selects the workflow-file base (§2.2). A
+  // bare reference must never probe the workflow directory first, or a file
+  // that merely shares its relative path shadows the real target and the
+  // reference is silently classified as an ordinary repo file — the
+  // filesystem-dependent meaning §2.1 exists to prevent.
   const candidates = resolver.getCandidatePaths(
     reference.path,
-    sourceDefinitionPath
+    isWorkflowRelativeReference(reference.path)
+      ? sourceDefinitionPath
+      : undefined
   );
   const lexicalGenerated = candidates.find((candidate) =>
     isGeneratedStorePath(candidate, trustedRoots)
@@ -1020,6 +1027,15 @@ function toWorkflowRelativePath(
   return `./${path
     .relative(path.dirname(destinationPath), assetPath)
     .replace(/\\/g, "/")}`;
+}
+
+/**
+ * True when a reference explicitly selects the workflow-file base. Mirrors
+ * `resolveReferencePath`'s step 2 so both agree on what `./` and `../` mean.
+ */
+function isWorkflowRelativeReference(referencePath: string): boolean {
+  const normalized = referencePath.replace(/\\/g, "/");
+  return normalized.startsWith("./") || normalized.startsWith("../");
 }
 
 function isGeneratedStorePath(
