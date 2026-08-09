@@ -20,17 +20,19 @@ vi.mock("../../../components/shared", () => ({
   IconToggleButton: ({
     active,
     onToggle,
-    activeLabel,
-    inactiveLabel,
+    activeTooltip,
+    inactiveTooltip,
   }: {
     active: boolean;
     onToggle: (next: boolean) => void;
-    activeLabel?: string;
-    inactiveLabel?: string;
+    activeTooltip: string;
+    inactiveTooltip: string;
   }) => (
     <button
       type="button"
-      aria-label={active ? activeLabel : inactiveLabel}
+      title={active ? activeTooltip : inactiveTooltip}
+      aria-label={active ? activeTooltip : inactiveTooltip}
+      aria-pressed={active}
       onClick={() => onToggle(!active)}
     />
   ),

@@ -303,10 +303,6 @@ const EditorSectionInner: React.FC = () => {
             inactiveIcon="repo"
             activeTooltip="Respecting .gitignore for completions"
             inactiveTooltip="All files included for completions (ignoring .gitignore)"
-            activeLabel="Excluding ignored files"
-            inactiveLabel="Including all files"
-            narrow={isNarrow}
-            labelPosition="left"
           />
         )}
       </div>

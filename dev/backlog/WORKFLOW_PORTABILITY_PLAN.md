@@ -306,7 +306,7 @@ record of what has actually landed.
 | 5   | Bundle analyzer (`src/utils/WorkflowBundleAnalyzer.ts`) | WP §3.2 / P3 | done   |
 | 6   | Bundle writer, manifest, Save-As/template wiring  | WP §3.4 / P3    | done   |
 | 7   | Save-dialog bundle disclosure + plan fingerprint  | WP §3.3 / P3    | done   |
-| 8   | Gitignore toggle → icon-only; prune label API     | PFE §2.2 / P2   | todo   |
+| 8   | Gitignore toggle → icon-only; prune label API     | PFE §2.2 / P2   | done   |
 | 9   | Prompt-file writer + message contract             | PFE §4.1-4.2    | todo   |
 | 10  | Convert button + empty-file UX                    | PFE §2.1, §3.1a | todo   |
 | 11  | Delete `createPromptFile` / `createDraftPrompt`   | PFE §5 / P5     | todo   |
