@@ -91,8 +91,8 @@ Stated in one line for the docs:
 - **`<workflow>.assets/` must not be blanket-ignored**, including when a workflow is saved inside
   `.ctrlyoke/`. Exported assets are tracked by definition — that is the entire point of exporting
   them.
-- **`ensureGitignore` only ever appends, never prunes.** Anything added to `GITIGNORE_CONTENT` is
-  permanent for every existing workspace. Add deliberately.
+- **`ensureGitignore` only ever appends patterns, never prunes.** Anything added to the generated
+  ignore-entry list is permanent for every existing workspace. Add deliberately.
 - Adding entries is safe for existing users — `.gitignore` does not affect already-tracked files —
   which is also why the dangling-reference risk in §5 is easy to miss in testing: it only bites
   files created after the change.
@@ -100,11 +100,12 @@ Stated in one line for the docs:
 ### 2.2 `settings.json`
 
 The generator does not ignore it (users track it by default), but this repo's own
-`.ctrlyoke/.gitignore` does. Resolve toward **track**: it holds harness defaults, permissions, and
+`.ctrlyoke/.gitignore` does. **Decision: track it.** It holds harness defaults, permissions, and
 queue/run behavior — team-shareable project config — and it is schema-validated
-(`schemas/settings-schema.json`, wired through `package.json` `jsonValidation`). The only
-machine-local fields are `server.certPath` / `server.keyPath`; exclude those keys later if it
-becomes a problem, not the whole file.
+(`schemas/settings-schema.json`, wired through `package.json` `jsonValidation`). The
+`server.certPath` / `server.keyPath` fields are machine-local; document that caveat. Git cannot
+ignore individual JSON keys, so a future fix would need schema/config layering rather than another
+`.gitignore` rule.
 
 ---
 
@@ -137,65 +138,109 @@ the association visible in a directory listing and mechanical for the loader to 
 Sibling layout's one real weakness is "move the YAML, forget the assets". Mitigate:
 
 1. Derived naming, above — the pairing is self-evident.
-2. On load, a reference into a `*.assets/` directory that does not exist warns through the existing
-   file-ref validation path rather than failing silently at run time.
-3. Re-saving over an existing workflow refreshes the assets directory and prunes orphans, so it
-   never accumulates files from earlier revisions.
+2. On load, a reference into a missing `*.assets/` directory produces one workflow-level warning;
+   the editor's existing inline-context validation continues to mark each missing token. This is
+   not the lone-prompt `FILE_REF_VALIDATION` path — `@` / `#selection:` / `#sym` references use
+   `CONTEXT_REFS_VALIDATION`.
+3. Re-saving over an existing workflow refreshes bundler-managed assets and prunes only files
+   recorded in the previous bundle manifest (§3.4), preserving anything the user added by hand.
 
 ### 3.2 What gets bundled, inlined, and left alone
 
 The rule is about _where a reference points_, not what kind of reference it is:
 
-| Reference                                                             | Action                                                                                    |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Step `prompt` whose whole value is a path into `.ctrlyoke/prompts/**` | **inline** the file's text into the step                                                  |
-| `@ref` / `#file:` into `.ctrlyoke/attachments/**`                     | **copy** into `<basename>.assets/`, rewrite the path                                      |
-| `@ref` into `.ctrlyoke/prompts/**` inside larger prompt text          | copy + rewrite — **do not inline** (see below)                                            |
-| `@ref` into ordinary repo files (`src/…`)                             | leave alone — travels with the repo                                                       |
-| Anything under `.ctrlyoke/temp/**`                                    | warn — `TempFileManager` deletes these after the turn, so the reference is already broken |
-| Absolute path outside the workspace                                   | warn, do not copy — an external reference is deliberate                                   |
-| `script:` into `.ctrlyoke/scripts/**`                                 | leave alone — `scripts/` is tracked                                                       |
+| Reference                                                            | Action                                                                                         |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Lone step `prompt` resolving into `.ctrlyoke/prompts/**`             | **inline** the resolved content, including `""` for an empty draft                             |
+| Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/attachments/**` | **copy** the underlying file into `<basename>.assets/`; rebuild the token with the new path    |
+| Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/prompts/**`     | copy + rewrite — **do not inline** (see below)                                                 |
+| Directory `@.../` into either generated store                        | block save and ask for explicit file refs; copying the shared store would leak unrelated files |
+| Inline ref into ordinary repo files (`src/…`)                        | leave alone — travels with the repo                                                            |
+| Missing generated-store ref or anything under `.ctrlyoke/temp/**`    | block save — emitting a knowingly incomplete artifact violates the goal                        |
+| Generated-store path containing `{{var}}`                            | block save — export cannot know which runtime file to copy                                     |
+| Lone absolute prompt-file path outside the workspace                 | warn and leave unchanged; it is deliberately machine-specific                                  |
+| Inline absolute path outside the workspace                           | block save; `ContextExpander` already blocks it at execution                                   |
+| Script command/path into `.ctrlyoke/scripts/**`                      | leave alone — `scripts/` is tracked                                                            |
 
 **Why inline a lone prompt-file body but copy an `@ref` to the same file:** these are two different
-mechanisms. A lone path as a step's `prompt` is resolved by
-`PromptFileParser.resolvePromptContent()` (`:203`) — the file's text _becomes_ the prompt. Inlining
-at export therefore changes nothing semantically; it only moves resolution from run time to export
-time, and it removes the dependency entirely so the common case saves as a single self-contained
-file. An `@ref` embedded in larger text is a context attachment expanded by a different path with
-different semantics, so inlining it would change what the harness receives.
+mechanisms. A lone path as a step's `prompt` is resolved through the shared `PromptFileResolver` —
+the file's text _becomes_ the effective prompt. Export calls that same resolver, including its
+empty-file behavior, so inlining only moves resolution from run time to export time and removes the
+dependency. An inline context ref embedded in larger text is expanded by a different mechanism, so
+inlining it would change what the harness receives.
 
 Inlining is lossy in one respect: a prompt deliberately factored into a file for reuse across
 workflows loses that factoring in the export. The local file still exists, so nothing is destroyed.
-Default to inline; if this proves annoying, a "keep prompt files as references" checkbox in the
-save dialog is the escape hatch, not a change to the default.
+**Decision: inline by default with no v1 checkbox.** If reuse proves common enough, a later "keep
+prompt files as references" option can be added without changing the portable default.
 
-Attachments are already content-addressed (`TempFileManager.createPastedImageFile`), so two steps
-referencing the same image dedupe to one copy for free.
+Pasted attachments are already content-addressed (`TempFileManager.createPastedImageFile`), but the
+bundler must still dedupe by source content because copied prompt files and basename collisions are
+not content-addressed. Preserve a basename when unambiguous; when different files share it, append
+a stable short content hash before the extension. Identical bytes in the current plan map to one
+destination. Naming is ownership-aware: never adopt an unmanifested pre-existing file as managed,
+even when its bytes match; choose a non-colliding managed name instead.
 
 ### 3.3 Surfacing it
 
-`SaveWorkflowDialog` should state what the save will do before it happens — "3 attachments will be
-copied to `fix-tests.assets/`", "2 prompt files will be inlined", plus any warnings from the table
-above. A bundle operation the user cannot see is one they will not trust or understand, and the
-warning rows (temp refs, external absolute paths) are exactly the cases where they need to
-intervene.
+`SaveWorkflowDialog` states what the save will do before it happens — "3 attachments will be copied
+to `fix-tests.assets/`", "2 prompt files will be inlined", "2 managed assets will be removed" —
+plus warnings and blockers from the table above. Extend the existing addressed/debounced
+`CHECK_SAVE_PATH` → `SAVE_PATH_CHECKED` exchange to return the destination-specific bundle preview;
+the destination and prune set change when the user edits the name or location. Disable Save while
+the preview is pending or contains a blocker. Recompute the analysis in the authoritative save
+handler so the preview remains advisory, like the overwrite check. Because pruning is destructive,
+the preview response includes a plan fingerprint and `SAVE_WORKFLOW` echoes it; if recomputation
+changes the copy/rewrite/blocker/prune plan, reject the save and return the refreshed preview for
+explicit reconfirmation. Never delete a larger/different set than the one the user approved.
 
 ### 3.4 Implementation notes
 
-- The bundling pass belongs between `buildCleanWorkflow()` and serialization in
-  `WorkflowSerializer.handleSaveWorkflow()` (`:499-523`) — it rewrites the clean object, so it must
-  run before `yaml.dump` / `JSON.stringify`.
-- Reference discovery must cover both the prompt-value form and every inline reference form. Reuse
-  the existing parsers (`findAtomicReferences` / `findContextReferenceMatches` in
-  `utils/atomicReferences`, `looksLikeFilePath` in `utils/promptPathUtils`) rather than writing a
-  new scanner — a bundler that misses a reference form produces exactly the silent breakage this
-  plan exists to remove.
-- `handleSaveWorkflowAsTemplate` (`:547`) shares `buildCleanWorkflow`. Decide explicitly whether
-  templates bundle too. Recommendation: **templates inline prompt files but reject attachment
-  references**, since a template is meant to be instantiated in any repo and cannot carry a sibling
-  directory.
-- Copy asset files atomically and only after the workflow write succeeds, so a failed save cannot
-  leave a half-populated assets directory next to no workflow.
+- Fix the serializer allowlist before layering bundling onto it. The current `WORKFLOW_FIELDS` and
+  `PROMPT_FIELDS` omit `executionMode`, so Save As already changes workflow/step behavior. Build
+  both lists from the shared `EXECUTION_PROPERTY_KEYS` / `WORKFLOW_PROPERTY_KEYS` sources plus the
+  shape-specific fields, and add a schema-backed round-trip test that fails whenever a persisted
+  property is dropped. Portability starts with a complete definition, not only complete files.
+- The analysis/rewrite pass belongs after `buildCleanWorkflow()` and before serialization in
+  `WorkflowSerializer.handleSaveWorkflow()` (`:499-523`). It returns a rewritten clean object plus
+  a typed copy/warning/blocker/prune plan; it does not perform writes while discovering references.
+  Pass the semantic source-definition path from the addressed lineage into the analyzer so lone
+  prompt refs use the same base as execution; never resolve them relative to the `.runs/` working
+  copy.
+- Reference discovery covers top-level `prompt`, every prompt step, and `finalStep`. Use the
+  runtime parser `parseAllFileReferences()` from `src/utils/FileReferenceParser.ts` plus
+  `looksLikeFilePath()` / the shared `PromptFileResolver`. Do **not** import
+  `src/ui/webview-react/utils/atomicReferences.ts` into the extension host: that is a deliberately
+  separate rendering parser, not the runtime source of truth. Extract/reuse the fenced-code masking
+  used by `ContextExpander` so export ignores exactly the references execution ignores.
+- Classify a dependency by its resolved canonical path, not by string prefix. For example,
+  `@prompts/foo.prompt.md` can resolve through the `.ctrlyoke/` fallback into the generated prompt
+  store even though the token does not contain `.ctrlyoke`.
+- Rewrite complete tokens from typed parser results and the existing `ContextReferenceBuilder`
+  functions, preserving selection ranges, symbol names/kinds, and required quoting. Apply edits in
+  descending offset order. Do not use regex replacement over the whole prompt.
+- Apply the same containment rules to both sides of every copy. Resolve/`realpath` a generated-store
+  source and block symlink escapes outside the trusted workspace roots. Validate the derived assets
+  directory independently of the workflow file, rejecting an existing symlink or non-directory;
+  `resolveSafeExportPath()` checking only the workflow destination is not sufficient.
+- **Decision for templates:** `handleSaveWorkflowAsTemplate()` runs the analyzer in template mode.
+  It inlines lone prompt-file bodies and rejects every generated-store reference that would require
+  a sibling asset directory, naming the offending step and token. Ordinary repo references remain
+  unchanged. Sharing `buildCleanWorkflow()` alone does not make templates inherit the pass; both
+  handlers must call it explicitly.
+- Write `<workflow>.assets/.ctrlyoke-assets.json` with a versioned list of files created by the
+  bundler. On re-save, prune only paths present in the previous manifest but absent from the new
+  plan. If the directory has no manifest, treat every existing file as user-owned and do not prune.
+  Never delete a currently referenced path even if a stale manifest lists it. The manifest is part
+  of the portable bundle and is committed with the assets directory. If the new plan has no assets,
+  remove the old manifest after pruning and remove the directory only when it is empty; user-owned
+  leftovers keep the directory in place.
+- Stage and verify every copy before publishing anything. Publish asset files with temp-file +
+  rename, then atomically replace the serialized workflow, then atomically replace the manifest;
+  prune obsolete managed files only after the workflow commit. A prune/manifest failure reports a
+  warning and may leave harmless extra files, but a saved workflow never points at a missing newly
+  bundled asset. Clean staging paths on failure. Multi-path filesystem updates cannot honestly be
+  called fully atomic, so this — not "no directory is ever left behind" — is the invariant to test.
 
 ---
 
@@ -207,11 +252,11 @@ because the file ignores itself, and (b) cannot be reconciled on the other machi
 regenerates the defaults and silently re-ignores everything. Two clones of one repo, different
 tracking behavior, no signal anywhere.
 
-Fix by saying so, at the top of the generated file, with the self-ignore line last so the note sits
-next to what it describes:
+**Decision:** say so at the top of every newly generated file, with the self-ignore line last:
 
 ```
-# ctrlyoke runtime — generated, machine-local. Safe to commit nothing here.
+# ctrlyoke generated runtime entries are machine-local. Authored files in
+# templates/, scripts/, agents/, skills/, mcp/, and settings.json remain trackable.
 #
 # This file ignores ITSELF (last line) so initializing ctrlyoke leaves your
 # worktree clean. If you edit this file — e.g. to start tracking runs or
@@ -219,39 +264,57 @@ next to what it describes:
 # changes stay on this machine and every other clone regenerates the defaults.
 ```
 
-Do **not** get clever here — e.g. auto-dropping the self-ignore once the file diverges from the
-generated content. Silent behavior change inside the mechanism whose whole problem is silent
-behavior is a bad trade, and `ensureGitignore`'s append-only design gives no reliable way to tell a
-user edit from a generator change.
+Split the rendered header from the ignore-entry list so comments are not treated as appendable
+entries. For an existing `.gitignore`, preserve its bytes/order and append only missing patterns;
+do not prepend the new header or move its existing self-ignore line, because the file is user-owned.
+Existing users get the same warning through docs/release notes. Do **not** auto-drop the self-ignore
+when content diverges: `ensureGitignore` has no reliable way to distinguish a user edit from a
+generator change.
 
 ---
 
 ## 5. Sequencing — bundling first
 
-| Phase | Scope                                                                |
-| ----- | -------------------------------------------------------------------- |
-| 1     | `.gitignore` header comment (§4) — standalone, no behavior change    |
-| 2     | Reference-discovery pass + Save-As bundling + dialog disclosure (§3) |
-| 3     | Missing-`*.assets/` warning on load (§3.1 mitigation 2)              |
-| 4     | Add `attachments/` and `prompts/` to `GITIGNORE_CONTENT`             |
-| 5     | Docs: what's ignored and why, the one-line tracking rule (§1, §2)    |
+| Phase | Scope                                                                             |
+| ----- | --------------------------------------------------------------------------------- |
+| 1     | Fresh-file `.gitignore` header (§4)                                               |
+| 2     | Prompt-extraction phase 1: shared resolver + just-in-time execution contract      |
+| 3     | Reference analysis + Save-As bundling/manifest + dialog disclosure (§3)           |
+| 4     | Prompt-extraction phases 2-5: editor writer/UX and legacy cleanup                 |
+| 5     | Missing-`*.assets/` aggregate warning on load (§3.1 mitigation 2)                 |
+| 6     | Add `attachments/` and `prompts/` to the generated ignore-entry list              |
+| 7     | Docs/release note: tracking rule, Save-As behavior, self-ignore, migration caveat |
 
-**Phase 4 must not ship before phase 2.** Between them is the window where a user exports a
+**Phase 6 must not ship before phases 3 and 4.** Between them is the window where a user exports a
 workflow, commits it, and hands a teammate a definition whose assets were never tracked. The
 incompleteness exists today, but ignoring the directories turns "usually works because the files
 happen to be there" into "never works for anyone else".
 
 ## 6. Testing
 
-- Bundler: each row of the §3.2 table, including the negative cases (repo-relative `@ref` untouched,
-  `script:` into `scripts/` untouched); dedupe of two steps referencing one content-addressed image;
-  pruning removes only unreferenced files and never on first write (§8.2); no assets directory
-  created when nothing needs bundling.
-- Template export refuses an attachment reference and names the step (§8.3).
+- Serializer round trip preserves every schema-backed workflow/step field (including
+  `executionMode`) while still stripping runtime-only metadata.
+- Bundler: each row of the §3.2 table, including repo-relative refs/scripts untouched and every
+  blocking case; `@`, `#selection:`, and `#sym` rewrites preserve quoting/ranges/kinds; fenced refs
+  stay untouched; equal content dedupes; unequal same-basename files get stable hash suffixes; no
+  assets directory is created when nothing needs bundling; source/destination symlink escapes are
+  rejected; unmanifested collisions are neither overwritten nor adopted as managed.
+- Manifest/pruning: first write does not delete pre-existing files; only prior-manifest-owned
+  orphans are removed; hand-added and currently referenced files survive; stale/missing/corrupt
+  manifests fail safe without deletion; an emptied managed directory is removed but a non-empty
+  user-owned one remains; prune count appears in the destination-specific preview.
+- Template export inlines lone prompt files, refuses every generated-store inline reference, and
+  names the step/token.
 - Round trip: export a run containing a pasted image and a converted prompt file, load the exported
   workflow from a different directory, confirm every reference resolves.
-- Failure atomicity: a write failure mid-bundle leaves no partial assets directory.
-- `WorkspaceInitializer` tests assert the new `GITIGNORE_CONTENT` entries and the header comment.
+- Failure ordering: copy failure leaves the old workflow untouched; workflow-write failure never
+  replaces the old definition with one referencing missing assets; manifest/prune failure can leave
+  only harmless extras and reports a warning; staging paths are cleaned.
+- Save-dialog races: stale `SAVE_PATH_CHECKED` bundle previews cannot repaint a newer destination,
+  blockers disable Save, and an authoritative-plan fingerprint mismatch forces reconfirmation
+  without writing or pruning.
+- `WorkspaceInitializer`: fresh output has the header and self-ignore last; existing files preserve
+  content/order and receive only missing patterns; new ignore entries are asserted.
 
 ## 7. Docs
 
@@ -277,9 +340,7 @@ happen to be there" into "never works for anyone else".
   safe because Save As bundles" coupling belong wherever the serializer's ownership is documented;
   it is exactly the kind of cross-layer constraint the code cannot show on its own.
 
-## 8. Open questions
-
-Each carries a recommendation; none blocks starting phase 1 or the discovery pass in phase 2.
+## 8. Decisions
 
 ### 8.1 What base do rewritten references use? — the only structural one
 
@@ -288,10 +349,11 @@ Each carries a recommendation; none blocks starting phase 1 or the discovery pas
 bundled reference has to be rewritten workspace-relative:
 `@workflows/fix-tests.assets/shot.png`.
 
-That is correct anywhere inside the repo, and exports are already constrained to the workspace
-(`resolveSafeExportPath`, `WorkflowSerializer.ts:144-146`), so there is no cross-workspace case to
-handle. It breaks only if someone later moves the `.yaml` + `.assets/` pair to a different
-directory or repo — which §3.1's missing-assets warning catches loudly rather than silently.
+That is correct anywhere inside the primary workspace root, and workspace-backed exports are
+already constrained there (`resolveSafeExportPath`, `WorkflowSerializer.ts:144-146`). It breaks
+only if someone later moves the `.yaml` + `.assets/` pair to a different directory or repo — which
+§3.1's missing-assets warning catches loudly rather than silently. A no-workspace shim cannot bundle
+assets (§8.5).
 
 The alternative — teach reference resolution a workflow-file-relative base so `@./fix-tests.assets/
 shot.png` works and the pair is freely movable — is a genuine cross-layer change with a wrinkle
@@ -299,44 +361,48 @@ that is easy to miss: **at execution time the workflow being run is the working 
 `.runs/<key>/run-<ts>/`, not the file the user saved.** "Relative to the workflow file" would have
 to mean `descriptor.originalFile`, which is optional and can go stale. Not worth it for v1.
 
-**Recommendation: workspace-relative rewrite.** Revisit only if moving exported pairs turns out to
-be common.
+**Decision: workspace-relative rewrite.** Revisit only if moving exported pairs turns out to be
+common.
 
 ### 8.2 Prune semantics on re-save
 
 "Refresh and prune orphans" is unsafe if read as "delete anything in `*.assets/` that the bundler
 did not just write" — a user may have hand-added a file there.
 
-**Recommendation:** remove only files that are no longer referenced by the workflow, never on the
-first write, and always disclose it in the save dialog ("2 unused assets will be removed") so the
-deletion is something the user approved rather than discovered. Disclosure is what makes pruning
-safe; without it, don't prune.
+**Decision:** use the versioned bundle manifest from §3.4. Remove only previously managed files
+absent from the new plan, never unmanifested/user-owned or currently referenced files, and always
+disclose the count in the save dialog ("2 managed assets will be removed"). Without a valid prior
+manifest, do not prune.
 
 ### 8.3 Templates and attachment references
 
-`handleSaveWorkflowAsTemplate` shares `buildCleanWorkflow`, so it inherits whatever the bundler
-does. A template is instantiated in arbitrary repos and cannot carry a sibling directory.
+`handleSaveWorkflowAsTemplate` shares `buildCleanWorkflow` but does not automatically inherit a
+pass added to the normal save handler. A template is instantiated in arbitrary repos and cannot
+carry a sibling directory.
 
-**Recommendation:** templates **inline** prompt-file bodies (same as export) and **refuse** to save
-when an attachment reference is present, naming the offending step. Silently dropping the reference
-would produce a template that looks fine and expands to a dangling path.
+**Decision:** call the analyzer explicitly in template mode. Templates **inline** lone prompt-file
+bodies and **refuse** any generated-store inline reference, naming the offending step/token.
+Silently dropping it would produce a template that looks fine and expands to a dangling path.
 
-### 8.4 Existing asset-mode users after the ignore change
+### 8.4 Existing users after the ignore change
 
 `.gitignore` does not untrack tracked files, so a workflow already committed with its attachments
 keeps working. The gap is narrow: a user adds a _new_ screenshot to an already-committed workflow
 and the new file lands ignored. Saving the workflow moves it into `*.assets/` and closes the gap,
 so this only bites someone who edits a committed workflow and never re-saves it.
 
-**Recommendation:** a release-note line, not code.
+**Decision:** cover this with a release-note line, not code.
 
 ### 8.5 Verified, not open
 
 - **One save path.** `src/server/**` contains no `SAVE_WORKFLOW` handling — the hosted browser
   dashboard routes through the extension host's `WorkflowSerializer`, so the bundler has exactly
   one implementation site.
-- **Exports cannot leave the workspace**, so bundled assets are always inside it and always
-  addressable workspace-relative.
+- **Workspace-backed exports cannot leave the primary workspace root.** `resolveSafeExportPath()`
+  deliberately falls back to unrestricted absolute resolution only when VS Code exposes no
+  workspace folders (unit-test/CLI shims). Bundle analysis must require a workspace root whenever
+  it needs to copy/rewrite an asset; a dependency-free no-workspace export can keep the existing
+  fallback.
 
 ## 9. Related
 
