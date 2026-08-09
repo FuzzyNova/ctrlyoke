@@ -24,6 +24,19 @@ import {
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
 
+/**
+ * Mask reference trigger characters inside triple-backtick fenced blocks.
+ *
+ * Runtime context expansion treats fenced code as literal text. Export
+ * analysis must use the same mask so a code sample cannot accidentally become
+ * a bundled dependency or be rewritten on Save As.
+ */
+export function maskFencedCodeBlocks(text: string): string {
+  return text.replace(/```[\s\S]*?```/g, (block) =>
+    block.replace(/[@#~]/g, "\x00")
+  );
+}
+
 export interface FileReference {
   path: string;
   startLine?: number;

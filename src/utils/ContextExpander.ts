@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import {
   FileReference,
+  maskFencedCodeBlocks,
   parseAllFileReferences,
   parseAtReferences,
   parseGitChangeReferences,
@@ -102,9 +103,7 @@ export class ContextExpander {
    * parsers treat block contents as literal text.
    */
   private maskBacktickBlocks(text: string): string {
-    return text.replace(/```[\s\S]*?```/g, (block) =>
-      block.replace(/[@#~]/g, "\x00")
-    );
+    return maskFencedCodeBlocks(text);
   }
 
   /**

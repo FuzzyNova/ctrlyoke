@@ -52,7 +52,7 @@ export type PromptFileResolution =
       path: string;
       candidates: readonly string[];
       content: string;
-  };
+    };
 
 export class PromptFileReferenceError extends Error {
   constructor(
@@ -172,8 +172,16 @@ export class PromptFileResolver {
     sourceDefinitionPath?: string
   ): Promise<PromptFilePathResolution> {
     return this.findReadableFile(
-      this.getCandidates(filePath, sourceDefinitionPath)
+      this.getCandidatePaths(filePath, sourceDefinitionPath)
     );
+  }
+
+  /** Return the ordered candidates used by resolution without touching disk. */
+  getCandidatePaths(
+    filePath: string,
+    sourceDefinitionPath?: string
+  ): readonly string[] {
+    return this.getCandidates(filePath, sourceDefinitionPath);
   }
 
   /** Synchronous path-only counterpart for VS Code's synchronous link API. */
@@ -181,7 +189,7 @@ export class PromptFileResolver {
     filePath: string,
     sourceDefinitionPath?: string
   ): PromptFilePathResolution {
-    const candidates = this.getCandidates(filePath, sourceDefinitionPath);
+    const candidates = this.getCandidatePaths(filePath, sourceDefinitionPath);
 
     for (const candidate of candidates) {
       let stats: fs.Stats;
@@ -220,7 +228,9 @@ export class PromptFileResolver {
 
     const candidates: string[] = [];
     if (sourceDefinitionPath) {
-      candidates.push(path.resolve(path.dirname(sourceDefinitionPath), trimmedPath));
+      candidates.push(
+        path.resolve(path.dirname(sourceDefinitionPath), trimmedPath)
+      );
     }
 
     if (this.workspaceRoot) {

@@ -303,7 +303,7 @@ record of what has actually landed.
 | 2   | Shared `PromptFileResolver` (refactor only)       | PFE §4.4 / P1   | done   |
 | 3   | Just-in-time resolution contract                  | PFE §4.4, §3.1a | done   |
 | 4   | Serializer field completeness (`executionMode`)   | WP §3.4         | done   |
-| 5   | Bundle analyzer (pure analysis/rewrite plan)      | WP §3.2 / P3    | todo   |
+| 5   | Bundle analyzer (`src/utils/WorkflowBundleAnalyzer.ts`) | WP §3.2 / P3 | done   |
 | 6   | Bundle writer, manifest, Save-As/template wiring  | WP §3.4 / P3    | todo   |
 | 7   | Save-dialog bundle disclosure + plan fingerprint  | WP §3.3 / P3    | todo   |
 | 8   | Gitignore toggle → icon-only; prune label API     | PFE §2.2 / P2   | todo   |
