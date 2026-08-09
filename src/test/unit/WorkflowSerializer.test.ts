@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -25,6 +26,91 @@ function fakeWorkspaceState(): any {
       store.set(key, value);
     },
   };
+}
+
+interface SchemaNode {
+  $ref?: string;
+  properties?: Record<string, unknown>;
+  allOf?: SchemaNode[];
+}
+
+interface WorkflowSchema {
+  definitions: Record<string, SchemaNode>;
+  oneOf: SchemaNode[];
+}
+
+function directSchemaPropertyNames(node: SchemaNode): string[] {
+  const names = new Set<string>(Object.keys(node.properties ?? {}));
+  for (const child of node.allOf ?? []) {
+    for (const name of directSchemaPropertyNames(child)) {
+      names.add(name);
+    }
+  }
+  return [...names];
+}
+
+function schemaBackedFieldNames(): {
+  workflow: string[];
+  step: string[];
+} {
+  const schemaPath = path.resolve(
+    __dirname,
+    "../../../schemas/workflow-schema.json"
+  );
+  const schema = JSON.parse(
+    fsSync.readFileSync(schemaPath, "utf8")
+  ) as WorkflowSchema;
+  const executionFields = directSchemaPropertyNames(
+    schema.definitions.executionProperties
+  );
+  const promptFields = directSchemaPropertyNames(
+    schema.definitions.promptStep
+  );
+  const scriptFields = directSchemaPropertyNames(
+    schema.definitions.scriptStep
+  );
+  const multiStepWorkflowFields = directSchemaPropertyNames(
+    schema.oneOf[1].allOf?.find((node) => node.properties?.steps) ?? {}
+  );
+  const runtimeOnlyWorkflowFields = new Set([
+    "originalFile",
+    "workflowName",
+    "startedAt",
+    "_runtime",
+  ]);
+  const singleStepWorkflowFields = promptFields.filter(
+    (field) => field === "prompt"
+  );
+
+  return {
+    workflow: [
+      ...new Set([
+        ...singleStepWorkflowFields,
+        ...executionFields,
+        ...multiStepWorkflowFields,
+      ]),
+    ].filter((field) => !runtimeOnlyWorkflowFields.has(field)),
+    step: [
+      ...new Set([...executionFields, ...promptFields, ...scriptFields]),
+    ].filter((field) => field !== "_runtime"),
+  };
+}
+
+function schemaSentinel(context: string, field: string): string {
+  return `${context}-${field}`;
+}
+
+function buildSchemaBackedStep(
+  fields: string[],
+  context: string,
+  type: "prompt" | "script"
+): Record<string, unknown> {
+  const step: Record<string, unknown> = Object.fromEntries(
+    fields.map((field) => [field, schemaSentinel(context, field)])
+  );
+  step.type = type;
+  step._runtime = { startedAt: 123, terminalStatus: "completed" };
+  return step;
 }
 
 /** Promotes one complete run under an already-created lineage, writing the working
@@ -206,6 +292,130 @@ suite("WorkflowSerializer", () => {
             (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED
           )
         );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("round trips every schema-backed field through Save As and templates", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-serializer-schema-")
+      );
+      const workingFilePath = path.join(tempDir, "input.ctrlyoke.json");
+      const outputPath = path.join(tempDir, "saved.ctrlyoke.json");
+      const messages: any[] = [];
+      const address = {
+        workflowKey: "serializer-schema-test-1",
+        kind: "draft",
+      } as WorkflowViewAddress;
+      const schemaFields = schemaBackedFieldNames();
+      const promptStep = buildSchemaBackedStep(
+        schemaFields.step,
+        "prompt-step",
+        "prompt"
+      );
+      const scriptStep = buildSchemaBackedStep(
+        schemaFields.step,
+        "script-step",
+        "script"
+      );
+      const workingFile: Record<string, unknown> = Object.fromEntries(
+        schemaFields.workflow.map((field) => [
+          field,
+          schemaSentinel("workflow", field),
+        ])
+      );
+      workingFile.steps = [promptStep, scriptStep];
+      workingFile.finalStep = promptStep;
+      workingFile.vars = { workflowVariable: "value" };
+      workingFile.originalFile = "source.ctrlyoke.yaml";
+      workingFile.workflowName = "Runtime workflow name";
+      workingFile.startedAt = 456;
+      workingFile._runtime = {
+        currentIndex: 1,
+        executionState: "completed",
+      };
+
+      let templateWorkflow: Record<string, unknown> | undefined;
+      const templatePath = path.join(tempDir, "template.ctrlyoke.json");
+
+      try {
+        await fs.writeFile(workingFilePath, JSON.stringify(workingFile), "utf8");
+
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {
+            saveWorkflowAsTemplate: async (
+              _name: string,
+              _scope: string,
+              workflow: Record<string, unknown>
+            ) => {
+              templateWorkflow = workflow;
+              return templatePath;
+            },
+            getAvailableTemplates: async () => [
+              { id: "schema-template", path: templatePath },
+            ],
+          } as any,
+          () =>
+            ({
+              getQueueState: () => ({ workingFilePath }),
+              getViewAddress: () => address,
+            }) as any,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleSaveWorkflow(
+          "schema-save",
+          address,
+          outputPath,
+          "json"
+        );
+        await serializer.handleSaveWorkflowAsTemplate(
+          "schema-template",
+          address,
+          "Schema template",
+          "workspace",
+          "json"
+        );
+
+        const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as Record<
+          string,
+          any
+        >;
+        assert.ok(templateWorkflow);
+
+        for (const field of schemaFields.workflow) {
+          if (field === "steps" || field === "finalStep") {
+            continue;
+          }
+          assert.deepStrictEqual(saved[field], workingFile[field], field);
+          assert.deepStrictEqual(templateWorkflow?.[field], workingFile[field], field);
+        }
+        for (const [index, sourceStep] of [promptStep, scriptStep].entries()) {
+          for (const field of schemaFields.step) {
+            assert.deepStrictEqual(
+              saved.steps[index][field],
+              sourceStep[field],
+              `saved step ${index}.${field}`
+            );
+            assert.deepStrictEqual(
+              (templateWorkflow?.steps as any[])[index][field],
+              sourceStep[field],
+              `template step ${index}.${field}`
+            );
+          }
+        }
+
+        assert.strictEqual(saved.originalFile, undefined);
+        assert.strictEqual(saved.workflowName, undefined);
+        assert.strictEqual(saved.startedAt, undefined);
+        assert.strictEqual(saved._runtime, undefined);
+        assert.strictEqual(saved.steps[0]._runtime, undefined);
+        assert.strictEqual(saved.steps[1]._runtime, undefined);
+        assert.strictEqual(saved.finalStep._runtime, undefined);
+        assert.strictEqual((templateWorkflow as any)?._runtime, undefined);
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
