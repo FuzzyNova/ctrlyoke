@@ -15,6 +15,10 @@ import type { UserFeedback } from "../../core/UserFeedbackSink";
 import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
+import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
+import { parseAllFileReferences } from "../../utils/FileReferenceParser";
+import { resolveReferencePath } from "../../platform/WorkspaceRootResolver";
 
 suite("PromptFileLoader Tests", () => {
   const tempDirs: string[] = [];
@@ -669,6 +673,111 @@ suite("PromptFileLoader Tests", () => {
       await loader.loadPromptFile(workflowPath, workspaceRoot);
 
       assert.deepStrictEqual(statusMessages, []);
+    });
+
+    test("round trips a bundled image after relocation within and across workspaces", async () => {
+      const firstWorkspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-relocation-round-trip-one-")
+      );
+      const secondWorkspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-relocation-round-trip-two-")
+      );
+      tempDirs.push(firstWorkspace, secondWorkspace);
+
+      const sourcePath = path.join(
+        firstWorkspace,
+        ".ctrlyoke",
+        "attachments",
+        "pasted image.png"
+      );
+      await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+      await fs.writeFile(sourcePath, "pasted image bytes", "utf8");
+
+      const initialWorkflowPath = path.join(
+        firstWorkspace,
+        "exports",
+        "pasted-workflow.ctrlyoke.json"
+      );
+      const sourcePrompt =
+        'Review @".ctrlyoke/attachments/pasted image.png" #selection:".ctrlyoke/attachments/pasted image.png":1-2 #sym.class:".ctrlyoke/attachments/pasted image.png":Image:1-2';
+      const analysis = await analyzeWorkflowBundle(
+        { steps: [{ prompt: sourcePrompt }] },
+        {
+          workspaceRoot: firstWorkspace,
+          destinationPath: initialWorkflowPath,
+          sourceDefinitionPath: path.join(firstWorkspace, "authored", "source.yaml"),
+        }
+      );
+      await writeWorkflowBundle({
+        workflowPath: initialWorkflowPath,
+        serializedWorkflow: JSON.stringify(analysis.workflow, null, 2),
+        plan: analysis.plan,
+      });
+
+      const relocatedWorkflowPath = path.join(
+        firstWorkspace,
+        "relocated",
+        "pasted-workflow.ctrlyoke.json"
+      );
+      await fs.mkdir(path.dirname(relocatedWorkflowPath), { recursive: true });
+      await fs.rename(initialWorkflowPath, relocatedWorkflowPath);
+      await fs.rename(
+        path.join(firstWorkspace, "exports", "pasted-workflow.assets"),
+        path.join(firstWorkspace, "relocated", "pasted-workflow.assets")
+      );
+
+      const loadAndAssertRelocated = async (
+        workflowPath: string,
+        workspaceRoot: string
+      ): Promise<void> => {
+        const statusMessages: string[] = [];
+        const loader = new PromptFileLoader(
+          new PromptFileParser(),
+          new PromptQueue(),
+          () =>
+            ({
+              updateFileSelected: async () => {},
+              updateStatusMessage: (
+                _stepIndex: number,
+                message: string
+              ) => statusMessages.push(message),
+            }) as any
+        );
+
+        await loader.loadPromptFile(workflowPath, workspaceRoot);
+        assert.deepStrictEqual(statusMessages, []);
+
+        const workflow = JSON.parse(await fs.readFile(workflowPath, "utf8")) as {
+          steps: Array<{ prompt: string }>;
+        };
+        for (const reference of parseAllFileReferences(
+          workflow.steps[0].prompt
+        )) {
+          const resolved = resolveReferencePath(reference.path, {
+            primaryRoot: workspaceRoot,
+            namedRoots: [],
+            sourceDefinitionDir: path.dirname(workflowPath),
+          });
+          await fs.access(resolved.absolutePath);
+        }
+      };
+
+      await loadAndAssertRelocated(relocatedWorkflowPath, firstWorkspace);
+
+      const secondWorkflowPath = path.join(
+        secondWorkspace,
+        "imported",
+        "pasted-workflow.ctrlyoke.json"
+      );
+      await fs.mkdir(path.dirname(secondWorkflowPath), { recursive: true });
+      await fs.copyFile(relocatedWorkflowPath, secondWorkflowPath);
+      await fs.cp(
+        path.join(firstWorkspace, "relocated", "pasted-workflow.assets"),
+        path.join(secondWorkspace, "imported", "pasted-workflow.assets"),
+        { recursive: true }
+      );
+
+      await loadAndAssertRelocated(secondWorkflowPath, secondWorkspace);
     });
   });
 });

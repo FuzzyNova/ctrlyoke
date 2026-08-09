@@ -442,7 +442,8 @@ suite("WorkflowSerializer", () => {
       );
       const loadedPath = path.join(
         workspaceRoot,
-        "loaded-from-another-directory.ctrlyoke.json"
+        "loaded",
+        "portable.ctrlyoke.json"
       );
       const address = {
         workflowKey: "serializer-bundle-roundtrip-1",
@@ -571,7 +572,13 @@ suite("WorkflowSerializer", () => {
           "panel",
           refreshed.bundlePreview.planFingerprint
         );
+        await fs.mkdir(path.dirname(loadedPath), { recursive: true });
         await fs.copyFile(outputPath, loadedPath);
+        await fs.cp(
+          path.join(workspaceRoot, "exports", "portable.assets"),
+          path.join(workspaceRoot, "loaded", "portable.assets"),
+          { recursive: true }
+        );
 
         const loaded = JSON.parse(await fs.readFile(loadedPath, "utf8")) as {
           steps: Array<{ prompt: string }>;
@@ -580,7 +587,7 @@ suite("WorkflowSerializer", () => {
         const references = parseAllFileReferences(loaded.steps[1].prompt);
         const resolver = new PromptFileResolver({ workspaceRoot });
         for (const reference of references) {
-          const resolution = await resolver.resolvePath(reference.path);
+          const resolution = await resolver.resolvePath(reference.path, loadedPath);
           assert.strictEqual(
             resolution.status,
             "resolved",
@@ -588,7 +595,7 @@ suite("WorkflowSerializer", () => {
           );
         }
         assert.ok(
-          loaded.steps[1].prompt.includes("exports/portable.assets/pasted.png")
+          loaded.steps[1].prompt.includes("./portable.assets/pasted.png")
         );
         assert.ok(
           await fs.stat(

@@ -245,4 +245,50 @@ suite("WorkflowBundleWriter", () => {
       await cleanup(workspace);
     }
   });
+
+  test("saves idempotently when an asset source is its destination", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-writer-idempotent-");
+    try {
+      const assets = path.join(workspace, "fix-tests.assets");
+      const source = path.join(workspace, "source.png");
+      const workflow = path.join(workspace, "fix-tests.ctrlyoke.yaml");
+      const asset = path.join(assets, "source.png");
+      const serializedWorkflow =
+        'prompt: @"./fix-tests.assets/source.png"\n';
+      await fs.writeFile(source, "image", "utf8");
+
+      await writeWorkflowBundle({
+        workflowPath: workflow,
+        serializedWorkflow,
+        plan: plan(assets, source, asset),
+      });
+      const first = await fs.readFile(workflow, "utf8");
+
+      const samePathPlan = plan(assets, asset, asset);
+      samePathPlan.pruneCandidates = [];
+      await writeWorkflowBundle({
+        workflowPath: workflow,
+        serializedWorkflow,
+        plan: samePathPlan,
+      });
+      const second = await fs.readFile(workflow, "utf8");
+      assert.strictEqual(second, first);
+      assert.strictEqual(await fs.readFile(asset, "utf8"), "image");
+
+      await writeWorkflowBundle({
+        workflowPath: workflow,
+        serializedWorkflow,
+        plan: plan(assets, asset, asset),
+      });
+      assert.deepStrictEqual(await fs.readFile(workflow), Buffer.from(first));
+      assert.deepStrictEqual(
+        JSON.parse(
+          await fs.readFile(path.join(assets, BUNDLE_MANIFEST_FILE_NAME), "utf8")
+        ),
+        { version: BUNDLE_MANIFEST_VERSION, files: ["source.png"] }
+      );
+    } finally {
+      await cleanup(workspace);
+    }
+  });
 });

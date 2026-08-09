@@ -10,6 +10,11 @@ import {
   encodePriorContextTokenRef,
   decodePriorContextTokenRef,
 } from "../../utils/FileReferenceParser";
+import {
+  buildFileReference,
+  buildSelectionReference,
+  buildSymbolReference,
+} from "../../completions/ContextReferenceBuilder";
 
 suite("FileReferenceParser", () => {
   // ──────────────────────────────────────────────────────────────────────────
@@ -487,6 +492,38 @@ suite("FileReferenceParser", () => {
         "@src/a.ts #selection:src/b.ts:1-5 #sym:src/c.ts:myFunc:10-20";
       const refs = parseAllFileReferences(prompt);
       assert.strictEqual(refs.length, 3);
+    });
+
+    test("preserves ./ and ../ paths through parse and rewrite round trips", () => {
+      const prompts = [
+        "@./bare.png",
+        "@../bare.png",
+        '@"./space one.png"',
+        '@"../space two.png"',
+        "#selection:./bare.ts:1-2",
+        '#selection:"../space two.ts":3-4',
+        "#sym.class:./bare.ts:Thing:5-6",
+        '#sym.method:"../space two.ts":"My Symbol":7-8',
+      ];
+
+      for (const prompt of prompts) {
+        const [ref] = parseAllFileReferences(prompt);
+        assert.ok(ref);
+        const rewritten = ref.symbolName
+          ? buildSymbolReference(
+              ref.path,
+              ref.symbolName,
+              ref.startLine!,
+              ref.endLine!,
+              ref.symbolKind
+            )
+          : ref.startLine !== undefined && ref.endLine !== undefined
+            ? buildSelectionReference(ref.path, ref.startLine, ref.endLine)
+            : buildFileReference(ref.path);
+
+        assert.strictEqual(rewritten, prompt);
+        assert.deepStrictEqual(parseAllFileReferences(rewritten)[0], ref);
+      }
     });
   });
 

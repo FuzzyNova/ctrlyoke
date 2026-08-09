@@ -704,10 +704,9 @@ async function finalizeCopyPlan(
     usedNames.add(name);
     const destination = path.join(assetsDirectory, name);
     copy.destinationPath = destination;
-    copy.relativePath = toWorkspaceRelativePath(
+    copy.relativePath = toWorkflowRelativePath(
       destination,
-      workspaceRoot,
-      options
+      destinationPath
     );
   }
 
@@ -961,23 +960,13 @@ function deriveAssetsDirectory(destinationPath: string): string {
   return path.join(path.dirname(destinationPath), `${stem}.assets`);
 }
 
-function toWorkspaceRelativePath(
-  filePath: string,
-  workspaceRoot: string,
-  options: WorkflowBundleAnalyzerOptions
+function toWorkflowRelativePath(
+  assetPath: string,
+  destinationPath: string
 ): string {
-  const namedRoots = options.namedRoots ?? [];
-  const namedRoot =
-    namedRoots.length > 1
-      ? namedRoots.find((root) =>
-          isPathWithinDirectory(filePath, path.resolve(root.fsPath))
-        )
-      : undefined;
-  if (namedRoot) {
-    const relative = path.relative(path.resolve(namedRoot.fsPath), filePath);
-    return `${namedRoot.name}/${relative}`.replace(/\\/g, "/");
-  }
-  return path.relative(workspaceRoot, filePath).replace(/\\/g, "/");
+  return `./${path
+    .relative(path.dirname(destinationPath), assetPath)
+    .replace(/\\/g, "/")}`;
 }
 
 function isGeneratedStorePath(

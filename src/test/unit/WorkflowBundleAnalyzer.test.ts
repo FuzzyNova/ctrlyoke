@@ -89,19 +89,19 @@ suite("WorkflowBundleAnalyzer", () => {
       });
 
       const rewritten = (result.workflow.steps as any[])[0].prompt as string;
-      assert.match(rewritten, /@"workflows\/fix-tests\.assets\/shot one\.txt"/);
+      assert.match(rewritten, /@"\.\/fix-tests\.assets\/shot one\.txt"/);
       assert.match(
         rewritten,
-        /#selection:"workflows\/fix-tests\.assets\/shot one\.txt":2-4/
+        /#selection:"\.\/fix-tests\.assets\/shot one\.txt":2-4/
       );
       assert.match(
         rewritten,
-        /#sym\.class:"workflows\/fix-tests\.assets\/shot one\.txt":"My Symbol":2-4/
+        /#sym\.class:"\.\/fix-tests\.assets\/shot one\.txt":"My Symbol":2-4/
       );
       assert.strictEqual(result.plan.copies.length, 1);
       assert.strictEqual(
         result.plan.copies[0].relativePath,
-        "workflows/fix-tests.assets/shot one.txt"
+        "./fix-tests.assets/shot one.txt"
       );
       assert.strictEqual(result.plan.blockers.length, 0);
     } finally {
@@ -132,11 +132,11 @@ suite("WorkflowBundleAnalyzer", () => {
       assert.strictEqual(result.plan.copies.length, 2);
       assert.match(
         (result.workflow.steps as any[])[0].prompt,
-        /@workflows\/fix-tests\.assets\/shared\.md/
+        /@\.\/fix-tests\.assets\/shared\.md/
       );
       assert.match(
         (result.workflow.steps as any[])[0].prompt,
-        /@workflows\/fix-tests\.assets\/shared\.txt/
+        /@\.\/fix-tests\.assets\/shared\.txt/
       );
       assert.strictEqual(
         (result.workflow.steps as any[])[0].prompt.includes("prompt body"),
@@ -289,12 +289,13 @@ suite("WorkflowBundleAnalyzer", () => {
         .slice(0, 8);
       assert.ok(
         result.plan.copies.some((copy) =>
-          copy.relativePath.endsWith("same-" + hash + ".txt")
+          copy.relativePath.endsWith("same-" + hash + ".txt") &&
+          copy.relativePath.startsWith("./fix-tests.assets/")
         )
       );
       assert.strictEqual(
         (result.workflow.prompt as string).match(
-          /workflows\/fix-tests\.assets\/same\.txt/g
+          /\.\/fix-tests\.assets\/same\.txt/g
         )?.length,
         2
       );
@@ -327,14 +328,65 @@ suite("WorkflowBundleAnalyzer", () => {
 
       assert.notStrictEqual(
         result.plan.copies[0].relativePath,
-        "workflows/fix-tests.assets/owned.txt"
+        "./fix-tests.assets/owned.txt"
       );
       assert.match(
         result.plan.copies[0].relativePath,
-        /owned-[0-9a-f]{8}\.txt$/
+        /\.\/fix-tests\.assets\/owned-[0-9a-f]{8}\.txt$/
       );
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("uses workflow-relative asset refs in a multi-root export", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-multi-root-");
+    const secondaryRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-bundle-secondary-")
+    );
+    try {
+      const source = path.join(
+        secondaryRoot,
+        ".ctrlyoke",
+        "attachments",
+        "image.png"
+      );
+      await fs.mkdir(path.dirname(source), { recursive: true });
+      await fs.writeFile(source, "image", "utf8");
+      const destinationPath = path.join(
+        secondaryRoot,
+        "workflows",
+        "multi-root.ctrlyoke.yaml"
+      );
+      const result = await analyzeWorkflowBundle(
+        { prompt: "Attach @secondary/.ctrlyoke/attachments/image.png" },
+        {
+          workspaceRoot: workspace,
+          trustedRoots: [workspace, secondaryRoot],
+          namedRoots: [
+            { name: "primary", fsPath: workspace },
+            { name: "secondary", fsPath: secondaryRoot },
+          ],
+          destinationPath,
+        }
+      );
+
+      assert.strictEqual(result.plan.copies.length, 1);
+      assert.strictEqual(
+        result.plan.copies[0].relativePath,
+        "./multi-root.assets/image.png"
+      );
+      assert.strictEqual(
+        (result.workflow.prompt as string),
+        "Attach @./multi-root.assets/image.png"
+      );
+      assert.strictEqual(
+        (result.workflow.prompt as string).includes("secondary/"),
+        false
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+      await fs.rm(secondaryRoot, { recursive: true, force: true });
     }
   });
 
