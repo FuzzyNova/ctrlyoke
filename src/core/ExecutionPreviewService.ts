@@ -73,6 +73,8 @@ import {
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 import type { PreparedMutation } from "./harness/shared/interfaces/PreparedMutation";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import { PromptFileResolver } from "./PromptFileResolver";
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
@@ -89,6 +91,7 @@ export interface ExecutionPreviewServiceOptions {
   ) => ExecutionPreviewHarness | Promise<ExecutionPreviewHarness>;
   readonly workspaceRoot?: string;
   readonly workspaceRoots?: readonly string[];
+  readonly namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
   readonly extensionPath: string;
   readonly hostCanProvidePty: boolean;
   readonly cwd?: string;
@@ -107,6 +110,8 @@ export interface ExecutionPreviewRequest {
   readonly scope?: ExecutionPreviewScope;
   readonly workflowName?: string;
   readonly sourcePath?: string;
+  /** Authored source definition used as the semantic base for prompt-file refs. */
+  readonly sourceDefinitionPath?: string;
   readonly workingFilePath?: string;
   readonly definitionRevision?: number | string;
   /** Higher-precedence variables, such as CLI --var values. */
@@ -129,7 +134,14 @@ const DEFAULT_SCOPE: ExecutionPreviewScope = { kind: PREVIEW_SCOPES.WORKFLOW };
  * not resolve availability, open sessions, run conditions, or apply mutations.
  */
 export class ExecutionPreviewService {
-  constructor(private readonly options: ExecutionPreviewServiceOptions) {}
+  private readonly promptFileResolver: PromptFileResolver;
+
+  constructor(private readonly options: ExecutionPreviewServiceOptions) {
+    this.promptFileResolver = new PromptFileResolver({
+      workspaceRoot: options.workspaceRoot,
+      namedRoots: options.namedWorkspaceRoots ?? [],
+    });
+  }
 
   async build(
     request: ExecutionPreviewRequest
@@ -151,10 +163,17 @@ export class ExecutionPreviewService {
       ...(request.variables ?? {}),
     };
     const workflow = request.workflow;
-    const preparedSteps =
-      workflow.steps?.map((step) => this.substituteStep(step, variables)) ?? [];
+    const preparedSteps = await Promise.all(
+      workflow.steps?.map((step) =>
+        this.substituteStep(step, variables, request.sourceDefinitionPath)
+      ) ?? []
+    );
     const preparedFinalStep = workflow.finalStep
-      ? this.substituteStep(workflow.finalStep, variables)
+      ? await this.substituteStep(
+          workflow.finalStep,
+          variables,
+          request.sourceDefinitionPath
+        )
       : undefined;
     const allPreparedSteps = [
       ...preparedSteps,
@@ -313,6 +332,10 @@ export class ExecutionPreviewService {
       };
     }
 
+    if (!step.prompt.trim()) {
+      throw new Error("Prompt is empty after resolving its prompt file");
+    }
+
     const prompt = { ...step };
     const workflowContext = {
       promptIndex: target.stepIndex,
@@ -417,18 +440,19 @@ export class ExecutionPreviewService {
 
   private substituteStep(
     step: WorkflowStep,
-    variables: Record<string, string>
-  ): WorkflowStep {
+    variables: Record<string, string>,
+    sourceDefinitionPath?: string
+  ): Promise<WorkflowStep> {
     if (isScriptStep(step)) {
-      return {
+      return Promise.resolve({
         ...step,
         script: VarSubstitutor.substitute(step.script, variables),
-      };
+      });
     }
-    return {
-      ...step,
-      prompt: VarSubstitutor.applyToPromptText(step.prompt, variables),
-    };
+    const substituted = VarSubstitutor.applyToPromptText(step.prompt, variables);
+    return this.promptFileResolver
+      .resolvePromptValue(substituted, sourceDefinitionPath)
+      .then((prompt) => ({ ...step, prompt }));
   }
 
   private scriptAsPrompt(step: ScriptStep): PromptStep {

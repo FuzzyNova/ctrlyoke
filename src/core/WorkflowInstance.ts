@@ -142,6 +142,8 @@ export class WorkflowInstance {
   workflowName: string = "";
   /** Path to the source prompt/workflow file (or generated name for ephemerals) */
   filePath: string = "";
+  /** Authored source used as the semantic base for standalone prompt-file refs. */
+  private sourceDefinitionPath?: string;
   /** Creation timestamp (ms since epoch) */
   readonly createdAt: number;
   /** Timestamp when execution last started (ms since epoch), 0 if never started */
@@ -860,6 +862,7 @@ export class WorkflowInstance {
    */
   setCurrentPromptFile(filePath: string, promptFile: PromptFile): void {
     this.currentPromptFile = { filePath, promptFile };
+    this.sourceDefinitionPath = undefined;
   }
 
   /**
@@ -921,6 +924,7 @@ export class WorkflowInstance {
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
     this.filePath = filePath;
+    this.sourceDefinitionPath = filePath;
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
@@ -956,6 +960,7 @@ export class WorkflowInstance {
   ): Promise<void> {
     this.promptQueue.clearQueue();
     this.filePath = displayName;
+    this.sourceDefinitionPath = undefined;
 
     const workingFilePath = await this.promptFileLoader.loadFromMemory(
       promptFile,
@@ -981,6 +986,7 @@ export class WorkflowInstance {
   ): void {
     this.promptQueue.clearQueue();
     this.filePath = "";
+    this.sourceDefinitionPath = undefined;
     const promptFile: PromptFile = {
       steps: [{ prompt: promptText }],
       ...workflowOverrides,
@@ -1001,6 +1007,7 @@ export class WorkflowInstance {
     if (workingFile?.steps) {
       const filePath = workingFile.originalFile || workingFilePath;
       this.filePath = filePath;
+      this.sourceDefinitionPath = workingFile.originalFile;
       this.currentPromptFile = {
         filePath,
         promptFile: { steps: workingFile.steps },
@@ -1046,6 +1053,7 @@ export class WorkflowInstance {
     if (workingFile?.steps) {
       const filePath = workingFile.originalFile || workingFilePath;
       this.filePath = filePath;
+      this.sourceDefinitionPath = workingFile.originalFile;
       this.currentPromptFile = {
         filePath,
         promptFile: { steps: workingFile.steps },
@@ -2990,6 +2998,7 @@ export class WorkflowInstance {
       hostCanProvidePty: this.hostCanProvidePty,
       namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),
       currentPromptFilePath: this.currentPromptFile?.filePath,
+      sourceDefinitionPath: this.sourceDefinitionPath,
       // Use a getter so dashboardProvider is evaluated lazily each time
       // WorkflowExecutor accesses it.
       get dashboardProvider() {
@@ -3848,6 +3857,7 @@ export class WorkflowInstance {
   ): Promise<string | undefined> {
     // Set instance-level name so getSummary() returns it immediately
     this.workflowName = displayName;
+    this.sourceDefinitionPath = originalFilePath;
 
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] initializeNewWorkflow: displayName="${displayName}" ` +

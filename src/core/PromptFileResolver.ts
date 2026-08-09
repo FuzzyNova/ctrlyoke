@@ -52,7 +52,20 @@ export type PromptFileResolution =
       path: string;
       candidates: readonly string[];
       content: string;
-    };
+  };
+
+export class PromptFileReferenceError extends Error {
+  constructor(
+    message: string,
+    readonly resolution: Extract<
+      PromptFileResolution,
+      { status: "missing" | "unreadable" }
+    >
+  ) {
+    super(message);
+    this.name = "PromptFileReferenceError";
+  }
+}
 
 /**
  * Resolves standalone prompt-file references for Node-side consumers.
@@ -105,6 +118,52 @@ export class PromptFileResolver {
         error,
       };
     }
+  }
+
+  /**
+   * Resolve a standalone prompt-file reference to its raw content.
+   *
+   * Literal prompt text passes through unchanged. A path that looks like an
+   * intentional prompt-file reference must resolve successfully; missing and
+   * unreadable references are never returned as literal prompt text.
+   */
+  async resolvePromptValue(
+    promptValue: string,
+    sourceDefinitionPath?: string
+  ): Promise<string> {
+    if (!this.looksLikePromptFilePath(promptValue)) {
+      return promptValue;
+    }
+
+    const reference = promptValue.trim();
+    const resolution = await this.resolve(reference, sourceDefinitionPath);
+    if (resolution.status === "resolved" || resolution.status === "empty") {
+      return resolution.content;
+    }
+
+    const detail =
+      resolution.status === "missing"
+        ? "could not be found"
+        : `could not be read: ${getErrorMessage(resolution.error)}`;
+    throw new PromptFileReferenceError(
+      `Prompt file reference "${reference}" ${detail}`,
+      resolution
+    );
+  }
+
+  /** Validate a statically resolvable reference without changing its value. */
+  async validatePromptReference(
+    promptValue: string,
+    sourceDefinitionPath?: string
+  ): Promise<void> {
+    if (
+      !this.looksLikePromptFilePath(promptValue) ||
+      promptValue.includes("{{")
+    ) {
+      return;
+    }
+
+    await this.resolvePromptValue(promptValue, sourceDefinitionPath);
   }
 
   /** Resolve only the path, including regular-file and readability checks. */
@@ -212,6 +271,10 @@ export class PromptFileResolver {
 
     return { status: "missing", candidates };
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isMissingPathError(error: unknown): boolean {

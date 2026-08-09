@@ -327,8 +327,11 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      // The prompt should be resolved from external-prompt.prompt.md
-      assert.ok(result.steps[0].prompt.includes("external prompt"));
+      // The authored lone path is retained for just-in-time resolution.
+      assert.strictEqual(
+        (result.steps[0] as PromptStep).prompt,
+        "./external-prompt.prompt.md"
+      );
     });
 
     test("should preserve prompt text as-is when not a file path", async () => {
@@ -348,16 +351,54 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      // The external-prompt.prompt.md is in the same directory as with-file-reference.json
-      // So it should be resolved relative to the prompt file directory
-      assert.ok(result.steps[0].prompt.includes("external prompt"));
+      // The external-prompt.prompt.md is validated relative to the definition,
+      // but the authored path remains the persisted prompt value.
+      assert.strictEqual(
+        (result.steps[0] as PromptStep).prompt,
+        "./external-prompt.prompt.md"
+      );
     });
 
-    test("should return literal text when file not found", async () => {
-      // We can't easily test this without modifying fixtures
-      // But the behavior is covered by the implementation - if file not found,
-      // it returns the original prompt value as literal text
-      // This is implicitly tested by single.prompt.json preserving its prompt text
+    test("should reject an intentional missing prompt-file reference", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-missing-reference-")
+      );
+      const filePath = path.join(tempDir, "workflow.ctrlyoke.json");
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({ prompt: "./missing.prompt.md" }),
+          "utf8"
+        );
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("retains a variable-backed prompt-file reference for runtime resolution", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-variable-reference-")
+      );
+      const filePath = path.join(tempDir, "workflow.ctrlyoke.json");
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            vars: { promptName: "current" },
+            prompt: "./{{promptName}}.prompt.md",
+          }),
+          "utf8"
+        );
+        const result = await parser.parsePromptFile(filePath);
+        assertValidResult(result);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).prompt,
+          "./{{promptName}}.prompt.md"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
   });
 

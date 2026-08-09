@@ -720,6 +720,7 @@ async function dryRunCommand(
       preview = await service.build({
         workflow: previewWorkflow,
         sourcePath: resolvedFile,
+        sourceDefinitionPath: resolvedFile,
         variables: config.vars,
       });
     } finally {

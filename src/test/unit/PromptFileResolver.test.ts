@@ -122,6 +122,26 @@ suite("PromptFileResolver", () => {
     assert.strictEqual(content.content, "content");
   });
 
+  test("returns raw content for prompt values and rejects missing references", async () => {
+    const promptFile = path.join(workspaceRoot, "raw.prompt.md");
+    await fs.writeFile(promptFile, "  raw content  ", "utf8");
+    const resolver = new PromptFileResolver({ workspaceRoot });
+
+    assert.strictEqual(
+      await resolver.resolvePromptValue("./raw.prompt.md"),
+      "  raw content  "
+    );
+    await assert.rejects(
+      resolver.resolvePromptValue("./missing.prompt.md"),
+      /could not be found/
+    );
+  });
+
+  test("defers variable-backed references during static validation", async () => {
+    const resolver = new PromptFileResolver({ workspaceRoot });
+    await resolver.validatePromptReference("./{{name}}.prompt.md");
+  });
+
   test("path-only callers share the same candidate result", async () => {
     const promptFile = path.join(workspaceRoot, ".ctrlyoke", "same.prompt.md");
     await fs.mkdir(path.dirname(promptFile), { recursive: true });

@@ -16,9 +16,6 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
-import {
-  PROMPT_FILE_EXTENSIONS,
-} from "../utils/promptPathUtils";
 import { STEP_TYPES } from "../types/DashboardConstants";
 import { PromptFileResolver } from "./PromptFileResolver";
 
@@ -191,15 +188,8 @@ export class PromptFileParser {
     }
   }
 
-  /**
-   * Resolve a prompt value that might be a file path
-   * Returns the file content if path resolves to a file, otherwise returns original value
-   *
-   * @param promptValue The prompt string (might be literal text or file path)
-   * @param promptFilePath Path to the prompt file containing this value (for relative resolution)
-   * @returns The resolved prompt content
-   */
-  private async resolvePromptContent(
+  /** Validate file references early while retaining the authored prompt value. */
+  private async validatePromptReference(
     promptValue: string,
     promptFilePath: string
   ): Promise<string> {
@@ -208,47 +198,8 @@ export class PromptFileParser {
       namedRoots: this.platform?.getNamedWorkspaceRoots() ?? [],
     });
 
-    // Quick check - if it doesn't look like a file path, return as-is
-    if (!resolver.looksLikePromptFilePath(promptValue)) {
-      return promptValue;
-    }
-
-    const trimmedPath = promptValue.trim();
-
-    const resolution = await resolver.resolve(trimmedPath, promptFilePath);
-    if (resolution.status === "missing") {
-      // File not found - warn user if it looks like an intentional prompt file reference
-      const looksIntentional = PROMPT_FILE_EXTENSIONS.some((ext) =>
-        trimmedPath.toLowerCase().endsWith(ext)
-      );
-
-      if (looksIntentional) {
-        Log.warn(
-          `Prompt file reference not found, using as literal text: "${trimmedPath}"`
-        );
-        notifyUserFeedback(
-          this.userFeedbackSink,
-          "warning",
-          `ctrlyoke: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
-        );
-      }
-
-      return promptValue;
-    }
-
-    if (resolution.status === "empty") {
-      Log.warn(`Referenced prompt file is empty: ${trimmedPath}`);
-      return promptValue; // Return original on read error
-    }
-    if (resolution.status === "unreadable") {
-      Log.error(`Failed to read prompt file ${resolution.path}:`, resolution.error);
-      return promptValue;
-    }
-
-    Log.debug(
-      `Resolved prompt from file: ${trimmedPath} -> ${resolution.path}`
-    );
-    return resolution.content.trim();
+    await resolver.validatePromptReference(promptValue, promptFilePath);
+    return promptValue;
   }
 
   /**
@@ -275,7 +226,7 @@ export class PromptFileParser {
 
   /**
    * Build a PromptStep with only explicitly set properties
-   * @param promptText The resolved prompt text
+   * @param promptText The authored prompt text, retained verbatim
    * @param source The source object (parsed JSON/YAML)
    * @returns PromptStep with only defined properties
    */
@@ -313,14 +264,14 @@ export class PromptFileParser {
 
     // Handle single prompt format
     if (parsed.prompt && typeof parsed.prompt === "string") {
-      const resolvedPrompt = await this.resolvePromptContent(
+      const promptValue = await this.validatePromptReference(
         parsed.prompt,
         promptFilePath
       );
 
       // Build PromptFile with workflow-level properties and single prompt
       const promptFile: PromptFile = {
-        steps: [this.buildPromptStep(resolvedPrompt, parsed)],
+        steps: [this.buildPromptStep(promptValue, parsed)],
       };
 
       // Copy workflow-level properties (if present)
@@ -336,11 +287,11 @@ export class PromptFileParser {
           if (item.type === STEP_TYPES.SCRIPT) {
             return this.buildScriptStep(item);
           }
-          const resolvedPrompt = await this.resolvePromptContent(
+          const promptValue = await this.validatePromptReference(
             item.prompt,
             promptFilePath
           );
-          return this.buildPromptStep(resolvedPrompt, item);
+          return this.buildPromptStep(promptValue, item);
         })
       );
 
@@ -354,12 +305,12 @@ export class PromptFileParser {
         if (rawFinalStep.type === STEP_TYPES.SCRIPT) {
           promptFile.finalStep = this.buildScriptStep(rawFinalStep);
         } else if (typeof rawFinalStep.prompt === "string") {
-          const resolvedFinalStep = await this.resolvePromptContent(
+          const promptValue = await this.validatePromptReference(
             rawFinalStep.prompt,
             promptFilePath
           );
           promptFile.finalStep = this.buildPromptStep(
-            resolvedFinalStep,
+            promptValue,
             rawFinalStep
           );
         }

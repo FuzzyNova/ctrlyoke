@@ -13,7 +13,11 @@ import {
   type EvaluationResult,
 } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
-import { PromptFile, type ScriptProperties } from "../../types/CtrlYokeTypes";
+import {
+  PromptFile,
+  PromptStep,
+  type ScriptProperties,
+} from "../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
   EXECUTION_STATES,
@@ -103,6 +107,134 @@ async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
 }
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("resolves prompt-file references at execution time without replacing queue state", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-executor-prompt-file-")
+    );
+    try {
+      const sourceDefinitionPath = path.join(root, "workflow.ctrlyoke.json");
+      const promptFilePath = path.join(root, "current.prompt.md");
+      await fs.writeFile(promptFilePath, "first contents", "utf8");
+
+      const integration = new MockHarnessIntegration(undefined, false);
+      const queue = new PromptQueue();
+      queue.loadPrompts({ steps: [{ prompt: "inline" }] });
+      await queue.updatePrompt(0, { prompt: "./current.prompt.md" });
+
+      await makeExecutor(queue).execute(
+        integration,
+        {
+          ...makeContext(integration),
+          workspaceFolderPath: root,
+          sourceDefinitionPath,
+        }
+      );
+
+      assert.deepStrictEqual(integration.sentPrompts, ["first contents"]);
+      assert.strictEqual(
+        (queue.getState().steps[0] as PromptStep).prompt,
+        "./current.prompt.md"
+      );
+
+      const secondIntegration = new MockHarnessIntegration(undefined, false);
+      const secondQueue = new PromptQueue();
+      await fs.writeFile(promptFilePath, "updated contents", "utf8");
+      secondQueue.loadPrompts({ steps: [{ prompt: "./current.prompt.md" }] });
+      await makeExecutor(secondQueue).execute(
+        secondIntegration,
+        {
+          ...makeContext(secondIntegration),
+          workspaceFolderPath: root,
+          sourceDefinitionPath,
+        }
+      );
+
+      assert.deepStrictEqual(secondIntegration.sentPrompts, ["updated contents"]);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("substitutes variables before resolving prompt-file references", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-executor-variable-prompt-file-")
+    );
+    try {
+      await fs.writeFile(
+        path.join(root, "current.prompt.md"),
+        "variable contents",
+        "utf8"
+      );
+      const integration = new MockHarnessIntegration(undefined, false);
+      const queue = new PromptQueue();
+      queue.loadPrompts({
+        vars: { name: "current" },
+        steps: [{ prompt: "./{{name}}.prompt.md" }],
+      });
+
+      await makeExecutor(queue).execute(
+        integration,
+        {
+          ...makeContext(integration),
+          workspaceFolderPath: root,
+          sourceDefinitionPath: path.join(root, "workflow.ctrlyoke.json"),
+        }
+      );
+
+      assert.deepStrictEqual(integration.sentPrompts, ["variable contents"]);
+      assert.strictEqual(
+        (queue.getState().steps[0] as PromptStep).prompt,
+        "./{{name}}.prompt.md"
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("fails before sending missing or empty prompt-file references", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-executor-invalid-prompt-file-")
+    );
+    try {
+      const sourceDefinitionPath = path.join(root, "workflow.ctrlyoke.json");
+      const cases = [
+        {
+          name: "missing.prompt.md",
+          content: undefined,
+          error: /could not be found/,
+        },
+        { name: "empty.prompt.md", content: " \n\t", error: /Prompt is empty/ },
+      ];
+      for (const currentCase of cases) {
+        if (currentCase.content !== undefined) {
+          await fs.writeFile(
+            path.join(root, currentCase.name),
+            currentCase.content,
+            "utf8"
+          );
+        }
+        const integration = new MockHarnessIntegration(undefined, false);
+        const queue = new PromptQueue();
+        queue.loadPrompts({ steps: [{ prompt: `./${currentCase.name}` }] });
+
+        await assert.rejects(
+          makeExecutor(queue).execute(
+            integration,
+            {
+              ...makeContext(integration),
+              workspaceFolderPath: root,
+              sourceDefinitionPath,
+            }
+          ),
+          currentCase.error
+        );
+        assert.deepStrictEqual(integration.sentPrompts, []);
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("logs the effective next-step harness instead of the default integration", async () => {
     const queue = new PromptQueue();
     const defaultIntegration = new MockHarnessIntegration(undefined, false);

@@ -2124,6 +2124,7 @@ export class WorkflowOrchestrator {
       getHarness: (harnessId) => this.getExecutionPreviewHarness(harnessId),
       workspaceRoot,
       workspaceRoots: platform.getWorkspaceRoots(),
+      namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
       extensionPath: platform.getExtensionPath(),
       hostCanProvidePty: true,
       cwd: workspaceRoot,
@@ -2140,6 +2141,8 @@ export class WorkflowOrchestrator {
       scope,
       workflowName: workflow.workflowName,
       sourcePath: previewSourcePath,
+      sourceDefinitionPath:
+        (await this.getViewSourceDefinitionPath(clientId)) ?? undefined,
       workingFilePath: previewSourcePath,
       definitionRevision: workflow.definitionRevision,
     });

@@ -47,6 +47,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import { PromptFileResolver } from "./PromptFileResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -83,6 +84,8 @@ export interface WorkflowExecutionContext {
    */
   namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
   currentPromptFilePath: string | undefined;
+  /** Authored workflow definition used as the semantic base for prompt-file refs. */
+  sourceDefinitionPath?: string;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
   shouldShowCliCommand: boolean;
@@ -632,13 +635,18 @@ export class WorkflowExecutor {
           resolvedProperties,
           vars
         );
-        if (prompt.prompt) {
-          // Substitute on a local copy so the working file is not mutated.
-          prompt = {
-            ...prompt,
-            prompt: VarSubstitutor.applyToPromptText(prompt.prompt, vars),
-          };
-        }
+      }
+
+      // Substitute first, then resolve a standalone prompt-file reference into
+      // a local copy. The queue and working file retain the authored path so
+      // edits to the target file are visible on the next run.
+      const effectivePromptText = await this.resolveEffectivePrompt(
+        prompt.prompt,
+        context,
+        vars
+      );
+      if (!effectivePromptText.trim()) {
+        throw new Error("Prompt is empty after resolving its prompt file");
       }
 
       const integration = context.getIntegrationForPrompt(
@@ -657,6 +665,11 @@ export class WorkflowExecutor {
         agent: resolvedProperties.agent,
         skills: resolvedProperties.skills,
       });
+
+      // Preserve the queue-owned _runtime object added above. Harness runtime
+      // bookkeeping mutates that object to publish the resolved session ID;
+      // only the prompt text itself is a just-in-time local copy.
+      prompt = { ...prompt, prompt: effectivePromptText };
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
         this.updateDashboardForPromptStart(
@@ -2391,6 +2404,17 @@ export class WorkflowExecutor {
         workflowFile,
         { hostCanProvidePty: context.hostCanProvidePty }
       );
+      const effectiveRetryPrompt: PromptStep = {
+        ...retryPromptStep,
+        prompt: await this.resolveEffectivePrompt(
+          retryPromptStep.prompt,
+          context,
+          workflowFile.vars
+        ),
+      };
+      if (!effectiveRetryPrompt.prompt.trim()) {
+        throw new Error("Retry prompt is empty after resolving its prompt file");
+      }
 
       if (context.historyFilePath && context.outputHistoryManager) {
         await context.outputHistoryManager.recordRetryScheduled(
@@ -2399,13 +2423,13 @@ export class WorkflowExecutor {
           runIndex,
           retryAttemptIndex,
           retryAttemptIndex - 1,
-          retryPromptStep.prompt,
+          effectiveRetryPrompt.prompt,
           context.getDefinitionRevisionContext?.()
         );
       }
 
       const result = await this.executeWithStreaming(
-        retryPromptStep,
+        effectiveRetryPrompt,
         integration,
         context,
         target,
@@ -2438,7 +2462,7 @@ export class WorkflowExecutor {
           integration,
           context,
           target,
-          retryPromptStep,
+          effectiveRetryPrompt,
           signedStepIndex ?? this.getSignedStepIndex(target),
           runIndex,
           retryAttemptIndex
@@ -2460,6 +2484,27 @@ export class WorkflowExecutor {
 
       return result.responseText;
     };
+  }
+
+  private async resolveEffectivePrompt(
+    promptText: string,
+    context: WorkflowExecutionContext,
+    variables: Record<string, string> | undefined
+  ): Promise<string> {
+    const substituted = VarSubstitutor.applyToPromptText(
+      promptText,
+      variables ?? {}
+    );
+    const resolver = new PromptFileResolver({
+      workspaceRoot:
+        context.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+      namedRoots:
+        context.namedWorkspaceRoots ?? this.platform.getNamedWorkspaceRoots(),
+    });
+    return resolver.resolvePromptValue(
+      substituted,
+      context.sourceDefinitionPath
+    );
   }
 
   clearResponseWaitState(): void {

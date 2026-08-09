@@ -170,6 +170,63 @@ suite("ExecutionPreviewService", () => {
     }
   });
 
+  test("resolves authored prompt-file paths at preview time after substitution", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-prompt-file-")
+    );
+    temporaryRoots.push(workspaceRoot);
+    const promptPath = path.join(workspaceRoot, "current.prompt.md");
+    const sourcePath = path.join(workspaceRoot, "workflow.ctrlyoke.json");
+    await fsPromises.writeFile(promptPath, "preview contents", "utf8");
+
+    const workflow: PromptFile = {
+      vars: { name: "current" },
+      steps: [{ prompt: "./{{name}}.prompt.md" }],
+    };
+    const preview = await createService(workspaceRoot).build({
+      workflow,
+      sourcePath,
+      sourceDefinitionPath: sourcePath,
+    });
+
+    assert.ok(
+      preview.steps[0].prompt?.sections.some((section) =>
+        section.body?.includes("preview contents")
+      )
+    );
+    assert.ok(
+      !JSON.stringify(preview.steps[0].prompt).includes("{{name}}.prompt.md")
+    );
+  });
+
+  test("rejects empty and missing prompt-file references during preview", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-invalid-prompt-file-")
+    );
+    temporaryRoots.push(workspaceRoot);
+    await fsPromises.writeFile(
+      path.join(workspaceRoot, "empty.prompt.md"),
+      " \n\t",
+      "utf8"
+    );
+    const sourcePath = path.join(workspaceRoot, "workflow.ctrlyoke.json");
+
+    await assert.rejects(
+      createService(workspaceRoot).build({
+        workflow: { steps: [{ prompt: "./empty.prompt.md" }] },
+        sourceDefinitionPath: sourcePath,
+      }),
+      /empty after resolving|empty/i
+    );
+    await assert.rejects(
+      createService(workspaceRoot).build({
+        workflow: { steps: [{ prompt: "./missing.prompt.md" }] },
+        sourceDefinitionPath: sourcePath,
+      }),
+      /could not be found/
+    );
+  });
+
   test("uses shared planning paths and produces a step-scoped DTO", async () => {
     const workflow: PromptFile = {
       harness: HARNESS_IDS.CLAUDE_CLI,

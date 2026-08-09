@@ -18,6 +18,11 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 
 <runtimeModel>
 
+- Standalone prompt-file references are persisted as authored path strings and
+  resolved just before execution/preview. The semantic base is the input
+  definition path for direct loads or the lineage descriptor's `originalFile`
+  for dashboard views; never derive it from a `.runs/` working-copy path.
+
 ## Execution ownership
 
 - Keep status logic in `WorkflowStateMachine`; do not add parallel status fields elsewhere.
