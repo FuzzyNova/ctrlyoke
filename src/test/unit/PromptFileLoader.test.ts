@@ -524,4 +524,56 @@ suite("PromptFileLoader Tests", () => {
       );
     });
   });
+
+  suite("missing exported assets", () => {
+    test("reports one workflow warning for multiple missing asset tokens", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-assets-warning-")
+      );
+      tempDirs.push(workspaceRoot);
+      const workflowPath = path.join(
+        workspaceRoot,
+        "portable.ctrlyoke.yaml"
+      );
+      await fs.writeFile(
+        workflowPath,
+        [
+          "steps:",
+          "  - prompt: |",
+          "      Review @portable.assets/shot.png and #selection:portable.assets/code.ts:1-2.",
+          "      Also inspect #sym.class:portable.assets/code.ts:Thing:1-2.",
+        ].join("\n"),
+        "utf8"
+      );
+
+      const statusMessages: Array<{
+        stepIndex: number;
+        message: string;
+        severity: string;
+      }> = [];
+      const loader = new PromptFileLoader(
+        new PromptFileParser(),
+        new PromptQueue(),
+        () =>
+          ({
+            updateFileSelected: async () => {},
+            updateStatusMessage: (
+              stepIndex: number,
+              message: string,
+              severity: string
+            ) => statusMessages.push({ stepIndex, message, severity }),
+          }) as any
+      );
+
+      await loader.loadPromptFile(workflowPath, workspaceRoot);
+
+      assert.strictEqual(statusMessages.length, 1);
+      assert.deepStrictEqual(statusMessages[0], {
+        stepIndex: 0,
+        message:
+          "Workflow references missing exported assets: portable.assets. Restore the sibling *.assets/ directory or use Save As to create a portable copy.",
+        severity: "warning",
+      });
+    });
+  });
 });

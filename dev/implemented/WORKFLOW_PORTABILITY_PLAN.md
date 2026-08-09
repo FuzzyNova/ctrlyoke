@@ -293,7 +293,8 @@ happen to be there" into "never works for anyone else".
 ### 5.1 Staged execution ledger
 
 The phases above are the design sequence; the table below is how they were split into single-session
-work items across both plans. `PFE` = `PROMPT_FILE_EXTRACTION_PLAN.md`, `WP` = this document.
+work items across both plans. `PFE` = `dev/implemented/PROMPT_FILE_EXTRACTION_PLAN.md`,
+`WP` = this document.
 **Each step must tick its own row to `done` when it commits** — this table is the cross-session
 record of what has actually landed.
 
@@ -310,7 +311,7 @@ record of what has actually landed.
 | 9   | Prompt-file writer + message contract             | PFE §4.1-4.2    | done   |
 | 10  | Convert button + empty-file UX                    | PFE §2.1, §3.1a | done   |
 | 11  | Delete `createPromptFile` / `createDraftPrompt`   | PFE §5 / P5     | done   |
-| 12  | Missing-assets warning, ignore entries, docs      | WP P5-P7        | todo   |
+| 12  | Missing-assets warning, ignore entries, docs      | WP P5-P7        | done   |
 
 Ordering constraints this split honors: step 3 precedes every consumer of file-backed prompts;
 steps 5-7 (bundling) precede steps 9-10 (the writer), which precede step 12 (the ignore entries).
@@ -434,5 +435,5 @@ so this only bites someone who edits a committed workflow and never re-saves it.
 
 ## 9. Related
 
-- `dev/backlog/PROMPT_FILE_EXTRACTION_PLAN.md` — the convert-to-prompt-file button writes into
+- `dev/implemented/PROMPT_FILE_EXTRACTION_PLAN.md` — the convert-to-prompt-file button writes into
   `.ctrlyoke/prompts/`; its §6 defers the tracking decision to this document.

@@ -23,6 +23,14 @@ These are the main user-facing commands registered by the extension.
 | `ctrlyoke: Create New Custom Template` | Create a user template                                |
 | `ctrlyoke: Import Workflow Templates`  | Import bundled templates                              |
 
+### Save As
+
+Save As writes a durable workflow definition at the destination you choose. It copies inline
+`@`, `#selection:`, and `#sym` references that point into generated attachments or prompt stores
+into a sibling `<workflow>.assets/` directory, rewriting those references to the exported paths.
+It inlines lone step prompt values that resolve to generated prompt files, including empty files.
+Ordinary repository references remain unchanged.
+
 ## Queue and session commands
 
 | Command                              | What it does                                |

@@ -379,7 +379,7 @@ the same. Do not "fix" this by re-adding the directory to init.
 
 ## 6. Git implications
 
-**Decided — see `dev/backlog/WORKFLOW_PORTABILITY_PLAN.md` for the full policy and rationale.**
+**Decided — see `dev/implemented/WORKFLOW_PORTABILITY_PLAN.md` for the full policy and rationale.**
 
 `.ctrlyoke/prompts/` is **gitignored**, and the convert button writes there anyway. That is correct
 rather than contradictory: converted prompts belong to ephemeral runs under `.runs/`, which is
@@ -400,7 +400,7 @@ Two constraints this feature must respect:
 
 | Phase | Scope                                                                                   |
 | ----- | --------------------------------------------------------------------------------------- |
-| 0     | None — the §6 tracking question is settled in `WORKFLOW_PORTABILITY_PLAN.md`            |
+| 0     | None — the §6 tracking question is settled in `dev/implemented/WORKFLOW_PORTABILITY_PLAN.md` |
 | 1     | Shared resolver + preserve refs + just-in-time execution/preview resolution (§4.4)      |
 | 2     | Gitignore toggle → icon-only; prune `IconToggleButton` label machinery; update its test |
 | 3     | Message pair + writer + button (convert / empty-draft / open states)                    |
@@ -414,7 +414,7 @@ itself. Phase 4 ships in the same release as phase 3. The portability plan's pha
 cross-plan master sequence: shared resolver → bundler → writer/UX → ignore entries.
 
 **The authoritative work breakdown for both plans is
-`WORKFLOW_PORTABILITY_PLAN.md` §5.1 (staged execution ledger).** Consult it to see which phases have
+`dev/implemented/WORKFLOW_PORTABILITY_PLAN.md` §5.1 (staged execution ledger).** Consult it to see which phases have
 already landed, and update the row for the step you are implementing.
 
 ## 8. Testing

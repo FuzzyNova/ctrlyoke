@@ -50,6 +50,8 @@ suite("WorkspaceInitializer", () => {
     assert.match(gitignoreContent, /^\.search-index\/$/m);
     assert.match(gitignoreContent, /^logs\/$/m);
     assert.match(gitignoreContent, /^temp\/$/m);
+    assert.match(gitignoreContent, /^attachments\/$/m);
+    assert.match(gitignoreContent, /^prompts\/$/m);
     assert.match(gitignoreContent, /^capabilities\.json$/m);
     assert.strictEqual(
       gitignoreContent.trimEnd().split("\n").at(-1),
@@ -109,6 +111,21 @@ suite("WorkspaceInitializer", () => {
     assert.match(gitignoreContent, /^capabilities\.json$/m);
     assert.match(gitignoreContent, /^\.search-index\/$/m);
     assert.match(gitignoreContent, /^\.gitignore$/m);
+    assert.strictEqual(
+      gitignoreContent.slice(existingContent.length),
+      [
+        ".runs/",
+        ".search-index/",
+        "temp/",
+        "certs/",
+        "notifications/",
+        "capabilities.json",
+        "attachments/",
+        "prompts/",
+        ".gitignore",
+        "",
+      ].join("\n")
+    );
   });
 
   test("does not append generated header comments as entries", async () => {

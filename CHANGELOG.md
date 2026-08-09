@@ -5,6 +5,17 @@ All notable changes to ctrlyoke will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Save As now creates a portable workflow bundle by copying generated attachments into a sibling
+  `<workflow>.assets/` directory and inlining lone generated prompt files. The new ignore rules do
+  not untrack files already committed; the only migration gap is a new screenshot added to an
+  already-committed workflow that is never re-saved.
+- `.ctrlyoke/settings.json` is tracked by default as project configuration. `server.certPath` and
+  `server.keyPath` remain machine-local paths and should be configured separately on each machine.
+
 ## [0.1.0] - 2026-05-12
 
 Initial release.

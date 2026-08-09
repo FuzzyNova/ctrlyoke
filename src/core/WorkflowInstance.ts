@@ -1017,7 +1017,8 @@ export class WorkflowInstance {
     await this.promptFileLoader.reloadFromWorkingFile(
       workingFilePath,
       "replace",
-      true
+      true,
+      this.workspaceFolderPath
     );
     await this.hydrateActiveExecutionOutputCaches();
 
@@ -1063,7 +1064,8 @@ export class WorkflowInstance {
     await this.promptFileLoader.reloadFromWorkingFile(
       workingFilePath,
       "replace",
-      true
+      true,
+      this.workspaceFolderPath
     );
     await this.hydrateActiveExecutionOutputCaches();
 

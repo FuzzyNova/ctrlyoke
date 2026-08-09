@@ -12,7 +12,11 @@ import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
+import {
+  STATUS_MESSAGE_SEVERITY,
+} from "../../types/DashboardConstants";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
+import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWarnings";
 
 const WORKFLOW_PROPERTY_KEYS = [
   ...EXECUTION_PROPERTY_KEYS,
@@ -235,6 +239,11 @@ export class PromptFileLoader {
       );
     }
 
+    await this.warnAboutMissingWorkflowAssets(
+      promptFile,
+      workspaceFolderPath
+    );
+
     Log.debug(
       `Loaded ${promptFile.steps.length} step(s)` +
         `${promptFile.finalStep ? " + final step" : ""} from ${displayName}`
@@ -256,7 +265,8 @@ export class PromptFileLoader {
   async reloadFromWorkingFile(
     workingFilePath: string,
     mode: "replace" | "merge" | "auto" = "auto",
-    preventRunningAutoStart: boolean = false
+    preventRunningAutoStart: boolean = false,
+    workspaceFolderPath?: string
   ): Promise<void> {
     try {
       // Read working file
@@ -344,6 +354,11 @@ export class PromptFileLoader {
         }
       }
 
+      await this.warnAboutMissingWorkflowAssets(
+        workingFile,
+        workspaceFolderPath
+      );
+
       Log.debug(
         `Reloaded ${workingFile.steps?.length ?? 0} prompts from working file`
       );
@@ -351,6 +366,50 @@ export class PromptFileLoader {
       Log.error("Failed to reload working file:", error);
       // Re-throw so caller knows the operation failed
       throw error;
+    }
+  }
+
+  private async warnAboutMissingWorkflowAssets(
+    workflow: PromptFile,
+    workspaceFolderPath?: string
+  ): Promise<void> {
+    const promptTexts = (workflow.steps ?? [])
+      .filter((step): step is Exclude<typeof step, { type: "script" }> =>
+        typeof step === "object" &&
+        step !== null &&
+        "prompt" in step &&
+        typeof step.prompt === "string"
+      )
+      .map((step) => step.prompt);
+
+    if (workflow.finalStep && "prompt" in workflow.finalStep) {
+      const finalPrompt = workflow.finalStep.prompt;
+      if (typeof finalPrompt === "string") {
+        promptTexts.push(finalPrompt);
+      }
+    }
+
+    const missingDirectories = await findMissingWorkflowAssetDirectories(
+      promptTexts,
+      workspaceFolderPath
+    );
+    if (missingDirectories.length === 0) {
+      return;
+    }
+
+    const message =
+      `Workflow references missing exported assets: ${missingDirectories.join(
+        ", "
+      )}. Restore the sibling *.assets/ directory or use Save As to create a portable copy.`;
+    const dashboard = this.getDashboard();
+    if (dashboard) {
+      dashboard.updateStatusMessage(
+        0,
+        message,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+    } else {
+      Log.warn(`ctrlyoke: ${message}`);
     }
   }
 

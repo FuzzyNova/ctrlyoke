@@ -37,6 +37,27 @@ Use one of these entry points:
 - `ctrlyoke: Select Prompt File` from the panel
 - `ctrlyoke: Run with ctrlyoke` if you want to load and start in one step
 
+## Make a workflow durable
+
+**Workflows you build in the dashboard stay on your machine.** Everything you queue, run, and
+edit lives under `.ctrlyoke/.runs/`, which ctrlyoke gitignores — including screenshots you paste
+and prompt files you create along the way. Most of that work is a conversation, not an artifact,
+so nothing lands in your commits by default.
+
+**When a workflow turns out to be worth keeping, use Save As.** It writes a portable copy — the
+workflow file plus any assets it depends on — anywhere you choose in the repo. Save As copies
+inline attachments into a sibling `<workflow>.assets/` directory and inlines lone prompt-file
+bodies. That copy is yours to commit and share. Files you author directly, such as a
+`.ctrlyoke.yaml`, are tracked like any other source file.
+
+The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
+files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`
+directories. The `.gitignore` is editable: remove the entries for anything you want tracked, but
+delete the `.gitignore` self-ignore line at the bottom first or the change stays on this machine.
+
+`settings.json` is tracked by default as project configuration. Its `server.certPath` and
+`server.keyPath` fields are machine-local and should point to files available on each machine.
+
 ## 4. Run the workflow
 
 Click **Run** in the panel. ctrlyoke sends the first step to the active harness, waits for completion, stores the runtime metadata, and then advances to the next step.

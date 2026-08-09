@@ -17,6 +17,18 @@ ctrlyoke currently supports:
 
 A workflow is a `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file that describes work to run. YAML and JSON support multi-step automation. Markdown prompt files are the simplest one-step format.
 
+### Durable workflows and generated files
+
+Dashboard work is stored under `.ctrlyoke/.runs/` and is machine-local by default. The generated
+`.ctrlyoke/.gitignore` also ignores `attachments/`, `prompts/`, logs, temporary files, and other
+runtime data. Use **Save As** when a workflow is worth keeping: it writes the workflow plus its
+dependencies, copying inline attachments into a sibling `<workflow>.assets/` directory and
+inlining lone prompt-file bodies. Exported assets are meant to be committed.
+
+The `.ctrlyoke/.gitignore` is editable. Delete its self-ignore line at the bottom before removing
+other entries, or the edit remains local. `settings.json` is tracked by default; the
+`server.certPath` and `server.keyPath` settings are machine-local paths.
+
 ## Step
 
 A workflow `steps` array can contain two kinds of step:
