@@ -3,8 +3,17 @@ import * as path from "path";
 import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
-const GITIGNORE_CONTENT = [
-  "# ctrlyoke runtime directories — generated at runtime, do not commit...unless you really want to",
+const GITIGNORE_HEADER = [
+  "# ctrlyoke generated runtime entries are machine-local. Authored files in",
+  "# templates/, scripts/, agents/, skills/, mcp/, and settings.json remain trackable.",
+  "#",
+  "# This file ignores ITSELF (last line) so initializing ctrlyoke leaves your",
+  "# worktree clean. If you edit this file — e.g. to start tracking runs or",
+  "# attachments — DELETE the `.gitignore` line at the bottom first. Otherwise your",
+  "# changes stay on this machine and every other clone regenerates the defaults.",
+].join("\n");
+
+const GITIGNORE_ENTRIES = [
   `${PATH_CONSTANTS.RUNS_DIR}/`,
   `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`,
   `${PATH_CONSTANTS.LOGS_DIR}/`,
@@ -12,7 +21,14 @@ const GITIGNORE_CONTENT = [
   `${PATH_CONSTANTS.CERTS_DIR}/`,
   `${PATH_CONSTANTS.NOTIFICATIONS_DIR}/`,
   PATH_CONSTANTS.CAPABILITIES_FILE,
-  ".gitignore",
+];
+
+const GITIGNORE_SELF_ENTRY = ".gitignore";
+
+const GITIGNORE_CONTENT = [
+  GITIGNORE_HEADER,
+  ...GITIGNORE_ENTRIES,
+  GITIGNORE_SELF_ENTRY,
   "",
 ].join("\n");
 
@@ -90,10 +106,12 @@ export class WorkspaceInitializer {
         .map((line) => line.trim())
         .filter((line) => line.length > 0)
     );
-    const missingEntries = GITIGNORE_CONTENT.split("\n").filter((line) => {
-      const entry = line.trim();
-      return entry.length > 0 && !currentEntries.has(entry);
-    });
+    const missingEntries = [...GITIGNORE_ENTRIES, GITIGNORE_SELF_ENTRY].filter(
+      (line) => {
+        const entry = line.trim();
+        return entry.length > 0 && !currentEntries.has(entry);
+      }
+    );
 
     if (missingEntries.length === 0) {
       return;
