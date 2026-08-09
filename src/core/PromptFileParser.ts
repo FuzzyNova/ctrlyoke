@@ -193,9 +193,13 @@ export class PromptFileParser {
     promptValue: string,
     promptFilePath: string
   ): Promise<string> {
+    const trustedRoots = this.platform?.getWorkspaceRoots();
     const resolver = new PromptFileResolver({
       workspaceRoot: this.platform?.getWorkspaceRoot(),
       namedRoots: this.platform?.getNamedWorkspaceRoots() ?? [],
+      trustedRoots: trustedRoots?.length ? trustedRoots : undefined,
+      approvedExternalRoots:
+        this.platform?.getApprovedExternalFileRoots?.(),
     });
 
     await resolver.validatePromptReference(promptValue, promptFilePath);

@@ -15,6 +15,7 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
 import {
   getVsCodeWorkspaceRoot,
@@ -222,6 +223,11 @@ export class WorkflowSerializer {
       workspaceRoot,
       trustedRoots: workspaceRoot
         ? getVsCodeTrustedWorkspaceRoots()
+        : undefined,
+      approvedExternalRoots: workspaceRoot
+        ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+            ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
+          )
         : undefined,
       namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : undefined,
       sourceDefinitionPath,

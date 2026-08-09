@@ -6,6 +6,8 @@ import type {
   PermissionMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 
 export interface ResolvedCliConfig {
   harness: string;
@@ -116,6 +118,12 @@ export class CliAdapter implements PlatformAdapter {
 
   getWorkspaceRoots(): string[] {
     return [this.getWorkspaceRoot()];
+  }
+
+  getApprovedExternalFileRoots(): string[] {
+    return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+      ExternalRootsTrustStore.canonicalizeRoot(this.getWorkspaceRoot())
+    );
   }
 
   getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {

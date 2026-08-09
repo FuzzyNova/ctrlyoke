@@ -91,6 +91,7 @@ export interface ExecutionPreviewServiceOptions {
   ) => ExecutionPreviewHarness | Promise<ExecutionPreviewHarness>;
   readonly workspaceRoot?: string;
   readonly workspaceRoots?: readonly string[];
+  readonly approvedExternalRoots?: readonly string[];
   readonly namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
   readonly extensionPath: string;
   readonly hostCanProvidePty: boolean;
@@ -140,6 +141,10 @@ export class ExecutionPreviewService {
     this.promptFileResolver = new PromptFileResolver({
       workspaceRoot: options.workspaceRoot,
       namedRoots: options.namedWorkspaceRoots ?? [],
+      trustedRoots: options.workspaceRoots?.length
+        ? options.workspaceRoots
+        : undefined,
+      approvedExternalRoots: options.approvedExternalRoots,
     });
   }
 

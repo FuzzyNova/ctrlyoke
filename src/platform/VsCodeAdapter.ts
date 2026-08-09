@@ -6,6 +6,8 @@ import {
   getVsCodeNamedWorkspaceRoots,
 } from "./VsCodeWorkspaceRoot";
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 
 /**
  * VS Code implementation of PlatformAdapter.
@@ -21,6 +23,12 @@ export class VsCodeAdapter implements PlatformAdapter {
 
   getWorkspaceRoots(): string[] {
     return getVsCodeTrustedWorkspaceRoots();
+  }
+
+  getApprovedExternalFileRoots(): string[] {
+    return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+      ExternalRootsTrustStore.canonicalizeRoot(this.getWorkspaceRoot())
+    );
   }
 
   getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {

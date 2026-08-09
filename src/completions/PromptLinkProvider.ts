@@ -172,7 +172,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     approvedExternalRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const trimmedPath = text.trim();
-    const resolver = new PromptFileResolver({ workspaceRoot, namedRoots });
+    const resolver = new PromptFileResolver({
+      workspaceRoot,
+      namedRoots,
+      trustedRoots,
+      approvedExternalRoots,
+    });
     if (!resolver.looksLikePromptFilePath(trimmedPath)) {
       return [];
     }

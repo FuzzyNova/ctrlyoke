@@ -90,6 +90,8 @@ export interface WorkflowBundleAnalyzerOptions {
   workspaceRoot?: string;
   /** Additional trusted workspace roots, normally the other multi-root folders. */
   trustedRoots?: readonly string[];
+  /** External roots approved for reading prompt-file candidates. */
+  approvedExternalRoots?: readonly string[];
   namedRoots?: readonly ResolverWorkspaceFolder[];
   /** Semantic authored definition path, not the .runs working copy. */
   sourceDefinitionPath?: string;
@@ -165,7 +167,12 @@ export async function analyzeWorkflowBundle(
     ...(workspaceRoot ? [workspaceRoot] : []),
     ...namedRoots.map((root) => root.fsPath),
   ]);
-  const resolver = new PromptFileResolver({ workspaceRoot, namedRoots });
+  const resolver = new PromptFileResolver({
+    workspaceRoot,
+    namedRoots,
+    trustedRoots: trustedRoots.length ? trustedRoots : undefined,
+    approvedExternalRoots: options.approvedExternalRoots,
+  });
   const fields = collectPromptFields(workflow);
   const rewriteRequests: RewriteRequest[] = [];
 

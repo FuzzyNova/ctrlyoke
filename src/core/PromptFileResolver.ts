@@ -3,14 +3,19 @@ import * as fsp from "fs/promises";
 import * as path from "path";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import {
+  getTrustedSourceDefinitionDir,
   resolveNamedRelativePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
+import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { looksLikeFilePath } from "../utils/promptPathUtils";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
   namedRoots?: readonly ResolverWorkspaceFolder[];
+  /** Workspace and external roots used to authorize candidates before reads. */
+  trustedRoots?: readonly string[];
+  approvedExternalRoots?: readonly string[];
 }
 
 export type PromptFilePathResolution =
@@ -77,10 +82,14 @@ export class PromptFileReferenceError extends Error {
 export class PromptFileResolver {
   private readonly workspaceRoot?: string;
   private readonly namedRoots: readonly ResolverWorkspaceFolder[];
+  private readonly trustedRoots?: readonly string[];
+  private readonly approvedExternalRoots?: readonly string[];
 
   constructor(options: PromptFileResolverOptions = {}) {
     this.workspaceRoot = options.workspaceRoot;
     this.namedRoots = options.namedRoots ?? [];
+    this.trustedRoots = options.trustedRoots;
+    this.approvedExternalRoots = options.approvedExternalRoots;
   }
 
   /** Shared heuristic used by all standalone prompt-file callers. */
@@ -192,6 +201,10 @@ export class PromptFileResolver {
     const candidates = this.getCandidatePaths(filePath, sourceDefinitionPath);
 
     for (const candidate of candidates) {
+      if (!this.isCandidateAllowed(candidate)) {
+        continue;
+      }
+
       let stats: fs.Stats;
       try {
         stats = fs.statSync(candidate);
@@ -227,19 +240,35 @@ export class PromptFileResolver {
     }
 
     const candidates: string[] = [];
-    if (sourceDefinitionPath) {
+    const sourceDefinitionDir = getTrustedSourceDefinitionDir(
+      sourceDefinitionPath,
+      this.trustedRoots
+    );
+    // This source-dir-then-workspace probing order is deliberate. Prompt-file
+    // completion inserts `./` plus a workspace-relative path, so making `./`
+    // source-dir-only would break completion-inserted references whose target
+    // is not a sibling of the workflow file.
+    if (sourceDefinitionDir) {
       candidates.push(
-        path.resolve(path.dirname(sourceDefinitionPath), trimmedPath)
+        path.resolve(sourceDefinitionDir, trimmedPath)
       );
     }
 
     if (this.workspaceRoot) {
+      // Lone prompt paths retain their established source-dir-then-workspace
+      // semantics. Strip only the mandatory `./` marker in this wrapper so
+      // it can still name a workspace-relative or named-root prompt; the
+      // shared resolver must keep `./` workflow-relative for inline refs.
+      const normalizedWorkspacePath = trimmedPath.replace(/\\/g, "/");
+      const workspacePath = normalizedWorkspacePath.replace(/^\.\//, "");
       candidates.push(
-        resolveNamedRelativePath(
-          trimmedPath,
-          this.workspaceRoot,
-          this.namedRoots
-        )
+        workspacePath.startsWith("../")
+          ? path.resolve(this.workspaceRoot, trimmedPath)
+          : resolveNamedRelativePath(
+              workspacePath,
+              this.workspaceRoot,
+              this.namedRoots
+            )
       );
       candidates.push(
         path.resolve(
@@ -257,6 +286,10 @@ export class PromptFileResolver {
     candidates: readonly string[]
   ): Promise<PromptFilePathResolution> {
     for (const candidate of candidates) {
+      if (!this.isCandidateAllowed(candidate)) {
+        continue;
+      }
+
       let stats: fs.Stats;
       try {
         stats = await fsp.stat(candidate);
@@ -280,6 +313,22 @@ export class PromptFileResolver {
     }
 
     return { status: "missing", candidates };
+  }
+
+  private isCandidateAllowed(candidate: string): boolean {
+    if (
+      this.trustedRoots === undefined &&
+      this.approvedExternalRoots === undefined
+    ) {
+      // Unit tests and CLI-only callers without a workspace intentionally
+      // omit roots, preserving the resolver's historical behavior.
+      return true;
+    }
+
+    return evaluateFileAccess(candidate, {
+      workspaceRoots: this.trustedRoots ?? [],
+      approvedExternalRoots: this.approvedExternalRoots ?? [],
+    }).allowed;
   }
 }
 

@@ -38,6 +38,13 @@ export interface PlatformAdapter {
   getWorkspaceRoots(): string[];
 
   /**
+   * External directories approved for file reads in this workspace.
+   * Optional so lightweight test doubles and headless callers can preserve
+   * the historical no-policy behavior when they have no trust context.
+   */
+  getApprovedExternalFileRoots?(): string[];
+
+  /**
    * Every open workspace folder as a name/path pair, for folder-name-prefixed
    * relative ref resolution (`root2/src/index.ts`). Used to resolve refs
    * produced by multi-root completions and to decide `effectiveAbsolute`.

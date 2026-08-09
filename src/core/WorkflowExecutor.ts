@@ -2495,11 +2495,20 @@ export class WorkflowExecutor {
       promptText,
       variables ?? {}
     );
+    const trustedRoots = Array.from(
+      new Set([
+        context.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+        ...this.platform.getWorkspaceRoots(),
+      ])
+    );
     const resolver = new PromptFileResolver({
       workspaceRoot:
         context.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
       namedRoots:
         context.namedWorkspaceRoots ?? this.platform.getNamedWorkspaceRoots(),
+      trustedRoots: trustedRoots.length ? trustedRoots : undefined,
+      approvedExternalRoots:
+        this.platform.getApprovedExternalFileRoots?.(),
     });
     return resolver.resolvePromptValue(
       substituted,

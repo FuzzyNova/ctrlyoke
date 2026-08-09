@@ -182,4 +182,50 @@ suite("PromptFileResolver", () => {
     assert.strictEqual(result.status, "resolved");
     assert.strictEqual(result.path, fallback);
   });
+
+  test("blocks relative and absolute prompt files outside trusted roots", async () => {
+    const outsideFile = path.join(path.dirname(workspaceRoot), "outside.md");
+    await fs.writeFile(outsideFile, "secret", "utf8");
+    try {
+      const resolver = new PromptFileResolver({
+        workspaceRoot,
+        trustedRoots: [workspaceRoot],
+      });
+      const sourceFile = path.join(sourceDirectory, "workflow.yaml");
+
+      const relative = await resolver.resolve("../../outside.md", sourceFile);
+      const absolute = await resolver.resolve(outsideFile, sourceFile);
+
+      assert.strictEqual(relative.status, "missing");
+      assert.strictEqual(absolute.status, "missing");
+    } finally {
+      await fs.rm(outsideFile, { force: true });
+    }
+  });
+
+  test("ignores a source-definition directory outside trusted roots", async () => {
+    const outsideDirectory = path.join(path.dirname(workspaceRoot), "workflow");
+    const outsidePrompt = path.join(outsideDirectory, "prompt.md");
+    await fs.mkdir(outsideDirectory, { recursive: true });
+    await fs.writeFile(outsidePrompt, "outside", "utf8");
+    try {
+      const resolver = new PromptFileResolver({
+        workspaceRoot,
+        trustedRoots: [workspaceRoot],
+      });
+      const resolution = await resolver.resolve(
+        "./prompt.md",
+        path.join(outsideDirectory, "workflow.yaml")
+      );
+
+      assert.strictEqual(resolution.status, "missing");
+      assert.ok(
+        resolution.candidates.every(
+          (candidate) => !candidate.startsWith(outsideDirectory)
+        )
+      );
+    } finally {
+      await fs.rm(outsideDirectory, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,9 +1,13 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import {
+  getTrustedSourceDefinitionDir,
   resolveWorkspaceRoot,
   resolveTrustedWorkspaceRoots,
   resolveNamedRelativePath,
+  resolveReferencePath,
   resolveEffectiveAbsoluteReferences,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
@@ -222,10 +226,10 @@ suite("WorkspaceRootResolver Tests", () => {
       );
     });
 
-    test("a manually-typed leading ./ still resolves against the matching named root", () => {
+    test("a leading ./ is resolved against the primary root rather than a named root", () => {
       assert.strictEqual(
         resolveNamedRelativePath("./docs/readme.md", appFolder, folders),
-        path.resolve(docsFolder, "readme.md")
+        path.resolve(appFolder, "docs/readme.md")
       );
     });
 
@@ -233,6 +237,119 @@ suite("WorkspaceRootResolver Tests", () => {
       assert.strictEqual(
         resolveNamedRelativePath("docs/readme.md", appFolder, []),
         path.resolve(appFolder, "docs/readme.md")
+      );
+    });
+  });
+
+  suite("resolveReferencePath", () => {
+    const workflowDir = path.resolve("/repo/workflows");
+
+    test("selects each lexical base deterministically", () => {
+      const cases = [
+        {
+          reference: path.resolve("/elsewhere/file.ts"),
+          expected: path.resolve("/elsewhere/file.ts"),
+          base: "absolute" as const,
+        },
+        {
+          reference: "./src/index.ts",
+          expected: path.resolve(workflowDir, "src/index.ts"),
+          base: "workflow" as const,
+        },
+        {
+          reference: "../docs/readme.md",
+          expected: path.resolve(workflowDir, "../docs/readme.md"),
+          base: "workflow" as const,
+        },
+        {
+          reference: ".\\src\\index.ts",
+          expected: path.resolve(workflowDir, "src/index.ts"),
+          base: "workflow" as const,
+        },
+        {
+          reference: "src/index.ts",
+          expected: path.resolve(appFolder, "src/index.ts"),
+          base: "workspace" as const,
+        },
+        {
+          reference: "docs/src/index.ts",
+          expected: path.resolve(docsFolder, "src/index.ts"),
+          base: "namedRoot" as const,
+        },
+      ];
+
+      for (const testCase of cases) {
+        assert.deepStrictEqual(
+          resolveReferencePath(testCase.reference, {
+            primaryRoot: appFolder,
+            namedRoots: folders,
+            sourceDefinitionDir: workflowDir,
+          }),
+          { absolutePath: testCase.expected, base: testCase.base }
+        );
+      }
+    });
+
+    test("requires a source definition directory for workflow-relative refs", () => {
+      assert.throws(
+        () =>
+          resolveReferencePath("./src/index.ts", {
+            primaryRoot: appFolder,
+            namedRoots: folders,
+          }),
+        /relative to the workflow file, which has no known location/i
+      );
+    });
+
+    test("does not let filesystem collision order affect the selected base", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-reference-collision-")
+      );
+      try {
+        const workspace = path.join(tempRoot, "workspace");
+        const workflow = path.join(workspace, "workflows");
+        for (const order of [
+          [path.join(workspace, "src"), path.join(workflow, "src")],
+          [path.join(workflow, "src"), path.join(workspace, "src")],
+        ]) {
+          await fs.mkdir(order[0], { recursive: true });
+          await fs.writeFile(path.join(order[0], "index.ts"), "collision");
+          await fs.mkdir(order[1], { recursive: true });
+          await fs.writeFile(path.join(order[1], "index.ts"), "collision");
+
+          assert.deepStrictEqual(
+            resolveReferencePath("src/index.ts", {
+              primaryRoot: workspace,
+              namedRoots: [],
+              sourceDefinitionDir: workflow,
+            }),
+            { absolutePath: path.join(workspace, "src/index.ts"), base: "workspace" }
+          );
+          assert.deepStrictEqual(
+            resolveReferencePath("./src/index.ts", {
+              primaryRoot: workspace,
+              namedRoots: [],
+              sourceDefinitionDir: workflow,
+            }),
+            { absolutePath: path.join(workflow, "src/index.ts"), base: "workflow" }
+          );
+          await fs.rm(workspace, { recursive: true, force: true });
+        }
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+  });
+
+  suite("getTrustedSourceDefinitionDir", () => {
+    test("ignores a source definition outside trusted roots", () => {
+      const trustedRoot = path.resolve("/repo");
+      assert.strictEqual(
+        getTrustedSourceDefinitionDir(
+          path.resolve("/outside/workflow.ctrlyoke.yaml"),
+          [trustedRoot]
+        ),
+        undefined
       );
     });
   });

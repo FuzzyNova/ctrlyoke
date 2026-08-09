@@ -1,4 +1,5 @@
 import * as path from "path";
+import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
 
 /**
  * A workspace folder reduced to the fields the resolver needs.
@@ -133,34 +134,65 @@ export function resolveTrustedWorkspaceRoots(
   return Array.from(new Set([primary, ...folderPaths]));
 }
 
+export type ReferencePathBase =
+  | "absolute"
+  | "workflow"
+  | "namedRoot"
+  | "workspace";
+
+export interface ReferencePathResolutionOptions {
+  primaryRoot: string;
+  namedRoots: readonly ResolverWorkspaceFolder[];
+  /** Directory containing the authored workflow definition, when trusted. */
+  sourceDefinitionDir?: string;
+}
+
+export interface ReferencePathResolution {
+  absolutePath: string;
+  base: ReferencePathBase;
+}
+
 /**
- * Resolve a relative reference path that may be folder-name-prefixed
- * (`root2/src/index.ts`, the multi-root stored form produced by
- * `vscode.workspace.asRelativePath(uri, true)`) against the correct root.
- *
- * Resolution order:
- * 1. Absolute paths are returned as-is (matches `path.resolve` semantics).
- * 2. A single leading `./` is stripped before matching (a manually-typed
- *    `./root2/src/index.ts` names the same root as `root2/src/index.ts`).
- * 3. If the first path segment matches a named root's `name` (or, as
- *    fallback, that root's directory basename), resolve the remainder
- *    against that root.
- * 4. Otherwise resolve the whole path against `primaryRoot` (today's
- *    behavior — an unprefixed ref is "relative to the primary root").
- *
- * Deliberately synchronous and side-effect free: no filesystem probing
- * across roots, so a ref always resolves to exactly one candidate path.
+ * Resolve a reference path against exactly one lexical base without touching
+ * the filesystem. A leading `./` or `../` requires a known workflow-file
+ * location; it throws instead of falling back to the workspace because that
+ * fallback can silently select the wrong file. Callers should surface the
+ * error as an unresolvable reference, just as they do for blocked references.
  */
-export function resolveNamedRelativePath(
-  relativePath: string,
-  primaryRoot: string,
-  namedRoots: readonly ResolverWorkspaceFolder[]
-): string {
-  if (path.isAbsolute(relativePath)) {
-    return path.resolve(relativePath);
+export function resolveReferencePath(
+  referencePath: string,
+  options: ReferencePathResolutionOptions
+): ReferencePathResolution {
+  if (path.isAbsolute(referencePath)) {
+    return { absolutePath: path.resolve(referencePath), base: "absolute" };
   }
 
-  const normalized = relativePath.replace(/\\/g, "/").replace(/^\.\//, "");
+  const normalized = referencePath.replace(/\\/g, "/");
+  if (normalized.startsWith("./") || normalized.startsWith("../")) {
+    if (!options.sourceDefinitionDir) {
+      throw new Error(
+        "This reference is relative to the workflow file, which has no known location."
+      );
+    }
+    return {
+      absolutePath: path.resolve(options.sourceDefinitionDir, normalized),
+      base: "workflow",
+    };
+  }
+
+  return resolveWorkspaceOrNamedPath(normalized, options.primaryRoot, options.namedRoots);
+}
+
+function resolveWorkspaceOrNamedPath(
+  referencePath: string,
+  primaryRoot: string,
+  namedRoots: readonly ResolverWorkspaceFolder[]
+): ReferencePathResolution {
+  if (path.isAbsolute(referencePath)) {
+    return { absolutePath: path.resolve(referencePath), base: "absolute" };
+  }
+
+  const normalized = referencePath.replace(/\\/g, "/");
   const firstSlash = normalized.indexOf("/");
   if (firstSlash > 0) {
     const firstSegment = normalized.slice(0, firstSlash);
@@ -171,11 +203,57 @@ export function resolveNamedRelativePath(
         path.basename(root.fsPath) === firstSegment
     );
     if (match) {
-      return path.resolve(match.fsPath, rest);
+      return {
+        absolutePath: path.resolve(match.fsPath, rest),
+        base: "namedRoot",
+      };
     }
   }
 
-  return path.resolve(primaryRoot, relativePath);
+  return {
+    absolutePath: path.resolve(primaryRoot, normalized),
+    base: "workspace",
+  };
+}
+
+/**
+ * Return the directory containing a source definition only when that file is
+ * inside the supplied trusted roots. `undefined` roots means the caller has
+ * no containment context and preserves the historical trusted-by-construction
+ * behavior; an explicitly supplied list is authoritative, including `[]`.
+ */
+export function getTrustedSourceDefinitionDir(
+  sourceDefinitionPath: string | undefined,
+  trustedRoots: readonly string[] | undefined
+): string | undefined {
+  if (!sourceDefinitionPath) {
+    return undefined;
+  }
+
+  const resolvedSourcePath = path.resolve(sourceDefinitionPath);
+  if (
+    trustedRoots !== undefined &&
+    !isPathWithinAnyDirectory(resolvedSourcePath, trustedRoots)
+  ) {
+    return undefined;
+  }
+
+  return path.dirname(resolvedSourcePath);
+}
+
+/**
+ * Resolve a relative reference path using the workspace/named-root branches
+ * of {@link resolveReferencePath}. A leading `./` is intentionally not
+ * stripped: inline references use it to select the workflow base, while lone
+ * prompt-file resolution keeps its own source-dir-then-workspace fallback.
+ */
+export function resolveNamedRelativePath(
+  relativePath: string,
+  primaryRoot: string,
+  namedRoots: readonly ResolverWorkspaceFolder[]
+): string {
+  return resolveWorkspaceOrNamedPath(relativePath, primaryRoot, namedRoots)
+    .absolutePath;
 }
 
 /**

@@ -189,9 +189,21 @@ export class PromptEditorSupportService {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : null;
+    const trustedRoots = workspaceRoot
+      ? getVsCodeTrustedWorkspaceRoots()
+      : undefined;
+    const workspaceIdentity = workspaceRoot
+      ? ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
+      : undefined;
     const resolver = new PromptFileResolver({
       workspaceRoot: workspaceRoot ?? undefined,
       namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : [],
+      trustedRoots,
+      approvedExternalRoots: workspaceIdentity
+        ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+            workspaceIdentity
+          )
+        : undefined,
     });
     const sourceDefinitionPath =
       await this.getOrchestrator()?.getViewSourceDefinitionPath(ctx.clientId);
@@ -272,6 +284,11 @@ export class PromptEditorSupportService {
       const resolver = new PromptFileResolver({
         workspaceRoot,
         namedRoots: getVsCodeNamedWorkspaceRoots(),
+        trustedRoots: getVsCodeTrustedWorkspaceRoots(),
+        approvedExternalRoots:
+          ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+            ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
+          ),
       });
       const resolution = await resolver.resolve(filePath.trim());
       if (resolution.status !== "resolved" && resolution.status !== "empty") {

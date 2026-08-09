@@ -2124,6 +2124,7 @@ export class WorkflowOrchestrator {
       getHarness: (harnessId) => this.getExecutionPreviewHarness(harnessId),
       workspaceRoot,
       workspaceRoots: platform.getWorkspaceRoots(),
+      approvedExternalRoots: platform.getApprovedExternalFileRoots?.(),
       namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
       extensionPath: platform.getExtensionPath(),
       hostCanProvidePty: true,
