@@ -605,16 +605,35 @@ checkable rather than assumed.
 
 | # | Step                                                                                  |
 | - | ------------------------------------------------------------------------------------- |
+| 0 | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) |
 | 1 | `resolveReferencePath` + `PromptFileResolver` containment fix (§3, §4) — no behavior change to emitted refs yet |
-| 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) |
+| 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix |
 | 3 | Parity sites (§5.3), webview payload included                                          |
-| 4 | Analyzer emits `./` + manifest-aware re-bundling (§5.1.3, §6.1)                        |
-| 5 | Migration script (§7), run once, then delete                                           |
-| 6 | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide |
+| 4 | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) |
+| 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1)         |
+| 6 | Migration script (§7), run once, then delete                                           |
+| 7 | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide, stating the §1.1 relocatability boundary |
+
+Step 0 is pure bug-fixing that stands on its own and must land first: §6.5's discovery exclusion is
+already wrong today (bundled `.prompt.md` files show up as runnable workflows), and the warning
+asymmetry weakens the safety net every later step leans on.
 
 Steps 1-3 are consumer-side and land with no visible change — every existing reference keeps its
 meaning because nothing emits `./` yet. Step 4 is the flip. That ordering means step 4 is revertible
-on its own if the relocation round trip surprises us.
+on its own if the relocation round trip surprises us. Step 5 fixes a corruption mode that exists
+today in a different shape (§6.1), so it is deliberately separable from the flip.
+
+### 9.1 Explicitly out of scope for this execution
+
+- **The "keep prompt files as references" escape hatch (§1.2, §1.2.1).** §1.2's recommendation
+  stands: do not change the inline default. The escape hatch's prerequisites (§1.2.1) are therefore
+  not being built either, beyond step 0's half of gap 1, which is worth doing on its own merits.
+- **The convert-to-prompt-file destination choice (§1.2).** A separate UI change with its own
+  design; it does not block relocatability.
+- **Save As setting `descriptor.originalFile` to the export destination (§6.2).** A UX nicety, not a
+  correctness fix — the relocation guarantee does not depend on it.
+- **Symlink-escape hardening on reference reads (§4.4).** Named as a distinct pre-existing gap on
+  purpose; do not let it grow into this plan.
 
 ## 10. Rejected
 
