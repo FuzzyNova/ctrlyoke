@@ -16,15 +16,6 @@ const GITIGNORE_CONTENT = [
   "",
 ].join("\n");
 
-/** User-facing directories created on first init */
-const USER_DIRECTORIES = [
-  PATH_CONSTANTS.PROMPTS_DIR,
-  PATH_CONSTANTS.SCRIPTS_DIR,
-  PATH_CONSTANTS.AGENTS_DIR,
-  PATH_CONSTANTS.SKILLS_DIR,
-  PATH_CONSTANTS.TEMPLATES_DIR,
-] as const;
-
 export class WorkspaceInitializer {
   /**
    * Returns true if ctrlyoke has already been initialized in this workspace.
@@ -48,19 +39,21 @@ export class WorkspaceInitializer {
 
   /**
    * Initialize the .ctrlyoke workspace directory if it doesn't exist.
-   * Creates the directory scaffold and .gitignore on first run.
+   * Creates `.ctrlyoke/` itself plus its .gitignore — nothing else.
    * Idempotent: safe to call on every activation.
+   *
+   * No subdirectories are scaffolded. Every consumer creates its own directory
+   * on demand (drafts, sample scripts, imported/custom templates, agents and
+   * skills), and every reader tolerates an absent directory, so pre-creating
+   * empty folders would only add clutter to the user's workspace.
+   *
    * @returns true if the workspace was newly initialized, false if it already existed
    */
   static async initializeIfNeeded(workspaceRoot: string): Promise<boolean> {
     const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
     const isNew = !fs.existsSync(ctrlyokeDir);
 
-    for (const dir of USER_DIRECTORIES) {
-      await fs.promises.mkdir(path.join(ctrlyokeDir, dir), {
-        recursive: true,
-      });
-    }
+    await fs.promises.mkdir(ctrlyokeDir, { recursive: true });
 
     const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
     await WorkspaceInitializer.ensureGitignore(gitignorePath);
@@ -75,7 +68,8 @@ export class WorkspaceInitializer {
   }
 
   /**
-   * Re-initialize workspace: ensures all directories and .gitignore exist.
+   * Re-initialize workspace: ensures `.ctrlyoke/` and its .gitignore exist and
+   * that the .gitignore lists every generated entry.
    * Does not overwrite existing files. Safe to call at any time.
    */
   static async reinitialize(workspaceRoot: string): Promise<void> {

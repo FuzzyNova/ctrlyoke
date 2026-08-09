@@ -29,15 +29,22 @@ Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run:
 ctrlyoke: Initialize Workspace
 ```
 
-This creates the `.ctrlyoke/` directory structure in your workspace root:
+This creates a `.ctrlyoke/` directory in your workspace root containing a single
+self-ignoring `.gitignore`, so initializing ctrlyoke leaves your worktree clean.
+
+Subdirectories appear only once something needs them:
 
 ```
 .ctrlyoke/
-  workflows/     # ready-to-run workflow files
-  prompts/       # draft single prompts
-  scripts/       # end condition validation scripts
-  templates/     # custom workflow templates
+  prompts/       # draft single prompts (ctrlyoke: New Draft Prompt)
+  scripts/       # end condition validation scripts (ctrlyoke: Create End Condition Script)
+  templates/     # custom workflow templates (New Template… / Import Workflow Templates)
+  agents/        # agents copied in from the Agents & Skills manager
+  skills/        # skills copied in from the Agents & Skills manager
 ```
+
+Workflow files themselves can live anywhere in your workspace — at the
+`.ctrlyoke/` root, or beside the code they operate on.
 
 ---
 
@@ -241,4 +248,4 @@ Open `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json` for 
 - `docs/ADDING_NEW_CLI_HARNESS.md` — adding support for a new AI CLI tool
 - `docs/SESSION_MANAGEMENT.md` — session ID resolution and cross-harness validation
 - `docs/QUEUE_APPEND_FEATURE.md` — dynamic queue extension details
-- `.ctrlyoke/scripts/` — end condition script examples after workspace initialization
+- `.ctrlyoke/scripts/` — end condition script examples, after you run `ctrlyoke: Create End Condition Script`

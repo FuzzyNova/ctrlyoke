@@ -43,6 +43,36 @@ suite("WorkspaceInitializer", () => {
     assert.match(gitignoreContent, /^\.gitignore$/m);
   });
 
+  test("creates no subdirectories — only .ctrlyoke/ and its .gitignore", async () => {
+    const workspaceRoot = createWorkspace();
+
+    await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+
+    const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
+    assert.deepStrictEqual(fs.readdirSync(ctrlyokeDir), [".gitignore"]);
+  });
+
+  test("does not create empty user-facing directories", async () => {
+    const workspaceRoot = createWorkspace();
+
+    await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+
+    const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
+    for (const dir of [
+      PATH_CONSTANTS.PROMPTS_DIR,
+      PATH_CONSTANTS.SCRIPTS_DIR,
+      PATH_CONSTANTS.TEMPLATES_DIR,
+      PATH_CONSTANTS.AGENTS_DIR,
+      PATH_CONSTANTS.SKILLS_DIR,
+    ]) {
+      assert.strictEqual(
+        fs.existsSync(path.join(ctrlyokeDir, dir)),
+        false,
+        `${dir}/ should be created lazily by its owning consumer, not by init`
+      );
+    }
+  });
+
   test("appends missing generated .gitignore entries without removing user entries", async () => {
     const workspaceRoot = createWorkspace();
     const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);

@@ -35,11 +35,11 @@ These are the main user-facing commands registered by the extension.
 
 ## Workspace and helper commands
 
-| Command                                 | What it does                                      |
-| --------------------------------------- | ------------------------------------------------- |
-| `ctrlyoke: Initialize Workspace`        | Create the standard `.ctrlyoke` workspace folders |
-| `ctrlyoke: Create End Condition Script` | Create a validation script template               |
-| `ctrlyoke: Import ctrlyoke Agents`      | Import bundled agents                             |
+| Command                                 | What it does                                       |
+| --------------------------------------- | -------------------------------------------------- |
+| `ctrlyoke: Initialize Workspace`        | Create `.ctrlyoke/` and its generated `.gitignore` |
+| `ctrlyoke: Create End Condition Script` | Create a validation script template                |
+| `ctrlyoke: Import ctrlyoke Agents`      | Import bundled agents                              |
 
 ## Prompt editor context commands
 

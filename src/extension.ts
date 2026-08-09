@@ -383,7 +383,7 @@ export async function activate(context: vscode.ExtensionContext) {
             if (isNew) {
               vscode.window
                 .showInformationMessage(
-                  `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+                  `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created for your workflows, prompts, and scripts.`,
                   "Reveal Folder"
                 )
                 .then((choice) => {
@@ -1199,7 +1199,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       try {
         await WorkspaceInitializer.reinitialize(getVsCodeWorkspaceRoot());
         vscode.window.showInformationMessage(
-          `ctrlyoke: Workspace initialized — ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directories and .gitignore are up to date.`
+          `ctrlyoke: Workspace initialized — ${PATH_CONSTANTS.CTRLYOKE_DIR}/ and its .gitignore are up to date.`
         );
       } catch (err) {
         vscode.window.showErrorMessage(

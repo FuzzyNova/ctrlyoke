@@ -1274,7 +1274,7 @@ export class WorkflowOrchestrator {
       if (isNew) {
         void vscode.window
           .showInformationMessage(
-            `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+            `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created for your workflows, prompts, and scripts.`,
             "Reveal Folder"
           )
           .then((choice) => {

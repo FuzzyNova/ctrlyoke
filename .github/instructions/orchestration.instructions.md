@@ -48,7 +48,8 @@ Disk/UI-facing orchestration helpers for workflow loading, session recovery, his
 
 <workspaceAndTemplates>
 
-- `WorkspaceInitializer` only scaffolds user-facing directories plus `.ctrlyoke/.gitignore`. `.runs/`, `logs/`, and `temp/` are intentionally created lazily by their owning managers.
+- `WorkspaceInitializer` creates `.ctrlyoke/` and its `.gitignore` and **nothing else** — no subdirectories at all, runtime or user-facing. Every directory is created on demand by the consumer that first writes into it (`createDraftPrompt` → `prompts/`, `createSampleScript` → `scripts/`, `TemplateImporter`/`TemplateManager.createCustomTemplate` → `templates/`, the Agents & Skills manager → `agents/`, `skills/`), and every reader treats an absent directory as empty. Adding a new `.ctrlyoke/` subdirectory means `mkdir`-ing at its writer, not extending init. Note that init's `mkdir` of `.ctrlyoke/` itself is now load-bearing: `ensureGitignore` writes into it, and `WorkflowOrchestrator` calls `Log.enableWorkspaceFileLogging()` immediately after on the assumption it exists.
+- The generated `.gitignore` lists itself, so a fresh init leaves `git status` clean. Keep it that way: anything init writes must be covered by that file, or initializing ctrlyoke starts dirtying users' worktrees.
 - `WorkflowCommandHandler.createPromptFile()` writes new workflow files at the `.ctrlyoke/` root, while `createDraftPrompt()` writes timestamped scratch prompts under `.ctrlyoke/prompts/`. Keep that distinction.
 - `TemplateImporter` copies from built extension manifests in `out/templates/...` into workspace locations and prompts before overwriting existing files. It is an import UI, not a template registry.
 
@@ -64,7 +65,7 @@ Disk/UI-facing orchestration helpers for workflow loading, session recovery, his
 
 <pathRules>
 
-- Use `WorkflowPaths` (`src/utils/WorkflowPaths.ts`) for every `.runs` path — root/lineage/draft/run/manifest/events/lock construction, validation, and parsing (`parseRunFilePath`, `parseRunArtifactPath`, `parseWorkingFileAddressFromPath`). Use `PATH_CONSTANTS` (and `ConfigurationUtils.getPromptsDirectory()` when applicable) only for other folder names. This layer does a lot of path joining and it is easy to accidentally hardcode `.ctrlyoke` details or reconstruct a `.runs` path ad hoc.
+- Use `WorkflowPaths` (`src/utils/WorkflowPaths.ts`) for every `.runs` path — root/lineage/draft/run/manifest/events/lock construction, validation, and parsing (`parseRunFilePath`, `parseRunArtifactPath`, `parseWorkingFileAddressFromPath`). Use `PATH_CONSTANTS` only for other folder names. This layer does a lot of path joining and it is easy to accidentally hardcode `.ctrlyoke` details or reconstruct a `.runs` path ad hoc.
 
 </pathRules>
 

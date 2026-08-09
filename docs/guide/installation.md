@@ -39,7 +39,7 @@ ctrlyoke expects a workspace-level `.ctrlyoke` folder for drafts, templates, scr
 Command Palette → ctrlyoke: Initialize Workspace
 ```
 
-That creates the standard directory structure and makes it easier to keep workflows, scripts, and supporting files organized.
+That creates `.ctrlyoke/` and a self-ignoring `.gitignore` inside it — nothing else, so initializing does not leave your Git worktree dirty. Subdirectories such as `prompts/`, `scripts/`, `templates/`, `agents/`, and `skills/` are created on demand the first time you add something to them.
 
 ## Optional: install the standalone CLI
 
