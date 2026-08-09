@@ -16,7 +16,11 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
-import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeNamedWorkspaceRoots,
+  getVsCodeTrustedWorkspaceRoots,
+} from "../platform/VsCodeWorkspaceRoot";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type {
@@ -42,6 +46,11 @@ import { PropertyResolver } from "../utils/PropertyResolver";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
+import {
+  analyzeWorkflowBundle,
+  type WorkflowBundleAnalysis,
+} from "../utils/WorkflowBundleAnalyzer";
+import { writeWorkflowBundle } from "../utils/WorkflowBundleWriter";
 
 /**
  * WorkflowSerializer
@@ -190,6 +199,46 @@ export class WorkflowSerializer {
     } catch {
       return false;
     }
+  }
+
+  private async analyzeSaveBundle(
+    cleanWorkflow: Record<string, unknown>,
+    destinationPath: string | undefined,
+    templateMode: boolean,
+    clientId: string,
+    manager: WorkflowOrchestrator
+  ): Promise<WorkflowBundleAnalysis> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    const sourceDefinitionPath =
+      typeof manager.getViewSourceDefinitionPath === "function"
+        ? ((await manager.getViewSourceDefinitionPath(clientId)) ?? undefined)
+        : undefined;
+
+    return analyzeWorkflowBundle(cleanWorkflow, {
+      workspaceRoot,
+      trustedRoots: workspaceRoot
+        ? getVsCodeTrustedWorkspaceRoots()
+        : undefined,
+      namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : undefined,
+      sourceDefinitionPath,
+      ...(destinationPath ? { destinationPath } : {}),
+      templateMode,
+    });
+  }
+
+  private getBundleBlockerMessage(
+    blockers: readonly { message: string; fieldPath?: string; token?: string }[]
+  ): string {
+    return blockers
+      .map((blocker) => {
+        const location = blocker.fieldPath
+          ? ` (${blocker.fieldPath}${blocker.token ? `, ${blocker.token}` : ""})`
+          : "";
+        return `${blocker.message}${location}`;
+      })
+      .join("\n");
   }
 
   private sendSaveFailure(
@@ -475,28 +524,43 @@ export class WorkflowSerializer {
     try {
       const workingFile = await readJsonFile(workingFilePath);
       const clean = this.buildCleanWorkflow(workingFile);
-
-      let absolutePath = await this.resolveSafeExportPath(filePath);
-      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+      const absolutePath = await this.resolveSafeExportPath(filePath);
+      const analysis = await this.analyzeSaveBundle(
+        clean,
+        absolutePath,
+        false,
+        clientId,
+        manager
+      );
+      if (analysis.plan.blockers.length > 0) {
+        throw new Error(this.getBundleBlockerMessage(analysis.plan.blockers));
+      }
 
       let serialized: string;
       if (format === WORKFLOW_FILE_FORMATS.YAML) {
-        serialized = yaml.dump(clean, {
+        serialized = yaml.dump(analysis.workflow, {
           lineWidth: -1,
           noRefs: true,
           quoteStyle: "double",
         });
       } else {
-        serialized = JSON.stringify(clean, null, 2);
+        serialized = JSON.stringify(analysis.workflow, null, 2);
       }
 
       // Re-run the exact preflight immediately before the write. The dialog's
       // warning is advisory and may now be stale; this remains the authority.
-      absolutePath = await this.resolveSafeExportPath(filePath);
+      await this.resolveSafeExportPath(filePath);
       if (!this.getViewedWorkingFilePath(clientId, address)) {
         throw new Error("The viewed workflow changed before Save completed.");
       }
-      await fs.writeFile(absolutePath, serialized, "utf-8");
+      const writeResult = await writeWorkflowBundle({
+        workflowPath: absolutePath,
+        serializedWorkflow: serialized,
+        plan: analysis.plan,
+      });
+      for (const warning of writeResult.warnings) {
+        Log.warn(`Save As bundle warning: ${warning}`);
+      }
 
       Log.debug(`Saved workflow to: ${absolutePath}`);
 
@@ -511,6 +575,9 @@ export class WorkflowSerializer {
         type: MESSAGE_TYPES.WORKFLOW_SAVED,
         requestId,
         filePath: absolutePath,
+        ...(writeResult.warnings.length > 0
+          ? { warnings: writeResult.warnings }
+          : {}),
       });
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -554,13 +621,27 @@ export class WorkflowSerializer {
     try {
       const workingFile = await readJsonFile(workingFilePath);
       const clean = this.buildCleanWorkflow(workingFile);
+      const analysis = await this.analyzeSaveBundle(
+        clean,
+        undefined,
+        true,
+        clientId,
+        manager
+      );
+      if (analysis.plan.blockers.length > 0) {
+        throw new Error(this.getBundleBlockerMessage(analysis.plan.blockers));
+      }
 
       const templatePath = await this.templateManager.saveWorkflowAsTemplate(
         name,
         scope,
-        clean,
+        analysis.workflow,
         format
       );
+
+      for (const warning of analysis.plan.warnings) {
+        Log.warn(`Template export warning: ${warning.message}`);
+      }
 
       const templates = await this.templateManager.getAvailableTemplates();
       const created = templates.find((t) => t.path === templatePath);

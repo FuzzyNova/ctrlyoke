@@ -918,6 +918,7 @@ export interface WorkflowSavedMessage {
   type: typeof MESSAGE_TYPES.WORKFLOW_SAVED;
   requestId: string;
   filePath: string;
+  warnings?: string[];
 }
 
 /**

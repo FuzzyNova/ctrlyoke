@@ -15,6 +15,8 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { PromptFileResolver } from "../../core/PromptFileResolver";
+import { parseAllFileReferences } from "../../utils/FileReferenceParser";
 
 /** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
 function fakeWorkspaceState(): any {
@@ -63,12 +65,8 @@ function schemaBackedFieldNames(): {
   const executionFields = directSchemaPropertyNames(
     schema.definitions.executionProperties
   );
-  const promptFields = directSchemaPropertyNames(
-    schema.definitions.promptStep
-  );
-  const scriptFields = directSchemaPropertyNames(
-    schema.definitions.scriptStep
-  );
+  const promptFields = directSchemaPropertyNames(schema.definitions.promptStep);
+  const scriptFields = directSchemaPropertyNames(schema.definitions.scriptStep);
   const multiStepWorkflowFields = directSchemaPropertyNames(
     schema.oneOf[1].allOf?.find((node) => node.properties?.steps) ?? {}
   );
@@ -340,7 +338,11 @@ suite("WorkflowSerializer", () => {
       const templatePath = path.join(tempDir, "template.ctrlyoke.json");
 
       try {
-        await fs.writeFile(workingFilePath, JSON.stringify(workingFile), "utf8");
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile),
+          "utf8"
+        );
 
         const serializer = new WorkflowSerializer(
           (message) => messages.push(message),
@@ -380,10 +382,9 @@ suite("WorkflowSerializer", () => {
           "json"
         );
 
-        const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as Record<
-          string,
-          any
-        >;
+        const saved = JSON.parse(
+          await fs.readFile(outputPath, "utf8")
+        ) as Record<string, any>;
         assert.ok(templateWorkflow);
 
         for (const field of schemaFields.workflow) {
@@ -391,7 +392,11 @@ suite("WorkflowSerializer", () => {
             continue;
           }
           assert.deepStrictEqual(saved[field], workingFile[field], field);
-          assert.deepStrictEqual(templateWorkflow?.[field], workingFile[field], field);
+          assert.deepStrictEqual(
+            templateWorkflow?.[field],
+            workingFile[field],
+            field
+          );
         }
         for (const [index, sourceStep] of [promptStep, scriptStep].entries()) {
           for (const field of schemaFields.step) {
@@ -418,6 +423,241 @@ suite("WorkflowSerializer", () => {
         assert.strictEqual((templateWorkflow as any)?._runtime, undefined);
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("bundles pasted assets and inlines converted prompt files for a portable round trip", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-serializer-bundle-roundtrip-")
+      );
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const workingFilePath = WorkflowPaths.draftFilePath(
+        workspaceRoot,
+        "serializer-bundle-roundtrip-1" as WorkflowKey
+      );
+      const outputPath = path.join(
+        workspaceRoot,
+        "exports",
+        "portable.ctrlyoke.json"
+      );
+      const loadedPath = path.join(
+        workspaceRoot,
+        "loaded-from-another-directory.ctrlyoke.json"
+      );
+      const address = {
+        workflowKey: "serializer-bundle-roundtrip-1",
+        kind: "draft",
+      } as WorkflowViewAddress;
+
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [
+            {
+              uri: vscode.Uri.file(workspaceRoot),
+              name: "bundle-roundtrip",
+              index: 0,
+            },
+          ],
+          configurable: true,
+        });
+        await fs.mkdir(path.join(workspaceRoot, ".ctrlyoke", "prompts"), {
+          recursive: true,
+        });
+        await fs.mkdir(path.join(workspaceRoot, ".ctrlyoke", "attachments"), {
+          recursive: true,
+        });
+        await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+        await fs.writeFile(
+          path.join(
+            workspaceRoot,
+            ".ctrlyoke",
+            "prompts",
+            "converted.prompt.md"
+          ),
+          "converted prompt body",
+          "utf8"
+        );
+        await fs.writeFile(
+          path.join(workspaceRoot, ".ctrlyoke", "attachments", "pasted.png"),
+          Buffer.from([137, 80, 78, 71])
+        );
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify({
+            steps: [
+              { prompt: "./.ctrlyoke/prompts/converted.prompt.md" },
+              { prompt: "Review @.ctrlyoke/attachments/pasted.png" },
+            ],
+          }),
+          "utf8"
+        );
+
+        const serializer = new WorkflowSerializer(
+          () => {},
+          {} as any,
+          () =>
+            ({
+              getQueueState: () => ({ workingFilePath }),
+              getViewAddress: () => address,
+              getViewSourceDefinitionPath: async () =>
+                path.join(workspaceRoot, "authored", "source.ctrlyoke.yaml"),
+            }) as any,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleSaveWorkflow(
+          "bundle-roundtrip-save",
+          address,
+          outputPath,
+          "json"
+        );
+        await fs.copyFile(outputPath, loadedPath);
+
+        const loaded = JSON.parse(await fs.readFile(loadedPath, "utf8")) as {
+          steps: Array<{ prompt: string }>;
+        };
+        assert.strictEqual(loaded.steps[0].prompt, "converted prompt body");
+        const references = parseAllFileReferences(loaded.steps[1].prompt);
+        const resolver = new PromptFileResolver({ workspaceRoot });
+        for (const reference of references) {
+          const resolution = await resolver.resolvePath(reference.path);
+          assert.strictEqual(
+            resolution.status,
+            "resolved",
+            `reference did not resolve: ${reference.path}`
+          );
+        }
+        assert.ok(
+          loaded.steps[1].prompt.includes("exports/portable.assets/pasted.png")
+        );
+        assert.ok(
+          await fs.stat(
+            path.join(workspaceRoot, "exports", "portable.assets", "pasted.png")
+          )
+        );
+        assert.ok(
+          await fs.stat(
+            path.join(
+              workspaceRoot,
+              "exports",
+              "portable.assets",
+              ".ctrlyoke-assets.json"
+            )
+          )
+        );
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("runs template analysis and refuses generated-store asset references", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-serializer-template-bundle-")
+      );
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const workingFilePath = WorkflowPaths.draftFilePath(
+        workspaceRoot,
+        "serializer-template-bundle-1" as WorkflowKey
+      );
+      const address = {
+        workflowKey: "serializer-template-bundle-1",
+        kind: "draft",
+      } as WorkflowViewAddress;
+      const messages: any[] = [];
+      let saved = false;
+
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [
+            {
+              uri: vscode.Uri.file(workspaceRoot),
+              name: "template-bundle",
+              index: 0,
+            },
+          ],
+          configurable: true,
+        });
+        await fs.mkdir(path.join(workspaceRoot, ".ctrlyoke", "prompts"), {
+          recursive: true,
+        });
+        await fs.mkdir(path.join(workspaceRoot, ".ctrlyoke", "attachments"), {
+          recursive: true,
+        });
+        await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+        await fs.writeFile(
+          path.join(
+            workspaceRoot,
+            ".ctrlyoke",
+            "prompts",
+            "template.prompt.md"
+          ),
+          "template body",
+          "utf8"
+        );
+        await fs.writeFile(
+          path.join(workspaceRoot, ".ctrlyoke", "attachments", "image.png"),
+          "image",
+          "utf8"
+        );
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify({
+            steps: [
+              { prompt: "./.ctrlyoke/prompts/template.prompt.md" },
+              { prompt: "Attach @.ctrlyoke/attachments/image.png" },
+            ],
+          }),
+          "utf8"
+        );
+
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {
+            saveWorkflowAsTemplate: async () => {
+              saved = true;
+              return "template-path";
+            },
+            getAvailableTemplates: async () => [],
+          } as any,
+          () =>
+            ({
+              getQueueState: () => ({ workingFilePath }),
+              getViewAddress: () => address,
+              getViewSourceDefinitionPath: async () =>
+                path.join(workspaceRoot, "source.ctrlyoke.yaml"),
+            }) as any,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleSaveWorkflowAsTemplate(
+          "template-bundle-save",
+          address,
+          "Portable template",
+          "workspace",
+          "json"
+        );
+
+        assert.strictEqual(saved, false);
+        const failure = messages.find(
+          (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVE_FAILED
+        );
+        assert.ok(failure);
+        assert.match(
+          failure.error,
+          /steps\[1\].*\.ctrlyoke\/attachments\/image\.png/i
+        );
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
   });

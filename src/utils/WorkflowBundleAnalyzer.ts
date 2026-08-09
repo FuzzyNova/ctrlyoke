@@ -935,9 +935,13 @@ function toWorkspaceRelativePath(
   workspaceRoot: string,
   options: WorkflowBundleAnalyzerOptions
 ): string {
-  const namedRoot = (options.namedRoots ?? []).find((root) =>
-    isPathWithinDirectory(filePath, path.resolve(root.fsPath))
-  );
+  const namedRoots = options.namedRoots ?? [];
+  const namedRoot =
+    namedRoots.length > 1
+      ? namedRoots.find((root) =>
+          isPathWithinDirectory(filePath, path.resolve(root.fsPath))
+        )
+      : undefined;
   if (namedRoot) {
     const relative = path.relative(path.resolve(namedRoot.fsPath), filePath);
     return `${namedRoot.name}/${relative}`.replace(/\\/g, "/");

@@ -2304,6 +2304,9 @@ export function createMessageHandlers(
     // Extract filename for a concise toast
     const fileName = message.filePath.split(/[/\\]/).pop() ?? message.filePath;
     uiStore.showToast(`Saved as ${fileName}`, USER_FEEDBACK_SEVERITY.SUCCESS);
+    for (const warning of message.warnings ?? []) {
+      uiStore.showToast(warning, USER_FEEDBACK_SEVERITY.WARNING);
+    }
   };
 
   // --------------------------------------------------------------------------
