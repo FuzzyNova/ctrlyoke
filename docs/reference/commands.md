@@ -29,7 +29,11 @@ Save As writes a durable workflow definition at the destination you choose. It c
 `@`, `#selection:`, and `#sym` references that point into generated attachments or prompt stores
 into a sibling `<workflow>.assets/` directory, rewriting those references to the exported paths.
 It inlines lone step prompt values that resolve to generated prompt files, including empty files.
-Ordinary repository references remain unchanged.
+Ordinary repository references remain unchanged. The exported pair — the workflow file and its
+sibling `<workflow>.assets/` directory — can be moved or copied to another directory or repository
+and still resolve, provided they travel together. The pair carries generated dependencies, not the
+repository it operates on: `@src/foo.ts`, committed prompt files, and `.ctrlyoke/scripts/**`
+references remain dependencies of the surrounding repository by design.
 
 ## Queue and session commands
 

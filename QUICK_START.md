@@ -56,8 +56,11 @@ so nothing lands in your commits by default.
 **When a workflow turns out to be worth keeping, use Save As.** It writes a portable copy — the
 workflow file plus any assets it depends on — anywhere you choose in the repo. That copy is yours
 to commit and share. Save As copies inline attachments into a sibling `<workflow>.assets/`
-directory and inlines lone prompt-file bodies. You can also just write a `.ctrlyoke.yaml` by hand;
-files you author are tracked like any other source file.
+directory and inlines lone prompt-file bodies. The workflow file and its sibling assets directory
+can travel together to another directory or repository. The pair carries generated dependencies
+only; references to repository files, committed prompt files, and `.ctrlyoke/scripts/**` still need
+the repository they operate on. You can also just write a `.ctrlyoke.yaml` by hand; files you
+author are tracked like any other source file.
 
 The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
 files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`

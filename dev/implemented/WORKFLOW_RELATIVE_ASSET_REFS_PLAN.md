@@ -611,8 +611,8 @@ checkable rather than assumed.
 | 3 | Parity sites (§5.3), webview payload included — **landed**                              |
 | 4 | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) — **landed** |
 | 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1) — **landed** |
-| 6 | Migration script (§7), run once, then delete                                           |
-| 7 | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide, stating the §1.1 relocatability boundary |
+| 6 | Migration script (§7), run once, then delete — **done**                                |
+| 7 | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide, stating the §1.1 relocatability boundary — **done** |
 
 Step 0 is pure bug-fixing that stands on its own and must land first: §6.5's discovery exclusion is
 already wrong today (bundled `.prompt.md` files show up as runnable workflows), and the warning
@@ -641,6 +641,17 @@ sanitized output.
   correctness fix — the relocation guarantee does not depend on it.
 - **Symlink-escape hardening on reference reads (§4.4).** Named as a distinct pre-existing gap on
   purpose; do not let it grow into this plan.
+
+### 9.2 Closeout
+
+Steps 6 and 7 shipped. The migration dry-run scanned this repository and found no references to
+rewrite, so the throwaway script was deleted without a write pass. Save As and the user guide now
+describe the movable workflow-plus-assets pair and the §1.1 boundary: generated dependencies
+travel with the pair, while repository files, committed prompts, and scripts remain external.
+
+The §9.1 deferrals remain deliberate: the keep-prompt-files escape hatch, the convert-to-prompt-file
+destination choice, the Save-As `originalFile` nicety, and symlink hardening for reference reads
+were not built as part of this execution.
 
 ## 10. Rejected
 
