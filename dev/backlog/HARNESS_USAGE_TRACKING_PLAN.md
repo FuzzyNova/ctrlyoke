@@ -1,8 +1,11 @@
 # Harness Usage Tracking Plan
 
-**Status:** Researched / ready for design
-**Provider research:** June 15, 2026 (CLI versions checked then: Claude Code `2.1.177`, Codex CLI `0.139.0`, GitHub Copilot CLI `1.0.62`)
-**Revised:** August 8, 2026 — re-aligned with current code; Antigravity added; sidecar pattern is no longer speculative; Claude collector and auto-enable confirmed
+**Status:** Ready to implement after the prerequisite token-total stages
+**Provider research:** June 15, 2026; local CLI surfaces rechecked August 9,
+2026 (Claude Code `2.1.225`, Codex CLI `0.146.0`, GitHub Copilot CLI `1.0.78`)
+**Revised:** August 9, 2026 — final codebase pass; Codex app-server source,
+idempotent per-harness rollups, normalized snapshot persistence, and combined
+staging order added
 **Related:** `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`
 
 ---
@@ -13,11 +16,13 @@ ctrlyoke can provide a useful unified usage display, but the implementation
 should use different collection strategies per harness:
 
 1. **Claude Code:** status-line JSON for live quota windows during a ctrlyoke-run
-   session; local transcripts for observed token/cost history; enterprise/admin
-   APIs opt-in only.
-2. **Codex CLI:** parse local session JSONL `token_count` events for both
-   observed tokens and last-known rate-limit windows; no standalone
-   `codex status` command existed in the checked version.
+   session; normalized ctrlyoke run aggregates for observed token/cost history;
+   transcript-wide/all-activity and enterprise/admin sources deferred and
+   opt-in only.
+2. **Codex CLI:** prefer the documented app-server
+   `account/rateLimits/read` JSON-RPC method for live ChatGPT quota, with local
+   session JSONL `token_count.rate_limits` as a defensive last-known fallback.
+   No standalone top-level `codex status` command exists in the rechecked CLI.
 3. **GitHub Copilot CLI:** OTel spans (already wired in ctrlyoke) for observed
    token usage; personal monthly AI credit balance appears only in GitHub UI and
    the CLI TUI — no documented personal REST/GraphQL quota API was found.
@@ -52,20 +57,22 @@ The research findings below still hold; what changed is ctrlyoke's own code, and
 that changes the build plan materially:
 
 - **The status-line sidecar pattern is already shipped.**
-  `src/core/harness/antigravity/AntigravityStatuslineSidecar.ts` generates a
-  statusline command, has the harness write JSON snapshots to a ctrlyoke-owned
-  path, polls for a changed `_ctrlyoke.sequence` / `writtenAt` marker, and feeds
-  the parsed snapshot into the live context-window pipeline. The proposed
-  `ClaudeUsageProvider` status-line collector should be modelled directly on it
-  rather than designed from scratch — and the shared parts (snapshot path
-  allocation, marker-based change detection, teardown) belong in
-  `src/core/harness/shared/` so the second implementation forces the extraction.
+  `AntigravityCliProvider` generates/registers the command and owns the settings
+  lease; `AntigravityStatuslineSidecar.ts` watches the ctrlyoke-owned JSON
+  snapshot, accepts changed `_ctrlyoke.sequence` / `writtenAt` markers, and
+  feeds context-window updates into the existing pipeline. Model the Claude
+  collector on that split. Extract only the provider-neutral snapshot watcher,
+  marker/read/teardown mechanics into `src/core/harness/shared/`; command shape,
+  payload parsing, settings key/path, and forwarding the user's prior statusline
+  remain provider-specific. Dead-owner recovery already lives in the shared
+  `SettingsJsonMcpTracker` value-lease implementation.
 - **Copilot OTel is already implemented.** `CopilotLogParser` sets
   `COPILOT_OTEL_ENABLED` / `COPILOT_OTEL_FILE_EXPORTER_PATH` and reads
   `gen_ai.usage.input_tokens` / `output_tokens` off each `chat <model>` span
-  incrementally during execution (`CopilotLogParser.ts:116-237`). The
-  "Copilot CLI observed-usage collector" in Phase 3 is therefore mostly wiring an
-  existing signal into the usage store, not new parsing.
+  incrementally during execution (`CopilotLogParser.ts:116-237`). The token plan
+  only needs to make cumulative input lossless; the usage store then receives
+  Copilot through the same run aggregate as every other harness, not a direct
+  OTel feed.
 - **Antigravity is a first-class harness now** and was missing from this plan
   entirely. The six harnesses are `HARNESS_IDS` in
   `src/types/DashboardConstants.ts`; "Gemini" in the old adapter list was not one
@@ -74,8 +81,11 @@ that changes the build plan materially:
   `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md` defines normalized per-attempt
   `TokenStats` totals and a per-run `WorkflowTokenTotals` aggregate persisted in
   the run's working file and manifest. `HarnessObservedTokens` must be summed
-  **from those**, not from a second parse of `events.jsonl`. That plan is a hard
-  prerequisite for this one's Phase 1.
+  **from the persisted `WorkflowTokenTotals.byLocalDay` per-harness
+  subtotals**, not from a second parse of `events.jsonl`, provider transcripts,
+  or OTel. `byHarness` is the run-level cross-check; whole-run totals are not
+  enough because one run may use multiple harnesses or span multiple days. That
+  plan is a hard prerequisite for this one's Phase 1.
 - **Cost estimation moved.** Per-attempt and per-run dollar estimates, the model
   price table, and the cache-subset billing rules now live in
   `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`. This plan consumes those numbers for its
@@ -123,29 +133,41 @@ Implementation implications:
   ctrlyoke temp path, poll for marker changes, parse, discard the raw file.
   Scope it to sessions ctrlyoke starts, enabled automatically (see Open
   Questions), and release the settings lease on teardown — including after a
-  crashed host, which is why the Antigravity implementation's dead-owner
-  recovery is part of what gets extracted rather than reinvented.
+  crashed host by reusing `SettingsJsonMcpTracker`'s existing dead-owner
+  recovery rather than reinventing it.
 - Parse `rate_limits.five_hour.{used_percentage,resets_at}` and
   `rate_limits.seven_day.{used_percentage,resets_at}` for provider quota.
-- Parse transcript JSONL for observed history, deduplicating repeated assistant
-  `message.id` values — Claude transcripts emit multiple content records per API
-  response.
+- Do not parse Claude transcripts for the MVP observed rollup. That would count
+  activity outside ctrlyoke, duplicate the normalized attempt pipeline, and add
+  a broader privacy surface. If product scope later expands to "all Claude Code
+  activity," model it as a separate provider-history source and deduplicate
+  repeated assistant `message.id` values.
 - Use `claude auth status` only for capability/auth state, with strict redaction.
 - Do not parse the human `/usage` screen as the primary integration.
 
-Confidence: high for status-line/transcript paths; medium for using status-line
-as a background quota probe, since rate limits only appear after a live API
-response.
+Confidence: high for status-line capture during a ctrlyoke session; medium for
+using it as a background quota probe, since rate limits only appear after a live
+API response. A normalized persisted last-known snapshot is therefore required
+for a pre-launch warning before the first Claude turn after host startup.
 
 ### Codex CLI
 
-Confirmed surfaces:
+Confirmed/rechecked surfaces:
 
-- `codex --help` listed no `status` top-level command in `0.139.0`.
+- `codex --help` still lists no `status` top-level command in `0.146.0`.
 - `codex login status` reports authentication mode only.
 - `codex doctor --json` emits redacted install/auth/config/state diagnostics, no
   quota.
 - `codex exec --json` exists for machine-readable non-interactive runs.
+- The documented Codex app-server account surface now includes
+  `account/rateLimits/read` and `account/rateLimits/updated`, returning
+  `usedPercent`, `windowDurationMins`, `resetsAt`, optional plan/credit fields,
+  and a multi-bucket `rateLimitsByLimitId` view. Starting app-server and reading
+  account state does not launch a model turn. The `app-server` command is still
+  labelled experimental, so capability/version gating and the rollout fallback
+  remain required.
+- The TUI now has `/usage` and can display daily, weekly, or cumulative account
+  token activity. It remains a human UI, not the integration surface.
 - Local `~/.codex/sessions/**/rollout-*.jsonl` files contain `event_msg` entries
   of payload type `token_count` with:
   - `info.total_token_usage`, `info.last_token_usage`, `info.model_context_window`
@@ -157,13 +179,19 @@ Confirmed surfaces:
 - `~/.codex` also holds `history.jsonl`, `logs_2.sqlite`, `state_5.sqlite`,
   `models_cache.json`. Rollout JSONL is easier and less invasive than SQLite.
 
-Implementation implications:
+Implementation implications, in priority order:
 
-- **ctrlyoke already parses the token half of this shape.**
+- First spike a short-lived stdio `codex app-server` client that initializes,
+  calls `account/rateLimits/read`, normalizes only quota fields, and shuts down.
+  Prefer this documented provider-live source when the installed version
+  supports it. Redact/ignore account identity returned by sibling methods.
+- **Keep rollout parsing as a defensive fallback. ctrlyoke already parses the
+  token half of this shape.**
   `CodexLogParser.ts:230-250` reads `token_count.info.total_token_usage`,
   `last_token_usage`, and `model_context_window`. The usage provider needs the
   sibling `rate_limits` object from the same event — extend the existing parse
-  site rather than adding a second reader over the same file.
+  site and route a normalized signal through an injected callback/metadata
+  field rather than adding a second reader over the same file.
 - Treat `rate_limits.primary` / `.secondary` as **last-known** provider quota,
   refreshed whenever Codex emits token-count events, not an always-fresh global
   status.
@@ -174,20 +202,23 @@ Implementation implications:
 - `logs_2.sqlite` is a later optional investigation only; rollout JSONL already
   carries the needed fields.
 
-Confidence: high for local session-log parsing after Codex activity; high that no
-standalone `codex status` existed in the checked CLI; medium on long-term
-stability of the internal rollout schema.
+Confidence: high for the documented app-server rate-limit contract and local
+session-log parsing after Codex activity; high that no standalone top-level
+`codex status` exists in the rechecked CLI; medium on app-server process
+compatibility across installed versions and on long-term stability of the
+internal rollout fallback.
 
 ### GitHub Copilot CLI
 
 Confirmed surfaces:
 
 - `copilot --help` lists a `billing` help topic.
-- `copilot help billing` says: the footer continuously shows remaining AI credit
-  budget (or remaining premium requests on legacy billing); `/statusline`
-  supports `ai-credits` (monthly) and `ai-used` (session); legacy billing can use
-  `quota`; `/usage` shows session AI credit usage, token breakdown, and
-  usage-limit progress; `/context` shows context-window token usage.
+- In `1.0.78`, `copilot help billing` says the footer continuously shows
+  remaining AI credit budget (or remaining premium requests on legacy billing);
+  `/statusline` supports `quota` (plan-limit progress) and `ai-used` (session);
+  `/usage` shows session AI credit usage, token breakdown, and usage-limit
+  progress; `/context` shows context-window token usage. The earlier
+  `ai-credits` statusline item name is stale and must not be implemented.
 - `copilot -p "/usage" --output-format json --stream off` could not be validated
   in the research environment — an auth/network failure, not evidence the command
   cannot work.
@@ -211,8 +242,8 @@ Implementation implications:
   card should show AI credits (or premium requests on legacy billing) as the
   headline and tokens as secondary. Do not synthesize a dollar figure from token
   counts for Copilot.
-- Investigate a **Copilot status-line collector** only if `/statusline
-  ai-credits ai-used` can emit structured data. The help topic confirms item
+- Investigate a **Copilot status-line collector** only if `/statusline quota
+ai-used` can emit structured data. The help topic confirms item
   names, not a public JSON schema.
 - For personal account quota, prefer: an "Open GitHub usage dashboard" link;
   local/session usage; last-known CLI TUI data when available. Avoid undocumented
@@ -228,10 +259,10 @@ admin/org oriented; medium-high that no documented personal credit API exists.
 Not covered by the June research; added here from ctrlyoke's own implementation.
 
 - The statusline sidecar (`AntigravityStatuslineSidecar.ts`) already receives
-  periodic JSON snapshots containing `context_window.{total_input_tokens,
-  total_output_tokens, context_window_size, current_usage}` plus model
-  identity. Snapshots carry a ctrlyoke-written `_ctrlyoke.{sequence,writtenAt}`
-  marker used for change detection.
+  periodic JSON snapshots containing context-window input, output, capacity,
+  and current-usage fields plus model identity. Snapshots carry a
+  ctrlyoke-written `_ctrlyoke.{sequence,writtenAt}` marker used for change
+  detection.
 - Stream-json `result.usage` provides real billing-shaped totals
   (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`,
   `total_tokens`).
@@ -245,7 +276,7 @@ Not covered by the June research; added here from ctrlyoke's own implementation.
 
 Observed-only. OpenCode additionally self-reports per-step USD cost
 (`step_finish.part.cost`), which the observed rollup should carry through as
-authoritative spend for that harness rather than re-deriving it from tokens.
+the harness-reported cost for that run rather than re-deriving it from tokens.
 
 ### Existing VS Code Extensions
 
@@ -272,12 +303,14 @@ Add a compact **Usage** surface near existing harness controls:
 Each harness card shows:
 
 - provider display name
-- data source: `provider-live`, `provider-log`, `ctrlyoke-observed`,
-  `enterprise-api`, or `unavailable`
+- quota source: `provider-live`, `provider-log`, `enterprise-api`, or
+  `unavailable`; observed totals are always explicitly `ctrlyoke-observed`
 - freshness timestamp
 - active windows, if known, and reset time, if known
 - observed ctrlyoke token totals for today/week/month
-- observed spend, where a harness self-reports it or a model price is known
+- observed cost/equivalent estimate with provenance, where a harness
+  self-reports it or a model price is known; partial sums use `≥`, never `≈`
+  alone
 - last safe error code
 
 Usage lookup must never block workflow execution.
@@ -289,10 +322,9 @@ Usage lookup must never block workflow execution.
 Create a normalized usage contract in `src/types/UsageTypes.ts`:
 
 ```typescript
-export type HarnessUsageSource =
+export type HarnessQuotaSource =
   | "provider-live"
   | "provider-log"
-  | "ctrlyoke-observed"
   | "enterprise-api"
   | "unavailable";
 
@@ -303,13 +335,18 @@ export type HarnessUsageWindowKind =
   | "monthly"
   | "unknown";
 
+export type HarnessObservedPeriod = "daily" | "weekly" | "monthly";
+
 export interface HarnessUsageWindow {
+  /** Stable normalized key used to replace a pushed/refreshed window. */
+  id: string;
   kind: HarnessUsageWindowKind;
   label: string;
   used?: number;
   limit?: number;
   remaining?: number;
   percentUsed?: number;
+  /** Normalized Unix epoch milliseconds (provider seconds/ISO strings convert here). */
   resetAt?: number;
   windowMinutes?: number;
   unit: "tokens" | "credits" | "requests" | "percent" | "unknown";
@@ -325,36 +362,61 @@ export interface HarnessObservedTokens {
   total: number;
   /** Summed attempt cost where priceable. See PROMPT_TOTAL_TOKEN_USAGE_PLAN. */
   costUsd?: number;
+  /** Distinct cost provenances represented in `costUsd`, in stable display order. */
+  costSources?: AttemptCostSource[];
+  /** True when at least one token-bearing attempt in the window was unpriceable. */
+  costPartial?: boolean;
   /** True when at least one attempt in the window had no usable total. */
   partial?: boolean;
   since: number;
 }
 
-export interface HarnessUsageSnapshot {
+export interface HarnessQuotaSnapshot {
   harnessId: HarnessId;
-  source: HarnessUsageSource;
-  fetchedAt: number;
+  source: HarnessQuotaSource;
+  /** Last successful quota fetch/ingest; absent when quota was never available. */
+  fetchedAt?: number;
   staleAfterMs: number;
   windows: HarnessUsageWindow[];
-  observedTokens?: HarnessObservedTokens;
   planType?: string;
   message?: string;
   errorCode?: string;
 }
+
+export interface HarnessUsageSnapshot {
+  harnessId: HarnessId;
+  /** When this merged provider + observed snapshot was emitted. */
+  updatedAt: number;
+  quota: HarnessQuotaSnapshot;
+  /** Calendar observed totals; each value carries its own `since` boundary. */
+  observed: Partial<Record<HarnessObservedPeriod, HarnessObservedTokens>>;
+}
 ```
 
-Note the string-union fields above are display metadata, not flow control. Any
-value compared with `===` or switched on belongs in `DashboardConstants.ts` as a
-`const` object per the project's coding principles — including
-`HARNESS_USAGE_SOURCES` and the window kinds.
+The snippet uses string literals for readability. In implementation, define the
+quota sources, observed periods, confidence values, units, and window kinds as
+`const` objects in `DashboardConstants.ts`, then derive the union types from
+those objects; do not maintain parallel handwritten string unions. Define and
+test timestamp units at the normalization boundary: ctrlyoke uses epoch
+milliseconds everywhere even when Codex returns Unix seconds or Claude returns
+an ISO string.
 
 Model **multiple windows**: Claude exposes five-hour and seven-day windows via
 status line, Codex session logs expose primary/secondary, Copilot may expose
 monthly credits alongside session usage.
 
-`HarnessObservedTokens` fields map one-to-one onto the normalized `TokenStats`
-from `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`. Keep them aligned; a divergence means
-two different answers to "how many tokens did I use" in the same product.
+The token and cost fields on `HarnessObservedTokens` map directly from the
+corresponding `WorkflowTokenTotals.byLocalDay` subtotal fields in
+`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`; `partial` derives from subtotal coverage.
+Keep those meanings aligned—a divergence means two different answers to “how
+many tokens did I use” in the same product.
+
+Initial freshness policy (constants, not component literals): provider-live
+snapshots are fresh for 5 minutes; provider-log fallbacks are fresh for 15
+minutes; either expires earlier when its window has reset. Refresh in the
+background when the quick picker/settings card opens and after relevant harness
+events. The launch path reads the cache synchronously and never waits for a
+network/process probe.
 
 ---
 
@@ -369,7 +431,12 @@ Responsibilities:
 - maintain an in-memory cache keyed by harness ID
 - debounce refreshes
 - expose `refreshHarnessUsage(harnessId)` and `refreshAllHarnessUsage()`
+- accept push updates from active parser/sidecar paths through an injected
+  `ingestProviderUsage(...)` port; parsers must not import a service singleton
 - merge provider snapshots with ctrlyoke-observed token stats
+- load/store normalized last-known provider windows in
+  `.ctrlyoke/.usage/provider-snapshots.json` so Claude can warn before the first
+  turn after a host restart; never persist raw payloads or identity fields
 - emit dashboard updates
 - never write account-specific details to logs
 
@@ -378,31 +445,48 @@ Responsibilities:
 ```typescript
 export interface IHarnessUsageProvider {
   readonly harnessId: HarnessId;
-  refreshUsage(signal?: AbortSignal): Promise<HarnessUsageSnapshot>;
+  refreshUsage(signal?: AbortSignal): Promise<HarnessQuotaSnapshot>;
 }
 ```
+
+`refreshUsage` is the pull path used by commands/cards. Active harness parsers
+and sidecars use the service's push port. Both paths enter the same normalizer,
+cache, persistence, staleness, and message pipeline.
 
 Adapters, one per `HARNESS_IDS` entry — every adapter declares
 `implements IHarnessUsageProvider` explicitly:
 
-- `ClaudeUsageProvider` — status-line sidecar for live windows; transcript parser
-  for observed history.
-- `CodexUsageProvider` — rollout JSONL `rate_limits` for provider-log windows,
-  reusing the existing `token_count` parse site.
-- `CopilotUsageProvider` — OTel-derived observed usage; optional
+- `ClaudeUsageProvider` — status-line sidecar for live windows. Observed totals
+  come only from completed ctrlyoke run aggregates.
+- `CodexUsageProvider` — documented app-server `account/rateLimits/read` for
+  provider-live windows; rollout JSONL `rate_limits` fallback reusing the
+  existing `token_count` parse site.
+- `CopilotUsageProvider` — observed totals from the shared run rollup; optional
   status-line/TUI research path; GitHub dashboard link fallback.
 - `AntigravityUsageProvider` — observed-only until a quota field is found in the
   statusline snapshot.
 - `ObservedOnlyUsageProvider` — OpenCode and Qwen. OpenCode passes through its
-  self-reported per-step USD cost.
+  observed self-reported cost only through the shared run rollup.
 
 ### 3. Observed Usage Store
 
-Persist a small workspace-local rollup in `.ctrlyoke/.usage/observed-usage.json`,
-fed by the per-run `WorkflowTokenTotals` written at run completion. This is not a
-quota source — it records what ctrlyoke launched or safely observed locally.
+Persist a versioned workspace-local rollup in
+`.ctrlyoke/.usage/observed-usage.json`, fed only by
+`WorkflowTokenTotals.byLocalDay` at every terminal run transition (`completed`,
+`stopped`, or `error`). This is not a quota source — it records what ctrlyoke
+launched or safely observed locally.
 
-Bucket by local day/week/month at write time so reads never scan runs.
+The store must be idempotent by durable `(workflowKey, runRef)` identity. A
+same-run continuation or repaired terminal transition upserts/replaces that
+run's contribution instead of adding it again. Persist the small per-run
+contribution ledger keyed by local day so an upsert can subtract the old
+contribution and add the new one without scanning run files. Derive ISO weeks
+(Monday start) and calendar months from those day keys. Mixed-harness and
+multi-day runs apply their `byLocalDay` subtotals independently. Prune
+contributions once none of their day keys can affect a retained window so the
+file stays bounded. File writes use the project's atomic-write and lock
+patterns; malformed data is quarantined/reset with a safe error code, never
+allowed to block execution.
 
 ### 4. Webview Messages
 
@@ -416,21 +500,33 @@ export interface HarnessUsageUpdatedMessage {
 }
 ```
 
+Register `ctrlyoke.refreshHarnessUsage` and the optional provider-dashboard
+command through the existing extension command surface (`package.json` plus
+`extension.ts`), and route webview requests through `WebviewMessageRouter` /
+the dashboard sink rather than calling core services from React.
+
 ---
 
 ## Implementation Phases
 
-**Prerequisite:** Phases 1–3 of `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`. Without
-normalized per-run totals there is nothing correct to roll up, and building a
-parallel token pipeline here would be the exact duplication both plans warn
-against.
+**Prerequisite:** combined stages 1–3 in
+`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`'s
+[Recommended Combined Staging Order](PROMPT_TOTAL_TOKEN_USAGE_PLAN.md#recommended-combined-staging-order).
+Without normalized per-run `byHarness` / `byLocalDay` totals there is nothing
+correct to roll up, and building a parallel token pipeline here would be the
+exact duplication both plans warn against.
 
 ### Phase 1: Observed Usage Baseline
 
 - [ ] Add `UsageTypes.ts` and the matching constants in `DashboardConstants.ts`
-- [ ] Add `ObservedHarnessUsageStore`, fed by run-completion `WorkflowTokenTotals`
+- [ ] Add the canonical `.usage` path constants plus versioned, atomic
+      normalized-provider and observed-rollup stores
+- [ ] Add `ObservedHarnessUsageStore`, idempotently fed at every terminal state
+      by `(workflowKey, runRef)` and `WorkflowTokenTotals.byLocalDay`
 - [ ] Render usage cards in `HarnessesSection.tsx` showing observed totals
-- [ ] Tests for rollup bucketing, corrupt-file recovery, and stale snapshots
+- [ ] Tests for local day/ISO-week/month bucketing, mixed-harness attribution,
+      same-run continuation replacement, repeated terminal notification,
+      corrupt-file recovery, and stale snapshots
 
 ### Phase 2: Claude And Codex Provider Signals
 
@@ -438,16 +534,26 @@ against.
       `AntigravityStatuslineSidecar.ts` into `src/core/harness/shared/`
 - [ ] Add `ClaudeUsageProvider` + a generated Claude status-line command built on
       the extracted sidecar; parse `rate_limits`
-- [ ] Parse Claude transcript JSONL with assistant-message deduplication
-- [ ] Add `CodexUsageProvider`; read `rate_limits` at the existing `token_count`
-      parse site
-- [ ] Map Codex primary/secondary windows to normalized kinds by `window_minutes`
-- [ ] Redaction tests for `claude auth status`
+- [ ] Preserve/forward the user's prior Claude statusline command, release the
+      shared settings lease on every teardown path, and persist normalized
+      last-known windows only
+- [ ] Spike a short-lived stdio Codex app-server client and use
+      `account/rateLimits/read` when supported; fall back safely on unsupported
+      versions/auth modes
+- [ ] Add the Codex rollout fallback; read `rate_limits` at the existing
+      `token_count` parse site and push the normalized signal through an
+      injected port
+- [ ] Map both app-server `windowDurationMins` and rollout `window_minutes`
+      through one duration-based window normalizer
+- [ ] Redaction, epoch-seconds/ISO-to-milliseconds, abort/timeout, app-server
+      teardown, multi-bucket/window replacement, settings-lease recovery, and
+      provider-schema drift tests
 
 ### Phase 3: Copilot Usage
 
-- [ ] Route existing OTel span usage into the observed store
-- [ ] Investigate whether `/statusline ai-credits ai-used` can emit structured
+- [ ] Consume Copilot's existing OTel totals only through the shared
+      `WorkflowTokenTotals.byLocalDay` rollup; add no Copilot-specific store feed
+- [ ] Investigate whether `/statusline quota ai-used` can emit structured
       data or only TUI text
 - [ ] Show AI credits (not dollars) as Copilot's headline unit
 - [ ] Add a GitHub usage dashboard link for personal accounts
@@ -462,15 +568,20 @@ against.
 
 ### Phase 5: Selection Assist — the motivating outcome
 
-- [ ] Near-limit warnings before starting a large queue: compare queue size
-      against the harness's freshest quota window and warn when the window is
-      nearly exhausted. Warn, never block — the user may knowingly want to burn
-      the remainder, and a stale or absent window must not gate execution.
+- [ ] Near-limit warnings before starting a queue: if at least one remaining AI
+      attempt is queued and any fresh provider window has `percentUsed` at or
+      above a configurable threshold (default recommendation: 80%), warn. Queue
+      length supplies context in the message; it is not converted into quota or
+      treated as a prediction. Warn, never block — the user may knowingly want
+      to burn the remainder.
 - [ ] Say which window triggered the warning and when it resets; a bare "low
       quota" is not actionable.
-- [ ] Suppress the warning entirely when the snapshot is `unavailable` or stale
-      past `staleAfterMs`, rather than guessing.
-- [ ] Fallback harness suggestions based on stale/fresh usage data
+- [ ] Suppress the warning entirely when `snapshot.quota.source` is
+      `unavailable` or the quota snapshot is stale past
+      `snapshot.quota.staleAfterMs`, rather than guessing.
+- [ ] Suggest a fallback only when its comparable provider window is fresh and
+      materially less used; never rank an observed-only or stale harness as if
+      its missing quota meant zero usage
 - [ ] User-configurable preferred fallback order
 
 ---
@@ -479,8 +590,10 @@ against.
 
 Non-negotiables:
 
-- Do not store raw `/usage`, `/status`, status-line payloads, auth status output,
-  or provider transcripts.
+- Do not retain raw `/usage`, `/status`, auth output, or provider transcripts.
+  A statusline wrapper may use one ctrlyoke temp snapshot as its transport, but
+  it must be workspace-scoped, never logged/copied to durable usage storage, and
+  deleted on teardown/recovery.
 - Do not log emails, org IDs, org names, account IDs, access tokens, session
   tokens, or billing identifiers.
 - Store only normalized numbers, reset timestamps, source/freshness, and generic
@@ -496,7 +609,9 @@ Potential setting:
   "enabled": true,
   "providerRefreshEnabled": true,
   "persistObservedUsage": true,
-  "enterpriseUsageApisEnabled": false
+  "enterpriseUsageApisEnabled": false,
+  "warningPercentUsed": 80,
+  "preferredFallbackOrder": []
 }
 ```
 
@@ -510,9 +625,9 @@ Decided August 8, 2026:
   pre-queue near-limit warning are wanted features, and the status line is the
   only machine-readable source for `rate_limits` — verified empirically, not
   just from docs: a scan of 25 local transcripts found no `five_hour` /
-  `seven_day` / `resets_at` fields anywhere, and `claude -p "/usage"
-  --output-format json` returns only a subscription blurb. The sidecar earns its
-  cost (a leased key in the user's global Claude settings, with dead-owner
+  `seven_day` / `resets_at` fields anywhere, and a JSON-output invocation of
+  Claude's `/usage` command returns only a subscription blurb. The sidecar earns
+  its cost (a leased key in the user's global Claude settings, with dead-owner
   recovery) because nothing else answers the question.
 - **Enable Claude status-line capture automatically for ctrlyoke-started Claude
   sessions**, matching the Antigravity sidecar precedent, on the condition that
@@ -522,19 +637,67 @@ Decided August 8, 2026:
 - **Treat Codex `token_count.rate_limits` as best-effort internal parsing**, not
   a stable contract. Parse defensively, tolerate absent or renamed fields, and
   degrade that harness to `ctrlyoke-observed` rather than erroring when the
-  shape drifts. The same rule applies to the Claude status-line schema.
+  shape drifts. Prefer the documented app-server `account/rateLimits/read`
+  result when available. The same defensive rule applies to the Claude
+  status-line schema.
 
 Still open:
 
-1. Can Copilot `/statusline ai-credits ai-used` be captured as structured data,
-   or only as TUI text?
+1. Can Copilot `/statusline quota ai-used` be captured as structured data,
+   or only as TUI text? **Recommendation:** update the spike to the current
+   `quota` + `ai-used` item names, timebox it, and do not parse ANSI/private TUI
+   state. If there is no structured surface, ship observed OTel-derived totals
+   plus the GitHub dashboard link.
 2. Should observed usage be workspace-local only, or should users opt into a
    user-level aggregate across workspaces? (Workspace-local is the Phase 1
    default either way; this only decides whether the opt-in exists.)
+   **Recommendation:** do not add the user-level aggregate in the first
+   implementation. It expands privacy, migration, and cross-process locking
+   scope without helping the pre-launch quota warning.
 3. Does Antigravity expose any quota field at all? Unknown until Phase 4.
-4. Do the June-2026 CLI findings still hold on current CLI versions? Re-verify
-   the Claude status-line schema and the Codex rollout shape before Phase 2 —
-   both are internal formats with no stability guarantee.
+   **Recommendation:** remain observed-only unless a documented or stable
+   structured field is found; absence must not be rendered as available quota.
+4. Do the provider schemas still match at implementation time? Local CLI help
+   was rechecked August 9, 2026, and Codex now has a documented app-server
+   source, but Claude status-line and the Codex rollout fallback remain
+   version-sensitive. **Recommendation:** keep fixture-based drift tests and a
+   pre-merge live-schema verification task; degrade safely rather than block the
+   core feature.
+
+None of these questions blocks combined stages 1–7. They decide optional
+provider enrichment or are explicit verification gates with safe fallbacks.
+
+---
+
+## Acceptance Criteria
+
+- Observed totals come only from terminal, persisted
+  `WorkflowTokenTotals.byLocalDay` snapshots; no usage provider reparses output
+  events, OTel, or Claude transcripts.
+- Repeated terminal notifications and same-run continuations replace one durable
+  run contribution rather than double-counting it.
+- Mixed-harness runs update the correct harness buckets independently.
+- Multi-day runs update the correct local-day buckets instead of assigning all
+  usage to their terminal date.
+- Quota source and ctrlyoke-observed source are labelled separately; missing
+  quota is never interpreted as zero usage or unlimited capacity.
+- Codex uses `account/rateLimits/read` when supported and degrades to defensive
+  last-known rollout parsing or observed-only without blocking execution.
+- Claude's collector preserves the user's prior statusline, shares the
+  ownership-aware settings lease, recovers dead owners, and persists only
+  normalized windows.
+- Every provider timestamp is normalized to epoch milliseconds and every stale
+  decision uses `snapshot.quota.fetchedAt` plus the source-specific
+  `snapshot.quota.staleAfterMs` value.
+- Refresh, provider failures, malformed cache files, and dashboard delivery are
+  non-blocking for workflow execution.
+- Pre-launch warnings use fresh provider percentages only, name the triggering
+  window/reset, and warn rather than block.
+- No durable usage file or log contains account identity, credentials, raw
+  provider payloads, or transcript content; ephemeral statusline transport files
+  are removed on teardown/recovery.
+- The full implementation follows the canonical cross-plan staging order in
+  `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`.
 
 ---
 
@@ -549,6 +712,7 @@ Still open:
 - Anthropic Claude Code Analytics Admin API: https://platform.claude.com/docs/en/manage-claude/claude-code-analytics-api
 - Codex CLI reference: https://developers.openai.com/codex/cli/reference
 - Codex CLI slash commands: https://developers.openai.com/codex/cli/slash-commands
+- Codex app-server account/rate-limit protocol: https://learn.chatgpt.com/docs/app-server
 - Codex config/state locations: https://developers.openai.com/codex/config-advanced#config-and-state-locations
 - Codex enterprise governance/analytics: https://developers.openai.com/codex/enterprise/governance
 - GitHub Copilot models and pricing: https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing

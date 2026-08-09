@@ -254,7 +254,7 @@ const EditorSectionInner: React.FC = () => {
                 onBlur={saveNameEdit}
                 placeholder="Step name (optional)"
                 aria-label="Step name"
-                className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48"
+                className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48 max-w-full min-w-0"
                 style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
               />
             ) : (
