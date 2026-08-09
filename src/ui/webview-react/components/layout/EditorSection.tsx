@@ -7,7 +7,10 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { formatMagnitude } from "../../utils/number";
-import { PromptEditor } from "../editor/PromptEditor";
+import {
+  PromptEditor,
+  type PromptFileAction,
+} from "../editor/PromptEditor";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
   FINAL_STEP_PHASES,
@@ -56,6 +59,8 @@ const EditorSectionInner: React.FC = () => {
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = steps.length;
+  const [promptFileAction, setPromptFileAction] =
+    useState<PromptFileAction | null>(null);
 
   // Steps preceding this prompt — folds into prior-context ($previous, $step:N)
   // token estimates. Editing queue step i: steps 0..i-1 precede it. New prompt
@@ -294,7 +299,21 @@ const EditorSectionInner: React.FC = () => {
           </span>
         </div>
 
-        {/* Right: Git ignore toggle */}
+        {/* Right: prompt-file action and Git ignore toggle */}
+        {!isCLIManaged && !isScriptMode && promptFileAction && (
+          <button
+            type="button"
+            onClick={promptFileAction.onClick}
+            disabled={promptFileAction.disabled}
+            title={promptFileAction.tooltip}
+            aria-label={promptFileAction.tooltip}
+            className="control-button flex items-center px-1 bg-transparent border-none cursor-pointer leading-none transition-colors select-none disabled:opacity-50 disabled:cursor-not-allowed text-description-fg hover:text-foreground"
+          >
+            <i
+              className={`codicon codicon-lg codicon-${promptFileAction.icon}`}
+            />
+          </button>
+        )}
         {!isCLIManaged && (
           <IconToggleButton
             active={globalSettings.respectGitignore}
@@ -309,7 +328,10 @@ const EditorSectionInner: React.FC = () => {
 
       {/* Content area */}
       <div className="prompt-editor-wrapper flex flex-1 min-h-0 overflow-hidden relative">
-        <PromptEditor isCLIManaged={isCLIManaged} />
+        <PromptEditor
+          isCLIManaged={isCLIManaged}
+          onPromptFileActionChange={setPromptFileAction}
+        />
       </div>
     </section>
   );

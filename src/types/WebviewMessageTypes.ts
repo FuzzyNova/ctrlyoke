@@ -1041,6 +1041,47 @@ export interface PromptEditorInsertMessage {
   data: PromptEditorInsertRequest;
 }
 
+/** Webview → Extension: validate a lone prompt-file reference. */
+export interface ValidateFileRefMessage {
+  type: typeof MESSAGE_TYPES.VALIDATE_FILE_REF;
+  filePath: string;
+  seq?: number;
+  address?: WorkflowViewAddress;
+}
+
+/** Extension → Webview: addressed validation result for a prompt-file reference. */
+export interface FileRefValidationMessage {
+  type: typeof MESSAGE_TYPES.FILE_REF_VALIDATION;
+  filePath: string;
+  exists: boolean;
+  isEmpty: boolean;
+  resolvedPath?: string;
+  seq?: number;
+}
+
+/** Webview → Extension: write the current prompt text to a prompt file. */
+export interface ConvertPromptToFileMessage {
+  type: typeof MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE;
+  text: string;
+  suggestedName?: string;
+  seq?: number;
+}
+
+/** Extension → Webview: result of a prompt-file conversion. */
+export interface PromptFileCreatedMessage {
+  type: typeof MESSAGE_TYPES.PROMPT_FILE_CREATED;
+  reference?: string;
+  resolvedPath?: string;
+  error?: string;
+  seq?: number;
+}
+
+/** Webview → Extension: open a prompt-file reference in the editor. */
+export interface OpenPromptFileMessage {
+  type: typeof MESSAGE_TYPES.OPEN_PROMPT_FILE;
+  path: string;
+}
+
 /**
  * Global settings updated message (extension -> webview)
  */
@@ -1958,6 +1999,8 @@ export type IncomingMessage =
   | ActiveWorkflowChangedMessage
   | ExecutionPreviewResultMessage
   | PromptEditorInsertMessage
+  | FileRefValidationMessage
+  | PromptFileCreatedMessage
   | GlobalSettingsUpdatedMessage
   | SearchHistoryResultsMessage
   | OutputHistoryLoadedMessage

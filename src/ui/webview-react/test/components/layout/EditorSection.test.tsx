@@ -6,13 +6,30 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { RUNNER_IDS, STEP_TYPES } from "@root/types/DashboardConstants";
 
-const { attachmentTokenCount } = vi.hoisted(() => ({
+const { attachmentTokenCount, promptFileAction } = vi.hoisted(() => ({
   attachmentTokenCount: { value: 128 },
+  promptFileAction: { value: null as null | {
+    icon: string;
+    tooltip: string;
+    disabled: boolean;
+    onClick: () => void;
+  } },
 }));
 
 vi.mock("../../../components/editor/PromptEditor", () => ({
-  PromptEditor: () => <div data-testid="prompt-editor" />,
+  PromptEditor: ({
+    onPromptFileActionChange,
+  }: {
+    onPromptFileActionChange?: (action: typeof promptFileAction.value) => void;
+  }) => {
+    React.useEffect(() => {
+      onPromptFileActionChange?.(promptFileAction.value);
+      return () => onPromptFileActionChange?.(null);
+    }, [onPromptFileActionChange]);
+    return <div data-testid="prompt-editor" />;
+  },
 }));
 
 vi.mock("../../../components/shared", () => ({
@@ -62,7 +79,50 @@ function resetStores() {
 describe("EditorSection", () => {
   beforeEach(() => {
     attachmentTokenCount.value = 128;
+    promptFileAction.value = null;
     resetStores();
+  });
+
+  it.each([
+    ["prompt text", "file-symlink-file", "Convert to prompt file"],
+    ["empty prompt", "file-symlink-file", "Write this prompt in a file"],
+    ["prompt file", "go-to-file", "Open prompt file"],
+  ])("renders the prompt-file action for %s", (_state, icon, tooltip) => {
+    const onClick = vi.fn();
+    promptFileAction.value = { icon, tooltip, disabled: false, onClick };
+
+    render(<EditorSection />);
+
+    const action = screen.getByRole("button", { name: tooltip });
+    expect(action).toHaveAttribute("title", tooltip);
+    expect(action.querySelector(`.codicon-${icon}`)).not.toBeNull();
+    fireEvent.click(action);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("hides the prompt-file action for script steps and CLI-managed workflows", () => {
+    promptFileAction.value = {
+      icon: "file-symlink-file",
+      tooltip: "Convert to prompt file",
+      disabled: false,
+      onClick: vi.fn(),
+    };
+    useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+    render(<EditorSection />);
+    expect(
+      screen.queryByRole("button", { name: "Convert to prompt file" })
+    ).not.toBeInTheDocument();
+
+    useEditorStore.getState().setStepType(STEP_TYPES.PROMPT);
+    useUiStore.setState({
+      loadedWorkflows: [
+        { id: "cli", managedBy: RUNNER_IDS.CLI } as never,
+      ],
+      activeWorkflowId: "cli",
+    });
+    expect(
+      screen.queryByRole("button", { name: "Convert to prompt file" })
+    ).not.toBeInTheDocument();
   });
 
   it("defaults new steps to enabled and lets the user disable them", () => {

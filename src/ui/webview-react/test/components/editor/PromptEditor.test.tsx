@@ -8,7 +8,7 @@
  * run when an older run was selected.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Stub HarnessIcon so this test does not depend on `?raw` SVG asset
@@ -19,7 +19,10 @@ vi.mock("@components/shared/HarnessIcon", () => ({
   HarnessIcon: () => null,
 }));
 
-import { PromptEditor } from "@components/editor/PromptEditor";
+import {
+  PromptEditor,
+  type PromptFileAction,
+} from "@components/editor/PromptEditor";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -201,5 +204,140 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     const message = findExecutePromptMessage();
     expect(message).toBeDefined();
     expect(message).not.toHaveProperty("mutation");
+  });
+});
+
+describe("PromptEditor — prompt-file action", () => {
+  function renderWithAction() {
+    let action: PromptFileAction | null = null;
+    render(
+      <PromptEditor
+        onPromptFileActionChange={(nextAction) => {
+          action = nextAction;
+        }}
+      />
+    );
+    return () => action;
+  }
+
+  it("keeps the editor text until conversion succeeds, then persists and opens the file", async () => {
+    useEditorStore.getState().setPromptText("exact text\nwith whitespace\n");
+    const getAction = renderWithAction();
+
+    await waitFor(() => expect(getAction()?.tooltip).toBe("Convert to prompt file"));
+    getAction()?.onClick();
+
+    const request = postMessageSpy.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE
+    )?.[0] as { seq: number; text: string };
+    expect(request.text).toBe("exact text\nwith whitespace\n");
+    expect(useEditorStore.getState().promptText).toBe(
+      "exact text\nwith whitespace\n"
+    );
+
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+          seq: request.seq,
+          reference: "./.ctrlyoke/prompts/exact-text.prompt.md",
+          resolvedPath: "C:/workspace/.ctrlyoke/prompts/exact-text.prompt.md",
+        },
+      })
+    );
+
+    await waitFor(() =>
+      expect(useEditorStore.getState().promptText).toBe(
+        "./.ctrlyoke/prompts/exact-text.prompt.md"
+      )
+    );
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
+      path: "C:/workspace/.ctrlyoke/prompts/exact-text.prompt.md",
+    });
+  });
+
+  it("leaves the editor unchanged when conversion fails or a late reply arrives", async () => {
+    useEditorStore.getState().setPromptText("keep this text");
+    const getAction = renderWithAction();
+    await waitFor(() => expect(getAction()?.tooltip).toBe("Convert to prompt file"));
+    getAction()?.onClick();
+    const request = postMessageSpy.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE
+    )?.[0] as { seq: number };
+
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+          seq: request.seq + 1,
+          reference: "./late.prompt.md",
+          resolvedPath: "C:/late.prompt.md",
+        },
+      })
+    );
+    expect(useEditorStore.getState().promptText).toBe("keep this text");
+
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+          seq: request.seq,
+          error: "No workspace folder open",
+        },
+      })
+    );
+    expect(useEditorStore.getState().promptText).toBe("keep this text");
+  });
+
+  it("shows the empty-file state and opens using the latest resolved validation path", async () => {
+    useEditorStore
+      .getState()
+      .setPromptText("./.ctrlyoke/prompts/draft.prompt.md");
+    const getAction = renderWithAction();
+
+    await waitFor(() =>
+      expect(
+        postMessageSpy.mock.calls.some(
+          ([message]) =>
+            (message as { type?: string }).type ===
+            MESSAGE_TYPES.VALIDATE_FILE_REF
+        )
+      ).toBe(true)
+    );
+    const validationRequests = postMessageSpy.mock.calls
+      .map(([message]) => message as { type?: string; seq?: number })
+      .filter((message) => message.type === MESSAGE_TYPES.VALIDATE_FILE_REF);
+    const request = validationRequests[validationRequests.length - 1]!;
+
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.FILE_REF_VALIDATION,
+          seq: request.seq,
+          filePath: "./.ctrlyoke/prompts/draft.prompt.md",
+          exists: true,
+          isEmpty: true,
+          resolvedPath: "C:/workspace/.ctrlyoke/prompts/draft.prompt.md",
+        },
+      })
+    );
+
+    expect(await waitFor(() => getAction()?.tooltip)).toBe("Open prompt file");
+    expect(await waitFor(() => getAction()?.disabled)).toBe(false);
+    expect(screen.getByText("Prompt file is empty")).toBeInTheDocument();
+    getAction()?.onClick();
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
+      path: "C:/workspace/.ctrlyoke/prompts/draft.prompt.md",
+    });
   });
 });

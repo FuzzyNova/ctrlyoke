@@ -1066,6 +1066,9 @@ export const PASTING_IMAGE_PLACEHOLDER = "[Pasting image…]";
 /** Milliseconds before an unanswered SAVE_PASTED_IMAGE round trip is treated as failed. */
 export const PASTED_IMAGE_SAVE_TIMEOUT_MS = 30_000;
 
+/** Milliseconds before an unanswered prompt-file conversion is treated as failed. */
+export const PROMPT_FILE_CONVERSION_TIMEOUT_MS = 30_000;
+
 /**
  * Map a clipboard MIME type to its on-disk extension, or `undefined` if the
  * type is not an accepted image type.

@@ -1,4 +1,10 @@
-import React, { useCallback, useRef, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
@@ -24,8 +30,12 @@ import {
   EDITOR_PLACEHOLDER_TEXT,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  PROMPT_FILE_CONVERSION_TIMEOUT_MS,
 } from "../../types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  STEP_TYPES,
+  USER_FEEDBACK_SEVERITY,
+} from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
@@ -34,6 +44,15 @@ import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
   isCLIManaged?: boolean;
+  /** Supplies the header action without moving its state out of the editor. */
+  onPromptFileActionChange?: (action: PromptFileAction | null) => void;
+}
+
+export interface PromptFileAction {
+  icon: "file-symlink-file" | "go-to-file";
+  tooltip: string;
+  disabled: boolean;
+  onClick: () => void;
 }
 
 /**
@@ -48,6 +67,7 @@ interface PromptEditorProps {
  */
 export const PromptEditor: React.FC<PromptEditorProps> = ({
   isCLIManaged = false,
+  onPromptFileActionChange,
 }) => {
   const {
     selectionTarget,
@@ -92,6 +112,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     propertiesDrawerOpen,
     togglePropertiesDrawer,
     closePropertiesDrawer,
+    showToast,
   } = useUiStore();
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
@@ -135,13 +156,27 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const vscode = getVsCodeApi();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const validationSeqRef = useRef(0);
+  const validationTargetRef = useRef("");
+  const conversionSeqRef = useRef(0);
+  const conversionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  // null = not applicable / pending, true = file found, false = file not found
-  const [fileRefExists, setFileRefExists] = useState<boolean | null>(null);
+  const [fileRefValidation, setFileRefValidation] = useState<{
+    target: string;
+    exists: boolean;
+    isEmpty: boolean;
+    resolvedPath?: string;
+  } | null>(null);
+  const [fileRefValidationPending, setFileRefValidationPending] =
+    useState(false);
+  const [isPromptFileConversionBusy, setIsPromptFileConversionBusy] =
+    useState(false);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const isFinalStep = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
@@ -171,6 +206,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     selectedPromptStatus === STEP_STATUS.RUNNING;
   // Delete button: disabled only when prompt is actively running
   const isPromptActivelyRunning = selectedPromptStatus === STEP_STATUS.RUNNING;
+  const isPromptExecutionLocked =
+    isPromptBeingSent || (isRunning && !isPromptCompleted);
   const pendingPromptEditorInsert = pendingPromptEditorInserts[0] ?? null;
 
   const { affUri, dicUri } = getDictionaryUris();
@@ -253,48 +290,6 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [propertiesDrawerOpen, closePropertiesDrawer]);
-
-  // Validate file-ref path when the editor contains a lone file path.
-  // Debounced to avoid spamming on every keystroke.
-  useEffect(() => {
-    if (!isFileRef) {
-      setFileRefExists(null);
-      if (validateTimeoutRef.current) {
-        clearTimeout(validateTimeoutRef.current);
-      }
-      return;
-    }
-
-    setFileRefExists(null); // pending while we wait
-
-    if (validateTimeoutRef.current) {
-      clearTimeout(validateTimeoutRef.current);
-    }
-
-    validateTimeoutRef.current = setTimeout(() => {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.VALIDATE_FILE_REF,
-        filePath: promptText.trim(),
-      });
-    }, 400);
-
-    return () => {
-      if (validateTimeoutRef.current) {
-        clearTimeout(validateTimeoutRef.current);
-      }
-    };
-  }, [isFileRef, promptText, vscode]);
-
-  // Listen for FILE_REF_VALIDATION responses from extension
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === MESSAGE_TYPES.FILE_REF_VALIDATION) {
-        setFileRefExists(event.data.exists as boolean);
-      }
-    };
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
 
   // Get property values for sending to extension
   // includeNullsForDefaults: if true, send null for default values to clear overrides
@@ -457,6 +452,310 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     },
     [properties, stepEnabled]
   );
+
+  const validateFileRef = useCallback(
+    (target: string) => {
+      const seq = ++validationSeqRef.current;
+      setFileRefValidationPending(true);
+      vscode.postMessage({
+        type: MESSAGE_TYPES.VALIDATE_FILE_REF,
+        filePath: target,
+        seq,
+      });
+    },
+    [vscode]
+  );
+
+  // Validate file-ref paths after editing, then keep missing/empty targets
+  // fresh while the user edits the opened file.
+  useEffect(() => {
+    const target = promptText.trim();
+    validationTargetRef.current = isFileRef ? target : "";
+    validationSeqRef.current += 1; // expire replies for the previous target
+
+    if (validateTimeoutRef.current) {
+      clearTimeout(validateTimeoutRef.current);
+      validateTimeoutRef.current = null;
+    }
+
+    if (!isFileRef) {
+      setFileRefValidation(null);
+      setFileRefValidationPending(false);
+      return;
+    }
+
+    setFileRefValidation(null);
+    setFileRefValidationPending(true);
+    validateTimeoutRef.current = setTimeout(() => {
+      validateFileRef(target);
+    }, 400);
+
+    return () => {
+      if (validateTimeoutRef.current) {
+        clearTimeout(validateTimeoutRef.current);
+        validateTimeoutRef.current = null;
+      }
+    };
+  }, [isFileRef, promptText, validateFileRef]);
+
+  // Listen for addressed FILE_REF_VALIDATION responses. A response is valid
+  // only for the latest request and the current editor target.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (message?.type !== MESSAGE_TYPES.FILE_REF_VALIDATION) return;
+      if (
+        message.seq !== validationSeqRef.current ||
+        message.filePath?.trim() !== validationTargetRef.current
+      ) {
+        return;
+      }
+
+      setFileRefValidationPending(false);
+      setFileRefValidation({
+        target: validationTargetRef.current,
+        exists: message.exists === true,
+        isEmpty: message.isEmpty === true,
+        resolvedPath:
+          typeof message.resolvedPath === "string"
+            ? message.resolvedPath
+            : undefined,
+      });
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  const revalidateMissingOrEmptyFileRef = useCallback(() => {
+    if (
+      !isFileRef ||
+      fileRefValidationPending ||
+      !fileRefValidation ||
+      (fileRefValidation.exists && !fileRefValidation.isEmpty)
+    ) {
+      return;
+    }
+    const target = promptText.trim();
+    if (target === validationTargetRef.current) {
+      validateFileRef(target);
+    }
+  }, [
+    fileRefValidation,
+    fileRefValidationPending,
+    isFileRef,
+    promptText,
+    validateFileRef,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isFileRef ||
+      fileRefValidationPending ||
+      !fileRefValidation ||
+      (fileRefValidation.exists && !fileRefValidation.isEmpty)
+    ) {
+      return;
+    }
+
+    const pollId = setInterval(revalidateMissingOrEmptyFileRef, 3_000);
+    window.addEventListener("focus", revalidateMissingOrEmptyFileRef);
+    return () => {
+      clearInterval(pollId);
+      window.removeEventListener("focus", revalidateMissingOrEmptyFileRef);
+    };
+  }, [
+    fileRefValidation,
+    fileRefValidationPending,
+    isFileRef,
+    revalidateMissingOrEmptyFileRef,
+  ]);
+
+  const persistPromptFileReference = useCallback(
+    (reference: string) => {
+      if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) return;
+
+      const { properties: propertyValues, clearProperties } =
+        getPropertyValues(true);
+      if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.UPDATE_PROMPT,
+          index: selectionTarget.index,
+          text: reference,
+          properties: propertyValues,
+          clearProperties,
+          promptName: promptName.trim(),
+          ...(isPromptCompleted && { rewindCompletedStep: true }),
+        });
+      } else if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+          finalStep: {
+            ...propertyValues,
+            ...(promptName.trim() ? { name: promptName.trim() } : {}),
+            prompt: reference,
+          },
+          clearProperties,
+        });
+      }
+    },
+    [
+      getPropertyValues,
+      isPromptCompleted,
+      promptName,
+      selectionTarget,
+      vscode,
+    ]
+  );
+
+  const openPromptFile = useCallback(() => {
+    if (
+      !isFileRef ||
+      fileRefValidationPending ||
+      !fileRefValidation?.exists ||
+      !fileRefValidation.resolvedPath
+    ) {
+      return;
+    }
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
+      path: fileRefValidation.resolvedPath,
+    });
+  }, [fileRefValidation, fileRefValidationPending, isFileRef, vscode]);
+
+  const convertPromptToFile = useCallback(() => {
+    if (
+      isScriptMode ||
+      isFileRef ||
+      isCLIManaged ||
+      isPromptExecutionLocked ||
+      isPromptFileConversionBusy
+    ) {
+      return;
+    }
+
+    const seq = ++conversionSeqRef.current;
+    setIsPromptFileConversionBusy(true);
+    if (conversionTimeoutRef.current) {
+      clearTimeout(conversionTimeoutRef.current);
+    }
+    conversionTimeoutRef.current = setTimeout(() => {
+      if (conversionSeqRef.current !== seq) return;
+      conversionSeqRef.current = 0;
+      conversionTimeoutRef.current = null;
+      setIsPromptFileConversionBusy(false);
+      showToast(
+        "Timed out converting prompt to a file",
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
+    }, PROMPT_FILE_CONVERSION_TIMEOUT_MS);
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE,
+      seq,
+      text: promptText,
+      ...(promptName.trim() ? { suggestedName: promptName.trim() } : {}),
+    });
+  }, [
+    isCLIManaged,
+    isFileRef,
+    isPromptExecutionLocked,
+    isPromptFileConversionBusy,
+    isScriptMode,
+    promptName,
+    promptText,
+    showToast,
+    vscode,
+  ]);
+
+  // Reconcile conversion replies only with the request that is still active.
+  // The editor is deliberately unchanged until a successful reply arrives.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (message?.type !== MESSAGE_TYPES.PROMPT_FILE_CREATED) return;
+      if (!message.seq || message.seq !== conversionSeqRef.current) return;
+
+      if (conversionTimeoutRef.current) {
+        clearTimeout(conversionTimeoutRef.current);
+        conversionTimeoutRef.current = null;
+      }
+      conversionSeqRef.current = 0;
+      setIsPromptFileConversionBusy(false);
+
+      if (typeof message.error === "string" || !message.reference) {
+        showToast(
+          message.error || "Failed to convert prompt to a file",
+          USER_FEEDBACK_SEVERITY.ERROR
+        );
+        return;
+      }
+      if (typeof message.resolvedPath !== "string") {
+        showToast(
+          "Prompt file conversion returned no resolved path",
+          USER_FEEDBACK_SEVERITY.ERROR
+        );
+        return;
+      }
+
+      setPromptText(message.reference);
+      persistPromptFileReference(message.reference);
+      vscode.postMessage({
+        type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
+        path: message.resolvedPath,
+      });
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [persistPromptFileReference, setPromptText, showToast, vscode]);
+
+  useEffect(() => {
+    return () => {
+      conversionSeqRef.current = 0;
+      if (conversionTimeoutRef.current) {
+        clearTimeout(conversionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const promptFileAction = useMemo<PromptFileAction | null>(() => {
+    if (isScriptMode) return null;
+    if (isFileRef) {
+      return {
+        icon: "go-to-file",
+        tooltip: "Open prompt file",
+        disabled:
+          fileRefValidationPending !== false ||
+          !fileRefValidation?.exists ||
+          !fileRefValidation.resolvedPath ||
+          isPromptExecutionLocked,
+        onClick: openPromptFile,
+      };
+    }
+    return {
+      icon: "file-symlink-file",
+      tooltip:
+        promptText.trim().length > 0
+          ? "Convert to prompt file"
+          : "Write this prompt in a file",
+      disabled: isPromptExecutionLocked || isPromptFileConversionBusy,
+      onClick: convertPromptToFile,
+    };
+  }, [
+    convertPromptToFile,
+    fileRefValidation,
+    fileRefValidationPending,
+    isFileRef,
+    isPromptExecutionLocked,
+    isPromptFileConversionBusy,
+    isScriptMode,
+    openPromptFile,
+    promptText,
+  ]);
+
+  useEffect(() => {
+    onPromptFileActionChange?.(promptFileAction);
+    return () => onPromptFileActionChange?.(null);
+  }, [onPromptFileActionChange, promptFileAction]);
 
   // Ref to hold the last submitted text so we can restore it on failure
   const lastSubmittedTextRef = useRef<string>("");
@@ -889,7 +1188,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           className="flex items-center gap-1 px-2 py-1 text-xs"
           style={{
             color:
-              fileRefExists === false
+              fileRefValidation?.exists && fileRefValidation.isEmpty
+                ? "var(--vscode-editorWarning-foreground)"
+                : fileRefValidation?.exists === false
                 ? "var(--vscode-editorWarning-foreground)"
                 : "var(--vscode-textLink-foreground)",
             backgroundColor: "var(--vscode-editor-background)",
@@ -897,7 +1198,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               "1px solid var(--vscode-widget-border, var(--vscode-panel-border))",
           }}
         >
-          {fileRefExists === false ? (
+          {fileRefValidation?.exists === false ? (
             <>
               <i
                 className="codicon codicon-warning"
@@ -906,6 +1207,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               <span>
                 File not found — will be sent as literal text at execution
               </span>
+            </>
+          ) : fileRefValidation?.isEmpty ? (
+            <>
+              <i
+                className="codicon codicon-warning"
+                style={{ fontSize: "11px" }}
+              />
+              <span>Prompt file is empty</span>
             </>
           ) : (
             <>
