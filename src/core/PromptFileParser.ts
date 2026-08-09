@@ -16,12 +16,11 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
-import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   PROMPT_FILE_EXTENSIONS,
-  looksLikeFilePath,
 } from "../utils/promptPathUtils";
 import { STEP_TYPES } from "../types/DashboardConstants";
+import { PromptFileResolver } from "./PromptFileResolver";
 
 export class PromptFileParser {
   private ajv = new Ajv({ allowUnionTypes: true });
@@ -204,25 +203,20 @@ export class PromptFileParser {
     promptValue: string,
     promptFilePath: string
   ): Promise<string> {
+    const resolver = new PromptFileResolver({
+      workspaceRoot: this.platform?.getWorkspaceRoot(),
+      namedRoots: this.platform?.getNamedWorkspaceRoots() ?? [],
+    });
+
     // Quick check - if it doesn't look like a file path, return as-is
-    if (
-      !looksLikeFilePath(promptValue, {
-        allowWorkspaceFolderPrefix:
-          (this.platform?.getNamedWorkspaceRoots().length ?? 0) > 1,
-      })
-    ) {
+    if (!resolver.looksLikePromptFilePath(promptValue)) {
       return promptValue;
     }
 
     const trimmedPath = promptValue.trim();
 
-    // Try to resolve the file path
-    const resolvedPath = await this.resolvePromptFilePath(
-      trimmedPath,
-      promptFilePath
-    );
-
-    if (!resolvedPath) {
+    const resolution = await resolver.resolve(trimmedPath, promptFilePath);
+    if (resolution.status === "missing") {
       // File not found - warn user if it looks like an intentional prompt file reference
       const looksIntentional = PROMPT_FILE_EXTENSIONS.some((ext) =>
         trimmedPath.toLowerCase().endsWith(ext)
@@ -242,94 +236,19 @@ export class PromptFileParser {
       return promptValue;
     }
 
-    // Read the file content
-    try {
-      const content = await fs.readFile(resolvedPath, "utf8");
-      const trimmedContent = content.trim();
-
-      if (!trimmedContent) {
-        Log.warn(`Referenced prompt file is empty: ${trimmedPath}`);
-        return promptValue; // Return original if file is empty
-      }
-
-      Log.debug(`Resolved prompt from file: ${trimmedPath} -> ${resolvedPath}`);
-      return trimmedContent;
-    } catch (error) {
-      Log.error(`Failed to read prompt file ${resolvedPath}:`, error);
+    if (resolution.status === "empty") {
+      Log.warn(`Referenced prompt file is empty: ${trimmedPath}`);
       return promptValue; // Return original on read error
     }
-  }
-
-  /**
-   * Resolve a file path relative to the prompt file or workspace
-   * Resolution order:
-   * 1. Absolute paths
-   * 2. Relative to prompt file's directory
-   * 3. Relative to workspace root
-   * 4. Relative to .ctrlyoke directory
-   *
-   * @param filePath The file path to resolve
-   * @param promptFilePath Path to the prompt file (for relative resolution)
-   * @returns Resolved absolute path if file exists, null otherwise
-   */
-  private async resolvePromptFilePath(
-    filePath: string,
-    promptFilePath: string
-  ): Promise<string | null> {
-    // Try absolute path first
-    if (path.isAbsolute(filePath)) {
-      if (await this.fileExists(filePath)) {
-        return filePath;
-      }
-      return null;
+    if (resolution.status === "unreadable") {
+      Log.error(`Failed to read prompt file ${resolution.path}:`, resolution.error);
+      return promptValue;
     }
 
-    // Try relative to prompt file's directory
-    const promptDir = path.dirname(promptFilePath);
-    const relativeToPrompt = path.resolve(promptDir, filePath);
-    if (await this.fileExists(relativeToPrompt)) {
-      return relativeToPrompt;
-    }
-
-    // Try relative to workspace root — folder-name-prefixed multi-root refs
-    // (`root2/prompts/x.prompt.md`) resolve against that named root; an
-    // unprefixed ref resolves against the primary root, same as before.
-    const workspaceRoot = this.platform?.getWorkspaceRoot();
-    if (workspaceRoot) {
-      const namedRoots = this.platform?.getNamedWorkspaceRoots() ?? [];
-      const relativeToWorkspace = resolveNamedRelativePath(
-        filePath,
-        workspaceRoot,
-        namedRoots
-      );
-      if (await this.fileExists(relativeToWorkspace)) {
-        return relativeToWorkspace;
-      }
-
-      // Try in .ctrlyoke directory
-      const relativeToCtrlYoke = path.resolve(
-        workspaceRoot,
-        PATH_CONSTANTS.CTRLYOKE_DIR,
-        filePath
-      );
-      if (await this.fileExists(relativeToCtrlYoke)) {
-        return relativeToCtrlYoke;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Check if a file exists
-   */
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.stat(filePath);
-      return true;
-    } catch {
-      return false;
-    }
+    Log.debug(
+      `Resolved prompt from file: ${trimmedPath} -> ${resolution.path}`
+    );
+    return resolution.content.trim();
   }
 
   /**

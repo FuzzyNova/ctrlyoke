@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
 import * as path from "path";
 import {
   getVsCodeWorkspaceRoot,
@@ -17,7 +16,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
-import { looksLikeFilePath } from "../utils/promptPathUtils";
+import { PromptFileResolver } from "../core/PromptFileResolver";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -173,23 +172,17 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     approvedExternalRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const trimmedPath = text.trim();
-    if (
-      !looksLikeFilePath(trimmedPath, {
-        allowWorkspaceFolderPrefix: namedRoots.length > 1,
-      })
-    ) {
+    const resolver = new PromptFileResolver({ workspaceRoot, namedRoots });
+    if (!resolver.looksLikePromptFilePath(trimmedPath)) {
       return [];
     }
 
-    const candidates = path.isAbsolute(trimmedPath)
-      ? [path.resolve(trimmedPath)]
-      : [
-          path.resolve(path.dirname(document.fileName), trimmedPath),
-          resolveNamedRelativePath(trimmedPath, workspaceRoot, namedRoots),
-          path.resolve(workspaceRoot, ".ctrlyoke", trimmedPath),
-        ];
+    const resolution = resolver.resolvePathSync(trimmedPath, document.fileName);
     const resolvedPath =
-      candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+      resolution.status === "missing" ? resolution.candidates[0] : resolution.path;
+    if (!resolvedPath) {
+      return [];
+    }
 
     const decision = evaluateFileAccess(resolvedPath, {
       workspaceRoots: trustedRoots,

@@ -2175,6 +2175,32 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Return the authored source definition for a client's addressed lineage.
+   * This deliberately reads the lineage descriptor rather than deriving a
+   * semantic base from the draft/run working-copy path under `.runs/`.
+   */
+  async getViewSourceDefinitionPath(clientId: string): Promise<string | null> {
+    const address = this.getViewAddress(clientId);
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!address || !workspaceRoot) {
+      return null;
+    }
+
+    try {
+      const descriptor = await this.lineageRepository.readDescriptor(
+        workspaceRoot,
+        address.workflowKey
+      );
+      return descriptor.originalFile ?? null;
+    } catch (error) {
+      Log.debug(
+        `[WorkflowOrchestrator] Could not read source definition for ${clientId}: ${getErrorMessage(error)}`
+      );
+      return null;
+    }
+  }
+
+  /**
    * Current address and revisions of a client's editing target, read from disk.
    *
    * Every definition write advances `definitionRevision`, and a client that

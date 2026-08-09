@@ -27,6 +27,7 @@ import {
   resolveNamedRelativePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
+import { PromptFileResolver } from "../core/PromptFileResolver";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -172,10 +173,8 @@ export class PromptEditorSupportService {
 
   /**
    * Validate whether a file-ref path typed in the prompt editor resolves to
-   * an actual file.  Resolution order mirrors PromptFileParser:
-   *   1. Absolute path
-   *   2. Relative to workspace root
-   *   3. Relative to .ctrlyoke directory inside workspace root
+   * an actual readable file. The source directory comes from the addressed
+   * lineage descriptor, never from the `.runs/...` working copy.
    */
   async handleFileRefValidation(
     ctx: WebviewClientContext,
@@ -184,42 +183,21 @@ export class PromptEditorSupportService {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : null;
-    let exists = false;
-
-    try {
-      if (path.isAbsolute(filePath)) {
-        await fs.promises.stat(filePath);
-        exists = true;
-      } else if (workspaceRoot) {
-        const candidates = [
-          resolveNamedRelativePath(
-            filePath,
-            workspaceRoot,
-            getVsCodeNamedWorkspaceRoots()
-          ),
-          path.resolve(
-            workspaceRoot,
-            PATH_CONSTANTS.CTRLYOKE_DIR,
-            filePath.replace(/^\.\.?\//, "")
-          ),
-        ];
-        for (const candidate of candidates) {
-          try {
-            await fs.promises.stat(candidate);
-            exists = true;
-            break;
-          } catch {
-            // try next candidate
-          }
-        }
-      }
-    } catch {
-      exists = false;
-    }
+    const resolver = new PromptFileResolver({
+      workspaceRoot: workspaceRoot ?? undefined,
+      namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : [],
+    });
+    const sourceDefinitionPath = await this.getOrchestrator()?.getViewSourceDefinitionPath(
+      ctx.clientId
+    );
+    const resolution = await resolver.resolvePath(
+      filePath.trim(),
+      sourceDefinitionPath ?? undefined
+    );
 
     ctx.emit({
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
-      exists,
+      exists: resolution.status === "resolved",
       filePath,
     });
   }

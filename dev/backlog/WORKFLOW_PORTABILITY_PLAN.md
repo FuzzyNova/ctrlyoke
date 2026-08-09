@@ -300,7 +300,7 @@ record of what has actually landed.
 | #   | Step                                              | Covers          | Status |
 | --- | ------------------------------------------------- | --------------- | ------ |
 | 1   | `.gitignore` header + self-ignore warning         | WP §4 / P1      | done   |
-| 2   | Shared `PromptFileResolver` (refactor only)       | PFE §4.4 / P1   | todo   |
+| 2   | Shared `PromptFileResolver` (refactor only)       | PFE §4.4 / P1   | done   |
 | 3   | Just-in-time resolution contract                  | PFE §4.4, §3.1a | todo   |
 | 4   | Serializer field completeness (`executionMode`)   | WP §3.4         | todo   |
 | 5   | Bundle analyzer (pure analysis/rewrite plan)      | WP §3.2 / P3    | todo   |
