@@ -608,7 +608,7 @@ checkable rather than assumed.
 | 0 | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) — **landed** |
 | 1 | `resolveReferencePath` + `PromptFileResolver` containment fix (§3, §4) — no behavior change to emitted refs yet — **landed** |
 | 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix — **landed** |
-| 3 | Parity sites (§5.3), webview payload included                                          |
+| 3 | Parity sites (§5.3), webview payload included — **landed**                              |
 | 4 | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) |
 | 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1)         |
 | 6 | Migration script (§7), run once, then delete                                           |

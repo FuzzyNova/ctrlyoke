@@ -294,7 +294,8 @@ export class ContextExpander {
             this.workspaceRoot,
             this.trustedRoots,
             this.namedRoots,
-            this.effectiveAbsolute
+            this.effectiveAbsolute,
+            this.sourceDefinitionDir
           ).catch((err) => {
             Log.error(
               `[ContextExpander] Failed directory attachment ${ref.path}:`,
@@ -661,7 +662,8 @@ export class ContextExpander {
         this.workspaceRoot,
         this.trustedRoots,
         this.namedRoots,
-        this.effectiveAbsolute
+        this.effectiveAbsolute,
+        this.sourceDefinitionDir
       );
     } else {
       // File reference (full file, line range, or symbol)

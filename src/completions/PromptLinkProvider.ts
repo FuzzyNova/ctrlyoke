@@ -6,7 +6,8 @@ import {
   getVsCodeTrustedWorkspaceRoots,
 } from "../platform/VsCodeWorkspaceRoot";
 import {
-  resolveNamedRelativePath,
+  getTrustedSourceDefinitionDir,
+  resolveReferencePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 import {
@@ -83,6 +84,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     const namedRoots = getVsCodeNamedWorkspaceRoots();
     const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+    const sourceDefinitionDir = getTrustedSourceDefinitionDir(
+      document.fileName,
+      trustedRoots
+    );
     const workspaceIdentity =
       ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
     const approvedExternalRoots =
@@ -113,7 +118,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       )
     );
 
@@ -125,7 +131,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       )
     );
 
@@ -137,7 +144,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       )
     );
 
@@ -213,7 +221,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
   /**
    * Resolve a ref's path the same way every other `@`-reference is resolved
-   * (`resolveNamedRelativePath`) and decide whether it's inside the
+   * (`resolveReferencePath`) and decide whether it's inside the
    * workspace, inside a trusted external root, or neither — a folder-name
    * prefix from a multi-root `.code-workspace` (`root2/src/index.ts`)
    * resolves against that named root instead of always joining onto the
@@ -224,13 +232,19 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
-    approvedExternalRoots: readonly string[]
-  ): FileAccessDecision {
-    const resolved = resolveNamedRelativePath(
-      relativePath,
-      workspaceRoot,
-      namedRoots
-    );
+    approvedExternalRoots: readonly string[],
+    sourceDefinitionDir?: string
+  ): FileAccessDecision | undefined {
+    let resolved: string;
+    try {
+      resolved = resolveReferencePath(relativePath, {
+        primaryRoot: workspaceRoot,
+        namedRoots,
+        sourceDefinitionDir,
+      }).absolutePath;
+    } catch {
+      return undefined;
+    }
     return evaluateFileAccess(resolved, {
       workspaceRoots: trustedRoots,
       approvedExternalRoots,
@@ -282,7 +296,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
-    approvedExternalRoots: readonly string[]
+    approvedExternalRoots: readonly string[],
+    sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -294,8 +309,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       );
+      if (!decision) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
@@ -341,7 +360,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
-    approvedExternalRoots: readonly string[]
+    approvedExternalRoots: readonly string[],
+    sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -353,8 +373,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       );
+      if (!decision) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
@@ -404,7 +428,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
-    approvedExternalRoots: readonly string[]
+    approvedExternalRoots: readonly string[],
+    sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -419,8 +444,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       );
+      if (!decision) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
@@ -509,7 +538,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
-    approvedExternalRoots: readonly string[]
+    approvedExternalRoots: readonly string[],
+    sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -525,8 +555,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        sourceDefinitionDir
       );
+      if (!decision) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);

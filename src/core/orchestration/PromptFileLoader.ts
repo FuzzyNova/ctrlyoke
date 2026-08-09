@@ -241,7 +241,8 @@ export class PromptFileLoader {
 
     await this.warnAboutMissingWorkflowAssets(
       promptFile,
-      workspaceFolderPath
+      workspaceFolderPath,
+      originalFilePath
     );
 
     Log.debug(
@@ -356,7 +357,8 @@ export class PromptFileLoader {
 
       await this.warnAboutMissingWorkflowAssets(
         workingFile,
-        workspaceFolderPath
+        workspaceFolderPath,
+        workingFile.originalFile
       );
 
       Log.debug(
@@ -371,7 +373,8 @@ export class PromptFileLoader {
 
   private async warnAboutMissingWorkflowAssets(
     workflow: PromptFile,
-    workspaceFolderPath?: string
+    workspaceFolderPath?: string,
+    sourceDefinitionPath?: string
   ): Promise<void> {
     const promptTexts =
       typeof workflow.prompt === "string" ? [workflow.prompt] : [];
@@ -395,7 +398,8 @@ export class PromptFileLoader {
 
     const missingDirectories = await findMissingWorkflowAssetDirectories(
       promptTexts,
-      workspaceFolderPath
+      workspaceFolderPath,
+      sourceDefinitionPath
     );
     if (missingDirectories.length === 0) {
       return;

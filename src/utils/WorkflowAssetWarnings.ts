@@ -5,6 +5,10 @@ import {
   parseAllFileReferences,
 } from "./FileReferenceParser";
 import { isPathWithinDirectory } from "./PathSecurity";
+import {
+  getTrustedSourceDefinitionDir,
+  resolveReferencePath,
+} from "../platform/WorkspaceRootResolver";
 
 /**
  * Find exported asset directories referenced by prompt text that are absent
@@ -13,13 +17,18 @@ import { isPathWithinDirectory } from "./PathSecurity";
  */
 export async function findMissingWorkflowAssetDirectories(
   promptTexts: readonly string[],
-  workspaceRoot?: string
+  workspaceRoot?: string,
+  sourceDefinitionPath?: string
 ): Promise<string[]> {
   if (!workspaceRoot) {
     return [];
   }
 
   const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
+  const sourceDefinitionDir = getTrustedSourceDefinitionDir(
+    sourceDefinitionPath,
+    [resolvedWorkspaceRoot]
+  );
   const missingDirectories = new Set<string>();
 
   for (const promptText of promptTexts) {
@@ -27,7 +36,8 @@ export async function findMissingWorkflowAssetDirectories(
     for (const reference of references) {
       const assetsDirectory = getReferencedAssetsDirectory(
         reference.path,
-        resolvedWorkspaceRoot
+        resolvedWorkspaceRoot,
+        sourceDefinitionDir
       );
       if (
         !assetsDirectory ||
@@ -62,11 +72,19 @@ export async function findMissingWorkflowAssetDirectories(
 
 function getReferencedAssetsDirectory(
   referencePath: string,
-  workspaceRoot: string
+  workspaceRoot: string,
+  sourceDefinitionDir?: string
 ): string | undefined {
-  const resolvedReferencePath = path.isAbsolute(referencePath)
-    ? path.resolve(referencePath)
-    : path.resolve(workspaceRoot, referencePath);
+  let resolvedReferencePath: string;
+  try {
+    resolvedReferencePath = resolveReferencePath(referencePath, {
+      primaryRoot: workspaceRoot,
+      namedRoots: [],
+      sourceDefinitionDir,
+    }).absolutePath;
+  } catch {
+    return undefined;
+  }
   const normalizedPath = path.normalize(resolvedReferencePath);
   const assetsSegment = /(?:^|[\\/])[^\\/]+\.assets(?:[\\/]|$)/i.exec(
     normalizedPath

@@ -588,7 +588,13 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(path.join(secondRoot, "sub", "c.ts"), "// c\n");
       const relativeDir = path.relative(root, path.join(secondRoot, "sub"));
 
-      const expander = new ContextExpander(root, [root, secondRoot]);
+      const expander = new ContextExpander(
+        root,
+        [root, secondRoot],
+        [],
+        false,
+        root
+      );
       const result = await expander.expandContextSplit(`@${relativeDir}/`);
 
       assert.ok(result.excerptBlocks.includes("c.ts"));
@@ -608,7 +614,13 @@ suite("ContextExpander.expandContextSplit", () => {
       );
 
       try {
-        const expander = new ContextExpander(root, [root, secondRoot]);
+        const expander = new ContextExpander(
+          root,
+          [root, secondRoot],
+          [],
+          false,
+          root
+        );
         const result = await expander.expandContextSplit(`@${traversal}`);
 
         assert.deepStrictEqual(result.directFileRefs, []);

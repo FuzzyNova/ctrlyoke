@@ -41,6 +41,10 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
 
     const xml = await buildDirectoryAttachmentXml(
       `${traversal}/`,
+      workspaceRoot,
+      [],
+      [],
+      false,
       workspaceRoot
     );
 
@@ -75,6 +79,10 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
     // Without the second root trusted, the same reference is blocked.
     const untrusted = await buildDirectoryAttachmentXml(
       `${relativeDir}/`,
+      workspaceRoot,
+      [],
+      [],
+      false,
       workspaceRoot
     );
     assert.ok(untrusted.includes("blocked"));
@@ -82,9 +90,32 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
     const trusted = await buildDirectoryAttachmentXml(
       `${relativeDir}/`,
       workspaceRoot,
-      [workspaceRoot, outsideDir]
+      [workspaceRoot, outsideDir],
+      [],
+      false,
+      workspaceRoot
     );
     assert.ok(trusted.includes("b.ts"));
     assert.ok(!trusted.includes("blocked"));
+  });
+
+  test("resolves a workflow-relative directory reference against the workflow file", async () => {
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
+    const workflowDir = path.join(workspaceRoot, "bundles");
+    const assetsDir = path.join(workflowDir, "workflow.assets");
+    fs.mkdirSync(assetsDir, { recursive: true });
+    fs.writeFileSync(path.join(assetsDir, "asset.ts"), "// asset\n");
+
+    const xml = await buildDirectoryAttachmentXml(
+      "./workflow.assets/",
+      workspaceRoot,
+      [],
+      [],
+      false,
+      workflowDir
+    );
+
+    assert.ok(xml.includes("asset.ts"));
+    assert.ok(!xml.includes("blocked"));
   });
 });

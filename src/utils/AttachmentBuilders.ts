@@ -3,7 +3,7 @@ import * as path from "path";
 import { Log } from "./Log";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
 import {
-  resolveNamedRelativePath,
+  resolveReferencePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 
@@ -86,10 +86,12 @@ async function buildDirectoryTree(
  *   folder of a multi-root `.code-workspace`, which need not be descendants of
  *   `workspaceRoot`). Defaults to just `workspaceRoot`.
  * @param namedRoots Named roots for folder-name-prefixed resolution (see
- *   `resolveNamedRelativePath`). Defaults to none (primary-root-only resolution).
+ *   `resolveReferencePath`). Defaults to none (primary-root-only resolution).
  * @param effectiveAbsolute When true, render the resolved absolute directory path
  *   in the attachment body instead of the as-typed relative path (the id is
  *   unaffected — it only needs to be stable for deduplication).
+ * @param sourceDefinitionDir Directory containing the authored workflow, used
+ *   for `./` and `../` references.
  * @returns XML string with directory tree
  */
 export async function buildDirectoryAttachmentXml(
@@ -97,18 +99,19 @@ export async function buildDirectoryAttachmentXml(
   workspaceRoot: string,
   additionalTrustedRoots: string[] = [],
   namedRoots: ResolverWorkspaceFolder[] = [],
-  effectiveAbsolute: boolean = false
+  effectiveAbsolute: boolean = false,
+  sourceDefinitionDir?: string
 ): Promise<string> {
   // Remove trailing slash for consistent path handling
   const normalizedPath = dirPath.replace(/[/\\]+$/, "");
 
   // Build absolute URI
   const resolvedRoot = path.resolve(workspaceRoot);
-  const absolutePath = resolveNamedRelativePath(
-    normalizedPath,
-    resolvedRoot,
-    namedRoots
-  );
+  const absolutePath = resolveReferencePath(normalizedPath, {
+    primaryRoot: resolvedRoot,
+    namedRoots,
+    sourceDefinitionDir,
+  }).absolutePath;
   const trustedRoots = [
     resolvedRoot,
     ...additionalTrustedRoots.map((root) => path.resolve(root)),

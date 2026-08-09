@@ -27,7 +27,8 @@ import {
   type FileOpenTarget,
 } from "./ExternalFileTrustPrompt";
 import {
-  resolveNamedRelativePath,
+  resolveReferencePath,
+  getTrustedSourceDefinitionDir,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 import { PromptFileResolver } from "../core/PromptFileResolver";
@@ -405,7 +406,7 @@ export class PromptEditorSupportService {
    * pasted images under `.ctrlyoke/` — so a harness that references an existing
    * repo image (`docs/diagram.png`, `root2/assets/logo.webp`, …) gets a thumbnail
    * too. The path is resolved with the same multi-root logic as `@`-references
-   * (`resolveNamedRelativePath` + trusted-root containment), so folder-name
+   * (`resolveReferencePath` + trusted-root containment), so folder-name
    * prefixes and every folder of a multi-root `.code-workspace` are honored, and
    * any path that escapes every trusted root returns an error so the webview
    * falls back to a plain file-ref rather than leaking arbitrary filesystem
@@ -454,11 +455,15 @@ export class PromptEditorSupportService {
       }
 
       const trustedRoots = getVsCodeTrustedWorkspaceRoots();
-      const resolved = resolveNamedRelativePath(
-        message.relativePath,
-        workspaceRoot,
-        getVsCodeNamedWorkspaceRoots()
+      const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
+        ctx,
+        trustedRoots
       );
+      const resolved = resolveReferencePath(message.relativePath, {
+        primaryRoot: workspaceRoot,
+        namedRoots: getVsCodeNamedWorkspaceRoots(),
+        sourceDefinitionDir,
+      }).absolutePath;
       if (!isPathWithinAnyDirectory(resolved, trustedRoots)) {
         return fail("Image is not inside an open workspace folder");
       }
@@ -518,13 +523,18 @@ export class PromptEditorSupportService {
       ? getVsCodeWorkspaceRoot()
       : null;
     const namedRoots = getVsCodeNamedWorkspaceRoots();
+    const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
+      ctx,
+      workspaceRoot ? getVsCodeTrustedWorkspaceRoots() : undefined
+    );
 
     const results = await Promise.all(
       references.map(async (reference) => {
         const validation = await this.validateContextReference(
           reference,
           workspaceRoot,
-          namedRoots
+          namedRoots,
+          sourceDefinitionDir
         );
         return {
           id: reference.id,
@@ -550,7 +560,8 @@ export class PromptEditorSupportService {
       symbolName?: string;
     },
     workspaceRoot: string | null,
-    namedRoots: readonly ResolverWorkspaceFolder[]
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    sourceDefinitionDir?: string
   ): Promise<{
     exists: boolean;
     message?: string;
@@ -568,10 +579,14 @@ export class PromptEditorSupportService {
     const pathValidation = await this.resolveContextReferencePath(
       reference.path,
       workspaceRoot,
-      namedRoots
+      namedRoots,
+      sourceDefinitionDir
     );
 
     if (!pathValidation.exists || !pathValidation.resolvedPath) {
+      if (pathValidation.message) {
+        return { exists: false, message: pathValidation.message };
+      }
       // Type-agnostic exit (nothing exists on disk at the typed path), so word
       // the message by reference type — a missing directory ref reads "file not
       // found" otherwise. file/lineRange/symbol all point at a file, so they
@@ -685,25 +700,42 @@ export class PromptEditorSupportService {
   private async resolveContextReferencePath(
     filePath: string,
     workspaceRoot: string | null,
-    namedRoots: readonly ResolverWorkspaceFolder[]
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    sourceDefinitionDir?: string
   ): Promise<{
     exists: boolean;
     resolvedPath?: string;
     isFile?: boolean;
     isDirectory?: boolean;
+    message?: string;
   }> {
-    const candidates = path.isAbsolute(filePath)
-      ? [filePath]
-      : workspaceRoot
-        ? [
-            resolveNamedRelativePath(filePath, workspaceRoot, namedRoots),
-            path.resolve(
-              workspaceRoot,
-              PATH_CONSTANTS.CTRLYOKE_DIR,
-              filePath.replace(/^\.\.?\//, "")
-            ),
-          ]
-        : [];
+    if (!workspaceRoot) {
+      return { exists: false };
+    }
+
+    let resolution;
+    try {
+      resolution = resolveReferencePath(filePath, {
+        primaryRoot: workspaceRoot,
+        namedRoots,
+        sourceDefinitionDir,
+      });
+    } catch (error) {
+      return { exists: false, message: getErrorMessage(error) };
+    }
+
+    const candidates = [resolution.absolutePath];
+    if (resolution.base === "workspace") {
+      candidates.push(
+        resolveReferencePath(
+          path.join(
+            PATH_CONSTANTS.CTRLYOKE_DIR,
+            filePath.replace(/^\.\.?[\\/]/, "")
+          ),
+          { primaryRoot: workspaceRoot, namedRoots }
+        ).absolutePath
+      );
+    }
 
     for (const candidate of candidates) {
       try {
@@ -760,6 +792,10 @@ export class PromptEditorSupportService {
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const trustedRoots = getVsCodeTrustedWorkspaceRoots();
       const namedRoots = getVsCodeNamedWorkspaceRoots();
+      const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
+        ctx,
+        trustedRoots
+      );
 
       const normalizeCodexAbsPath = (rawPath: string): string => {
         const pathWithDrive = rawPath.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
@@ -783,15 +819,11 @@ export class PromptEditorSupportService {
         ? normalizedPath.replace(/\/+$/, "")
         : normalizedPath;
 
-      // Resolve via the same folder-name-prefixed multi-root logic as every
-      // other @-reference (`resolveNamedRelativePath`): absolute paths pass
-      // through as-is, a `root2/...` prefix resolves against that named root,
-      // and an unprefixed path resolves against the primary root.
-      const resolvedFsPath = resolveNamedRelativePath(
-        trimmedPath,
-        workspaceRoot,
-        namedRoots
-      );
+      const resolvedFsPath = resolveReferencePath(trimmedPath, {
+        primaryRoot: workspaceRoot,
+        namedRoots,
+        sourceDefinitionDir,
+      }).absolutePath;
       const targetUri = vscode.Uri.file(resolvedFsPath);
 
       const workspaceIdentity =
@@ -922,6 +954,10 @@ export class PromptEditorSupportService {
       ),
     ];
     const namedRoots = getVsCodeNamedWorkspaceRoots();
+    const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
+      ctx,
+      trustedRoots
+    );
 
     await Promise.all(
       references.map(async (rawRef) => {
@@ -946,7 +982,9 @@ export class PromptEditorSupportService {
           const expander = new ContextExpander(
             workspaceRoot,
             trustedRoots,
-            namedRoots
+            namedRoots,
+            false,
+            sourceDefinitionDir
           );
 
           // Images are billed by pixel area, not raw byte content — estimate
@@ -990,5 +1028,17 @@ export class PromptEditorSupportService {
       type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
       counts,
     });
+  }
+
+  private async getViewSourceDefinitionDir(
+    ctx: WebviewClientContext,
+    trustedRoots: readonly string[] | undefined
+  ): Promise<string | undefined> {
+    const sourceDefinitionPath =
+      await this.getOrchestrator()?.getViewSourceDefinitionPath(ctx.clientId);
+    return getTrustedSourceDefinitionDir(
+      sourceDefinitionPath ?? undefined,
+      trustedRoots
+    );
   }
 }

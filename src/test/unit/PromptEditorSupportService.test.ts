@@ -112,4 +112,67 @@ suite("PromptEditorSupportService", () => {
     assert.strictEqual((emitted[0] as { isEmpty: boolean }).isEmpty, true);
     assert.strictEqual((emitted[0] as { seq: number }).seq, 43);
   });
+
+  test("validates relocated workflow-relative context references", async () => {
+    const workflowPath = path.join(
+      workspaceRoot,
+      "bundles",
+      "workflow.ctrlyoke.yaml"
+    );
+    const assetPath = path.join(
+      workspaceRoot,
+      "bundles",
+      "workflow.assets",
+      "shot.png"
+    );
+    await fs.mkdir(path.dirname(assetPath), { recursive: true });
+    await fs.writeFile(assetPath, "asset", "utf8");
+
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () =>
+        ({
+          getViewSourceDefinitionPath: async () => workflowPath,
+        }) as any,
+      () => undefined
+    );
+
+    await service.handleContextRefsValidation(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message);
+      }),
+      [{ id: "asset", type: "file", path: "./workflow.assets/shot.png" }]
+    );
+
+    const result = emitted[0] as {
+      results: Array<{ exists: boolean; message?: string }>;
+    };
+    assert.deepStrictEqual(result.results, [{ id: "asset", exists: true }]);
+  });
+
+  test("explains when a relative context reference has no workflow location", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined
+    );
+
+    await service.handleContextRefsValidation(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message);
+      }),
+      [{ id: "asset", type: "file", path: "./workflow.assets/shot.png" }]
+    );
+
+    const result = emitted[0] as {
+      results: Array<{ exists: boolean; message?: string }>;
+    };
+    assert.strictEqual(result.results[0].exists, false);
+    assert.match(
+      result.results[0].message ?? "",
+      /relative to the workflow file, which has no known location/i
+    );
+  });
 });

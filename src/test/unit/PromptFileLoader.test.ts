@@ -620,5 +620,55 @@ suite("PromptFileLoader Tests", () => {
         },
       ]);
     });
+
+    test("does not warn for assets beside a relocated workflow", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-relocated-assets-")
+      );
+      tempDirs.push(workspaceRoot);
+      const workflowPath = path.join(
+        workspaceRoot,
+        "bundles",
+        "relocated.ctrlyoke.yaml"
+      );
+      const assetPath = path.join(
+        workspaceRoot,
+        "bundles",
+        "relocated.assets",
+        "shot.png"
+      );
+      await fs.mkdir(path.dirname(assetPath), { recursive: true });
+      await fs.writeFile(assetPath, "asset", "utf8");
+      await fs.writeFile(
+        workflowPath,
+        ["steps:", "  - prompt: Use @./relocated.assets/shot.png"].join(
+          "\n"
+        ),
+        "utf8"
+      );
+
+      const statusMessages: Array<{
+        stepIndex: number;
+        message: string;
+        severity: string;
+      }> = [];
+      const loader = new PromptFileLoader(
+        new PromptFileParser(),
+        new PromptQueue(),
+        () =>
+          ({
+            updateFileSelected: async () => {},
+            updateStatusMessage: (
+              stepIndex: number,
+              message: string,
+              severity: string
+            ) => statusMessages.push({ stepIndex, message, severity }),
+          }) as any
+      );
+
+      await loader.loadPromptFile(workflowPath, workspaceRoot);
+
+      assert.deepStrictEqual(statusMessages, []);
+    });
   });
 });
