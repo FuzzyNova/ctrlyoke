@@ -1,0 +1,40 @@
+harness: codex-cli
+model: gpt-5.6-terra
+executionMode: interactive
+agent: null
+skills: []
+resumeSession: true
+mcpServers: []
+hooks: []
+endCondition: null
+preCondition: null
+errorBehavior: null
+priorContext: none
+additionalArgs: ""
+toolPermissions:
+  mode: dangerouslyAllowAll
+  allowedTools:
+    - write
+    - shell(git status)
+    - shell(git diff)
+    - shell(git add:*)
+    - shell(git commit:*)
+    - shell(git log:*)
+    - shell(npm:*)
+    - shell(yarn:*)
+    - shell(pnpm:*)
+    - shell(node:*)
+    - shell(npx:*)
+  deniedTools:
+    - shell(sudo:*)
+    - shell(chmod:*)
+    - shell(chown:*)
+    - shell(git push:*)
+    - shell(git reset:*)
+    - shell(git checkout:*)
+    - shell(git clean:*)
+    - shell(docker rm:*)
+    - shell(docker rmi:*)
+steps:
+  - prompt: "just say hi\r\n"
+  - prompt: just say bye

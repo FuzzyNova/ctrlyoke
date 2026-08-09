@@ -11,3 +11,5 @@ settings.json
 .search-index/
 .working/
 .runs/
+attachments/
+prompts/
