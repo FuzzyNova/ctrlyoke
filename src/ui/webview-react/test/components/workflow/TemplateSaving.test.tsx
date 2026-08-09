@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -98,5 +99,69 @@ describe("template saving", () => {
       scope: "workspace",
       format: WORKFLOW_FILE_FORMATS.JSON,
     });
+  });
+
+  it("shows the bundle plan and disables Save for pending or blocked previews", () => {
+    const address = {
+      workflowKey: "workflow-a" as never,
+      kind: "draft" as const,
+    };
+    useUiStore.getState().openSaveWorkflowDialog({
+      requestId: "save-preview",
+      address,
+      title: "Save workflow",
+      defaultPath: "/workspace/fix-tests.ctrlyoke.yaml",
+      defaultFormat: WORKFLOW_FILE_FORMATS.YAML,
+    });
+
+    render(<SaveWorkflowDialog />);
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    act(() => {
+      useUiStore.setState({
+        savePathCheck: {
+          requestId: "save-preview:path:1",
+          path: "/workspace/fix-tests.ctrlyoke.yaml",
+          address,
+          exists: false,
+          checking: false,
+          bundlePreview: {
+            copyCount: 3,
+            inlineCount: 2,
+            pruneCount: 2,
+            assetsDirectoryName: "fix-tests.assets",
+            warnings: [{ code: "warning", message: "A portability warning" }],
+            blockers: [],
+            planFingerprint: "fingerprint-1",
+          },
+        },
+      });
+    });
+
+    expect(
+      screen.getByText(/3 attachments will be copied to/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 prompt files will be inlined/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 managed assets will be removed/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/A portability warning/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+
+    act(() => {
+      useUiStore.setState({
+        savePathCheck: {
+          ...useUiStore.getState().savePathCheck!,
+          bundlePreview: {
+            ...useUiStore.getState().savePathCheck!.bundlePreview!,
+            blockers: [{ code: "blocked", message: "Missing attachment" }],
+          },
+        },
+      });
+    });
+    expect(screen.getByText(/Missing attachment/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });

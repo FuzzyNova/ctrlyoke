@@ -48,8 +48,10 @@ import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
 import {
   analyzeWorkflowBundle,
+  getBundlePlanFingerprint,
   type WorkflowBundleAnalysis,
 } from "../utils/WorkflowBundleAnalyzer";
+import type { SaveWorkflowBundlePreview } from "../types/WebviewMessageTypes";
 import { writeWorkflowBundle } from "../utils/WorkflowBundleWriter";
 
 /**
@@ -241,6 +243,59 @@ export class WorkflowSerializer {
       .join("\n");
   }
 
+  private getBundlePreview(
+    analysis: WorkflowBundleAnalysis
+  ): SaveWorkflowBundlePreview {
+    const toDiagnostic = (diagnostic: {
+      code: string;
+      message: string;
+      fieldPath?: string;
+      token?: string;
+    }) => ({
+      code: diagnostic.code,
+      message: diagnostic.message,
+      ...(diagnostic.fieldPath ? { fieldPath: diagnostic.fieldPath } : {}),
+      ...(diagnostic.token ? { token: diagnostic.token } : {}),
+    });
+    return {
+      copyCount: analysis.plan.copies.length,
+      inlineCount: analysis.plan.inlines.length,
+      pruneCount: analysis.plan.pruneCandidates.length,
+      ...(analysis.plan.assetsDirectory
+        ? { assetsDirectoryName: path.basename(analysis.plan.assetsDirectory) }
+        : {}),
+      warnings: analysis.plan.warnings.map(toDiagnostic),
+      blockers: analysis.plan.blockers.map(toDiagnostic),
+      planFingerprint: getBundlePlanFingerprint(analysis.plan),
+    };
+  }
+
+  private sendSavePathChecked(
+    postMessage: PostMessageFn,
+    requestId: string,
+    filePath: string,
+    address: WorkflowViewAddress,
+    exists: boolean,
+    options: {
+      error?: string;
+      bundlePreview?: SaveWorkflowBundlePreview;
+      planChanged?: boolean;
+    } = {}
+  ): void {
+    postMessage({
+      type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
+      requestId,
+      path: filePath,
+      address,
+      exists,
+      ...(options.bundlePreview
+        ? { bundlePreview: options.bundlePreview }
+        : {}),
+      ...(options.planChanged ? { planChanged: true } : {}),
+      ...(options.error ? { error: options.error } : {}),
+    });
+  }
+
   private sendSaveFailure(
     postMessage: PostMessageFn,
     error: string,
@@ -385,30 +440,35 @@ export class WorkflowSerializer {
     clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
-    if (!this.getViewedWorkingFilePath(clientId, address)) {
-      pm({
-        type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
-        requestId,
-        path: filePath,
-        exists: false,
+    const manager = this.getManager();
+    const workingFilePath = this.getViewedWorkingFilePath(clientId, address);
+    if (!manager || !workingFilePath) {
+      this.sendSavePathChecked(pm, requestId, filePath, address, false, {
         error: "The viewed workflow changed.",
       });
       return;
     }
     try {
       const absolutePath = await this.resolveSafeExportPath(filePath);
-      pm({
-        type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
+      const workingFile = await readJsonFile(workingFilePath);
+      const clean = this.buildCleanWorkflow(workingFile);
+      const analysis = await this.analyzeSaveBundle(
+        clean,
+        absolutePath,
+        false,
+        clientId,
+        manager
+      );
+      this.sendSavePathChecked(
+        pm,
         requestId,
-        path: filePath,
-        exists: await this.pathExists(absolutePath),
-      });
+        filePath,
+        address,
+        await this.pathExists(absolutePath),
+        { bundlePreview: this.getBundlePreview(analysis) }
+      );
     } catch (error) {
-      pm({
-        type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
-        requestId,
-        path: filePath,
-        exists: false,
+      this.sendSavePathChecked(pm, requestId, filePath, address, false, {
         error: getErrorMessage(error),
       });
     }
@@ -501,7 +561,9 @@ export class WorkflowSerializer {
     filePath: string,
     format: WorkflowFileFormat,
     postMessage?: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
+    clientId: string = PANEL_CLIENT_ID,
+    planFingerprint?: string,
+    pathCheckRequestId?: string
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
@@ -532,6 +594,32 @@ export class WorkflowSerializer {
         clientId,
         manager
       );
+      const actualFingerprint = getBundlePlanFingerprint(analysis.plan);
+      const requiresBundleApproval =
+        analysis.plan.copies.length > 0 ||
+        analysis.plan.inlines.length > 0 ||
+        analysis.plan.pruneCandidates.length > 0 ||
+        analysis.plan.blockers.length > 0;
+      if (
+        (planFingerprint !== undefined &&
+          planFingerprint !== actualFingerprint) ||
+        (planFingerprint === undefined && requiresBundleApproval)
+      ) {
+        this.sendSavePathChecked(
+          pm,
+          pathCheckRequestId ?? requestId,
+          filePath,
+          address,
+          await this.pathExists(absolutePath),
+          {
+            bundlePreview: this.getBundlePreview(analysis),
+            ...(planFingerprint !== undefined
+              ? { planChanged: true }
+              : { error: "A current bundle preview is required." }),
+          }
+        );
+        return;
+      }
       if (analysis.plan.blockers.length > 0) {
         throw new Error(this.getBundleBlockerMessage(analysis.plan.blockers));
       }

@@ -21,6 +21,7 @@ import type {
   WorkflowRunNavigationSummary,
   WorkflowKey,
 } from "@root/types/CtrlYokeTypes";
+import type { SaveWorkflowBundlePreview } from "../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isWorkflowRunning } from "@utils/status";
 import {
@@ -202,7 +203,10 @@ export interface SaveWorkflowDialogData {
 export interface SavePathCheck {
   requestId: string;
   path: string;
+  address: WorkflowViewAddress;
   exists: boolean;
+  bundlePreview?: SaveWorkflowBundlePreview;
+  planChanged?: boolean;
   error?: string;
   checking: boolean;
 }
@@ -689,7 +693,11 @@ interface UiActions {
   // Save workflow dialog
   openSaveWorkflowDialog: (data: SaveWorkflowDialogData) => void;
   closeSaveWorkflowDialog: () => void;
-  beginSavePathCheck: (requestId: string, path: string) => void;
+  beginSavePathCheck: (
+    requestId: string,
+    path: string,
+    address: WorkflowViewAddress
+  ) => void;
   resolveSavePathCheck: (result: Omit<SavePathCheck, "checking">) => void;
   clearSavePathCheck: () => void;
 
@@ -1189,9 +1197,15 @@ export const useUiStore = create<UiState & UiActions>()(
           savePathCheck: null,
         }),
 
-      beginSavePathCheck: (requestId, path) =>
+      beginSavePathCheck: (requestId, path, address) =>
         set({
-          savePathCheck: { requestId, path, exists: false, checking: true },
+          savePathCheck: {
+            requestId,
+            path,
+            address,
+            exists: false,
+            checking: true,
+          },
         }),
 
       resolveSavePathCheck: (result) =>
@@ -1201,7 +1215,8 @@ export const useUiStore = create<UiState & UiActions>()(
             !state.saveWorkflowDialogOpen ||
             !pending ||
             pending.requestId !== result.requestId ||
-            pending.path !== result.path
+            pending.path !== result.path ||
+            !areWorkflowAddressesEqual(pending.address, result.address)
           ) {
             return state;
           }

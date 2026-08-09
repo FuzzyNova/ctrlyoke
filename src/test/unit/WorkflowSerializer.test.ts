@@ -492,8 +492,9 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
+        const messages: any[] = [];
         const serializer = new WorkflowSerializer(
-          () => {},
+          (message) => messages.push(message),
           {} as any,
           () =>
             ({
@@ -506,11 +507,69 @@ suite("WorkflowSerializer", () => {
           fakeWorkspaceState()
         );
 
+        await serializer.handleCheckSavePath(
+          "bundle-roundtrip-check",
+          outputPath,
+          address
+        );
+        const preview = messages.find(
+          (message) => message.type === MESSAGE_TYPES.SAVE_PATH_CHECKED
+        );
+        assert.ok(preview?.bundlePreview?.planFingerprint);
+
+        await fs.writeFile(
+          path.join(workspaceRoot, ".ctrlyoke", "attachments", "pasted.png"),
+          Buffer.from([137, 80, 78, 71, 1])
+        );
+        await serializer.handleSaveWorkflow(
+          "bundle-roundtrip-stale-save",
+          address,
+          outputPath,
+          "json",
+          undefined,
+          "panel",
+          preview.bundlePreview.planFingerprint
+        );
+        const staleSave = messages.find(
+          (message) =>
+            message.type === MESSAGE_TYPES.SAVE_PATH_CHECKED &&
+            message.requestId === "bundle-roundtrip-stale-save"
+        );
+        assert.strictEqual(staleSave?.planChanged, true);
+        assert.strictEqual(
+          await fs
+            .access(outputPath)
+            .then(() => true)
+            .catch(() => false),
+          false
+        );
+        assert.strictEqual(
+          await fs
+            .access(path.join(workspaceRoot, "exports", "portable.assets"))
+            .then(() => true)
+            .catch(() => false),
+          false
+        );
+
+        await serializer.handleCheckSavePath(
+          "bundle-roundtrip-refresh",
+          outputPath,
+          address
+        );
+        const refreshed = messages.find(
+          (message) =>
+            message.type === MESSAGE_TYPES.SAVE_PATH_CHECKED &&
+            message.requestId === "bundle-roundtrip-refresh"
+        );
+
         await serializer.handleSaveWorkflow(
           "bundle-roundtrip-save",
           address,
           outputPath,
-          "json"
+          "json",
+          undefined,
+          "panel",
+          refreshed.bundlePreview.planFingerprint
         );
         await fs.copyFile(outputPath, loadedPath);
 
@@ -700,6 +759,11 @@ suite("WorkflowSerializer", () => {
         await fs.mkdir(path.join(workspaceRoot, "exports"), {
           recursive: true,
         });
+        await writeDraftWorkingFile(
+          workspaceRoot,
+          address.workflowKey,
+          Date.now()
+        );
         await fs.writeFile(
           path.join(workspaceRoot, "exports", "existing.ctrlyoke.yaml"),
           "steps: []\n"
@@ -710,12 +774,14 @@ suite("WorkflowSerializer", () => {
           "exports/existing.ctrlyoke.yaml",
           address
         );
-        assert.deepStrictEqual(messages.pop(), {
-          type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
-          requestId: "check-existing",
-          path: "exports/existing.ctrlyoke.yaml",
-          exists: true,
-        });
+        const existing = messages.pop();
+        assert.strictEqual(existing.type, MESSAGE_TYPES.SAVE_PATH_CHECKED);
+        assert.strictEqual(existing.requestId, "check-existing");
+        assert.strictEqual(existing.path, "exports/existing.ctrlyoke.yaml");
+        assert.deepStrictEqual(existing.address, address);
+        assert.strictEqual(existing.exists, true);
+        assert.strictEqual(existing.bundlePreview.copyCount, 0);
+        assert.strictEqual(existing.bundlePreview.inlineCount, 0);
 
         await serializer.handleCheckSavePath(
           "check-escape",
@@ -766,9 +832,103 @@ suite("WorkflowSerializer", () => {
         type: MESSAGE_TYPES.SAVE_PATH_CHECKED,
         requestId: "stale-check",
         path: "workflow.ctrlyoke.yaml",
+        address: stale,
         exists: false,
         error: "The viewed workflow changed.",
       });
+    });
+
+    test("rejects bundle blockers without writing the workflow", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-save-blocker-")
+      );
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const address = {
+        workflowKey: "save-blocker-test-1",
+        kind: "draft",
+      } as WorkflowViewAddress;
+      const outputPath = path.join(
+        workspaceRoot,
+        "exports",
+        "blocked.ctrlyoke.yaml"
+      );
+      const workingFilePath = WorkflowPaths.draftFilePath(
+        workspaceRoot,
+        address.workflowKey
+      );
+      const messages: any[] = [];
+
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [
+            {
+              uri: vscode.Uri.file(workspaceRoot),
+              name: "save-blocker-test",
+              index: 0,
+            },
+          ],
+          configurable: true,
+        });
+        await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify({
+            steps: [{ prompt: "Attach @.ctrlyoke/attachments/missing.png" }],
+          }),
+          "utf8"
+        );
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {} as any,
+          () =>
+            ({
+              getViewAddress: () => address,
+              getQueueState: () => ({ workingFilePath }),
+            }) as any,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleCheckSavePath(
+          "blocked-preview",
+          outputPath,
+          address
+        );
+        const preview = messages.find(
+          (message) => message.requestId === "blocked-preview"
+        );
+        assert.ok(preview?.bundlePreview?.blockers.length > 0);
+
+        await serializer.handleSaveWorkflow(
+          "blocked-save",
+          address,
+          outputPath,
+          "yaml",
+          undefined,
+          "panel",
+          preview.bundlePreview.planFingerprint
+        );
+        assert.ok(
+          messages.some(
+            (message) =>
+              message.type === MESSAGE_TYPES.WORKFLOW_SAVE_FAILED &&
+              message.requestId === "blocked-save"
+          )
+        );
+        assert.strictEqual(
+          await fs
+            .access(outputPath)
+            .then(() => true)
+            .catch(() => false),
+          false
+        );
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+      }
     });
   });
 

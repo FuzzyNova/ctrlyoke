@@ -2287,7 +2287,10 @@ export function createMessageHandlers(
     useUiStore.getState().resolveSavePathCheck({
       requestId: message.requestId,
       path: message.path,
+      address: message.address,
       exists: message.exists,
+      bundlePreview: message.bundlePreview,
+      planChanged: message.planChanged,
       error: message.error,
     });
   };

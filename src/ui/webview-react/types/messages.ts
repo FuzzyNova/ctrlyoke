@@ -130,6 +130,8 @@ export {
   type ExecutionPreviewScope,
   type RequestExecutionPreviewMessage,
   type ExecutionPreviewResultMessage,
+  type SaveWorkflowBundlePreview,
+  type SaveBundleDiagnostic,
 
   // Prompt and workflow types
   type PromptStep,

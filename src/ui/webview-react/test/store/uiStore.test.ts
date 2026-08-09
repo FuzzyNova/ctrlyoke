@@ -219,25 +219,63 @@ describe("save workflow dialog", () => {
     });
     store().beginSavePathCheck(
       "save-1:path:1",
-      "/workspace/first.ctrlyoke.yaml"
+      "/workspace/first.ctrlyoke.yaml",
+      { workflowKey: "workflow-1" as any, kind: "draft" }
     );
     store().beginSavePathCheck(
       "save-1:path:2",
-      "/workspace/second.ctrlyoke.yaml"
+      "/workspace/second.ctrlyoke.yaml",
+      { workflowKey: "workflow-1" as any, kind: "draft" }
     );
     store().resolveSavePathCheck({
       requestId: "save-1:path:1",
       path: "/workspace/first.ctrlyoke.yaml",
+      address: { workflowKey: "workflow-1" as any, kind: "draft" },
       exists: true,
+      bundlePreview: {
+        copyCount: 99,
+        inlineCount: 0,
+        pruneCount: 0,
+        warnings: [],
+        blockers: [],
+        planFingerprint: "stale",
+      },
     });
     expect(store().savePathCheck?.checking).toBe(true);
     expect(store().savePathCheck?.path).toBe("/workspace/second.ctrlyoke.yaml");
+
+    store().resolveSavePathCheck({
+      requestId: "save-1:path:2",
+      path: "/workspace/second.ctrlyoke.yaml",
+      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      exists: true,
+      bundlePreview: {
+        copyCount: 2,
+        inlineCount: 1,
+        pruneCount: 1,
+        warnings: [],
+        blockers: [],
+        planFingerprint: "current",
+      },
+    });
+    expect(store().savePathCheck?.bundlePreview?.planFingerprint).toBe(
+      "current"
+    );
 
     store().closeSaveWorkflowDialog();
     store().resolveSavePathCheck({
       requestId: "save-1:path:2",
       path: "/workspace/second.ctrlyoke.yaml",
+      address: { workflowKey: "workflow-1" as any, kind: "draft" },
       exists: true,
+      bundlePreview: {
+        copyCount: 2,
+        inlineCount: 1,
+        pruneCount: 1,
+        warnings: [],
+        blockers: [],
+        planFingerprint: "current",
+      },
     });
     expect(store().savePathCheck).toBeNull();
   });

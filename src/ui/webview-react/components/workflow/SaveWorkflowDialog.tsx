@@ -190,7 +190,11 @@ export const SaveWorkflowDialog: React.FC = () => {
     }
     pathCheckSequence.current += 1;
     const requestId = `${saveWorkflowDialogData.requestId}:path:${pathCheckSequence.current}`;
-    beginSavePathCheck(requestId, workflowPreviewPath);
+    beginSavePathCheck(
+      requestId,
+      workflowPreviewPath,
+      saveWorkflowDialogData.address
+    );
     vscode.postMessage({
       type: MESSAGE_TYPES.CHECK_SAVE_PATH,
       requestId,
@@ -210,6 +214,20 @@ export const SaveWorkflowDialog: React.FC = () => {
     vscode,
     workflowPreviewPath,
   ]);
+
+  const matchingPathCheck =
+    savePathCheck?.path === workflowPreviewPath &&
+    saveWorkflowDialogData &&
+    savePathCheck.address.workflowKey ===
+      saveWorkflowDialogData.address.workflowKey &&
+    savePathCheck.address.kind === saveWorkflowDialogData.address.kind &&
+    (saveWorkflowDialogData.address.kind === "draft" ||
+      (saveWorkflowDialogData.address.kind === "run" &&
+        savePathCheck.address.kind === "run" &&
+        savePathCheck.address.runRef === saveWorkflowDialogData.address.runRef))
+      ? savePathCheck
+      : null;
+  const bundlePreview = matchingPathCheck?.bundlePreview;
 
   const handleSave = useCallback(() => {
     if (saveAsTemplate) {
@@ -240,6 +258,8 @@ export const SaveWorkflowDialog: React.FC = () => {
       address: saveWorkflowDialogData?.address,
       filePath: workflowPreviewPath,
       format,
+      planFingerprint: bundlePreview?.planFingerprint,
+      pathCheckRequestId: matchingPathCheck?.requestId,
     });
   }, [
     vscode,
@@ -251,14 +271,16 @@ export const SaveWorkflowDialog: React.FC = () => {
     templateFormat,
     saveWorkflowDialogData,
     workflowPreviewPath,
+    bundlePreview,
+    matchingPathCheck?.requestId,
   ]);
 
-  const matchingPathCheck =
-    savePathCheck?.path === workflowPreviewPath ? savePathCheck : null;
   const pathReady =
     !!matchingPathCheck &&
     !matchingPathCheck.checking &&
-    !matchingPathCheck.error;
+    !matchingPathCheck.error &&
+    !!bundlePreview &&
+    bundlePreview.blockers.length === 0;
   const canSave = saveAsTemplate
     ? !!templateName.trim() && !templateNameError
     : !!name.trim() && !nameError && pathReady;
@@ -461,8 +483,71 @@ export const SaveWorkflowDialog: React.FC = () => {
                   overwritten.
                 </p>
               )}
+              {matchingPathCheck?.planChanged && bundlePreview && (
+                <p className="mt-1 text-xs text-warning-fg" role="alert">
+                  The bundle changed while saving. Review the updated plan and
+                  confirm again.
+                </p>
+              )}
             </div>
           </>
+        )}
+
+        {!saveAsTemplate && matchingPathCheck?.checking && (
+          <p className="text-sm text-description-fg">Analyzing bundle…</p>
+        )}
+
+        {!saveAsTemplate && bundlePreview && !matchingPathCheck?.checking && (
+          <div className="space-y-1.5 text-sm" aria-label="Bundle preview">
+            {bundlePreview.copyCount > 0 && (
+              <p>
+                {bundlePreview.copyCount} attachment
+                {bundlePreview.copyCount === 1 ? "" : "s"} will be copied to{" "}
+                <span className="font-mono">
+                  {bundlePreview.assetsDirectoryName ?? "the assets folder"}/
+                </span>
+              </p>
+            )}
+            {bundlePreview.inlineCount > 0 && (
+              <p>
+                {bundlePreview.inlineCount} prompt file
+                {bundlePreview.inlineCount === 1 ? "" : "s"} will be inlined
+              </p>
+            )}
+            {bundlePreview.pruneCount > 0 && (
+              <p className="text-warning-fg">
+                {bundlePreview.pruneCount} managed asset
+                {bundlePreview.pruneCount === 1 ? "" : "s"} will be removed
+              </p>
+            )}
+            {bundlePreview.copyCount === 0 &&
+              bundlePreview.inlineCount === 0 &&
+              bundlePreview.pruneCount === 0 &&
+              bundlePreview.warnings.length === 0 &&
+              bundlePreview.blockers.length === 0 && (
+                <p className="text-description-fg">
+                  No bundle changes are required.
+                </p>
+              )}
+            {bundlePreview.warnings.map((warning) => (
+              <p
+                key={`warning-${warning.code}-${warning.message}`}
+                className="text-warning-fg"
+                role="alert"
+              >
+                Warning: {warning.message}
+              </p>
+            ))}
+            {bundlePreview.blockers.map((blocker) => (
+              <p
+                key={`blocker-${blocker.code}-${blocker.message}`}
+                className="text-error-fg"
+                role="alert"
+              >
+                Cannot save: {blocker.message}
+              </p>
+            ))}
+          </div>
         )}
 
         <div className="pt-3 border-t border-panel-border">

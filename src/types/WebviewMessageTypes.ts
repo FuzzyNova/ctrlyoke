@@ -886,12 +886,32 @@ export interface CheckSavePathMessage {
   address: WorkflowViewAddress;
 }
 
+export interface SaveBundleDiagnostic {
+  code: string;
+  message: string;
+  fieldPath?: string;
+  token?: string;
+}
+
+export interface SaveWorkflowBundlePreview {
+  copyCount: number;
+  inlineCount: number;
+  pruneCount: number;
+  assetsDirectoryName?: string;
+  warnings: SaveBundleDiagnostic[];
+  blockers: SaveBundleDiagnostic[];
+  planFingerprint: string;
+}
+
 /** Extension → Webview: addressed result of a save-path preflight. */
 export interface SavePathCheckedMessage {
   type: typeof MESSAGE_TYPES.SAVE_PATH_CHECKED;
   requestId: string;
   path: string;
+  address: WorkflowViewAddress;
   exists: boolean;
+  bundlePreview?: SaveWorkflowBundlePreview;
+  planChanged?: boolean;
   error?: string;
 }
 
@@ -909,6 +929,8 @@ export interface SaveWorkflowMessage {
   address: WorkflowViewAddress;
   filePath: string;
   format: WorkflowFileFormat;
+  planFingerprint?: string;
+  pathCheckRequestId?: string;
 }
 
 /**

@@ -1227,7 +1227,9 @@ export class WebviewMessageRouter {
         message.filePath,
         message.format,
         ctx.postMessage,
-        ctx.clientId
+        ctx.clientId,
+        message.planFingerprint,
+        message.pathCheckRequestId
       );
     });
 

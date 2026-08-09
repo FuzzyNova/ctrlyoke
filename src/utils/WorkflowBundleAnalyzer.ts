@@ -56,6 +56,29 @@ export interface BundlePlan {
   assetsDirectory?: string;
 }
 
+/** Fingerprint the user-visible bundle work, excluding filesystem metadata. */
+export function getBundlePlanFingerprint(plan: BundlePlan): string {
+  return crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        assetsDirectory: plan.assetsDirectory,
+        copies: plan.copies.map((copy) => ({
+          sourcePath: copy.sourcePath,
+          destinationPath: copy.destinationPath,
+          relativePath: copy.relativePath,
+          contentHash: copy.contentHash,
+          references: copy.references,
+        })),
+        inlines: plan.inlines,
+        warnings: plan.warnings,
+        blockers: plan.blockers,
+        pruneCandidates: plan.pruneCandidates,
+      })
+    )
+    .digest("hex");
+}
+
 export interface WorkflowBundleAnalysis {
   workflow: Record<string, unknown>;
   plan: BundlePlan;
