@@ -113,6 +113,7 @@ interface ResolvedReference {
   candidatePath?: string;
   canonicalPath?: string;
   generatedStore?: BundleGeneratedStore;
+  bundleAssetsDirectory?: string;
   missingGeneratedStore?: BundleGeneratedStore;
   outsideTrustedRoots?: boolean;
   error?: unknown;
@@ -121,6 +122,7 @@ interface ResolvedReference {
 interface ExistingManifest {
   files: Set<string>;
   valid: boolean;
+  error?: unknown;
 }
 
 interface RewriteRequest {
@@ -446,7 +448,8 @@ async function analyzeInlineReferences(
       reference,
       token,
       resolver,
-      trustedRoots
+      trustedRoots,
+      options.sourceDefinitionPath
     );
 
     if (item.outsideTrustedRoots) {
@@ -461,6 +464,7 @@ async function analyzeInlineReferences(
     }
 
     const generatedStore = item.generatedStore ?? item.missingGeneratedStore;
+    const bundleManagedAsset = item.bundleAssetsDirectory !== undefined;
     if (!workspaceRoot && looksLikeGeneratedStoreReference(reference.path)) {
       addBlocker(
         plan,
@@ -471,7 +475,7 @@ async function analyzeInlineReferences(
       );
       continue;
     }
-    if (!generatedStore) {
+    if (!generatedStore && !bundleManagedAsset) {
       continue;
     }
     if (generatedStore === "temp") {
@@ -484,7 +488,7 @@ async function analyzeInlineReferences(
       );
       continue;
     }
-    if (item.reference.isDirectory) {
+    if (generatedStore && item.reference.isDirectory) {
       addBlocker(
         plan,
         "generated-directory-reference",
@@ -494,7 +498,7 @@ async function analyzeInlineReferences(
       );
       continue;
     }
-    if (item.reference.path.includes("{{var}}")) {
+    if (generatedStore && item.reference.path.includes("{{var}}")) {
       addBlocker(
         plan,
         "dynamic-generated-reference",
@@ -515,10 +519,13 @@ async function analyzeInlineReferences(
       continue;
     }
     if (options.templateMode) {
+      const referenceKind = generatedStore
+        ? "generated-store"
+        : "bundle-managed asset";
       addBlocker(
         plan,
         "template-generated-reference",
-        `Cannot export template: ${field.label} contains generated-store reference "${token}"; templates cannot carry sibling assets.`,
+        `Cannot export template: ${field.label} contains ${referenceKind} reference "${token}"; templates cannot carry sibling assets.`,
         field.label,
         token
       );
@@ -549,9 +556,13 @@ async function resolveInlineReference(
   reference: FileReference,
   token: string,
   resolver: PromptFileResolver,
-  trustedRoots: readonly string[]
+  trustedRoots: readonly string[],
+  sourceDefinitionPath?: string
 ): Promise<ResolvedReference> {
-  const candidates = resolver.getCandidatePaths(reference.path);
+  const candidates = resolver.getCandidatePaths(
+    reference.path,
+    sourceDefinitionPath
+  );
   const lexicalGenerated = candidates.find((candidate) =>
     isGeneratedStorePath(candidate, trustedRoots)
   );
@@ -597,6 +608,9 @@ async function resolveInlineReference(
     candidatePath: candidate,
     canonicalPath,
     generatedStore: getGeneratedStore(canonicalPath, trustedRoots),
+    bundleAssetsDirectory: outsideTrustedRoots
+      ? undefined
+      : await getManifestedAssetsDirectory(canonicalPath, trustedRoots),
     missingGeneratedStore: lexicalEscape
       ? getGeneratedStore(lexicalGenerated, trustedRoots)
       : undefined,
@@ -913,6 +927,23 @@ async function readExistingManifest(
   assetsDirectory: string,
   plan: BundlePlan
 ): Promise<ExistingManifest> {
+  const manifest = await loadExistingManifest(assetsDirectory);
+  if (manifest.error) {
+    addWarning(
+      plan,
+      "invalid-assets-manifest",
+      `Ignoring invalid assets manifest "${path.join(
+        assetsDirectory,
+        BUNDLE_MANIFEST_FILE_NAME
+      )}": ${getErrorMessage(manifest.error)}.`
+    );
+  }
+  return manifest;
+}
+
+async function loadExistingManifest(
+  assetsDirectory: string
+): Promise<ExistingManifest> {
   const manifestPath = path.join(assetsDirectory, BUNDLE_MANIFEST_FILE_NAME);
   try {
     const value = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
@@ -934,13 +965,35 @@ async function readExistingManifest(
     if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
       return { files: new Set(), valid: false };
     }
-    addWarning(
-      plan,
-      "invalid-assets-manifest",
-      `Ignoring invalid assets manifest "${manifestPath}": ${getErrorMessage(error)}.`
-    );
-    return { files: new Set(), valid: false };
+    return { files: new Set(), valid: false, error };
   }
+}
+
+async function getManifestedAssetsDirectory(
+  filePath: string,
+  trustedRoots: readonly string[]
+): Promise<string | undefined> {
+  let directory = path.dirname(filePath);
+  while (isPathWithinAnyDirectory(directory, trustedRoots)) {
+    if (/\.assets$/i.test(path.basename(directory))) {
+      const relativePath = path
+        .relative(directory, filePath)
+        .replace(/\\/g, "/");
+      if (!isSafeManifestPath(relativePath)) {
+        return undefined;
+      }
+      const manifest = await loadExistingManifest(directory);
+      return manifest.valid && manifest.files.has(relativePath)
+        ? directory
+        : undefined;
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      break;
+    }
+    directory = parent;
+  }
+  return undefined;
 }
 
 async function getExistingNames(assetsDirectory: string): Promise<Set<string>> {

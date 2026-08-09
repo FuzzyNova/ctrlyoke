@@ -154,6 +154,7 @@ The rule is about _where a reference points_, not what kind of reference it is:
 | Lone step `prompt` resolving into `.ctrlyoke/prompts/**`             | **inline** the resolved content, including `""` for an empty draft                             |
 | Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/attachments/**` | **copy** the underlying file into `<basename>.assets/`; rebuild the token with the new path    |
 | Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/prompts/**`     | copy + rewrite — **do not inline** (see below)                                                 |
+| Inline ref into a manifested `*.assets/**` file                     | copy + rewrite into the destination bundle's assets directory; manifest ownership makes it managed |
 | Directory `@.../` into either generated store                        | block save and ask for explicit file refs; copying the shared store would leak unrelated files |
 | Inline ref into ordinary repo files (`src/…`)                        | leave alone — travels with the repo                                                            |
 | Missing generated-store ref or anything under `.ctrlyoke/temp/**`    | block save — emitting a knowingly incomplete artifact violates the goal                        |

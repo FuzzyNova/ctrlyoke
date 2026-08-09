@@ -6,8 +6,10 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import {
   analyzeWorkflowBundle,
+  BUNDLE_MANIFEST_FILE_NAME,
   BUNDLE_MANIFEST_VERSION,
 } from "../../utils/WorkflowBundleAnalyzer";
+import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
 
 async function makeWorkspace(prefix: string): Promise<string> {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -333,6 +335,131 @@ suite("WorkflowBundleAnalyzer", () => {
       assert.match(
         result.plan.copies[0].relativePath,
         /\.\/fix-tests\.assets\/owned-[0-9a-f]{8}\.txt$/
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("re-bundles manifested assets when Save As moves the workflow", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-rebundle-");
+    try {
+      const sourceDefinitionPath = path.join(
+        workspace,
+        "workflows",
+        "fix-tests.ctrlyoke.yaml"
+      );
+      const sourceAssets = path.join(
+        workspace,
+        "workflows",
+        "fix-tests.assets"
+      );
+      const destinationPath = path.join(
+        workspace,
+        "tools",
+        "fix-tests.ctrlyoke.yaml"
+      );
+      const destinationAssets = path.join(
+        workspace,
+        "tools",
+        "fix-tests.assets"
+      );
+      const sourceAsset = path.join(sourceAssets, "shot.png");
+      await fs.mkdir(sourceAssets, { recursive: true });
+      await fs.writeFile(sourceAsset, "previous export", "utf8");
+      await fs.writeFile(
+        path.join(sourceAssets, BUNDLE_MANIFEST_FILE_NAME),
+        JSON.stringify({
+          version: BUNDLE_MANIFEST_VERSION,
+          files: ["shot.png"],
+        }),
+        "utf8"
+      );
+      await fs.mkdir(destinationAssets, { recursive: true });
+      await fs.writeFile(
+        path.join(destinationAssets, "stale.png"),
+        "stale",
+        "utf8"
+      );
+      await fs.writeFile(
+        path.join(destinationAssets, BUNDLE_MANIFEST_FILE_NAME),
+        JSON.stringify({
+          version: BUNDLE_MANIFEST_VERSION,
+          files: ["stale.png"],
+        }),
+        "utf8"
+      );
+
+      const result = await analyzeWorkflowBundle(
+        { prompt: "Review @./fix-tests.assets/shot.png" },
+        {
+          workspaceRoot: workspace,
+          sourceDefinitionPath,
+          destinationPath,
+        }
+      );
+
+      assert.strictEqual(result.plan.copies.length, 1);
+      assert.strictEqual(result.plan.copies[0].sourcePath, sourceAsset);
+      assert.strictEqual(
+        result.plan.copies[0].relativePath,
+        "./fix-tests.assets/shot.png"
+      );
+      assert.strictEqual(
+        result.workflow.prompt,
+        "Review @./fix-tests.assets/shot.png"
+      );
+      assert.deepStrictEqual(result.plan.pruneCandidates, ["stale.png"]);
+
+      await writeWorkflowBundle({
+        workflowPath: destinationPath,
+        serializedWorkflow: JSON.stringify(result.workflow),
+        plan: result.plan,
+      });
+      assert.strictEqual(
+        await fs.readFile(path.join(destinationAssets, "shot.png"), "utf8"),
+        "previous export"
+      );
+      await assert.rejects(() =>
+        fs.access(path.join(destinationAssets, "stale.png"))
+      );
+      assert.strictEqual(
+        await fs.readFile(sourceAsset, "utf8"),
+        "previous export"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("leaves an unmanifested assets-shaped repo directory untouched", async () => {
+    const workspace = await makeWorkspace(
+      "ctrlyoke-bundle-unmanifested-assets-"
+    );
+    try {
+      const workflowDirectory = path.join(workspace, "workflows");
+      const sourceDefinitionPath = path.join(
+        workflowDirectory,
+        "fix-tests.ctrlyoke.yaml"
+      );
+      const asset = path.join(workflowDirectory, "mygame.assets", "shot.png");
+      await fs.mkdir(path.dirname(asset), { recursive: true });
+      await fs.writeFile(asset, "repo asset", "utf8");
+
+      const result = await analyzeWorkflowBundle(
+        { prompt: "Review @./mygame.assets/shot.png" },
+        {
+          workspaceRoot: workspace,
+          sourceDefinitionPath,
+          destinationPath: destination(workspace),
+        }
+      );
+
+      assert.strictEqual(result.plan.copies.length, 0);
+      assert.strictEqual(result.plan.blockers.length, 0);
+      assert.strictEqual(
+        result.workflow.prompt,
+        "Review @./mygame.assets/shot.png"
       );
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });

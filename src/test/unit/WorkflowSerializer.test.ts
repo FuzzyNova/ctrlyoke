@@ -17,6 +17,10 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { PromptFileResolver } from "../../core/PromptFileResolver";
 import { parseAllFileReferences } from "../../utils/FileReferenceParser";
+import {
+  BUNDLE_MANIFEST_FILE_NAME,
+  BUNDLE_MANIFEST_VERSION,
+} from "../../utils/WorkflowBundleAnalyzer";
 
 /** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
 function fakeWorkspaceState(): any {
@@ -670,12 +674,32 @@ suite("WorkflowSerializer", () => {
           "image",
           "utf8"
         );
+        const inheritedAssets = path.join(
+          workspaceRoot,
+          "workflows",
+          "fix-tests.assets"
+        );
+        await fs.mkdir(inheritedAssets, { recursive: true });
+        await fs.writeFile(
+          path.join(inheritedAssets, "inherited.png"),
+          "inherited image",
+          "utf8"
+        );
+        await fs.writeFile(
+          path.join(inheritedAssets, BUNDLE_MANIFEST_FILE_NAME),
+          JSON.stringify({
+            version: BUNDLE_MANIFEST_VERSION,
+            files: ["inherited.png"],
+          }),
+          "utf8"
+        );
         await fs.writeFile(
           workingFilePath,
           JSON.stringify({
             steps: [
               { prompt: "./.ctrlyoke/prompts/template.prompt.md" },
               { prompt: "Attach @.ctrlyoke/attachments/image.png" },
+              { prompt: "Attach @./fix-tests.assets/inherited.png" },
             ],
           }),
           "utf8"
@@ -695,7 +719,7 @@ suite("WorkflowSerializer", () => {
               getQueueState: () => ({ workingFilePath }),
               getViewAddress: () => address,
               getViewSourceDefinitionPath: async () =>
-                path.join(workspaceRoot, "source.ctrlyoke.yaml"),
+                path.join(workspaceRoot, "workflows", "source.ctrlyoke.yaml"),
             }) as any,
           () => undefined,
           fakeWorkspaceState()
@@ -717,6 +741,10 @@ suite("WorkflowSerializer", () => {
         assert.match(
           failure.error,
           /steps\[1\].*\.ctrlyoke\/attachments\/image\.png/i
+        );
+        assert.match(
+          failure.error,
+          /steps\[2\].*bundle-managed asset.*\.\/fix-tests\.assets\/inherited\.png/i
         );
       } finally {
         Object.defineProperty(vscode.workspace, "workspaceFolders", {

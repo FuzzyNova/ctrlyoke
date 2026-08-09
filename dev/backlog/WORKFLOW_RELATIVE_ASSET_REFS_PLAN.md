@@ -610,7 +610,7 @@ checkable rather than assumed.
 | 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix — **landed** |
 | 3 | Parity sites (§5.3), webview payload included — **landed**                              |
 | 4 | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) — **landed** |
-| 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1)         |
+| 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1) — **landed** |
 | 6 | Migration script (§7), run once, then delete                                           |
 | 7 | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide, stating the §1.1 relocatability boundary |
 
