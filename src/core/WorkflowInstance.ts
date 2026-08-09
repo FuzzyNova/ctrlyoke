@@ -3275,6 +3275,7 @@ export class WorkflowInstance {
     if (live) {
       this.liveInjectIntegrations.delete(harness);
       live.resetForNewRun();
+      live.setSourceDefinitionPath(this.sourceDefinitionPath);
       this.executionIntegrations.set(harness, live);
       Log.info(
         `[inst:${this.id.slice(0, 8)}] ♻️ Reusing live inject integration (harness=${harness}) from previous run`
@@ -3284,6 +3285,7 @@ export class WorkflowInstance {
 
     const cached = this.executionIntegrations.get(harness);
     if (cached) {
+      cached.setSourceDefinitionPath(this.sourceDefinitionPath);
       Log.debug(`♻️ Reusing cached integration for harness: ${harness}`);
       return cached;
     }
@@ -3292,6 +3294,7 @@ export class WorkflowInstance {
     }
     const integration = this.integrationFactory.createForExecution(harness);
     integration.setWorkflowName(this.workflowName || undefined);
+    integration.setSourceDefinitionPath(this.sourceDefinitionPath);
     integration.onStreamingEvents((events) =>
       this._streamingEventsEmitter.fire(events)
     );

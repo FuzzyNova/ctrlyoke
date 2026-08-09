@@ -607,7 +607,7 @@ checkable rather than assumed.
 | - | ------------------------------------------------------------------------------------- |
 | 0 | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) — **landed** |
 | 1 | `resolveReferencePath` + `PromptFileResolver` containment fix (§3, §4) — no behavior change to emitted refs yet — **landed** |
-| 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix |
+| 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix — **landed** |
 | 3 | Parity sites (§5.3), webview payload included                                          |
 | 4 | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) |
 | 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1)         |
@@ -622,6 +622,13 @@ Steps 1-3 are consumer-side and land with no visible change — every existing r
 meaning because nothing emits `./` yet. Step 4 is the flip. That ordering means step 4 is revertible
 on its own if the relocation round trip surprises us. Step 5 fixes a corruption mode that exists
 today in a different shape (§6.1), so it is deliberately separable from the flip.
+
+Step 2 renders workflow-relative inline references as absolute paths during sanitization, even when
+single-root rendering otherwise keeps workspace references in their authored form. Absolute output
+is the deliberate choice because harness CLIs run from the workspace root rather than the workflow
+directory, and it therefore preserves the workflow-relative meaning without relying on a second cwd
+or another relative-path convention. Workspace-based references retain their existing byte-for-byte
+sanitized output.
 
 ### 9.1 Explicitly out of scope for this execution
 

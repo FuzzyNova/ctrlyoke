@@ -15,7 +15,8 @@ import {
 } from "./FileTokenEstimator";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
 import {
-  resolveNamedRelativePath,
+  resolveReferencePath,
+  type ReferencePathResolution,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 import { Log } from "./Log";
@@ -77,6 +78,9 @@ export class ContextExpander {
   // When true, render resolved absolute paths in excerpt descriptions/bodies
   // instead of the as-typed relative ref (attachment ids are unaffected).
   private effectiveAbsolute: boolean;
+  // Workflow-relative inline references use this directory as their only
+  // resolution base. It is discarded when it is outside the trusted roots.
+  private sourceDefinitionDir?: string;
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
 
@@ -84,7 +88,8 @@ export class ContextExpander {
     workspaceRoot: string,
     additionalTrustedRoots: string[] = [],
     namedRoots: ResolverWorkspaceFolder[] = [],
-    effectiveAbsolute: boolean = false
+    effectiveAbsolute: boolean = false,
+    sourceDefinitionDir?: string
   ) {
     this.workspaceRoot = workspaceRoot;
     this.trustedRoots = Array.from(
@@ -96,6 +101,14 @@ export class ContextExpander {
     );
     this.namedRoots = namedRoots;
     this.effectiveAbsolute = effectiveAbsolute;
+    const resolvedSourceDefinitionDir = sourceDefinitionDir
+      ? path.resolve(sourceDefinitionDir)
+      : undefined;
+    this.sourceDefinitionDir =
+      resolvedSourceDefinitionDir &&
+      isPathWithinAnyDirectory(resolvedSourceDefinitionDir, this.trustedRoots)
+        ? resolvedSourceDefinitionDir
+        : undefined;
   }
 
   /**
@@ -257,7 +270,16 @@ export class ContextExpander {
       }
 
       for (const ref of fileReferences) {
-        const attachmentId = this.getAttachmentId(ref);
+        let attachmentId: string;
+        try {
+          attachmentId = this.getAttachmentId(ref);
+        } catch (err) {
+          Log.warn(
+            `[ContextExpander] Skipping unresolvable reference: ${ref.path}.`,
+            err
+          );
+          continue;
+        }
 
         if (this.attachmentIds.has(attachmentId)) {
           Log.debug(`[ContextExpander] Skipping duplicate: ${attachmentId}`);
@@ -417,15 +439,27 @@ export class ContextExpander {
     ref: FileReference,
     formatFileRef: (quotedPath: string) => string
   ): Promise<string | null> {
+    let resolution: ReferencePathResolution;
     let absolutePath: string;
     try {
-      absolutePath = this.resolveWorkspacePath(ref.path);
+      resolution = this.resolveReference(ref.path);
+      absolutePath = resolution.absolutePath;
       await fs.access(absolutePath);
-    } catch {
+    } catch (err) {
+      Log.debug(
+        `[ContextExpander] Skipping unresolvable reference: ${ref.path}.`,
+        err
+      );
       return null;
     }
 
-    const displayPath = this.effectiveAbsolute ? absolutePath : ref.path;
+    // Workflow-relative paths must leave ctrlyoke as absolute paths because
+    // harness CLIs run from the workspace root, not the workflow directory.
+    // Absolute output is unambiguous even when the workflow lives elsewhere.
+    const displayPath =
+      resolution.base === "workflow" || this.effectiveAbsolute
+        ? absolutePath
+        : ref.path;
     const quotedPath = displayPath.includes(" ")
       ? `"${displayPath}"`
       : displayPath;
@@ -434,7 +468,7 @@ export class ContextExpander {
     if (isExcerptRef) {
       // #selection:/#sym: never carry an @ prefix, and only the resolved
       // path (not the surrounding syntax) can change.
-      if (!this.effectiveAbsolute) {
+      if (!this.effectiveAbsolute && resolution.base !== "workflow") {
         return null;
       }
       // Not `quotedPath`: these are colon-delimited fields, and effectiveAbsolute
@@ -584,19 +618,21 @@ export class ContextExpander {
       return `directory:${normalizedPath}`;
     }
 
+    const resolvedPath = this.resolveReference(ref.path).absolutePath;
+
     if (ref.symbolName && ref.startLine && ref.endLine) {
       // Symbol with line range - use path + lines for uniqueness
       // (same symbol can appear in multiple files or multiple times in same file)
-      return `symbol:${ref.path}:${ref.startLine}-${ref.endLine}`;
+      return `symbol:${resolvedPath}:${ref.startLine}-${ref.endLine}`;
     }
 
     if (ref.startLine && ref.endLine) {
       // Line range
-      return `file:${ref.path}:${ref.startLine}-${ref.endLine}`;
+      return `file:${resolvedPath}:${ref.startLine}-${ref.endLine}`;
     }
 
     // Full file
-    return `file:${ref.path}`;
+    return `file:${resolvedPath}`;
   }
 
   /**
@@ -722,18 +758,24 @@ ${content}
    * Uses Node.js path.resolve for cross-platform compatibility
    */
   private resolveWorkspacePath(relativePath: string): string {
+    return this.resolveReference(relativePath).absolutePath;
+  }
+
+  /**
+   * Resolve a reference and apply the workspace containment policy.
+   * Resolution selects the lexical base; it does not authorize the result.
+   */
+  private resolveReference(relativePath: string): ReferencePathResolution {
     if (!this.workspaceRoot) {
       throw new Error("No workspace folder open");
     }
 
-    // Folder-name-prefixed refs (`root2/src/index.ts`) resolve against that
-    // named root; otherwise (and for absolute paths) behaves like
-    // path.resolve(workspaceRoot, relativePath) as before.
-    const resolved = resolveNamedRelativePath(
-      relativePath,
-      this.workspaceRoot,
-      this.namedRoots
-    );
+    const resolution = resolveReferencePath(relativePath, {
+      primaryRoot: this.workspaceRoot,
+      namedRoots: this.namedRoots,
+      sourceDefinitionDir: this.sourceDefinitionDir,
+    });
+    const resolved = resolution.absolutePath;
 
     // Reject `..` traversal and absolute-path references that escape every
     // trusted root — @-references come from prompt/workflow file content,
@@ -747,6 +789,6 @@ ${content}
       );
     }
 
-    return resolved;
+    return resolution;
   }
 }

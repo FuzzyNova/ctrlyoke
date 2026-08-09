@@ -20,6 +20,7 @@ import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import {
+  getTrustedSourceDefinitionDir,
   resolveEffectiveAbsoluteReferences,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
@@ -170,6 +171,8 @@ export abstract class HarnessIntegration {
   protected totalSteps: number = 0;
   protected isCancelling: boolean = false;
   protected lastFailureReason: string | null = null;
+  /** Authored workflow definition used as the base for workflow-relative refs. */
+  protected sourceDefinitionPath?: string;
 
   // Event emitters for status and response completion
   protected statusChangeEmitter = new TypedEmitter<HarnessStatus>();
@@ -377,6 +380,11 @@ export abstract class HarnessIntegration {
     // no-op in base class; CliIntegration overrides
   }
 
+  /** Set the authored workflow path used by inline reference expansion. */
+  setSourceDefinitionPath(sourceDefinitionPath: string | undefined): void {
+    this.sourceDefinitionPath = sourceDefinitionPath;
+  }
+
   /**
    * Initialize the Harness integration
    * Must be implemented by subclasses
@@ -459,7 +467,8 @@ export abstract class HarnessIntegration {
             ...this.getEffectiveApprovedExternalFileRoots(),
           ],
           this.getNamedWorkspaceRoots(),
-          effectiveAbsolute
+          effectiveAbsolute,
+          this.getSourceDefinitionDir()
         );
         splitContext = await expander.expandContextSplit(rawPromptText);
         // Rewrite folder-name-prefixed refs to their resolved form inline,
@@ -759,6 +768,22 @@ export abstract class HarnessIntegration {
    */
   protected getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
     return [];
+  }
+
+  /**
+   * Return the trusted directory containing the authored workflow definition.
+   * The run working copy is intentionally never used as this source.
+   */
+  protected getSourceDefinitionDir(): string | undefined {
+    return getTrustedSourceDefinitionDir(
+      this.sourceDefinitionPath,
+      Array.from(
+        new Set([
+          ...this.getWorkspaceRoots(),
+          ...this.getEffectiveApprovedExternalFileRoots(),
+        ])
+      )
+    );
   }
 
   /**

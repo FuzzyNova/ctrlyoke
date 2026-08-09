@@ -462,6 +462,81 @@ suite("ContextExpander.expandContextSplit", () => {
 
       assert.deepStrictEqual(result.directFileRefs, [insideFile]);
     });
+
+    test("resolves ./ refs from the workflow directory and bare refs from the workspace root", async () => {
+      const root = freshWorkspace();
+      const workflowDir = path.join(root, "workflows");
+      fs.mkdirSync(workflowDir);
+      const workflowFile = path.join(workflowDir, "asset.txt");
+      const workspaceFile = path.join(root, "asset.txt");
+      fs.writeFileSync(workflowFile, "workflow asset\n");
+      fs.writeFileSync(workspaceFile, "workspace asset\n");
+
+      const expander = new ContextExpander(
+        root,
+        [root],
+        [],
+        false,
+        workflowDir
+      );
+      const result = await expander.expandContextSplit(
+        "@./asset.txt and @asset.txt"
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [workflowFile, workspaceFile]);
+    });
+
+    test("resolves a workflow-relative traversal before blocking it outside trusted roots", async () => {
+      const root = freshWorkspace();
+      const workflowDir = path.join(root, "workflows", "deep");
+      fs.mkdirSync(workflowDir, { recursive: true });
+
+      const expander = new ContextExpander(
+        root,
+        [root],
+        [],
+        false,
+        workflowDir
+      );
+      const result = await expander.expandContextSplit(
+        "@./../../../outside.txt"
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("treats workflow-relative refs without a source directory as unresolvable", async () => {
+      const root = freshWorkspace();
+      fs.writeFileSync(path.join(root, "asset.txt"), "workspace asset\n");
+
+      const expander = new ContextExpander(root, [root]);
+      const result = await expander.expandContextSplit("@./asset.txt");
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("deduplicates references naming one file through workspace and workflow-relative forms", async () => {
+      const root = freshWorkspace();
+      const workflowDir = path.join(root, "workflows");
+      fs.mkdirSync(workflowDir);
+      const filePath = path.join(root, "shared.txt");
+      fs.writeFileSync(filePath, "shared\n");
+
+      const expander = new ContextExpander(
+        root,
+        [root],
+        [],
+        false,
+        workflowDir
+      );
+      const result = await expander.expandContextSplit(
+        "@shared.txt and @./../shared.txt"
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [filePath]);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -493,7 +568,13 @@ suite("ContextExpander.expandContextSplit", () => {
       );
       assert.deepStrictEqual(untrustedResult.directFileRefs, []);
 
-      const trustedExpander = new ContextExpander(root, [root, secondRoot]);
+      const trustedExpander = new ContextExpander(
+        root,
+        [root, secondRoot],
+        [],
+        false,
+        root
+      );
       const trustedResult = await trustedExpander.expandContextSplit(
         `@${relativeFromPrimary}`
       );
@@ -797,6 +878,33 @@ suite("ContextExpander.sanitizeReferences", () => {
     );
 
     assert.strictEqual(result, "Please review @a.ts for issues.");
+  });
+
+  test("single-root, effectiveAbsolute false: rewrites workflow-relative @ and excerpt refs to absolute paths", async () => {
+    const root = freshWorkspace();
+    const workflowDir = path.join(root, "workflows");
+    fs.mkdirSync(workflowDir);
+    const filePath = path.join(workflowDir, "asset.ts");
+    fs.writeFileSync(filePath, "export const asset = true;\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root],
+      [],
+      false,
+      workflowDir
+    );
+    const references = [
+      "@./asset.ts",
+      "#selection:./asset.ts:1-1",
+      "#sym:./asset.ts:asset:1-1",
+    ];
+
+    for (const reference of references) {
+      const result = await expander.sanitizeReferences(reference);
+      assert.ok(!result.includes("./"), `rewrote ${reference}: ${result}`);
+      assert.ok(result.includes(filePath), `rewrote ${reference}: ${result}`);
+    }
   });
 
   test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed @ref to its absolute path", async () => {
