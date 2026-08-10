@@ -170,4 +170,44 @@ suite("ClaudeUsageProvider", () => {
       }
     );
   });
+
+  test("does not install the statusline collector when usage tracking is disabled", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-claude-usage-disabled-")
+    );
+    process.env.HOME = tempDirectory;
+    process.env.USERPROFILE = tempDirectory;
+    configService.setUserBackend(
+      backend({ usageTracking: { enabled: false } })
+    );
+    configService.setWorkspaceBackend(backend({}));
+
+    const settingsPath = path.join(tempDirectory, ".claude", "settings.json");
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({
+        statusLine: { type: "command", command: "node user-statusline.js" },
+      })
+    );
+
+    const provider = new ClaudeCliProvider();
+    await provider.buildCliArgs(
+      {} as never,
+      false,
+      "C:/extension root",
+      path.join(tempDirectory, "workspace"),
+      undefined,
+      { promptIndex: 0, allPrompts: [], workingFilePath: "workflow.md" }
+    );
+
+    assert.strictEqual(
+      provider.getHeadlessSpawnEnv().CTRLYOKE_CLAUDE_STATUSLINE_FORWARD,
+      undefined
+    );
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf8")),
+      { statusLine: { type: "command", command: "node user-statusline.js" } }
+    );
+  });
 });

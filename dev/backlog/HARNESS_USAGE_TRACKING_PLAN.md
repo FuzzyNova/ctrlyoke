@@ -572,21 +572,21 @@ exact duplication both plans warn against.
 
 ### Phase 5: Selection Assist — the motivating outcome
 
-- [ ] Near-limit warnings before starting a queue: if at least one remaining AI
+- [x] Near-limit warnings before starting a queue: if at least one remaining AI
       attempt is queued and any fresh provider window has `percentUsed` at or
       above a configurable threshold (default recommendation: 80%), warn. Queue
       length supplies context in the message; it is not converted into quota or
       treated as a prediction. Warn, never block — the user may knowingly want
       to burn the remainder.
-- [ ] Say which window triggered the warning and when it resets; a bare "low
+- [x] Say which window triggered the warning and when it resets; a bare "low
       quota" is not actionable.
-- [ ] Suppress the warning entirely when `snapshot.quota.source` is
+- [x] Suppress the warning entirely when `snapshot.quota.source` is
       `unavailable` or the quota snapshot is stale past
       `snapshot.quota.staleAfterMs`, rather than guessing.
-- [ ] Suggest a fallback only when its comparable provider window is fresh and
+- [x] Suggest a fallback only when its comparable provider window is fresh and
       materially less used; never rank an observed-only or stale harness as if
       its missing quota meant zero usage
-- [ ] User-configurable preferred fallback order
+- [x] User-configurable preferred fallback order
 
 ---
 

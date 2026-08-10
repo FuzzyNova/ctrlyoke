@@ -1494,6 +1494,7 @@ export class OutputHistoryManager {
    * must never delay or fail a workflow terminal transition.
    */
   private feedObservedHarnessUsage(historyFilePath: string): void {
+    if (!ConfigurationUtils.shouldPersistObservedHarnessUsage()) return;
     const address = WorkflowPaths.parseRunArtifactPath(
       this._workspaceFolderPath,
       historyFilePath

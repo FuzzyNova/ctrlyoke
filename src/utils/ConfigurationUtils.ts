@@ -6,7 +6,10 @@ import {
   PreCondition,
   UserHookConfig,
 } from "../types/CtrlYokeTypes";
-import type { TerminalSettings } from "../types/CtrlYokeSettings";
+import type {
+  CtrlYokeGlobalSettings,
+  TerminalSettings,
+} from "../types/CtrlYokeSettings";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
@@ -85,6 +88,14 @@ export const CONFIG_KEYS = {
     SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING,
   USAGE_TRACKING: "usageTracking",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
+  USAGE_TRACKING_PROVIDER_REFRESH_ENABLED:
+    "usageTracking.providerRefreshEnabled",
+  USAGE_TRACKING_PERSIST_OBSERVED_USAGE: "usageTracking.persistObservedUsage",
+  USAGE_TRACKING_ENTERPRISE_APIS_ENABLED:
+    "usageTracking.enterpriseUsageApisEnabled",
+  USAGE_TRACKING_WARNING_PERCENT_USED: "usageTracking.warningPercentUsed",
+  USAGE_TRACKING_PREFERRED_FALLBACK_ORDER:
+    "usageTracking.preferredFallbackOrder",
   UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
@@ -710,6 +721,27 @@ export const ConfigurationUtils = {
   /** Whether provider quota and observed usage collection is enabled. */
   shouldTrackHarnessUsage(): boolean {
     return configService.get(CONFIG_KEYS.USAGE_TRACKING).enabled;
+  },
+
+  /** Get the complete usage tracking configuration used by selection assist. */
+  getHarnessUsageSettings(): CtrlYokeGlobalSettings["usageTracking"] {
+    const settings = configService.get(CONFIG_KEYS.USAGE_TRACKING);
+    return {
+      ...settings,
+      preferredFallbackOrder: [...settings.preferredFallbackOrder],
+    };
+  },
+
+  /** Whether the explicit provider refresh command may invoke collectors. */
+  shouldRefreshHarnessUsage(): boolean {
+    const settings = configService.get(CONFIG_KEYS.USAGE_TRACKING);
+    return settings.enabled && settings.providerRefreshEnabled;
+  },
+
+  /** Whether normalized observed totals may be written to workspace storage. */
+  shouldPersistObservedHarnessUsage(): boolean {
+    const settings = configService.get(CONFIG_KEYS.USAGE_TRACKING);
+    return settings.enabled && settings.persistObservedUsage;
   },
 
   // ============================================================

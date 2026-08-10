@@ -37,6 +37,12 @@ export interface HarnessUsageUpdateSink {
   updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void;
 }
 
+export interface HarnessUsageServiceOptions {
+  isEnabled?: () => boolean;
+  isProviderRefreshEnabled?: () => boolean;
+  shouldPersistObservedUsage?: () => boolean;
+}
+
 interface PersistedProviderUsage {
   schemaVersion: typeof PROVIDER_USAGE_SCHEMA_VERSION;
   snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>>;
@@ -163,6 +169,7 @@ export class HarnessUsageService {
   private readonly observedStore: ObservedHarnessUsageStore;
   private readonly emit?: (snapshots: HarnessUsageSnapshot[]) => void;
   private readonly now: () => number;
+  private readonly options: Required<HarnessUsageServiceOptions>;
   private readonly persistedLoad: Promise<void>;
 
   constructor(
@@ -172,12 +179,20 @@ export class HarnessUsageService {
       workspaceRoot
     ),
     emit?: (snapshots: HarnessUsageSnapshot[]) => void,
-    now: () => number = Date.now
+    now: () => number = Date.now,
+    options: HarnessUsageServiceOptions = {}
   ) {
     this.providerSnapshotsFile = providerSnapshotsPath(workspaceRoot);
     this.observedStore = observedStore;
     this.emit = emit;
     this.now = now;
+    this.options = {
+      isEnabled: options.isEnabled ?? (() => true),
+      isProviderRefreshEnabled:
+        options.isProviderRefreshEnabled ?? (() => true),
+      shouldPersistObservedUsage:
+        options.shouldPersistObservedUsage ?? (() => true),
+    };
     for (const provider of providers) {
       if (VALID_HARNESS_IDS.has(provider.harnessId)) {
         this.providerByHarness.set(provider.harnessId, provider);
@@ -192,7 +207,9 @@ export class HarnessUsageService {
   /** Load normalized last-known windows without making a provider call. */
   async initialize(): Promise<void> {
     await this.persistedLoad;
-    await this.refreshObservedUsage();
+    if (this.options.isEnabled() && this.options.shouldPersistObservedUsage()) {
+      await this.refreshObservedUsage();
+    }
   }
 
   getHarnessUsage(harnessId: HarnessId): HarnessUsageSnapshot {
@@ -205,6 +222,7 @@ export class HarnessUsageService {
 
   /** Injected push port for parsers and sidecars. */
   ingestProviderUsage(quota: HarnessQuotaSnapshot): void {
+    if (!this.options.isEnabled()) return;
     if (!VALID_HARNESS_IDS.has(quota.harnessId)) return;
     const normalized = normalizeQuota(quota);
     this.quotaCache.set(quota.harnessId, normalized);
@@ -217,6 +235,9 @@ export class HarnessUsageService {
   }
 
   refreshHarnessUsage(harnessId: HarnessId): Promise<HarnessUsageSnapshot> {
+    if (!this.options.isEnabled() || !this.options.isProviderRefreshEnabled()) {
+      return Promise.resolve(this.buildSnapshot(harnessId));
+    }
     const existing = this.refreshPromises.get(harnessId);
     if (existing) return existing;
     const promise = new Promise<HarnessUsageSnapshot>((resolve) => {
@@ -233,6 +254,9 @@ export class HarnessUsageService {
   }
 
   async refreshAllHarnessUsage(): Promise<HarnessUsageSnapshot[]> {
+    if (!this.options.isEnabled() || !this.options.isProviderRefreshEnabled()) {
+      return this.getHarnessUsageSnapshots();
+    }
     await Promise.all(
       HARNESS_ID_LIST.map((harnessId) => this.refreshHarnessUsage(harnessId))
     );
@@ -249,7 +273,9 @@ export class HarnessUsageService {
   private async refreshOne(
     harnessId: HarnessId
   ): Promise<HarnessUsageSnapshot> {
-    await this.refreshObservedUsage();
+    if (this.options.shouldPersistObservedUsage()) {
+      await this.refreshObservedUsage();
+    }
     const provider = this.providerByHarness.get(harnessId);
     if (!provider) {
       this.quotaCache.set(

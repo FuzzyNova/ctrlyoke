@@ -398,7 +398,15 @@ export class WorkflowOrchestrator {
         this.currentWorkspaceFolder.uri.fsPath,
         undefined,
         undefined,
-        (snapshots) => this.dashboardBroadcastHub.updateHarnessUsage(snapshots)
+        (snapshots) => this.dashboardBroadcastHub.updateHarnessUsage(snapshots),
+        Date.now,
+        {
+          isEnabled: () => ConfigurationUtils.shouldTrackHarnessUsage(),
+          isProviderRefreshEnabled: () =>
+            ConfigurationUtils.shouldRefreshHarnessUsage(),
+          shouldPersistObservedUsage: () =>
+            ConfigurationUtils.shouldPersistObservedHarnessUsage(),
+        }
       );
     }
 
@@ -514,6 +522,7 @@ export class WorkflowOrchestrator {
   }
 
   public async refreshHarnessUsage(): Promise<void> {
+    if (!ConfigurationUtils.shouldRefreshHarnessUsage()) return;
     await this.harnessUsageService?.refreshAllHarnessUsage();
   }
 
@@ -5028,7 +5037,8 @@ export class WorkflowOrchestrator {
       this.currentWorkspaceFolder?.uri.fsPath,
       true,
       this.compatibilityRegistry,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? []
     );
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);

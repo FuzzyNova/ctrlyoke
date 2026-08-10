@@ -70,6 +70,7 @@ import { PropertyResolver } from "../utils/PropertyResolver";
 import { isCli } from "../utils/RuntimeMode";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -100,6 +101,7 @@ import {
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor";
+import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -376,7 +378,9 @@ export class WorkflowInstance {
     private readonly hostCanProvidePty: boolean = true,
     private readonly compatibilityRegistry?: HarnessCapabilityRegistry,
     /** Destination for future operational feedback migrations. */
-    private readonly userFeedbackSink?: UserFeedbackSink
+    private readonly userFeedbackSink?: UserFeedbackSink,
+    /** Synchronous cache reader; must never refresh providers during launch. */
+    private readonly getHarnessUsageSnapshots?: () => readonly HarnessUsageSnapshot[]
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
@@ -1482,6 +1486,13 @@ export class WorkflowInstance {
           executionState === EXECUTION_STATES.PAUSED ||
           executionState === EXECUTION_STATES.STOPPED ||
           executionState === EXECUTION_STATES.ERROR);
+
+      this.warnBeforeWorkflowStart(
+        prevQueueState,
+        promptFile,
+        modeOverride,
+        isRestartFromBeginning
+      );
 
       if (isRestartFromBeginning) {
         await this.closeRetainedTerminalsForFreshRun();
@@ -3005,6 +3016,73 @@ export class WorkflowInstance {
     }
     await this.promptQueue.prepareFinalStepContinuation(maxLoopIndex + 1);
     this.syncCurrentPromptFileFromQueue();
+  }
+
+  private warnBeforeWorkflowStart(
+    queueState: QueueState,
+    workflow: PromptFile,
+    modeOverride: HarnessId | undefined,
+    restartFromBeginning: boolean
+  ): void {
+    if (
+      !ConfigurationUtils.shouldTrackHarnessUsage() ||
+      !this.getHarnessUsageSnapshots
+    ) {
+      return;
+    }
+
+    const startIndex = restartFromBeginning ? 0 : queueState.currentIndex;
+    const queuedAttempts = queueState.steps
+      .slice(startIndex)
+      .filter((step, offset): step is PromptStep => {
+        if (step.enabled === false || isScriptStep(step)) return false;
+        const absoluteIndex = startIndex + offset;
+        if (restartFromBeginning) return true;
+        const status = queueState.results[absoluteIndex]?.status;
+        return (
+          status !== STEP_STATUS.COMPLETED &&
+          status !== STEP_STATUS.CANCELLED &&
+          status !== STEP_STATUS.FAILED &&
+          status !== STEP_STATUS.SKIPPED
+        );
+      })
+      .map((step) => ({
+        harnessId: PropertyResolver.resolveHarnessValue(
+          step.harness,
+          modeOverride ?? workflow.harness
+        ),
+      }));
+
+    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+    const finalStep = workflow.finalStep;
+    const finalStepStillQueued =
+      finalStep !== undefined &&
+      finalStep.enabled !== false &&
+      !isScriptStep(finalStep) &&
+      (restartFromBeginning ||
+        !finalStepRuntime ||
+        finalStepRuntime.phase === FINAL_STEP_PHASES.QUEUE ||
+        (finalStepRuntime.status !== STEP_STATUS.COMPLETED &&
+          finalStepRuntime.status !== STEP_STATUS.SKIPPED));
+    if (finalStepStillQueued && finalStep) {
+      queuedAttempts.push({
+        harnessId: PropertyResolver.resolveHarnessValue(
+          finalStep.harness,
+          modeOverride ?? workflow.harness
+        ),
+      });
+    }
+
+    const settings = ConfigurationUtils.getHarnessUsageSettings();
+    const warning = buildUsageSelectionWarning({
+      queuedAttempts,
+      snapshots: this.getHarnessUsageSnapshots(),
+      warningPercentUsed: settings.warningPercentUsed,
+      preferredFallbackOrder: settings.preferredFallbackOrder,
+    });
+    if (warning) {
+      notifyUserFeedback(this.userFeedbackSink, "warning", warning.message);
+    }
   }
 
   /**
