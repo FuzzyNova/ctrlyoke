@@ -26,6 +26,7 @@ import {
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
   FAILURE_KINDS,
+  ATTEMPT_COST_UNAVAILABLE_REASONS,
   type ConditionAction,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
@@ -68,6 +69,7 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { summarizeCompactionEvents } from "../utils/TokenUsage";
+import { calculateAttemptCost } from "../utils/ModelPricing";
 import {
   formatVerdictSummary,
   createConditionEvaluationSummary,
@@ -1573,6 +1575,22 @@ export class WorkflowExecutor {
     if (parsedOutput?.metadata.usage) {
       const u = parsedOutput.metadata.usage;
       const compactionSummary = summarizeCompactionEvents(parsedOutput.events);
+      const costResult =
+        parsedOutput.metadata.harness && parsedOutput.metadata.model
+          ? calculateAttemptCost({
+              harnessId: parsedOutput.metadata.harness,
+              modelId: parsedOutput.metadata.model,
+              prompt: u.inputTokens,
+              completion: u.outputTokens,
+              cached: u.cachedInputTokens,
+              cacheCreated: u.cacheCreatedTokens,
+              reasoning: u.reasoningOutputTokens,
+              totalConfidence: u.totalConfidence,
+            })
+          : {
+              costUnavailableReason:
+                ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
+            };
       return {
         prompt: u.inputTokens,
         completion: u.outputTokens,
@@ -1584,6 +1602,7 @@ export class WorkflowExecutor {
         contextWindowSize: u.contextWindowSize,
         ...compactionSummary,
         totalConfidence: u.totalConfidence,
+        ...costResult,
       };
     }
     return undefined;

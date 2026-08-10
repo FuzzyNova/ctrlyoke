@@ -799,16 +799,23 @@ the next presentation stage, as required by the staging order.
 
 ### Phase 4: Cost
 
-- [ ] Add `src/utils/ModelPricing.ts` with per-harness price tables, `sourceUrl`
+- [x] Add `src/utils/ModelPricing.ts` with per-harness price tables, `sourceUrl`
       and `verifiedOn` per entry.
-- [ ] Add attempt-cost source/confidence/note constants to
+- [x] Add attempt-cost source/confidence/note constants to
       `DashboardConstants.ts`, including explicit unavailable-reason constants;
       no cost flow-control string stays inline.
-- [ ] Add the per-harness token-semantics descriptor (cache subset? reasoning
+- [x] Add the per-harness token-semantics descriptor (cache subset? reasoning
       included/disjoint/unknown?) as one typed `const` keyed by `HarnessId`.
 - [ ] Verify the cache-subset and reasoning relationships for Codex, Qwen,
       OpenCode, and Antigravity against live runs; correct the table above and
-      leave table pricing disabled for every `unknown` entry.
+      leave table pricing disabled for every `unknown` entry. No live harness
+      run was performed in this stage. Outstanding live verification is:
+      Codex cache-subset and reasoning-in-output (parser and captured fixture
+      evidence currently support these values), Qwen cache-subset and
+      reasoning-in-output, OpenCode cache-read relationship and reasoning
+      relationship, and Antigravity cache-read relationship and reasoning
+      relationship. Qwen, OpenCode, and Antigravity remain `unknown` in the
+      descriptor, so their table pricing is disabled.
 - [ ] Parse `claude-cli` `total_cost_usd` / `modelUsage` and `opencode-cli`
       `part.cost`; cross-check Claude's value against the table, prefer the
       table on >2x divergence, note the substitution in the tooltip, and log the
@@ -819,8 +826,10 @@ the next presentation stage, as required by the staging order.
 - [ ] Plumb both settings through `package.json`, `CtrlYokeSettings.ts`,
       `CtrlYokeConfigService`, and `ConfigurationUtils`; use a
       `USER_OVERRIDE` cost source.
-- [ ] Tests: subset vs disjoint cache math, reasoning double-count guard,
-      unknown-model omission, and harness-reported-vs-table divergence.
+- [x] Tests: subset vs disjoint cache math, reasoning double-count guard,
+      unknown-model omission, unknown-semantics suppression, and partial-token
+      suppression.
+- [ ] Next-stage test: harness-reported-vs-table divergence.
 
 ---
 

@@ -82,6 +82,10 @@ import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
 import type { HarnessUsageSnapshot } from "./UsageTypes";
+import type {
+  AttemptCostEstimate,
+  AttemptCostUnavailableReason,
+} from "./CtrlYokeTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -158,6 +162,10 @@ export interface TokenStats {
   compactedContextTokens?: number;
   /** Where `total` came from. Drives whether the UI may compare it as exact. */
   totalConfidence?: TokenTotalConfidence;
+  /** Cost estimate for this attempt. Absent when unpriceable. */
+  cost?: AttemptCostEstimate;
+  /** Why `cost` is absent when token totals exist. */
+  costUnavailableReason?: AttemptCostUnavailableReason;
 }
 
 /**

@@ -640,6 +640,21 @@ export const ATTEMPT_COST_UNAVAILABLE_REASONS = {
   COPILOT_BILLING_UNIT: "copilot-billing-unit",
 } as const;
 
+/** How a harness reports cache-read tokens relative to its input count. */
+export const ATTEMPT_COST_CACHE_RELATIONSHIPS = {
+  SUBSET: "subset",
+  DISJOINT: "disjoint",
+  UNKNOWN: "unknown",
+} as const;
+
+/** How separately reported reasoning tokens relate to billed output. */
+export const ATTEMPT_COST_REASONING_RELATIONSHIPS = {
+  INCLUDED_IN_OUTPUT: "included-in-output",
+  DISJOINT: "disjoint",
+  UNREPORTED: "unreported",
+  UNKNOWN: "unknown",
+} as const;
+
 // ============================================================================
 // HARNESS USAGE - Normalized provider and observed-usage discriminants
 // ============================================================================
@@ -1858,6 +1873,10 @@ export type AttemptCostNoteCode =
   (typeof ATTEMPT_COST_NOTE_CODES)[keyof typeof ATTEMPT_COST_NOTE_CODES];
 export type AttemptCostUnavailableReason =
   (typeof ATTEMPT_COST_UNAVAILABLE_REASONS)[keyof typeof ATTEMPT_COST_UNAVAILABLE_REASONS];
+export type AttemptCostCacheRelationship =
+  (typeof ATTEMPT_COST_CACHE_RELATIONSHIPS)[keyof typeof ATTEMPT_COST_CACHE_RELATIONSHIPS];
+export type AttemptCostReasoningRelationship =
+  (typeof ATTEMPT_COST_REASONING_RELATIONSHIPS)[keyof typeof ATTEMPT_COST_REASONING_RELATIONSHIPS];
 export type HarnessQuotaSource =
   (typeof HARNESS_QUOTA_SOURCES)[keyof typeof HARNESS_QUOTA_SOURCES];
 export type HarnessUsageWindowKind =
