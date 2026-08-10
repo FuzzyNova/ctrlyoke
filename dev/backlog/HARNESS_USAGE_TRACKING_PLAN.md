@@ -1,11 +1,12 @@
 # Harness Usage Tracking Plan
 
-**Status:** Ready to implement after the prerequisite token-total stages
+**Status:** Stage 9 optional-provider research complete; stages 1–8 are
+implemented. Enterprise/admin integrations remain explicitly deferred.
 **Provider research:** June 15, 2026; local CLI surfaces rechecked August 9,
 2026 (Claude Code `2.1.225`, Codex CLI `0.146.0`, GitHub Copilot CLI `1.0.78`)
 **Revised:** August 9, 2026 — final codebase pass; Codex app-server source,
-idempotent per-harness rollups, normalized snapshot persistence, and combined
-staging order added
+idempotent per-harness rollups, normalized snapshot persistence, combined
+staging order, and Stage 9 research closeout added
 **Related:** `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`
 
 ---
@@ -219,6 +220,13 @@ Confirmed surfaces:
   `/usage` shows session AI credit usage, token breakdown, and usage-limit
   progress; `/context` shows context-window token usage. The earlier
   `ai-credits` statusline item name is stale and must not be implemented.
+- `copilot --version` reports `1.0.78`. `copilot help billing
+  --output-format json` still returns the same human help text, and
+  `copilot help statusline` is not a documented help topic. No JSON/JSONL
+  statusline output, callback, or public quota schema was exposed by the
+  installed CLI. The quota is therefore TUI text only for this integration;
+  capturing it would require ANSI/private TUI-state scraping, which is
+  intentionally rejected as unstable.
 - `copilot -p "/usage" --output-format json --stream off` could not be validated
   in the research environment — an auth/network failure, not evidence the command
   cannot work.
@@ -238,6 +246,10 @@ Implementation implications:
   `CopilotLogParser` emits per-`chat` span `gen_ai.usage.*` attributes during
   execution. Feed that through the shared attempt totals rather than adding a
   Copilot-specific usage parser.
+- The structured-quota spike is closed negatively: use the existing
+  `WorkflowTokenTotals.byLocalDay` → observed rollup, plus the GitHub personal
+  usage-dashboard link. Do not add a Copilot quota collector and do not
+  implement the stale `ai-credits` item name.
 - Copilot is the one harness where **tokens are not the billing unit**. Its usage
   card should show AI credits (or premium requests on legacy billing) as the
   headline and tokens as secondary. Do not synthesize a dollar figure from token
@@ -266,11 +278,18 @@ Not covered by the June research; added here from ctrlyoke's own implementation.
 - Stream-json `result.usage` provides real billing-shaped totals
   (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`,
   `total_tokens`).
-- **No quota/rate-limit fields have been observed** in either surface. Until one
-  is found, Antigravity is `ctrlyoke-observed` only.
-- Open research task: inspect a full statusline snapshot for any plan/quota
-  fields before assuming none exist — ctrlyoke currently reads only the
-  `context_window` subtree and would discard anything else silently.
+- A full live statusline snapshot could not be captured without first
+  modifying the user's global `~/.gemini/antigravity-cli/settings.json` and
+  starting a new session; the current settings have no `statusLine` command,
+  and no raw statusline snapshot is persisted in the local CLI state. The
+  installed `agy` `1.1.10` help exposes no statusline JSON contract. The
+  wrapper's synthetic test payload contains an optional
+  `quota.weekly.remaining_fraction`, and the binary contains matching field
+  names, but neither is a documented/stable provider surface. Internal
+  `quota_manager` log messages are lifecycle diagnostics, not quota data.
+- **No documented or stable quota/rate-limit field was found** beyond the
+  `context_window` subtree ctrlyoke reads today. Antigravity therefore stays
+  `ctrlyoke-observed` only; absence is never rendered as available quota.
 
 ### OpenCode CLI / Qwen CLI
 
@@ -555,10 +574,12 @@ exact duplication both plans warn against.
 
 ### Phase 3: Copilot Usage
 
-- [ ] Consume Copilot's existing OTel totals only through the shared
+- [x] Consume Copilot's existing OTel totals only through the shared
       `WorkflowTokenTotals.byLocalDay` rollup; add no Copilot-specific store feed
-- [ ] Investigate whether `/statusline quota ai-used` can emit structured
-      data or only TUI text
+- [x] Investigate whether `/statusline quota ai-used` can emit structured
+      data or only TUI text — `quota` and `ai-used` are TUI-only in the
+      installed 1.0.78 CLI; retain OTel-derived observed totals and the GitHub
+      dashboard link
 - [x] Show AI credits (not dollars) as Copilot's headline unit
 - [x] Add a GitHub usage dashboard link for personal accounts
 - [ ] Optional enterprise/org metrics integration behind explicit auth + scope
@@ -566,9 +587,12 @@ exact duplication both plans warn against.
 
 ### Phase 4: Antigravity Research
 
-- [ ] Dump a full statusline snapshot and check for plan/quota fields beyond the
-      `context_window` subtree ctrlyoke reads today
-- [ ] Promote Antigravity from observed-only if a quota surface exists
+- [x] Dump/check the full statusline surface for plan/quota fields beyond the
+      `context_window` subtree ctrlyoke reads today; no live snapshot was
+      available without changing global settings, and no documented/stable
+      quota field was found
+- [x] Confirm Antigravity remains observed-only because no documented/stable
+      quota surface exists
 
 ### Phase 5: Selection Assist — the motivating outcome
 
@@ -645,31 +669,49 @@ Decided August 8, 2026:
   result when available. The same defensive rule applies to the Claude
   status-line schema.
 
+Resolved in the Stage 9 closeout:
+
+1. **Copilot `/statusline quota ai-used` is TUI-only for this integration.**
+   In installed Copilot CLI `1.0.78`, `copilot help billing` documents the
+   current `quota` and `ai-used` item names, but `copilot help billing
+   --output-format json` remains human help text and `copilot help statusline`
+   is not a documented topic. No structured statusline surface was found.
+   Do not parse ANSI/private TUI state or implement the stale `ai-credits`
+   name. Use OTel-derived observed totals and the existing GitHub dashboard
+   link.
+
+3. **Antigravity exposes no documented/stable quota field in the available
+   statusline surface.** `agy` `1.1.10` has no configured statusline command in
+   the current user settings, so capturing a live payload would require
+   changing global settings and starting a new session. No raw snapshot exists
+   in local state. The optional `quota.weekly.remaining_fraction` seen in the
+   synthetic wrapper test and matching binary strings are not stable provider
+   contracts; internal `quota_manager` logs contain no normalized quota data.
+   Keep `AntigravityUsageProvider` observed-only, and never render missing
+   quota as available capacity.
+
+4. **The provider schemas remain safe at implementation time.** Installed
+   versions are Claude Code `2.1.225`, Codex CLI `0.146.0`, and Copilot CLI
+   `1.0.78`; Antigravity is `agy` `1.1.10`. Claude and Codex golden fixtures
+   remain shape fixtures (their recorded metadata identifies older runs), while
+   the Claude/Codex usage tests cover missing, partial, renamed, and malformed
+   quota shapes. Claude `--help` still advertises machine-readable JSON and
+   stream-JSON output, and Codex `--help` still has no top-level `status`; the
+   experimental app-server help still exposes the provider-live route. A shape
+   change therefore yields an empty/last-known quota or observed-only output,
+   never a workflow-blocking error.
+
 Still open:
 
-1. Can Copilot `/statusline quota ai-used` be captured as structured data,
-   or only as TUI text? **Recommendation:** update the spike to the current
-   `quota` + `ai-used` item names, timebox it, and do not parse ANSI/private TUI
-   state. If there is no structured surface, ship observed OTel-derived totals
-   plus the GitHub dashboard link.
 2. Should observed usage be workspace-local only, or should users opt into a
    user-level aggregate across workspaces? (Workspace-local is the Phase 1
    default either way; this only decides whether the opt-in exists.)
    **Recommendation:** do not add the user-level aggregate in the first
    implementation. It expands privacy, migration, and cross-process locking
    scope without helping the pre-launch quota warning.
-3. Does Antigravity expose any quota field at all? Unknown until Phase 4.
-   **Recommendation:** remain observed-only unless a documented or stable
-   structured field is found; absence must not be rendered as available quota.
-4. Do the provider schemas still match at implementation time? Local CLI help
-   was rechecked August 9, 2026, and Codex now has a documented app-server
-   source, but Claude status-line and the Codex rollout fallback remain
-   version-sensitive. **Recommendation:** keep fixture-based drift tests and a
-   pre-merge live-schema verification task; degrade safely rather than block the
-   core feature.
-
-None of these questions blocks combined stages 1–7. They decide optional
-provider enrichment or are explicit verification gates with safe fallbacks.
+None of these questions blocks combined stages 1–7. The remaining workspace
+scope decision is intentionally deferred; the Stage 9 provider spikes are
+closed with safe fallbacks.
 
 ---
 

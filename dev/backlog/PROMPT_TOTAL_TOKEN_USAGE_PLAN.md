@@ -863,9 +863,11 @@ start a second token-ingestion pipeline while the contracts are in flight.
    provider percentages, followed by conservative fallback suggestions.
 8. **Cost estimation — COMPLETE** — do pricing after empirical token-semantics gates pass;
    then let later terminal-run upserts enrich observed rollups with cost.
-9. **Optional provider expansion** — Copilot structured-quota research,
-   Antigravity quota research, and enterprise/admin integrations. None blocks
-   the MVP stages above.
+9. **Optional provider expansion — COMPLETE (research only)** — Copilot
+   structured-quota research and Antigravity quota research are closed with
+   safe negative findings. Enterprise/admin integrations remain explicitly
+   deferred and require an authorized, user-selected scope. None blocks the
+   MVP stages above.
 
 Recommended review/commit boundaries are the numbered stages. If a stage is too
 large, split backend/contracts from rendering/tests, but preserve the order.
