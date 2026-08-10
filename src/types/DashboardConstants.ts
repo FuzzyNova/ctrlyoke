@@ -441,10 +441,12 @@ export const HOSTED_CONNECTION_LIVENESS = {
 
 export const HOSTED_ICON_FILES = {
   APP_ICON_PNG: "icon.png",
-  // Transparent-background SVG used in the web app manifest and as the SVG apple-touch-icon.
-  // iOS 26+ supports SVG for home screen icons and uses manifest icons for web apps.
-  // Transparent background is required for iOS 26 Liquid Glass / Clear appearance mode;
-  // a solid opaque background causes iOS 26 to fall back to a generic placeholder icon.
+  // SVG used in the web app manifest and as the SVG apple-touch-icon. iOS 15+ uses
+  // this for home screen icons. Deliberately opaque (solid BG_COLOR canvas) — iOS has
+  // never rendered transparent PWA home-screen icons (it always fills a solid backdrop),
+  // and Apple's Liquid Glass guidance for icons in general is to submit an opaque master
+  // and let the system apply Clear/Tinted/Dark effects on top, not to author transparency
+  // yourself.
   APP_ICON_SVG: "ctrlyoke-app-icon.svg",
   // Same mark as APP_ICON_SVG but rendered with a transparent canvas (only the keyface
   // shape carries the background color) — see ctrlyoke-icon.svg's keyface path. Same

@@ -93,6 +93,15 @@ export class ClaudeCliProvider implements ICliProvider {
   private statusLineForwardCommand: string | undefined;
   private statusLineSidecar: ClaudeStatuslineSidecar | undefined;
 
+  shouldRetainWorkflowArtifactsForReuse(): boolean {
+    // Injected turns do not rebuild CLI arguments. Keep the prompt-scoped
+    // --settings file and statusline lease alive with the reusable PTY because
+    // Claude hot-reloads settings in running sessions; restoring the user
+    // settings file would otherwise reload after the --settings file is gone
+    // and silently remove both completion hooks and statusline reporting.
+    return true;
+  }
+
   readonly config: HarnessConfig = {
     name: "claude",
     harnessId: HARNESS_IDS.CLAUDE_CLI,

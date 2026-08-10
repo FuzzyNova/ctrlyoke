@@ -28,7 +28,10 @@ import {
   HOOK_EVENT_ORDER,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
-import type { ICliProvider } from "./shared/interfaces/ICliProvider";
+import type {
+  CliExecutionSidecar,
+  ICliProvider,
+} from "./shared/interfaces/ICliProvider";
 import type { HarnessQuotaSnapshot } from "../../types/UsageTypes";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
@@ -876,6 +879,7 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     const mode = this.sessionExecutionMode(session);
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
+    const workspaceRoot = this.getWorkspaceRoot();
 
     // Inject mode: write directly into the running TUI instead of killing and
     // restarting with --resume. Works for sequential follow-up prompts within a
@@ -884,8 +888,17 @@ export class CliIntegration extends HarnessIntegration {
     // already populated and shouldUseInjectMode passes without needing promptIndex > 0.
     if (isInteractive && this.shouldUseInjectMode(session)) {
       this.handleInjectedPromptPrepared(session.promptArgument);
-      const injectResult =
-        await this.executionRunner.executeInteractiveInject(session);
+      const executionSidecar = this.startProviderExecutionSidecar(
+        session,
+        workspaceRoot
+      );
+      let injectResult;
+      try {
+        injectResult =
+          await this.executionRunner.executeInteractiveInject(session);
+      } finally {
+        executionSidecar?.stop();
+      }
       if (injectResult.injected) {
         return injectResult.success;
       }
@@ -915,7 +928,6 @@ export class CliIntegration extends HarnessIntegration {
       await this.retireInteractivePtyBeforeHeadlessResume(session);
     }
 
-    const workspaceRoot = this.getWorkspaceRoot();
     const executionPlan = await this.executionPlanBuilder.plan(session);
     const routedDiagnostics =
       executionPlan.permissionApplication.diagnostics.map((diagnostic) => {
@@ -941,16 +953,10 @@ export class CliIntegration extends HarnessIntegration {
       routedDiagnostics
     );
     await this.executionPlanBuilder.apply(executionPlan);
-    const executionSidecar = workspaceRoot
-      ? this.provider.startExecutionSidecar?.({
-          workspaceRoot,
-          model: session.resolvedProperties?.model ?? "",
-          onStreamingEvents: (events) => this.emitStreamingEvents(events),
-          onContextWindowUpdate: (used, size) =>
-            this.emitContextWindowUpdate(used, size),
-          onProviderUsageUpdate: this.onProviderUsageUpdate,
-        })
-      : undefined;
+    const executionSidecar = this.startProviderExecutionSidecar(
+      session,
+      workspaceRoot
+    );
 
     let success: boolean;
     try {
@@ -983,6 +989,23 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     return success;
+  }
+
+  private startProviderExecutionSidecar(
+    session: CliExecutionSession,
+    workspaceRoot: string | undefined
+  ): CliExecutionSidecar | undefined {
+    if (!workspaceRoot) {
+      return undefined;
+    }
+    return this.provider.startExecutionSidecar?.({
+      workspaceRoot,
+      model: session.resolvedProperties?.model ?? "",
+      onStreamingEvents: (events) => this.emitStreamingEvents(events),
+      onContextWindowUpdate: (used, size) =>
+        this.emitContextWindowUpdate(used, size),
+      onProviderUsageUpdate: this.onProviderUsageUpdate,
+    });
   }
 
   /**

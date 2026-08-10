@@ -3,6 +3,12 @@ import { suite, test } from "mocha";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 
 suite("ClaudeCliProvider", () => {
+  test("retains hook and statusline artifacts for reusable PTY sessions", () => {
+    const provider = new ClaudeCliProvider();
+
+    assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);
+  });
+
   test("keeps invalid-session spawn errors recoverable", () => {
     const provider = new ClaudeCliProvider();
 

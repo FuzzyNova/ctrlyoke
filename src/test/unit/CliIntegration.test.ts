@@ -572,6 +572,38 @@ suite("CliIntegration", () => {
     }
   });
 
+  test("starts and stops the execution sidecar around an injected turn", async () => {
+    configService.setCliOverlay({
+      defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
+    });
+    const lifecycle: string[] = [];
+    const integration = createTestIntegration({
+      startExecutionSidecar: () => {
+        lifecycle.push("start");
+        return {
+          stop: () => lifecycle.push("stop"),
+        };
+      },
+    });
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: createResolvedProperties(),
+      resolvedSessionId: "session-existing",
+    });
+    (integration as any).shouldUseInjectMode = () => true;
+    (integration as any).executionRunner.executeInteractiveInject =
+      async () => {
+        lifecycle.push("execute");
+        return { injected: true, success: true };
+      };
+
+    assert.strictEqual(
+      await integration.sendPrompt({ prompt: "continue" }),
+      true
+    );
+    assert.deepStrictEqual(lifecycle, ["start", "execute", "stop"]);
+    integration.dispose();
+  });
+
   test("should skip inject mode for a headless session", async () => {
     configService.setCliOverlay({
       defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
