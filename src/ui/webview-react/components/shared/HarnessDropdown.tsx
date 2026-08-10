@@ -11,6 +11,12 @@ import {
 } from "../../types/messages";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { HarnessIcon } from "./HarnessIcon";
+import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import {
+  formatHarnessUsageTooltip,
+  getHarnessAvailabilityPhrase,
+  getHarnessUsageDisplay,
+} from "@utils/harnessUsageDisplay";
 
 // ─── Display names (official product names) ──────────────────────────────────
 
@@ -39,40 +45,19 @@ const NON_HIDEABLE: HarnessId[] = [];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const StatusIndicator: React.FC<{
-  status: HarnessStatusString;
-  narrow?: boolean;
-}> = ({ status, narrow = false }) => {
-  const config: Record<
-    HarnessStatusString,
-    { color: string; text: string; animate: boolean }
-  > = {
-    checking: {
-      color: "bg-indicator-running",
-      text: "Checking...",
-      animate: true,
-    },
-    available: {
-      color: "bg-indicator-success",
-      text: "Available",
-      animate: false,
-    },
-    unavailable: {
-      color: "bg-indicator-error",
-      text: "Not Available",
-      animate: false,
-    },
-  };
-  const { color, text, animate } = config[status] ?? config.checking;
-  return (
-    <span className="inline-flex items-center gap-1 text-xxs text-description-fg">
-      <span
-        className={`w-2 h-2 rounded-full flex-shrink-0 ${color} ${animate ? "animate-pulse" : ""}`}
-      />
-      {!narrow && text}
-    </span>
-  );
+const STATUS_COLORS: Record<HarnessStatusString, string> = {
+  checking: "bg-indicator-running animate-pulse",
+  available: "bg-indicator-success",
+  unavailable: "bg-indicator-error",
 };
+
+const StatusIndicator: React.FC<{ status: HarnessStatusString }> = ({
+  status,
+}) => (
+  <span
+    className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_COLORS[status] ?? STATUS_COLORS.checking}`}
+  />
+);
 
 // ─── Harness row ──────────────────────────────────────────────────────────────
 
@@ -112,15 +97,34 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   const isAvailable = status?.available !== false;
   const isChecking = status?.status === HARNESS_STATUS_STRINGS.CHECKING;
   const name = HARNESS_DISPLAY_NAMES[harness] ?? harness;
-  const unavailableHint =
-    !isAvailable && !isChecking
-      ? (status?.installHint ?? "Harness is not available")
-      : undefined;
+
+  const usageSnapshot = useHarnessUsageStore(
+    (s) => s.snapshotsByHarness[harness]
+  );
+  const usageDisplay = getHarnessUsageDisplay(usageSnapshot);
+  const availabilityPhrase = getHarnessAvailabilityPhrase(status);
+  const rowTooltip = status
+    ? formatHarnessUsageTooltip(usageDisplay, availabilityPhrase)
+    : undefined;
+
+  const usageIndicator = showStatus && status && (
+    <span className="inline-flex items-center gap-1 flex-shrink-0">
+      {!narrow && usageDisplay.percentOnly && (
+        <span className="text-xxs text-description-fg">
+          {usageDisplay.percentOnly}
+        </span>
+      )}
+      <StatusIndicator status={status.status} />
+    </span>
+  );
 
   if (isHidden) {
     // Dimmed, italic, eye-open on the left to restore
     return (
-      <div className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row">
+      <div
+        title={rowTooltip}
+        className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
+      >
         <button
           type="button"
           title="Unhide this harness"
@@ -141,16 +145,14 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           <HarnessIcon harnessId={harness} size={13} />
           {name}
         </button>
-        {showStatus && status && (
-          <StatusIndicator status={status.status} narrow={narrow} />
-        )}
+        {usageIndicator}
       </div>
     );
   }
 
   return (
     <div
-      title={unavailableHint}
+      title={rowTooltip}
       className={`group flex items-center pr-2 gap-1 ${
         isSelected
           ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
@@ -170,9 +172,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         <HarnessIcon harnessId={harness} size={13} />
         {name}
       </button>
-      {showStatus && status && (
-        <StatusIndicator status={status.status} narrow={narrow} />
-      )}
+      {usageIndicator}
       <div className="flex-shrink-0 w-4 flex items-center justify-center">
         {/* Reserve a right-edge action slot so status text never shifts on hover. */}
         {canHideRow && (
@@ -383,9 +383,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       >
         <span>{triggerLabel}</span>
         <div className="flex items-center gap-1">
-          {triggerStatus && (
-            <StatusIndicator status={triggerStatus.status} narrow={isNarrow} />
-          )}
+          {triggerStatus && <StatusIndicator status={triggerStatus.status} />}
           <i
             className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs`}
           />

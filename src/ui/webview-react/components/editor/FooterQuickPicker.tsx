@@ -12,6 +12,8 @@ interface FooterQuickPickerProps {
   icon: React.ReactNode;
   /** Text shown next to icon in wide mode — the current override value or "Inherit" */
   valueLabel: string;
+  /** Optional compact badge shown after valueLabel in wide mode only (e.g. a usage percentage). */
+  badgeLabel?: string;
   /** Whether the value is an override (not default) — used for active styling */
   isOverride: boolean;
   /** Whether this picker's popup is currently open */
@@ -49,6 +51,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   showLabel,
   icon,
   valueLabel,
+  badgeLabel,
   isOverride,
   isOpen,
   onToggle,
@@ -133,6 +136,11 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
             }`}
           >
             {valueLabel}
+          </span>
+        )}
+        {!isNarrow && showLabel && badgeLabel && (
+          <span className="text-[10px] text-description-fg opacity-80">
+            {badgeLabel}
           </span>
         )}
       </button>
