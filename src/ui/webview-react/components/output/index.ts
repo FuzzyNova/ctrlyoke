@@ -1,5 +1,6 @@
 export { OutputFindBar } from "./OutputFindBar";
 export { OutputRow } from "./OutputRow";
+export { RunSummaryBanner } from "./RunSummaryBanner";
 export { MarkdownText } from "./MarkdownText";
 export {
   FileEditOutput,

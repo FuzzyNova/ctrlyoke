@@ -49,8 +49,6 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Attempts";
     case "error":
       return "Error";
-    case "history-banner":
-      return "History";
     case "step-anchor":
       return "Step";
     case "final-step-label":

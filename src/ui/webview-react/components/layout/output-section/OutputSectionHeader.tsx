@@ -2,12 +2,7 @@ import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
-import {
-  hasWorkflowTokenUsage,
-  WorkflowTokenUsage,
-} from "@components/workflow/WorkflowTokenUsage";
 import type { TerminalSession } from "@store/terminalStore";
-import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
 
 type OutputTab = "output" | "terminal";
 
@@ -29,8 +24,6 @@ export interface OutputSectionHeaderProps {
   terminalFontSize: number;
   terminalSessionActive: boolean;
   useCompactLabels: boolean;
-  /** Current workflow's run-scoped token/cost totals — shown centered, output tab only. */
-  workflowTokenTotals?: WorkflowTokenTotals;
   workflowRedoEntries: WorkflowStepEntry[];
   workflowUndoEntries: WorkflowStepEntry[];
   onCollapseAllDiffs: () => void;
@@ -66,7 +59,6 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   terminalFontSize,
   terminalSessionActive,
   useCompactLabels,
-  workflowTokenTotals,
   workflowRedoEntries,
   workflowUndoEntries,
   onCollapseAllDiffs,
@@ -96,9 +88,9 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   return (
     <div
       ref={refCallback}
-      className="relative z-header select-none [-webkit-touch-callout:none] flex items-center gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
+      className="relative z-header select-none [-webkit-touch-callout:none] flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
     >
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex items-center gap-1">
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
           onClick={onToggleCollapse}
@@ -215,26 +207,8 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
         ) : null}
       </div>
 
-      {/* Centered run token/cost totals — output tab only. Terminal can show a
-          different run of the same lineage (see `terminalExecutionRunLabel`),
-          so the totals shown here would not necessarily match it. A real
-          flex-1 column (not an absolute overlay) so it's squeezed by its
-          siblings' actual widths instead of ever overlapping them: inline at
-          full width, stacked into two short lines once space gets tight, and
-          dropped entirely only once there's no room for even that. */}
-      <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden">
-        {activeOutputTab === "output" &&
-          !isHeaderVeryNarrow &&
-          hasWorkflowTokenUsage(workflowTokenTotals) && (
-            <WorkflowTokenUsage
-              totals={workflowTokenTotals}
-              layout={isHeaderNarrow ? "stacked" : "inline"}
-            />
-          )}
-      </div>
-
       <div
-        className={`flex items-center flex-shrink-0 ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
+        className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
       >
         {activeOutputTab === "terminal" && (
           <>

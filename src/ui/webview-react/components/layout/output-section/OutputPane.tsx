@@ -1,12 +1,13 @@
 import React, { memo, Profiler } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
-import { OutputRow } from "@components/output";
+import { OutputRow, RunSummaryBanner } from "@components/output";
 import {
   DEFAULT_BASH_OUTPUT_EXPANSION_STATE,
   type BashOutputExpansionSection,
   type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { OutputRowFileUndoRequest } from "@components/output/OutputRow";
+import type { RunBannerData } from "@components/output/RunSummaryBanner";
 import {
   OutputMinimap,
   type MinimapStep,
@@ -49,6 +50,12 @@ interface OutputPaneProps {
   virtualizedTotalSize: number;
   measureRowElement: React.RefCallback<HTMLDivElement>;
   measureStaticRowElement: React.RefCallback<HTMLDivElement>;
+  /** Run identity/status/totals for whichever run is displayed; absent when there's no run to show (e.g. a fresh draft). */
+  runBanner?: RunBannerData;
+  isRunBannerPinned: boolean;
+  onToggleRunBannerPinned: () => void;
+  /** True while browsing history and a different run is executing live. */
+  showBackToLive: boolean;
   onBackToLive: () => void;
   onBashExpansionChange: (
     rowKey: string,
@@ -110,7 +117,6 @@ function renderOutputRow(
     | "findCaseSensitive"
     | "atomicContextReferences"
     | "isExecutionActive"
-    | "onBackToLive"
     | "onBashExpansionChange"
     | "onScriptVerdictExpansionChange"
     | "onScriptOutputExpansionChange"
@@ -135,7 +141,6 @@ function renderOutputRow(
         props.activeMatch?.rowKey === row.key ? props.activeMatch : null
       }
       isExecutionActive={props.isExecutionActive}
-      onBackToLive={props.onBackToLive}
       onPromptUndo={props.onPromptUndo}
       onPromptRedo={props.onPromptRedo}
       onFileUndo={props.onFileUndo}
@@ -175,6 +180,11 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     virtualizedTotalSize,
     measureRowElement,
     measureStaticRowElement,
+    runBanner,
+    isRunBannerPinned,
+    onToggleRunBannerPinned,
+    showBackToLive,
+    onBackToLive,
     onContextMenuOpen,
     onMinimapStepClick,
     onOutputProfilerRender,
@@ -250,6 +260,18 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
           onContextMenuOpen(e.clientX, e.clientY, e.currentTarget);
         }}
       >
+        {runBanner && (
+          <RunSummaryBanner
+            runId={runBanner.runId}
+            startedAt={runBanner.startedAt}
+            executionState={runBanner.executionState}
+            tokenTotals={runBanner.tokenTotals}
+            isPinned={isRunBannerPinned}
+            onTogglePinned={onToggleRunBannerPinned}
+            showBackToLive={showBackToLive}
+            onBackToLive={onBackToLive}
+          />
+        )}
         {!hasOutput ? (
           <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
             Output will appear here during execution

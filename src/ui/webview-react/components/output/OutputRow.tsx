@@ -48,7 +48,6 @@ import type {
 } from "../../types/cliEvents";
 import {
   CLI_EVENT_TYPES,
-  EXECUTION_STATES,
   HARNESS_INFO,
   SCRIPT_OUTPUT_SOURCES,
 } from "../../types/messages";
@@ -83,7 +82,6 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import type {
   CliHeaderRow,
-  HistoryBannerRow,
   OutputRenderRow,
   ScriptOutputRow,
   StructuredEventRow,
@@ -155,7 +153,6 @@ interface OutputRowProps {
   atomicContextReferences?: boolean;
   activeFindMatch?: OutputFindMatch | null;
   isExecutionActive: boolean;
-  onBackToLive?: () => void;
   onPromptUndo?: (row: CliHeaderRow) => void;
   onPromptRedo?: (row: CliHeaderRow) => void;
   onFileUndo?: (
@@ -1244,51 +1241,6 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   );
 };
 
-/**
- * Trailing marker on the history banner. A run that was seeded but never
- * executed is a real, reachable state — `Set start position` on the first step
- * forks a run and leaves it idle — and it has no output because it never ran,
- * not because it was cut off. Calling that "(incomplete)" reads as an
- * interrupted run, so it gets its own wording; the manifest of such a run never
- * leaves IDLE (see `WorkingFileManager.seedNewRun`).
- */
-function historyRunStatusMarker(
-  runMetadata: HistoryBannerRow["historyOutputs"]["runMetadata"]
-): string {
-  if (runMetadata.completedAt) return " ✓";
-  return runMetadata.executionState === EXECUTION_STATES.IDLE
-    ? " (not started)"
-    : " (incomplete)";
-}
-
-function HistoryBannerRowView({
-  row,
-  onBackToLive,
-}: {
-  row: HistoryBannerRow;
-  onBackToLive?: () => void;
-}) {
-  return (
-    <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
-      <span>
-        Run {row.historyOutputs.runMetadata.runId} &middot;{" "}
-        {new Date(row.historyOutputs.runMetadata.startedAt).toLocaleString()}
-        {historyRunStatusMarker(row.historyOutputs.runMetadata)}
-      </span>
-      {row.showBackToLive && onBackToLive && (
-        <button
-          type="button"
-          onClick={onBackToLive}
-          className="text-link-fg hover:underline focus:outline-none"
-        >
-          Back to Live{" "}
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 /** Human-readable tooltip for a decorated prompt reference. */
 function promptReferenceTooltip(ref: ContextReferenceMatch): string {
   switch (ref.type) {
@@ -1460,7 +1412,6 @@ function OutputRowComponent({
   atomicContextReferences = false,
   activeFindMatch,
   isExecutionActive,
-  onBackToLive,
   onPromptUndo,
   onPromptRedo,
   onFileUndo,
@@ -1485,9 +1436,6 @@ function OutputRowComponent({
   const isActiveRow = activeFindMatch?.rowKey === row.key;
   let content: React.ReactNode;
   switch (row.rowKind) {
-    case "history-banner":
-      content = <HistoryBannerRowView row={row} onBackToLive={onBackToLive} />;
-      break;
     case "step-anchor":
       content = <div className="h-px" aria-hidden="true" />;
       break;

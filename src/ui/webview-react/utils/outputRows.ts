@@ -127,12 +127,6 @@ export interface AttemptGroupSummaryRow extends OutputRowBase {
   coverage: WorkflowTokenCoverage;
 }
 
-export interface HistoryBannerRow extends OutputRowBase {
-  rowKind: "history-banner";
-  historyOutputs: NonNullable<BuildOutputRowsInput["historyOutputs"]>;
-  showBackToLive: boolean;
-}
-
 export interface StepAnchorRow extends OutputRowBase {
   rowKind: "step-anchor";
   target: OutputMessageTarget;
@@ -255,7 +249,6 @@ export interface ScriptVerdictRow extends OutputRowBase {
 }
 
 export type OutputRenderRow =
-  | HistoryBannerRow
   | StepAnchorRow
   | FinalStepLabelRow
   | StatusRow
@@ -1323,8 +1316,6 @@ function estimateOutputRowContentHeight(
   outputContentWidth?: number
 ): number {
   switch (row.rowKind) {
-    case "history-banner":
-      return 38;
     case "step-anchor":
       return 1;
     case "final-step-label":
@@ -1553,16 +1544,6 @@ export function buildOutputRows(
       stepOutputsMap.set(targetKey, stepOutputs);
       lastCliIndexPerStep.set(targetKey, messageIndex);
     }
-  }
-
-  if (input.isViewingHistory && input.historyOutputs) {
-    rows.push({
-      key: "history-banner",
-      rowKind: "history-banner",
-      historyOutputs: input.historyOutputs,
-      showBackToLive: input.isExecutionActive,
-      estimateSize: 44,
-    });
   }
 
   for (const [messageIndex, message] of input.allMessages.entries()) {

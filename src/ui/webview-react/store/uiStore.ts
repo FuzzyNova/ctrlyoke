@@ -558,6 +558,11 @@ interface UiState {
   // Terminal font size (px) — user-adjustable, persisted
   terminalFontSize: number;
 
+  // Whether the output pane's run summary banner (run id, date, status,
+  // token/cost totals) stays fixed at the top while scrolling, or scrolls
+  // away as the first row of content. Persisted so it survives reloads.
+  runBannerPinned: boolean;
+
   // Terminal tab state (per workflow, defaults to 'output')
   activeOutputTabs: Record<string, "output" | "terminal">;
   // Workflows with at least one running terminal session
@@ -745,6 +750,8 @@ interface UiActions {
   setOutputFontSize: (size: number) => void;
   // Terminal font size
   setTerminalFontSize: (size: number) => void;
+  // Run summary banner pin state
+  toggleRunBannerPinned: () => void;
 
   // Loading state
   setLoading: (loading: boolean, message?: string) => void;
@@ -926,6 +933,7 @@ const initialState: UiState = {
   loadingMessage: null,
   outputFontSize: 13,
   terminalFontSize: 14,
+  runBannerPinned: true,
   toastQueue: [],
   contentPreviewModal: null,
   suffixEditConfirmation: null,
@@ -976,6 +984,7 @@ const persistedFields = [
   "undoDialogDiffsCollapsed",
   "outputFontSize",
   "terminalFontSize",
+  "runBannerPinned",
   "terminalRailCollapsed",
   "terminalRailSizePx",
   "globalSettingsActiveTab",
@@ -1356,6 +1365,9 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setTerminalFontSize: (size) =>
         set({ terminalFontSize: Math.min(24, Math.max(8, size)) }),
+
+      toggleRunBannerPinned: () =>
+        set((state) => ({ runBannerPinned: !state.runBannerPinned })),
 
       // ============================================================================
       // LOADING STATE
@@ -1826,6 +1838,7 @@ export const useUiStore = create<UiState & UiActions>()(
           undoDialogDiffsCollapsed: initialState.undoDialogDiffsCollapsed,
           outputFontSize: initialState.outputFontSize,
           terminalFontSize: initialState.terminalFontSize,
+          runBannerPinned: initialState.runBannerPinned,
         });
       },
     }),

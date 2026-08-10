@@ -142,7 +142,6 @@ export function getOutputRowSearchSegments(
 ): OutputRowSearchSegment[] {
   switch (row.rowKind) {
     case "stats":
-    case "history-banner":
     case "step-anchor":
     case "final-step-label":
     case "attempt-group-summary":

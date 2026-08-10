@@ -4,18 +4,6 @@ import {
   OutputSectionHeader,
   type OutputSectionHeaderProps,
 } from "@components/layout/output-section/OutputSectionHeader";
-import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
-
-const workflowTokenTotals: WorkflowTokenTotals = {
-  total: 410_000,
-  coverage: "complete",
-  reportedAttemptCount: 1,
-  attemptCount: 1,
-  isFinal: true,
-  costUsd: 0.41,
-  byHarness: {},
-  byLocalDay: {},
-};
 
 function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
   const noop = vi.fn();
@@ -169,67 +157,6 @@ describe("OutputSectionHeader find action", () => {
 
     expect(
       screen.queryByRole("button", { name: "Find in output" })
-    ).not.toBeInTheDocument();
-  });
-});
-
-describe("OutputSectionHeader workflow token usage", () => {
-  it("shows the centered run total on the output tab", () => {
-    renderHeader({
-      activeOutputTab: "output",
-      workflowTokenTotals,
-    });
-
-    expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
-      "410k · ≈$0.41"
-    );
-  });
-
-  it("hides the run total on the terminal tab", () => {
-    renderHeader({
-      activeOutputTab: "terminal",
-      workflowTokenTotals,
-    });
-
-    expect(
-      screen.queryByTestId("workflow-token-usage")
-    ).not.toBeInTheDocument();
-  });
-
-  it("stacks the run total into two lines in a narrow header", () => {
-    renderHeader({
-      activeOutputTab: "output",
-      isHeaderNarrow: true,
-      workflowTokenTotals,
-    });
-
-    const usage = screen.getByTestId("workflow-token-usage");
-    expect(usage).toHaveTextContent("410k");
-    expect(usage).toHaveTextContent("≈$0.41");
-    expect(usage.querySelectorAll("span")).toHaveLength(2);
-  });
-
-  it("hides the run total once the header is very narrow", () => {
-    renderHeader({
-      activeOutputTab: "output",
-      isHeaderNarrow: true,
-      isHeaderVeryNarrow: true,
-      workflowTokenTotals,
-    });
-
-    expect(
-      screen.queryByTestId("workflow-token-usage")
-    ).not.toBeInTheDocument();
-  });
-
-  it("renders nothing when the workflow has no usable total", () => {
-    renderHeader({
-      activeOutputTab: "output",
-      workflowTokenTotals: undefined,
-    });
-
-    expect(
-      screen.queryByTestId("workflow-token-usage")
     ).not.toBeInTheDocument();
   });
 });

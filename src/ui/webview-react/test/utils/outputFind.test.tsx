@@ -251,21 +251,6 @@ describe("outputFind", () => {
     it("skips non-searchable row kinds", () => {
       const rows: OutputRenderRow[] = [
         {
-          key: "history",
-          rowKind: "history-banner",
-          historyOutputs: {
-            orderedEntries: [],
-            promptOutputs: {},
-            runMetadata: {
-              runId: "run-1",
-              startedAt: 1,
-              executionState: "completed",
-            },
-          } as never,
-          showBackToLive: false,
-          estimateSize: 44,
-        },
-        {
           key: "anchor",
           rowKind: "step-anchor",
           target,

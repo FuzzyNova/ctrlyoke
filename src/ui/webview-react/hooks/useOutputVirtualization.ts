@@ -127,7 +127,6 @@ function getZeroHeightStructuredEventReason(
 
 function getRowHeightBucket(row: OutputRenderRow): string {
   switch (row.rowKind) {
-    case "history-banner":
     case "step-anchor":
     case "final-step-label":
     case "status":

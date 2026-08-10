@@ -210,13 +210,11 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
     onToggleFind,
     onToggleCollapse,
     terminalExecutionRunLabel,
-    workflowTokenTotals,
   }: {
     isFindOpen: boolean;
     onToggleFind: () => void;
     onToggleCollapse: () => void;
     terminalExecutionRunLabel: string | null;
-    workflowTokenTotals?: { total: number };
   }) => (
     <>
       <button
@@ -234,11 +232,6 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
           {terminalExecutionRunLabel}
         </span>
       )}
-      {workflowTokenTotals && (
-        <span data-testid="workflow-token-totals">
-          {workflowTokenTotals.total}
-        </span>
-      )}
     </>
   ),
 }));
@@ -247,25 +240,34 @@ vi.mock("@components/layout/output-section/OutputPane", () => ({
   OutputPane: ({
     outputRef,
     showVirtualizationOverlay,
+    runBanner,
   }: {
     outputRef: React.RefObject<HTMLDivElement | null>;
     showVirtualizationOverlay: boolean;
+    runBanner?: { runId: number; tokenTotals?: { total: number } };
   }) => (
-    <div
-      ref={(node) => {
-        if (!node) {
-          outputRef.current = null;
-          return;
-        }
-        Object.defineProperty(node, "getBoundingClientRect", {
-          configurable: true,
-          value: () => ({ width: outputWidth }),
-        });
-        outputRef.current = node;
-      }}
-      data-testid="output-pane"
-      data-virtualization-overlay={showVirtualizationOverlay}
-    />
+    <>
+      <div
+        ref={(node) => {
+          if (!node) {
+            outputRef.current = null;
+            return;
+          }
+          Object.defineProperty(node, "getBoundingClientRect", {
+            configurable: true,
+            value: () => ({ width: outputWidth }),
+          });
+          outputRef.current = node;
+        }}
+        data-testid="output-pane"
+        data-virtualization-overlay={showVirtualizationOverlay}
+      />
+      {runBanner && (
+        <span data-testid="run-banner" data-run-id={runBanner.runId}>
+          {runBanner.tokenTotals?.total}
+        </span>
+      )}
+    </>
   ),
 }));
 
@@ -505,8 +507,39 @@ describe("OutputSection", () => {
           executionState: "running" as never,
           currentStep: 1,
           totalSteps: 2,
+          startedAt: 2000,
           tokenTotals: {
             total: 5_000,
+            coverage: "complete" as never,
+            reportedAttemptCount: 1,
+            attemptCount: 1,
+            isFinal: false,
+            byHarness: {},
+            byLocalDay: {},
+          },
+        },
+      ],
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-live" as never,
+      },
+      executionRunRef: "run-live" as never,
+      runSummaries: [
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-live" as never,
+          runId: 7,
+          startedAt: 2000,
+          executionState: "running" as never,
+          definitionRevision: 1,
+          stepCount: 2,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+          // Stale snapshot totals — the live banner should prefer the
+          // workflow's own live-updating totals over this manifest snapshot.
+          tokenTotals: {
+            total: 999,
             coverage: "complete" as never,
             reportedAttemptCount: 1,
             attemptCount: 1,
@@ -520,9 +553,9 @@ describe("OutputSection", () => {
 
     render(<OutputSection />);
 
-    expect(screen.getByTestId("workflow-token-totals")).toHaveTextContent(
-      "5000"
-    );
+    const banner = screen.getByTestId("run-banner");
+    expect(banner).toHaveAttribute("data-run-id", "7");
+    expect(banner).toHaveTextContent("5000");
   });
 
   it("shows the viewed historical run's totals instead of the executing run's", () => {
@@ -580,8 +613,8 @@ describe("OutputSection", () => {
 
     render(<OutputSection />);
 
-    expect(screen.getByTestId("workflow-token-totals")).toHaveTextContent(
-      "410000"
-    );
+    const banner = screen.getByTestId("run-banner");
+    expect(banner).toHaveAttribute("data-run-id", "1031");
+    expect(banner).toHaveTextContent("410000");
   });
 });

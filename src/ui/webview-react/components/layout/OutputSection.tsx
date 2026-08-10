@@ -1,6 +1,7 @@
 import React, {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useCallback,
   useState,
@@ -31,6 +32,7 @@ import {
 } from "../../types/messages";
 import { type MinimapStep } from "../output/OutputMinimap";
 import { OutputFindBar } from "../output";
+import type { RunBannerData } from "../output/RunSummaryBanner";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -151,20 +153,44 @@ const OutputSectionInner: React.FC = () => {
     )?.runId;
     return executionRunId === undefined ? null : `Live Run ${executionRunId}`;
   });
-  // The header's centered usage display always tracks whatever run is
-  // actually being viewed: a historical run's own totals while browsing
-  // history (even if a different run is executing live), otherwise the
-  // active lineage's live-updating totals.
-  const workflowTokenTotals = useUiStore((s) => {
+  // The run summary banner always tracks whatever run is actually being
+  // viewed: a historical run's own identity/totals while browsing history
+  // (even if a different run is executing live), otherwise the active
+  // lineage's live-updating identity/totals. Selectors return store
+  // references (not freshly built objects) so they stay referentially
+  // stable — and the component doesn't re-render — while unrelated store
+  // fields change; only the useMemo below allocates the combined object,
+  // and only when one of its inputs actually changes.
+  const displayedRunSummary = useUiStore((s) => {
     const displayedAddress = s.displayedViewAddress;
-    if (s.isViewingHistory && displayedAddress?.kind === "run") {
-      return s.runSummaries.find(
-        (summary) => summary.runRef === displayedAddress.runRef
-      )?.tokenTotals;
-    }
-    return s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
-      ?.tokenTotals;
+    if (displayedAddress?.kind !== "run") return undefined;
+    return s.runSummaries.find(
+      (summary) => summary.runRef === displayedAddress.runRef
+    );
   });
+  const liveWorkflowSummary = useUiStore((s) =>
+    s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
+  );
+  const runBannerPinned = useUiStore((s) => s.runBannerPinned);
+  const toggleRunBannerPinned = useUiStore((s) => s.toggleRunBannerPinned);
+  const displayedRunBanner = useMemo<RunBannerData | undefined>(() => {
+    if (!displayedRunSummary) return undefined;
+    if (isViewingHistory) {
+      return {
+        runId: displayedRunSummary.runId,
+        startedAt: displayedRunSummary.startedAt,
+        executionState: displayedRunSummary.executionState,
+        tokenTotals: displayedRunSummary.tokenTotals,
+      };
+    }
+    if (!liveWorkflowSummary) return undefined;
+    return {
+      runId: displayedRunSummary.runId,
+      startedAt: liveWorkflowSummary.startedAt ?? displayedRunSummary.startedAt,
+      executionState: liveWorkflowSummary.executionState,
+      tokenTotals: liveWorkflowSummary.tokenTotals,
+    };
+  }, [displayedRunSummary, isViewingHistory, liveWorkflowSummary]);
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
@@ -1181,7 +1207,6 @@ const OutputSectionInner: React.FC = () => {
           terminalFontSize={terminalFontSize}
           terminalSessionActive={terminalSessionActive}
           useCompactLabels={useCompactOutputHeaderLabels}
-          workflowTokenTotals={workflowTokenTotals}
           workflowRedoEntries={workflowUndoRedoData.redoEntries}
           workflowUndoEntries={workflowUndoRedoData.undoEntries}
           onCollapseAllDiffs={collapseAllDiffs}
@@ -1243,6 +1268,10 @@ const OutputSectionInner: React.FC = () => {
           virtualizedTotalSize={rowVirtualizer.getTotalSize()}
           measureRowElement={measureRowElement}
           measureStaticRowElement={measureStaticRowElement}
+          runBanner={displayedRunBanner}
+          isRunBannerPinned={runBannerPinned}
+          onToggleRunBannerPinned={toggleRunBannerPinned}
+          showBackToLive={isViewingHistory && isExecutionActive}
           onBackToLive={handleBackToLive}
           onBashExpansionChange={handleBashExpansionChange}
           onScriptVerdictExpansionChange={handleScriptVerdictExpansionChange}
