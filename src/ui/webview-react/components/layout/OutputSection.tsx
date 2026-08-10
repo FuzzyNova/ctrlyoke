@@ -151,6 +151,20 @@ const OutputSectionInner: React.FC = () => {
     )?.runId;
     return executionRunId === undefined ? null : `Live Run ${executionRunId}`;
   });
+  // The header's centered usage display always tracks whatever run is
+  // actually being viewed: a historical run's own totals while browsing
+  // history (even if a different run is executing live), otherwise the
+  // active lineage's live-updating totals.
+  const workflowTokenTotals = useUiStore((s) => {
+    const displayedAddress = s.displayedViewAddress;
+    if (s.isViewingHistory && displayedAddress?.kind === "run") {
+      return s.runSummaries.find(
+        (summary) => summary.runRef === displayedAddress.runRef
+      )?.tokenTotals;
+    }
+    return s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
+      ?.tokenTotals;
+  });
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
@@ -1167,6 +1181,7 @@ const OutputSectionInner: React.FC = () => {
           terminalFontSize={terminalFontSize}
           terminalSessionActive={terminalSessionActive}
           useCompactLabels={useCompactOutputHeaderLabels}
+          workflowTokenTotals={workflowTokenTotals}
           workflowRedoEntries={workflowUndoRedoData.redoEntries}
           workflowUndoEntries={workflowUndoRedoData.undoEntries}
           onCollapseAllDiffs={collapseAllDiffs}

@@ -61,11 +61,19 @@ export function workflowTokenTotalsTooltip(
 
 interface WorkflowTokenUsageProps {
   totals?: WorkflowTokenTotals;
+  /**
+   * "inline" (default) joins the token total and cost on one line, used by
+   * workflow/run rows. "stacked" renders them as two short lines instead —
+   * for spots too narrow for the inline string but tall enough for two
+   * compact lines, e.g. the output header.
+   */
+  layout?: "inline" | "stacked";
 }
 
 /** Shared compact run-total display for workflow and run-summary rows. */
 export const WorkflowTokenUsage: React.FC<WorkflowTokenUsageProps> = ({
   totals,
+  layout = "inline",
 }) => {
   const hideCost = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
@@ -79,6 +87,25 @@ export const WorkflowTokenUsage: React.FC<WorkflowTokenUsageProps> = ({
     : workflowTokenTotalsTooltip(totals);
   if (!label || !accessibleLabel || !tooltip) return null;
 
+  const costLabel =
+    !hideCost && totals.costUsd !== undefined
+      ? formatCostLabel(totals.costUsd, totals.costPartial === true)
+      : undefined;
+
+  if (layout === "stacked") {
+    return (
+      <span
+        data-testid="workflow-token-usage"
+        aria-label={accessibleLabel}
+        title={tooltip}
+        className="flex flex-col items-center leading-none font-mono text-xxs text-description-fg"
+      >
+        <span>{label}</span>
+        {costLabel && <span>{costLabel}</span>}
+      </span>
+    );
+  }
+
   return (
     <span
       data-testid="workflow-token-usage"
@@ -87,9 +114,7 @@ export const WorkflowTokenUsage: React.FC<WorkflowTokenUsageProps> = ({
       className="whitespace-nowrap font-mono text-xs text-description-fg"
     >
       {label}
-      {!hideCost && totals.costUsd !== undefined
-        ? ` · ${formatCostLabel(totals.costUsd, totals.costPartial === true)}`
-        : ""}
+      {costLabel ? ` · ${costLabel}` : ""}
     </span>
   );
 };

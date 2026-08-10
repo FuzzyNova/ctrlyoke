@@ -210,11 +210,13 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
     onToggleFind,
     onToggleCollapse,
     terminalExecutionRunLabel,
+    workflowTokenTotals,
   }: {
     isFindOpen: boolean;
     onToggleFind: () => void;
     onToggleCollapse: () => void;
     terminalExecutionRunLabel: string | null;
+    workflowTokenTotals?: { total: number };
   }) => (
     <>
       <button
@@ -230,6 +232,11 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
       {terminalExecutionRunLabel && (
         <span data-testid="terminal-execution-run-label">
           {terminalExecutionRunLabel}
+        </span>
+      )}
+      {workflowTokenTotals && (
+        <span data-testid="workflow-token-totals">
+          {workflowTokenTotals.total}
         </span>
       )}
     </>
@@ -485,5 +492,96 @@ describe("OutputSection", () => {
     expect(
       screen.queryByTestId("terminal-execution-run-label")
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the active workflow's live totals while viewing live output", () => {
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+      loadedWorkflows: [
+        {
+          id: "workflow-1",
+          workflowName: "Live workflow",
+          filePath: "workflow.prompt.md",
+          executionState: "running" as never,
+          currentStep: 1,
+          totalSteps: 2,
+          tokenTotals: {
+            total: 5_000,
+            coverage: "complete" as never,
+            reportedAttemptCount: 1,
+            attemptCount: 1,
+            isFinal: false,
+            byHarness: {},
+            byLocalDay: {},
+          },
+        },
+      ],
+    });
+
+    render(<OutputSection />);
+
+    expect(screen.getByTestId("workflow-token-totals")).toHaveTextContent(
+      "5000"
+    );
+  });
+
+  it("shows the viewed historical run's totals instead of the executing run's", () => {
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+      loadedWorkflows: [
+        {
+          id: "workflow-1",
+          workflowName: "Live workflow",
+          filePath: "workflow.prompt.md",
+          executionState: "running" as never,
+          currentStep: 1,
+          totalSteps: 2,
+          tokenTotals: {
+            total: 5_000,
+            coverage: "complete" as never,
+            reportedAttemptCount: 1,
+            attemptCount: 1,
+            isFinal: false,
+            byHarness: {},
+            byLocalDay: {},
+          },
+        },
+      ],
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-historical" as never,
+      },
+      executionRunRef: "run-live",
+      runSummaries: [
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-historical" as never,
+          runId: 1031,
+          startedAt: 1031,
+          executionState: "completed" as never,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+          tokenTotals: {
+            total: 410_000,
+            coverage: "complete" as never,
+            reportedAttemptCount: 1,
+            attemptCount: 1,
+            isFinal: true,
+            byHarness: {},
+            byLocalDay: {},
+          },
+        },
+      ],
+    });
+    useUiStore.getState().setHistoryView();
+
+    render(<OutputSection />);
+
+    expect(screen.getByTestId("workflow-token-totals")).toHaveTextContent(
+      "410000"
+    );
   });
 });
