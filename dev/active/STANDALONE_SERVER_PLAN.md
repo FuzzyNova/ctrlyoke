@@ -9,7 +9,7 @@ This document is the standalone implementation backlog for after v0.1.0.
 
 The shared prerequisites are now specified in two focused plans:
 
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
   is the exhaustive `vscode` audit and the authoritative plan for composition,
   watchers, shared routing, services, utilities, and retiring the Node-side shim.
 - [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) covers

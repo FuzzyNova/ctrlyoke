@@ -3,18 +3,18 @@
 **Decided 2026-08-02.** Implementation order for the remaining work in three
 plans, none of which is a 0.1.0 release gate:
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../backlog/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
   — Phases 2, 2.5 (Site 3), 3, 4, and the Phase 5 guards.
 - [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)
   — the per-step `ctrlyoke run --headless --json` v1 contract, in full.
-- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
   — Phase 2, Phase 3, and the permission plan's post-release parity items.
 
 This document owns only **sequencing and the dependency argument**. Each plan
 remains the source of truth for its own scope, phases, and acceptance criteria;
 do not restate their content here.
 
-**Supersedes** [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](COMPATIBILITY_AND_FEEDBACK_STAGING.md)
+**Supersedes** [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
 for forward-looking work. That document's queue is fully complete and it is
 retained as the record of how the 0.1.0 permission gate was sequenced.
 
@@ -88,7 +88,7 @@ preference.
 | Feedback Phase 3 (client-scoped routing)        | Feedback Phase 2's sink contract                                                                                                                                |
 | Feedback Phase 4 (interactive choices)          | Feedback Phase 2's transport                                                                                                                                    |
 | Decoupling Stage 10 (`StandaloneServerAdapter`) | Feedback Phase 2 deleting the five `PlatformAdapter` UI methods                                                                                                 |
-| Compatibility Phase 2 — **dry-run leg only**    | [`DRY_RUN_PREVIEW_PLAN.md`](../backlog/DRY_RUN_PREVIEW_PLAN.md), which itself needs [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md) |
+| Compatibility Phase 2 — **dry-run leg only**    | [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md), which itself needs [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md) |
 
 **The last row is why Compatibility Phase 2 had to be split.** It is written as
 one phase — "dry run, portability report, CLI/MCP serialization" — but only the
@@ -184,7 +184,7 @@ pulling them in here would triple the stage for no benefit to Stages B–G.
 
 Found 2026-08-02 while auditing the cut of the MCP capability serialization.
 Owned by
-[`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)
+[`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)
 "Known enforcement gaps"; that plan holds the full trace. It is queued here
 because it is the same dishonest-enforcement class the 0.1.0 gate existed to
 close, and because a checkbox is a stronger promise than a pattern textarea.
@@ -283,7 +283,8 @@ Interactive choices: the 6 surviving action-bearing sites and the
 
 Capability domains (hooks, MCP per-server tool filtering, images, usage),
 generated compatibility docs, the Codex partial-support investigation,
-Compatibility Phase 2's dry-run leg once `DRY_RUN_PREVIEW_PLAN.md` exists, and a
+Compatibility Phase 2's dry-run leg now that `DRY_RUN_PREVIEW_PLAN.md` is
+implemented, and a
 re-evaluation of the portability report against a multi-domain registry.
 
 **`mcp.injection` was deleted from Phase 3 on 2026-08-02.** Every harness
@@ -478,8 +479,8 @@ becoming a second source of truth.
 ### Compatibility Phase 2 — dry-run leg (deferred into Stage G)
 
 Integrating diagnostics and the actual provider translation into dry-run preview
-requires a dry-run service that does not exist. `DRY_RUN_PREVIEW_PLAN.md` is
-Proposed and states it needs both the compatibility contracts (now shipped) and
+requires integration with the shipped dry-run service. `DRY_RUN_PREVIEW_PLAN.md`
+is implemented and provides both the compatibility contracts (now shipped) and
 the redaction contracts from `SECRETS_AND_REDACTION_PLAN.md` (also Proposed).
 Two unbuilt plans deep — this is the only item in the three plans with a genuine
 blocking dependency.
@@ -513,10 +514,10 @@ just because the products share history and directories.
 
 ## What would change this recommendation
 
-- `DRY_RUN_PREVIEW_PLAN.md` and `SECRETS_AND_REDACTION_PLAN.md` being taken on —
+- `DRY_RUN_PREVIEW_PLAN.md` is shipped; taking on `SECRETS_AND_REDACTION_PLAN.md` —
   that pulls Compatibility Phase 2's dry-run leg out of Stage G and back beside
   Stage D.
-- Pulling [`STANDALONE_SERVER_PLAN.md`](../backlog/STANDALONE_SERVER_PLAN.md)
+- Pulling [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
   forward — its Phase 5 needs the `PlatformAdapter` UI methods gone, which would
   promote Stage C.3 ahead of everything else in Stage C.
 - Evidence that Codex or Antigravity has a usable granular-policy mechanism —

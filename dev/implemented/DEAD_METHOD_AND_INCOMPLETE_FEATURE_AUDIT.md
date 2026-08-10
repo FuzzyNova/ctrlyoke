@@ -30,10 +30,10 @@ surface 21 new webview-side candidates — see "Sweep 1b" below.
 
 **Related plans:**
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) — Site 1
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md) — Site 1
   is the `handleExecutionError` precedent for how to verify-then-delete a
   candidate from this audit.
-- [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md) — several
+- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) — several
   `WorkflowOrchestrator` methods below are scaffolding for this plan's
   unimplemented phases, not orphaned code; see the special case below before
   deleting any of them.
@@ -284,10 +284,10 @@ worth an individual look since 1–3 is a small enough number to just read.
 | `src/ui/CtrlYokeWebviewProvider.ts:1337`             | `getPanelScopedSend()`                                                                       | **deleted 2026-07-29 (Step 5)**; no callers remained after client-scoped router wiring                                                  |
 | `src/ui/NotificationManager.ts:65`                   | `notifyStartupComplete()`                                                                    | **deleted 2026-07-29 (Step 5)**; see special case                                                                                       |
 | `src/test/unit/CliIntegration.test.ts:53`            | `MockVsCodePlatform.getExtensionContext()` — **made nominal 2026-07-29 (Step 6)**            | The test double explicitly implements `Pick<VsCodeAdapter, "getExtensionContext">`, matching the intentional VS Code-only discriminator |
-| `src/core/WorkflowOrchestrator.ts:637`               | `getActiveWorkflow()`                                                                        | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                              |
-| `src/core/WorkflowOrchestrator.ts:1634`              | `pauseWorkflow()`                                                                            | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                     |
-| `src/core/WorkflowOrchestrator.ts:1669`              | `resumeWorkflow()`                                                                           | `dev/backlog/STANDALONE_SERVER_PLAN.md` — see special case                                                                              |
-| `src/core/WorkflowOrchestrator.ts:1717`              | `stopWorkflow()`                                                                             | `dev/backlog/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                     |
+| `src/core/WorkflowOrchestrator.ts:637`               | `getActiveWorkflow()`                                                                        | `dev/active/STANDALONE_SERVER_PLAN.md` — see special case                                                                               |
+| `src/core/WorkflowOrchestrator.ts:1634`              | `pauseWorkflow()`                                                                            | `dev/active/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                      |
+| `src/core/WorkflowOrchestrator.ts:1669`              | `resumeWorkflow()`                                                                           | `dev/active/STANDALONE_SERVER_PLAN.md` — see special case                                                                               |
+| `src/core/WorkflowOrchestrator.ts:1717`              | `stopWorkflow()`                                                                             | `dev/active/STANDALONE_SERVER_PLAN.md`, `prompts/copilot-integration.prompt.md` — see special case                                      |
 
 ### Bucket C — 4+ occurrences, name too common to trust the count (29 candidates)
 
@@ -419,13 +419,13 @@ the production discriminator remains intentionally dynamic.
 `cancelPauseWorkflow`, `resumeWorkflow`, `stopWorkflow`, `readWorkingFile`,
 and `getHarnessDetailedStatus` all show zero real callers. The pause/resume/
 stop quartet's only repo occurrences are in
-`dev/backlog/STANDALONE_SERVER_PLAN.md`'s message-routing table (documenting
+`dev/active/STANDALONE_SERVER_PLAN.md`'s message-routing table (documenting
 `orchestrator.pauseWorkflow(id)` etc. as the intended direct call for the
 not-yet-built standalone server) and in `prompts/copilot-integration.prompt.md`
 (a demo/example prompt, not source).
 
 This is **scaffolding for an unimplemented plan, not abandoned code** —
-`STANDALONE_SERVER_PLAN.md` is still in `dev/backlog/` (not `dev/implemented/`),
+`STANDALONE_SERVER_PLAN.md` is still in `dev/active/` (not `dev/implemented/`),
 and `ServerSection.tsx:338` explicitly says "Phases 5–10 are unimplemented."
 
 **Decision (2026-07-29): retain this near-term standalone-server API.** All 11

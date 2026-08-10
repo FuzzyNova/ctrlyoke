@@ -3,7 +3,7 @@
 > **Status:** Stages 1–5 complete
 >
 > **Priority:** P0 — blocks the OpenCode half of
-> [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)
+> [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
 >
 > **Effect on that plan:** removes OpenCode as a consumer of the workspace
 > permission lease, which deletes most of its "Workspace-Configuration Support"

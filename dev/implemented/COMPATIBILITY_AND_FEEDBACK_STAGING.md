@@ -3,17 +3,17 @@
 > **Complete as of 2026-08-01 — retained as the record of how the 0.1.0
 > permission gate was sequenced.** Every step in its queue landed. Forward-looking
 > work in these plans is sequenced by
-> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
 > which supersedes this document and drops its release-gate framing. Do not add
 > new steps here.
 
 **Decided 2026-08-01.** Implementation order for three interlocking plans:
 
-- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../backlog/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
   — the capability registry, analyzer, and pure effective-property resolver.
-- [`TOOL_PERMISSION_PARITY_PLAN.md`](../backlog/TOOL_PERMISSION_PARITY_PLAN.md)
+- [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)
   — the first consumer of that registry.
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../backlog/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
   — the toast queue, feedback sink, and interaction contract.
 
 This document owns only **sequencing and the dependency argument**. Each plan
@@ -21,7 +21,7 @@ remains the source of truth for its own scope, phases, and acceptance criteria;
 do not restate their content here.
 
 Roadmap context: the first two are P0 gates for 0.1.0
-([`ROADMAP.md`](ROADMAP.md) P0 item 5). The third is unprioritized.
+([`ROADMAP.md`](../active/ROADMAP.md) P0 item 5). The third is unprioritized.
 
 ---
 

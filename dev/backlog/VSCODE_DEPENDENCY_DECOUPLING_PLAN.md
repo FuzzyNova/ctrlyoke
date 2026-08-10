@@ -6,8 +6,8 @@ instead of depending on the CLI esbuild `vscode-shim`.
 
 **Related plans:**
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md)
-- [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
 
 ## Decision
 
@@ -96,21 +96,21 @@ standalone-reachable graph. `EndConditionHandler` is the sharpest case: it halts
 a workflow on a native modal that, in the hosted server, renders only on the
 host machine. Both of its sites are **deleted rather than ported** — one is
 dead code, the other overrides declared `endCondition.onFail` policy. See
-`BROWSER_USER_FEEDBACK_PLAN.md` Phase 2.5.
+`../active/BROWSER_USER_FEEDBACK_PLAN.md` Phase 2.5.
 
 **Corollary for every stage: triage before porting.** Some VS Code UI in
 reusable code should simply be removed — it duplicates a typed reply that
 already exists, announces routine success the dashboard already shows, or asks
 at runtime what workflow config already declares. Deleting a site is strictly
 cheaper than giving it a message type, a browser renderer, and a headless
-fallback. Apply the triage table in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 2
+fallback. Apply the triage table in `../active/BROWSER_USER_FEEDBACK_PLAN.md` Phase 2
 before writing any adapter for a call site.
 
 Treat "file has no `vscode` import" as a necessary but insufficient exit
 criterion. The real criterion is that reusable code has no path to a host UI
 except through an injected capability port whose headless implementation is
 defined. See
-[`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) Phase 2.5.
+[`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md) Phase 2.5.
 
 ## Exhaustive `window` / `workspace` Inventory
 
@@ -253,7 +253,7 @@ interface FileWatcherFactory {
 ### User feedback and interactions
 
 Follow
-[`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md). Do not use
+[`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md). Do not use
 diagnostic logging as a user-notification substitute.
 
 ### Dashboard host actions
@@ -565,4 +565,4 @@ Only the first is blocking; the rest can be answered inside their stage.
 - `ctrlyoke run` and `ctrlyoke server` do not require `vscode-shim.ts`.
 - CI enforces the import and bundle boundaries.
 - Browser feedback satisfies
-  [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md).
+  [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md).

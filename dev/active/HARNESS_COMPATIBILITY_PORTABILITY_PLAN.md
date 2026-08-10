@@ -35,10 +35,10 @@
 > **Priority:** P0 — release gate for 0.1.0
 >
 > **First implementation consumer:**
-> [`TOOL_PERMISSION_PARITY_PLAN.md`](TOOL_PERMISSION_PARITY_PLAN.md)
+> [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)
 >
 > **Implementation order:** completed Phase 1 sequencing is recorded in
-> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
+> [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
 > remaining Phase 2 and Phase 3 work is sequenced by
 > [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
 > which splits Phase 2 because only its dry-run leg has an unbuilt dependency.

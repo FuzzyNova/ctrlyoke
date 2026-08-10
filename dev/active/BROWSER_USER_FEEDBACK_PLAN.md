@@ -10,7 +10,7 @@ outstanding.
 
 **Related plans:**
 
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
 - [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md)
 
 **Implementation order:**
@@ -18,11 +18,11 @@ outstanding.
 — Phases 2, 2.5 Site 3, 3, and 4 are Stages C, E, and F there; the Phase 5
 guards are Stage A. The completed Phase 1 and Phase 2.5 Site 2 sequencing is
 recorded in
-[`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../active/COMPATIBILITY_AND_FEEDBACK_STAGING.md).
+[`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md).
 
 **Not a dependency of the 0.1.0 permission work.**
 [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](./HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
-and [`TOOL_PERMISSION_PARITY_PLAN.md`](./TOOL_PERMISSION_PARITY_PLAN.md) both
+and [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md) both
 render through persistent field diagnostics and the existing shared
 `Modal.tsx`, and both explicitly forbid routing compatibility feedback through
 toast. This plan can land before or after them without changing their scope.
