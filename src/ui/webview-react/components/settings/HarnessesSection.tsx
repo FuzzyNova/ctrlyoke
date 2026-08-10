@@ -19,7 +19,10 @@ import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
-import { isHarnessQuotaStale } from "@root/types/UsageTypes";
+import {
+  isHarnessQuotaStale,
+  isHarnessUsageWindowStale,
+} from "@root/types/UsageTypes";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 import {
   formatCostLabel,
@@ -157,6 +160,9 @@ function UsageCard({
               {window.limit !== undefined ? ` / ${window.limit}` : ""}
               {window.resetAt !== undefined
                 ? ` · resets ${formatTimestamp(window.resetAt)}`
+                : ""}
+              {isHarnessUsageWindowStale(snapshot.quota, window)
+                ? " · stale"
                 : ""}
             </div>
           ))}

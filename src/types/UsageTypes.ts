@@ -68,18 +68,28 @@ export interface HarnessUsageSnapshot {
   observed: Partial<Record<HarnessObservedPeriod, HarnessObservedTokens>>;
 }
 
-/** A quota is stale only after its own fetch window or a known reset. */
+/** A quota snapshot is stale once its own provider fetch has aged past `staleAfterMs`. */
 export function isHarnessQuotaStale(
   quota: HarnessQuotaSnapshot,
   now: number = Date.now()
 ): boolean {
   if (quota.fetchedAt === undefined) return false;
-  const staleAt = quota.fetchedAt + quota.staleAfterMs;
-  const resetAt = quota.windows
-    .map((window) => window.resetAt)
-    .filter((value): value is number => value !== undefined)
-    .sort((left, right) => left - right)[0];
-  return now >= staleAt || (resetAt !== undefined && now >= resetAt);
+  return now >= quota.fetchedAt + quota.staleAfterMs;
+}
+
+/**
+ * A single window is stale when its snapshot is stale, or when that window's
+ * own reset time has passed — a percentage captured before a reset no longer
+ * describes the window that is live now. Other windows on the same snapshot
+ * (e.g. Claude's 7-day figure) are unaffected by a sibling window resetting.
+ */
+export function isHarnessUsageWindowStale(
+  quota: HarnessQuotaSnapshot,
+  window: HarnessUsageWindow,
+  now: number = Date.now()
+): boolean {
+  if (isHarnessQuotaStale(quota, now)) return true;
+  return window.resetAt !== undefined && now >= window.resetAt;
 }
 
 export function defaultStaleAfterMs(source: HarnessQuotaSource): number {

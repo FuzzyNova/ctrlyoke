@@ -1,6 +1,7 @@
 import { HARNESS_USAGE_STATUS_CODES } from "@root/types/DashboardConstants";
 import {
   isHarnessQuotaStale,
+  isHarnessUsageWindowStale,
   type HarnessUsageSnapshot,
 } from "@root/types/UsageTypes";
 import { HARNESS_STATUS_STRINGS, type HarnessStatusString } from "../types/messages";
@@ -12,9 +13,16 @@ export interface HarnessUsageDisplay {
   quotaPhrase: string;
 }
 
-/** Normalizes a harness quota snapshot into display-ready percentage/phrase strings. */
+/**
+ * Normalizes a harness quota snapshot into display-ready percentage/phrase
+ * strings. Last-known percentages are always shown once available — a window
+ * past its freshness window or its own reset time is annotated "(stale)"
+ * rather than hidden, so a value is still visible between Claude turns
+ * instead of disappearing every time the statusline sidecar goes quiet.
+ */
 export function getHarnessUsageDisplay(
-  snapshot: HarnessUsageSnapshot | undefined
+  snapshot: HarnessUsageSnapshot | undefined,
+  now: number = Date.now()
 ): HarnessUsageDisplay {
   if (!snapshot) {
     return { quotaPhrase: "No usage data" };
@@ -22,22 +30,26 @@ export function getHarnessUsageDisplay(
   if (snapshot.quota.errorCode === HARNESS_USAGE_STATUS_CODES.AUTH_REQUIRED) {
     return { quotaPhrase: "Needs auth" };
   }
-  if (isHarnessQuotaStale(snapshot.quota)) {
-    return { quotaPhrase: "Usage data stale" };
-  }
   const windows = snapshot.quota.windows.filter(
     (window) => window.percentUsed !== undefined
   );
   if (windows.length === 0) {
-    return { quotaPhrase: "No usage data" };
+    return {
+      quotaPhrase: isHarnessQuotaStale(snapshot.quota, now)
+        ? "Usage data stale"
+        : "No usage data",
+    };
   }
   const primaryPercent = Math.round(windows[0].percentUsed ?? 0);
   return {
     percentOnly: `${primaryPercent}%`,
     quotaPhrase: windows
-      .map(
-        (window) => `${Math.round(window.percentUsed ?? 0)}% ${window.label}`
-      )
+      .map((window) => {
+        const label = `${Math.round(window.percentUsed ?? 0)}% ${window.label}`;
+        return isHarnessUsageWindowStale(snapshot.quota, window, now)
+          ? `${label} (stale)`
+          : label;
+      })
       .join(" | "),
   };
 }

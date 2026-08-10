@@ -10,7 +10,10 @@ import type {
   HarnessUsageSnapshot,
   HarnessUsageWindow,
 } from "../../../../types/UsageTypes";
-import { isHarnessQuotaStale } from "../../../../types/UsageTypes";
+import {
+  isHarnessQuotaStale,
+  isHarnessUsageWindowStale,
+} from "../../../../types/UsageTypes";
 
 /** Percentage-point difference required before a fallback is actionable. */
 export const MATERIALLY_LESS_USED_PERCENT = 10;
@@ -105,6 +108,7 @@ function findFallbackHarness(
     const candidate = snapshot.quota.windows.find(
       (window) =>
         window.percentUsed !== undefined &&
+        !isHarnessUsageWindowStale(snapshot.quota, window, now) &&
         isComparableWindow(triggeringWindow, window) &&
         window.percentUsed <=
           (triggeringWindow.percentUsed ?? 100) - MATERIALLY_LESS_USED_PERCENT
@@ -149,6 +153,7 @@ export function buildUsageSelectionWarning(
     for (const window of snapshot.quota.windows) {
       if (
         window.percentUsed !== undefined &&
+        !isHarnessUsageWindowStale(snapshot.quota, window, now) &&
         window.percentUsed >= threshold &&
         (!trigger ||
           window.percentUsed >
