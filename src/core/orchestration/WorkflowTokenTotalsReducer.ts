@@ -1,6 +1,8 @@
 import {
+  ATTEMPT_COST_SOURCES,
   HARNESS_IDS,
   WORKFLOW_TOKEN_COVERAGE,
+  type AttemptCostSource,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type { CliOutput, TokenStats } from "../../types/WebviewMessageTypes";
@@ -38,6 +40,10 @@ interface MutableHarnessTotals {
   reportedAttemptCount: number;
   attemptCount: number;
   incomplete: boolean;
+  costUsd: number;
+  hasCost: boolean;
+  costPartial: boolean;
+  costSources: Set<AttemptCostSource>;
 }
 
 interface ReducerScope {
@@ -122,6 +128,10 @@ export class WorkflowTokenTotalsReducer {
     let total = 0;
     let reportedAttemptCount = 0;
     let incomplete = false;
+    let costUsd = 0;
+    let hasCost = false;
+    let costPartial = false;
+    const costSources = new Set<AttemptCostSource>();
 
     for (const attempt of aiAttempts) {
       const output = attempt.output?.payload.cliOutput;
@@ -133,6 +143,14 @@ export class WorkflowTokenTotalsReducer {
         reportedAttemptCount += 1;
       } else {
         incomplete = true;
+      }
+
+      if (tokens?.cost && isUsableCost(tokens.cost.usd)) {
+        costUsd += tokens.cost.usd;
+        hasCost = true;
+        costSources.add(tokens.cost.source);
+      } else if (hasUsableTotal) {
+        costPartial = true;
       }
 
       const harness = getHarness(output);
@@ -172,6 +190,11 @@ export class WorkflowTokenTotalsReducer {
       reportedAttemptCount,
       attemptCount: aiAttempts.length,
       isFinal: this.isFinal,
+      ...(hasCost ? { costUsd } : {}),
+      ...(costPartial ? { costPartial: true } : {}),
+      ...(costSources.size > 0
+        ? { costSources: orderCostSources(costSources) }
+        : {}),
       byHarness: materializeHarnessTotals(byHarness),
       byLocalDay: materializeLocalDayTotals(byLocalDay),
     };
@@ -276,6 +299,10 @@ function getOrCreateHarnessTotals(
     reportedAttemptCount: 0,
     attemptCount: 0,
     incomplete: false,
+    costUsd: 0,
+    hasCost: false,
+    costPartial: false,
+    costSources: new Set(),
   };
   totals.set(harness, created);
   return created;
@@ -305,6 +332,13 @@ function addAttempt(
   addOptional(aggregate, "cachedInput", tokens.cached);
   addOptional(aggregate, "cacheCreated", tokens.cacheCreated);
   addOptional(aggregate, "reasoningOutput", tokens.reasoning);
+  if (tokens.cost && isUsableCost(tokens.cost.usd)) {
+    aggregate.costUsd += tokens.cost.usd;
+    aggregate.hasCost = true;
+    aggregate.costSources.add(tokens.cost.source);
+  } else {
+    aggregate.costPartial = true;
+  }
 }
 
 function finiteOrZero(value: number | undefined): number {
@@ -376,5 +410,23 @@ function materializeHarnessTotal(
       : WORKFLOW_TOKEN_COVERAGE.COMPLETE,
     reportedAttemptCount: aggregate.reportedAttemptCount,
     attemptCount: aggregate.attemptCount,
+    ...(aggregate.hasCost ? { costUsd: aggregate.costUsd } : {}),
+    ...(aggregate.costPartial ? { costPartial: true } : {}),
+    ...(aggregate.costSources.size > 0
+      ? { costSources: orderCostSources(aggregate.costSources) }
+      : {}),
   };
+}
+
+function isUsableCost(value: number): boolean {
+  return Number.isFinite(value) && value >= 0;
+}
+
+function orderCostSources(
+  sources: Iterable<AttemptCostSource>
+): AttemptCostSource[] {
+  const present = new Set(sources);
+  return Object.values(ATTEMPT_COST_SOURCES).filter((source) =>
+    present.has(source)
+  );
 }

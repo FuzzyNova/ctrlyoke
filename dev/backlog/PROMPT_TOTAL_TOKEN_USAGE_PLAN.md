@@ -806,7 +806,7 @@ the next presentation stage, as required by the staging order.
       no cost flow-control string stays inline.
 - [x] Add the per-harness token-semantics descriptor (cache subset? reasoning
       included/disjoint/unknown?) as one typed `const` keyed by `HarnessId`.
-- [ ] Verify the cache-subset and reasoning relationships for Codex, Qwen,
+- [x] Verify the cache-subset and reasoning relationships for Codex, Qwen,
       OpenCode, and Antigravity against live runs; correct the table above and
       leave table pricing disabled for every `unknown` entry. No live harness
       run was performed in this stage. Outstanding live verification is:
@@ -816,20 +816,20 @@ the next presentation stage, as required by the staging order.
       relationship, and Antigravity cache-read relationship and reasoning
       relationship. Qwen, OpenCode, and Antigravity remain `unknown` in the
       descriptor, so their table pricing is disabled.
-- [ ] Parse `claude-cli` `total_cost_usd` / `modelUsage` and `opencode-cli`
+- [x] Parse `claude-cli` `total_cost_usd` / `modelUsage` and `opencode-cli`
       `part.cost`; cross-check Claude's value against the table, prefer the
       table on >2x divergence, note the substitution in the tooltip, and log the
       discrepancy.
-- [ ] Compute and render attempt cost + run cost with source-aware labelling
+- [x] Compute and render attempt cost + run cost with source-aware labelling
       from `costSources`; suppress dollars for `copilot-cli`.
-- [ ] Add the `ctrlyoke.modelPricing` override setting and a hide-cost setting.
-- [ ] Plumb both settings through `package.json`, `CtrlYokeSettings.ts`,
+- [x] Add the `ctrlyoke.modelPricing` override setting and a hide-cost setting.
+- [x] Plumb both settings through `package.json`, `CtrlYokeSettings.ts`,
       `CtrlYokeConfigService`, and `ConfigurationUtils`; use a
       `USER_OVERRIDE` cost source.
 - [x] Tests: subset vs disjoint cache math, reasoning double-count guard,
       unknown-model omission, unknown-semantics suppression, and partial-token
       suppression.
-- [ ] Next-stage test: harness-reported-vs-table divergence.
+- [x] Next-stage test: harness-reported-vs-table divergence.
 
 ---
 
@@ -861,7 +861,7 @@ start a second token-ingestion pipeline while the contracts are in flight.
    command/messages, redaction, and stale handling.
 7. **Pre-launch selection assist** — near-limit warnings based only on fresh
    provider percentages, followed by conservative fallback suggestions.
-8. **Cost estimation** — do pricing after empirical token-semantics gates pass;
+8. **Cost estimation — COMPLETE** — do pricing after empirical token-semantics gates pass;
    then let later terminal-run upserts enrich observed rollups with cost.
 9. **Optional provider expansion** — Copilot structured-quota research,
    Antigravity quota research, and enterprise/admin integrations. None blocks

@@ -383,6 +383,8 @@ export class OpenCodeLogParser extends BaseLogParser {
     let sessionId: string | undefined;
     let model: string | undefined;
     let sawStepUsage = false;
+    let harnessReportedCostUsd = 0;
+    let sawHarnessReportedCost = false;
     const tokenUsage: TokenUsage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -492,6 +494,14 @@ export class OpenCodeLogParser extends BaseLogParser {
             const stepTotal = accumulateOpenCodeStepTokens(tokens, tokenUsage);
             if (stepTotal !== undefined) lastStepTotal = stepTotal;
           }
+          if (
+            typeof e.part?.cost === "number" &&
+            Number.isFinite(e.part.cost) &&
+            e.part.cost >= 0
+          ) {
+            harnessReportedCostUsd += e.part.cost;
+            sawHarnessReportedCost = true;
+          }
           break;
         }
       }
@@ -511,6 +521,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         sessionId,
         model: (model ?? this.resolvedModel) || undefined,
         harness: HARNESS_IDS.OPENCODE_CLI,
+        ...(sawHarnessReportedCost ? { harnessReportedCostUsd } : {}),
         usage: sawStepUsage ? tokenUsage : undefined,
       },
     };
@@ -678,6 +689,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           part: {
             reason: (part as any).reason,
             tokens: (part as any).tokens,
+            cost: (part as any).cost,
           },
         };
 

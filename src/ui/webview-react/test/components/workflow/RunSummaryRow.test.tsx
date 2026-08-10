@@ -11,6 +11,7 @@ import { render, screen } from "@testing-library/react";
 import { RunSummaryRow } from "@components/workflow/RunSummaryRow";
 import type { WorkflowRowTier } from "@/constants";
 import { EXECUTION_STATES, HARNESS_IDS } from "@/types/messages";
+import { ATTEMPT_COST_SOURCES } from "@root/types/DashboardConstants";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 
 const summary = {
@@ -100,6 +101,37 @@ describe("RunSummaryRow", () => {
       container.querySelector(".workflow-row-primary-flat")
     ).not.toBeNull();
     expect(container.querySelector(".workflow-row-primary-stacked")).toBeNull();
+  });
+
+  it("shows a lower-bound run cost when one attempt was unpriceable", () => {
+    render(
+      <RunSummaryRow
+        row={{
+          kind: "run",
+          summary: {
+            ...summary,
+            tokenTotals: {
+              ...summary.tokenTotals,
+              costUsd: 0.41,
+              costPartial: true,
+              costSources: [ATTEMPT_COST_SOURCES.PRICE_TABLE],
+            },
+          } as RunSummary,
+        }}
+        rowKey="run:wf:run-14-partial"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        tier="flat"
+        canDelete
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
+      "≥$0.41"
+    );
   });
 
   it("exposes the full identity in the accessible name regardless of width", () => {

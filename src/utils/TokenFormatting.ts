@@ -1,7 +1,12 @@
 import {
   WORKFLOW_TOKEN_COVERAGE,
+  ATTEMPT_COST_SOURCES,
+  ATTEMPT_COST_NOTE_CODES,
+  type AttemptCostSource,
+  type AttemptCostNoteCode,
   type WorkflowTokenCoverage,
 } from "../types/DashboardConstants";
+import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
 
 export interface TokenBreakdownValues {
   input: number | undefined;
@@ -109,4 +114,53 @@ export function formatAccessibleTokenTotal(
   return coverage === WORKFLOW_TOKEN_COVERAGE.PARTIAL
     ? `at least ${formatted} observed tokens`
     : `${formatted} total tokens`;
+}
+
+/** Format a dollar estimate without implying that it is subscription spend. */
+export function formatCostLabel(
+  usd: number | undefined,
+  partial = false
+): string {
+  if (usd === undefined || !Number.isFinite(usd) || usd < 0) return "";
+  return `${partial ? "≥" : "≈"}$${usd.toFixed(2)}`;
+}
+
+export function formatCostSourcePhrase(
+  sources: readonly AttemptCostSource[] | undefined
+): string {
+  if (!sources?.length) return "estimated token value";
+  const phrases = sources.map((source) => {
+    switch (source) {
+      case ATTEMPT_COST_SOURCES.PRICE_TABLE:
+        return "at API list prices";
+      case ATTEMPT_COST_SOURCES.HARNESS_REPORTED:
+        return "reported by the harness; not incremental subscription spend";
+      case ATTEMPT_COST_SOURCES.USER_OVERRIDE:
+        return "using your configured price override";
+    }
+  });
+  return phrases.join(" + ");
+}
+
+export function formatCostTooltip(
+  usd: number | undefined,
+  sources: readonly AttemptCostSource[] | undefined,
+  partial = false,
+  noteCode?: AttemptCostNoteCode
+): string {
+  const label = formatCostLabel(usd, partial);
+  if (!label) return "";
+  const partialNote = partial ? " One or more attempts were unpriceable." : "";
+  const divergenceNote =
+    noteCode === ATTEMPT_COST_NOTE_CODES.HARNESS_DIVERGENCE
+      ? " The harness-reported value diverged from the calculated value, so the calculated value is shown."
+      : "";
+  return `${label} ${formatCostSourcePhrase(sources)}.${partialNote}${divergenceNote}`;
+}
+
+export function formatAttemptCostTooltip(
+  cost: AttemptCostEstimate | undefined
+): string {
+  if (!cost) return "";
+  return formatCostTooltip(cost.usd, [cost.source], false, cost.noteCode);
 }

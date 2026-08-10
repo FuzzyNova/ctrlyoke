@@ -11,8 +11,10 @@ import type { RetryState, CliOutput } from "../../store/workflowStore";
 import {
   formatTokenBreakdown,
   formatTokenCount,
+  formatAttemptCostTooltip,
   resolveTokenTotal,
 } from "@root/utils/TokenFormatting";
+import { useSettingsStore } from "@store/settingsStore";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -145,6 +147,9 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   onContextMenu,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const hideCost = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  );
   const longPressHandlers = useLongPress(onContextMenu);
 
   // Derive context window percentage from live data only while this row is the
@@ -200,6 +205,9 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
     attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
     attemptBreakdown || null,
     compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,
+    !hideCost && attemptTokens?.cost
+      ? formatAttemptCostTooltip(attemptTokens.cost)
+      : null,
   ]
     .filter((part): part is string => part !== null)
     .join("\n");

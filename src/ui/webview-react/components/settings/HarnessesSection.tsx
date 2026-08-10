@@ -21,6 +21,10 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import { isHarnessQuotaStale } from "@root/types/UsageTypes";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
+import {
+  formatCostLabel,
+  formatCostSourcePhrase,
+} from "@root/utils/TokenFormatting";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -46,7 +50,9 @@ function formatTimestamp(value: number | undefined): string {
     : new Date(value).toLocaleString();
 }
 
-function quotaSourceLabel(source: HarnessUsageSnapshot["quota"]["source"]): string {
+function quotaSourceLabel(
+  source: HarnessUsageSnapshot["quota"]["source"]
+): string {
   switch (source) {
     case HARNESS_QUOTA_SOURCES.PROVIDER_LIVE:
       return "provider-live";
@@ -59,11 +65,31 @@ function quotaSourceLabel(source: HarnessUsageSnapshot["quota"]["source"]): stri
   }
 }
 
-function UsageCard({ snapshot }: { snapshot: HarnessUsageSnapshot | undefined }) {
+function UsageCard({
+  snapshot,
+  harnessId,
+  hideCost,
+}: {
+  snapshot: HarnessUsageSnapshot | undefined;
+  harnessId: HarnessId;
+  hideCost: boolean;
+}) {
   if (!snapshot) {
     return (
       <div className="rounded border border-panel-border bg-panel-bg p-2 text-xs text-description-fg">
         Usage: loading…
+        {harnessId === HARNESS_IDS.COPILOT_CLI && (
+          <div className="mt-1">
+            <a
+              className="text-link-fg hover:underline"
+              href="https://github.com/settings/copilot"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open GitHub usage dashboard
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -83,8 +109,26 @@ function UsageCard({ snapshot }: { snapshot: HarnessUsageSnapshot | undefined })
         Quota freshness: {formatTimestamp(snapshot.quota.fetchedAt)}
       </div>
       <div className="text-description-fg">
-        Observed source: <span className="text-foreground">ctrlyoke-observed</span>
+        Observed source:{" "}
+        <span className="text-foreground">ctrlyoke-observed</span>
       </div>
+      {harnessId === HARNESS_IDS.COPILOT_CLI && (
+        <div className="space-y-1 text-foreground">
+          <div>AI credits: not reported by the local usage feed</div>
+          <div className="text-description-fg">
+            Tokens are secondary context for Copilot; billing uses AI credits or
+            premium requests.
+          </div>
+          <a
+            className="text-link-fg hover:underline"
+            href="https://github.com/settings/copilot"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open GitHub usage dashboard
+          </a>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-2 text-foreground">
         {(["daily", "weekly", "monthly"] as const).map((period) => (
           <div key={period} className="rounded bg-input-bg px-2 py-1">
@@ -93,15 +137,18 @@ function UsageCard({ snapshot }: { snapshot: HarnessUsageSnapshot | undefined })
           </div>
         ))}
       </div>
-      {observed.monthly?.costUsd !== undefined && (
-        <div className="text-description-fg">
-          Observed cost: {observed.monthly.costPartial ? "≥ " : ""}$
-          {observed.monthly.costUsd.toFixed(4)}
-          {observed.monthly.costSources?.length
-            ? ` (${observed.monthly.costSources.join(", ")})`
-            : ""}
-        </div>
-      )}
+      {!hideCost &&
+        harnessId !== HARNESS_IDS.COPILOT_CLI &&
+        observed.monthly?.costUsd !== undefined && (
+          <div className="text-description-fg">
+            Observed token value:{" "}
+            {formatCostLabel(
+              observed.monthly.costUsd,
+              observed.monthly.costPartial === true
+            )}{" "}
+            {formatCostSourcePhrase(observed.monthly.costSources)}
+          </div>
+        )}
       {snapshot.quota.windows.length > 0 && (
         <div className="space-y-1">
           {snapshot.quota.windows.map((window) => (
@@ -253,7 +300,11 @@ export function HarnessesSection({
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                 />
               </SettingInputRow>
-              <UsageCard snapshot={snapshotsByHarness[harnessId]} />
+              <UsageCard
+                harnessId={harnessId}
+                snapshot={snapshotsByHarness[harnessId]}
+                hideCost={settings.settings.ui.hideCost}
+              />
             </div>
           );
         })}

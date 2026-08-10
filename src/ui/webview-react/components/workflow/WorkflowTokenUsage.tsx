@@ -6,8 +6,11 @@ import {
 import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
 import {
   formatAccessibleTokenTotal,
+  formatCostLabel,
+  formatCostTooltip,
   formatTokenTotal,
 } from "@root/utils/TokenFormatting";
+import { useSettingsStore } from "@store/settingsStore";
 
 function isPartialCoverage(coverage: WorkflowTokenCoverage): boolean {
   return coverage === WORKFLOW_TOKEN_COVERAGE.PARTIAL;
@@ -33,7 +36,12 @@ export function workflowTokenTotalsTooltip(
     ? "partial coverage; this is a lower bound"
     : "complete coverage";
   const lifecycle = totals.isFinal ? "final total" : "still increasing";
-  return `${accessibleLabel}; ${coverage}; ${lifecycle}.`;
+  const cost = formatCostTooltip(
+    totals.costUsd,
+    totals.costSources,
+    totals.costPartial === true
+  );
+  return `${accessibleLabel}; ${coverage}; ${lifecycle}.${cost ? ` ${cost}` : ""}`;
 }
 
 interface WorkflowTokenUsageProps {
@@ -44,11 +52,16 @@ interface WorkflowTokenUsageProps {
 export const WorkflowTokenUsage: React.FC<WorkflowTokenUsageProps> = ({
   totals,
 }) => {
+  const hideCost = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  );
   if (!totals) return null;
 
   const label = formatTokenTotal(totals.total, totals.coverage);
   const accessibleLabel = workflowTokenTotalsAccessibleLabel(totals);
-  const tooltip = workflowTokenTotalsTooltip(totals);
+  const tooltip = hideCost
+    ? workflowTokenTotalsTooltip({ ...totals, costUsd: undefined })
+    : workflowTokenTotalsTooltip(totals);
   if (!label || !accessibleLabel || !tooltip) return null;
 
   return (
@@ -59,6 +72,9 @@ export const WorkflowTokenUsage: React.FC<WorkflowTokenUsageProps> = ({
       className="whitespace-nowrap font-mono text-xs text-description-fg"
     >
       {label}
+      {!hideCost && totals.costUsd !== undefined
+        ? ` · ${formatCostLabel(totals.costUsd, totals.costPartial === true)}`
+        : ""}
     </span>
   );
 };

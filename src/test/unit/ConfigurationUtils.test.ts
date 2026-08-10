@@ -186,3 +186,34 @@ suite("ConfigurationUtils — Antigravity statusline tracking", () => {
     );
   });
 });
+
+suite("ConfigurationUtils — cost settings", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  test("reads user pricing overrides and keeps cost visible by default", () => {
+    configService.setUserBackend(
+      makeBackend({
+        modelPricing: {
+          "claude-cli": {
+            "byo-model": { inputPerMTok: 3, outputPerMTok: 15 },
+          },
+        },
+        ui: { hideCost: false },
+      })
+    );
+
+    assert.deepStrictEqual(
+      ConfigurationUtils.getModelPricingOverride("claude-cli", "byo-model"),
+      { inputPerMTok: 3, outputPerMTok: 15 }
+    );
+    assert.strictEqual(ConfigurationUtils.shouldHideCost(), false);
+  });
+
+  test("reads the hide-cost setting", () => {
+    configService.setUserBackend(makeBackend({ ui: { hideCost: true } }));
+    assert.strictEqual(ConfigurationUtils.shouldHideCost(), true);
+  });
+});

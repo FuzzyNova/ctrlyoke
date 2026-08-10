@@ -206,6 +206,10 @@ export interface OutputMetadata {
   elapsed?: number;
   /** Harness identifier from the canonical HARNESS_IDS set. */
   harness?: HarnessId;
+  /** Raw USD total reported by a harness (never inferred from tokens). */
+  harnessReportedCostUsd?: number;
+  /** Typed per-provider-model cost breakdown when the harness supplies one. */
+  modelUsage?: Record<string, ProviderModelUsage>;
   /**
    * When true, text events contain pre-formatted output that should NOT be
    * processed by markdown renderers (e.g., Streamdown). The harness already
@@ -216,6 +220,18 @@ export interface OutputMetadata {
    * and pre-formats its own output (currently: copilot-cli).
    */
   rawTextOutput?: boolean;
+}
+
+/** Provider-reported per-model usage/cost details (currently Claude stream-json). */
+export interface ProviderModelUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  webSearchRequests?: number;
+  costUSD?: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 /**

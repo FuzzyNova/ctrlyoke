@@ -115,6 +115,18 @@
           },
           "scope": "machine",
           "markdownDescription": "Preferred order for fresh, materially less-used provider quota fallbacks in pre-launch warnings."
+        },
+        "ctrlyoke.modelPricing": {
+          "type": "object",
+          "default": {},
+          "scope": "machine",
+          "markdownDescription": "Optional per-harness/per-model USD list-price overrides. Values use USD per one million tokens, for example {\"claude-cli\":{\"my-model\":{\"inputPerMTok\":3,\"outputPerMTok\":15}}}."
+        },
+        "ctrlyoke.ui.hideCost": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "markdownDescription": "Hide token cost estimates from dashboard and CLI statistics. Estimates are shown by default and are not the same as subscription spend."
         }
       }
     },

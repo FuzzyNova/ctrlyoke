@@ -332,6 +332,25 @@
         }
       }
     },
+    "modelPricing": {
+      "type": "object",
+      "description": "Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": ["inputPerMTok", "outputPerMTok"],
+          "properties": {
+            "inputPerMTok": { "type": "number", "minimum": 0 },
+            "outputPerMTok": { "type": "number", "minimum": 0 },
+            "cachedInputPerMTok": { "type": "number", "minimum": 0 },
+            "cacheWritePerMTok": { "type": "number", "minimum": 0 },
+            "reasoningPerMTok": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
     "execution": {
       "type": "object",
       "description": "Execution settings.",
@@ -533,6 +552,10 @@
         "atomicContextReferences": {
           "type": "boolean",
           "description": "In the prompt editor, treat @file/#symbol/~git/$context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links."
+        },
+        "hideCost": {
+          "type": "boolean",
+          "description": "Hide token cost estimates from dashboard and CLI statistics."
         },
         "offerTrustForUntrustedFileLinks": {
           "type": "boolean",

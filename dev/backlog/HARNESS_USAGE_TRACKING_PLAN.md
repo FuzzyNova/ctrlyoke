@@ -559,8 +559,8 @@ exact duplication both plans warn against.
       `WorkflowTokenTotals.byLocalDay` rollup; add no Copilot-specific store feed
 - [ ] Investigate whether `/statusline quota ai-used` can emit structured
       data or only TUI text
-- [ ] Show AI credits (not dollars) as Copilot's headline unit
-- [ ] Add a GitHub usage dashboard link for personal accounts
+- [x] Show AI credits (not dollars) as Copilot's headline unit
+- [x] Add a GitHub usage dashboard link for personal accounts
 - [ ] Optional enterprise/org metrics integration behind explicit auth + scope
       prompts
 

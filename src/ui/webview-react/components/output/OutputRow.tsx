@@ -3,10 +3,13 @@ import { calcContextPct } from "@utils/tokenUtils";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 import {
   formatTokenBreakdown,
+  formatAttemptCostTooltip,
+  formatCostLabel,
   formatTokenCount,
   formatTokenTotal,
   resolveTokenTotal,
 } from "@root/utils/TokenFormatting";
+import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   BashOutput,
@@ -1044,6 +1047,9 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
     : undefined;
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [copiedOutput, setCopiedOutput] = useState(false);
+  const hideCost = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  );
 
   const handleCopySessionId = useCallback(async () => {
     if (!sessionId) return;
@@ -1076,6 +1082,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       contextWindowSize,
       total: reportedTotal,
       compactionCount,
+      cost,
     } = output.tokens;
     const total = resolveTokenTotal(reportedTotal, prompt, completion);
     const totalLabel = formatTokenCount(total);
@@ -1103,6 +1110,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       totalLabel ? `Attempt total: ${totalLabel} tokens` : null,
       tokenBreakdown || null,
       compactionLabel ? `Compactions: ${compactionCount}` : null,
+      !hideCost && cost ? formatAttemptCostTooltip(cost) : null,
     ]
       .filter((part): part is string => part !== null)
       .join("\n");
@@ -1120,6 +1128,13 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
           </span>
         );
       }
+      if (!hideCost && cost) {
+        parts.push(
+          <span key="cost" title={formatAttemptCostTooltip(cost)}>
+            {formatCostLabel(cost.usd)}
+          </span>
+        );
+      }
     } else {
       if (tokenBreakdown) {
         parts.push(
@@ -1131,6 +1146,13 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
         parts.push(
           <span key="total" title={tokenTooltip}>
             Total: {totalLabel}
+          </span>
+        );
+      }
+      if (!hideCost && cost) {
+        parts.push(
+          <span key="cost" title={formatAttemptCostTooltip(cost)}>
+            {formatCostLabel(cost.usd)}
           </span>
         );
       }

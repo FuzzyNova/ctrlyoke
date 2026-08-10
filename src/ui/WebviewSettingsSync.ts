@@ -803,6 +803,7 @@ export class WebviewSettingsSync {
       confirmContinuationDiscardOperations:
         ConfigurationUtils.shouldConfirmContinuationDiscardOperations(),
       hideGitIgnoredFiles: ConfigurationUtils.shouldHideGitIgnoredFiles(),
+      hideCost: ConfigurationUtils.shouldHideCost(),
       isMultiRoot: isMultiRootWorkspace(),
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,

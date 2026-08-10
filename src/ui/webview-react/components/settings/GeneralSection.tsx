@@ -112,6 +112,14 @@ export function GeneralSection({
           {...rowProps}
         />
         <SettingToggleRow
+          label="Show token cost estimates"
+          description="Show source-labelled token cost estimates. These are not incremental subscription spend."
+          checked={!ui.hideCost}
+          onChange={(v) => onUpdate("ui.hideCost", !v)}
+          path="ui.hideCost"
+          {...rowProps}
+        />
+        <SettingToggleRow
           label="Headless permission warning"
           description="Warn when headless execution uses limited tool permissions."
           checked={ui.showHeadlessPermissionWarning}

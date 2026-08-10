@@ -435,7 +435,11 @@ export class WorkflowInstance {
 
     const bufferCallbacks: OutputCaptureCallbacks = {
       onPromptStart: (data) => this._promptStartEmitter.fire(data),
-      onPromptComplete: (data) => this._promptCompleteEmitter.fire(data),
+      onPromptComplete: (data) =>
+        this._promptCompleteEmitter.fire({
+          ...data,
+          hideCost: ConfigurationUtils.shouldHideCost(),
+        }),
       onStatusMessage: (stepIndex, message, severity) =>
         this._workflowStatusMessageEmitter.fire({
           stepIndex,

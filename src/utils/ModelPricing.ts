@@ -1,6 +1,7 @@
 import {
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   ATTEMPT_COST_CONFIDENCE,
+  ATTEMPT_COST_NOTE_CODES,
   ATTEMPT_COST_REASONING_RELATIONSHIPS,
   ATTEMPT_COST_SOURCES,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
@@ -14,6 +15,8 @@ import {
   type TokenTotalConfidence,
 } from "../types/DashboardConstants";
 import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
+import type { ModelPricingOverride } from "../types/CtrlYokeSettings";
+import { Log } from "./Log";
 
 /** USD rates per one million tokens for a single harness/model pair. */
 export interface ModelPricing {
@@ -50,8 +53,12 @@ export interface AttemptTokenCounts {
 
 export interface AttemptCostCalculationInput extends AttemptTokenCounts {
   harnessId: HarnessId;
-  modelId: string;
+  modelId?: string;
   totalConfidence?: TokenTotalConfidence;
+  /** Explicit setting override takes precedence over the bundled table. */
+  pricingOverride?: ModelPricingOverride;
+  /** Raw provider-reported USD total, when available. */
+  harnessReportedCostUsd?: number;
 }
 
 export interface AttemptCostCalculationResult {
@@ -151,9 +158,25 @@ export const HARNESS_TOKEN_SEMANTICS: Record<HarnessId, HarnessTokenSemantics> =
 
 export function getModelPricing(
   harnessId: HarnessId,
-  modelId: string
+  modelId: string,
+  pricingOverride?: ModelPricingOverride
 ): ModelPricing | undefined {
-  return MODEL_PRICING[harnessId][modelId];
+  if (pricingOverride) {
+    return {
+      ...pricingOverride,
+      sourceUrl: "user-configured override",
+      verifiedOn: "user-configured",
+    };
+  }
+  const entries = MODEL_PRICING[harnessId];
+  const exact = entries[modelId];
+  if (exact) return exact;
+  const normalized = modelId.toLowerCase();
+  const alias = Object.keys(entries).find((key) => {
+    const lower = key.toLowerCase();
+    return normalized.includes(lower) || lower.includes(normalized);
+  });
+  return alias ? entries[alias] : undefined;
 }
 
 function perMillion(tokens: number, rate: number): number {
@@ -252,37 +275,74 @@ export function calculateAttemptCost(
     };
   }
 
-  const pricingData = getModelPricing(input.harnessId, input.modelId);
-  if (!pricingData) {
-    return {
-      costUnavailableReason: ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
-    };
-  }
+  const harnessReported = input.harnessReportedCostUsd;
+  const hasHarnessReported =
+    harnessReported !== undefined &&
+    Number.isFinite(harnessReported) &&
+    harnessReported >= 0;
+
+  const pricingData = input.modelId
+    ? getModelPricing(input.harnessId, input.modelId, input.pricingOverride)
+    : undefined;
 
   const semantics = HARNESS_TOKEN_SEMANTICS[input.harnessId];
-  if (
-    semantics.cacheInputRelationship ===
-      ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN ||
-    semantics.reasoningRelationship ===
-      ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN
-  ) {
+
+  const canCalculate =
+    semantics.cacheInputRelationship !==
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN &&
+    semantics.reasoningRelationship !==
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN;
+  const calculatedCost =
+    pricingData && canCalculate
+      ? calculateTokenCost(
+          pricingData,
+          semantics,
+          input,
+          input.pricingOverride
+            ? ATTEMPT_COST_SOURCES.USER_OVERRIDE
+            : ATTEMPT_COST_SOURCES.PRICE_TABLE,
+          input.modelId
+        )
+      : undefined;
+
+  if (hasHarnessReported) {
+    if (
+      input.harnessId === HARNESS_IDS.CLAUDE_CLI &&
+      calculatedCost &&
+      !costsAgreeWithinTwoX(harnessReported, calculatedCost.usd)
+    ) {
+      Log.warn(
+        `[Cost] Claude harness-reported cost diverges from ${
+          input.pricingOverride ? "user override" : "price table"
+        } for ${input.modelId ?? "unknown model"}: reported=$${harnessReported}, calculated=$${calculatedCost.usd}`
+      );
+      return {
+        cost: {
+          ...calculatedCost,
+          noteCode: ATTEMPT_COST_NOTE_CODES.HARNESS_DIVERGENCE,
+        },
+      };
+    }
     return {
-      costUnavailableReason:
-        ATTEMPT_COST_UNAVAILABLE_REASONS.UNVERIFIED_TOKEN_SEMANTICS,
+      cost: {
+        usd: harnessReported,
+        source: ATTEMPT_COST_SOURCES.HARNESS_REPORTED,
+        confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+        ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
+      },
     };
   }
 
-  const cost = calculateTokenCost(
-    pricingData,
-    semantics,
-    input,
-    ATTEMPT_COST_SOURCES.PRICE_TABLE,
-    input.modelId
-  );
-  return cost
-    ? { cost }
-    : {
-        costUnavailableReason:
-          ATTEMPT_COST_UNAVAILABLE_REASONS.UNVERIFIED_TOKEN_SEMANTICS,
-      };
+  if (calculatedCost) return { cost: calculatedCost };
+  return {
+    costUnavailableReason:
+      pricingData && !canCalculate
+        ? ATTEMPT_COST_UNAVAILABLE_REASONS.UNVERIFIED_TOKEN_SEMANTICS
+        : ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
+  };
+}
+
+function costsAgreeWithinTwoX(left: number, right: number): boolean {
+  if (left === 0 || right === 0) return left === right;
+  return Math.max(left, right) / Math.min(left, right) <= 2;
 }

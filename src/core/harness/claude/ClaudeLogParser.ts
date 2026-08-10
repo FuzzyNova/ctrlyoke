@@ -17,6 +17,7 @@ import {
   TextData,
   ToolResultData,
   CompactionData,
+  ProviderModelUsage,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -97,6 +98,8 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   attachment?: {
     prompt?: string;
   };
+  total_cost_usd?: number;
+  modelUsage?: Record<string, ProviderModelUsage>;
 }
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
@@ -188,6 +191,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let cacheReadTokens = 0;
     let resultUsage: ClaudeProviderEvent["usage"];
     let resultTotalTokens: number | undefined;
+    let harnessReportedCostUsd: number | undefined;
+    let modelUsage: Record<string, ProviderModelUsage> | undefined;
     let lastAssistantUsage:
       | {
           input_tokens: number;
@@ -224,6 +229,19 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           cacheReadTokens =
             event.usage.cache_read_input_tokens ?? cacheReadTokens;
           resultTotalTokens = event.usage.total_tokens;
+        }
+        if (
+          typeof event.total_cost_usd === "number" &&
+          Number.isFinite(event.total_cost_usd) &&
+          event.total_cost_usd >= 0
+        ) {
+          harnessReportedCostUsd = event.total_cost_usd;
+        }
+        if (event.modelUsage) {
+          modelUsage = event.modelUsage;
+          if (!model && Object.keys(event.modelUsage).length === 1) {
+            model = Object.keys(event.modelUsage)[0];
+          }
         }
       }
 
@@ -359,6 +377,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         sessionId,
         model,
         harness: HARNESS_IDS.CLAUDE_CLI,
+        ...(harnessReportedCostUsd === undefined
+          ? {}
+          : { harnessReportedCostUsd }),
+        ...(modelUsage === undefined ? {} : { modelUsage }),
         elapsed,
         usage:
           totalInputTokens > 0 ||

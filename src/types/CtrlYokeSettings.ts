@@ -23,6 +23,15 @@ import type {
   UserHookConfig,
 } from "./CtrlYokeTypes";
 
+/** User-supplied per-million-token pricing for a harness/model pair. */
+export interface ModelPricingOverride {
+  inputPerMTok: number;
+  outputPerMTok: number;
+  cachedInputPerMTok?: number;
+  cacheWritePerMTok?: number;
+  reasoningPerMTok?: number;
+}
+
 /** Default number of lines shown before a tool result is collapsed. */
 export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 3;
 
@@ -87,6 +96,11 @@ export interface CtrlYokeGlobalSettings {
     warningPercentUsed: number;
     preferredFallbackOrder: HarnessId[];
   };
+
+  /** Explicit price overrides for models absent from the bundled table. */
+  modelPricing: Partial<
+    Record<HarnessId, Record<string, ModelPricingOverride>>
+  >;
 
   // Execution
   execution: {
@@ -159,6 +173,8 @@ export interface CtrlYokeGlobalSettings {
      * always open directly regardless of this setting.
      */
     offerTrustForUntrustedFileLinks: boolean;
+    /** Hide token cost estimates from dashboard and CLI presentation. */
+    hideCost: boolean;
   };
 
   // Server (new)
@@ -318,6 +334,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     warningPercentUsed: 80,
     preferredFallbackOrder: [],
   },
+  modelPricing: {},
   execution: {
     injectMode: true,
     maxPromptTimeout: -1,
@@ -365,6 +382,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     hideGitIgnoredFiles: false,
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
+    hideCost: false,
   },
   server: {
     enabled: false,

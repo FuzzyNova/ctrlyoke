@@ -410,6 +410,33 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual((response.metadata as any).cacheTokens.read, 500);
     });
 
+    test("preserves Claude result dollars and the modelUsage breakdown", () => {
+      const response = parser.extractResponse([
+        {
+          type: "result",
+          sessionId: "result-session",
+          usage: { input_tokens: 100, output_tokens: 20 },
+          total_cost_usd: 0.42,
+          modelUsage: {
+            "claude-sonnet-4-5-20250929": {
+              inputTokens: 100,
+              outputTokens: 20,
+              cacheReadInputTokens: 10,
+              cacheCreationInputTokens: 5,
+              costUSD: 0.42,
+            },
+          },
+        },
+      ] as any);
+
+      assert.strictEqual(response.metadata.harnessReportedCostUsd, 0.42);
+      assert.strictEqual(
+        response.metadata.modelUsage?.["claude-sonnet-4-5-20250929"]?.costUSD,
+        0.42
+      );
+      assert.strictEqual(response.metadata.model, "claude-sonnet-4-5-20250929");
+    });
+
     test("should extract tool results from user events", () => {
       const events = [
         {
@@ -3363,6 +3390,7 @@ suite("OpenCodeLogParser", () => {
               total: 120,
               cache: { read: 30, write: 4 },
             },
+            cost: 0.12,
           },
         },
         {
@@ -3376,6 +3404,7 @@ suite("OpenCodeLogParser", () => {
               total: 230,
               cache: { read: 50, write: 6 },
             },
+            cost: 0.08,
           },
         },
       ] as unknown as BaseCliEvent[]);
@@ -3396,6 +3425,7 @@ suite("OpenCodeLogParser", () => {
         response.metadata.usage?.totalConfidence,
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
       );
+      assert.strictEqual(response.metadata.harnessReportedCostUsd, 0.2);
     });
   });
 

@@ -1,6 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  ATTEMPT_COST_SOURCES,
+  ATTEMPT_COST_CONFIDENCE,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
@@ -77,6 +79,8 @@ function output(
     cached?: number;
     cacheCreated?: number;
     reasoning?: number;
+    costUsd?: number;
+    costSource?: (typeof ATTEMPT_COST_SOURCES)[keyof typeof ATTEMPT_COST_SOURCES];
   } = {}
 ): CliOutputRecordedEvent {
   const cliOutput: CliOutput = {
@@ -95,6 +99,15 @@ function output(
             cached: options.cached,
             cacheCreated: options.cacheCreated,
             reasoning: options.reasoning,
+            cost:
+              options.costUsd === undefined
+                ? undefined
+                : {
+                    usd: options.costUsd,
+                    source:
+                      options.costSource ?? ATTEMPT_COST_SOURCES.PRICE_TABLE,
+                    confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+                  },
           },
     structured: {
       events: [],
@@ -354,5 +367,49 @@ suite("WorkflowTokenTotalsReducer", () => {
     assert.strictEqual(reducer.appendEvents([terminal(3)])?.isFinal, true);
     assert.strictEqual(reducer.setFinal(false)?.isFinal, false);
     assert.strictEqual(reducer.snapshot()?.total, 10);
+  });
+
+  test("aggregates cost into run, harness, and local-day subtotals", () => {
+    const totals = new WorkflowTokenTotalsReducer(1).reduce([
+      start(1, QUEUE_TARGET, { timestampMs: new Date(2026, 0, 1).getTime() }),
+      output(2, QUEUE_TARGET, {
+        total: 10,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        costUsd: 0.11,
+        costSource: ATTEMPT_COST_SOURCES.HARNESS_REPORTED,
+      }),
+    ]);
+
+    assert.strictEqual(totals?.costUsd, 0.11);
+    assert.deepStrictEqual(totals?.costSources, [
+      ATTEMPT_COST_SOURCES.HARNESS_REPORTED,
+    ]);
+    assert.strictEqual(
+      totals?.byHarness[HARNESS_IDS.CLAUDE_CLI]?.costUsd,
+      0.11
+    );
+    assert.strictEqual(
+      totals?.byLocalDay[localDay(new Date(2026, 0, 1).getTime())]?.[
+        HARNESS_IDS.CLAUDE_CLI
+      ]?.costUsd,
+      0.11
+    );
+  });
+
+  test("marks cost partial without manufacturing zero for an unpriceable attempt", () => {
+    const totals = new WorkflowTokenTotalsReducer(1).reduce([
+      start(1),
+      output(2, QUEUE_TARGET, {
+        total: 10,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+      }),
+    ]);
+
+    assert.strictEqual(totals?.costUsd, undefined);
+    assert.strictEqual(totals?.costPartial, true);
+    assert.strictEqual(
+      totals?.byHarness[HARNESS_IDS.CLAUDE_CLI]?.costUsd,
+      undefined
+    );
   });
 });

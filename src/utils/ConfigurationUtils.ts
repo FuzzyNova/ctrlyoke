@@ -8,6 +8,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
+  ModelPricingOverride,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
 import {
@@ -82,6 +83,7 @@ export const CONFIG_KEYS = {
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
   UI_COLLAPSED_TOOL_OUTPUT_LINE_COUNT: "ui.collapsedToolOutputLineCount",
+  UI_HIDE_COST: "ui.hideCost",
   PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS:
     "permissions.allowedExternalFileRoots",
   PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
@@ -96,6 +98,7 @@ export const CONFIG_KEYS = {
   USAGE_TRACKING_WARNING_PERCENT_USED: "usageTracking.warningPercentUsed",
   USAGE_TRACKING_PREFERRED_FALLBACK_ORDER:
     "usageTracking.preferredFallbackOrder",
+  MODEL_PRICING: "modelPricing",
   UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
@@ -377,6 +380,17 @@ export const ConfigurationUtils = {
 
   shouldAutoExpandEditorWhenTyping(): boolean {
     return configService.get(CONFIG_KEYS.UI).autoExpandEditorWhenTyping;
+  },
+
+  shouldHideCost(): boolean {
+    return configService.get(CONFIG_KEYS.UI).hideCost;
+  },
+
+  getModelPricingOverride(
+    harnessId: HarnessId,
+    modelId: string
+  ): ModelPricingOverride | undefined {
+    return configService.get(CONFIG_KEYS.MODEL_PRICING)[harnessId]?.[modelId];
   },
 
   shouldTreatReferencesAsAtomic(): boolean {

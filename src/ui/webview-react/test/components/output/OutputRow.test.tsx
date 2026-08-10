@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
 import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
@@ -9,6 +9,15 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   type TokenStats,
 } from "@/types/messages";
+import {
+  ATTEMPT_COST_CONFIDENCE,
+  ATTEMPT_COST_SOURCES,
+} from "@root/types/DashboardConstants";
+import { useSettingsStore } from "@store/settingsStore";
+
+afterEach(() => {
+  useSettingsStore.setState({ fullGlobalSettings: null });
+});
 
 const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 
@@ -131,6 +140,53 @@ describe("OutputRow token stats", () => {
     expect(
       container.querySelector("[title*='Attempt total: 410k']")
     ).not.toBeNull();
+  });
+
+  it("renders a source-labelled cost and omits unavailable dollars", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildStatsRow({
+          prompt: 8000,
+          completion: 2000,
+          total: 10000,
+          cost: {
+            usd: 0.41,
+            source: ATTEMPT_COST_SOURCES.PRICE_TABLE,
+            confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+          },
+        })}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).toHaveTextContent("≈$0.41");
+    expect(
+      container.querySelector("[title*='API list prices']")
+    ).not.toBeNull();
+    expect(container).not.toHaveTextContent("$0.00");
+  });
+
+  it("hides cost when the setting is enabled", () => {
+    useSettingsStore.setState({
+      fullGlobalSettings: { settings: { ui: { hideCost: true } } } as never,
+    });
+    const { container } = render(
+      <OutputRow
+        row={buildStatsRow({
+          prompt: 1000,
+          completion: 1000,
+          total: 2000,
+          cost: {
+            usd: 0.41,
+            source: ATTEMPT_COST_SOURCES.PRICE_TABLE,
+            confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+          },
+        })}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).not.toHaveTextContent("$0.41");
   });
 });
 

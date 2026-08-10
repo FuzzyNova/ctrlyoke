@@ -35,6 +35,7 @@ export interface PromptCompleteData {
   sessionId?: string;
   harness?: string;
   elapsed?: number; // seconds
+  hideCost?: boolean;
 }
 
 interface StepOutputBufferEntry {

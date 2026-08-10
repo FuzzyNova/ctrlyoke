@@ -1575,22 +1575,29 @@ export class WorkflowExecutor {
     if (parsedOutput?.metadata.usage) {
       const u = parsedOutput.metadata.usage;
       const compactionSummary = summarizeCompactionEvents(parsedOutput.events);
-      const costResult =
-        parsedOutput.metadata.harness && parsedOutput.metadata.model
-          ? calculateAttemptCost({
-              harnessId: parsedOutput.metadata.harness,
-              modelId: parsedOutput.metadata.model,
-              prompt: u.inputTokens,
-              completion: u.outputTokens,
-              cached: u.cachedInputTokens,
-              cacheCreated: u.cacheCreatedTokens,
-              reasoning: u.reasoningOutputTokens,
-              totalConfidence: u.totalConfidence,
-            })
-          : {
-              costUnavailableReason:
-                ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
-            };
+      const costResult = parsedOutput.metadata.harness
+        ? calculateAttemptCost({
+            harnessId: parsedOutput.metadata.harness,
+            modelId: parsedOutput.metadata.model,
+            pricingOverride: parsedOutput.metadata.model
+              ? ConfigurationUtils.getModelPricingOverride(
+                  parsedOutput.metadata.harness,
+                  parsedOutput.metadata.model
+                )
+              : undefined,
+            harnessReportedCostUsd:
+              parsedOutput.metadata.harnessReportedCostUsd,
+            prompt: u.inputTokens,
+            completion: u.outputTokens,
+            cached: u.cachedInputTokens,
+            cacheCreated: u.cacheCreatedTokens,
+            reasoning: u.reasoningOutputTokens,
+            totalConfidence: u.totalConfidence,
+          })
+        : {
+            costUnavailableReason:
+              ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
+          };
       return {
         prompt: u.inputTokens,
         completion: u.outputTokens,

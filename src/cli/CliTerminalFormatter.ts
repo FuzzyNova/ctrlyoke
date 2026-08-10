@@ -32,6 +32,8 @@ import type {
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
 import {
   formatTokenBreakdown,
+  formatCostLabel,
+  formatCostSourcePhrase,
   formatTokenCount,
   resolveTokenTotal,
 } from "../utils/TokenFormatting";
@@ -212,11 +214,11 @@ export class CliTerminalFormatter {
         if (section.truncationReason) {
           const delivery =
             section.truncationReason === PREVIEW_TRUNCATION_REASONS.REFERENCE
-                ? PREVIEW_TRUNCATION_REASON_COPY[
-                    PREVIEW_TRUNCATION_REASONS.REFERENCE
-                  ]
-                : section.truncationReason ===
-                    PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
+              ? PREVIEW_TRUNCATION_REASON_COPY[
+                  PREVIEW_TRUNCATION_REASONS.REFERENCE
+                ]
+              : section.truncationReason ===
+                  PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
                 ? PREVIEW_TRUNCATION_REASON_COPY[
                     PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
                   ]
@@ -236,9 +238,7 @@ export class CliTerminalFormatter {
           mutation.scope === PREVIEW_MUTATION_SCOPES.SHARED && mutation.warning
             ? ` — ${mutation.warning}`
             : "";
-        writeLine(
-          `  Mutation: ${mutation.operation}${mutationPath}${warning}`
-        );
+        writeLine(`  Mutation: ${mutation.operation}${mutationPath}${warning}`);
       }
       writeLine("");
     }
@@ -566,6 +566,7 @@ export class CliTerminalFormatter {
         contextWindowSize,
         total: reportedTotal,
         compactionCount,
+        cost,
       } = data.tokens;
       const total = resolveTokenTotal(reportedTotal, prompt, completion);
       const totalLabel = formatTokenCount(total);
@@ -586,12 +587,18 @@ export class CliTerminalFormatter {
         const contextParts = [
           `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`,
           totalLabel ? `Total: ${totalLabel}` : null,
+          data.hideCost || !cost
+            ? null
+            : `${formatCostLabel(cost.usd)} ${formatCostSourcePhrase([cost.source])}`,
           compactionLabel ?? null,
         ].filter((part): part is string => part !== null);
         parts.push(contextParts.join("  "));
       } else {
         const tokenParts = [
           tokenBreakdown || null,
+          data.hideCost || !cost
+            ? null
+            : `${formatCostLabel(cost.usd)} ${formatCostSourcePhrase([cost.source])}`,
           compactionLabel ?? null,
         ].filter((part): part is string => part !== null);
         if (tokenParts.length > 0) {
