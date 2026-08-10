@@ -5,7 +5,11 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { AntigravityTranscriptReader } from "../../core/harness/antigravity/AntigravityTranscriptReader";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
+} from "../../types/DashboardConstants";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 
 async function withTemporaryHome<T>(
@@ -1042,9 +1046,13 @@ suite("AntigravityLogParser", () => {
       assert.strictEqual(result.metadata.usage?.cacheCreatedTokens, 40);
       assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 1_200);
       assert.strictEqual(result.metadata.usage?.contextWindowSize, 10_000);
+      assert.strictEqual(
+        result.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.PARTIAL
+      );
     });
 
-    test("merges stream-json reasoning while statusline wins context fields", () => {
+    test("uses stream-json billing fields and statusline context fields", () => {
       const parser = new AntigravityLogParser();
       parser.setStatuslineSnapshot({
         model: { id: "gemini-test" },
@@ -1065,17 +1073,30 @@ suite("AntigravityLogParser", () => {
           reasoningOutputTokens: 13,
           totalTokens: 812,
         },
+        terminalUsage: {
+          inputTokens: 900,
+          outputTokens: 14,
+          reasoningOutputTokens: 15,
+          cachedInputTokens: 22,
+          totalTokens: 914,
+        },
       });
 
       const result = parser.extractResponse([
         { type: "response.text", line: "answer" },
       ]);
 
-      assert.strictEqual(result.metadata.usage?.inputTokens, 120);
-      assert.strictEqual(result.metadata.usage?.outputTokens, 7);
+      assert.strictEqual(result.metadata.usage?.inputTokens, 900);
+      assert.strictEqual(result.metadata.usage?.outputTokens, 14);
+      assert.strictEqual(result.metadata.usage?.totalTokens, 914);
+      assert.strictEqual(result.metadata.usage?.cachedInputTokens, 22);
       assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 1_200);
       assert.strictEqual(result.metadata.usage?.contextWindowSize, 10_000);
-      assert.strictEqual(result.metadata.usage?.reasoningOutputTokens, 13);
+      assert.strictEqual(result.metadata.usage?.reasoningOutputTokens, 15);
+      assert.strictEqual(
+        result.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.PROVIDER
+      );
     });
 
     test("uses stream-json as the per-turn fallback without a statusline", () => {

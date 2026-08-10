@@ -64,9 +64,9 @@ rather than a compaction-based estimator:
 | `claude-cli`      | Yes — sums every assistant `message.usage`, prefers `result.usage.total_tokens` (`ClaudeLogParser.ts:278-288, 362-378`)                                               | `input + cache_creation + cache_read` of last turn (`:345-353`)         | `cache_read` and `cache_creation` **disjoint** from `input_tokens`                          | No                                                                 | **Yes** — `result.total_cost_usd` + `modelUsage` (not parsed today) |
 | `codex-cli`       | Yes — `token_count.info.total_token_usage` (`CodexLogParser.ts:230-240`); preserve its `total_tokens` instead of always recomputing input + output                    | `last_token_usage.total_tokens` (`:241-249`)                            | `cached_input_tokens` is a **subset** of `input_tokens` (`:242-243`)                        | Yes — `reasoning_output_tokens` (parsed, then dropped downstream)  | No                                                                  |
 | `qwen-cli`        | Yes — sums `usageMetadata` per assistant turn (`QwenLogParser.ts:244-253`)                                                                                            | last turn `promptTokenCount` (`:322-326`)                               | `cachedContentTokenCount` is a **subset** of `promptTokenCount` (Gemini semantics — verify) | Folded into output (`thoughtsTokenCount`), not reported separately | No                                                                  |
-| `opencode-cli`    | Yes — accumulates every `step_finish` (`OpenCodeEventMapper.ts:52-67`), but its output metadata currently omits the harness/model attribution the run breakdown needs | last step's `tokens.total`                                              | `tokens.cache.read` accumulated; `cache.write` **not** captured                             | Emitted by the CLI as `tokens.reasoning`, **not** captured         | **Yes** — `step_finish.part.cost` (USD), **not** captured           |
+| `opencode-cli`    | Yes — accumulates every `step_finish` (`OpenCodeEventMapper.ts:52-67`) and completed output now retains harness/model attribution | last step's `tokens.total`                                              | `tokens.cache.read` and `tokens.cache.write` accumulated                             | `tokens.reasoning` accumulated separately         | **Yes** — `step_finish.part.cost` (USD), **not** captured           |
 | `antigravity-cli` | Yes — stream-json `result.usage.total_tokens` (`AntigravityStreamJsonUsage.ts:39-54`)                                                                                 | statusline sidecar snapshot (`AntigravityStatuslineSidecar.ts:237-243`) | `cache_read_tokens`                                                                         | Yes — `thinking_tokens`                                            | No                                                                  |
-| `copilot-cli`     | **No** — OTel keeps only the _last_ chat span's input (`CopilotLogParser.ts:132, 217`); output is cumulative (`:134, 221`)                                            | `otelLastInputTokens` (`:230-237`)                                      | None                                                                                        | None                                                               | No (bills in AI credits — see below)                                |
+| `copilot-cli`     | Yes — OTel accumulates input and output across chat spans; `otelLastInputTokens` remains the last-turn context signal (`CopilotLogParser.ts:132-138, 217-224`) | `otelLastInputTokens` (`:230-237`)                                      | None                                                                                        | None                                                               | No (bills in AI credits — see below)                                |
 
 Four defects fall out of this table and are part of this plan:
 
@@ -754,19 +754,19 @@ the next presentation stage, as required by the staging order.
 
 ### Phase 2: Close the harness gaps
 
-- [ ] Copilot: accumulate input tokens per chat span
+- [x] Copilot: accumulate input tokens per chat span
       (`CopilotLogParser.ts:214-222`) and report cumulative input from
       `getFinalOtelUsage`; when no OTel chat span was seen, emit no total and let
       run coverage become partial/unavailable rather than manufacturing zero.
-- [ ] Antigravity: let the statusline snapshot win for context-window fields
+- [x] Antigravity: let the statusline snapshot win for context-window fields
       only, and stream-json `result.usage` win for billing totals
       (`AntigravityLogParser.ts:946-1000`).
-- [ ] Capture OpenCode `tokens.reasoning` and `tokens.cache.write`.
-- [ ] Stamp OpenCode output with `HARNESS_IDS.OPENCODE_CLI` and ensure all six
+- [x] Capture OpenCode `tokens.reasoning` and `tokens.cache.write`.
+- [x] Stamp OpenCode output with `HARNESS_IDS.OPENCODE_CLI` and ensure all six
       completed AI outputs retain harness/model attribution.
-- [ ] Preserve Codex `total_token_usage.total_tokens` and carry
+- [x] Preserve Codex `total_token_usage.total_tokens` and carry
       `reasoning_output_tokens` through to `TokenStats`.
-- [ ] Unit tests per harness asserting cumulative-vs-last-turn separation.
+- [x] Unit tests per harness asserting cumulative-vs-last-turn separation.
 
 ### Phase 3: Run aggregation
 

@@ -378,7 +378,7 @@ export interface TokenUsage {
   /** Number of output tokens generated */
   outputTokens: number;
   /** Total token count; its relationship to input/output is harness-specific. */
-  totalTokens: number;
+  totalTokens?: number;
   /** Number of cache-read input tokens (billed at reduced rate) */
   cachedInputTokens?: number;
   /** Number of cache-creation input tokens — Claude only */

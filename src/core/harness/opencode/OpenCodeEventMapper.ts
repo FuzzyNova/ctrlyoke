@@ -11,7 +11,10 @@ import {
   type UnifiedDiffHunk,
   type TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  TOKEN_TOTAL_CONFIDENCE,
+} from "../../../types/DashboardConstants";
 
 /**
  * Compute structured diff hunks from a full before/after file pair.
@@ -59,9 +62,18 @@ export function accumulateOpenCodeStepTokens(
     (tokenUsage.outputTokens ?? 0) + (tokens.output ?? 0);
   tokenUsage.totalTokens =
     (tokenUsage.totalTokens ?? 0) + (tokens.input ?? 0) + (tokens.output ?? 0);
-  if (tokens.cache?.read) {
+  tokenUsage.totalConfidence = TOKEN_TOTAL_CONFIDENCE.ACCUMULATED;
+  if (typeof tokens.cache?.read === "number") {
     tokenUsage.cachedInputTokens =
       (tokenUsage.cachedInputTokens ?? 0) + tokens.cache.read;
+  }
+  if (typeof tokens.cache?.write === "number") {
+    tokenUsage.cacheCreatedTokens =
+      (tokenUsage.cacheCreatedTokens ?? 0) + tokens.cache.write;
+  }
+  if (typeof tokens.reasoning === "number") {
+    tokenUsage.reasoningOutputTokens =
+      (tokenUsage.reasoningOutputTokens ?? 0) + tokens.reasoning;
   }
   return typeof tokens.total === "number" ? tokens.total : undefined;
 }

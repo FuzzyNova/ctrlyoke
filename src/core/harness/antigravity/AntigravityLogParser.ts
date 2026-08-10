@@ -11,6 +11,7 @@ import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import {
   CliEvent,
@@ -150,6 +151,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       cacheCreatedTokens: currentUsage?.cacheCreationInputTokens,
       contextWindowUsedTokens: totalInputTokens + totalOutputTokens,
       contextWindowSize,
+      totalConfidence: TOKEN_TOTAL_CONFIDENCE.PARTIAL,
     };
   }
 
@@ -950,52 +952,55 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         (candidate) => typeof candidate.contextWindowUsedTokens === "number"
       );
     const streamJsonUsage = this.getLatestStreamJsonUsage();
+    const statuslineUsage = this.latestStatuslineUsage;
 
-    // The statusline is the authoritative source for context occupancy and
-    // model window size. Stream-json adds reasoning tokens without replacing
-    // those self-reported fields.
-    if (this.latestStatuslineUsage) {
-      return {
-        ...this.latestStatuslineUsage,
-        reasoningOutputTokens:
-          streamJsonUsage?.reasoningOutputTokens ??
-          this.latestStatuslineUsage.reasoningOutputTokens,
-      };
-    }
-
-    if (!event && !streamJsonUsage) {
+    if (!event && !streamJsonUsage && !statuslineUsage) {
       return undefined;
     }
 
     const currentUsage = event?.currentUsage;
     const outputTokens =
       streamJsonUsage?.outputTokens ??
+      statuslineUsage?.outputTokens ??
       currentUsage?.outputTokens ??
       event?.outputTokens ??
       0;
     const inputTokens =
       streamJsonUsage?.inputTokens ??
+      statuslineUsage?.inputTokens ??
       currentUsage?.inputTokens ??
       (event?.contextWindowUsedTokens !== undefined
         ? Math.max(event.contextWindowUsedTokens - outputTokens, 0)
         : 0);
-    const totalTokens =
-      streamJsonUsage?.totalTokens ?? inputTokens + outputTokens;
-    const contextWindowSize = event
-      ? (event.contextWindowSize ??
-        getAntigravityContextWindowSize(event.model ?? this.resolvedModel))
-      : undefined;
+    const totalTokens = streamJsonUsage
+      ? (streamJsonUsage.totalTokens ?? inputTokens + outputTokens)
+      : (statuslineUsage?.totalTokens ?? inputTokens + outputTokens);
+    const contextWindowUsedTokens =
+      statuslineUsage?.contextWindowUsedTokens ?? event?.contextWindowUsedTokens;
+    const contextWindowSize =
+      statuslineUsage?.contextWindowSize ??
+      event?.contextWindowSize ??
+      (event || streamJsonUsage
+        ? getAntigravityContextWindowSize(event?.model ?? this.resolvedModel)
+        : undefined);
     return {
       inputTokens,
       outputTokens,
       totalTokens,
       cachedInputTokens:
         streamJsonUsage?.cachedInputTokens ??
+        statuslineUsage?.cachedInputTokens ??
         currentUsage?.cacheReadInputTokens,
-      cacheCreatedTokens: currentUsage?.cacheCreationInputTokens,
+      cacheCreatedTokens:
+        statuslineUsage?.cacheCreatedTokens ??
+        currentUsage?.cacheCreationInputTokens,
       reasoningOutputTokens: streamJsonUsage?.reasoningOutputTokens,
-      contextWindowUsedTokens: event?.contextWindowUsedTokens,
+      contextWindowUsedTokens,
       contextWindowSize,
+      totalConfidence:
+        this.latestStreamJsonUsage?.terminalUsage?.totalTokens !== undefined
+          ? TOKEN_TOTAL_CONFIDENCE.PROVIDER
+          : TOKEN_TOTAL_CONFIDENCE.PARTIAL,
     };
   }
 
@@ -1005,7 +1010,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     if (!latestStepUsage && !terminalUsage) {
       return undefined;
     }
-    return { ...terminalUsage, ...latestStepUsage };
+    return { ...latestStepUsage, ...terminalUsage };
   }
 
   private getSnapshotModel(

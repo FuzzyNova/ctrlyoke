@@ -1,7 +1,10 @@
 import * as path from "path";
 import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
+} from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
@@ -1031,18 +1034,12 @@ export class CopilotCliProvider implements ICliProvider {
   async augmentParsedOutput(
     output: UniversalCliOutput
   ): Promise<UniversalCliOutput> {
-    // Already have input token data — Copilot may add this to JSON output in a future version.
-    if (output.metadata.usage && output.metadata.usage.inputTokens > 0) {
-      return output;
-    }
-
     await this.logParser.pollOtelContextWindow(output.metadata.model ?? "");
     const otelUsage = this.logParser.getFinalOtelUsage();
     if (otelUsage) {
       Log.debug(
         `[CopilotCliProvider] Context window from OTel: ${otelUsage.contextWindowUsedTokens}/${otelUsage.contextWindowSize} tokens`
       );
-      const existingOutputTokens = output.metadata.usage?.outputTokens ?? 0;
       return {
         ...output,
         metadata: {
@@ -1050,10 +1047,11 @@ export class CopilotCliProvider implements ICliProvider {
           usage: {
             ...output.metadata.usage,
             inputTokens: otelUsage.inputTokens,
-            outputTokens: existingOutputTokens,
-            totalTokens: otelUsage.inputTokens + existingOutputTokens,
+            outputTokens: otelUsage.outputTokens,
+            totalTokens: otelUsage.totalTokens,
             contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
             contextWindowSize: otelUsage.contextWindowSize,
+            totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
           },
         },
       };
@@ -1086,7 +1084,6 @@ export class CopilotCliProvider implements ICliProvider {
             ...output.metadata.usage,
             inputTokens: postTruncationTokensInMessages,
             outputTokens,
-            totalTokens: postTruncationTokensInMessages + outputTokens,
             contextWindowUsedTokens: postTruncationTokensInMessages,
             contextWindowSize: tokenLimit,
           },
@@ -1117,7 +1114,6 @@ export class CopilotCliProvider implements ICliProvider {
           ...output.metadata.usage,
           inputTokens: processCtx.used,
           outputTokens,
-          totalTokens: processCtx.used + outputTokens,
           contextWindowUsedTokens: processCtx.used,
           contextWindowSize: processCtx.size,
         },

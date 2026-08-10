@@ -22,6 +22,7 @@ import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
   OPERATION_STATUS,
+  TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
@@ -180,6 +181,7 @@ export class QwenLogParser extends BaseLogParser {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCachedTokens = 0;
+    let sawUsageMetadata = false;
     let lastAssistantUsage: QwenProviderEvent["usageMetadata"] | undefined;
     let model: string | undefined;
     // Maps callId → full file path so tool_result events can get the path from the
@@ -243,6 +245,7 @@ export class QwenLogParser extends BaseLogParser {
 
         // Token usage is on usageMetadata at top level of assistant event
         if (event.usageMetadata) {
+          sawUsageMetadata = true;
           const u = event.usageMetadata;
           totalInputTokens += u.promptTokenCount || 0;
           // Output = candidate tokens + thinking tokens (both count toward billing)
@@ -326,11 +329,12 @@ export class QwenLogParser extends BaseLogParser {
       : undefined;
 
     const tokenUsage: TokenUsage | undefined =
-      totalInputTokens > 0 || totalOutputTokens > 0
+      sawUsageMetadata
         ? {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
+            totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
             cachedInputTokens:
               totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,

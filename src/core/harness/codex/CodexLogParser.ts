@@ -25,6 +25,7 @@ import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 
@@ -199,6 +200,7 @@ export class CodexLogParser extends BaseLogParser {
     let totalOutputTokens = 0;
     let cachedInputTokens = 0;
     let reasoningOutputTokens = 0;
+    let providerTotalTokens: number | undefined;
     // Per-turn (last) usage — used for context window (not cumulative billing total)
     let lastTurnContextWindowUsed: number | undefined;
     let modelContextWindow: number | undefined;
@@ -237,6 +239,9 @@ export class CodexLogParser extends BaseLogParser {
           totalOutputTokens = total.output_tokens || 0;
           cachedInputTokens = total.cached_input_tokens || 0;
           reasoningOutputTokens = total.reasoning_output_tokens || 0;
+          if (typeof total.total_tokens === "number") {
+            providerTotalTokens = total.total_tokens;
+          }
         }
         if (info?.last_token_usage) {
           // Per-turn usage — Codex reports cached tokens as a subset of input,
@@ -526,13 +531,22 @@ export class CodexLogParser extends BaseLogParser {
       harness: HARNESS_IDS.CODEX_CLI,
     };
 
-    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+    if (
+      totalInputTokens > 0 ||
+      totalOutputTokens > 0 ||
+      providerTotalTokens !== undefined
+    ) {
       metadata.usage = {
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
-        totalTokens: totalInputTokens + totalOutputTokens,
+        totalTokens:
+          providerTotalTokens ?? totalInputTokens + totalOutputTokens,
         cachedInputTokens,
         reasoningOutputTokens,
+        totalConfidence:
+          providerTotalTokens !== undefined
+            ? TOKEN_TOTAL_CONFIDENCE.PROVIDER
+            : TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
         contextWindowUsedTokens: lastTurnContextWindowUsed,
         contextWindowSize: modelContextWindow,
       };

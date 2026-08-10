@@ -16,6 +16,7 @@ import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
   CALLER_TYPES,
+  HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import {
   mapOpenCodeToolPartToCliEvent,
@@ -380,6 +381,8 @@ export class OpenCodeLogParser extends BaseLogParser {
   extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
     const cliEvents: CliEvent[] = [];
     let sessionId: string | undefined;
+    let model: string | undefined;
+    let sawStepUsage = false;
     const tokenUsage: TokenUsage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -392,6 +395,15 @@ export class OpenCodeLogParser extends BaseLogParser {
 
       if (typeof e.sessionID === "string" && !sessionId) {
         sessionId = e.sessionID;
+      }
+      if (typeof e.model === "string" && !model) {
+        model = e.model;
+      }
+      if (typeof e.info?.model === "string" && !model) {
+        model = e.info.model;
+      }
+      if (typeof e.part?.model === "string" && !model) {
+        model = e.part.model;
       }
 
       switch (event.type) {
@@ -476,6 +488,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         case "step_finish": {
           const tokens = e.part?.tokens as Record<string, any> | undefined;
           if (tokens) {
+            sawStepUsage = true;
             const stepTotal = accumulateOpenCodeStepTokens(tokens, tokenUsage);
             if (stepTotal !== undefined) lastStepTotal = stepTotal;
           }
@@ -494,7 +507,12 @@ export class OpenCodeLogParser extends BaseLogParser {
 
     return {
       events: cliEvents,
-      metadata: { sessionId, usage: tokenUsage },
+      metadata: {
+        sessionId,
+        model: (model ?? this.resolvedModel) || undefined,
+        harness: HARNESS_IDS.OPENCODE_CLI,
+        usage: sawStepUsage ? tokenUsage : undefined,
+      },
     };
   }
 

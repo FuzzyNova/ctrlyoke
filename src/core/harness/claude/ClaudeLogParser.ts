@@ -22,6 +22,7 @@ import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
@@ -360,12 +361,18 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         harness: HARNESS_IDS.CLAUDE_CLI,
         elapsed,
         usage:
-          totalInputTokens > 0 || totalOutputTokens > 0
+          totalInputTokens > 0 ||
+          totalOutputTokens > 0 ||
+          resultTotalTokens !== undefined
             ? {
                 inputTokens: totalInputTokens,
                 outputTokens: totalOutputTokens,
                 totalTokens:
                   resultTotalTokens ?? totalInputTokens + totalOutputTokens,
+                totalConfidence:
+                  resultTotalTokens !== undefined
+                    ? TOKEN_TOTAL_CONFIDENCE.PROVIDER
+                    : TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
                 cachedInputTokens:
                   cacheReadTokens > 0 ? cacheReadTokens : undefined,
                 cacheCreatedTokens:

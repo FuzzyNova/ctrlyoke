@@ -301,15 +301,14 @@ export class CliLogMonitor {
         if (typeof (parser as any).getFinalOtelUsage === "function") {
           const otelUsage = (parser as any).getFinalOtelUsage();
           if (otelUsage) {
-            const existingOutputTokens =
-              response.metadata.usage?.outputTokens ?? 0;
             response.metadata.usage = {
               ...response.metadata.usage,
               inputTokens: otelUsage.inputTokens,
-              outputTokens: existingOutputTokens,
-              totalTokens: otelUsage.inputTokens + existingOutputTokens,
+              outputTokens: otelUsage.outputTokens,
+              totalTokens: otelUsage.totalTokens,
               contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
               contextWindowSize: otelUsage.contextWindowSize,
+              totalConfidence: otelUsage.totalConfidence,
             };
             contextPatched = true;
           }
@@ -324,19 +323,14 @@ export class CliLogMonitor {
             effectiveSessionId
           );
           if (processCtx) {
-            const existingOutputTokens =
-              response.metadata.usage?.outputTokens ?? 0;
             if (response.metadata.usage) {
               response.metadata.usage.inputTokens = processCtx.used;
-              response.metadata.usage.totalTokens =
-                processCtx.used + existingOutputTokens;
               response.metadata.usage.contextWindowUsedTokens = processCtx.used;
               response.metadata.usage.contextWindowSize = processCtx.size;
             } else {
               response.metadata.usage = {
                 inputTokens: processCtx.used,
                 outputTokens: 0,
-                totalTokens: processCtx.used,
                 contextWindowUsedTokens: processCtx.used,
                 contextWindowSize: processCtx.size,
               };

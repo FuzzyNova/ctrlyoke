@@ -18,7 +18,11 @@ import {
   TextData,
   FileWriteData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
+} from "../../../types/DashboardConstants";
 import {
   BaseCliEvent,
   ILogParser,
@@ -157,12 +161,22 @@ suite("ClaudeLogParser", () => {
       const logOutput = parser.extractResponse(sessionLog);
       const normalize = (output: UniversalCliOutput) =>
         JSON.parse(
-          JSON.stringify(output, (key, value) =>
-            key === "timestamp" ? undefined : value
+        JSON.stringify(output, (key, value) =>
+            key === "timestamp" || key === "totalConfidence"
+              ? undefined
+              : value
           )
         );
 
       assert.deepStrictEqual(normalize(stdoutOutput), normalize(logOutput));
+      assert.strictEqual(
+        stdoutOutput.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.PROVIDER
+      );
+      assert.strictEqual(
+        logOutput.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
       assert.strictEqual(
         provider.extractSessionIdFromStdout(stdout),
         "claude-session-golden"
@@ -350,6 +364,14 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.metadata.usage!.inputTokens, 80);
       assert.strictEqual(response.metadata.usage!.outputTokens, 35);
       assert.strictEqual(response.metadata.usage!.totalTokens, 115);
+      assert.strictEqual(
+        response.metadata.usage!.contextWindowUsedTokens,
+        30
+      );
+      assert.strictEqual(
+        response.metadata.usage!.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
     });
 
     test("should extract cache tokens from usage stats", () => {
@@ -1578,7 +1600,7 @@ suite("CopilotLogParser", () => {
       }
     });
 
-    test("should track the latest input and cumulative output tokens across multiple chat spans", async () => {
+    test("should separate cumulative input/output from last-turn context", async () => {
       const otelLines = [
         {
           type: "span",
@@ -1609,8 +1631,14 @@ suite("CopilotLogParser", () => {
 
         const final = parser.getFinalOtelUsage();
         assert.strictEqual(final?.contextWindowUsedTokens, 18894);
-        // "outputTokens" accumulates across every chat span in this invocation.
+        // Billing input and output both accumulate across every chat span.
+        assert.strictEqual(final?.inputTokens, 37613);
         assert.strictEqual(final?.outputTokens, 200);
+        assert.strictEqual(final?.totalTokens, 37813);
+        assert.strictEqual(
+          final?.totalConfidence,
+          TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+        );
       } finally {
         cleanupTempFile(filePath);
       }
@@ -2881,6 +2909,11 @@ suite("CodexLogParser", () => {
       assert.strictEqual(response.metadata.usage?.outputTokens, 14864);
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 5032192);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 6001);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 5206848);
+      assert.strictEqual(
+        response.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.PROVIDER
+      );
     });
     test("should fall back to the Codex 5.6 context window when token_count omits it", () => {
       const events = [
@@ -2916,6 +2949,12 @@ suite("CodexLogParser", () => {
       );
 
       assert.strictEqual(response.metadata.usage?.contextWindowSize, 1_050_000);
+      assert.strictEqual(response.metadata.harness, HARNESS_IDS.CODEX_CLI);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 4200);
+      assert.strictEqual(
+        response.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
     });
 
     test("should emit one file edit per file for multi-file apply_patch calls", () => {
@@ -3307,6 +3346,57 @@ suite("OpenCodeLogParser", () => {
 
   setup(() => {
     parser = new OpenCodeLogParser();
+  });
+
+  suite("extractResponse token attribution", () => {
+    test("captures reasoning and cache writes while preserving last-step context", () => {
+      const response = parser.extractResponse([
+        {
+          type: "step_finish",
+          sessionID: "ses_open_code",
+          part: {
+            model: "anthropic/claude-sonnet-4-6",
+            tokens: {
+              input: 100,
+              output: 20,
+              reasoning: 7,
+              total: 120,
+              cache: { read: 30, write: 4 },
+            },
+          },
+        },
+        {
+          type: "step_finish",
+          sessionID: "ses_open_code",
+          part: {
+            tokens: {
+              input: 200,
+              output: 10,
+              reasoning: 3,
+              total: 230,
+              cache: { read: 50, write: 6 },
+            },
+          },
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.harness, HARNESS_IDS.OPENCODE_CLI);
+      assert.strictEqual(response.metadata.model, "anthropic/claude-sonnet-4-6");
+      assert.strictEqual(response.metadata.usage?.inputTokens, 300);
+      assert.strictEqual(response.metadata.usage?.outputTokens, 30);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 330);
+      assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 10);
+      assert.strictEqual(response.metadata.usage?.cachedInputTokens, 80);
+      assert.strictEqual(response.metadata.usage?.cacheCreatedTokens, 10);
+      assert.strictEqual(
+        response.metadata.usage?.contextWindowUsedTokens,
+        230
+      );
+      assert.strictEqual(
+        response.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
+    });
   });
 
   suite("getFinalEventsOnCompletion", () => {
@@ -3701,6 +3791,11 @@ suite("QwenLogParser", () => {
       assert.strictEqual(output.metadata.model, "qwen3.5-plus");
       assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 14167);
       assert.strictEqual(output.metadata.usage?.contextWindowSize, 1_000_000);
+      assert.strictEqual(output.metadata.usage?.totalTokens, 28573);
+      assert.strictEqual(
+        output.metadata.usage?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
     });
   });
 });

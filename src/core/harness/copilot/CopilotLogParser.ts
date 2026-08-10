@@ -20,6 +20,7 @@ import {
 import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
+  TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 
@@ -130,8 +131,12 @@ export class CopilotLogParser extends BaseLogParser {
   private otelFilePath: string | undefined;
   /** Most recent chat span's input token count (= current context window usage). */
   private otelLastInputTokens = 0;
+  /** Running total of input tokens across all chat spans seen this invocation. */
+  private otelCumulativeInputTokens = 0;
   /** Running total of output tokens across all chat spans seen this invocation. */
   private otelCumulativeOutputTokens = 0;
+  /** Whether at least one OTel chat span was observed this invocation. */
+  private otelChatSpanSeen = false;
   /** Model reported by the most recent chat span, used to size the context window. */
   private otelLastModel: string | undefined;
 
@@ -145,7 +150,9 @@ export class CopilotLogParser extends BaseLogParser {
     this.otelFilePath = filePath;
     this.otelReadPosition = 0;
     this.otelLastInputTokens = 0;
+    this.otelCumulativeInputTokens = 0;
     this.otelCumulativeOutputTokens = 0;
+    this.otelChatSpanSeen = false;
     this.otelLastModel = undefined;
   }
 
@@ -211,10 +218,12 @@ export class CopilotLogParser extends BaseLogParser {
         line.name.startsWith("chat ") &&
         line.attributes
       ) {
+        this.otelChatSpanSeen = true;
         const input = line.attributes["gen_ai.usage.input_tokens"];
         const output = line.attributes["gen_ai.usage.output_tokens"];
         if (typeof input === "number") {
           this.otelLastInputTokens = input;
+          this.otelCumulativeInputTokens += input;
           updated = true;
         }
         if (typeof output === "number") {
@@ -244,19 +253,24 @@ export class CopilotLogParser extends BaseLogParser {
   getFinalOtelUsage(): {
     inputTokens: number;
     outputTokens: number;
+    totalTokens: number;
     contextWindowUsedTokens: number;
     contextWindowSize: number;
+    totalConfidence: typeof TOKEN_TOTAL_CONFIDENCE.ACCUMULATED;
   } | null {
-    if (this.otelLastInputTokens <= 0) {
+    if (!this.otelChatSpanSeen) {
       return null;
     }
     return {
-      inputTokens: this.otelLastInputTokens,
+      inputTokens: this.otelCumulativeInputTokens,
       outputTokens: this.otelCumulativeOutputTokens,
+      totalTokens:
+        this.otelCumulativeInputTokens + this.otelCumulativeOutputTokens,
       contextWindowUsedTokens: this.otelLastInputTokens,
       contextWindowSize: getCopilotContextWindowSize(
         this.otelLastModel ?? this.resolvedModel
       ),
+      totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
     };
   }
 
@@ -511,7 +525,6 @@ export class CopilotLogParser extends BaseLogParser {
             ? {
                 inputTokens: effectiveInputTokens,
                 outputTokens,
-                totalTokens: effectiveInputTokens + outputTokens,
                 // postTruncationTokensInMessages = full context sent to model on last turn
                 contextWindowUsedTokens: effectiveInputTokens,
                 contextWindowSize: effectiveContextWindowSize,
