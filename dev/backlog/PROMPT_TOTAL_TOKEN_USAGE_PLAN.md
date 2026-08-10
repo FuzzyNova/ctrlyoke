@@ -1,6 +1,9 @@
 # Prompt, Workflow Token Usage And Cost Plan
 
-**Status:** Ready to implement (empirical pricing gates remain in Phase 4)
+**Status:** Implemented (Phases 1–4 complete). The only outstanding work is the
+empirical token-semantics verification listed in Phase 4: Qwen, OpenCode, and
+Antigravity remain `unknown` in the cost descriptor, so their table pricing stays
+disabled until a live run confirms their cache/reasoning relationships.
 **Created:** July 9, 2026
 **Revised:** August 9, 2026 — final codebase pass; canonical attempt identity,
 per-harness run subtotals, persistence ownership, and combined staging order added
@@ -61,14 +64,16 @@ rather than a compaction-based estimator:
 
 | Harness           | Cumulative per-attempt totals                                                                                                                                         | Context window (last turn)                                              | Cache split                                                                                 | Reasoning tokens                                                   | Self-reported cost                                                  |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `claude-cli`      | Yes — sums every assistant `message.usage`, prefers `result.usage.total_tokens` (`ClaudeLogParser.ts:278-288, 362-378`)                                               | `input + cache_creation + cache_read` of last turn (`:345-353`)         | `cache_read` and `cache_creation` **disjoint** from `input_tokens`                          | No                                                                 | **Yes** — `result.total_cost_usd` + `modelUsage` (not parsed today) |
+| `claude-cli`      | Yes — sums every assistant `message.usage`, prefers `result.usage.total_tokens` (`ClaudeLogParser.ts:278-288, 362-378`)                                               | `input + cache_creation + cache_read` of last turn (`:345-353`)         | `cache_read` and `cache_creation` **disjoint** from `input_tokens`                          | No                                                                 | **Yes** — `result.total_cost_usd` + `modelUsage` (parsed; cross-checked against the price table) |
 | `codex-cli`       | Yes — `token_count.info.total_token_usage` (`CodexLogParser.ts:230-240`); preserve its `total_tokens` instead of always recomputing input + output                    | `last_token_usage.total_tokens` (`:241-249`)                            | `cached_input_tokens` is a **subset** of `input_tokens` (`:242-243`)                        | Yes — `reasoning_output_tokens` (parsed, then dropped downstream)  | No                                                                  |
 | `qwen-cli`        | Yes — sums `usageMetadata` per assistant turn (`QwenLogParser.ts:244-253`)                                                                                            | last turn `promptTokenCount` (`:322-326`)                               | `cachedContentTokenCount` is a **subset** of `promptTokenCount` (Gemini semantics — verify) | Folded into output (`thoughtsTokenCount`), not reported separately | No                                                                  |
-| `opencode-cli`    | Yes — accumulates every `step_finish` (`OpenCodeEventMapper.ts:52-67`) and completed output now retains harness/model attribution | last step's `tokens.total`                                              | `tokens.cache.read` and `tokens.cache.write` accumulated                             | `tokens.reasoning` accumulated separately         | **Yes** — `step_finish.part.cost` (USD), **not** captured           |
+| `opencode-cli`    | Yes — accumulates every `step_finish` (`OpenCodeEventMapper.ts:52-67`) and completed output now retains harness/model attribution | last step's `tokens.total`                                              | `tokens.cache.read` and `tokens.cache.write` accumulated                             | `tokens.reasoning` accumulated separately         | **Yes** — `step_finish.part.cost` (USD), summed across steps        |
 | `antigravity-cli` | Yes — stream-json `result.usage.total_tokens` (`AntigravityStreamJsonUsage.ts:39-54`)                                                                                 | statusline sidecar snapshot (`AntigravityStatuslineSidecar.ts:237-243`) | `cache_read_tokens`                                                                         | Yes — `thinking_tokens`                                            | No                                                                  |
 | `copilot-cli`     | Yes — OTel accumulates input and output across chat spans; `otelLastInputTokens` remains the last-turn context signal (`CopilotLogParser.ts:132-138, 217-224`) | `otelLastInputTokens` (`:230-237`)                                      | None                                                                                        | None                                                               | No (bills in AI credits — see below)                                |
 
-Four defects fall out of this table and are part of this plan:
+Four defects fell out of this table and were fixed in Phase 2. They are kept
+here as the record of what the audit found and why each fix is shaped the way it
+is; the table above already reflects the corrected behaviour.
 
 1. **Antigravity discards its own billing totals.**
    `AntigravityLogParser.extractTokenUsage` short-circuits on the statusline
@@ -748,9 +753,10 @@ list rather than deferring.
       uncompacted-with-large-total (label absent), and
       compaction-count-unavailable (label absent) cases.
 
-Phase 1 backend work is complete through the shared formatting helpers. Stats
-row, CLI, and workflow-step rendering plus their React tests are deferred to
-the next presentation stage, as required by the staging order.
+Phase 1 shipped in two commits, splitting backend contracts from presentation as
+the staging order allows: `6844c042` covered the types, lossless mapping,
+compaction summarizer, and shared formatting helpers; `4108e041` covered the
+stats row, CLI formatter, workflow-step rendering, and their React tests.
 
 ### Phase 2: Close the harness gaps
 
