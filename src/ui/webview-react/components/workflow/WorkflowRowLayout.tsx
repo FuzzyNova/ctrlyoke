@@ -37,7 +37,9 @@ interface WorkflowRowLayoutProps {
   glyph?: React.ReactNode;
   /** Column 5 / first line, right — execution state badge. */
   badge?: React.ReactNode;
-  /** Column 6 / last meta item — relative time or elapsed timer. */
+  /** Column 6 / run-total usage; joins stacked metadata. */
+  usage?: React.ReactNode;
+  /** Column 7 / last meta item — relative time or elapsed timer. */
   time?: React.ReactNode;
 }
 
@@ -167,9 +169,11 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   count,
   glyph,
   badge,
+  usage,
   time,
 }) => {
   const isStacked = tier !== "flat";
+  const visibleUsage = tier === "compact" ? undefined : usage;
   const buttonClassName = `workflow-row-primary ${
     isStacked ? "workflow-row-primary-stacked" : "workflow-row-primary-flat"
   } min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
@@ -188,6 +192,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
         style={
           {
             "--workflow-row-state-col": `${WORKFLOW_ROW_TRACKS.state}px`,
+            "--workflow-row-usage-col": `${WORKFLOW_ROW_TRACKS.usage}px`,
             "--workflow-row-time-col": `${WORKFLOW_ROW_TRACKS.time}px`,
           } as React.CSSProperties
         }
@@ -214,7 +219,10 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
             column visibly ragged down the list. A shared left edge is what
             makes the column scannable. */}
         <span className="col-start-5 flex justify-start">{badge}</span>
-        <span className="col-start-6 truncate text-right text-xs text-description-fg">
+        <span className="col-start-6 flex items-center justify-start">
+          {visibleUsage}
+        </span>
+        <span className="col-start-7 truncate text-right text-xs text-description-fg">
           {time}
         </span>
       </button>
@@ -225,6 +233,8 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   // shows a dangling separator for a lineage with no steps or no timestamp.
   const metaParts: Array<{ key: string; node: React.ReactNode }> = [];
   if (hasContent(count)) metaParts.push({ key: "count", node: count });
+  if (hasContent(visibleUsage))
+    metaParts.push({ key: "usage", node: visibleUsage });
   if (hasContent(time)) metaParts.push({ key: "time", node: time });
 
   return (

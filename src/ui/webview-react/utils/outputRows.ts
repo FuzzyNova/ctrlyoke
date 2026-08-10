@@ -12,6 +12,10 @@ import type {
   ToolCall,
 } from "../types/cliEvents";
 import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
+import {
+  WORKFLOW_TOKEN_COVERAGE,
+  type WorkflowTokenCoverage,
+} from "@root/types/DashboardConstants";
 import type {
   StepOutput,
   UndoRecord,
@@ -20,6 +24,7 @@ import type {
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
+import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey } from "./outputProjection";
 import { computePromptUndoActions } from "./promptUndo";
@@ -111,6 +116,15 @@ interface OutputRowBase {
   estimateSize: number;
   groupStart?: boolean;
   groupEnd?: boolean;
+}
+
+export interface AttemptGroupSummaryRow extends OutputRowBase {
+  rowKind: "attempt-group-summary";
+  target: OutputMessageTarget;
+  groupKey: string;
+  attemptCount: number;
+  total?: number;
+  coverage: WorkflowTokenCoverage;
 }
 
 export interface HistoryBannerRow extends OutputRowBase {
@@ -253,6 +267,7 @@ export type OutputRenderRow =
   | PlainResponseRow
   | ScriptOutputRow
   | ScriptVerdictRow
+  | AttemptGroupSummaryRow
   | StatsRow;
 
 export interface BuildOutputRowsInput {
@@ -280,12 +295,49 @@ export interface BuildOutputRowsInput {
   scriptVerdictExpansionState?: ReadonlyMap<string, boolean>;
   /** Keyed by `ScriptOutputRow.tailToggle.key`, not by row key. */
   scriptOutputExpansionState?: ReadonlyMap<string, boolean>;
+  /** Retry/manual-rerun groups currently shown as one aggregate row. */
+  collapsedAttemptGroupKeys?: ReadonlySet<string>;
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
   outputContentWidth?: number;
   /** Approximate number of wrapped result lines shown before Bash and generic tool output collapses. */
   collapsedToolOutputLineCount?: number;
+}
+
+interface AttemptGroupAggregate {
+  key: string;
+  target: OutputMessageTarget;
+  firstMessageIndex: number;
+  attempts: Map<string, CliOutputType>;
+}
+
+function getAttemptGroupKey(message: OutputMessage): string | undefined {
+  if (message.type !== "cli") return undefined;
+  const output = message.data as CliOutputType;
+  const runIndex = message.runIndex ?? output.runIndex ?? 0;
+  return `${getTargetKey(message.target)}:run${runIndex}`;
+}
+
+/** Finds the retry/manual-rerun groups eligible for a collapsed summary. */
+export function getCollapsibleAttemptGroupKeys(
+  messages: readonly OutputMessage[]
+): ReadonlySet<string> {
+  const groups = new Map<string, Set<string>>();
+  for (const message of messages) {
+    const groupKey = getAttemptGroupKey(message);
+    if (!groupKey || message.type !== "cli") continue;
+    const attemptKey = `${groupKey}:attempt${message.attemptIndex ?? 0}`;
+    const attempts = groups.get(groupKey) ?? new Set<string>();
+    attempts.add(attemptKey);
+    groups.set(groupKey, attempts);
+  }
+
+  return new Set(
+    [...groups.entries()]
+      .filter(([, attempts]) => attempts.size > 1)
+      .map(([groupKey]) => groupKey)
+  );
 }
 
 export interface BuildOutputRowsResult {
@@ -1355,6 +1407,8 @@ function estimateOutputRowContentHeight(
             outputContentWidth,
             outputFontSize
           );
+    case "attempt-group-summary":
+      return 36;
     case "stats":
       return estimateStatsRowHeight(row, outputContentWidth, outputFontSize);
     case "structured-event":
@@ -1464,6 +1518,28 @@ export function buildOutputRows(
   const firstRowIndexByTarget = new Map<string, number>();
   const collapsedToolOutputLineCount =
     input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+  const attemptGroups = new Map<string, AttemptGroupAggregate>();
+  const attemptGroupByMessageIndex = new Map<number, string>();
+
+  for (const [messageIndex, message] of input.allMessages.entries()) {
+    const groupKey = getAttemptGroupKey(message);
+    if (!groupKey || message.type !== "cli") continue;
+    const output = message.data as CliOutputType;
+    const runIndex = message.runIndex ?? output.runIndex ?? 0;
+    const attemptKey = `${runIndex}:${message.attemptIndex ?? 0}`;
+    const group =
+      attemptGroups.get(groupKey) ??
+      ({
+        key: groupKey,
+        target: message.target,
+        firstMessageIndex: messageIndex,
+        attempts: new Map<string, CliOutputType>(),
+      } satisfies AttemptGroupAggregate);
+    group.attempts.set(attemptKey, output);
+    group.firstMessageIndex = Math.min(group.firstMessageIndex, messageIndex);
+    attemptGroups.set(groupKey, group);
+    attemptGroupByMessageIndex.set(messageIndex, groupKey);
+  }
 
   for (const [messageIndex, message] of input.allMessages.entries()) {
     const targetKey = getTargetKey(message.target);
@@ -1518,6 +1594,50 @@ export function buildOutputRows(
         rowKind: "status",
         target,
         status: message.data as OutputStatusMessage,
+        estimateSize: 36,
+      });
+      continue;
+    }
+
+    const attemptGroupKey = attemptGroupByMessageIndex.get(messageIndex);
+    const attemptGroup = attemptGroupKey
+      ? attemptGroups.get(attemptGroupKey)
+      : undefined;
+    if (
+      attemptGroup &&
+      input.collapsedAttemptGroupKeys?.has(attemptGroup.key)
+    ) {
+      if (messageIndex !== attemptGroup.firstMessageIndex) continue;
+
+      let total = 0;
+      let hasUsableTotal = false;
+      let hasMissingTotal = false;
+      for (const output of attemptGroup.attempts.values()) {
+        const attemptTotal = resolveTokenTotal(
+          output.tokens?.total,
+          output.tokens?.prompt,
+          output.tokens?.completion
+        );
+        if (attemptTotal === undefined) {
+          hasMissingTotal = true;
+        } else {
+          total += attemptTotal;
+          hasUsableTotal = true;
+        }
+      }
+
+      rows.push({
+        key: `${attemptGroup.key}:summary`,
+        rowKind: "attempt-group-summary",
+        target: attemptGroup.target,
+        groupKey: attemptGroup.key,
+        attemptCount: attemptGroup.attempts.size,
+        total: hasUsableTotal ? total : undefined,
+        coverage: hasMissingTotal
+          ? WORKFLOW_TOKEN_COVERAGE.PARTIAL
+          : WORKFLOW_TOKEN_COVERAGE.COMPLETE,
+        groupStart: true,
+        groupEnd: true,
         estimateSize: 36,
       });
       continue;

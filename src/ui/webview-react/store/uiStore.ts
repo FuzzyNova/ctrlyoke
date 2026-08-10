@@ -20,6 +20,7 @@ import type {
   WorkflowViewAddress,
   WorkflowRunNavigationSummary,
   WorkflowKey,
+  WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
@@ -240,6 +241,7 @@ export interface RecentWorkflow {
   totalSteps?: number;
   harness?: HarnessId;
   runNav?: WorkflowRunNavigationSummary;
+  tokenTotals?: WorkflowTokenTotals;
 }
 
 /** Panel size snapshot for the desktop layout (steps/settings/editor in px; output as %). */

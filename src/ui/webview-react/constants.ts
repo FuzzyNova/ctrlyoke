@@ -110,6 +110,8 @@ export const WORKFLOW_ROW_TRACKS = {
   glyph: 16,
   /** Fits the longest execution state label, "CANCELLING". */
   state: 88,
+  /** Fits the lower-bound label `≥1.2M`. */
+  usage: 56,
   /**
    * Fits the longest verbose stamp, "59 minutes ago". Deliberately one width
    * for every row kind — running rows show a short elapsed timer and would fit
@@ -135,6 +137,40 @@ export const WORKFLOW_ROW_TRACKS = {
   actions: 44,
 } as const;
 
+const WORKFLOW_ROW_HORIZONTAL_PADDING = 16;
+const WORKFLOW_ROW_COLUMN_GAP = 4;
+const WORKFLOW_ROW_RAIL_GAP = 8;
+const WORKFLOW_ROW_MIN_NAME_WIDTH = {
+  flat: 120,
+  stacked: 140,
+} as const;
+const WORKFLOW_ROW_WIDEST_STEP_LABEL = "12 steps";
+const WORKFLOW_ROW_BODY_CHAR_WIDTH = 6.4;
+
+/** Fixed width consumed before the flexible name track in a flat row. */
+const workflowFlatFixedWidth =
+  WORKFLOW_ROW_HORIZONTAL_PADDING +
+  WORKFLOW_ROW_TRACKS.harness +
+  WORKFLOW_ROW_TRACKS.glyph +
+  WORKFLOW_ROW_TRACKS.state +
+  WORKFLOW_ROW_TRACKS.usage +
+  WORKFLOW_ROW_TRACKS.time +
+  6 * WORKFLOW_ROW_COLUMN_GAP +
+  WORKFLOW_ROW_TRACKS.runIndicator.flat +
+  WORKFLOW_ROW_TRACKS.actions +
+  2 * WORKFLOW_ROW_RAIL_GAP +
+  WORKFLOW_ROW_WIDEST_STEP_LABEL.length * WORKFLOW_ROW_BODY_CHAR_WIDTH;
+
+/** Fixed width consumed before the flexible name track in a stacked row. */
+const workflowStackedFirstLineWidth =
+  WORKFLOW_ROW_HORIZONTAL_PADDING +
+  2 * WORKFLOW_ROW_RAIL_GAP +
+  WORKFLOW_ROW_TRACKS.harness +
+  2 * WORKFLOW_ROW_COLUMN_GAP +
+  WORKFLOW_ROW_TRACKS.state +
+  WORKFLOW_ROW_TRACKS.runIndicator.stacked +
+  WORKFLOW_ROW_TRACKS.actions;
+
 /**
  * Width (px) the workflow dropdown opens to on desktop, before being clamped to
  * the viewport and re-centred on its trigger. The popup is a fixed-position
@@ -147,14 +183,14 @@ export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
  * Width (px) below which the workflow dropdown's rows stack onto two lines.
  *
  * Derived from what the flat layout costs, not picked for feel. Its fixed
- * tracks and sibling actions — harness 14, terminal 16, badge 88, time 96,
- * run indicator 64, favourite/remove 40, row padding and gaps ~60 — total
- * ~378px before the flexible name column gets a single pixel, plus a
- * `max-content` step count on top. So the name is left roughly:
+ * tracks and sibling actions — including the usage track — are computed from
+ * `WORKFLOW_ROW_TRACKS` below. The threshold leaves the name at least 120px
+ * wide, while the 640px desktop target remains flat. So the name is left
+ * roughly:
  *
- *     440px → ~20px   500px → ~80px   560px → ~140px   640px → ~220px
+ *     440px → no room   500px → ~15px   560px → ~75px   640px → ~155px
  *
- * Below this threshold the name collapses toward zero and the `max-content`
+ * Below this threshold the name would collapse toward zero and the `max-content`
  * tracks start wrapping instead ("3 steps" onto two lines, "39 minutes ago"
  * onto three) — which also silently doubles the row height the virtualizer
  * estimated. Stacking instead gives the name ~250px at the same width.
@@ -163,23 +199,24 @@ export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
  * button that opens it — see the two `useElementNarrow` calls in
  * `WorkflowStatus`.
  */
-export const WORKFLOW_DROPDOWN_NARROW_WIDTH = 560;
+export const WORKFLOW_DROPDOWN_NARROW_WIDTH =
+  workflowFlatFixedWidth + WORKFLOW_ROW_MIN_NAME_WIDTH.flat;
 
 /**
  * Width (px) below which stacked rows also drop their state badge to its
  * icon-only form (and their run indicator to `#12`).
  *
  * Stacking alone only buys the name a line of its own — it does not shrink
- * anything sharing that line. A stacked first line still spends ~238px on the
- * harness icon, a full-text badge ("CANCELLING" ≈ 88px), the run indicator and
- * the action rail, so at a phone- or sidebar-width popup the name is back to a
- * few characters. Dropping the badge to its icon returns ~60px of that.
+ * anything sharing that line. The stacked first-line budget is computed from
+ * the harness icon, full-text badge, run indicator, action rail, and their
+ * gaps. Dropping the badge to its icon returns ~60px of that width.
  *
  * Set so the name keeps ~140px on the stacked first line while the badge still
  * carries text; below it the icon buys that width back instead. See
  * `workflowRowWidths.test.ts`.
  */
-export const WORKFLOW_DROPDOWN_COMPACT_WIDTH = 380;
+export const WORKFLOW_DROPDOWN_COMPACT_WIDTH =
+  workflowStackedFirstLineWidth + WORKFLOW_ROW_MIN_NAME_WIDTH.stacked;
 
 /**
  * How much a workflow dropdown row compacts at the width it is rendered at.

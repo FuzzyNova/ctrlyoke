@@ -3,7 +3,10 @@ import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
 } from "@utils/outputProjection";
-import { buildOutputRows } from "@utils/outputRows";
+import {
+  buildOutputRows,
+  getCollapsibleAttemptGroupKeys,
+} from "@utils/outputRows";
 import { measurePhase } from "@utils/performanceProfiler";
 import { CLI_EVENT_TYPES } from "@/types/messages";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
@@ -105,6 +108,9 @@ export function useOutputRowsModel({
   const [scriptOutputExpansionState, setScriptOutputExpansionState] = useState<
     Map<string, boolean>
   >(new Map());
+  const [collapsedAttemptGroupKeys, setCollapsedAttemptGroupKeys] = useState<
+    Set<string>
+  >(new Set());
 
   // Build chronologically sorted list of all messages from the single ordered entries array.
   const allMessages = useMemo((): OutputMessage[] => {
@@ -113,6 +119,27 @@ export function useOutputRowsModel({
     }
     return mapOrderedHistoryEntriesToMessages(liveOrderedEntries);
   }, [isViewingHistory, historyOutputs, liveOrderedEntries]);
+
+  const collapsibleAttemptGroupKeys = useMemo(
+    () => getCollapsibleAttemptGroupKeys(allMessages),
+    [allMessages]
+  );
+
+  useEffect(() => {
+    setCollapsedAttemptGroupKeys((previous) => {
+      const next = new Set(
+        [...previous].filter((key) => collapsibleAttemptGroupKeys.has(key))
+      );
+      for (const key of collapsibleAttemptGroupKeys) next.add(key);
+      if (
+        next.size === previous.size &&
+        [...next].every((key) => previous.has(key))
+      ) {
+        return previous;
+      }
+      return next;
+    });
+  }, [collapsibleAttemptGroupKeys]);
 
   const {
     rows,
@@ -152,6 +179,7 @@ export function useOutputRowsModel({
             bashExpansionState,
             scriptVerdictExpansionState,
             scriptOutputExpansionState,
+            collapsedAttemptGroupKeys,
             defaultDiffCollapsed: diffsCollapsed,
             diffViewType: outputDiffViewType,
             outputFontSize,
@@ -177,6 +205,7 @@ export function useOutputRowsModel({
       bashExpansionState,
       scriptVerdictExpansionState,
       scriptOutputExpansionState,
+      collapsedAttemptGroupKeys,
       diffsCollapsed,
       outputDiffViewType,
       outputFontSize,
@@ -517,6 +546,18 @@ export function useOutputRowsModel({
     [invalidateMeasuredRowForUserResize]
   );
 
+  const handleAttemptGroupToggle = useCallback((groupKey: string) => {
+    setCollapsedAttemptGroupKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }, []);
+
   return {
     allMessages,
     rows,
@@ -528,6 +569,7 @@ export function useOutputRowsModel({
     bashExpansionState,
     handleScriptVerdictExpansionChange,
     handleScriptOutputExpansionChange,
+    handleAttemptGroupToggle,
     handleDiffCollapsedChange,
     handleDiffGapExpand,
     handleToolCallExpansionChange,

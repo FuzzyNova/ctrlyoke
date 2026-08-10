@@ -134,6 +134,32 @@ describe("OutputRow token stats", () => {
   });
 });
 
+describe("OutputRow collapsed attempt groups", () => {
+  it("labels the aggregate with the number of attempts", () => {
+    const onToggle = vi.fn();
+    render(
+      <OutputRow
+        row={{
+          key: "attempt-group-summary",
+          target: TARGET,
+          estimateSize: 36,
+          rowKind: "attempt-group-summary",
+          groupKey: "queue:0:run0",
+          attemptCount: 3,
+          total: 410_000,
+          coverage: "complete",
+        }}
+        isExecutionActive={false}
+        onAttemptGroupToggle={onToggle}
+      />
+    );
+
+    expect(screen.getByText("3 attempts · 410k total")).toBeInTheDocument();
+    screen.getByRole("button", { name: /Expand 3 attempts/ }).click();
+    expect(onToggle).toHaveBeenCalledWith("queue:0:run0");
+  });
+});
+
 describe("OutputRow auto-expand on hidden active match", () => {
   it.each([
     ["passed", "✔ Passed"],

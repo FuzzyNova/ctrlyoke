@@ -36,7 +36,7 @@ describe("WorkflowRowLayout", () => {
     const { container } = renderLayout("flat");
     const button = container.querySelector("button")!;
     expect(button.className).toContain("workflow-row-primary-flat");
-    expect(button.querySelector(".col-start-6")?.textContent).toBe(
+    expect(button.querySelector(".col-start-7")?.textContent).toBe(
       "2 hours ago"
     );
   });

@@ -4,6 +4,7 @@ import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 import {
   formatTokenBreakdown,
   formatTokenCount,
+  formatTokenTotal,
   resolveTokenTotal,
 } from "@root/utils/TokenFormatting";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
@@ -186,6 +187,7 @@ interface OutputRowProps {
     toggleKey: string,
     expanded: boolean
   ) => void;
+  onAttemptGroupToggle?: (groupKey: string) => void;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -1447,6 +1449,7 @@ function OutputRowComponent({
   onBashExpansionChange,
   onScriptVerdictExpansionChange,
   onScriptOutputExpansionChange,
+  onAttemptGroupToggle,
 }: OutputRowProps) {
   const rowSearchSegments = getOutputRowSearchSegments(row);
   const getFieldMatches = (field: string, occurrence = 0) => {
@@ -1630,6 +1633,24 @@ function OutputRowComponent({
     case "stats":
       content = <StatsRowView row={row} />;
       break;
+    case "attempt-group-summary": {
+      const totalLabel = formatTokenTotal(row.total, row.coverage);
+      content = (
+        <button
+          type="button"
+          className="fp-dropdown-row inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-description-fg hover:text-foreground"
+          aria-label={`Expand ${row.attemptCount} attempts${totalLabel ? `, ${totalLabel} total` : ""}`}
+          onClick={() => onAttemptGroupToggle?.(row.groupKey)}
+        >
+          <i className="codicon codicon-chevron-right text-xxs" />
+          <span>
+            {row.attemptCount} attempts
+            {totalLabel ? ` · ${totalLabel} total` : ""}
+          </span>
+        </button>
+      );
+      break;
+    }
   }
 
   const isCliGroupRow =
@@ -1641,7 +1662,8 @@ function OutputRowComponent({
     row.rowKind === "script-output" ||
     row.rowKind === "structured-event" ||
     row.rowKind === "script-verdict" ||
-    row.rowKind === "stats";
+    row.rowKind === "stats" ||
+    row.rowKind === "attempt-group-summary";
 
   if (!isCliGroupRow) {
     if (!isActiveRow) {

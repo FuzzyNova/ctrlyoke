@@ -15,6 +15,10 @@ import {
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
+import {
+  WorkflowTokenUsage,
+  workflowTokenTotalsAccessibleLabel,
+} from "./WorkflowTokenUsage";
 import type { WorkflowRowTier } from "../../constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 
@@ -158,6 +162,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           workflow.executionState,
           workflow.totalSteps > 0 &&
             `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
+          workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
           hasActiveTerminal && "terminal session is still running",
         ])}
         harness={
@@ -191,6 +196,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             isNarrow={isCompactRow(tier)}
           />
         }
+        usage={<WorkflowTokenUsage totals={workflow.tokenTotals} />}
         time={<span className="font-mono">{elapsed}</span>}
       />
 

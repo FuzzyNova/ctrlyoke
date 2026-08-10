@@ -781,9 +781,9 @@ the next presentation stage, as required by the staging order.
       `WorkflowSummary` paths so later runtime writes cannot erase it.
 - [x] Publish rolling totals via `WorkflowSummary`, durable totals via
       `RECENT_WORKFLOWS`.
-- [ ] Add the usage slot to `WorkflowRowLayout.tsx`, `WORKFLOW_ROW_TRACKS`, and
+- [x] Add the usage slot to `WorkflowRowLayout.tsx`, `WORKFLOW_ROW_TRACKS`, and
       both row kinds; render in `RunSummaryRow.tsx`.
-- [ ] Update collapsed output groups to show the all-attempt sum with an
+- [x] Update collapsed output groups to show the all-attempt sum with an
       explicit `N attempts` label; expanded rows retain per-attempt totals.
 - [x] Pure reducer tests: streaming replacement, retry/manual-rerun inclusion,
       final/dynamic-step inclusion, partial coverage, run isolation,
@@ -794,7 +794,7 @@ the next presentation stage, as required by the staging order.
       partitioning, `byHarness === sum(byLocalDay)`, duplicate/fork runtime
       stripping, same-run reopen/final transitions, and workflow-list refresh
       not reading `events.jsonl`.
-- [ ] Workflow-list tests at flat, stacked, and compact tiers for complete,
+- [x] Workflow-list tests at flat, stacked, and compact tiers for complete,
       partial, running, and unavailable totals.
 
 ### Phase 4: Cost

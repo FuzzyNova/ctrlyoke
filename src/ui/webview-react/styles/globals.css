@@ -654,6 +654,7 @@ button .codicon {
     grid-template-columns:
       14px minmax(0, 1fr) max-content 16px
       var(--workflow-row-state-col, 88px)
+      var(--workflow-row-usage-col, 56px)
       var(--workflow-row-time-col, 96px);
   }
 

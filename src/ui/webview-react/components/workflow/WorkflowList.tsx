@@ -12,6 +12,10 @@ import {
   isCompactRow,
 } from "./WorkflowRowLayout";
 import {
+  WorkflowTokenUsage,
+  workflowTokenTotalsAccessibleLabel,
+} from "./WorkflowTokenUsage";
+import {
   workflowRowHeightEstimate,
   type WorkflowRowTier,
 } from "../../constants";
@@ -142,6 +146,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           workflow.executionState,
           showStepCount &&
             `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
+          workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
           timeAgo,
           showTerminalIcon && "terminal session is still running",
         ])}
@@ -181,6 +186,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
             className="workflow-menu-item-state"
           />
         }
+        usage={<WorkflowTokenUsage totals={workflow.tokenTotals} />}
         time={
           timeAgo ? (
             <span className="workflow-menu-item-time">{timeAgo}</span>

@@ -24,6 +24,61 @@ import {
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
 
+  it("collapses retry attempts into an explicitly labelled aggregate", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const allMessages: OutputMessage[] = [0, 1].map((attemptIndex) => ({
+      type: "cli" as const,
+      target,
+      timestamp: 1000 + attemptIndex,
+      attemptIndex,
+      runIndex: 0,
+      data: {
+        prompt: "Inspect code",
+        response: "done",
+        elapsed: 1,
+        isStreaming: false,
+        tokens: { prompt: 100, completion: 100, total: 200 },
+      },
+    }));
+
+    const common = {
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    };
+
+    const collapsed = buildOutputRows({
+      ...common,
+      collapsedAttemptGroupKeys: new Set(["queue:0:run0"]),
+    });
+    const summary = collapsed.rows.find(
+      (row) => row.rowKind === "attempt-group-summary"
+    );
+    expect(summary).toMatchObject({
+      attemptCount: 2,
+      total: 400,
+      coverage: "complete",
+    });
+
+    const expanded = buildOutputRows(common);
+    expect(expanded.rows.filter((row) => row.rowKind === "stats")).toHaveLength(
+      2
+    );
+  });
+
   it("threads the collapsed tool output line count into Bash and generic tool rows", () => {
     const output = Array.from(
       { length: 8 },

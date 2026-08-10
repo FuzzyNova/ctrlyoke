@@ -338,6 +338,7 @@ const OutputSectionInner: React.FC = () => {
     handleBashExpansionChange,
     handleScriptVerdictExpansionChange,
     handleScriptOutputExpansionChange,
+    handleAttemptGroupToggle,
   } = useOutputRowsModel({
     isViewingHistory,
     historyOutputs,
@@ -1231,6 +1232,7 @@ const OutputSectionInner: React.FC = () => {
           onBashExpansionChange={handleBashExpansionChange}
           onScriptVerdictExpansionChange={handleScriptVerdictExpansionChange}
           onScriptOutputExpansionChange={handleScriptOutputExpansionChange}
+          onAttemptGroupToggle={handleAttemptGroupToggle}
           onContextMenuOpen={openContextMenu}
           onDiffCollapsedChange={handleDiffCollapsedChange}
           onDiffGapExpand={handleDiffGapExpand}

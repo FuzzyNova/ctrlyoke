@@ -25,6 +25,15 @@ const summary = {
   primaryHarness: HARNESS_IDS.CLAUDE_CLI,
   hasMixedHarnesses: false,
   hasMixedModels: false,
+  tokenTotals: {
+    total: 410_000,
+    coverage: "complete",
+    reportedAttemptCount: 1,
+    attemptCount: 1,
+    isFinal: true,
+    byHarness: {},
+    byLocalDay: {},
+  },
 } as unknown as RunSummary;
 
 function renderRow(tier: WorkflowRowTier) {
@@ -50,6 +59,9 @@ describe("RunSummaryRow", () => {
     expect(screen.getByText("4 steps")).toBeInTheDocument();
     expect(screen.getByText(EXECUTION_STATES.COMPLETED)).toBeInTheDocument();
     expect(screen.getByText(/minutes ago|minute ago/)).toBeInTheDocument();
+    expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
+      "410k"
+    );
   });
 
   it("stacks onto two lines in a narrow dropdown without abbreviating", () => {
@@ -79,6 +91,7 @@ describe("RunSummaryRow", () => {
     ).not.toBeNull();
     expect(screen.getByText("Run 14")).toBeInTheDocument();
     expect(screen.getByText("4 steps")).toBeInTheDocument();
+    expect(screen.queryByTestId("workflow-token-usage")).toBeNull();
   });
 
   it("uses the flat single-line layout when the dropdown is wide", () => {

@@ -145,6 +145,7 @@ export function getOutputRowSearchSegments(
     case "history-banner":
     case "step-anchor":
     case "final-step-label":
+    case "attempt-group-summary":
       return [];
     case "script-verdict":
       return createSegments([

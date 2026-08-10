@@ -7,6 +7,10 @@ import {
   composeRowAccessibleName,
   isCompactRow,
 } from "./WorkflowRowLayout";
+import {
+  WorkflowTokenUsage,
+  workflowTokenTotalsAccessibleLabel,
+} from "./WorkflowTokenUsage";
 import type { WorkflowRowTier } from "../../constants";
 import { HARNESS_INFO, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
@@ -85,6 +89,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     executionState,
     harnessTitle,
     stepLabel,
+    workflowTokenTotalsAccessibleLabel(summary?.tokenTotals),
     timeAgo,
   ]);
 
@@ -128,6 +133,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
             />
           )
         }
+        usage={<WorkflowTokenUsage totals={summary?.tokenTotals} />}
         time={timeAgo}
       />
 

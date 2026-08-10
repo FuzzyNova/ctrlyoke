@@ -61,6 +61,7 @@ interface OutputPaneProps {
     toggleKey: string,
     expanded: boolean
   ) => void;
+  onAttemptGroupToggle: (groupKey: string) => void;
   onContextMenuOpen: (
     x: number,
     y: number,
@@ -113,6 +114,7 @@ function renderOutputRow(
     | "onBashExpansionChange"
     | "onScriptVerdictExpansionChange"
     | "onScriptOutputExpansionChange"
+    | "onAttemptGroupToggle"
     | "onDiffCollapsedChange"
     | "onDiffGapExpand"
     | "onFileUndo"
@@ -147,6 +149,7 @@ function renderOutputRow(
       onBashExpansionChange={props.onBashExpansionChange}
       onScriptVerdictExpansionChange={props.onScriptVerdictExpansionChange}
       onScriptOutputExpansionChange={props.onScriptOutputExpansionChange}
+      onAttemptGroupToggle={props.onAttemptGroupToggle}
     />
   );
 }
