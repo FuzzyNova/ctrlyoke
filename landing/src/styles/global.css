@@ -3,11 +3,17 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --color-brand-950: #020c15;
-  --color-brand-900: #041625;
-  --color-brand-800: #072c45;
-  --color-brand-700: #0a3d61;
-  --color-brand-600: #0e5380;
+  --color-brand-50: #eaf5fd;
+  --color-brand-100: #d5ebfc;
+  --color-brand-200: #9ed6f9;
+  --color-brand-300: #59c4f6;
+  --color-brand-400: #43abd9;
+  --color-brand-500: #3994bc;
+  --color-brand-600: #2b7495;
+  --color-brand-700: #1f5871;
+  --color-brand-800: #123b4d;
+  --color-brand-900: #07222e;
+  --color-brand-950: #03151e;
   --font-sans: system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }

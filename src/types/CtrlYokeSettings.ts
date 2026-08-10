@@ -189,9 +189,9 @@ export interface CtrlYokeGlobalSettings {
       certPath: string;
       keyPath: string;
     };
-    /** Background color for the SVG favicon and PWA icon (hex, e.g. '#1076ba'). */
+    /** Background color for the SVG favicon and PWA icon (hex, e.g. '#3994BC'). */
     iconBgColor: string;
-    /** Foreground (path/stroke) color for the SVG favicon and PWA icon (hex, e.g. '#ffffff'). */
+    /** Foreground (path/stroke) color for the SVG favicon and PWA icon (hex, e.g. '#051923'). */
     iconFgColor: string;
   };
 

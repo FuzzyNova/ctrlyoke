@@ -16,15 +16,22 @@
  *     `currentColor`. Recolored to FG_COLOR (or a theme color) for baked outputs.
  *
  * Outputs:
- *   - images/ctrlyoke-app-icon.svg  → #ffffff fg on #072c45 bg (keyface + canvas rect
+ *   - images/ctrlyoke-app-icon.svg  → FG_COLOR fg on BG_COLOR bg (keyface + canvas rect
  *                                     both BG_COLOR); the user-customizable 2-token
  *                                     file (PWA app icon + settings preview).
- *   - images/icon.png (512)         → VS Code Marketplace icon + manifest app icon.
- *   - images/apple-touch-icon.png (180)
- *   - images/ctrlyoke-icon-color.svg → #ffffff fg, BG_COLOR keyface, TRANSPARENT canvas
+ *   - images/icon.png (512)         → VS Code Marketplace / Extensions view icon
+ *                                     (package.json "icon"). TRANSPARENT canvas — VS Code
+ *                                     supports and recommends this so it reads correctly
+ *                                     on both light and dark Marketplace backgrounds.
+ *   - images/apple-touch-icon.png (180) → iOS home-screen fallback. Stays OPAQUE — unlike
+ *                                     the Marketplace icon, iOS has never supported
+ *                                     transparent home-screen icons.
+ *   - images/ctrlyoke-icon-color.svg → FG_COLOR fg, BG_COLOR keyface, TRANSPARENT canvas
  *                                     (no rect) — the 2-token favicon SVG. Sits as a
  *                                     colored keycap glyph rather than a solid square.
  *   - images/ctrlyoke-icon-color.png (512) → static favicon PNG / notification badge.
+ *                                     Also reused for images/icon.png above (same
+ *                                     transparent-canvas render).
  *   - landing/public/ctrlyoke-icon.svg + docs/public/ctrlyoke-icon.svg → web favicon +
  *                                     header logos for the marketing + docs sites.
  *                                     Loaded via <img>/<link rel=icon> (no CSS cascade),
@@ -61,8 +68,8 @@ const imagesDir = join(rootDir, "images");
 const landingPublicDir = join(rootDir, "landing", "public");
 const docsPublicDir = join(rootDir, "docs", "public");
 
-const BG_COLOR = "#072c45";
-const FG_COLOR = "#ffffff";
+const BG_COLOR = "#3994BC";
+const FG_COLOR = "#051923";
 const LIGHT_THEME_ICON_COLOR = "#424242";
 const DARK_THEME_ICON_COLOR = "#C5C5C5";
 
@@ -76,12 +83,19 @@ function colorizeFg(svg, color) {
 function colorizeKeyface(svg, color) {
   const re = /<path\b[^>]*\bid="keyface"[^>]*\/>/;
   const match = svg.match(re);
-  if (!match) throw new Error('Could not find <path id="keyface"> in master SVG');
+  if (!match)
+    throw new Error('Could not find <path id="keyface"> in master SVG');
   if (!match[0].includes("fill:none")) {
-    throw new Error('keyface path does not have "fill:none" — master SVG authoring contract changed?');
+    throw new Error(
+      'keyface path does not have "fill:none" — master SVG authoring contract changed?'
+    );
   }
   const replaced = match[0].replace("fill:none", `fill:${color}`);
-  return svg.slice(0, match.index) + replaced + svg.slice(match.index + match[0].length);
+  return (
+    svg.slice(0, match.index) +
+    replaced +
+    svg.slice(match.index + match[0].length)
+  );
 }
 
 /** Insert a solid background rect as the first child of <svg>. */
@@ -178,9 +192,15 @@ try {
   // PNG exports via resvg-wasm
   console.log("\nRendering PNGs via resvg-wasm...");
 
-  writeFileSync(join(imagesDir, "icon.png"), renderPng(appIcon, 512));
+  // VS Code Marketplace / Extensions view icon (package.json "icon"). Transparent canvas —
+  // Microsoft's publishing docs recommend transparency here so the icon reads correctly
+  // against both light and dark Marketplace/Extensions-view backgrounds. Uses the same
+  // favicon-style render as ctrlyoke-icon-color.png.
+  writeFileSync(join(imagesDir, "icon.png"), renderPng(favicon, 512));
   console.log("  ✓ images/icon.png (512×512)");
 
+  // iOS apple-touch-icon PNG fallback — stays opaque. iOS has never supported transparent
+  // home-screen icons (it always fills a solid backdrop), unlike the Marketplace icon above.
   writeFileSync(
     join(imagesDir, "apple-touch-icon.png"),
     renderPng(appIcon, 180)
