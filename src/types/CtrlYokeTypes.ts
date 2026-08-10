@@ -16,8 +16,22 @@ import {
   type ExecutionMode,
   type HookEvent,
   type FailureKind,
+  type AttemptCostConfidence,
+  type AttemptCostNoteCode,
+  type AttemptCostSource,
+  type AttemptCostUnavailableReason,
+  type WorkflowTokenCoverage,
 } from "./DashboardConstants";
-export type { HarnessId, HookEvent, FailureKind };
+export type {
+  HarnessId,
+  HookEvent,
+  FailureKind,
+  AttemptCostConfidence,
+  AttemptCostNoteCode,
+  AttemptCostSource,
+  AttemptCostUnavailableReason,
+  WorkflowTokenCoverage,
+};
 import type { ToolPermissionMode } from "./ExecutionPropertyTypes";
 export type { ToolPermissionMode };
 
@@ -744,6 +758,68 @@ export interface WorkflowRunNavigationSummary {
   hasDraft: boolean;
 }
 
+export interface AttemptCostEstimate {
+  /** Total estimated cost in USD for this attempt. */
+  usd: number;
+  /** Where the number came from — governs the label and the disclaimer. */
+  source: AttemptCostSource;
+  /** Whether every billing relationship used by the calculation is verified. */
+  confidence: AttemptCostConfidence;
+  /** Machine-readable explanation for a fallback/substitution shown in the tooltip. */
+  noteCode?: AttemptCostNoteCode;
+  /** Model the price table was keyed on; shown in the tooltip. */
+  modelId?: string;
+  /** Optional component breakdown for the tooltip. */
+  breakdown?: {
+    inputUsd?: number;
+    outputUsd?: number;
+    cachedInputUsd?: number;
+    cacheWriteUsd?: number;
+    reasoningUsd?: number;
+  };
+}
+
+export interface WorkflowTokenTotals {
+  /** Sum of every AI attempt's `TokenStats.total` observed in this run. */
+  total: number;
+  /** Complete only when every executed AI attempt reported a usable total. */
+  coverage: WorkflowTokenCoverage;
+  /** AI attempts included in `total`. */
+  reportedAttemptCount: number;
+  /** AI attempts executed, including retries and manual reruns. */
+  attemptCount: number;
+  /** False while the run can still add usage. */
+  isFinal: boolean;
+  /** Summed attempt cost. Absent when no attempt was priceable. */
+  costUsd?: number;
+  /** True when at least one included attempt could not be priced. */
+  costPartial?: boolean;
+  /** Distinct attempt cost sources represented, in stable display order. */
+  costSources?: AttemptCostSource[];
+  /** Same aggregate partitioned by the harness recorded on each immutable attempt output. */
+  byHarness: Partial<Record<HarnessId, WorkflowHarnessTokenTotals>>;
+  /** Same per-harness subtotals partitioned by the attempt start's local day. */
+  byLocalDay: Record<
+    string,
+    Partial<Record<HarnessId, WorkflowHarnessTokenTotals>>
+  >;
+}
+
+export interface WorkflowHarnessTokenTotals {
+  input: number;
+  output: number;
+  cachedInput?: number;
+  cacheCreated?: number;
+  reasoningOutput?: number;
+  total: number;
+  coverage: WorkflowTokenCoverage;
+  reportedAttemptCount: number;
+  attemptCount: number;
+  costUsd?: number;
+  costPartial?: boolean;
+  costSources?: AttemptCostSource[];
+}
+
 /**
  * Summary of a workflow instance — used by WorkflowOrchestrator to expose
  * lightweight status information without leaking the full WorkflowInstance.
@@ -774,6 +850,7 @@ export interface WorkflowSummary {
   harness?: HarnessId;
   /** Run-navigation metadata for this lineage's list row. Not yet populated for running workflows. */
   runNav?: WorkflowRunNavigationSummary;
+  tokenTotals?: WorkflowTokenTotals;
 }
 
 /**

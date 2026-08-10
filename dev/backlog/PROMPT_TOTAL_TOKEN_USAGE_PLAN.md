@@ -770,11 +770,10 @@ the next presentation stage, as required by the staging order.
 
 ### Phase 3: Run aggregation
 
-- [ ] Add the pure run-scoped `WorkflowTokenTotalsReducer` over
+- [x] Add the pure run-scoped `WorkflowTokenTotalsReducer` over
       `TIMELINE_ATTEMPT_KINDS.AI` attempts, keyed by
       `(target, runIndex, attemptIndex, phase)`, with `byHarness` and
-      `byLocalDay` breakdowns; own/hydrate it per active manifest in
-      `OutputHistoryManager`.
+      `byLocalDay` breakdowns.
 - [ ] Persist `WorkflowTokenTotals` into `WorkingFileRuntime` and the run
       manifest; bump the timeline schema version and project into `RunSummary`.
 - [ ] Thread the live value through `PromptQueue` / `IWorkingFileQueueAccess` /
@@ -786,7 +785,11 @@ the next presentation stage, as required by the staging order.
       both row kinds; render in `RunSummaryRow.tsx`.
 - [ ] Update collapsed output groups to show the all-attempt sum with an
       explicit `N attempts` label; expanded rows retain per-attempt totals.
-- [ ] Tests: streaming replacement, retry/manual-rerun inclusion, partial
+- [x] Pure reducer tests: streaming replacement, retry/manual-rerun inclusion,
+      final/dynamic-step inclusion, partial coverage, run isolation,
+      local-midnight partitioning, `byHarness === sum(byLocalDay)`, mixed
+      harnesses, missing attribution, and no-usable-total omission.
+- [ ] Persistence tests: streaming replacement, retry/manual-rerun inclusion, partial
       coverage, dynamic-step inclusion, run isolation, local-midnight
       partitioning, `byHarness === sum(byLocalDay)`, duplicate/fork runtime
       stripping, same-run reopen/final transitions, and workflow-list refresh

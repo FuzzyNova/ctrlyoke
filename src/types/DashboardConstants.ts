@@ -611,6 +611,32 @@ export const WORKFLOW_TOKEN_COVERAGE = {
   PARTIAL: "partial",
 } as const;
 
+export const ATTEMPT_COST_SOURCES = {
+  /** The harness itself reported dollars (Claude `total_cost_usd`, OpenCode `part.cost`). */
+  HARNESS_REPORTED: "harness-reported",
+  /** Computed by ctrlyoke from the bundled price table. */
+  PRICE_TABLE: "price-table",
+  /** Computed from a user-supplied per-harness/model override. */
+  USER_OVERRIDE: "user-override",
+} as const;
+
+export const ATTEMPT_COST_CONFIDENCE = {
+  COMPLETE: "complete",
+  PARTIAL: "partial",
+} as const;
+
+export const ATTEMPT_COST_NOTE_CODES = {
+  HARNESS_DIVERGENCE: "harness-divergence",
+} as const;
+
+export const ATTEMPT_COST_UNAVAILABLE_REASONS = {
+  UNKNOWN_MODEL: "unknown-model",
+  PARTIAL_TOKENS: "partial-tokens",
+  UNVERIFIED_TOKEN_SEMANTICS: "unverified-token-semantics",
+  MISSING_HARNESS_COST: "missing-harness-cost",
+  COPILOT_BILLING_UNIT: "copilot-billing-unit",
+} as const;
+
 // ============================================================================
 // EXECUTION PREVIEW - Shared preview contract discriminants and limits
 // ============================================================================
@@ -1762,6 +1788,14 @@ export type TokenTotalConfidence =
   (typeof TOKEN_TOTAL_CONFIDENCE)[keyof typeof TOKEN_TOTAL_CONFIDENCE];
 export type WorkflowTokenCoverage =
   (typeof WORKFLOW_TOKEN_COVERAGE)[keyof typeof WORKFLOW_TOKEN_COVERAGE];
+export type AttemptCostSource =
+  (typeof ATTEMPT_COST_SOURCES)[keyof typeof ATTEMPT_COST_SOURCES];
+export type AttemptCostConfidence =
+  (typeof ATTEMPT_COST_CONFIDENCE)[keyof typeof ATTEMPT_COST_CONFIDENCE];
+export type AttemptCostNoteCode =
+  (typeof ATTEMPT_COST_NOTE_CODES)[keyof typeof ATTEMPT_COST_NOTE_CODES];
+export type AttemptCostUnavailableReason =
+  (typeof ATTEMPT_COST_UNAVAILABLE_REASONS)[keyof typeof ATTEMPT_COST_UNAVAILABLE_REASONS];
 export type PreviewScope = (typeof PREVIEW_SCOPES)[keyof typeof PREVIEW_SCOPES];
 export type PreviewMutationScope =
   (typeof PREVIEW_MUTATION_SCOPES)[keyof typeof PREVIEW_MUTATION_SCOPES];
