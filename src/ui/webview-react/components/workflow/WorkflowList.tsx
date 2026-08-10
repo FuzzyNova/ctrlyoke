@@ -13,6 +13,7 @@ import {
 } from "./WorkflowRowLayout";
 import {
   WorkflowTokenUsage,
+  hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
 import {
@@ -186,7 +187,11 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
             className="workflow-menu-item-state"
           />
         }
-        usage={<WorkflowTokenUsage totals={workflow.tokenTotals} />}
+        usage={
+          hasWorkflowTokenUsage(workflow.tokenTotals) ? (
+            <WorkflowTokenUsage totals={workflow.tokenTotals} />
+          ) : undefined
+        }
         time={
           timeAgo ? (
             <span className="workflow-menu-item-time">{timeAgo}</span>

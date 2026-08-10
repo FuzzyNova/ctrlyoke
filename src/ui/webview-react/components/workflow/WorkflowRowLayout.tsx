@@ -219,7 +219,11 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
             column visibly ragged down the list. A shared left edge is what
             makes the column scannable. */}
         <span className="col-start-5 flex justify-start">{badge}</span>
-        <span className="col-start-6 flex items-center justify-start">
+        {/* Same truncate-not-overflow treatment as the label column: fixed
+            grid tracks don't clip their content by default, so long token/cost
+            text (e.g. "≥11.2M · ≥$123.45") would otherwise bleed into the
+            time column instead of respecting its own track width. */}
+        <span className="col-start-6 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
           {visibleUsage}
         </span>
         <span className="col-start-7 truncate text-right text-xs text-description-fg">
@@ -260,7 +264,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
         {metaParts.map((part, index) => (
           <React.Fragment key={part.key}>
             {index > 0 && (
-              <span aria-hidden="true" className="opacity-50">
+              <span aria-hidden="true" className="font-normal opacity-50">
                 ·
               </span>
             )}

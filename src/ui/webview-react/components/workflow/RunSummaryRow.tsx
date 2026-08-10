@@ -9,6 +9,7 @@ import {
 } from "./WorkflowRowLayout";
 import {
   WorkflowTokenUsage,
+  hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
 import type { WorkflowRowTier } from "../../constants";
@@ -133,7 +134,11 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
             />
           )
         }
-        usage={<WorkflowTokenUsage totals={summary?.tokenTotals} />}
+        usage={
+          hasWorkflowTokenUsage(summary?.tokenTotals) ? (
+            <WorkflowTokenUsage totals={summary?.tokenTotals} />
+          ) : undefined
+        }
         time={timeAgo}
       />
 

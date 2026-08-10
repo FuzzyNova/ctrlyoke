@@ -17,6 +17,7 @@ import {
 } from "./WorkflowRowLayout";
 import {
   WorkflowTokenUsage,
+  hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
 import type { WorkflowRowTier } from "../../constants";
@@ -196,7 +197,11 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             isNarrow={isCompactRow(tier)}
           />
         }
-        usage={<WorkflowTokenUsage totals={workflow.tokenTotals} />}
+        usage={
+          hasWorkflowTokenUsage(workflow.tokenTotals) ? (
+            <WorkflowTokenUsage totals={workflow.tokenTotals} />
+          ) : undefined
+        }
         time={<span className="font-mono">{elapsed}</span>}
       />
 

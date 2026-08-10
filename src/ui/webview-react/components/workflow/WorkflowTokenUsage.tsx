@@ -25,6 +25,21 @@ export function workflowTokenTotalsAccessibleLabel(
   return label || undefined;
 }
 
+/**
+ * Whether `<WorkflowTokenUsage totals={totals} />` will render visible
+ * content. Callers that lay out a fixed-slot `usage` prop (e.g.
+ * `WorkflowRowLayout`'s stacked meta line, which joins its parts with a
+ * separator) must check this *before* deciding whether to pass the slot at
+ * all — the rendered `<WorkflowTokenUsage />` element itself is always a
+ * non-null React node even when the component internally renders `null`, so
+ * a presence check against the element reads as "has content" when it isn't.
+ */
+export function hasWorkflowTokenUsage(
+  totals: WorkflowTokenTotals | undefined
+): boolean {
+  return !!totals && !!formatTokenTotal(totals.total, totals.coverage);
+}
+
 /** Builds the usage tooltip shared by all workflow and run rows. */
 export function workflowTokenTotalsTooltip(
   totals: WorkflowTokenTotals | undefined

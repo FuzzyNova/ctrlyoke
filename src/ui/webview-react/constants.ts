@@ -110,8 +110,13 @@ export const WORKFLOW_ROW_TRACKS = {
   glyph: 16,
   /** Fits the longest execution state label, "CANCELLING". */
   state: 88,
-  /** Fits the lower-bound label `≥1.2M`. */
-  usage: 56,
+  /**
+   * Fits a lower-bound token total plus cost, e.g. `≥1.2M · ≥$999.99`.
+   * `WorkflowRowLayout` still clips overflow with an ellipsis (full detail
+   * stays in the tooltip) as a hard backstop — this budget just keeps that
+   * ellipsis rare instead of routine.
+   */
+  usage: 120,
   /**
    * Fits the longest verbose stamp, "59 minutes ago". Deliberately one width
    * for every row kind — running rows show a short elapsed timer and would fit
@@ -177,7 +182,7 @@ const workflowStackedFirstLineWidth =
  * overlay, so it may exceed its trigger and overlap neighbouring panels — the
  * limit is legibility of the row content, not the header's own width.
  */
-export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
+export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 720;
 
 /**
  * Width (px) below which the workflow dropdown's rows stack onto two lines.
@@ -185,10 +190,10 @@ export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
  * Derived from what the flat layout costs, not picked for feel. Its fixed
  * tracks and sibling actions — including the usage track — are computed from
  * `WORKFLOW_ROW_TRACKS` below. The threshold leaves the name at least 120px
- * wide, while the 640px desktop target remains flat. So the name is left
+ * wide, while the 720px desktop target remains flat. So the name is left
  * roughly:
  *
- *     440px → no room   500px → ~15px   560px → ~75px   640px → ~155px
+ *     440px → no room   500px → no room   560px → ~10px   640px → ~90px   720px → ~170px
  *
  * Below this threshold the name would collapse toward zero and the `max-content`
  * tracks start wrapping instead ("3 steps" onto two lines, "39 minutes ago"

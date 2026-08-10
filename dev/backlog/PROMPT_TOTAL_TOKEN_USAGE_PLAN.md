@@ -708,7 +708,9 @@ Show the addressed run's `WorkflowTokenTotals`:
   stacked badge-drop width) from the updated budget — `getWorkflowRowTier`
   reads those thresholds. Sizing lives there, not in CSS; globals.css carries
   only matching fallbacks, so a track widened in CSS alone silently collapses
-  the name column. Budget ~56px (fits `≥1.2M`).
+  the name column. Budget ~120px (fits `≥1.2M · ≥$999.99`); the column still
+  clips with an ellipsis as a backstop for anything longer, rather than
+  overflowing into the neighbouring time column.
 - At the `compact` tier, drop the usage slot rather than shrink the name column.
 - Formatting via the shared formatter: complete `410k`; partial `≥410k`; absent
   renders nothing.
