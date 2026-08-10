@@ -9,7 +9,9 @@ import {
   CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HARNESS_IDS,
 } from "../../types/DashboardConstants";
+import type { HarnessId } from "../../types/DashboardConstants";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
 import {
   TIMELINE_EVENT_TYPES,
@@ -39,8 +41,18 @@ suite("HistorySearchIndexService", () => {
   test("preserves harness attribution across same-step reruns", async () => {
     const workflowId = "harness-reruns-2026-06-09T22-00-00";
     await createRun(workflowId, 1, 1000, [
-      createCliOutputDraft(1100, "claude-cli", "shared-harness-term", 0),
-      createCliOutputDraft(1200, "codex-cli", "shared-harness-term", 1),
+      createCliOutputDraft(
+        1100,
+        HARNESS_IDS.CLAUDE_CLI,
+        "shared-harness-term",
+        0
+      ),
+      createCliOutputDraft(
+        1200,
+        HARNESS_IDS.CODEX_CLI,
+        "shared-harness-term",
+        1
+      ),
     ]);
 
     const index = new HistorySearchIndexService();
@@ -115,7 +127,7 @@ suite("HistorySearchIndexService", () => {
   test("matches path filters across mixed separators and casing", async () => {
     const workflowId = "path-filter-2026-06-09T22-20-00";
     await createRun(workflowId, 1, 3000, [
-      createCliOutputDraft(3100, "claude-cli", "mixed-path-term", 0, [
+      createCliOutputDraft(3100, HARNESS_IDS.CLAUDE_CLI, "mixed-path-term", 0, [
         {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           data: {
@@ -187,7 +199,7 @@ suite("HistorySearchIndexService", () => {
 
   function createCliOutputDraft(
     timestampMs: number,
-    harness: string | undefined,
+    harness: HarnessId | undefined,
     response: string,
     attemptIndex: number,
     structuredEvents: CliEvent[] = []

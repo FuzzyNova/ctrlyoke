@@ -27,6 +27,7 @@ import {
   EXECUTION_MODES,
   STEP_TYPES,
   PREVIEW_SCOPES,
+  type TokenTotalConfidence,
   type ScriptOutputSource,
   type ExecutionPhase,
   type UndoFileAction,
@@ -132,14 +133,29 @@ type ExecutionMode = (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
 export interface TokenStats {
   prompt: number;
   completion: number;
-  /** Cache-read tokens (billed at reduced rate) */
+  /** Cache-read tokens (billed at reduced rate). */
   cached?: number;
-  /** Cache-creation tokens — Claude only */
+  /** Cache-creation tokens — Claude only. */
   cacheCreated?: number;
-  /** Total input tokens occupying the context window (last API turn) */
+  /** Cumulative reasoning output tokens, when reported separately. */
+  reasoning?: number;
+  /**
+   * Normalized cumulative total for the attempt (provider-reported or parser
+   * accumulated, as described by `totalConfidence`). Prefer this over
+   * `prompt + completion`: whether cache tokens are already inside `prompt`
+   * varies by harness, so the sum is wrong for at least half of them.
+   */
+  total?: number;
+  /** Total input tokens occupying the context window (last API turn). */
   contextWindowUsed?: number;
-  /** Model's total context window capacity in tokens */
+  /** Model's total context window capacity in tokens. */
   contextWindowSize?: number;
+  /** Compaction events observed during this attempt. Context, not a total source. */
+  compactionCount?: number;
+  /** Sum of known pre-compaction token counts. Best effort, display only. */
+  compactedContextTokens?: number;
+  /** Where `total` came from. Drives whether the UI may compare it as exact. */
+  totalConfidence?: TokenTotalConfidence;
 }
 
 /**

@@ -728,15 +728,15 @@ list rather than deferring.
 
 ### Phase 1: Stop losing the numbers we already have
 
-- [ ] Widen `TokenStats` with `total`, `reasoning`, `compactionCount`,
+- [x] Widen `TokenStats` with `total`, `reasoning`, `compactionCount`,
       `compactedContextTokens`, `totalConfidence`.
-- [ ] Add `TOKEN_TOTAL_CONFIDENCE` and `WORKFLOW_TOKEN_COVERAGE` to
+- [x] Add `TOKEN_TOTAL_CONFIDENCE` and `WORKFLOW_TOKEN_COVERAGE` to
       `DashboardConstants.ts`.
-- [ ] Correct the `TokenUsage.inputTokens` / `totalTokens` contract comments;
+- [x] Correct the `TokenUsage.inputTokens` / `totalTokens` contract comments;
       add provenance fields and narrow `OutputMetadata.harness` to `HarnessId`.
-- [ ] Make `WorkflowExecutor.resolveTokenCounts` lossless.
-- [ ] Summarize compaction events at that same conversion boundary.
-- [ ] Add pure token/total/accessible-label helpers to
+- [x] Make `WorkflowExecutor.resolveTokenCounts` lossless.
+- [x] Summarize compaction events at that same conversion boundary.
+- [x] Add pure token/total/accessible-label helpers to
       `src/utils/TokenFormatting.ts`, consumable by both CLI and webview
       (`@root/utils/...`); keep `calcContextPct` in the webview's
       `tokenUtils.ts`. Do not fork formatting logic by surface.
@@ -747,6 +747,10 @@ list rather than deferring.
 - [ ] React tests: context-only, total-only, compacted (label visible),
       uncompacted-with-large-total (label absent), and
       compaction-count-unavailable (label absent) cases.
+
+Phase 1 backend work is complete through the shared formatting helpers. Stats
+row, CLI, and workflow-step rendering plus their React tests are deferred to
+the next presentation stage, as required by the staging order.
 
 ### Phase 2: Close the harness gaps
 

@@ -595,6 +595,23 @@ export const HARNESS_IDS = {
 } as const;
 
 // ============================================================================
+// TOKEN USAGE - Provenance and aggregate coverage
+// ============================================================================
+export const TOKEN_TOTAL_CONFIDENCE = {
+  /** Provider reported a cumulative total for the whole attempt. */
+  PROVIDER: "provider",
+  /** Summed from provider per-turn usage by a ctrlyoke parser. */
+  ACCUMULATED: "accumulated",
+  /** Known to be incomplete (e.g. a harness that only reports the last turn). */
+  PARTIAL: "partial",
+} as const;
+
+export const WORKFLOW_TOKEN_COVERAGE = {
+  COMPLETE: "complete",
+  PARTIAL: "partial",
+} as const;
+
+// ============================================================================
 // EXECUTION PREVIEW - Shared preview contract discriminants and limits
 // ============================================================================
 export const PREVIEW_SCOPES = {
@@ -1741,6 +1758,10 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+export type TokenTotalConfidence =
+  (typeof TOKEN_TOTAL_CONFIDENCE)[keyof typeof TOKEN_TOTAL_CONFIDENCE];
+export type WorkflowTokenCoverage =
+  (typeof WORKFLOW_TOKEN_COVERAGE)[keyof typeof WORKFLOW_TOKEN_COVERAGE];
 export type PreviewScope = (typeof PREVIEW_SCOPES)[keyof typeof PREVIEW_SCOPES];
 export type PreviewMutationScope =
   (typeof PREVIEW_MUTATION_SCOPES)[keyof typeof PREVIEW_MUTATION_SCOPES];

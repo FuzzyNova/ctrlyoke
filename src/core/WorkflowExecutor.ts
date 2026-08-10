@@ -67,6 +67,7 @@ import {
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import { summarizeCompactionEvents } from "../utils/TokenUsage";
 import {
   formatVerdictSummary,
   createConditionEvaluationSummary,
@@ -1571,13 +1572,18 @@ export class WorkflowExecutor {
   ): CliOutput["tokens"] {
     if (parsedOutput?.metadata.usage) {
       const u = parsedOutput.metadata.usage;
+      const compactionSummary = summarizeCompactionEvents(parsedOutput.events);
       return {
         prompt: u.inputTokens,
         completion: u.outputTokens,
         cached: u.cachedInputTokens,
         cacheCreated: u.cacheCreatedTokens,
+        reasoning: u.reasoningOutputTokens,
+        total: u.totalTokens,
         contextWindowUsed: u.contextWindowUsedTokens,
         contextWindowSize: u.contextWindowSize,
+        ...compactionSummary,
+        totalConfidence: u.totalConfidence,
       };
     }
     return undefined;

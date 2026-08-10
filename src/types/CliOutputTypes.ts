@@ -9,6 +9,8 @@ import type {
   CliEventType,
   CompactionTrigger,
   CallerType,
+  HarnessId,
+  TokenTotalConfidence,
 } from "./DashboardConstants";
 
 export type { CliEventType };
@@ -202,8 +204,8 @@ export interface OutputMetadata {
   cliVersion?: string;
   /** Elapsed time in milliseconds */
   elapsed?: number;
-  /** Harness identifier (e.g., 'copilot-cli', 'claude-cli', 'codex-cli') */
-  harness?: string;
+  /** Harness identifier from the canonical HARNESS_IDS set. */
+  harness?: HarnessId;
   /**
    * When true, text events contain pre-formatted output that should NOT be
    * processed by markdown renderers (e.g., Streamdown). The harness already
@@ -371,11 +373,11 @@ export interface CliResult {
  * Token usage statistics for the response.
  */
 export interface TokenUsage {
-  /** Number of input tokens consumed (non-cached portion) */
+  /** Number of input tokens consumed; cache inclusion is harness-specific. */
   inputTokens: number;
   /** Number of output tokens generated */
   outputTokens: number;
-  /** Billing total: inputTokens + outputTokens */
+  /** Total token count; its relationship to input/output is harness-specific. */
   totalTokens: number;
   /** Number of cache-read input tokens (billed at reduced rate) */
   cachedInputTokens?: number;
@@ -383,6 +385,8 @@ export interface TokenUsage {
   cacheCreatedTokens?: number;
   /** Number of reasoning output tokens — Codex and Antigravity */
   reasoningOutputTokens?: number;
+  /** Provenance of totalTokens as declared by the parser. */
+  totalConfidence?: TokenTotalConfidence;
   /**
    * Total input tokens in the context window for the last API turn.
    * = input_tokens + cache_creation_input_tokens + cache_read_input_tokens
