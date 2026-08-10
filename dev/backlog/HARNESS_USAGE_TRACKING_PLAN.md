@@ -520,7 +520,11 @@ exact duplication both plans warn against.
 
 - [ ] Add `UsageTypes.ts` and the matching constants in `DashboardConstants.ts`
 - [ ] Add the canonical `.usage` path constants plus versioned, atomic
-      normalized-provider and observed-rollup stores
+      normalized-provider and observed-rollup stores. The directory name belongs
+      in `PATH_CONSTANTS` (`src/utils/ConfigurationUtils.ts`) beside
+      `RUNS_DIR`/`TEMP_DIR`; the file paths under it belong in a small
+      `UsagePaths` helper mirroring how `WorkflowPaths.ts` owns everything under
+      `.runs` — do not build `.usage` paths ad hoc at call sites
 - [ ] Add `ObservedHarnessUsageStore`, idempotently fed at every terminal state
       by `(workflowKey, runRef)` and `WorkflowTokenTotals.byLocalDay`
 - [ ] Render usage cards in `HarnessesSection.tsx` showing observed totals

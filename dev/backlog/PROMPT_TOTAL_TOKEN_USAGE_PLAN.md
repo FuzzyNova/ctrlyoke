@@ -693,13 +693,17 @@ Show the addressed run's `WorkflowTokenTotals`:
   diverge.
 - Add a dedicated usage slot to `WorkflowRowLayout.tsx` so totals align
   vertically in flat rows and join the second metadata line at the `stacked`
-  tier.
-  The current tracks are harness, label, count, glyph, badge, and time; the usage
-  slot goes between count and glyph.
+  tier. The tracks actually declared today are `harness`, `glyph`, `state`,
+  `time`, `runIndicator` (`{ flat, stacked }`), and `actions`; place the usage
+  track between `state` and `time` so it sits with the other metadata rather
+  than beside the leading harness glyph.
 - Add the new track to `WORKFLOW_ROW_TRACKS` in
-  `src/ui/webview-react/constants.ts:106-136` and re-derive the responsive tier
-  thresholds from it. Sizing lives there, not in CSS — a track widened in CSS
-  alone silently collapses the name column. Budget ~56px (fits `≥1.2M`).
+  `src/ui/webview-react/constants.ts` and re-derive
+  `WORKFLOW_DROPDOWN_NARROW_WIDTH` / `WORKFLOW_DROPDOWN_COMPACT_WIDTH` (and the
+  stacked badge-drop width) from the updated budget — `getWorkflowRowTier`
+  reads those thresholds. Sizing lives there, not in CSS; globals.css carries
+  only matching fallbacks, so a track widened in CSS alone silently collapses
+  the name column. Budget ~56px (fits `≥1.2M`).
 - At the `compact` tier, drop the usage slot rather than shrink the name column.
 - Formatting via the shared formatter: complete `410k`; partial `≥410k`; absent
   renders nothing.
