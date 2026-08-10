@@ -62,7 +62,11 @@ function addLocalDays(date: Date, days: number): Date {
 function observedSince(period: HarnessObservedPeriod, now: number): number {
   const date = new Date(now);
   if (period === HARNESS_OBSERVED_PERIODS.DAILY) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    ).getTime();
   }
   if (period === HARNESS_OBSERVED_PERIODS.MONTHLY) {
     return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
@@ -80,7 +84,10 @@ function observedKey(period: HarnessObservedPeriod, now: number): string {
   return localDayKey(date);
 }
 
-function emptyObserved(period: HarnessObservedPeriod, now: number): HarnessObservedTokens {
+function emptyObserved(
+  period: HarnessObservedPeriod,
+  now: number
+): HarnessObservedTokens {
   return {
     input: 0,
     output: 0,
@@ -125,18 +132,33 @@ function normalizeQuota(quota: HarnessQuotaSnapshot): HarnessQuotaSnapshot {
 }
 
 function safeErrorCode(error: unknown): string {
-  if (error instanceof Error && error.message === HARNESS_USAGE_ERROR_CODES.MALFORMED_PROVIDER_DATA) {
+  if (
+    error instanceof Error &&
+    error.message === HARNESS_USAGE_ERROR_CODES.MALFORMED_PROVIDER_DATA
+  ) {
     return error.message;
   }
   return HARNESS_USAGE_ERROR_CODES.PROVIDER_REFRESH_FAILED;
 }
 
 export class HarnessUsageService {
-  private readonly providerByHarness = new Map<HarnessId, IHarnessUsageProvider>();
+  private readonly providerByHarness = new Map<
+    HarnessId,
+    IHarnessUsageProvider
+  >();
   private readonly quotaCache = new Map<HarnessId, HarnessQuotaSnapshot>();
-  private readonly observedCache = new Map<HarnessId, HarnessUsageSnapshot["observed"]>();
-  private readonly refreshPromises = new Map<HarnessId, Promise<HarnessUsageSnapshot>>();
-  private readonly refreshTimers = new Map<HarnessId, ReturnType<typeof setTimeout>>();
+  private readonly observedCache = new Map<
+    HarnessId,
+    HarnessUsageSnapshot["observed"]
+  >();
+  private readonly refreshPromises = new Map<
+    HarnessId,
+    Promise<HarnessUsageSnapshot>
+  >();
+  private readonly refreshTimers = new Map<
+    HarnessId,
+    ReturnType<typeof setTimeout>
+  >();
   private readonly providerSnapshotsFile: string;
   private readonly observedStore: ObservedHarnessUsageStore;
   private readonly emit?: (snapshots: HarnessUsageSnapshot[]) => void;
@@ -146,7 +168,9 @@ export class HarnessUsageService {
   constructor(
     workspaceRoot: string,
     providers: readonly IHarnessUsageProvider[] = createDefaultHarnessUsageProviders(),
-    observedStore: ObservedHarnessUsageStore = new ObservedHarnessUsageStore(workspaceRoot),
+    observedStore: ObservedHarnessUsageStore = new ObservedHarnessUsageStore(
+      workspaceRoot
+    ),
     emit?: (snapshots: HarnessUsageSnapshot[]) => void,
     now: () => number = Date.now
   ) {
@@ -209,26 +233,45 @@ export class HarnessUsageService {
   }
 
   async refreshAllHarnessUsage(): Promise<HarnessUsageSnapshot[]> {
-    await Promise.all(HARNESS_ID_LIST.map((harnessId) => this.refreshHarnessUsage(harnessId)));
+    await Promise.all(
+      HARNESS_ID_LIST.map((harnessId) => this.refreshHarnessUsage(harnessId))
+    );
     return this.getHarnessUsageSnapshots();
   }
 
   isQuotaStale(harnessId: HarnessId, now: number = this.now()): boolean {
-    return isHarnessQuotaStale(this.quotaCache.get(harnessId) ?? this.createUnavailableQuota(harnessId), now);
+    return isHarnessQuotaStale(
+      this.quotaCache.get(harnessId) ?? this.createUnavailableQuota(harnessId),
+      now
+    );
   }
 
-  private async refreshOne(harnessId: HarnessId): Promise<HarnessUsageSnapshot> {
+  private async refreshOne(
+    harnessId: HarnessId
+  ): Promise<HarnessUsageSnapshot> {
     await this.refreshObservedUsage();
     const provider = this.providerByHarness.get(harnessId);
     if (!provider) {
-      this.quotaCache.set(harnessId, this.createUnavailableQuota(harnessId, "provider-not-registered"));
+      this.quotaCache.set(
+        harnessId,
+        this.createUnavailableQuota(harnessId, "provider-not-registered")
+      );
     } else {
       try {
         const quota = await provider.refreshUsage();
         if (quota.harnessId !== harnessId) {
           throw new Error(HARNESS_USAGE_ERROR_CODES.MALFORMED_PROVIDER_DATA);
         }
-        this.ingestProviderUsage(quota);
+        // A provider may have no safe standalone probe (Claude's live quota is
+        // pushed by its statusline sidecar). Do not erase a last-known live
+        // snapshot merely because a pull refresh has no new data.
+        if (
+          quota.source !== HARNESS_QUOTA_SOURCES.UNAVAILABLE ||
+          quota.windows.length > 0 ||
+          quota.fetchedAt !== undefined
+        ) {
+          this.ingestProviderUsage(quota);
+        }
       } catch (error) {
         const previous = this.quotaCache.get(harnessId);
         this.quotaCache.set(
@@ -275,19 +318,28 @@ export class HarnessUsageService {
     return {
       harnessId,
       updatedAt: this.now(),
-      quota: cloneQuota(this.quotaCache.get(harnessId) ?? this.createUnavailableQuota(harnessId)),
-      observed: this.observedCache.get(harnessId) ?? this.emptyObservedPeriods(),
+      quota: cloneQuota(
+        this.quotaCache.get(harnessId) ?? this.createUnavailableQuota(harnessId)
+      ),
+      observed:
+        this.observedCache.get(harnessId) ?? this.emptyObservedPeriods(),
     };
   }
 
   private emptyObservedPeriods(): HarnessUsageSnapshot["observed"] {
     const now = this.now();
     return Object.fromEntries(
-      Object.values(HARNESS_OBSERVED_PERIODS).map((period) => [period, emptyObserved(period, now)])
+      Object.values(HARNESS_OBSERVED_PERIODS).map((period) => [
+        period,
+        emptyObserved(period, now),
+      ])
     ) as HarnessUsageSnapshot["observed"];
   }
 
-  private createUnavailableQuota(harnessId: HarnessId, errorCode?: string): HarnessQuotaSnapshot {
+  private createUnavailableQuota(
+    harnessId: HarnessId,
+    errorCode?: string
+  ): HarnessQuotaSnapshot {
     return {
       harnessId,
       source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
@@ -305,13 +357,20 @@ export class HarnessUsageService {
     try {
       const raw = await fs.readFile(this.providerSnapshotsFile, "utf8");
       const parsed: unknown = JSON.parse(raw);
-      if (!isRecord(parsed) || parsed.schemaVersion !== PROVIDER_USAGE_SCHEMA_VERSION || !isRecord(parsed.snapshots)) {
+      if (
+        !isRecord(parsed) ||
+        parsed.schemaVersion !== PROVIDER_USAGE_SCHEMA_VERSION ||
+        !isRecord(parsed.snapshots)
+      ) {
         throw new Error(HARNESS_USAGE_ERROR_CODES.MALFORMED_PROVIDER_DATA);
       }
       for (const [harnessId, value] of Object.entries(parsed.snapshots)) {
         if (VALID_HARNESS_IDS.has(harnessId as HarnessId) && isRecord(value)) {
           const quota = value as unknown as HarnessQuotaSnapshot;
-          if (Array.isArray(quota.windows) && typeof quota.source === "string") {
+          if (
+            Array.isArray(quota.windows) &&
+            typeof quota.source === "string"
+          ) {
             this.quotaCache.set(harnessId as HarnessId, normalizeQuota(quota));
           }
         }
@@ -325,7 +384,9 @@ export class HarnessUsageService {
   private async persistProviderSnapshots(): Promise<void> {
     try {
       await withFileLock(this.providerSnapshotsFile, async () => {
-        await fs.mkdir(path.dirname(this.providerSnapshotsFile), { recursive: true });
+        await fs.mkdir(path.dirname(this.providerSnapshotsFile), {
+          recursive: true,
+        });
         const snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>> = {};
         for (const harnessId of HARNESS_ID_LIST) {
           const quota = this.quotaCache.get(harnessId);
@@ -351,7 +412,10 @@ export class HarnessUsageService {
 
   private async quarantineProviderSnapshotFile(): Promise<void> {
     await fs
-      .rename(this.providerSnapshotsFile, `${this.providerSnapshotsFile}.corrupt-${this.now()}.json`)
+      .rename(
+        this.providerSnapshotsFile,
+        `${this.providerSnapshotsFile}.corrupt-${this.now()}.json`
+      )
       .catch(() => undefined);
   }
 }

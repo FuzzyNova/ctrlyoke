@@ -39,6 +39,7 @@ import {
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { AntigravityCliProvider } from "./core/harness/antigravity/AntigravityCliProvider";
+import { ClaudeCliProvider } from "./core/harness/claude/ClaudeCliProvider";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
@@ -418,6 +419,11 @@ export async function activate(context: vscode.ExtensionContext) {
         AntigravityCliProvider.pruneOrphanedStatusLine(workspaceRoot).catch(
           (err) => {
             Log.warn("ctrlyoke: Antigravity statusline cleanup failed:", err);
+          }
+        );
+        ClaudeCliProvider.pruneOrphanedStatusLine(workspaceRoot).catch(
+          (err) => {
+            Log.warn("ctrlyoke: Claude statusline cleanup failed:", err);
           }
         );
       } else {

@@ -66,6 +66,12 @@
           "default": true,
           "scope": "machine",
           "markdownDescription": "Enable Antigravity statusline token/context tracking. This writes to the GLOBAL `~/.gemini/antigravity-cli/settings.json` and wraps any statusline command you already have configured, forwarding its output unchanged. Disable this if you do not want ctrlyoke to touch that global file or your existing statusline is fragile."
+        },
+        "ctrlyoke.usageTracking.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Enable workspace-local provider quota and observed-usage tracking. Claude statusline capture is automatic for ctrlyoke-started sessions while this setting is enabled."
         }
       }
     },

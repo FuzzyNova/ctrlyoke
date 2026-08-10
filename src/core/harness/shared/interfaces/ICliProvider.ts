@@ -22,6 +22,7 @@ import type { ResolvedProperties } from "../../../../utils/PropertyResolver";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type { HarnessId } from "../../../../types/DashboardConstants";
 import type { CliEvent } from "../../../../types/CliOutputTypes";
+import type { HarnessQuotaSnapshot } from "../../../../types/UsageTypes";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
 export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
@@ -37,6 +38,8 @@ export interface CliExecutionSidecarDeps {
   model: string;
   onStreamingEvents: (events: CliEvent[]) => void;
   onContextWindowUpdate: (used: number, size: number) => void;
+  /** Optional injected port for provider-live usage signals. */
+  onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void;
 }
 
 /**

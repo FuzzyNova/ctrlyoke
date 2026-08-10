@@ -29,6 +29,7 @@ import {
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
+import type { HarnessQuotaSnapshot } from "../../types/UsageTypes";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
 import {
@@ -181,7 +182,10 @@ export class CliIntegration extends HarnessIntegration {
     cliProvider: ICliProvider,
     platform: PlatformAdapter,
     registerWithContext: boolean = true,
-    private readonly userFeedbackSink?: UserFeedbackSink
+    private readonly userFeedbackSink?: UserFeedbackSink,
+    private readonly onProviderUsageUpdate?: (
+      quota: HarnessQuotaSnapshot
+    ) => void
   ) {
     // Pass ExtensionContext to base class if available (VS Code context) for subscription management
     const vsCtx =
@@ -944,6 +948,7 @@ export class CliIntegration extends HarnessIntegration {
           onStreamingEvents: (events) => this.emitStreamingEvents(events),
           onContextWindowUpdate: (used, size) =>
             this.emitContextWindowUpdate(used, size),
+          onProviderUsageUpdate: this.onProviderUsageUpdate,
         })
       : undefined;
 

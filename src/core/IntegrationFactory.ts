@@ -10,6 +10,7 @@ import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
 import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProvider";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
+import type { HarnessQuotaSnapshot } from "../types/UsageTypes";
 
 /**
  * IntegrationFactory
@@ -32,7 +33,10 @@ import type { UserFeedbackSink } from "./UserFeedbackSink";
 export class IntegrationFactory {
   constructor(
     protected readonly platform: PlatformAdapter,
-    protected readonly userFeedbackSink?: UserFeedbackSink
+    protected readonly userFeedbackSink?: UserFeedbackSink,
+    protected readonly onProviderUsageUpdate?: (
+      quota: HarnessQuotaSnapshot
+    ) => void
   ) {}
 
   /**
@@ -65,7 +69,8 @@ export class IntegrationFactory {
       provider,
       this.platform,
       registerWithContext,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.onProviderUsageUpdate
     );
   }
 
@@ -76,7 +81,8 @@ export class IntegrationFactory {
       provider,
       this.platform,
       registerWithContext,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.onProviderUsageUpdate
     );
   }
 
@@ -87,7 +93,8 @@ export class IntegrationFactory {
       provider,
       this.platform,
       registerWithContext,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.onProviderUsageUpdate
     );
   }
 
@@ -98,7 +105,8 @@ export class IntegrationFactory {
       provider,
       this.platform,
       registerWithContext,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.onProviderUsageUpdate
     );
   }
 
@@ -109,7 +117,8 @@ export class IntegrationFactory {
       provider,
       this.platform,
       registerWithContext,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.onProviderUsageUpdate
     );
   }
 
@@ -120,7 +129,8 @@ export class IntegrationFactory {
       provider,
       this.platform,
       registerWithContext,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.onProviderUsageUpdate
     );
   }
 

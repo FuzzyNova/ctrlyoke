@@ -316,6 +316,22 @@
         }
       }
     },
+    "usageTracking": {
+      "type": "object",
+      "description": "Controls workspace-local provider quota and observed-usage collection.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Enable usage collection for ctrlyoke-started harness sessions." },
+        "providerRefreshEnabled": { "type": "boolean", "description": "Allow provider quota refreshes from configured collectors." },
+        "persistObservedUsage": { "type": "boolean", "description": "Persist normalized observed usage in the workspace." },
+        "enterpriseUsageApisEnabled": { "type": "boolean", "description": "Allow explicitly configured enterprise usage APIs." },
+        "warningPercentUsed": { "type": "number", "minimum": 0, "maximum": 100 },
+        "preferredFallbackOrder": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["copilot-cli", "claude-cli", "codex-cli", "opencode-cli", "qwen-cli", "antigravity-cli"] }
+        }
+      }
+    },
     "execution": {
       "type": "object",
       "description": "Execution settings.",

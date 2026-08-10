@@ -1,9 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import { StatuslineSnapshotWatcher } from "../shared/StatuslineSnapshotWatcher";
 import type { AntigravityLogParser } from "./AntigravityLogParser";
-
-const SNAPSHOT_POLL_INTERVAL_MS = 500;
 
 interface SnapshotContextWindow {
   total_input_tokens?: unknown;
@@ -88,133 +85,44 @@ export interface AntigravityStatuslineSidecarDeps {
  * the snapshot is an additional token-count source, not a second log stream.
  */
 export class AntigravityStatuslineSidecar {
-  private readonly snapshotPath: string;
   private readonly model: string;
   private readonly parser: Pick<
     AntigravityLogParser,
     "extractLiveContextWindow"
   >;
   private readonly onContextWindowUpdate: (used: number, size: number) => void;
-  private readonly onSnapshot:
-    | ((snapshot: AntigravityStatuslineSnapshot) => void)
-    | undefined;
-  private readonly snapshotDirectory: string;
-  private readonly snapshotFileName: string;
-  private watcher?: fs.FSWatcher;
-  private pollTimer?: NodeJS.Timeout;
-  private readQueue = Promise.resolve();
-  private stopped = false;
-  private lastSnapshotMarker?: string;
-  private latestSnapshot?: AntigravityStatuslineSnapshot;
+  private readonly watcher: StatuslineSnapshotWatcher<AntigravityStatuslineSnapshot>;
 
   constructor(deps: AntigravityStatuslineSidecarDeps) {
-    this.snapshotPath = deps.snapshotPath;
     this.model = deps.model;
     this.parser = deps.parser;
     this.onContextWindowUpdate = deps.onContextWindowUpdate;
-    this.onSnapshot = deps.onSnapshot;
-    this.snapshotDirectory = path.dirname(deps.snapshotPath);
-    this.snapshotFileName = path.basename(deps.snapshotPath);
-
-    this.startWatching();
-    this.queueSnapshotRead();
+    this.watcher = new StatuslineSnapshotWatcher({
+      snapshotPath: deps.snapshotPath,
+      onSnapshot: (snapshot) => {
+        deps.onSnapshot?.(snapshot);
+        this.acceptSnapshot(snapshot);
+      },
+    });
   }
 
   /** The most recently accepted raw statusline payload. */
   getLatestSnapshot(): AntigravityStatuslineSnapshot | undefined {
-    return this.latestSnapshot;
+    return this.watcher.getLatestSnapshot();
   }
 
   /** Flush one final read so completed-response consumers see the newest snapshot. */
   async readLatestSnapshot(): Promise<
     AntigravityStatuslineSnapshot | undefined
   > {
-    this.queueSnapshotRead();
-    await this.readQueue;
-    return this.latestSnapshot;
+    return this.watcher.readLatestSnapshot();
   }
 
   stop(): void {
-    if (this.stopped) {
-      return;
-    }
-    this.stopped = true;
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = undefined;
-    }
-    if (this.watcher) {
-      this.watcher.close();
-      this.watcher = undefined;
-    }
+    this.watcher.stop();
   }
 
-  private startWatching(): void {
-    try {
-      fs.mkdirSync(this.snapshotDirectory, { recursive: true });
-      this.watcher = fs.watch(
-        this.snapshotDirectory,
-        (_eventType, fileName) => {
-          if (
-            this.stopped ||
-            (fileName != null && fileName.toString() !== this.snapshotFileName)
-          ) {
-            return;
-          }
-          this.queueSnapshotRead();
-        }
-      );
-      this.watcher.on("error", () => {
-        // Polling remains active when a platform watcher becomes unreliable.
-      });
-    } catch {
-      // The polling fallback below still handles filesystems where fs.watch
-      // cannot be created.
-    }
-
-    this.pollTimer = setInterval(
-      () => this.queueSnapshotRead(),
-      SNAPSHOT_POLL_INTERVAL_MS
-    );
-  }
-
-  private queueSnapshotRead(): void {
-    if (this.stopped) {
-      return;
-    }
-    this.readQueue = this.readQueue
-      .then(() => this.readSnapshot())
-      .catch(() => {
-        // A watcher callback must never surface malformed or transient reads.
-      });
-  }
-
-  private async readSnapshot(): Promise<void> {
-    if (this.stopped) {
-      return;
-    }
-
-    let snapshot: AntigravityStatuslineSnapshot;
-    try {
-      const content = await fs.promises.readFile(this.snapshotPath, "utf8");
-      const parsed: unknown = JSON.parse(content);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return;
-      }
-      snapshot = parsed as AntigravityStatuslineSnapshot;
-    } catch {
-      return;
-    }
-
-    const marker = this.getSnapshotMarker(snapshot);
-    if (!marker || marker === this.lastSnapshotMarker || this.stopped) {
-      return;
-    }
-
-    this.lastSnapshotMarker = marker;
-    this.latestSnapshot = snapshot;
-    this.onSnapshot?.(snapshot);
-
+  private acceptSnapshot(snapshot: AntigravityStatuslineSnapshot): void {
     const contextWindow = snapshot.context_window;
     const inputTokens = this.asFiniteNumber(contextWindow?.total_input_tokens);
     const outputTokens = this.asFiniteNumber(
@@ -243,21 +151,9 @@ export class AntigravityStatuslineSidecar {
       currentUsage: parseStatuslineCurrentUsage(contextWindow?.current_usage),
     } as BaseCliEvent;
     const context = this.parser.extractLiveContextWindow(event, this.model);
-    if (context && !this.stopped) {
+    if (context) {
       this.onContextWindowUpdate(context.used, context.size);
     }
-  }
-
-  private getSnapshotMarker(
-    snapshot: AntigravityStatuslineSnapshot
-  ): string | undefined {
-    const metadata = snapshot._ctrlyoke;
-    const sequence = this.asFiniteNumber(metadata?.sequence);
-    const writtenAt = this.asFiniteNumber(metadata?.writtenAt);
-    if (sequence === undefined && writtenAt === undefined) {
-      return undefined;
-    }
-    return `${sequence ?? ""}:${writtenAt ?? ""}`;
   }
 
   private getModel(

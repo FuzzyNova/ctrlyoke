@@ -83,6 +83,8 @@ export const CONFIG_KEYS = {
     "permissions.allowedExternalFileRoots",
   PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
     SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING,
+  USAGE_TRACKING: "usageTracking",
+  USAGE_TRACKING_ENABLED: "usageTracking.enabled",
   UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
@@ -703,6 +705,11 @@ export const ConfigurationUtils = {
   shouldTrackAntigravityStatusLine(): boolean {
     return configService.get(CONFIG_KEYS.PERMISSIONS)
       .antigravityStatusLineTracking;
+  },
+
+  /** Whether provider quota and observed usage collection is enabled. */
+  shouldTrackHarnessUsage(): boolean {
+    return configService.get(CONFIG_KEYS.USAGE_TRACKING).enabled;
   },
 
   // ============================================================

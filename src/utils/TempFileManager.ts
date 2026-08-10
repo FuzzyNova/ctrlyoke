@@ -25,6 +25,7 @@ export class TempFileManager {
   private readonly PROMPT_EXTENSION = ".prompt.md";
   private readonly MCP_CONFIG_PREFIX = "mcp-config";
   private readonly AGY_STATUSLINE_PREFIX = "agy-statusline-";
+  private readonly CLAUDE_STATUSLINE_PREFIX = "claude-statusline-";
   // Filename marker for pasted images. Kept in the name (not just the extension)
   // so the temp orphan sweep can target these regardless of image extension
   // without allow-listing arbitrary binary files a user may have dropped in temp.
@@ -432,7 +433,8 @@ export class TempFileManager {
             file.endsWith(".md") ||
             file.startsWith(this.MCP_CONFIG_PREFIX) ||
             file.startsWith(this.PASTED_IMAGE_PREFIX) ||
-            file.startsWith(this.AGY_STATUSLINE_PREFIX);
+            file.startsWith(this.AGY_STATUSLINE_PREFIX) ||
+            file.startsWith(this.CLAUDE_STATUSLINE_PREFIX);
           if (!isTempFile) {
             continue;
           }

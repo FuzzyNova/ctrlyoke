@@ -390,9 +390,22 @@ export class WorkflowOrchestrator {
     if (dashboardProvider) {
       this.dashboardBroadcastHub.addClient(dashboardProvider);
     }
+    // Workspace — the folder matching the resolved `.ctrlyoke` root
+    // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
+    this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
+    if (this.currentWorkspaceFolder) {
+      this.harnessUsageService = new HarnessUsageService(
+        this.currentWorkspaceFolder.uri.fsPath,
+        undefined,
+        undefined,
+        (snapshots) => this.dashboardBroadcastHub.updateHarnessUsage(snapshots)
+      );
+    }
+
     this.integrationFactory = new IntegrationFactory(
       new VsCodeAdapter(context),
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.harnessUsageService?.getProviderUsageIngestPort()
     );
     this.compatibilityRegistry = new HarnessCapabilityRegistry();
 
@@ -407,18 +420,6 @@ export class WorkflowOrchestrator {
 
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
-
-    // Workspace — the folder matching the resolved `.ctrlyoke` root
-    // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
-    this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
-    if (this.currentWorkspaceFolder) {
-      this.harnessUsageService = new HarnessUsageService(
-        this.currentWorkspaceFolder.uri.fsPath,
-        undefined,
-        undefined,
-        (snapshots) => this.dashboardBroadcastHub.updateHarnessUsage(snapshots)
-      );
-    }
 
     // Shared parsers / orchestration helpers
     this.promptFileParser = new PromptFileParser(

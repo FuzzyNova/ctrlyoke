@@ -534,11 +534,11 @@ exact duplication both plans warn against.
 
 ### Phase 2: Claude And Codex Provider Signals
 
-- [ ] Extract the shared sidecar mechanics out of
+- [x] Extract the shared sidecar mechanics out of
       `AntigravityStatuslineSidecar.ts` into `src/core/harness/shared/`
-- [ ] Add `ClaudeUsageProvider` + a generated Claude status-line command built on
+- [x] Add `ClaudeUsageProvider` + a generated Claude status-line command built on
       the extracted sidecar; parse `rate_limits`
-- [ ] Preserve/forward the user's prior Claude statusline command, release the
+- [x] Preserve/forward the user's prior Claude statusline command, release the
       shared settings lease on every teardown path, and persist normalized
       last-known windows only
 - [ ] Spike a short-lived stdio Codex app-server client and use

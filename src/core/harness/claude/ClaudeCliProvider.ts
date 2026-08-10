@@ -1,5 +1,7 @@
 import * as path from "path";
+import * as os from "os";
 import * as fs from "fs/promises";
+import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -22,6 +24,13 @@ import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
+import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import { ClaudeStatuslineSidecar } from "./ClaudeStatuslineSidecar";
+import type {
+  CliExecutionSidecar,
+  CliExecutionSidecarDeps,
+} from "../shared/interfaces/ICliProvider";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
@@ -60,8 +69,29 @@ import {
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
+  private static readonly statusLineTracker =
+    SettingsJsonMcpTracker.getInstance("claude-cli-settings", {
+      projectConfigPath: () =>
+        path.join(os.homedir(), ".claude", "settings.json"),
+      userConfigPath: () => path.join(os.homedir(), ".claude", "settings.json"),
+    });
+  private static readonly STATUS_LINE_KEY = "statusLine";
+
+  static async pruneOrphanedStatusLine(workspaceRoot: string): Promise<void> {
+    await ClaudeCliProvider.statusLineTracker.pruneDeadOwners(
+      workspaceRoot,
+      ClaudeCliProvider.STATUS_LINE_KEY
+    );
+  }
+
   /** Tracks per-prompt hook settings files for cleanup */
   private hookSettingsPaths: string[] = [];
+  private readonly statusLineSnapshotPaths = new Set<string>();
+  private statusLineToken: string | undefined;
+  private statusLineDirectory: string | undefined;
+  private statusLineEnabledForPrompt = false;
+  private statusLineForwardCommand: string | undefined;
+  private statusLineSidecar: ClaudeStatuslineSidecar | undefined;
 
   readonly config: HarnessConfig = {
     name: "claude",
@@ -179,6 +209,7 @@ export class ClaudeCliProvider implements ICliProvider {
     workspaceRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
     const args: string[] = [];
+    const statusLineToken = randomUUID();
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
@@ -308,9 +339,53 @@ export class ClaudeCliProvider implements ICliProvider {
 
     return {
       cliArgs: args,
-      mutations: mcpPreparation.mutations,
+      mutations: [
+        {
+          description: "Prepare Claude statusline usage tracking",
+          apply: async () => {
+            this.statusLineSidecar?.stop();
+            this.statusLineSidecar = undefined;
+            this.statusLineToken = statusLineToken;
+            this.statusLineDirectory = undefined;
+            this.statusLineEnabledForPrompt = false;
+            this.statusLineForwardCommand = undefined;
+            if (workspaceRoot && ConfigurationUtils.shouldTrackHarnessUsage()) {
+              await this.registerStatusLine(
+                extensionPath,
+                workspaceRoot,
+                workflowContext?.workingFilePath ?? workspaceRoot
+              );
+            }
+          },
+        },
+        ...mcpPreparation.mutations,
+      ],
       diagnostics: mcpPreparation.diagnostics,
     };
+  }
+
+  startExecutionSidecar(
+    deps: CliExecutionSidecarDeps
+  ): CliExecutionSidecar | undefined {
+    if (
+      !this.statusLineEnabledForPrompt ||
+      !this.statusLineToken ||
+      !this.statusLineDirectory
+    ) {
+      return undefined;
+    }
+    this.statusLineSidecar = new ClaudeStatuslineSidecar({
+      snapshotPath: path.join(
+        this.statusLineDirectory,
+        `claude-statusline-${this.statusLineToken}.json`
+      ),
+      onProviderUsageUpdate: deps.onProviderUsageUpdate,
+    });
+    return this.statusLineSidecar;
+  }
+
+  getLatestStatuslineSnapshot() {
+    return this.statusLineSidecar?.getLatestSnapshot();
   }
 
   /**
@@ -585,7 +660,23 @@ export class ClaudeCliProvider implements ICliProvider {
    * Includes all per-prompt hook settings files created during interactive and headless sessions.
    */
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.hookSettingsPaths];
+    return [...this.hookSettingsPaths, ...this.statusLineSnapshotPaths];
+  }
+
+  async cleanupWorkspaceArtifacts(
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    this.statusLineSidecar?.stop();
+    this.statusLineSidecar = undefined;
+    for (const snapshotPath of this.statusLineSnapshotPaths) {
+      await fs.unlink(snapshotPath).catch(() => undefined);
+    }
+    await ClaudeCliProvider.statusLineTracker.unregisterValueLease(
+      workingFilePath ?? workspaceRoot,
+      workspaceRoot,
+      ClaudeCliProvider.STATUS_LINE_KEY
+    );
   }
 
   /**
@@ -735,9 +826,91 @@ export class ClaudeCliProvider implements ICliProvider {
    * Unset CLAUDECODE so Claude CLI doesn't refuse to start inside an active session.
    */
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
-    const env = CliProviderUtils.buildProcessEnv();
+    const env = {
+      ...CliProviderUtils.buildProcessEnv(),
+      ...this.buildStatusLineSpawnEnv(),
+    };
     delete env.CLAUDECODE;
     return env;
+  }
+
+  getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
+    return this.buildStatusLineSpawnEnv();
+  }
+
+  private async registerStatusLine(
+    extensionPath: string,
+    workspaceRoot: string,
+    workflowKey: string
+  ): Promise<void> {
+    const scriptPath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-claude-statusline.js"
+    );
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      ""
+    ).trim();
+    const snapshotDirectory = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const snapshotPath = path.join(
+      snapshotDirectory,
+      `claude-statusline-${this.statusLineToken}.json`
+    );
+    this.statusLineSnapshotPaths.add(snapshotPath);
+
+    try {
+      await ClaudeCliProvider.statusLineTracker.registerValueLease(
+        workflowKey,
+        workspaceRoot,
+        ClaudeCliProvider.STATUS_LINE_KEY,
+        { type: "command", command }
+      );
+      const baseline =
+        ClaudeCliProvider.statusLineTracker.getValueLeaseBaseline(
+          workspaceRoot,
+          ClaudeCliProvider.STATUS_LINE_KEY
+        );
+      this.statusLineForwardCommand = this.extractStatusLineCommand(baseline);
+      this.statusLineDirectory = snapshotDirectory;
+      this.statusLineEnabledForPrompt = true;
+    } catch (error) {
+      // A statusline failure must never prevent Claude itself from running.
+      Log.warn(`Failed to register Claude statusline: ${error}`);
+    }
+  }
+
+  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
+    if (
+      !this.statusLineEnabledForPrompt ||
+      !this.statusLineToken ||
+      !this.statusLineDirectory
+    ) {
+      return {};
+    }
+    const env: NodeJS.ProcessEnv = {
+      CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: this.statusLineToken,
+      CTRLYOKE_CLAUDE_STATUSLINE_DIR: this.statusLineDirectory,
+    };
+    if (this.statusLineForwardCommand) {
+      env.CTRLYOKE_CLAUDE_STATUSLINE_FORWARD = this.statusLineForwardCommand;
+    }
+    return env;
+  }
+
+  private extractStatusLineCommand(value: unknown): string | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+    const command = (value as { command?: unknown }).command;
+    return typeof command === "string" && command.length > 0
+      ? command
+      : undefined;
   }
 
   /**

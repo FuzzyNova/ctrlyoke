@@ -78,6 +78,16 @@ export interface CtrlYokeGlobalSettings {
     allowedExternalFileRoots: string[];
   };
 
+  /** Workspace-local provider quota and observed-usage collection controls. */
+  usageTracking: {
+    enabled: boolean;
+    providerRefreshEnabled: boolean;
+    persistObservedUsage: boolean;
+    enterpriseUsageApisEnabled: boolean;
+    warningPercentUsed: number;
+    preferredFallbackOrder: HarnessId[];
+  };
+
   // Execution
   execution: {
     /** When true, keep the TUI alive and write follow-up prompts directly into the PTY. */
@@ -299,6 +309,14 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     codexApprovalPolicy: "on-request",
     antigravityStatusLineTracking: true,
     allowedExternalFileRoots: [],
+  },
+  usageTracking: {
+    enabled: true,
+    providerRefreshEnabled: true,
+    persistObservedUsage: true,
+    enterpriseUsageApisEnabled: false,
+    warningPercentUsed: 80,
+    preferredFallbackOrder: [],
   },
   execution: {
     injectMode: true,
