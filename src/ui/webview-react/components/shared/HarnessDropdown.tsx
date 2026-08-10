@@ -253,6 +253,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     isOpen,
     dropdownMaxHeight
   );
+  const triggerUsageSnapshot = useHarnessUsageStore((s) =>
+    value !== "default" ? s.snapshotsByHarness[value as HarnessId] : undefined
+  );
+  const triggerUsageDisplay = getHarnessUsageDisplay(triggerUsageSnapshot);
   useClickOutside(
     [buttonRef, popupRef],
     isOpen,
@@ -383,6 +387,11 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       >
         <span>{triggerLabel}</span>
         <div className="flex items-center gap-1">
+          {!isNarrow && triggerUsageDisplay.percentOnly && (
+            <span className="text-xxs text-description-fg">
+              {triggerUsageDisplay.percentOnly}
+            </span>
+          )}
           {triggerStatus && <StatusIndicator status={triggerStatus.status} />}
           <i
             className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs`}

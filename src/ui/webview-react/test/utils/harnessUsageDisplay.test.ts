@@ -69,7 +69,11 @@ describe("getHarnessUsageDisplay", () => {
       snapshot([fiveHour, sevenDay], fetchedAt),
       fetchedAt + 120_000
     );
-    expect(display.quotaPhrase).toBe("63% 5-hour (stale) | 10% 7-day");
+    // The stale five-hour window drops its reset time (already passed); the
+    // still-live seven-day window keeps its own.
+    expect(display.quotaPhrase).toMatch(
+      /^63% 5-hour \(stale\) \| 10% 7-day, resets .+$/
+    );
   });
 
   it("falls back to a stale label with no numbers when no window ever reported a percentage", () => {
@@ -79,5 +83,41 @@ describe("getHarnessUsageDisplay", () => {
     );
     expect(display.percentOnly).toBeUndefined();
     expect(display.quotaPhrase).toBe("Usage data stale");
+  });
+
+  it("appends the reset time for a still-live window with a future resetAt", () => {
+    const fiveHour = { ...window, resetAt: fetchedAt + 60 * 60 * 1000 };
+    const display = getHarnessUsageDisplay(
+      snapshot([fiveHour], fetchedAt),
+      fetchedAt + 60_000
+    );
+    expect(display.quotaPhrase).toMatch(/^63% 5-hour, resets .+$/);
+  });
+
+  it("omits the reset time once the window itself is stale, rather than showing a past reset", () => {
+    const fiveHour = { ...window, resetAt: fetchedAt + 60_000 };
+    const display = getHarnessUsageDisplay(
+      snapshot([fiveHour], fetchedAt),
+      fetchedAt + 120_000
+    );
+    expect(display.quotaPhrase).toBe("63% 5-hour (stale)");
+  });
+
+  it("gives each window its own independent reset time when joined", () => {
+    const fiveHour = { ...window, id: "five-hour", resetAt: fetchedAt + 60_000 };
+    const sevenDay = {
+      ...window,
+      id: "seven-day",
+      label: "7-day",
+      percentUsed: 10,
+      resetAt: fetchedAt + 999_999_999,
+    };
+    const display = getHarnessUsageDisplay(
+      snapshot([fiveHour, sevenDay], fetchedAt),
+      fetchedAt + 30_000
+    );
+    expect(display.quotaPhrase).toMatch(
+      /^63% 5-hour, resets .+ \| 10% 7-day, resets .+$/
+    );
   });
 });

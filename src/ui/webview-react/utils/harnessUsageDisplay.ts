@@ -5,11 +5,17 @@ import {
   type HarnessUsageSnapshot,
 } from "@root/types/UsageTypes";
 import { HARNESS_STATUS_STRINGS, type HarnessStatusString } from "../types/messages";
+import { formatFutureTime } from "./time";
 
 export interface HarnessUsageDisplay {
   /** Bare percentage for compact badges, e.g. "25%". Undefined when no usable percentage exists. */
   percentOnly?: string;
-  /** Quota status phrase for tooltips, e.g. "25% 5-hour", "Needs auth", "Usage data stale", "No usage data". */
+  /**
+   * Quota status phrase for tooltips, e.g. "25% 5-hour, resets 5:00 PM today",
+   * "Needs auth", "Usage data stale", "No usage data". Multiple windows (e.g.
+   * Claude's 5-hour + 7-day, Codex's primary + secondary) join with " | ",
+   * each carrying its own reset time since they reset independently.
+   */
   quotaPhrase: string;
 }
 
@@ -18,7 +24,10 @@ export interface HarnessUsageDisplay {
  * strings. Last-known percentages are always shown once available — a window
  * past its freshness window or its own reset time is annotated "(stale)"
  * rather than hidden, so a value is still visible between Claude turns
- * instead of disappearing every time the statusline sidecar goes quiet.
+ * instead of disappearing every time the statusline sidecar goes quiet. A
+ * still-live window's own reset time is appended; a stale window's isn't,
+ * since a reset timestamp that already passed (or that predates a stale
+ * refetch) would be misleading rather than informative.
  */
 export function getHarnessUsageDisplay(
   snapshot: HarnessUsageSnapshot | undefined,
@@ -46,9 +55,15 @@ export function getHarnessUsageDisplay(
     quotaPhrase: windows
       .map((window) => {
         const label = `${Math.round(window.percentUsed ?? 0)}% ${window.label}`;
-        return isHarnessUsageWindowStale(snapshot.quota, window, now)
-          ? `${label} (stale)`
-          : label;
+        const stale = isHarnessUsageWindowStale(snapshot.quota, window, now);
+        // A reset time only means something for a window that's still live —
+        // once stale (including a window whose own resetAt has already
+        // passed) the timestamp would just show a reset that already happened.
+        const resetSuffix =
+          !stale && window.resetAt !== undefined
+            ? `, resets ${formatFutureTime(window.resetAt, now)}`
+            : "";
+        return stale ? `${label}${resetSuffix} (stale)` : `${label}${resetSuffix}`;
       })
       .join(" | "),
   };
@@ -73,8 +88,8 @@ export function getHarnessAvailabilityPhrase(
 /**
  * Pipe-joined tooltip in a single fixed order — `[name] | [availability] |
  * usage` — shared by the harness dropdown rows (no name) and the footer
- * quick picker (with name), e.g. "Available | 25% 5-hour" or
- * "Claude Code | Available | No usage data".
+ * quick picker (with name), e.g. "Available | 25% 5-hour, resets 5:00 PM
+ * today" or "Claude Code | Available | No usage data".
  */
 export function formatHarnessUsageTooltip(
   usage: HarnessUsageDisplay,

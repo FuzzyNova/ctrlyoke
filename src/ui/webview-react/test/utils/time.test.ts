@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   formatDuration,
+  formatFutureTime,
   formatRelativeTime,
   formatRelativeTimeVerbose,
   formatTime,
@@ -81,6 +82,48 @@ describe("formatRelativeTime", () => {
   it("returns days for >= 1 day ago", () => {
     expect(formatRelativeTime(Date.now() - 86_400_000)).toBe("1 day");
     expect(formatRelativeTime(Date.now() - 172_800_000)).toBe("2 days");
+  });
+});
+
+describe("formatFutureTime", () => {
+  // Local-time constructors (not an ISO/UTC string) so the day-boundary math
+  // lines up with the test runner's own timezone the same way it would at
+  // runtime — matching the day of `now` is the whole point of the function.
+  const reference = new Date(2024, 0, 1, 12, 0, 0).getTime(); // Mon Jan 1, 2024, noon
+
+  function fiveThirtyPmOn(year: number, month: number, day: number): number {
+    return new Date(year, month, day, 17, 30, 0).getTime();
+  }
+
+  it("labels a reset later the same day as 'today'", () => {
+    expect(formatFutureTime(fiveThirtyPmOn(2024, 0, 1), reference)).toMatch(
+      / today$/
+    );
+  });
+
+  it("labels a reset on the next calendar day as 'tomorrow'", () => {
+    expect(formatFutureTime(fiveThirtyPmOn(2024, 0, 2), reference)).toMatch(
+      / tomorrow$/
+    );
+  });
+
+  it("labels a reset 2-6 days out with the short weekday name", () => {
+    // Jan 4, 2024 is a Thursday.
+    expect(formatFutureTime(fiveThirtyPmOn(2024, 0, 4), reference)).toMatch(
+      / Thu$/
+    );
+  });
+
+  it("labels a reset a week or more out with a numeric date", () => {
+    expect(formatFutureTime(fiveThirtyPmOn(2024, 0, 9), reference)).toMatch(
+      / 1\/9$/
+    );
+  });
+
+  it("includes a time portion before the day label", () => {
+    const result = formatFutureTime(fiveThirtyPmOn(2024, 0, 1), reference);
+    expect(result.startsWith("today")).toBe(false);
+    expect(result.length).toBeGreaterThan(" today".length);
   });
 });
 
