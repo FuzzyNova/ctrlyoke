@@ -57,7 +57,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
   isViewed,
   isPending,
   isLive,
-  tier = "flat",
+  tier = "stacked",
   canDelete,
   onSelect,
   onDelete,

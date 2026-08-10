@@ -95,49 +95,25 @@ export const HEADER_BUTTON_SIZES = {
 } as const;
 
 /**
- * Fixed track widths (px) for the flat workflow row layout.
- *
- * These are the source of truth: `WorkflowRowLayout` publishes them as CSS
- * custom properties on the row, and both breakpoints below are derived from
- * them. globals.css only carries matching fallbacks. Sizing lives here because
- * the breakpoints have to be computed from it — a track widened in CSS alone
- * would quietly collapse the name column instead.
+ * Fixed track widths (px) for the workflow row layout's stacked first line
+ * (harness icon, name, state badge) — every row in the dropdown (workflow
+ * list, running region, run panel) uses this single two-line layout
+ * regardless of dropdown width; only the badge/run-indicator form changes
+ * below `WORKFLOW_DROPDOWN_COMPACT_WIDTH`. These are the source of truth for
+ * that breakpoint, computed below.
  */
 export const WORKFLOW_ROW_TRACKS = {
-  /** Mirrors the fixed `14px` first track; here so the budget below is complete. */
+  /** Mirrors the fixed `14px` harness-icon track; here so the budget below is complete. */
   harness: 14,
-  /** Mirrors the fixed `16px` terminal-icon / live-dot track. */
-  glyph: 16,
   /** Fits the longest execution state label, "CANCELLING". */
   state: 88,
   /**
-   * Fits a lower-bound token total plus cost, e.g. `≥1.2M · ≥$999.99`.
-   * `WorkflowRowLayout` still clips overflow with an ellipsis (full detail
-   * stays in the tooltip) as a hard backstop — this budget just keeps that
-   * ellipsis rare instead of routine.
-   */
-  usage: 120,
-  /**
-   * Fits the longest verbose stamp, "59 minutes ago". Deliberately one width
-   * for every row kind — running rows show a short elapsed timer and would fit
-   * in half of it, but a narrower track there shifts their state badge out of
-   * line with the recent rows directly below.
-   */
-  time: 96,
-  /**
-   * `Run 12 ›` drill affordance, reserved list-wide once any row is drillable
-   * — at *every* tier. Everything to a row's right is what positions its state
+   * `#12 ›` drill affordance, reserved list-wide once any row is drillable —
+   * at *every* tier. Everything to a row's right is what positions its state
    * badge, so a row that dropped the track (or sized it to its own content)
-   * sits its badge tens of pixels out of line with its neighbours; that is
-   * true whether or not the rest of the row is stacked.
-   *
-   * Only the width varies: stacked rows render the short `#1042` label, so
-   * they reserve less than the flat layout's `Run 1042`.
+   * sits its badge tens of pixels out of line with its neighbours.
    */
-  runIndicator: {
-    flat: 64,
-    stacked: 52,
-  },
+  runIndicator: 52,
   /** Trailing action rail: two icon buttons and the gap between them. */
   actions: 44,
 } as const;
@@ -145,35 +121,21 @@ export const WORKFLOW_ROW_TRACKS = {
 const WORKFLOW_ROW_HORIZONTAL_PADDING = 16;
 const WORKFLOW_ROW_COLUMN_GAP = 4;
 const WORKFLOW_ROW_RAIL_GAP = 8;
-const WORKFLOW_ROW_MIN_NAME_WIDTH = {
-  flat: 120,
-  stacked: 140,
-} as const;
-const WORKFLOW_ROW_WIDEST_STEP_LABEL = "12 steps";
-const WORKFLOW_ROW_BODY_CHAR_WIDTH = 6.4;
+const WORKFLOW_ROW_MIN_NAME_WIDTH = 140;
 
-/** Fixed width consumed before the flexible name track in a flat row. */
-const workflowFlatFixedWidth =
-  WORKFLOW_ROW_HORIZONTAL_PADDING +
-  WORKFLOW_ROW_TRACKS.harness +
-  WORKFLOW_ROW_TRACKS.glyph +
-  WORKFLOW_ROW_TRACKS.state +
-  WORKFLOW_ROW_TRACKS.usage +
-  WORKFLOW_ROW_TRACKS.time +
-  6 * WORKFLOW_ROW_COLUMN_GAP +
-  WORKFLOW_ROW_TRACKS.runIndicator.flat +
-  WORKFLOW_ROW_TRACKS.actions +
-  2 * WORKFLOW_ROW_RAIL_GAP +
-  WORKFLOW_ROW_WIDEST_STEP_LABEL.length * WORKFLOW_ROW_BODY_CHAR_WIDTH;
-
-/** Fixed width consumed before the flexible name track in a stacked row. */
+/**
+ * Everything the stacked row's first line spends before the name gets a
+ * pixel. The second (meta) line is free — it spans the name and badge
+ * columns together and truncates its own content — so the first line is what
+ * the breakpoint below has to be sized for.
+ */
 const workflowStackedFirstLineWidth =
   WORKFLOW_ROW_HORIZONTAL_PADDING +
   2 * WORKFLOW_ROW_RAIL_GAP +
   WORKFLOW_ROW_TRACKS.harness +
   2 * WORKFLOW_ROW_COLUMN_GAP +
   WORKFLOW_ROW_TRACKS.state +
-  WORKFLOW_ROW_TRACKS.runIndicator.stacked +
+  WORKFLOW_ROW_TRACKS.runIndicator +
   WORKFLOW_ROW_TRACKS.actions;
 
 /**
@@ -182,87 +144,45 @@ const workflowStackedFirstLineWidth =
  * overlay, so it may exceed its trigger and overlap neighbouring panels — the
  * limit is legibility of the row content, not the header's own width.
  */
-export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 720;
+export const WORKFLOW_DROPDOWN_TARGET_WIDTH = 640;
 
 /**
- * Width (px) below which the workflow dropdown's rows stack onto two lines.
- *
- * Derived from what the flat layout costs, not picked for feel. Its fixed
- * tracks and sibling actions — including the usage track — are computed from
- * `WORKFLOW_ROW_TRACKS` below. The threshold leaves the name at least 120px
- * wide, while the 720px desktop target remains flat. So the name is left
- * roughly:
- *
- *     440px → no room   500px → no room   560px → ~10px   640px → ~90px   720px → ~170px
- *
- * Below this threshold the name would collapse toward zero and the `max-content`
- * tracks start wrapping instead ("3 steps" onto two lines, "39 minutes ago"
- * onto three) — which also silently doubles the row height the virtualizer
- * estimated. Stacking instead gives the name ~250px at the same width.
- *
- * Measured on the dropdown popup itself, never on the WorkflowStatus split
- * button that opens it — see the two `useElementNarrow` calls in
- * `WorkflowStatus`.
- */
-export const WORKFLOW_DROPDOWN_NARROW_WIDTH =
-  workflowFlatFixedWidth + WORKFLOW_ROW_MIN_NAME_WIDTH.flat;
-
-/**
- * Width (px) below which stacked rows also drop their state badge to its
+ * Width (px) below which stacked rows drop their state badge to its
  * icon-only form (and their run indicator to `#12`).
  *
- * Stacking alone only buys the name a line of its own — it does not shrink
- * anything sharing that line. The stacked first-line budget is computed from
- * the harness icon, full-text badge, run indicator, action rail, and their
- * gaps. Dropping the badge to its icon returns ~60px of that width.
+ * Every row already stacks its name onto its own line; this is the only
+ * remaining breakpoint. The stacked first-line budget is computed from the
+ * harness icon, full-text badge, run indicator, action rail, and their gaps.
+ * Dropping the badge to its icon returns ~60px of that width.
  *
  * Set so the name keeps ~140px on the stacked first line while the badge still
  * carries text; below it the icon buys that width back instead. See
  * `workflowRowWidths.test.ts`.
  */
 export const WORKFLOW_DROPDOWN_COMPACT_WIDTH =
-  workflowStackedFirstLineWidth + WORKFLOW_ROW_MIN_NAME_WIDTH.stacked;
+  workflowStackedFirstLineWidth + WORKFLOW_ROW_MIN_NAME_WIDTH;
 
 /**
  * How much a workflow dropdown row compacts at the width it is rendered at.
- *
- * - `flat` — one line, fixed metadata tracks aligned down the whole list.
- * - `stacked` — name on its own line, metadata on a muted second line.
- * - `compact` — stacked, plus icon-only badges and `#12` run indicators.
- *
- * One value rather than a pair of booleans: the tiers are ordered, and two
- * independent flags would let `compact && !stacked` exist.
+ * Every row is always two lines (name, then metadata) — `compact` additionally
+ * drops the state badge to its icon-only form and the run indicator to `#12`.
  */
-export type WorkflowRowTier = "flat" | "stacked" | "compact";
+export type WorkflowRowTier = "stacked" | "compact";
 
 /** Resolves the row tier for a measured dropdown width. */
 export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
-  if (width < WORKFLOW_DROPDOWN_COMPACT_WIDTH) return "compact";
-  if (width < WORKFLOW_DROPDOWN_NARROW_WIDTH) return "stacked";
-  return "flat";
+  return width < WORKFLOW_DROPDOWN_COMPACT_WIDTH ? "compact" : "stacked";
 }
 
 /**
- * Virtualizer size estimates for the workflow dropdown's two row layouts.
- *
- * `flat` is one line of metadata; `stacked` adds the second (meta) line used
- * below {@link WORKFLOW_DROPDOWN_NARROW_WIDTH}. The virtualizer corrects to the
- * real measured height once a row is realized, but the estimate drives total
- * scroll height and `scrollToIndex` before that — a 36px estimate against 54px
- * rows makes the scrollbar lie and drops seeks well short of their target on a
+ * Virtualizer size estimate (px) for a workflow dropdown row. Every row is
+ * two lines regardless of tier. The virtualizer corrects to the real measured
+ * height once a row is realized, but the estimate drives total scroll height
+ * and `scrollToIndex` before that — an estimate short of the real row height
+ * makes the scrollbar lie and drops seeks well short of their target on a
  * long list.
  */
-const WORKFLOW_DROPDOWN_ROW_HEIGHT = {
-  flat: 36,
-  stacked: 54,
-} as const;
-
-/** The virtualizer estimate for a tier — `compact` is stacked, just narrower. */
-export function workflowRowHeightEstimate(tier: WorkflowRowTier): number {
-  return tier === "flat"
-    ? WORKFLOW_DROPDOWN_ROW_HEIGHT.flat
-    : WORKFLOW_DROPDOWN_ROW_HEIGHT.stacked;
-}
+export const WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE = 54;
 
 /**
  * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.

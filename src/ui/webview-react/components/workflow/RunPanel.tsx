@@ -5,7 +5,7 @@ import { VirtualizedDropdownList } from "../shared";
 import { RunSummaryRow, type RunPanelRow } from "./RunSummaryRow";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import {
-  workflowRowHeightEstimate,
+  WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE,
   type WorkflowRowTier,
 } from "../../constants";
 import type {
@@ -72,7 +72,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   rows,
   isLoading,
   loadError,
-  tier = "flat",
+  tier = "stacked",
   displayedAddress,
   isViewingHistory,
   executionRunRef,
@@ -236,7 +236,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
             getItemKey={(row) => runPanelRowKey(workflowKey, row)}
             scrollContainerRef={scrollContainerRef}
             scrollToKey={scrollToKey}
-            estimatedRowHeight={workflowRowHeightEstimate(tier)}
+            estimatedRowHeight={WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE}
             renderItem={(row) => {
               const rowKey = runPanelRowKey(workflowKey, row);
               const isViewed = isRowViewed(row);

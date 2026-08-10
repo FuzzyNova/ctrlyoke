@@ -17,7 +17,7 @@ import {
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
 import {
-  workflowRowHeightEstimate,
+  WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE,
   type WorkflowRowTier,
 } from "../../constants";
 import { HARNESS_INFO } from "../../types/messages";
@@ -205,7 +205,6 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         <RunIndicatorCell
           runNav={workflow.runNav}
           workflowName={workflow.workflowName}
-          tier={tier}
           onDrill={
             onDrillIntoRuns ? () => onDrillIntoRuns(workflow) : undefined
           }
@@ -315,7 +314,7 @@ export const WorkflowList = React.forwardRef<
     onToggleFilters,
     filterControls,
     isFiltering = false,
-    tier = "flat",
+    tier = "stacked",
     className = "",
   },
   ref
@@ -351,7 +350,7 @@ export const WorkflowList = React.forwardRef<
   // recent rows directly beneath it. A list with no drillable rows renders
   // without the track at all.
   const hasDrillableRow = rows.some((row) => isDrillableRunNav(rowRunNav(row)));
-  const estimatedRowHeight = workflowRowHeightEstimate(tier);
+  const estimatedRowHeight = WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE;
 
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>

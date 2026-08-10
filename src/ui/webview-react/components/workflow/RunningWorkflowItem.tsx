@@ -85,7 +85,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   workflow,
   isCurrent,
   hasActiveTerminal,
-  tier = "flat",
+  tier = "stacked",
   runNav,
   showRunIndicatorTrack = false,
   onDrillIntoRuns,
@@ -212,7 +212,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         <RunIndicatorCell
           runNav={runNav}
           workflowName={workflow.workflowName}
-          tier={tier}
           onDrill={onDrillIntoRuns}
         />
       )}

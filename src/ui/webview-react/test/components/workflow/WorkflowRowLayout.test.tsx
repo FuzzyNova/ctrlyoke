@@ -3,7 +3,7 @@
  * pinned running region, and the run panel.
  */
 import { describe, it, expect, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import {
   WorkflowRowLayout,
   RunIndicatorCell,
@@ -32,16 +32,7 @@ function renderLayout(
 }
 
 describe("WorkflowRowLayout", () => {
-  it("renders six aligned cells in the flat layout", () => {
-    const { container } = renderLayout("flat");
-    const button = container.querySelector("button")!;
-    expect(button.className).toContain("workflow-row-primary-flat");
-    expect(button.querySelector(".col-start-7")?.textContent).toBe(
-      "2 hours ago"
-    );
-  });
-
-  it("moves metadata onto a second line in the stacked layout", () => {
+  it("renders the name on its own line with metadata on a second, muted line", () => {
     const { container } = renderLayout("stacked");
     const button = container.querySelector("button")!;
     expect(button.className).toContain("workflow-row-primary-stacked");
@@ -56,7 +47,7 @@ describe("WorkflowRowLayout", () => {
     );
   });
 
-  it("keeps the compact tier stacked rather than inventing a third grid", () => {
+  it("keeps the compact tier on the same grid, not a third layout", () => {
     const { container } = renderLayout("compact");
     expect(container.querySelector("button")?.className).toContain(
       "workflow-row-primary-stacked"
@@ -71,7 +62,7 @@ describe("WorkflowRowLayout", () => {
   });
 
   it("keeps the accessible name identical across every tier", () => {
-    const names = (["flat", "stacked", "compact"] as const).map((tier) =>
+    const names = (["stacked", "compact"] as const).map((tier) =>
       renderLayout(tier)
         .container.querySelector("button")
         ?.getAttribute("aria-label")
@@ -88,8 +79,7 @@ describe("WorkflowRowLayout", () => {
 });
 
 describe("isCompactRow", () => {
-  it("abbreviates only at the compact tier — stacking alone has room", () => {
-    expect(isCompactRow("flat")).toBe(false);
+  it("abbreviates only at the compact tier", () => {
     expect(isCompactRow("stacked")).toBe(false);
     expect(isCompactRow("compact")).toBe(true);
   });
@@ -108,15 +98,11 @@ describe("RunIndicatorCell", () => {
   } as WorkflowRunNavigationSummary;
 
   /** Renders one cell and returns its reserved track element. */
-  function renderCell(
-    runNav: WorkflowRunNavigationSummary,
-    tier: WorkflowRowTier
-  ): HTMLSpanElement {
+  function renderCell(runNav: WorkflowRunNavigationSummary): HTMLSpanElement {
     const { container } = render(
       <RunIndicatorCell
         runNav={runNav}
         workflowName="Fix login bug"
-        tier={tier}
         onDrill={vi.fn()}
       />
     );
@@ -127,42 +113,33 @@ describe("RunIndicatorCell", () => {
   // dropped this track (or sized it to its own content) sat its badge tens of
   // pixels out of line with its neighbours — visible as a ragged status
   // column the moment one row in a list had no runs to drill into.
-  it.each(["flat", "stacked", "compact"] as const)(
-    "reserves the same track for drillable and non-drillable %s rows",
-    (tier) => {
-      const drillableWidth = renderCell(drillable, tier).style.width;
-      const emptyWidth = renderCell(singleRun, tier).style.width;
-      expect(drillableWidth).not.toBe("");
-      expect(emptyWidth).toBe(drillableWidth);
-    }
-  );
+  it("reserves the same track for drillable and non-drillable rows", () => {
+    const drillableWidth = renderCell(drillable).style.width;
+    const emptyWidth = renderCell(singleRun).style.width;
+    expect(drillableWidth).not.toBe("");
+    expect(emptyWidth).toBe(drillableWidth);
+  });
 
-  it("reserves less once stacked, where the label is the short form", () => {
-    expect(renderCell(drillable, "flat").style.width).toBe(
-      `${WORKFLOW_ROW_TRACKS.runIndicator.flat}px`
-    );
-    expect(renderCell(drillable, "compact").style.width).toBe(
-      `${WORKFLOW_ROW_TRACKS.runIndicator.stacked}px`
+  it("reserves WORKFLOW_ROW_TRACKS.runIndicator", () => {
+    expect(renderCell(drillable).style.width).toBe(
+      `${WORKFLOW_ROW_TRACKS.runIndicator}px`
     );
   });
 
   it("renders no button when there is nothing to drill into", () => {
-    renderCell(singleRun, "flat");
+    renderCell(singleRun);
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("spells out the run in the flat layout and abbreviates when stacked", () => {
-    renderCell(drillable, "flat");
-    expect(screen.getByRole("button", { name: /Run 7 —/ })).toBeInTheDocument();
-    cleanup();
-    renderCell(drillable, "stacked");
+  it("abbreviates the run to its short form", () => {
+    renderCell(drillable);
     expect(screen.getByRole("button", { name: /#7 —/ })).toBeInTheDocument();
   });
 
   it("uses an explicit height and zero vertical padding to center its contents", () => {
-    renderCell(drillable, "flat");
+    renderCell(drillable);
 
-    const button = screen.getByRole("button", { name: /Run 7 —/ });
+    const button = screen.getByRole("button", { name: /#7 —/ });
     expect(button).toHaveClass("h-8", "items-center", "py-0", "leading-none");
     expect(button.querySelector(".codicon")).toHaveClass(
       "block",

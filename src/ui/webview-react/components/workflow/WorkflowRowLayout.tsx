@@ -5,8 +5,7 @@ import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 
 /**
  * Whether this tier renders the *content* of a row compactly — today the
- * state badge's icon-only form. Stacking alone doesn't imply it: a 500px
- * popup has room for two lines and full-text badges both.
+ * state badge's icon-only form.
  *
  * Every row kind asks this rather than comparing tiers itself, so "which tier
  * abbreviates" stays a single decision.
@@ -17,9 +16,10 @@ export function isCompactRow(tier: WorkflowRowTier): boolean {
 
 interface WorkflowRowLayoutProps {
   /**
-   * How much this row compacts. `stacked`/`compact` put the label on its own
-   * line with metadata beneath. Driven by the *dropdown's* width, not the
-   * trigger's — see `resolveWorkflowRowTier`.
+   * How much this row compacts. Every tier puts the label on its own line
+   * with metadata beneath; `compact` additionally drops the state badge to
+   * its icon-only form. Driven by the *dropdown's* width, not the trigger's
+   * — see `resolveWorkflowRowTier`.
    */
   tier: WorkflowRowTier;
   onClick: () => void;
@@ -50,45 +50,33 @@ function hasContent(node: React.ReactNode): boolean {
 interface RunIndicatorCellProps {
   runNav: WorkflowRunNavigationSummary | undefined;
   workflowName: string;
-  tier: WorkflowRowTier;
   /** Omitted when the lineage can't be drilled into; the track is still reserved. */
   onDrill?: () => void;
 }
 
 /**
- * RunIndicatorCell - the `Run 12 ›` drill affordance, a sibling of the row's
+ * RunIndicatorCell - the `#12 ›` drill affordance, a sibling of the row's
  * primary button (never nested inside it).
  *
  * The track is fixed-width and reserved list-wide whenever *any* row is
- * drillable, including across the running/recent split, and at every tier:
- * everything to its right is what positions the state badge (and, when flat,
- * the time column), so a row that dropped the track sits its badge tens of
- * pixels out of line with its neighbours. Stacked rows abandon cross-row
- * alignment *within* the primary button's grid — that is not licence to
- * unalign the siblings outside it, which is what the badge's position
- * actually depends on.
- *
- * Only the reserved width follows the tier, since stacked rows render the
- * short `#1042` label rather than `Run 1042`.
+ * drillable, including across the running/recent split: everything to its
+ * right is what positions the state badge, so a row that dropped the track
+ * sits its badge tens of pixels out of line with its neighbours.
  */
 export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
   runNav,
   workflowName,
-  tier,
   onDrill,
 }) => {
-  const isStacked = tier !== "flat";
   const drill =
     runNav && isDrillableRunNav(runNav) && onDrill
-      ? { label: runNavIndicatorLabel(runNav, isStacked), onDrill }
+      ? { label: runNavIndicatorLabel(runNav, true), onDrill }
       : null;
 
   return (
     <span
       className="flex flex-shrink-0 justify-end"
-      style={{
-        width: WORKFLOW_ROW_TRACKS.runIndicator[isStacked ? "stacked" : "flat"],
-      }}
+      style={{ width: WORKFLOW_ROW_TRACKS.runIndicator }}
     >
       {drill && (
         <button
@@ -132,11 +120,12 @@ export const RowActionRail: React.FC<{ children?: React.ReactNode }> = ({
 /**
  * Builds a row's accessible name from its identity and metadata.
  *
- * Every row kind passes an explicit label rather than letting the name fall out
- * of concatenated cell text: the stacked and flat layouts render the same
- * information in a different DOM order, and an accessible name that changes
- * with the dropdown's width is a bug even when both readings are sensible.
- * Omit values that tick (an elapsed timer re-announces on every update).
+ * Every row kind passes an explicit label rather than letting the name fall
+ * out of concatenated cell text: the stacked and compact tiers render the
+ * same information in a different DOM order, and an accessible name that
+ * changes with the dropdown's width is a bug even when both readings are
+ * sensible. Omit values that tick (an elapsed timer re-announces on every
+ * update).
  */
 export function composeRowAccessibleName(
   parts: Array<string | number | false | null | undefined>
@@ -148,9 +137,9 @@ export function composeRowAccessibleName(
  * WorkflowRowLayout - the primary button shared by every row in the workflow
  * dropdown: recent lineages, running lineages, and run-panel runs.
  *
- * Owning both layouts here is what keeps the three row kinds from drifting:
- * each caller supplies the same six pieces of content and this decides whether
- * they render as one aligned line or two stacked ones.
+ * Owning it here is what keeps the three row kinds from drifting: each caller
+ * supplies the same set of content pieces and this lays them out identically,
+ * name on its own line with metadata beneath.
  *
  * Callers pass full-length text content at every tier — abbreviating `4 steps`
  * to `4` saves ~40px on a line that has already been given its own row. The
@@ -172,66 +161,8 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   usage,
   time,
 }) => {
-  const isStacked = tier !== "flat";
   const visibleUsage = tier === "compact" ? undefined : usage;
-  const buttonClassName = `workflow-row-primary ${
-    isStacked ? "workflow-row-primary-stacked" : "workflow-row-primary-flat"
-  } min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
-
-  if (!isStacked) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={ariaLabel}
-        className={buttonClassName}
-        // Published from WORKFLOW_ROW_TRACKS rather than hard-coded in CSS:
-        // both tier breakpoints are derived from these widths, so a track that
-        // could be widened in the stylesheet alone would silently invalidate
-        // them and collapse the name column.
-        style={
-          {
-            "--workflow-row-state-col": `${WORKFLOW_ROW_TRACKS.state}px`,
-            "--workflow-row-usage-col": `${WORKFLOW_ROW_TRACKS.usage}px`,
-            "--workflow-row-time-col": `${WORKFLOW_ROW_TRACKS.time}px`,
-          } as React.CSSProperties
-        }
-      >
-        <span
-          className="col-start-1 flex w-[14px] items-center justify-center"
-          title={harnessTitle}
-        >
-          {harness}
-        </span>
-        <span
-          className={`col-start-2 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${labelClassName}`}
-        >
-          {label}
-        </span>
-        <span className="col-start-3 whitespace-nowrap font-mono text-xs text-description-fg">
-          {count}
-        </span>
-        <span className="col-start-4 flex w-4 items-center justify-center text-description-fg">
-          {glyph}
-        </span>
-        {/* Left-aligned, not centred: badge labels vary from IDLE to
-            CANCELLING, and centring them in a fixed track leaves the status
-            column visibly ragged down the list. A shared left edge is what
-            makes the column scannable. */}
-        <span className="col-start-5 flex justify-start">{badge}</span>
-        {/* Same truncate-not-overflow treatment as the label column: fixed
-            grid tracks don't clip their content by default, so long token/cost
-            text (e.g. "≥11.2M · ≥$123.45") would otherwise bleed into the
-            time column instead of respecting its own track width. */}
-        <span className="col-start-6 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-          {visibleUsage}
-        </span>
-        <span className="col-start-7 truncate text-right text-xs text-description-fg">
-          {time}
-        </span>
-      </button>
-    );
-  }
+  const buttonClassName = `workflow-row-primary workflow-row-primary-stacked min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
 
   // Absent metadata is omitted rather than reserved, so the second line never
   // shows a dangling separator for a lineage with no steps or no timestamp.

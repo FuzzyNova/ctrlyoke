@@ -87,7 +87,7 @@ function renderWorkflowList(
 describe("WorkflowList token totals", () => {
   afterEach(() => cleanup());
 
-  it.each(["flat", "stacked", "compact"] as const)(
+  it.each(["stacked", "compact"] as const)(
     "renders complete totals and the full accessible phrase at the %s tier",
     (tier) => {
       renderWorkflowList(tier, "recent", makeTotals("complete"));
@@ -105,7 +105,7 @@ describe("WorkflowList token totals", () => {
     }
   );
 
-  it.each(["flat", "stacked", "compact"] as const)(
+  it.each(["stacked", "compact"] as const)(
     "renders partial totals as lower bounds at the %s tier",
     (tier) => {
       renderWorkflowList(tier, "recent", makeTotals("partial"));
@@ -121,7 +121,7 @@ describe("WorkflowList token totals", () => {
     }
   );
 
-  it.each(["flat", "stacked", "compact"] as const)(
+  it.each(["stacked", "compact"] as const)(
     "shows the live observed-so-far total at the %s tier",
     (tier) => {
       renderWorkflowList(tier, "running", makeTotals("running"));
@@ -141,7 +141,7 @@ describe("WorkflowList token totals", () => {
     }
   );
 
-  it.each(["flat", "stacked", "compact"] as const)(
+  it.each(["stacked", "compact"] as const)(
     "renders no usage slot for unavailable totals at the %s tier",
     (tier) => {
       renderWorkflowList(tier, "recent");

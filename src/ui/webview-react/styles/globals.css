@@ -630,32 +630,18 @@ button .codicon {
     box-sizing: border-box;
   }
 
-  /* Two row layouts for the workflow dropdown's rows (workflow list, running
+  /* Row layout for the workflow dropdown's rows (workflow list, running
      region, and run panel — see WorkflowRowLayout.tsx).
 
-     `flat` is one line with fixed metadata tracks, so badges and times align
-     down the whole list. `stacked` (narrow dropdowns) gives the label its own
-     line and collapses the metadata onto a second, muted line, with the harness
-     icon spanning both. Cross-row column alignment is deliberately traded away
-     there: below WORKFLOW_DROPDOWN_NARROW_WIDTH the six fixed tracks cost more
-     than the popup has, so keeping them would starve the name column — and the
-     name is what the list is scanned by. */
+     Every row is two lines: the name gets its own line, and metadata (step
+     count, usage, time) collapses onto a second, muted line beneath it, with
+     the harness icon spanning both. Below WORKFLOW_DROPDOWN_COMPACT_WIDTH the
+     state badge additionally drops to its icon-only form to buy the name
+     column back some width. */
   .workflow-row-primary {
     display: grid;
     column-gap: 0.25rem;
     align-items: center;
-  }
-
-  /* Track widths come from WORKFLOW_ROW_TRACKS, which WorkflowRowLayout
-     publishes as custom properties on each row — the values below are only
-     fallbacks. They are sized so no cell ever wraps: a wrapped cell silently
-     doubles the row height the virtualizer estimated. */
-  .workflow-row-primary-flat {
-    grid-template-columns:
-      14px minmax(0, 1fr) max-content 16px
-      var(--workflow-row-state-col, 88px)
-      var(--workflow-row-usage-col, 120px)
-      var(--workflow-row-time-col, 96px);
   }
 
   .workflow-row-primary-stacked {

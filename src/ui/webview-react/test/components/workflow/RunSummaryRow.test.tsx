@@ -54,8 +54,11 @@ function renderRow(tier: WorkflowRowTier) {
 }
 
 describe("RunSummaryRow", () => {
-  it("shows run number, step count, state, and time at full width", () => {
-    renderRow("flat");
+  it("shows run number, step count, state, and time, full text throughout", () => {
+    const { container } = renderRow("stacked");
+    expect(
+      container.querySelector(".workflow-row-primary-stacked")
+    ).not.toBeNull();
     expect(screen.getByText("Run 14")).toBeInTheDocument();
     expect(screen.getByText("4 steps")).toBeInTheDocument();
     expect(screen.getByText(EXECUTION_STATES.COMPLETED)).toBeInTheDocument();
@@ -63,17 +66,6 @@ describe("RunSummaryRow", () => {
     expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
       "410k"
     );
-  });
-
-  it("stacks onto two lines in a narrow dropdown without abbreviating", () => {
-    const { container } = renderRow("stacked");
-    expect(
-      container.querySelector(".workflow-row-primary-stacked")
-    ).not.toBeNull();
-    // Stacking alone bought the label its own line — full text everywhere.
-    expect(screen.getByText("Run 14")).toBeInTheDocument();
-    expect(screen.getByText("4 steps")).toBeInTheDocument();
-    expect(screen.getByText(EXECUTION_STATES.COMPLETED)).toBeInTheDocument();
     expect(
       container.querySelector(".workflow-row-cell-meta")?.textContent
     ).toMatch(/4 steps.*·.*ago/);
@@ -95,14 +87,6 @@ describe("RunSummaryRow", () => {
     expect(screen.queryByTestId("workflow-token-usage")).toBeNull();
   });
 
-  it("uses the flat single-line layout when the dropdown is wide", () => {
-    const { container } = renderRow("flat");
-    expect(
-      container.querySelector(".workflow-row-primary-flat")
-    ).not.toBeNull();
-    expect(container.querySelector(".workflow-row-primary-stacked")).toBeNull();
-  });
-
   it("shows a lower-bound run cost when one attempt was unpriceable", () => {
     render(
       <RunSummaryRow
@@ -122,7 +106,7 @@ describe("RunSummaryRow", () => {
         isViewed={false}
         isPending={false}
         isLive={false}
-        tier="flat"
+        tier="stacked"
         canDelete
         onSelect={vi.fn()}
         onDelete={vi.fn()}

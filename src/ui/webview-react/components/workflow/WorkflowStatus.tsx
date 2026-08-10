@@ -319,7 +319,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [dropdownTierRef, dropdownRowTier] = useElementTier<
     WorkflowRowTier,
     HTMLDivElement
-  >(resolveWorkflowRowTier, "flat");
+  >(resolveWorkflowRowTier, "stacked");
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
