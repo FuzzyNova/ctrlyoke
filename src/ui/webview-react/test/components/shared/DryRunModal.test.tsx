@@ -704,8 +704,72 @@ describe("DryRunModal", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Copy payload" }));
+    expect(clipboardWriteText).toHaveBeenLastCalledWith("redacted prompt body");
+  });
+
+  it("reconstructs the payload copy as plain expanded text, not the raw DTO", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: clipboardWriteText },
+    });
+    openPreview(
+      { kind: "step", stepIndex: 0 },
+      {
+        ...preview,
+        steps: [
+          {
+            ...preview.steps[0],
+            prompt: {
+              totalByteCount: 256,
+              includedBodyByteCount: 96,
+              bodyBudgetBytes: 1024,
+              sections: [
+                {
+                  category: "agent-instructions",
+                  byteCount: 32,
+                  lineCount: 1,
+                  tokenEstimate: 8,
+                  chunkIndex: 0,
+                  contentHash: "hash-1",
+                  body: "You are a helpful agent.",
+                },
+                {
+                  category: "file-reference",
+                  byteCount: 0,
+                  lineCount: null,
+                  tokenEstimate: 10,
+                  chunkIndex: 1,
+                  contentHash: null,
+                  truncationReason: "reference",
+                  path: "C:/workspace/README.md",
+                  providerReference: "@README.md",
+                },
+                {
+                  category: "inline-reference",
+                  byteCount: 5000,
+                  lineCount: 200,
+                  tokenEstimate: 1200,
+                  chunkIndex: 2,
+                  contentHash: "hash-2",
+                  truncationReason: "over-inline-cap",
+                },
+              ],
+            },
+          },
+          ...preview.steps.slice(1),
+        ],
+      }
+    );
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    await user.click(screen.getByRole("button", { name: "Copy payload" }));
     expect(clipboardWriteText).toHaveBeenLastCalledWith(
-      JSON.stringify(preview.steps[0].prompt, null, 2)
+      [
+        "You are a helpful agent.",
+        "@README.md",
+        "[Excerpts omitted: Preview only: this chunk's body is hidden because it exceeds the inline content cap. The harness still receives it in full via the referenced file.]",
+      ].join("\n\n")
     );
   });
 

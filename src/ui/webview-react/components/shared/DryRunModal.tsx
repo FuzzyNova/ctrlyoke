@@ -19,6 +19,7 @@ import type {
   CompatibilityDiagnosticSeverity,
 } from "@root/types/CompatibilityTypes";
 import type {
+  CategorizedPromptPreview,
   CategorizedPromptSectionPreview,
   CommandPreview,
   ConditionDefinitionPreview,
@@ -735,6 +736,25 @@ function PayloadSection({
   );
 }
 
+/** Reconstructs the categorized payload as one plain-text document, in
+ * delivery order, for pasting into a harness ctrlyoke does not natively
+ * support. File references render as their provider-formatted marker (never
+ * their content — Tier 1 never embeds file bytes); a section with no body
+ * (Tier 2/3 content cut by a size or budget cap) renders a placeholder
+ * naming why, so an omission is never silently invisible in the copy. */
+function buildExpandedPayloadText(prompt: CategorizedPromptPreview): string {
+  return prompt.sections
+    .map((section) => {
+      if (section.category === PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE) {
+        return section.providerReference ?? section.path ?? "";
+      }
+      if (section.body) return section.body;
+      const reason = truncationReasonLabel(section.truncationReason);
+      return `[${PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} omitted${reason ? `: ${reason}` : ""}]`;
+    })
+    .join("\n\n");
+}
+
 function PayloadPanel({
   step,
   expandedChunks,
@@ -1206,7 +1226,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
       ? resolveCommandDisplayText(activeStep.command, activeCommandShell)
       : undefined;
   const payloadText = activeStep?.prompt
-    ? formatJson(activeStep.prompt)
+    ? buildExpandedPayloadText(activeStep.prompt)
     : undefined;
   const workflowNarrow = scope.kind === "workflow" && isNarrow;
   const selectOptions: SelectOption[] = [
@@ -1235,7 +1255,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded transition-colors sm:px-3 ${commandText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
             onClick={() => void handleCopy("command", commandText)}
             disabled={!commandText}
-            title="Copy command"
+            title="Copy the exact command ctrlyoke will run — may reference generated files not yet written to disk"
             aria-label="Copy command"
           >
             <i

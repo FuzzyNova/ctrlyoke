@@ -537,8 +537,21 @@ the drawer and in the dry run.
 
 ### Footer
 
-- **Copy command** — copies `displayCommand` as displayed (redacted).
-- **Copy payload** — copies the categorized payload of the active step.
+- **Copy command** — copies `displayCommand` as displayed (redacted). This is
+  the exact invocation ctrlyoke will run, not a guaranteed standalone
+  paste-and-run command: it may reference categorized prompt/hook/MCP files
+  that preview never writes (preview performs no `apply()`). The tooltip says
+  so; there is deliberately no separate "runnable" variant that reconstructs a
+  different command, since the plan's single-source-of-truth rule (**Product
+  Decision**) forbids a second command builder.
+- **Copy payload** — copies the categorized payload of the active step as one
+  plain-text document, sections joined in delivery order: `FILE_REFERENCE`
+  sections render their provider-formatted reference marker (never file
+  content), other sections render their `body`, and a section with no body
+  (cut by a size or budget cap) renders a bracketed placeholder naming the
+  truncation reason instead of silently vanishing. This is for pasting into a
+  harness ctrlyoke does not natively support — it is prose, not the DTO; use
+  **Export** for the structured JSON.
 - **Export** — mirrors `ContentPreviewModal.handleExport`: `downloadTextFile` of
   the JSON plan when `isStandalone`, otherwise `EXPORT_CONTENT_PREVIEW` so VS
   Code opens it as an editor document.
