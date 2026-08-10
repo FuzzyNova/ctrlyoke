@@ -1287,7 +1287,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
           Preparing dry run…
         </div>
       ) : (
-        <div ref={contentRef} className="flex min-h-[28rem] min-w-0 flex-col">
+        <div
+          ref={contentRef}
+          className="flex h-full min-h-[28rem] min-w-0 flex-col"
+        >
           {isStale && (
             <div
               className="flex items-center gap-2 border-b border-warning-fg border-opacity-40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg"
