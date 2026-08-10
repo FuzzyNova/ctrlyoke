@@ -638,6 +638,44 @@ export const ATTEMPT_COST_UNAVAILABLE_REASONS = {
 } as const;
 
 // ============================================================================
+// HARNESS USAGE - Normalized provider and observed-usage discriminants
+// ============================================================================
+export const HARNESS_QUOTA_SOURCES = {
+  PROVIDER_LIVE: "provider-live",
+  PROVIDER_LOG: "provider-log",
+  ENTERPRISE_API: "enterprise-api",
+  UNAVAILABLE: "unavailable",
+} as const;
+
+export const HARNESS_USAGE_WINDOW_KINDS = {
+  ROLLING: "rolling",
+  DAILY: "daily",
+  WEEKLY: "weekly",
+  MONTHLY: "monthly",
+  UNKNOWN: "unknown",
+} as const;
+
+export const HARNESS_OBSERVED_PERIODS = {
+  DAILY: "daily",
+  WEEKLY: "weekly",
+  MONTHLY: "monthly",
+} as const;
+
+export const HARNESS_USAGE_CONFIDENCE = {
+  EXACT: "exact",
+  APPROXIMATE: "approximate",
+  LAST_KNOWN: "last-known",
+} as const;
+
+export const HARNESS_USAGE_UNITS = {
+  TOKENS: "tokens",
+  CREDITS: "credits",
+  REQUESTS: "requests",
+  PERCENT: "percent",
+  UNKNOWN: "unknown",
+} as const;
+
+// ============================================================================
 // EXECUTION PREVIEW - Shared preview contract discriminants and limits
 // ============================================================================
 export const PREVIEW_SCOPES = {
@@ -688,7 +726,10 @@ export const PREVIEW_PROMPT_CATEGORIES = {
   IMAGE_METADATA: "image-metadata",
 } as const;
 
-export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<PreviewPromptCategory, string> = {
+export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<
+  PreviewPromptCategory,
+  string
+> = {
   "agent-instructions": "Agent instructions",
   "skill-content": "Skill content",
   "prompt-text": "Prompt text",
@@ -706,7 +747,10 @@ export const PREVIEW_TRUNCATION_REASONS = {
   NOT_YET_AVAILABLE: "not-yet-available",
 } as const;
 
-export const PREVIEW_TRUNCATION_REASON_COPY: Record<PreviewTruncationReason, string> = {
+export const PREVIEW_TRUNCATION_REASON_COPY: Record<
+  PreviewTruncationReason,
+  string
+> = {
   [PREVIEW_TRUNCATION_REASONS.REFERENCE]:
     "The harness receives this as a file reference directly in the prompt, not the file's inline content.",
   [PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP]:
@@ -1796,6 +1840,16 @@ export type AttemptCostNoteCode =
   (typeof ATTEMPT_COST_NOTE_CODES)[keyof typeof ATTEMPT_COST_NOTE_CODES];
 export type AttemptCostUnavailableReason =
   (typeof ATTEMPT_COST_UNAVAILABLE_REASONS)[keyof typeof ATTEMPT_COST_UNAVAILABLE_REASONS];
+export type HarnessQuotaSource =
+  (typeof HARNESS_QUOTA_SOURCES)[keyof typeof HARNESS_QUOTA_SOURCES];
+export type HarnessUsageWindowKind =
+  (typeof HARNESS_USAGE_WINDOW_KINDS)[keyof typeof HARNESS_USAGE_WINDOW_KINDS];
+export type HarnessObservedPeriod =
+  (typeof HARNESS_OBSERVED_PERIODS)[keyof typeof HARNESS_OBSERVED_PERIODS];
+export type HarnessUsageConfidence =
+  (typeof HARNESS_USAGE_CONFIDENCE)[keyof typeof HARNESS_USAGE_CONFIDENCE];
+export type HarnessUsageUnit =
+  (typeof HARNESS_USAGE_UNITS)[keyof typeof HARNESS_USAGE_UNITS];
 export type PreviewScope = (typeof PREVIEW_SCOPES)[keyof typeof PREVIEW_SCOPES];
 export type PreviewMutationScope =
   (typeof PREVIEW_MUTATION_SCOPES)[keyof typeof PREVIEW_MUTATION_SCOPES];

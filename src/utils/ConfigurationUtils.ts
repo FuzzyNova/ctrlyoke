@@ -122,6 +122,9 @@ export const PATH_CONSTANTS = {
   /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",
 
+  /** Workspace-local observed/provider usage directory name (subdirectory of CTRLYOKE_DIR) */
+  USAGE_DIR: ".usage",
+
   /**
    * Attachments directory name (subdirectory of CTRLYOKE_DIR).
    * Committed, un-gitignored home for pasted images belonging to saved

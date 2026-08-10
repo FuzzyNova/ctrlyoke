@@ -29,10 +29,12 @@ import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { RunOutputResolver } from "./RunOutputResolver";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
+import { ObservedHarnessUsageStore } from "../harness/shared/usage/ObservedHarnessUsageStore";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_ATTEMPT_START_REASONS,
+  TIMELINE_STORAGE_FILES,
   type TimelineAttemptKind,
   type TimelineAttemptStartReason,
   type TimelineAttemptTerminalState,
@@ -128,6 +130,7 @@ export class OutputHistoryManager {
   );
   private readonly historySearchIndexService = new HistorySearchIndexService();
   private readonly lineageRepository = new WorkflowLineageRepository();
+  private readonly observedHarnessUsageStore: ObservedHarnessUsageStore;
   /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
   private readonly streamingBuffer = new StreamingHistoryBuffer(
     (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush)
@@ -141,12 +144,17 @@ export class OutputHistoryManager {
     WorkflowTokenTotalsReducer
   >();
   private readonly tokenReducerHydration = new Map<string, Promise<void>>();
+  private pendingObservedUsageFeed: Promise<void> = Promise.resolve();
   private tokenTotalsChangedHandler?: (
     historyFilePath: string,
     tokenTotals: WorkflowTokenTotals
   ) => Promise<void> | void;
 
-  constructor(private _workspaceFolderPath: string) {}
+  constructor(private _workspaceFolderPath: string) {
+    this.observedHarnessUsageStore = new ObservedHarnessUsageStore(
+      _workspaceFolderPath
+    );
+  }
 
   /** Project reducer snapshots into the owning queue/working file. */
   setTokenTotalsChangedHandler(
@@ -176,9 +184,8 @@ export class OutputHistoryManager {
     }
 
     const hydration = (async () => {
-      const manifest = await this.timelineRecorder.readManifest(
-        historyFilePath
-      );
+      const manifest =
+        await this.timelineRecorder.readManifest(historyFilePath);
       const reducer = new WorkflowTokenTotalsReducer({
         workflowId: manifest.workflowId,
         runId: manifest.runId,
@@ -662,9 +669,7 @@ export class OutputHistoryManager {
       await this.applyTokenEvents(
         historyFilePath,
         events,
-        isTerminalExecutionState(transition.current.status)
-          ? true
-          : undefined
+        isTerminalExecutionState(transition.current.status) ? true : undefined
       );
       // Keep the manifest's executionState authoritative for every transition, not
       // only init/finalize, so manifest-only run lists show paused/pausing/cancelling
@@ -678,6 +683,9 @@ export class OutputHistoryManager {
           lastUpdatedAt: transition.timestampMs,
         })
       );
+      if (isTerminalExecutionState(transition.current.status)) {
+        this.feedObservedHarnessUsage(historyFilePath);
+      }
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
@@ -759,6 +767,7 @@ export class OutputHistoryManager {
           lastUpdatedAt: completedAt,
         })
       );
+      this.feedObservedHarnessUsage(historyFilePath);
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to finalize history run:", error);
@@ -1450,7 +1459,11 @@ export class OutputHistoryManager {
         },
       };
       const tempPath = `${runFilePath}.token-totals.tmp`;
-      await fs.promises.writeFile(tempPath, JSON.stringify(updated, null, 2), "utf8");
+      await fs.promises.writeFile(
+        tempPath,
+        JSON.stringify(updated, null, 2),
+        "utf8"
+      );
       await fs.promises.rename(tempPath, runFilePath);
     } catch (error) {
       Log.warn(
@@ -1465,12 +1478,43 @@ export class OutputHistoryManager {
     tokenTotals: WorkflowTokenTotals
   ): Promise<void> {
     await this.timelineRecorder.updateManifest(historyFilePath, (manifest) => {
-      if (JSON.stringify(manifest.tokenTotals) === JSON.stringify(tokenTotals)) {
+      if (
+        JSON.stringify(manifest.tokenTotals) === JSON.stringify(tokenTotals)
+      ) {
         return manifest;
       }
       return { ...manifest, tokenTotals };
     });
     await this.tokenTotalsChangedHandler?.(historyFilePath, tokenTotals);
+  }
+
+  /**
+   * Feed the workspace rollup only after the terminal aggregate is durable in
+   * the run manifest. This is deliberately fire-and-forget: usage persistence
+   * must never delay or fail a workflow terminal transition.
+   */
+  private feedObservedHarnessUsage(historyFilePath: string): void {
+    const address = WorkflowPaths.parseRunArtifactPath(
+      this._workspaceFolderPath,
+      historyFilePath
+    );
+    if (!address || address.fileName !== TIMELINE_STORAGE_FILES.MANIFEST) {
+      return;
+    }
+    this.pendingObservedUsageFeed = this.pendingObservedUsageFeed
+      .then(async () => {
+        const manifest =
+          await this.timelineRecorder.readManifest(historyFilePath);
+        await this.observedHarnessUsageStore.upsertRunContribution(
+          address.workflowKey,
+          address.runRef,
+          manifest.tokenTotals,
+          manifest.lastUpdatedAt
+        );
+      })
+      .catch((error) => {
+        Log.warn("Failed to persist observed harness usage rollup:", error);
+      });
   }
 
   private createStatusMessageRecordedDraft(
