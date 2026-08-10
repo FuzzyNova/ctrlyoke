@@ -372,6 +372,8 @@ export interface WorkflowLineageDescriptor {
 export interface WorkingFileRuntime {
   currentIndex: number;
   executionState: ExecutionState;
+  /** Latest run-scoped token aggregate projected from timeline history. */
+  tokenTotals?: WorkflowTokenTotals;
   /** Wall-clock timestamp when active execution timing began. */
   startTime?: number;
   /** Wall-clock timestamp when the current pause began. */
@@ -721,6 +723,8 @@ export interface QueueState extends WorkflowRuntimeState {
     fromStepIndex: number;
     baseDefinitionRevision: number;
   };
+  /** Latest run-scoped token aggregate projected from timeline history. */
+  tokenTotals?: WorkflowTokenTotals;
 }
 
 /**

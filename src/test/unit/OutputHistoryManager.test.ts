@@ -30,6 +30,7 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   RunRef,
   WorkflowKey,
+  WorkflowTokenTotals,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 
@@ -106,6 +107,150 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await manager.flushPendingIndexRefresh();
     clearRunSummaryCache();
     await fs.rm(tempWorkspace, { recursive: true, force: true });
+  });
+
+  test("persists replacement snapshots, preserves same-run history across reopen, and finalizes both copies", async () => {
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-token-persistence"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const output = (total: number) => ({
+      prompt: "prompt",
+      response: "response",
+      elapsed: 0,
+      isStreaming: false,
+      timestampMs: 100,
+      runIndex: 0,
+      attemptIndex: 0,
+      structured: { events: [], metadata: { harness: HARNESS_IDS.CLAUDE_CLI } },
+      tokens: { prompt: total - 1, completion: 1, total },
+    });
+
+    await manager.startStreamingExecutionOutput(filePath, target, output(10));
+    await manager.saveExecutionOutput(filePath, target, [output(30)]);
+
+    let manifest = await recorder.readManifest(filePath);
+    assert.strictEqual(manifest.tokenTotals?.total, 30);
+    assert.strictEqual(manifest.tokenTotals?.reportedAttemptCount, 1);
+
+    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1);
+    manifest = await recorder.readManifest(filePath);
+    assert.strictEqual(manifest.tokenTotals?.isFinal, true);
+
+    await manager.reopenRun(filePath, EXECUTION_STATES.RUNNING, 1, 1);
+    manifest = await recorder.readManifest(filePath);
+    assert.strictEqual(manifest.tokenTotals?.isFinal, false);
+
+    const runFilePath = WorkflowPaths.runFilePath(
+      tempWorkspace,
+      workflowKey,
+      runRef
+    );
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        workflowName: "wf-token-persistence",
+        startedAt: 1,
+        definitionRevision: 1,
+        steps: [{ prompt: "prompt" }],
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+          tokenTotals: manifest.tokenTotals,
+        },
+      }),
+      "utf8"
+    );
+    const restartedManager = new OutputHistoryManager(tempWorkspace);
+    const recovered = await restartedManager.hydrateTokenTotals(filePath);
+    assert.strictEqual(recovered?.total, 30);
+    assert.strictEqual((await restartedManager.hydrateTokenTotals(filePath))?.total, 30);
+    const [summary] = await manager.getRunSummaries(workflowKey);
+    assert.strictEqual(summary?.tokenTotals?.total, 30);
+    assert.strictEqual(summary?.tokenTotals?.isFinal, false);
+  });
+
+  test("workflow-list summaries use persisted totals without reading historical events", async () => {
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-list-no-events"
+    );
+    const tokenTotals: WorkflowTokenTotals = {
+      total: 42,
+      coverage: "complete",
+      reportedAttemptCount: 1,
+      attemptCount: 1,
+      isFinal: true,
+      byHarness: {},
+      byLocalDay: {},
+    };
+    await fs.writeFile(
+      WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
+      JSON.stringify({
+        workflowName: "wf-list-no-events",
+        startedAt: 1,
+        definitionRevision: 1,
+        steps: [{ prompt: "prompt" }],
+        _runtime: { currentIndex: 1, executionState: EXECUTION_STATES.COMPLETED, tokenTotals },
+      }),
+      "utf8"
+    );
+    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1);
+    const recorderForTest = (manager as unknown as {
+      timelineRecorder: { streamEvents: () => AsyncGenerator<never> };
+    }).timelineRecorder;
+    recorderForTest.streamEvents = async function* () {
+      throw new Error("workflow-list must not scan events.jsonl");
+    };
+
+    const [summary] = await manager.getRunSummaries(workflowKey);
+    assert.strictEqual(summary?.tokenTotals?.total, 42);
+  });
+
+  test("startup recovery repairs a missing working-file aggregate without double-counting", async () => {
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-recovery-totals"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await manager.startStreamingExecutionOutput(filePath, target, {
+      prompt: "prompt",
+      response: "response",
+      elapsed: 0,
+      isStreaming: false,
+      timestampMs: 100,
+      structured: { events: [], metadata: { harness: HARNESS_IDS.CLAUDE_CLI } },
+      tokens: { prompt: 10, completion: 5, total: 15 },
+    });
+    await fs.writeFile(
+      WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
+      JSON.stringify({
+        workflowName: "wf-recovery-totals",
+        startedAt: 1,
+        definitionRevision: 1,
+        steps: [{ prompt: "prompt" }],
+        _runtime: { currentIndex: 1, executionState: EXECUTION_STATES.RUNNING },
+      }),
+      "utf8"
+    );
+
+    await manager.recoverInterruptedRun(workflowKey, 1);
+    const repaired = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
+        "utf8"
+      )
+    ) as { _runtime?: { tokenTotals?: WorkflowTokenTotals } };
+    assert.strictEqual(repaired._runtime?.tokenTotals?.total, 15);
+    assert.strictEqual(repaired._runtime?.tokenTotals?.isFinal, true);
+
+    await manager.recoverInterruptedRun(workflowKey, 1);
+    const manifest = await recorder.readManifest(filePath);
+    assert.strictEqual(manifest.tokenTotals?.total, 15);
   });
 
   /**
@@ -1511,7 +1656,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         const startedAt =
           WorkflowPaths.parseRunRefTimestamp(parsed.runRef) ?? 0;
         return {
-          schemaVersion: "2.3.0",
+          schemaVersion: "2.4.0",
           storageKind: "timeline",
           workflowId: workflowKey,
           runId: startedAt - Date.UTC(2025, 0, 1),

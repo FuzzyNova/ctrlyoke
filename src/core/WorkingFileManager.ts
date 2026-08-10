@@ -7,6 +7,7 @@ import type {
   PromptRuntimeMetadata,
   WorkingFile,
   WorkingFileRuntime,
+  WorkflowTokenTotals,
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
@@ -151,6 +152,9 @@ export interface IWorkingFileQueueAccess {
 
   /** Authoritative workflow execution status/timing snapshot. */
   getRuntimeState?(): WorkflowRuntimeState;
+
+  /** Latest timeline-projected run token aggregate, if any. */
+  getTokenTotals?(): WorkflowTokenTotals | undefined;
 
   /** Current in-memory definition revision counter (see `WorkingFile.definitionRevision`) */
   getDefinitionRevision(): number;
@@ -1561,6 +1565,8 @@ export class WorkingFileManager {
       workingFile.steps = this.queueAccess
         .getSteps()
         .map(stripViewOnlyWorkflowStepFields);
+      const tokenTotals =
+        this.queueAccess.getTokenTotals?.() ?? workingFile._runtime?.tokenTotals;
 
       // The finalStep definition remains disk-authoritative, but its per-step
       // execution metadata is owned by PromptQueue just like queue-step runtime.
@@ -1607,6 +1613,7 @@ export class WorkingFileManager {
       workingFile._runtime = {
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
+        ...(tokenTotals ? { tokenTotals } : {}),
         ...this.getPersistedExecutionTiming(),
         ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
         ...(this.queueAccess.getPendingRewind?.()

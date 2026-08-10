@@ -5518,7 +5518,11 @@ export class WorkflowOrchestrator {
       workflowName?: string;
       startedAt?: number;
       steps?: unknown[];
-      _runtime?: { currentIndex?: number; executionState?: string };
+      _runtime?: {
+        currentIndex?: number;
+        executionState?: string;
+        tokenTotals?: WorkflowSummary["tokenTotals"];
+      };
     };
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
@@ -5544,6 +5548,7 @@ export class WorkflowOrchestrator {
       totalSteps,
       startedAt: workingFile.startedAt,
       managedBy: RUNNER_IDS.CLI,
+      tokenTotals: workingFile._runtime?.tokenTotals,
     };
 
     const session = new CliWatchSession(
@@ -5875,7 +5880,11 @@ export class WorkflowOrchestrator {
       .readFile(workingFilePath, "utf8")
       .then(async (content) => {
         const workingFile = JSON.parse(content) as {
-          _runtime?: { executionState?: string; currentIndex?: number };
+          _runtime?: {
+            executionState?: string;
+            currentIndex?: number;
+            tokenTotals?: WorkflowSummary["tokenTotals"];
+          };
           steps?: unknown[];
           workflowName?: string;
           startedAt?: number;
@@ -5913,6 +5922,7 @@ export class WorkflowOrchestrator {
             workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
           totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
           managedBy: undefined, // no longer CLI-managed
+          tokenTotals: workingFile._runtime?.tokenTotals,
         };
 
         // Update the dashboard: send final state then dismiss from Running section

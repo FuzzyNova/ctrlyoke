@@ -11,6 +11,7 @@ import type {
   PromptRuntimeMetadata,
   PromptStep,
   WorkingFile,
+  WorkflowTokenTotals,
 } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -268,6 +269,30 @@ suite("WorkingFileManager", () => {
       typeof persisted.finalStep?._runtime?.startedAt,
       "number"
     );
+  });
+
+  test("projects token totals through a later PromptQueue runtime write", async () => {
+    const workingFilePath = tempFile("token-total-runtime");
+    const workingFile = makeMinimalWorkingFile();
+    await writeTempJson(workingFilePath, workingFile);
+
+    const queue = new PromptQueue();
+    queue.loadPrompts(workingFile, workingFilePath);
+    queue.setTokenTotals({
+      total: 12,
+      coverage: "complete",
+      reportedAttemptCount: 1,
+      attemptCount: 1,
+      isFinal: false,
+      byHarness: {},
+      byLocalDay: {},
+    });
+    await queue.commitRuntimeTransition();
+
+    const persisted = JSON.parse(
+      await fs.readFile(workingFilePath, "utf-8")
+    ) as WorkingFile;
+    assert.strictEqual(persisted._runtime?.tokenTotals?.total, 12);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -692,6 +717,42 @@ suite("WorkingFileManager", () => {
         EXECUTION_STATES.IDLE
       );
       assert.strictEqual((content.steps![0] as PromptStep)._runtime, undefined);
+    });
+
+    test("does not copy run token totals into a seeded run", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        [{ prompt: "step one" }],
+        EXECUTION_STATES.COMPLETED
+      );
+      const sourcePath = WorkflowPaths.runFilePath(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      const source = JSON.parse(await fs.readFile(sourcePath, "utf8")) as WorkingFile;
+      const tokenTotals: WorkflowTokenTotals = {
+        total: 7,
+        coverage: "complete",
+        reportedAttemptCount: 1,
+        attemptCount: 1,
+        isFinal: true,
+        byHarness: {},
+        byLocalDay: {},
+      };
+      source._runtime = { ...source._runtime!, tokenTotals };
+      await writeTempJson(sourcePath, source);
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      const content = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(content._runtime?.tokenTotals, undefined);
     });
 
     test("leaves the source run's file byte-for-byte unchanged", async () => {
@@ -1580,6 +1641,22 @@ suite("WorkingFileManager", () => {
         Date.now()
       );
       const sourcePath = promoted.workingFilePath;
+      const sourceWithTotals = JSON.parse(
+        await fs.readFile(sourcePath, "utf8")
+      ) as WorkingFile;
+      sourceWithTotals._runtime = {
+        ...sourceWithTotals._runtime!,
+        tokenTotals: {
+          total: 9,
+          coverage: "complete",
+          reportedAttemptCount: 1,
+          attemptCount: 1,
+          isFinal: true,
+          byHarness: {},
+          byLocalDay: {},
+        },
+      };
+      await writeTempJson(sourcePath, sourceWithTotals);
       const sourceBefore = await fs.readFile(sourcePath, "utf8");
 
       const draft = await WorkingFileManager.seedDraftFromRun(
@@ -1610,6 +1687,7 @@ suite("WorkingFileManager", () => {
         content._runtime?.executionState,
         EXECUTION_STATES.IDLE
       );
+      assert.strictEqual(content._runtime?.tokenTotals, undefined);
       assert.deepStrictEqual(descriptor.pendingEdit, { kind: "draft" });
       assert.strictEqual(descriptor.revision, 3);
       assert.strictEqual(await fs.readFile(sourcePath, "utf8"), sourceBefore);

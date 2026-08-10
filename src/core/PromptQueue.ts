@@ -13,6 +13,7 @@ import {
   ScriptRuntimeOutput,
   isScriptStep,
   PromptRuntimeMetadata,
+  WorkflowTokenTotals,
   type RunRef,
 } from "../types/CtrlYokeTypes";
 import {
@@ -140,6 +141,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       getCurrentIndex: () => this.state.currentIndex,
       getStatus: () => this.stateMachine.status,
       getRuntimeState: () => this.stateMachine.getSnapshot(),
+      getTokenTotals: () => this.state.tokenTotals,
       getWorkflowName: () => this.state.workflowName,
       mergeDiskSteps: (diskSteps: WorkflowStep[]) =>
         this.mergeDiskSteps(diskSteps),
@@ -352,6 +354,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       runRef: this.state.runRef,
       definitionRevision: this.state.definitionRevision, // Preserve across reloads (restoreFromWorkingFile sets the authoritative value)
       pendingRewind: this.state.pendingRewind,
+      tokenTotals: undefined,
     };
 
     // Store complete workflow file for property resolution
@@ -468,6 +471,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         runRef: lineageAddress?.runRef,
         definitionRevision: workingFile.definitionRevision ?? 1,
         pendingRewind: runtime?.pendingRewind,
+        tokenTotals: runtime?.tokenTotals,
       };
 
       // Store complete workflow file for property resolution
@@ -630,6 +634,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       totalExecutionTime: this.stateMachine.getActiveExecutionTime(),
       ...this.stateMachine.getSnapshot(),
     };
+  }
+
+  /** Accept the latest aggregate projected by OutputHistoryManager. */
+  public setTokenTotals(tokenTotals: WorkflowTokenTotals | undefined): void {
+    this.state.tokenTotals = tokenTotals;
+    this.emitStateChange();
   }
 
   /** Record the latest pre-condition evaluation for a queue step. */
@@ -1371,6 +1381,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     // A promoted run starts its own definition-revision sequence (mirrors the
     // hardcoded `definitionRevision: 1` WorkingFileManager.promoteToNewRun writes).
     this.state.definitionRevision = 1;
+    this.state.tokenTotals = undefined;
     this.emitStateChange();
 
     return {

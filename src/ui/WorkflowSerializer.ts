@@ -1266,6 +1266,7 @@ export class WorkflowSerializer {
               isFavorite: descriptor.isFavorite,
               totalSteps: steps.length,
               harness,
+              tokenTotals: workingFile._runtime?.tokenTotals,
               runNav,
             };
           } catch (error) {

@@ -774,12 +774,12 @@ the next presentation stage, as required by the staging order.
       `TIMELINE_ATTEMPT_KINDS.AI` attempts, keyed by
       `(target, runIndex, attemptIndex, phase)`, with `byHarness` and
       `byLocalDay` breakdowns.
-- [ ] Persist `WorkflowTokenTotals` into `WorkingFileRuntime` and the run
+- [x] Persist `WorkflowTokenTotals` into `WorkingFileRuntime` and the run
       manifest; bump the timeline schema version and project into `RunSummary`.
-- [ ] Thread the live value through `PromptQueue` / `IWorkingFileQueueAccess` /
+- [x] Thread the live value through `PromptQueue` / `IWorkingFileQueueAccess` /
       `WorkingFileManager`, and through both VS Code-managed and CLI-watch
       `WorkflowSummary` paths so later runtime writes cannot erase it.
-- [ ] Publish rolling totals via `WorkflowSummary`, durable totals via
+- [x] Publish rolling totals via `WorkflowSummary`, durable totals via
       `RECENT_WORKFLOWS`.
 - [ ] Add the usage slot to `WorkflowRowLayout.tsx`, `WORKFLOW_ROW_TRACKS`, and
       both row kinds; render in `RunSummaryRow.tsx`.
@@ -789,7 +789,7 @@ the next presentation stage, as required by the staging order.
       final/dynamic-step inclusion, partial coverage, run isolation,
       local-midnight partitioning, `byHarness === sum(byLocalDay)`, mixed
       harnesses, missing attribution, and no-usable-total omission.
-- [ ] Persistence tests: streaming replacement, retry/manual-rerun inclusion, partial
+- [x] Persistence tests: streaming replacement, retry/manual-rerun inclusion, partial
       coverage, dynamic-step inclusion, run isolation, local-midnight
       partitioning, `byHarness === sum(byLocalDay)`, duplicate/fork runtime
       stripping, same-run reopen/final transitions, and workflow-list refresh

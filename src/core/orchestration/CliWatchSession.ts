@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   WorkflowSummary,
+  WorkflowTokenTotals,
   EXECUTION_STATES,
   type RunRef,
   type WorkflowKey,
@@ -133,7 +134,11 @@ export class CliWatchSession implements vscode.Disposable {
     try {
       const content = await fs.promises.readFile(this.workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as {
-        _runtime?: { currentIndex?: number; executionState?: string };
+        _runtime?: {
+          currentIndex?: number;
+          executionState?: string;
+          tokenTotals?: WorkflowTokenTotals;
+        };
         steps?: unknown[];
       };
 
@@ -146,6 +151,7 @@ export class CliWatchSession implements vscode.Disposable {
         currentStep: currentIndex,
         totalSteps: workingFile.steps?.length ?? 0,
         executionState: executionState as WorkflowSummary["executionState"],
+        tokenTotals: workingFile._runtime?.tokenTotals,
       });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;

@@ -10,6 +10,7 @@ import type {
   WorkflowKey,
   RunRef,
   WorkflowStep,
+  WorkflowTokenTotals,
 } from "./CtrlYokeTypes";
 import type {
   OutputExecutionTarget,
@@ -24,7 +25,7 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = "2.3.0" as const;
+export const TIMELINE_SCHEMA_VERSION = "2.4.0" as const;
 
 export const TIMELINE_EVENT_TYPES = {
   WORKFLOW_RUNTIME_TRANSITION_RECORDED: "workflowRuntimeTransitionRecorded",
@@ -104,6 +105,8 @@ export interface WorkflowRunManifest {
   eventCount: number;
   nextSequence: number;
   lastUpdatedAt: number;
+  /** Latest run-scoped token aggregate projected from timeline history. */
+  tokenTotals?: WorkflowTokenTotals;
 }
 
 /**
@@ -124,6 +127,7 @@ export interface RunSummary {
   primaryModel?: string;
   hasMixedHarnesses: boolean;
   hasMixedModels: boolean;
+  tokenTotals?: WorkflowTokenTotals;
 }
 
 export interface HistorySearchResult {

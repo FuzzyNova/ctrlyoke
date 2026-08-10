@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkflowTokenTotals,
+} from "../../types/CtrlYokeTypes";
 import {
   WorkflowOutputHistory,
   OutputExecutionTarget,
@@ -24,6 +28,7 @@ import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { RunOutputResolver } from "./RunOutputResolver";
+import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_ATTEMPT_KINDS,
@@ -78,6 +83,14 @@ const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
   EXECUTION_STATES.CANCELLING,
 ]);
 
+function isTerminalExecutionState(state: ExecutionState): boolean {
+  return (
+    state === EXECUTION_STATES.COMPLETED ||
+    state === EXECUTION_STATES.STOPPED ||
+    state === EXECUTION_STATES.ERROR
+  );
+}
+
 /**
  * One run's summary plus the manifest's own lifecycle state, which the resolved
  * summary may have overridden with the working file's. Exported only so
@@ -122,8 +135,78 @@ export class OutputHistoryManager {
   private readonly snapshotService = new WorkspaceSnapshotService();
   /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
   private pendingIndexRefresh: Promise<void> = Promise.resolve();
+  /** One aggregate owner per active run manifest. */
+  private readonly tokenReducers = new Map<
+    string,
+    WorkflowTokenTotalsReducer
+  >();
+  private readonly tokenReducerHydration = new Map<string, Promise<void>>();
+  private tokenTotalsChangedHandler?: (
+    historyFilePath: string,
+    tokenTotals: WorkflowTokenTotals
+  ) => Promise<void> | void;
 
   constructor(private _workspaceFolderPath: string) {}
+
+  /** Project reducer snapshots into the owning queue/working file. */
+  setTokenTotalsChangedHandler(
+    handler: (
+      historyFilePath: string,
+      tokenTotals: WorkflowTokenTotals
+    ) => Promise<void> | void
+  ): void {
+    this.tokenTotalsChangedHandler = handler;
+  }
+
+  /** Hydrate a run aggregate once from its durable timeline and repair its manifest copy. */
+  async hydrateTokenTotals(
+    historyFilePath: string
+  ): Promise<WorkflowTokenTotals | undefined> {
+    if (!historyFilePath) {
+      return undefined;
+    }
+    const existingReducer = this.tokenReducers.get(historyFilePath);
+    if (existingReducer) {
+      return existingReducer.snapshot();
+    }
+    const existingHydration = this.tokenReducerHydration.get(historyFilePath);
+    if (existingHydration) {
+      await existingHydration;
+      return this.tokenReducers.get(historyFilePath)?.snapshot();
+    }
+
+    const hydration = (async () => {
+      const manifest = await this.timelineRecorder.readManifest(
+        historyFilePath
+      );
+      const reducer = new WorkflowTokenTotalsReducer({
+        workflowId: manifest.workflowId,
+        runId: manifest.runId,
+        isFinal: !ACTIVE_EXECUTION_STATES.has(manifest.executionState),
+      });
+      const events = [];
+      for await (const event of this.timelineRecorder.streamEvents(
+        historyFilePath
+      )) {
+        events.push(event);
+      }
+      reducer.reduce(events, {
+        isFinal: !ACTIVE_EXECUTION_STATES.has(manifest.executionState),
+      });
+      this.tokenReducers.set(historyFilePath, reducer);
+      const totals = reducer.snapshot();
+      if (totals) {
+        await this.persistTokenTotals(historyFilePath, totals);
+      }
+    })();
+    this.tokenReducerHydration.set(historyFilePath, hydration);
+    try {
+      await hydration;
+    } finally {
+      this.tokenReducerHydration.delete(historyFilePath);
+    }
+    return this.tokenReducers.get(historyFilePath)?.snapshot();
+  }
 
   /** Get the manifest path for an already-known run. */
   getHistoryFilePath(workflowKey: WorkflowKey, runRef: RunRef): string {
@@ -250,7 +333,7 @@ export class OutputHistoryManager {
         );
       }
       const definitionRevision = definitionContext?.definitionRevision ?? 1;
-      await this.timelineRecorder.appendEvents(historyFilePath, [
+      const events = await this.timelineRecorder.appendEvents(historyFilePath, [
         {
           eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
           timestampMs: cliOutput.timestampMs ?? Date.now(),
@@ -273,6 +356,7 @@ export class OutputHistoryManager {
           payload: { cliOutput },
         },
       ]);
+      await this.applyTokenEvents(historyFilePath, events);
     } catch (error) {
       Log.warn("Failed to start streaming output history:", error);
     }
@@ -562,7 +646,7 @@ export class OutputHistoryManager {
     }
 
     try {
-      await this.timelineRecorder.appendEvents(historyFilePath, [
+      const events = await this.timelineRecorder.appendEvents(historyFilePath, [
         {
           eventType: TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
           timestampMs: transition.timestampMs,
@@ -575,6 +659,13 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      await this.applyTokenEvents(
+        historyFilePath,
+        events,
+        isTerminalExecutionState(transition.current.status)
+          ? true
+          : undefined
+      );
       // Keep the manifest's executionState authoritative for every transition, not
       // only init/finalize, so manifest-only run lists show paused/pausing/cancelling
       // states correctly. finalizeRun (called after this for terminal transitions,
@@ -650,13 +741,14 @@ export class OutputHistoryManager {
     try {
       await this.streamingBuffer.flush(historyFilePath);
       const completedAt = Date.now();
-      await this.timelineRecorder.appendEvents(historyFilePath, [
+      const events = await this.timelineRecorder.appendEvents(historyFilePath, [
         {
           eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
           timestampMs: completedAt,
           payload: { executionState, stepCount },
         },
       ]);
+      await this.applyTokenEvents(historyFilePath, events, true);
       await this.timelineRecorder.updateManifest(
         historyFilePath,
         (manifest) => ({
@@ -690,6 +782,12 @@ export class OutputHistoryManager {
       definitionRevision,
       stepCount
     );
+    await this.hydrateTokenTotals(historyFilePath);
+    const reducer = this.tokenReducers.get(historyFilePath);
+    const totals = reducer?.setFinal(false);
+    if (totals) {
+      await this.persistTokenTotals(historyFilePath, totals);
+    }
     this.refreshSearchIndex();
   }
 
@@ -706,14 +804,23 @@ export class OutputHistoryManager {
     try {
       const manifest =
         await this.timelineRecorder.readManifest(historyFilePath);
-      if (manifest.executionState !== EXECUTION_STATES.RUNNING) {
-        return;
+      const totals = await this.hydrateTokenTotals(historyFilePath);
+      if (manifest.executionState === EXECUTION_STATES.RUNNING) {
+        await this.finalizeRun(
+          historyFilePath,
+          EXECUTION_STATES.STOPPED,
+          stepCount
+        );
       }
-      await this.finalizeRun(
-        historyFilePath,
-        EXECUTION_STATES.STOPPED,
-        stepCount
-      );
+      const recoveredTotals =
+        this.tokenReducers.get(historyFilePath)?.snapshot() ?? totals;
+      if (recoveredTotals) {
+        await this.repairWorkingFileTokenTotals(
+          workflowKey,
+          latestRun,
+          recoveredTotals
+        );
+      }
     } catch (error) {
       Log.warn("Failed to recover interrupted history run:", error);
     }
@@ -868,6 +975,7 @@ export class OutputHistoryManager {
         primaryModel,
         hasMixedHarnesses,
         hasMixedModels,
+        tokenTotals,
       } = await this.readRunFileSummaryFields(runFilePath);
 
       const record: RunSummaryRecord = {
@@ -894,6 +1002,7 @@ export class OutputHistoryManager {
           primaryModel,
           hasMixedHarnesses,
           hasMixedModels,
+          tokenTotals: tokenTotals ?? manifest.tokenTotals,
         },
       };
 
@@ -927,6 +1036,7 @@ export class OutputHistoryManager {
   private async readRunFileSummaryFields(runFilePath: string): Promise<{
     executionState?: ExecutionState;
     executionEndTime?: number;
+    tokenTotals?: WorkflowTokenTotals;
     primaryHarness?: string;
     primaryModel?: string;
     hasMixedHarnesses: boolean;
@@ -940,6 +1050,7 @@ export class OutputHistoryManager {
         _runtime?: {
           executionState?: ExecutionState;
           executionEndTime?: number;
+          tokenTotals?: WorkflowTokenTotals;
         };
         steps?: Array<{
           type?: string;
@@ -969,6 +1080,7 @@ export class OutputHistoryManager {
       return {
         executionState: workingFile._runtime?.executionState,
         executionEndTime: workingFile._runtime?.executionEndTime,
+        tokenTotals: workingFile._runtime?.tokenTotals,
         primaryHarness: harnesses.values().next().value,
         primaryModel: models.values().next().value,
         hasMixedHarnesses: harnesses.size > 1,
@@ -1283,8 +1395,82 @@ export class OutputHistoryManager {
     );
 
     eventDrafts.sort((left, right) => left.timestampMs - right.timestampMs);
-    await this.timelineRecorder.appendEvents(historyFilePath, eventDrafts);
+    const events = await this.timelineRecorder.appendEvents(
+      historyFilePath,
+      eventDrafts
+    );
+    await this.applyTokenEvents(historyFilePath, events);
     this.refreshSearchIndex();
+  }
+
+  private async applyTokenEvents(
+    historyFilePath: string,
+    events: readonly import("../../types/WorkflowTimelineTypes").WorkflowTimelineEvent[],
+    isFinal?: boolean
+  ): Promise<void> {
+    await this.hydrateTokenTotals(historyFilePath);
+    const reducer = this.tokenReducers.get(historyFilePath);
+    if (!reducer) {
+      return;
+    }
+    const totals = reducer.appendEvents(events, { isFinal });
+    if (totals) {
+      await this.persistTokenTotals(historyFilePath, totals);
+    }
+  }
+
+  /** Repair the fast-path copy during startup recovery without rescanning on list reads. */
+  private async repairWorkingFileTokenTotals(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    tokenTotals: WorkflowTokenTotals
+  ): Promise<void> {
+    const runFilePath = WorkflowPaths.runFilePath(
+      this._workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    try {
+      const workingFile = JSON.parse(
+        await fs.promises.readFile(runFilePath, "utf8")
+      ) as {
+        _runtime?: Record<string, unknown>;
+      };
+      if (
+        JSON.stringify(workingFile._runtime?.tokenTotals) ===
+        JSON.stringify(tokenTotals)
+      ) {
+        return;
+      }
+      const updated = {
+        ...workingFile,
+        _runtime: {
+          ...(workingFile._runtime ?? {}),
+          tokenTotals,
+        },
+      };
+      const tempPath = `${runFilePath}.token-totals.tmp`;
+      await fs.promises.writeFile(tempPath, JSON.stringify(updated, null, 2), "utf8");
+      await fs.promises.rename(tempPath, runFilePath);
+    } catch (error) {
+      Log.warn(
+        `[OutputHistoryManager] failed to repair working-file token totals for ${workflowKey}/${runRef}:`,
+        error
+      );
+    }
+  }
+
+  private async persistTokenTotals(
+    historyFilePath: string,
+    tokenTotals: WorkflowTokenTotals
+  ): Promise<void> {
+    await this.timelineRecorder.updateManifest(historyFilePath, (manifest) => {
+      if (JSON.stringify(manifest.tokenTotals) === JSON.stringify(tokenTotals)) {
+        return manifest;
+      }
+      return { ...manifest, tokenTotals };
+    });
+    await this.tokenTotalsChangedHandler?.(historyFilePath, tokenTotals);
   }
 
   private createStatusMessageRecordedDraft(

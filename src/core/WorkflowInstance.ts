@@ -395,6 +395,12 @@ export class WorkflowInstance {
     const resolvedWorkspacePath =
       workspaceFolderPath ?? this.platform.getWorkspaceRoot();
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
+    this.outputHistoryManager.setTokenTotalsChangedHandler(
+      async (_historyFilePath, tokenTotals) => {
+        this.promptQueue.setTokenTotals(tokenTotals);
+        await this.promptQueue.updateWorkingFile(true);
+      }
+    );
 
     this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
     this.endConditionHandler = new EndConditionHandler(
@@ -837,6 +843,7 @@ export class WorkflowInstance {
       executionTimeMs: this.workflowRuntime.getActiveExecutionTime(),
       executionTimeUpdatedAt,
       harness,
+      tokenTotals: state.tokenTotals,
     };
   }
 
@@ -1020,6 +1027,15 @@ export class WorkflowInstance {
       true,
       this.workspaceFolderPath
     );
+    const restoredState = this.promptQueue.getState();
+    if (restoredState.workflowKey && restoredState.runRef) {
+      await this.outputHistoryManager.hydrateTokenTotals(
+        this.outputHistoryManager.getHistoryFilePath(
+          restoredState.workflowKey,
+          restoredState.runRef
+        )
+      );
+    }
     await this.hydrateActiveExecutionOutputCaches();
 
     this.setupPromptFileWatcher(workingFilePath);
@@ -1067,6 +1083,15 @@ export class WorkflowInstance {
       true,
       this.workspaceFolderPath
     );
+    const autoLoadedState = this.promptQueue.getState();
+    if (autoLoadedState.workflowKey && autoLoadedState.runRef) {
+      await this.outputHistoryManager.hydrateTokenTotals(
+        this.outputHistoryManager.getHistoryFilePath(
+          autoLoadedState.workflowKey,
+          autoLoadedState.runRef
+        )
+      );
+    }
     await this.hydrateActiveExecutionOutputCaches();
 
     this.setupPromptFileWatcher(workingFilePath);

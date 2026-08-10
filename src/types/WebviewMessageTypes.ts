@@ -53,6 +53,7 @@ import type {
   RunRef,
   WorkingFile,
   WorkflowRunNavigationSummary,
+  WorkflowTokenTotals,
   ScriptVerdict,
 } from "./CtrlYokeTypes";
 import type {
@@ -851,6 +852,7 @@ export interface RecentWorkflowsMessage {
     totalSteps?: number;
     harness?: HarnessId;
     runNav?: WorkflowRunNavigationSummary;
+    tokenTotals?: WorkflowTokenTotals;
   }>;
 }
 
