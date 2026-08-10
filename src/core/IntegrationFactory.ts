@@ -88,7 +88,7 @@ export class IntegrationFactory {
 
   /** Create a new Codex CLI integration */
   createCodexCli(registerWithContext: boolean = true): CliIntegration {
-    const provider = new CodexCliProvider();
+    const provider = new CodexCliProvider(this.onProviderUsageUpdate);
     return new CliIntegration(
       provider,
       this.platform,

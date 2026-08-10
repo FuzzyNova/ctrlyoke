@@ -271,6 +271,18 @@ export class HarnessUsageService {
           quota.fetchedAt !== undefined
         ) {
           this.ingestProviderUsage(quota);
+        } else if (quota.errorCode) {
+          // Preserve a last-known quota while surfacing a safe capability/auth
+          // status from a non-blocking probe. With no prior quota, retain the
+          // unavailable status so the dashboard can distinguish it from a
+          // successful empty response.
+          const previous = this.quotaCache.get(harnessId);
+          this.quotaCache.set(
+            harnessId,
+            previous?.fetchedAt !== undefined
+              ? { ...previous, errorCode: quota.errorCode }
+              : normalizeQuota(quota)
+          );
         }
       } catch (error) {
         const previous = this.quotaCache.get(harnessId);

@@ -684,6 +684,12 @@ export const HARNESS_USAGE_FRESHNESS_MS = {
   PROVIDER_LOG: 15 * 60 * 1000,
 } as const;
 
+/** Safe, non-provider-specific status codes surfaced by compact usage chips. */
+export const HARNESS_USAGE_STATUS_CODES = {
+  AUTH_REQUIRED: "auth-required",
+  UNSUPPORTED_AUTH_MODE: "unsupported-auth-mode",
+} as const;
+
 /** Delay used to coalesce repeated usage refresh requests. */
 export const HARNESS_USAGE_REFRESH_DEBOUNCE_MS = 100;
 

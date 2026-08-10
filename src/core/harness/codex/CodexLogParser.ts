@@ -27,7 +27,9 @@ import {
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
+import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
+import { normalizeCodexRolloutQuota } from "./CodexUsageNormalization";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -127,6 +129,20 @@ interface CodexTrackedToolCall {
 }
 
 export class CodexLogParser extends BaseLogParser {
+  private readonly onProviderUsageUpdate?: (
+    quota: HarnessQuotaSnapshot
+  ) => void;
+  private readonly now: () => number;
+
+  constructor(
+    onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void,
+    now: () => number = Date.now
+  ) {
+    super();
+    this.onProviderUsageUpdate = onProviderUsageUpdate;
+    this.now = now;
+  }
+
   /**
    * Session metadata cache
    *
@@ -254,6 +270,16 @@ export class CodexLogParser extends BaseLogParser {
         }
         if (info?.model_context_window) {
           modelContextWindow = info.model_context_window;
+        }
+        // The rollout rate-limit object is an unstable, best-effort fallback.
+        // Keep it at this existing token_count parse site and push only the
+        // normalized quota contract through the injected host callback.
+        const quota = normalizeCodexRolloutQuota(
+          event.payload.rate_limits,
+          this.now()
+        );
+        if (quota) {
+          this.onProviderUsageUpdate?.(quota);
         }
       }
 

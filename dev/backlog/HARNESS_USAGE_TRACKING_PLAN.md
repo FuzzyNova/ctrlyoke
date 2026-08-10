@@ -541,15 +541,15 @@ exact duplication both plans warn against.
 - [x] Preserve/forward the user's prior Claude statusline command, release the
       shared settings lease on every teardown path, and persist normalized
       last-known windows only
-- [ ] Spike a short-lived stdio Codex app-server client and use
+- [x] Spike a short-lived stdio Codex app-server client and use
       `account/rateLimits/read` when supported; fall back safely on unsupported
       versions/auth modes
-- [ ] Add the Codex rollout fallback; read `rate_limits` at the existing
+- [x] Add the Codex rollout fallback; read `rate_limits` at the existing
       `token_count` parse site and push the normalized signal through an
       injected port
-- [ ] Map both app-server `windowDurationMins` and rollout `window_minutes`
+- [x] Map both app-server `windowDurationMins` and rollout `window_minutes`
       through one duration-based window normalizer
-- [ ] Redaction, epoch-seconds/ISO-to-milliseconds, abort/timeout, app-server
+- [x] Redaction, epoch-seconds/ISO-to-milliseconds, abort/timeout, app-server
       teardown, multi-bucket/window replacement, settings-lease recovery, and
       provider-schema drift tests
 

@@ -29,6 +29,7 @@ import type {
   McpServerConfig,
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
+import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
@@ -67,6 +68,12 @@ const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
  * ```
  */
 export class CodexCliProvider implements ICliProvider {
+  readonly logParser: CodexLogParser;
+
+  constructor(onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void) {
+    this.logParser = new CodexLogParser(onProviderUsageUpdate);
+  }
+
   private buildToolApprovalOverrideArgs(server: McpServerConfig): string[] {
     if (!Array.isArray(server.autoApprove) || server.autoApprove.length === 0) {
       return [];
@@ -94,7 +101,6 @@ export class CodexCliProvider implements ICliProvider {
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
-  readonly logParser = new CodexLogParser();
   readonly headlessSource = "log" as const;
 
   /** Extract Codex's session ID from the headless JSONL clock stream. */
