@@ -1,4 +1,8 @@
-import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
+import type {
+  CliEvent,
+  CliOutput,
+  TokenStats,
+} from "../types/WebviewMessageTypes";
 import type { WorkflowStep, PromptStep } from "../types/CtrlYokeTypes";
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
@@ -27,14 +31,7 @@ export interface PromptStartData {
 /** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
 export interface PromptCompleteData {
   stepIndex: number;
-  tokens?: {
-    prompt: number;
-    completion: number;
-    cached?: number;
-    cacheCreated?: number;
-    contextWindowUsed?: number;
-    contextWindowSize?: number;
-  };
+  tokens?: TokenStats;
   sessionId?: string;
   harness?: string;
   elapsed?: number; // seconds

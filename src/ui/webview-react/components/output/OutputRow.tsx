@@ -1,6 +1,11 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { calcContextPct } from "@utils/tokenUtils";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
+import {
+  formatTokenBreakdown,
+  formatTokenCount,
+  resolveTokenTotal,
+} from "@root/utils/TokenFormatting";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   BashOutput,
@@ -1067,26 +1072,73 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       cacheCreated,
       contextWindowUsed,
       contextWindowSize,
+      total: reportedTotal,
+      compactionCount,
     } = output.tokens;
-    const total = prompt + completion;
-    const tokenDetails: string[] = [
-      `Tokens: ${prompt} in / ${completion} out / ${total} total`,
-    ];
-    if (cached) tokenDetails.push(`${cached} cached`);
-    if (cacheCreated) tokenDetails.push(`${cacheCreated} cache-created`);
+    const total = resolveTokenTotal(reportedTotal, prompt, completion);
+    const totalLabel = formatTokenCount(total);
+    const tokenBreakdown = formatTokenBreakdown({
+      input: prompt,
+      output: completion,
+      total: reportedTotal,
+      cached,
+      cacheCreated,
+    });
 
     const pct = calcContextPct(contextWindowUsed, contextWindowSize);
+    const contextDetails =
+      pct !== undefined
+        ? `${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`
+        : undefined;
+    const contextLabel =
+      contextDetails !== undefined ? `Context: ${contextDetails}` : undefined;
+    const compactionLabel =
+      compactionCount !== undefined && compactionCount > 0
+        ? `Compacted ${compactionCount}x`
+        : undefined;
+    const tokenTooltip = [
+      contextDetails ? `Current context window: ${contextDetails}` : null,
+      totalLabel ? `Attempt total: ${totalLabel} tokens` : null,
+      tokenBreakdown || null,
+      compactionLabel ? `Compactions: ${compactionCount}` : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join("\n");
+
     if (pct !== undefined) {
-      const formatCount = (count: number) =>
-        count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
       parts.push(
-        <span key="context" title={tokenDetails.join(" | ")}>
-          Context: {formatCount(contextWindowUsed!)}/
-          {formatCount(contextWindowSize!)} ({pct}%)
+        <span key="context" title={tokenTooltip}>
+          {contextLabel}
         </span>
       );
+      if (totalLabel) {
+        parts.push(
+          <span key="total" title={tokenTooltip}>
+            Total: {totalLabel}
+          </span>
+        );
+      }
     } else {
-      parts.push(<span key="tokens">{tokenDetails.join(" | ")}</span>);
+      if (tokenBreakdown) {
+        parts.push(
+          <span key="tokens" title={tokenTooltip}>
+            {tokenBreakdown}
+          </span>
+        );
+      } else if (totalLabel) {
+        parts.push(
+          <span key="total" title={tokenTooltip}>
+            Total: {totalLabel}
+          </span>
+        );
+      }
+    }
+    if (compactionLabel) {
+      parts.push(
+        <span key="compacted" title={tokenTooltip}>
+          {compactionLabel}
+        </span>
+      );
     }
   }
 

@@ -3,6 +3,14 @@ import {
   type WorkflowTokenCoverage,
 } from "../types/DashboardConstants";
 
+export interface TokenBreakdownValues {
+  input: number | undefined;
+  output: number | undefined;
+  total: number | undefined;
+  cached?: number;
+  cacheCreated?: number;
+}
+
 function normalizeTokenCount(tokens: number | undefined): number | undefined {
   if (tokens === undefined || !Number.isFinite(tokens) || tokens < 0) {
     return undefined;
@@ -31,6 +39,42 @@ export function formatTokenCount(tokens: number | undefined): string {
   }
 
   return String(normalized);
+}
+
+/** Resolve an attempt total without discarding a provider-reported value. */
+export function resolveTokenTotal(
+  total: number | undefined,
+  input: number | undefined,
+  output: number | undefined
+): number | undefined {
+  if (total !== undefined) {
+    return total;
+  }
+
+  if (input === undefined || output === undefined) {
+    return undefined;
+  }
+
+  return input + output;
+}
+
+/** Format the input/output/cache composition of an attempt for tooltips. */
+export function formatTokenBreakdown(values: TokenBreakdownValues): string {
+  const input = formatTokenCount(values.input);
+  const output = formatTokenCount(values.output);
+  const total = formatTokenCount(
+    resolveTokenTotal(values.total, values.input, values.output)
+  );
+  if (!input || !output || !total) {
+    return "";
+  }
+
+  const details = [`Tokens: ${input} in / ${output} out / ${total} total`];
+  const cached = formatTokenCount(values.cached);
+  const cacheCreated = formatTokenCount(values.cacheCreated);
+  if (cached) details.push(`${cached} cached`);
+  if (cacheCreated) details.push(`${cacheCreated} cache-created`);
+  return details.join(" | ");
 }
 
 /**

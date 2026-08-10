@@ -30,6 +30,11 @@ import type {
   PromptStartData,
 } from "../core/WorkflowInstance";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
+import {
+  formatTokenBreakdown,
+  formatTokenCount,
+  resolveTokenTotal,
+} from "../utils/TokenFormatting";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -559,24 +564,41 @@ export class CliTerminalFormatter {
         cacheCreated,
         contextWindowUsed,
         contextWindowSize,
+        total: reportedTotal,
+        compactionCount,
       } = data.tokens;
-      const total = prompt + completion;
-      const fmt = (n: number) =>
-        n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-
-      const tokenDetail = [
-        `Tokens: ${fmt(prompt)} in / ${fmt(completion)} out / ${fmt(total)} total`,
-        ...(cached ? [`${fmt(cached)} cached`] : []),
-        ...(cacheCreated ? [`${fmt(cacheCreated)} cache-created`] : []),
-      ].join(", ");
+      const total = resolveTokenTotal(reportedTotal, prompt, completion);
+      const totalLabel = formatTokenCount(total);
+      const tokenBreakdown = formatTokenBreakdown({
+        input: prompt,
+        output: completion,
+        total: reportedTotal,
+        cached,
+        cacheCreated,
+      });
+      const compactionLabel =
+        compactionCount !== undefined && compactionCount > 0
+          ? `Compacted ${compactionCount}x`
+          : undefined;
 
       if (contextWindowUsed !== undefined && contextWindowSize) {
         const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
-        parts.push(
-          `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)  [${tokenDetail}]`
-        );
+        const contextParts = [
+          `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`,
+          totalLabel ? `Total: ${totalLabel}` : null,
+          compactionLabel ?? null,
+        ].filter((part): part is string => part !== null);
+        parts.push(contextParts.join("  "));
       } else {
-        parts.push(tokenDetail);
+        const tokenParts = [
+          tokenBreakdown || null,
+          compactionLabel ?? null,
+        ].filter((part): part is string => part !== null);
+        if (tokenParts.length > 0) {
+          parts.push(tokenParts.join("  "));
+        } else if (totalLabel) {
+          parts.push(`Total: ${totalLabel}`);
+        }
       }
     }
 

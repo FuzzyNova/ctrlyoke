@@ -8,6 +8,11 @@ import type { PromptOverride } from "./PromptStepDetails";
 export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
+import {
+  formatTokenBreakdown,
+  formatTokenCount,
+  resolveTokenTotal,
+} from "@root/utils/TokenFormatting";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -163,6 +168,41 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   const contextPct = ctx?.size
     ? Math.round((ctx.used / ctx.size) * 100)
     : undefined;
+  const attemptTokens = latestOutput?.tokens;
+  const attemptTotalLabel = formatTokenCount(
+    resolveTokenTotal(
+      attemptTokens?.total,
+      attemptTokens?.prompt,
+      attemptTokens?.completion
+    )
+  );
+  const attemptBreakdown = attemptTokens
+    ? formatTokenBreakdown({
+        input: attemptTokens.prompt,
+        output: attemptTokens.completion,
+        total: attemptTokens.total,
+        cached: attemptTokens.cached,
+        cacheCreated: attemptTokens.cacheCreated,
+      })
+    : "";
+  const compactionCount = attemptTokens?.compactionCount;
+  const visibleAttemptTotal =
+    contextPct !== undefined &&
+    compactionCount !== undefined &&
+    compactionCount > 0 &&
+    !!attemptTotalLabel;
+  const contextLabel =
+    ctx && contextPct !== undefined
+      ? `${formatTokenCount(ctx.used)}/${formatTokenCount(ctx.size)} (${contextPct}%)`
+      : undefined;
+  const tokenTooltip = [
+    contextLabel ? `Current context window: ${contextLabel}` : null,
+    attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
+    attemptBreakdown || null,
+    compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join("\n");
 
   // Build class names for the container
   const containerClasses = [
@@ -208,7 +248,9 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           : undefined
       }
       {...longPressHandlers}
-      title="Click to edit"
+      title={
+        tokenTooltip ? `Click to edit\n\n${tokenTooltip}` : "Click to edit"
+      }
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
@@ -325,7 +367,10 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           )}
         </div>
         {contextPct !== undefined && (
-          <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
+          <div
+            className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5"
+            title={tokenTooltip || undefined}
+          >
             {/* Track */}
             <div className="flex-1 w-1.5 rounded-full bg-ctx-bar-track overflow-hidden relative">
               {/* Fill */}
@@ -344,6 +389,12 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             {/* Percentage label */}
             <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5">
               {contextPct}%
+              {visibleAttemptTotal && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <span>{attemptTotalLabel}</span>
+                </>
+              )}
             </span>
           </div>
         )}

@@ -4,7 +4,11 @@ import { OutputRow } from "@components/output/OutputRow";
 import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
 import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
-import { FINAL_STEP_PHASES, SCRIPT_OUTPUT_SOURCES } from "@/types/messages";
+import {
+  FINAL_STEP_PHASES,
+  SCRIPT_OUTPUT_SOURCES,
+  type TokenStats,
+} from "@/types/messages";
 
 const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 
@@ -76,6 +80,59 @@ function buildActiveMatch(
 const TWENTY_LINES = Array.from({ length: 20 }, (_, i) => `line ${i}`).join(
   "\n"
 );
+
+function buildStatsRow(tokens: TokenStats): OutputRenderRow {
+  return {
+    key: "row-stats",
+    target: TARGET,
+    estimateSize: 24,
+    rowKind: "stats",
+    output: {
+      prompt: "prompt",
+      response: "response",
+      elapsed: 1,
+      isStreaming: false,
+      tokens,
+    },
+  };
+}
+
+describe("OutputRow token stats", () => {
+  it("shows current context without inventing a visible total", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildStatsRow({
+          contextWindowUsed: 10000,
+          contextWindowSize: 200000,
+        } as TokenStats)}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).toHaveTextContent("Context: 10k/200k (5%)");
+    expect(container).not.toHaveTextContent("Total:");
+  });
+
+  it("uses the provider total when there is no current context window", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildStatsRow({
+          prompt: 8000,
+          completion: 2000,
+          total: 410000,
+          cached: 390000,
+        })}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).toHaveTextContent("Tokens: 8k in / 2k out / 410k total");
+    expect(container).not.toHaveTextContent("Total: 10k");
+    expect(
+      container.querySelector("[title*='Attempt total: 410k']")
+    ).not.toBeNull();
+  });
+});
 
 describe("OutputRow auto-expand on hidden active match", () => {
   it.each([

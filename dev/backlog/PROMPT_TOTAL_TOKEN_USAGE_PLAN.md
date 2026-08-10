@@ -740,11 +740,11 @@ list rather than deferring.
       `src/utils/TokenFormatting.ts`, consumable by both CLI and webview
       (`@root/utils/...`); keep `calcContextPct` in the webview's
       `tokenUtils.ts`. Do not fork formatting logic by surface.
-- [ ] Render total + breakdown in `StatsRowView` and `CliTerminalFormatter`.
-- [ ] Expose the total in the `WorkflowStep` tooltip without changing the bar,
+- [x] Render total + breakdown in `StatsRowView` and `CliTerminalFormatter`.
+- [x] Expose the total in the `WorkflowStep` tooltip without changing the bar,
       and render the visible total **only** when `compactionCount > 0` and a
       usable total exists.
-- [ ] React tests: context-only, total-only, compacted (label visible),
+- [x] React tests: context-only, total-only, compacted (label visible),
       uncompacted-with-large-total (label absent), and
       compaction-count-unavailable (label absent) cases.
 
