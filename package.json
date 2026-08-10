@@ -578,7 +578,7 @@
         "id": "ctrlyoke.gettingStarted",
         "title": "Getting Started with ctrlyoke",
         "description": "Run your first AI coding workflow: verify a harness, create a workflow from a template, run it, and know where to get help.",
-        "icon": "images/ctrlyoke-icon-simple-color.png",
+        "icon": "images/ctrlyoke-icon-color.png",
         "steps": [
           {
             "id": "openPanel",

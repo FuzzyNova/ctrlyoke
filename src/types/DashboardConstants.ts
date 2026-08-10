@@ -446,10 +446,11 @@ export const HOSTED_ICON_FILES = {
   // Transparent background is required for iOS 26 Liquid Glass / Clear appearance mode;
   // a solid opaque background causes iOS 26 to fall back to a generic placeholder icon.
   APP_ICON_SVG: "ctrlyoke-app-icon.svg",
-  // The favicon / SCM-toolbar contexts are too small for the standard mark (the ctrl→yoke "Y"
-  // is lost), so they use a dedicated "simple" mark. Same 2-token recolor contract as the app icon.
-  FAVICON_PNG: "ctrlyoke-icon-simple-color.png",
-  FAVICON_SVG: "ctrlyoke-icon-simple-color.svg",
+  // Same mark as APP_ICON_SVG but rendered with a transparent canvas (only the keyface
+  // shape carries the background color) — see ctrlyoke-icon.svg's keyface path. Same
+  // 2-token recolor contract as the app icon.
+  FAVICON_PNG: "ctrlyoke-icon-color.png",
+  FAVICON_SVG: "ctrlyoke-icon-color.svg",
   // 180x180 PNG for the apple-touch-icon HTML link (used by the Add-to-Home-Screen preview
   // and as a PNG fallback for older iOS versions).
   APPLE_TOUCH_ICON_PNG: "apple-touch-icon.png",

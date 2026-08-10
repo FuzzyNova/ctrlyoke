@@ -1,37 +1,48 @@
 #!/usr/bin/env node
 
 /**
- * Generate every brand icon from TWO authored sources (both transparent background,
- * all shapes `currentColor`):
- *   images/ctrlyoke-icon.svg         → the full "standard" mark (ctrl keycap → yoke "Y").
- *   images/ctrlyoke-icon-simple.svg  → a dedicated "simple" mark for tiny contexts. At
- *                                      favicon / SCM-toolbar size the yoke is visually lost
- *                                      in the standard mark, so small spots use this instead.
+ * Generate every brand icon from ONE authored source (transparent background,
+ * `currentColor` fg, `fill:none` keyface):
+ *   images/ctrlyoke-icon.svg → the single "ctrl keycap → yoke Y" mark. It reads
+ *   correctly at every size we need (VS Code sidebar/panel down to favicon), so
+ *   there is no separate "simple" master.
  *
- * Outputs from the STANDARD master (bigger contexts):
- *   - images/ctrlyoke-app-icon.svg  → #ffffff fill on #072c45 background; the
- *                                     user-customizable 2-token file (PWA app icon + settings preview).
+ * The master has 3 named paths:
+ *   - id="keyface" → the keycap background shape. Authored as `fill:none` so the
+ *     master renders correctly as-is in VS Code's CSS-cascade / alpha-mask contexts
+ *     (transparent keyface, transparent canvas). Recolored to BG_COLOR for the
+ *     baked-color outputs below.
+ *   - id="keyyoke", id="ctrltext" → the yoke glyph + "CTRL" text, both authored as
+ *     `currentColor`. Recolored to FG_COLOR (or a theme color) for baked outputs.
+ *
+ * Outputs:
+ *   - images/ctrlyoke-app-icon.svg  → #ffffff fg on #072c45 bg (keyface + canvas rect
+ *                                     both BG_COLOR); the user-customizable 2-token
+ *                                     file (PWA app icon + settings preview).
  *   - images/icon.png (512)         → VS Code Marketplace icon + manifest app icon.
  *   - images/apple-touch-icon.png (180)
- *
- * Outputs from the SIMPLE master (tiny contexts):
+ *   - images/ctrlyoke-icon-color.svg → #ffffff fg, BG_COLOR keyface, TRANSPARENT canvas
+ *                                     (no rect) — the 2-token favicon SVG. Sits as a
+ *                                     colored keycap glyph rather than a solid square.
+ *   - images/ctrlyoke-icon-color.png (512) → static favicon PNG / notification badge.
+ *   - landing/public/ctrlyoke-icon.svg + docs/public/ctrlyoke-icon.svg → web favicon +
+ *                                     header logos for the marketing + docs sites.
+ *                                     Loaded via <img>/<link rel=icon> (no CSS cascade),
+ *                                     so they get the same baked-color favicon SVG.
  *   - images/ctrlyoke-icon-light.svg (#424242) / ctrlyoke-icon-dark.svg (#C5C5C5)
- *                                     → VS Code SCM-toolbar command icon (light/dark themes,
- *                                       rendered as <img>, no CSS cascade).
- *   - src/ui/icons/generate-commit-message.svg → copy of the simple master (currentColor) for inline mask use.
- *   - images/ctrlyoke-icon-simple-color.svg → #ffffff on #072c45, 2-token; the hosted-dashboard favicon SVG.
- *   - images/ctrlyoke-icon-simple-color.png (512) → static favicon PNG / notification badge.
- *   - landing/public/ctrlyoke-icon.svg + docs/public/ctrlyoke-icon.svg → web favicon + header
- *                                     logos for the marketing + docs sites. Same favicon-size
- *                                     context, and loaded via <img>/<link rel=icon> (no CSS
- *                                     cascade), so they get the baked-color simple mark.
+ *                                     → VS Code SCM-toolbar command icon (light/dark
+ *                                       themes, rendered as <img>, no CSS cascade).
+ *                                       Keyface stays transparent (silhouette only).
+ *   - src/ui/icons/generate-commit-message.svg → verbatim copy of the master
+ *                                     (currentColor; the custom-icons generator
+ *                                     strips color for mask use).
  *
  * Also:
  *   - src/types/IconColorDefaults.ts → keeps BG/FG defaults in sync with the 2-token contract.
  *
  * The 2-token contract: the *-color SVGs contain exactly BG_COLOR + FG_COLOR as literals,
  * which ServerSection.tsx and the hosted server swap for user-chosen colors. Do not introduce a
- * third hardcoded color into either master, or the recolor will be partial.
+ * third hardcoded color into the master, or the recolor will be partial.
  *
  * Uses @resvg/resvg-wasm for PNG rendering — no native tools (Inkscape, etc.) required.
  *
@@ -55,12 +66,22 @@ const FG_COLOR = "#ffffff";
 const LIGHT_THEME_ICON_COLOR = "#424242";
 const DARK_THEME_ICON_COLOR = "#C5C5C5";
 
-/** Replace all theme-relative and hardcoded colors with the given color. */
-function colorize(svg, color = FG_COLOR) {
-  return svg
-    .replace(/currentColor/g, color)
-    .replace(/stroke:#[0-9a-fA-F]{3,6}/g, `stroke:${color}`)
-    .replace(/fill:#[0-9a-fA-F]{3,6}/g, `fill:${color}`);
+/** Replace all `currentColor` occurrences (keyyoke + ctrltext) with the given color. */
+function colorizeFg(svg, color) {
+  return svg.replace(/currentColor/g, color);
+}
+
+/** Recolor the keyface path's `fill:none` to the given color. Keyface is matched by
+ *  id, not by color, so this is robust to future re-exports reordering attributes. */
+function colorizeKeyface(svg, color) {
+  const re = /<path\b[^>]*\bid="keyface"[^>]*\/>/;
+  const match = svg.match(re);
+  if (!match) throw new Error('Could not find <path id="keyface"> in master SVG');
+  if (!match[0].includes("fill:none")) {
+    throw new Error('keyface path does not have "fill:none" — master SVG authoring contract changed?');
+  }
+  const replaced = match[0].replace("fill:none", `fill:${color}`);
+  return svg.slice(0, match.index) + replaced + svg.slice(match.index + match[0].length);
 }
 
 /** Insert a solid background rect as the first child of <svg>. */
@@ -70,10 +91,6 @@ function addBackground(svg, color) {
   const insertAt = match.index + match[0].length;
   const rect = `<rect width="512" height="512" fill="${color}"/>`;
   return svg.slice(0, insertAt) + rect + svg.slice(insertAt);
-}
-
-function applyColors(svg) {
-  return addBackground(colorize(svg, FG_COLOR), BG_COLOR);
 }
 
 /** Render an SVG string to PNG at the given width (square) using resvg-wasm. */
@@ -99,64 +116,61 @@ await initWasm(readFileSync(wasmPath));
 
 try {
   const masterSvg = readFileSync(join(imagesDir, "ctrlyoke-icon.svg"), "utf8");
-  const simpleSvg = readFileSync(
-    join(imagesDir, "ctrlyoke-icon-simple.svg"),
-    "utf8"
-  );
 
-  const colored = applyColors(masterSvg);
-  const coloredSimple = applyColors(simpleSvg);
+  // 2-token "solid" mark (app icon / marketplace tile / apple-touch-icon): keyface AND
+  // the canvas rect are both BG_COLOR, so they blend into one seamless colored square.
+  let appIcon = colorizeFg(masterSvg, FG_COLOR);
+  appIcon = colorizeKeyface(appIcon, BG_COLOR);
+  appIcon = addBackground(appIcon, BG_COLOR);
 
-  // 2-token customizable SVG (PWA app icon + settings live-preview) — full standard mark.
-  writeFileSync(join(imagesDir, "ctrlyoke-app-icon.svg"), colored, "utf8");
+  writeFileSync(join(imagesDir, "ctrlyoke-app-icon.svg"), appIcon, "utf8");
   console.log("✓ images/ctrlyoke-app-icon.svg");
 
-  // 2-token customizable SIMPLE SVG — the hosted-dashboard favicon. The ctrl→yoke "Y" is
-  // visually lost at favicon size, so small contexts use the dedicated simple mark.
-  writeFileSync(
-    join(imagesDir, "ctrlyoke-icon-simple-color.svg"),
-    coloredSimple,
-    "utf8"
-  );
-  console.log("✓ images/ctrlyoke-icon-simple-color.svg");
+  // 2-token "favicon" mark: same colors as appIcon, but NO canvas rect — keyface alone
+  // (a rounded keycap shape, not the full 512x512 square) carries BG_COLOR, so the icon
+  // sits as a colored glyph on a transparent page/tab background.
+  let favicon = colorizeFg(masterSvg, FG_COLOR);
+  favicon = colorizeKeyface(favicon, BG_COLOR);
 
-  // Web favicons + header logos for the landing site and docs site. Same
-  // favicon-size context as the hosted-dashboard favicon, so they use the SIMPLE
-  // mark (the yoke is lost in the standard mark when tiny). These are consumed via
-  // <link rel="icon"> and <img src> — which render an SVG in isolation and IGNORE
-  // ancestor CSS color — so they must carry BAKED colors, not currentColor (a
-  // currentColor mark renders black/invisible on the dark sites). Single-sourced
-  // here so editing images/ctrlyoke-icon-simple.svg propagates to the web assets.
+  writeFileSync(join(imagesDir, "ctrlyoke-icon-color.svg"), favicon, "utf8");
+  console.log("✓ images/ctrlyoke-icon-color.svg");
+
+  // Web favicons + header logos for the landing site and docs site. Same favicon-style
+  // (transparent canvas) mark as above. Consumed via <link rel="icon"> and <img src> —
+  // which render an SVG in isolation and IGNORE ancestor CSS color — so they must carry
+  // BAKED colors, not currentColor (a currentColor mark renders black/invisible on the
+  // dark sites). Single-sourced here so editing images/ctrlyoke-icon.svg propagates.
   for (const dest of [
     join(landingPublicDir, "ctrlyoke-icon.svg"),
     join(docsPublicDir, "ctrlyoke-icon.svg"),
   ]) {
-    writeFileSync(dest, coloredSimple, "utf8");
+    writeFileSync(dest, favicon, "utf8");
     console.log(`✓ ${dest.slice(rootDir.length + 1).replace(/\\/g, "/")}`);
   }
 
   // VS Code SCM toolbar icon variants — light/dark themes require hardcoded colors
   // because VS Code renders { light, dark } command icons as <img> (no CSS cascade).
-  // Generated from the SIMPLE mark: the commit-message toolbar icon is tiny.
+  // Keyface stays untouched (still `fill:none`) so these read as a transparent-canvas
+  // silhouette, not a filled block.
   writeFileSync(
     join(imagesDir, "ctrlyoke-icon-light.svg"),
-    colorize(simpleSvg, LIGHT_THEME_ICON_COLOR),
+    colorizeFg(masterSvg, LIGHT_THEME_ICON_COLOR),
     "utf8"
   );
   console.log("✓ images/ctrlyoke-icon-light.svg");
 
   writeFileSync(
     join(imagesDir, "ctrlyoke-icon-dark.svg"),
-    colorize(simpleSvg, DARK_THEME_ICON_COLOR),
+    colorizeFg(masterSvg, DARK_THEME_ICON_COLOR),
     "utf8"
   );
   console.log("✓ images/ctrlyoke-icon-dark.svg");
 
-  // Keep src/ui/icons/generate-commit-message.svg in sync with the SIMPLE master (currentColor;
-  // the custom-icons generator strips color for mask use). The inline commit-message icon is small.
+  // Keep src/ui/icons/generate-commit-message.svg in sync with the master (currentColor,
+  // transparent keyface; the custom-icons generator strips color for mask use).
   writeFileSync(
     join(rootDir, "src", "ui", "icons", "generate-commit-message.svg"),
-    simpleSvg,
+    masterSvg,
     "utf8"
   );
   console.log("✓ src/ui/icons/generate-commit-message.svg");
@@ -164,21 +178,21 @@ try {
   // PNG exports via resvg-wasm
   console.log("\nRendering PNGs via resvg-wasm...");
 
-  writeFileSync(join(imagesDir, "icon.png"), renderPng(colored, 512));
+  writeFileSync(join(imagesDir, "icon.png"), renderPng(appIcon, 512));
   console.log("  ✓ images/icon.png (512×512)");
 
   writeFileSync(
     join(imagesDir, "apple-touch-icon.png"),
-    renderPng(colored, 180)
+    renderPng(appIcon, 180)
   );
   console.log("  ✓ images/apple-touch-icon.png (180×180)");
 
-  // Static favicon PNG (hosted-dashboard favicon fallback + notification badge) — simple mark.
+  // Static favicon PNG (hosted-dashboard favicon fallback + notification badge).
   writeFileSync(
-    join(imagesDir, "ctrlyoke-icon-simple-color.png"),
-    renderPng(coloredSimple, 512)
+    join(imagesDir, "ctrlyoke-icon-color.png"),
+    renderPng(favicon, 512)
   );
-  console.log("  ✓ images/ctrlyoke-icon-simple-color.png (512×512)");
+  console.log("  ✓ images/ctrlyoke-icon-color.png (512×512)");
 
   // Keep the TypeScript constants file in sync with BG_COLOR / FG_COLOR so every
   // spot in the codebase that references the default icon colors stays correct.
@@ -196,7 +210,7 @@ try {
   console.log("✓ src/types/IconColorDefaults.ts");
 
   console.log(
-    "\n✅ All app icons generated successfully from ctrlyoke-icon.svg + ctrlyoke-icon-simple.svg."
+    "\n✅ All app icons generated successfully from ctrlyoke-icon.svg."
   );
 } catch (err) {
   console.error("❌ Error:", err.message);

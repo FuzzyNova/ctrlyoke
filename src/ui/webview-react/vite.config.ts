@@ -48,8 +48,8 @@ export default defineConfig(({ mode }) => ({
           dest: ".",
           rename: { stripBase: true },
         },
-        // Copy hosted dashboard favicon/PWA assets. APP_ICON_* use the standard mark;
-        // FAVICON_* use the dedicated simple mark (the standard mark is illegible at favicon size).
+        // Copy hosted dashboard favicon/PWA assets. Both APP_ICON_* and FAVICON_* are the
+        // same mark; FAVICON_* just renders with a transparent canvas (see ctrlyoke-icon.svg).
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
           dest: ".",
