@@ -8,6 +8,7 @@ import * as os from "os";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
@@ -609,6 +610,10 @@ export class CtrlYokeHostedServer
 
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     void this.dispatchCompletionNotification(event);
+  }
+
+  updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
+    this.sink.updateHarnessUsage(snapshots);
   }
 
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────

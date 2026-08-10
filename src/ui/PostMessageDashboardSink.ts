@@ -15,6 +15,7 @@ import type {
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
+import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 
 /**
  * PostMessageDashboardSink
@@ -29,6 +30,13 @@ import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotifi
  */
 export class PostMessageDashboardSink implements IDashboardSink {
   constructor(private readonly send: (msg: unknown) => void) {}
+
+  updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
+    this.send({
+      type: MESSAGE_TYPES.HARNESS_USAGE_UPDATED,
+      snapshots,
+    });
+  }
 
   async updateFileSelected(
     fileName: string,

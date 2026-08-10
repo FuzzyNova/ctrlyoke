@@ -108,6 +108,9 @@ export const MESSAGE_TYPES = {
   GLOBAL_SETTINGS_LOADED: "globalSettingsLoaded", // Extension -> Webview: Full settings payload + sources
   UPDATE_GLOBAL_SETTING: "updateGlobalSetting", // Webview -> Extension: { path, value, scope }
   GLOBAL_SETTING_UPDATED: "globalSettingUpdated", // Extension -> Webview: { path, value, source } acknowledgment
+  REQUEST_HARNESS_USAGE: "requestHarnessUsage", // Webview -> Extension: return cache and refresh in background
+  REFRESH_HARNESS_USAGE: "refreshHarnessUsage", // Webview -> Extension: refresh provider usage
+  HARNESS_USAGE_UPDATED: "harnessUsageUpdated", // Extension -> Webview: normalized usage snapshots
   COMMIT_MESSAGE_GENERATION_UPDATED: "commitMessageGenerationUpdated", // Extension -> Webview: Latest real git diff input used for commit generation
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
@@ -674,6 +677,15 @@ export const HARNESS_USAGE_UNITS = {
   PERCENT: "percent",
   UNKNOWN: "unknown",
 } as const;
+
+/** Freshness windows for normalized provider snapshots. */
+export const HARNESS_USAGE_FRESHNESS_MS = {
+  PROVIDER_LIVE: 5 * 60 * 1000,
+  PROVIDER_LOG: 15 * 60 * 1000,
+} as const;
+
+/** Delay used to coalesce repeated usage refresh requests. */
+export const HARNESS_USAGE_REFRESH_DEBOUNCE_MS = 100;
 
 // ============================================================================
 // EXECUTION PREVIEW - Shared preview contract discriminants and limits
@@ -1959,6 +1971,7 @@ export const VSCODE_COMMANDS = {
   SEARCH_HISTORY: "ctrlyoke.searchHistory",
   GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",
+  REFRESH_HARNESS_USAGE: "ctrlyoke.refreshHarnessUsage",
 } as const;
 
 // Built-in VS Code Git extension command IDs that ctrlyoke invokes to open

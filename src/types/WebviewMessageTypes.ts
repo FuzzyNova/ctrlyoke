@@ -81,6 +81,7 @@ import type {
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
+import type { HarnessUsageSnapshot } from "./UsageTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -766,6 +767,12 @@ export interface HarnessStatusUpdateMessage {
       }
     >;
   };
+}
+
+/** Normalized provider quota and workspace-local observed usage. */
+export interface HarnessUsageUpdatedMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_USAGE_UPDATED;
+  snapshots: HarnessUsageSnapshot[];
 }
 
 /** Installed-version-aware harness capability facts (extension -> webview). */
@@ -1971,6 +1978,7 @@ export type IncomingMessage =
   | PromptDeletedMessage
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage
+  | HarnessUsageUpdatedMessage
   | HarnessCapabilitySnapshotMessage
   | AgentsUpdateMessage
   | SkillsUpdateMessage

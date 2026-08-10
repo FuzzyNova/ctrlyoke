@@ -1132,6 +1132,27 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.REQUEST_HARNESS_USAGE, (_message, ctx) => {
+      const service = this.getOrchestrator()?.getHarnessUsageService();
+      ctx.emit({
+        type: MESSAGE_TYPES.HARNESS_USAGE_UPDATED,
+        snapshots: service?.getHarnessUsageSnapshots() ?? [],
+      });
+      // The launch path is cache-only. Provider and observed refreshes happen
+      // after the cached response has reached the client.
+      void service?.refreshAllHarnessUsage();
+    });
+
+    table.set(MESSAGE_TYPES.REFRESH_HARNESS_USAGE, async (_message, ctx) => {
+      const service = this.getOrchestrator()?.getHarnessUsageService();
+      if (!service) {
+        ctx.emit({ type: MESSAGE_TYPES.HARNESS_USAGE_UPDATED, snapshots: [] });
+        return;
+      }
+      const snapshots = await service.refreshAllHarnessUsage();
+      ctx.emit({ type: MESSAGE_TYPES.HARNESS_USAGE_UPDATED, snapshots });
+    });
+
     table.set(MESSAGE_TYPES.ENABLE_SERVER, (_message, ctx) => {
       this.settingsSync.handleEnableServer(ctx.postMessage);
     });

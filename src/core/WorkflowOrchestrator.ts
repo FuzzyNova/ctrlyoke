@@ -84,6 +84,7 @@ import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { CliWatchSession } from "./orchestration/CliWatchSession";
+import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -308,6 +309,7 @@ export class WorkflowOrchestrator {
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
   private readonly dashboardBroadcastHub = new DashboardBroadcastHub();
+  private readonly harnessUsageService?: HarnessUsageService;
   private readonly integrationFactory: IntegrationFactory;
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
   private readonly statusBarManager: StatusBarManager;
@@ -409,6 +411,14 @@ export class WorkflowOrchestrator {
     // Workspace — the folder matching the resolved `.ctrlyoke` root
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
+    if (this.currentWorkspaceFolder) {
+      this.harnessUsageService = new HarnessUsageService(
+        this.currentWorkspaceFolder.uri.fsPath,
+        undefined,
+        undefined,
+        (snapshots) => this.dashboardBroadcastHub.updateHarnessUsage(snapshots)
+      );
+    }
 
     // Shared parsers / orchestration helpers
     this.promptFileParser = new PromptFileParser(
@@ -471,6 +481,7 @@ export class WorkflowOrchestrator {
     }
 
     this.updateStatusBar();
+    void this.harnessUsageService?.initialize();
     Log.debug("WorkflowOrchestrator initialized");
   }
 
@@ -495,6 +506,14 @@ export class WorkflowOrchestrator {
 
   public getDashboardBroadcastHub(): DashboardBroadcastHub {
     return this.dashboardBroadcastHub;
+  }
+
+  public getHarnessUsageService(): HarnessUsageService | undefined {
+    return this.harnessUsageService;
+  }
+
+  public async refreshHarnessUsage(): Promise<void> {
+    await this.harnessUsageService?.refreshAllHarnessUsage();
   }
 
   /** Shared installed-version-aware capability registry for dashboard consumers. */

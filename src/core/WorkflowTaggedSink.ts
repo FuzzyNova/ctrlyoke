@@ -13,6 +13,7 @@ import type {
   StatusMessageSeverity,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
+import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 
 /**
  * WorkflowTaggedSink
@@ -316,5 +317,9 @@ export class WorkflowTaggedSink implements IDashboardSink {
 
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     this.inner.notifyNotificationEvent?.(event);
+  }
+
+  updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
+    this.inner.updateHarnessUsage(snapshots);
   }
 }

@@ -1276,6 +1276,13 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const refreshHarnessUsageCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.REFRESH_HARNESS_USAGE,
+    async () => {
+      await workflowOrchestrator.refreshHarnessUsage();
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
@@ -1312,6 +1319,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     enableServerCommand,
     disableServerCommand,
     regenerateServerTokenCommand,
+    refreshHarnessUsageCommand,
     generateCommitMessageCommand,
     cancelCommitMessageGenerationCommand
   );

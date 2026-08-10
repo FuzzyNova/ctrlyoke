@@ -17,6 +17,7 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
+import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 
 export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 
@@ -112,6 +113,12 @@ export class DashboardBroadcastHub
   postMessage(message: unknown): void {
     for (const client of this.clients) {
       client.postMessage(message);
+    }
+  }
+
+  updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
+    for (const client of this.clients) {
+      client.updateHarnessUsage?.(snapshots);
     }
   }
 

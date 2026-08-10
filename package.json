@@ -82,6 +82,11 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.refreshHarnessUsage",
+        "title": "ctrlyoke: Refresh Harness Usage",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.showGettingStarted",
         "title": "Show Getting Started",
         "category": "ctrlyoke"

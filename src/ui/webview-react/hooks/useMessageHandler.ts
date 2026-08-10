@@ -59,6 +59,7 @@ import { useMcpManagerStore } from "../store/useMcpManagerStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { useCompatibilityStore } from "../store/compatibilityStore";
 import { useExecutionPreviewStore } from "../store/executionPreviewStore";
+import { useHarnessUsageStore } from "../store/harnessUsageStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -514,6 +515,12 @@ export function createMessageHandlers(
       settingsStore.setLastCertGenerated(message.certMeta);
     } else if (!message.settings?.settings?.server?.tls?.enabled) {
       settingsStore.setLastCertGenerated(null);
+    }
+  };
+
+  handlers[MESSAGE_TYPES.HARNESS_USAGE_UPDATED] = (message) => {
+    if (Array.isArray(message.snapshots)) {
+      useHarnessUsageStore.getState().setSnapshots(message.snapshots);
     }
   };
 

@@ -9,6 +9,7 @@ import type {
 } from "./DashboardConstants";
 import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { HarnessUsageSnapshot } from "./UsageTypes";
 
 /**
  * IDashboardSink
@@ -188,4 +189,7 @@ export interface IDashboardSink {
 
   /** Deliver a ctrlyoke notification event (completion or hook) to the sink. */
   notifyNotificationEvent?(event: CtrlYokeNotificationEvent): void;
+
+  /** Broadcast normalized provider quota plus ctrlyoke-observed usage. */
+  updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void;
 }

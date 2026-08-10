@@ -519,7 +519,7 @@ exact duplication both plans warn against.
 ### Phase 1: Observed Usage Baseline
 
 - [x] Add `UsageTypes.ts` and the matching constants in `DashboardConstants.ts`
-- [ ] Add the canonical `.usage` path constants plus versioned, atomic
+- [x] Add the canonical `.usage` path constants plus versioned, atomic
       normalized-provider and observed-rollup stores. The directory name belongs
       in `PATH_CONSTANTS` (`src/utils/ConfigurationUtils.ts`) beside
       `RUNS_DIR`/`TEMP_DIR`; the file paths under it belong in a small
@@ -527,8 +527,8 @@ exact duplication both plans warn against.
       `.runs` — do not build `.usage` paths ad hoc at call sites
 - [x] Add `ObservedHarnessUsageStore`, idempotently fed at every terminal state
       by `(workflowKey, runRef)` and `WorkflowTokenTotals.byLocalDay`
-- [ ] Render usage cards in `HarnessesSection.tsx` showing observed totals
-- [ ] Tests for local day/ISO-week/month bucketing, mixed-harness attribution,
+- [x] Render usage cards in `HarnessesSection.tsx` showing observed totals
+- [x] Tests for local day/ISO-week/month bucketing, mixed-harness attribution,
       same-run continuation replacement, repeated terminal notification,
       corrupt-file recovery, and stale snapshots
 

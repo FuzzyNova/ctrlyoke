@@ -114,6 +114,7 @@ export {
   type FinalStepOutputMessage,
   type ModelOptionsUpdateMessage,
   type HarnessStatusUpdateMessage,
+  type HarnessUsageUpdatedMessage,
   type HarnessCapabilitySnapshotMessage,
   type AgentsUpdateMessage,
   type SkillsUpdateMessage,
