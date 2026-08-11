@@ -549,8 +549,8 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 
 ### Phase 2 — Lifetime totals
 
-- [ ] Add `activeExecutionMs` to `WorkflowRunManifest`, written at `finalizeRun`.
-- [ ] Add `lifetimeStatsPath` to `UsagePaths.ts`.
+- [x] Add `activeExecutionMs` to `WorkflowRunManifest`, written at `finalizeRun`.
+- [x] Add `lifetimeStatsPath` to `UsagePaths.ts`.
 - [ ] Add `LifetimeUsageStore`: lineage-sized totals document, per-lineage
       counted-interval index, revision-by-lineage-recompute, bounded recent
       contribution cache, corruption recovery, full rebuild.

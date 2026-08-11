@@ -91,6 +91,8 @@ export interface WorkflowRunManifest {
   runId: number;
   startedAt: number;
   completedAt?: number;
+  /** Pause-aware active execution time; absent on runs created before this field. */
+  activeExecutionMs?: number;
   executionState: ExecutionState;
   /** Definition revision most recently committed for this run (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision: number;

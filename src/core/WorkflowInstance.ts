@@ -1476,7 +1476,8 @@ export class WorkflowInstance {
           await this.outputHistoryManager.finalizeRun(
             historyFilePath,
             EXECUTION_STATES.ERROR,
-            preflightStepCount
+            preflightStepCount,
+            this.promptQueue.getState().totalExecutionTime
           );
         }
         return;
@@ -1810,7 +1811,8 @@ export class WorkflowInstance {
           .finalizeRun(
             runToFinalize,
             EXECUTION_STATES.ERROR,
-            this.promptQueue.getProgress().total
+            this.promptQueue.getProgress().total,
+            this.promptQueue.getState().totalExecutionTime
           )
           .catch((err) =>
             Log.warn("Failed to finalize history run on early error:", err)
@@ -3664,7 +3666,8 @@ export class WorkflowInstance {
             this.getAuthoritativeExecutionState() as Parameters<
               OutputHistoryManager["finalizeRun"]
             >[1],
-            runStepCount
+            runStepCount,
+            this.promptQueue.getState().totalExecutionTime
           )
           .catch((err) => Log.warn("Failed to finalize history run:", err));
       }

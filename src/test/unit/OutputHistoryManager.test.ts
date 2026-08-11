@@ -135,9 +135,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(manifest.tokenTotals?.total, 30);
     assert.strictEqual(manifest.tokenTotals?.reportedAttemptCount, 1);
 
-    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1);
+    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1, 1234);
     manifest = await recorder.readManifest(filePath);
     assert.strictEqual(manifest.tokenTotals?.isFinal, true);
+    assert.strictEqual(manifest.activeExecutionMs, 1234);
 
     await manager.reopenRun(filePath, EXECUTION_STATES.RUNNING, 1, 1);
     manifest = await recorder.readManifest(filePath);

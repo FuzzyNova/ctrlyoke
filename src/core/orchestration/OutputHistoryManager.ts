@@ -740,7 +740,8 @@ export class OutputHistoryManager {
   async finalizeRun(
     historyFilePath: string,
     executionState: ExecutionState,
-    stepCount: number
+    stepCount: number,
+    activeExecutionMs?: number
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -762,6 +763,7 @@ export class OutputHistoryManager {
         (manifest) => ({
           ...manifest,
           completedAt,
+          ...(activeExecutionMs !== undefined ? { activeExecutionMs } : {}),
           executionState,
           stepCount,
           lastUpdatedAt: completedAt,
