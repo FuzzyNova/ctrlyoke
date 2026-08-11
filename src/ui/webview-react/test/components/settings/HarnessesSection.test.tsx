@@ -1,37 +1,25 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HarnessesSection } from "@components/settings/HarnessesSection";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
-import { HARNESS_IDS, SETTING_SCOPES } from "@root/types/DashboardConstants";
-import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
 function settings(): FullGlobalSettings {
-  return { settings: CTRLYOKE_SETTINGS_DEFAULTS, sources: {}, isMultiRoot: false };
+  return {
+    settings: CTRLYOKE_SETTINGS_DEFAULTS,
+    sources: {},
+    isMultiRoot: false,
+  };
 }
 
-describe("HarnessesSection usage cards", () => {
+describe("HarnessesSection defaults", () => {
   beforeEach(() => {
-    useHarnessUsageStore.setState({ snapshotsByHarness: {} });
+    vi.mocked(getVsCodeApi().postMessage).mockClear();
   });
 
-  it("labels observed-only quota separately and does not render a fake window", () => {
-    useHarnessUsageStore.getState().setSnapshots([
-      {
-        harnessId: HARNESS_IDS.QWEN_CLI,
-        updatedAt: Date.now(),
-        quota: {
-          harnessId: HARNESS_IDS.QWEN_CLI,
-          source: "unavailable",
-          staleAfterMs: 0,
-          windows: [],
-        },
-        observed: {
-          daily: { input: 3, output: 4, total: 7, since: Date.now() },
-        },
-      },
-    ]);
-
+  it("renders no usage data and sends no usage messages", () => {
     render(
       <HarnessesSection
         settings={settings()}
@@ -41,9 +29,17 @@ describe("HarnessesSection usage cards", () => {
       />
     );
 
-    expect(screen.getAllByText("Quota source: observed only").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("ctrlyoke-observed").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("7 tokens").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/resets/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Usage:/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Refresh harness usage" })
+    ).not.toBeInTheDocument();
+
+    const postMessage = vi.mocked(getVsCodeApi().postMessage);
+    expect(postMessage).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_HARNESS_USAGE,
+    });
+    expect(postMessage).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REFRESH_HARNESS_USAGE,
+    });
   });
 });

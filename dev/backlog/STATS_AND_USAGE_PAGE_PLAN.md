@@ -14,9 +14,9 @@
 **Workflow Defaults → Harness** page. That page exists to set defaults (default
 harness, per-harness model, per-harness extra args). It now also carries:
 
-- a `UsageCard` per harness (`HarnessesSection.tsx:71-176`)
-- a "Refresh harness usage" button (`HarnessesSection.tsx:206-212`)
-- a mount-time `REQUEST_HARNESS_USAGE` postMessage (`HarnessesSection.tsx:184-186`)
+- a `UsageCard` per harness (`components/settings/stats/UsageCard.tsx`)
+- a "Refresh harness usage" button (`components/settings/stats/StatsUsageSection.tsx`)
+- a mount-time `REQUEST_HARNESS_USAGE` postMessage (`components/settings/stats/StatsUsageSection.tsx`)
 
 Six usage cards interleaved with six model/args editors is the wrong density for
 a settings form, and it puts read-only telemetry inside a page whose every other
@@ -534,15 +534,15 @@ beside the existing `ctrlyoke.refreshHarnessUsage`.
 
 ### Phase 1 — Move the existing usage UI
 
-- [ ] Extract `UsageCard` out of `HarnessesSection.tsx` into
+- [x] Extract `UsageCard` out of `HarnessesSection.tsx` into
       `components/settings/stats/UsageCard.tsx`.
-- [ ] Add the `stats` tab to `GlobalSettingsDrawer.tsx` + `StatsUsageSection.tsx`
+- [x] Add the `stats` tab to `GlobalSettingsDrawer.tsx` + `StatsUsageSection.tsx`
       rendering the per-harness cards and the refresh button.
-- [ ] Remove the cards, the refresh button, and the mount-time
+- [x] Remove the cards, the refresh button, and the mount-time
       `REQUEST_HARNESS_USAGE` from `HarnessesSection.tsx`; it becomes
       defaults-only. (`HarnessQuickPicker.tsx:73` still requests usage for the
       footer chip, so removing this one does not starve the chip.)
-- [ ] Move/split `test/components/settings/HarnessesSection.test.tsx` so the
+- [x] Move/split `test/components/settings/HarnessesSection.test.tsx` so the
       usage assertions follow the component.
 
 Phase 1 is independently shippable and is the fix for the stated problem.

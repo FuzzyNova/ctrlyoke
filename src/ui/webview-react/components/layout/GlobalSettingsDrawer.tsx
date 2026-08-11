@@ -23,10 +23,12 @@ import {
   McpManagerSection,
   CommitSection,
 } from "../settings";
+import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
+  { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
@@ -204,6 +206,11 @@ export function GlobalSettingsDrawer() {
             <div className="p-4 max-w-2xl">
               {fullSettings && effectiveActiveTab === "general" && (
                 <GeneralSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "stats" && (
+                <StatsUsageSection
+                  hideCost={fullSettings.settings.ui.hideCost}
+                />
               )}
               {fullSettings && effectiveActiveTab === "permissions" && (
                 <AdvancedPermissionsSection

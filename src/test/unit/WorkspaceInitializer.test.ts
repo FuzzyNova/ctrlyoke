@@ -122,6 +122,7 @@ suite("WorkspaceInitializer", () => {
         "capabilities.json",
         "attachments/",
         "prompts/",
+        ".usage/",
         ".gitignore",
         "",
       ].join("\n")
