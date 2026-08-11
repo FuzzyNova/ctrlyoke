@@ -1,6 +1,5 @@
 import { SkillDiscovery, SkillInfo } from "./SkillDiscovery";
 import { Log } from "./Log";
-import { resolveWorkspaceFolder } from "./DiscoveryUtils";
 import { TtlCache } from "./TtlCache";
 
 /**
@@ -20,7 +19,10 @@ import { TtlCache } from "./TtlCache";
  */
 
 export class SkillExpander {
-  private static readonly skillCache = new TtlCache<SkillInfo>(5000);
+  private static readonly skillCaches = new Map<
+    string,
+    TtlCache<SkillInfo>
+  >();
 
   /**
    * Expand multiple skill names to formatted prompt blocks.
@@ -39,9 +41,14 @@ export class SkillExpander {
       return null;
     }
 
-    const workspaceFolder = resolveWorkspaceFolder(workspaceRoot);
-    const allSkills = await SkillExpander.skillCache.get(() =>
-      SkillDiscovery.discoverSkills(workspaceFolder)
+    const cacheKey = workspaceRoot ?? "";
+    let cache = SkillExpander.skillCaches.get(cacheKey);
+    if (!cache) {
+      cache = new TtlCache<SkillInfo>(5000);
+      SkillExpander.skillCaches.set(cacheKey, cache);
+    }
+    const allSkills = await cache.get(() =>
+      SkillDiscovery.discoverSkills(workspaceRoot)
     );
 
     const resolvedBlocks: string[] = [];

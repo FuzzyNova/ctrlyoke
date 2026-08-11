@@ -1,6 +1,4 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
-import { pathsEqual } from "./PathCasing";
 
 /**
  * DiscoveryUtils
@@ -40,28 +38,4 @@ export async function isAccessibleDirectory(
   } catch {
     return false;
   }
-}
-
-/**
- * Resolve a VS Code WorkspaceFolder from an optional workspace root path.
- *
- * Resolution order:
- *  1. If `workspaceRoot` is provided, find the folder whose `fsPath` matches exactly.
- *  2. Fall back to the first open workspace folder.
- *  3. Return undefined if no workspace folders are open.
- */
-export function resolveWorkspaceFolder(
-  workspaceRoot?: string
-): vscode.WorkspaceFolder | undefined {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders || folders.length === 0) {
-    return undefined;
-  }
-  if (workspaceRoot) {
-    return (
-      folders.find((folder) => pathsEqual(folder.uri.fsPath, workspaceRoot)) ??
-      folders[0]
-    );
-  }
-  return folders[0];
 }

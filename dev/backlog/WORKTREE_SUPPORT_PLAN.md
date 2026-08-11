@@ -1912,9 +1912,9 @@ live branch values.
 5. Resolve external-root trust against state identity and make provider
    additional-directory assembly consume explicit execution roots.
 6. Update script/condition security to accept execution roots and extract the
-   reusable script process runner needed by setup.
+   reusable script process runner needed by setup. **Implemented.**
 7. Parameterize workspace agent/skill discovery by execution root, including
-   linked-worktree `findGitRoot()` behavior.
+   linked-worktree `findGitRoot()` behavior. **Implemented.**
 8. Make snapshots accept execution-scoped primary and named roots.
 9. Add definition-path mapping, mapping/no-op, preview, and provider-sidecar tests.
 

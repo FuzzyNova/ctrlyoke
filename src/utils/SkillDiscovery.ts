@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -63,7 +62,7 @@ export class SkillDiscovery {
    * @returns Array of discovered skills (deduplicated by path)
    */
   static async discoverSkills(
-    workspaceFolder?: vscode.WorkspaceFolder
+    workspaceRoot?: string
   ): Promise<SkillInfo[]> {
     const skills: SkillInfo[] = [];
     const scannedPaths = new Set<string>();
@@ -100,9 +99,7 @@ export class SkillDiscovery {
 
       // --- Workspace-level locations ---
 
-      if (workspaceFolder) {
-        const workspaceRoot = workspaceFolder.uri.fsPath;
-
+      if (workspaceRoot) {
         // 4. <workspace>/.ctrlyoke/skills/ (ctrlyoke-exclusive skills)
         skills.push(
           ...(await this.discoverInPath(
@@ -256,10 +253,12 @@ export class SkillDiscovery {
    * (i.e., the nearest ancestor containing a .git entry).
    * Returns null if not inside a git repository.
    */
-  private static async findGitRoot(startDir: string): Promise<string | null> {
+  static async findGitRoot(startDir: string): Promise<string | null> {
     let current = startDir;
 
     while (true) {
+      // Linked worktrees store `.git` as a gitdir pointer file, while normal
+      // checkouts store it as a directory. Existence is the relevant signal.
       if (fs.existsSync(path.join(current, ".git"))) {
         return current;
       }

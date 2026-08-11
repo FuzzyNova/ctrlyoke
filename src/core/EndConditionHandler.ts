@@ -20,6 +20,7 @@ import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 
 /**
@@ -29,6 +30,7 @@ export interface RetryContext {
   integration: HarnessIntegration;
   totalSteps: number;
   workspaceFolderPath: string | undefined;
+  executionWorkspace?: ExecutionWorkspace;
   currentPromptFilePath: string | undefined;
   runtime: WorkflowStateMachine;
   attemptTarget: WorkflowAttemptTarget;
@@ -424,7 +426,8 @@ export class EndConditionHandler {
       : {
           evaluationResult: await this.endConditionEvaluator.evaluateCondition(
             prompt.endCondition!,
-            retryContext.workspaceFolderPath,
+            retryContext.executionWorkspace?.executionRoot ??
+              retryContext.workspaceFolderPath,
             retryContext.vars
           ),
         };

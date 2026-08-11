@@ -17,6 +17,7 @@ import {
 } from "../../types/DashboardConstants";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import { TIMELINE_ATTEMPT_KINDS } from "../../types/WorkflowTimelineTypes";
 import type {
   EvaluationResult,
@@ -31,6 +32,7 @@ import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
 import { StreamChunkCoalescer } from "../../utils/StreamChunkCoalescer";
 
 export interface ScriptExecutionReporterContext {
+  executionWorkspace?: ExecutionWorkspace;
   workspaceFolderPath?: string;
   historyFilePath?: string;
   dashboardProvider?: IDashboardSink;
@@ -170,7 +172,9 @@ export class ScriptExecutionReporter {
       source,
       timestampMs,
       cliCommand: properties.script,
-      workingDirectory: context.workspaceFolderPath,
+      workingDirectory:
+        context.executionWorkspace?.executionRoot ??
+        context.workspaceFolderPath,
       attemptIndex,
       runIndex,
     };
@@ -235,7 +239,8 @@ export class ScriptExecutionReporter {
         ? await request.evaluate(onOutput)
         : await this.evaluator.evaluateCondition(
             properties,
-            context.workspaceFolderPath,
+            context.executionWorkspace?.executionRoot ??
+              context.workspaceFolderPath,
             request.vars,
             onOutput
           );

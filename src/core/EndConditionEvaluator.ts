@@ -17,9 +17,16 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
-import { CliProcessManager } from "../utils/CliProcessManager";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
-import type { PlatformAdapter } from "../platform/PlatformAdapter";
+import {
+  createNoWorktreeExecutionWorkspace,
+  type PlatformAdapter,
+} from "../platform/PlatformAdapter";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import {
+  ScriptProcessRunner,
+  type ScriptProcessResult,
+} from "./orchestration/ScriptProcessRunner";
 
 export interface EvaluationResult {
   /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
@@ -49,14 +56,20 @@ export interface EvaluationComparison {
 }
 
 export class EndConditionEvaluator {
-  private platform: PlatformAdapter;
-  private processManager: CliProcessManager;
+  private readonly platform: PlatformAdapter;
+  private readonly executionWorkspace: ExecutionWorkspace;
+  private readonly scriptProcessRunner: ScriptProcessRunner;
 
-  constructor(platform: PlatformAdapter) {
+  constructor(
+    platform: PlatformAdapter,
+    executionWorkspace: ExecutionWorkspace = createNoWorktreeExecutionWorkspace(
+      platform
+    )
+  ) {
     this.platform = platform;
-    const workspaceRoot = platform.getWorkspaceRoot();
-    this.processManager = new CliProcessManager(workspaceRoot, (msg) =>
-      Log.debug(msg)
+    this.executionWorkspace = executionWorkspace;
+    this.scriptProcessRunner = new ScriptProcessRunner(
+      executionWorkspace.executionRoot
     );
   }
 
@@ -144,6 +157,8 @@ export class EndConditionEvaluator {
     onOutput?: (chunk: string) => void
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
+    const executionRoot =
+      workingDirectory ?? this.executionWorkspace.executionRoot;
 
     try {
       Log.info(`Evaluating end condition script: ${condition.script}`);
@@ -204,7 +219,7 @@ export class EndConditionEvaluator {
       const result = await this.executeScript(
         command.executable,
         command.args,
-        workingDirectory,
+        executionRoot,
         timeout,
         vars,
         onOutput,
@@ -299,7 +314,7 @@ export class EndConditionEvaluator {
     scriptPath: string,
     workingDirectory?: string
   ): Promise<string | null> {
-    const workspaceRoot = this.platform.getWorkspaceRoot();
+    const workspaceRoot = this.executionWorkspace.executionRoot;
     const homeScriptsDir = EndConditionEvaluator.getUserHomeScriptsDir();
 
     // Try absolute path first
@@ -563,89 +578,15 @@ export class EndConditionEvaluator {
     vars?: Record<string, string>,
     onOutput?: (chunk: string) => void,
     viaShell: boolean = false
-  ): Promise<{
-    success: boolean;
-    result: string;
-    error?: string;
-    timeout?: boolean;
-    stdout?: string;
-    stderr?: string;
-    exitCode?: number;
-    errored?: boolean;
-  }> {
-    // Log what we're about to execute
-    Log.debug(
-      `Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]${viaShell ? " (via shell)" : ""}`
-    );
-    Log.debug(
-      `Working directory: ${workingDirectory || this.platform.getWorkspaceRoot()}`
-    );
-
-    // Clean VS Code-specific environment variables that interfere with nested VS Code instances
-    const cleanEnv = { ...process.env };
-    const vsCodeEnvVars = [
-      "VSCODE_INJECTION",
-      "VSCODE_HANDLES_UNCAUGHT_ERRORS",
-      "VSCODE_NLS_CONFIG",
-      "VSCODE_PID",
-      "ELECTRON_RUN_AS_NODE",
-    ];
-    for (const key of vsCodeEnvVars) {
-      delete cleanEnv[key];
-    }
-    Log.debug(
-      `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
-    );
-
-    // Inject workflow variables as CTRLYOKE_VAR_<KEY>=value so scripts can branch on them.
-    if (vars && Object.keys(vars).length > 0) {
-      for (const [k, v] of Object.entries(vars)) {
-        cleanEnv[`CTRLYOKE_VAR_${k.toUpperCase()}`] = v;
-      }
-    }
-
-    try {
-      const result = await this.processManager.spawn(executable, args, {
-        cwd: workingDirectory || this.platform.getWorkspaceRoot(),
-        timeout,
-        env: cleanEnv,
-        onStdout: onOutput,
-        shell: viaShell,
-        // Pre/end-condition and headless script-step execution never wires up
-        // user input (interactive script steps use a separate PTY path), so a
-        // "pipe" stdin nothing ever writes to is equivalent to "ignore" here —
-        // no input arrives either way — without handing the script a NUL-bound
-        // handle that a tool probing stdin could trip over.
-        //
-        // This was previously credited with fixing a Vitest worker-pool failure
-        // on Windows. It did not: that failure was the lowercase drive letter in
-        // `cwd` (see `PathCasing.canonicalizeDriveLetter`), and it reproduces
-        // identically with stdin set to "ignore", "pipe", or "inherit".
-        stdin: "pipe",
-      });
-
-      return {
-        success: result.exitCode === 0,
-        result: result.stdout.trim(),
-        stdout: result.stdout.trim(),
-        stderr: result.stderr.trim(),
-        error: result.stderr.trim() || undefined,
-        exitCode: result.exitCode,
-        errored: false,
-      };
-    } catch (error) {
-      const isTimeout =
-        error instanceof Error && error.message.includes("timeout");
-      return {
-        success: false,
-        result: "",
-        stdout: "",
-        stderr: "",
-        error: getErrorMessage(error),
-        timeout: isTimeout,
-        errored: true,
-      };
-    }
+  ): Promise<ScriptProcessResult> {
+    return this.scriptProcessRunner.run({
+      cwd: workingDirectory ?? this.executionWorkspace.executionRoot,
+      timeout,
+      argv: [executable, ...args],
+      vars,
+      onOutput,
+      viaShell,
+    });
   }
 
   /**
@@ -1024,7 +965,7 @@ export class EndConditionEvaluator {
    * Kill all running processes
    */
   killAllProcesses(): void {
-    this.processManager.dispose();
+    this.scriptProcessRunner.dispose();
     Log.info("Killed all running end condition processes");
   }
 

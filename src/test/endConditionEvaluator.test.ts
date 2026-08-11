@@ -8,6 +8,7 @@ import {
   EvaluationResult,
 } from "../core/EndConditionEvaluator";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 
 suite("EndConditionEvaluator Tests", () => {
   let evaluator: EndConditionEvaluator;
@@ -332,6 +333,56 @@ suite("EndConditionEvaluator Tests", () => {
       // Duration should be reasonable (within 1 second of actual)
       assert.ok(result.duration >= 0);
       assert.ok(Math.abs(result.duration - actualDuration) < 1000);
+    });
+
+    test("uses the execution root for cwd and script security", async () => {
+      const executionRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-execution-root-")
+      );
+      const executionScript = path.join(executionRoot, "condition.js");
+      const stateScript = path.join(workspaceRoot, "state-condition.js");
+      const executionWorkspace: ExecutionWorkspace = {
+        stateRoot: workspaceRoot,
+        executionRoot,
+        workspaceRoots: [executionRoot],
+        namedWorkspaceRoots: [],
+        approvedExternalRoots: [],
+      };
+      const executionEvaluator = new EndConditionEvaluator(
+        {
+          getWorkspaceRoot: () => workspaceRoot,
+          getWorkspaceRoots: () => [workspaceRoot],
+          getNamedWorkspaceRoots: () => [],
+          getExtensionPath: () => "",
+        },
+        executionWorkspace
+      );
+
+      fs.writeFileSync(
+        executionScript,
+        "console.log(process.cwd().toLowerCase())",
+        "utf8"
+      );
+      fs.writeFileSync(stateScript, "console.log('state')", "utf8");
+
+      try {
+        const fromExecution = await executionEvaluator.evaluateCondition({
+          script: "condition.js",
+          returns: path.resolve(executionRoot).toLowerCase(),
+          compareSource: "stdout",
+        });
+        assert.strictEqual(fromExecution.passed, true);
+
+        const fromState = await executionEvaluator.evaluateCondition({
+          script: stateScript,
+        });
+        assert.strictEqual(fromState.errored, true);
+        assert.match(fromState.error ?? "", /Security:/);
+      } finally {
+        executionEvaluator.dispose();
+        fs.rmSync(executionRoot, { recursive: true, force: true });
+        fs.rmSync(stateScript, { force: true });
+      }
     });
   });
 

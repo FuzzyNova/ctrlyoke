@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
@@ -106,7 +105,7 @@ export class AgentDiscovery {
    * @returns Array of discovered agents
    */
   static async discoverAgents(
-    workspaceFolder?: vscode.WorkspaceFolder
+    workspaceRoot?: string
   ): Promise<AgentInfo[]> {
     const agents: AgentInfo[] = [];
 
@@ -124,8 +123,7 @@ export class AgentDiscovery {
       agents.push(...userAgents);
 
       // 3. Discover from workspace harness agent dirs (Claude, Copilot, Codex, etc.)
-      if (workspaceFolder) {
-        const workspaceRoot = workspaceFolder.uri.fsPath;
+      if (workspaceRoot) {
         const scanned = new Set<string>();
 
         for (const harnessId of Object.values(HARNESS_IDS)) {

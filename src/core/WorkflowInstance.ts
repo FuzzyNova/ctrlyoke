@@ -430,7 +430,10 @@ export class WorkflowInstance {
       }
     );
 
-    this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
+    this.endConditionEvaluator = new EndConditionEvaluator(
+      this.platform,
+      executionWorkspace
+    );
     this.endConditionHandler = new EndConditionHandler(
       this.endConditionEvaluator,
       this.promptQueue,

@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import { AgentDiscovery, AgentInfo } from "./AgentDiscovery";
 import { Log } from "./Log";
-import { resolveWorkspaceFolder } from "./DiscoveryUtils";
 import { TtlCache } from "./TtlCache";
 
 /**
@@ -22,14 +21,20 @@ import { TtlCache } from "./TtlCache";
  */
 
 export class AgentExpander {
-  private static readonly agentCache = new TtlCache<AgentInfo>(5000);
+  private static readonly agentCaches = new Map<
+    string,
+    TtlCache<AgentInfo>
+  >();
 
   /** Get cached agents or refresh the cache from disk */
   private static async getAgents(workspaceRoot?: string): Promise<AgentInfo[]> {
-    const workspaceFolder = resolveWorkspaceFolder(workspaceRoot);
-    return AgentExpander.agentCache.get(() =>
-      AgentDiscovery.discoverAgents(workspaceFolder)
-    );
+    const cacheKey = workspaceRoot ?? "";
+    let cache = AgentExpander.agentCaches.get(cacheKey);
+    if (!cache) {
+      cache = new TtlCache<AgentInfo>(5000);
+      AgentExpander.agentCaches.set(cacheKey, cache);
+    }
+    return cache.get(() => AgentDiscovery.discoverAgents(workspaceRoot));
   }
 
   /**

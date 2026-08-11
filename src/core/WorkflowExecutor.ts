@@ -1031,7 +1031,7 @@ export class WorkflowExecutor {
             stepName: stepLabel,
             stepIndex: signedStepIndex,
             script: step.script,
-            cwd: context.workspaceFolderPath ?? process.cwd(),
+            cwd: context.executionWorkspace.executionRoot,
             onOutput: (chunk) => {
               outputChunks.push(sanitizeTerminalOutput(chunk));
               onOutput(chunk);
@@ -1046,7 +1046,7 @@ export class WorkflowExecutor {
         if (!isInteractive || ptyExitCode === undefined) {
           return this.endConditionEvaluator.evaluateCondition(
             resolvedProperties,
-            context.workspaceFolderPath,
+            context.executionWorkspace.executionRoot,
             this.promptQueue.getWorkflowFile().vars,
             onOutput
           );
@@ -2090,6 +2090,7 @@ export class WorkflowExecutor {
       integration,
       totalSteps: this.promptQueue.getState().steps.length,
       workspaceFolderPath: context.workspaceFolderPath,
+      executionWorkspace: context.executionWorkspace,
       currentPromptFilePath: context.currentPromptFilePath,
       runtime: this.promptQueue.getRuntimeStateMachine(),
       attemptTarget: target,

@@ -157,7 +157,7 @@ export class WebviewSettingsSync {
   async discoverAgents(): Promise<void> {
     try {
       this.availableAgents = await AgentDiscovery.discoverAgents(
-        getVsCodeWorkspaceFolder()
+        getVsCodeWorkspaceFolder()?.uri.fsPath
       );
 
       this.sendAgentsUpdate();
@@ -172,7 +172,7 @@ export class WebviewSettingsSync {
   async discoverSkills(): Promise<void> {
     try {
       this.availableSkills = await SkillDiscovery.discoverSkills(
-        getVsCodeWorkspaceFolder()
+        getVsCodeWorkspaceFolder()?.uri.fsPath
       );
 
       this.sendSkillsUpdate();
