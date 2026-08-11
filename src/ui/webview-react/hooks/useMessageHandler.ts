@@ -60,6 +60,7 @@ import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { useCompatibilityStore } from "../store/compatibilityStore";
 import { useExecutionPreviewStore } from "../store/executionPreviewStore";
 import { useHarnessUsageStore } from "../store/harnessUsageStore";
+import { useWorkspaceStatsStore } from "../store/workspaceStatsStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -522,6 +523,10 @@ export function createMessageHandlers(
     if (Array.isArray(message.snapshots)) {
       useHarnessUsageStore.getState().setSnapshots(message.snapshots);
     }
+  };
+
+  handlers[MESSAGE_TYPES.WORKSPACE_STATS_UPDATED] = (message) => {
+    useWorkspaceStatsStore.getState().setSnapshot(message.snapshot);
   };
 
   handlers[MESSAGE_TYPES.GLOBAL_SETTING_UPDATED] = (message) => {

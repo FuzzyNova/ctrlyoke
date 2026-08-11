@@ -210,6 +210,7 @@ export function GlobalSettingsDrawer() {
               {fullSettings && effectiveActiveTab === "stats" && (
                 <StatsUsageSection
                   hideCost={fullSettings.settings.ui.hideCost}
+                  isNarrow={isNarrow}
                 />
               )}
               {fullSettings && effectiveActiveTab === "permissions" && (

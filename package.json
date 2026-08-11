@@ -148,6 +148,11 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.refreshWorkspaceStats",
+        "title": "ctrlyoke: Refresh Workspace Statistics",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.showGettingStarted",
         "title": "Show Getting Started",
         "category": "ctrlyoke"

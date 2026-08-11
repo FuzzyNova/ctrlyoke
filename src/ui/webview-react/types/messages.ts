@@ -115,6 +115,7 @@ export {
   type ModelOptionsUpdateMessage,
   type HarnessStatusUpdateMessage,
   type HarnessUsageUpdatedMessage,
+  type WorkspaceStatsUpdatedMessage,
   type HarnessCapabilitySnapshotMessage,
   type AgentsUpdateMessage,
   type SkillsUpdateMessage,

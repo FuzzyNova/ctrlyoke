@@ -113,6 +113,61 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
   });
 });
 
+suite("WebviewMessageRouter — workspace statistics", () => {
+  const snapshot = { workflowCount: 2 } as any;
+
+  function makeStatsRouter(emitted: unknown[], calls: string[]) {
+    return new WebviewMessageRouter(
+      (message: unknown) => emitted.push(message),
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () =>
+        ({
+          getWorkspaceStatsService: () => ({
+            getSnapshot: async () => {
+              calls.push("getSnapshot");
+              return snapshot;
+            },
+          }),
+          refreshWorkspaceStats: async () => {
+            calls.push("refreshWorkspaceStats");
+            return snapshot;
+          },
+        }) as any,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+  }
+
+  test("returns the cached snapshot and starts a background refresh", async () => {
+    const emitted: unknown[] = [];
+    const calls: string[] = [];
+    const router = makeStatsRouter(emitted, calls);
+
+    await router.route({ type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS });
+
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.WORKSPACE_STATS_UPDATED,
+      snapshot,
+    });
+    assert.deepStrictEqual(calls, ["getSnapshot", "refreshWorkspaceStats"]);
+  });
+
+  test("awaits an explicit stats refresh", async () => {
+    const emitted: unknown[] = [];
+    const calls: string[] = [];
+    const router = makeStatsRouter(emitted, calls);
+
+    await router.route({ type: MESSAGE_TYPES.REFRESH_WORKSPACE_STATS });
+
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.WORKSPACE_STATS_UPDATED,
+      snapshot,
+    });
+    assert.deepStrictEqual(calls, ["refreshWorkspaceStats"]);
+  });
+});
+
 /**
  * A run-view request the client never gets an answer to is not merely a lost
  * click: while it is outstanding the client suppresses every *requestless*

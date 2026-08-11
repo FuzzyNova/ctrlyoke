@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StatsUsageSection } from "@components/settings/stats/StatsUsageSection";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import {
   HARNESS_IDS,
   HARNESS_INFO,
@@ -13,6 +14,7 @@ import {
 describe("StatsUsageSection", () => {
   beforeEach(() => {
     useHarnessUsageStore.setState({ snapshotsByHarness: {} });
+    useWorkspaceStatsStore.setState({ snapshot: undefined });
     vi.mocked(getVsCodeApi().postMessage).mockClear();
   });
 
@@ -52,6 +54,9 @@ describe("StatsUsageSection", () => {
 
     const postMessage = vi.mocked(getVsCodeApi().postMessage);
     expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS,
+    });
+    expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.REQUEST_HARNESS_USAGE,
     });
   });
@@ -61,12 +66,10 @@ describe("StatsUsageSection", () => {
     render(<StatsUsageSection hideCost={true} />);
 
     vi.mocked(getVsCodeApi().postMessage).mockClear();
-    await user.click(
-      screen.getByRole("button", { name: "Refresh harness usage" })
-    );
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
 
     expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.REFRESH_HARNESS_USAGE,
+      type: MESSAGE_TYPES.REFRESH_WORKSPACE_STATS,
     });
   });
 });

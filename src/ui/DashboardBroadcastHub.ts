@@ -17,7 +17,10 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
-import type { HarnessUsageSnapshot } from "../types/UsageTypes";
+import type {
+  HarnessUsageSnapshot,
+  WorkspaceStatsSnapshot,
+} from "../types/UsageTypes";
 
 export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 
@@ -120,6 +123,13 @@ export class DashboardBroadcastHub
     for (const client of this.clients) {
       client.updateHarnessUsage?.(snapshots);
     }
+  }
+
+  updateWorkspaceStats(snapshot: WorkspaceStatsSnapshot): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.WORKSPACE_STATS_UPDATED,
+      snapshot,
+    });
   }
 
   /** Broadcast STARTUP_COMPLETE to all currently-registered clients. */

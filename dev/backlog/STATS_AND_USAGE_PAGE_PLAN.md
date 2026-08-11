@@ -560,8 +560,8 @@ Phase 1 is independently shippable and is the fix for the stated problem.
       to feed both stores from its single manifest read.
 - [x] Add `WorkspaceStatsService` + the bounded-concurrency backfill scanner
       with per-lineage mtime gating and mid-scan checkpointing.
-- [ ] Add messages, router handlers, command registration, `workspaceStatsStore`.
-- [ ] Render the headline tile grid, including backfill progress and the
+- [x] Add messages, router handlers, command registration, `workspaceStatsStore`.
+- [x] Render the headline tile grid, including backfill progress and the
       skipped/wall-clock disclosures.
 
 ### Phase 3 — Harness share

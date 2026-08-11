@@ -111,6 +111,9 @@ export const MESSAGE_TYPES = {
   REQUEST_HARNESS_USAGE: "requestHarnessUsage", // Webview -> Extension: return cache and refresh in background
   REFRESH_HARNESS_USAGE: "refreshHarnessUsage", // Webview -> Extension: refresh provider usage
   HARNESS_USAGE_UPDATED: "harnessUsageUpdated", // Extension -> Webview: normalized usage snapshots
+  REQUEST_WORKSPACE_STATS: "requestWorkspaceStats", // Webview -> Extension: return cache and refresh in background
+  REFRESH_WORKSPACE_STATS: "refreshWorkspaceStats", // Webview -> Extension: rebuild workspace statistics
+  WORKSPACE_STATS_UPDATED: "workspaceStatsUpdated", // Extension -> Webview: workspace statistics snapshot
   COMMIT_MESSAGE_GENERATION_UPDATED: "commitMessageGenerationUpdated", // Extension -> Webview: Latest real git diff input used for commit generation
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
@@ -2020,6 +2023,7 @@ export const VSCODE_COMMANDS = {
   GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",
   REFRESH_HARNESS_USAGE: "ctrlyoke.refreshHarnessUsage",
+  REFRESH_WORKSPACE_STATS: "ctrlyoke.refreshWorkspaceStats",
 } as const;
 
 // Built-in VS Code Git extension command IDs that ctrlyoke invokes to open

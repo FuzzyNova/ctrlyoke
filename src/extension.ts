@@ -1289,6 +1289,13 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const refreshWorkspaceStatsCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.REFRESH_WORKSPACE_STATS,
+    async () => {
+      await workflowOrchestrator.refreshWorkspaceStats();
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
@@ -1326,6 +1333,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     disableServerCommand,
     regenerateServerTokenCommand,
     refreshHarnessUsageCommand,
+    refreshWorkspaceStatsCommand,
     generateCommitMessageCommand,
     cancelCommitMessageGenerationCommand
   );

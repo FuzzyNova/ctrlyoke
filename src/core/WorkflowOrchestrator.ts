@@ -85,6 +85,8 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { CliWatchSession } from "./orchestration/CliWatchSession";
 import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService";
+import { WorkspaceStatsService } from "./harness/shared/usage/WorkspaceStatsService";
+import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -310,6 +312,7 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   private readonly dashboardBroadcastHub = new DashboardBroadcastHub();
   private readonly harnessUsageService?: HarnessUsageService;
+  private readonly workspaceStatsService?: WorkspaceStatsService;
   private readonly integrationFactory: IntegrationFactory;
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
   private readonly statusBarManager: StatusBarManager;
@@ -407,6 +410,9 @@ export class WorkflowOrchestrator {
           shouldPersistObservedUsage: () =>
             ConfigurationUtils.shouldPersistObservedHarnessUsage(),
         }
+      );
+      this.workspaceStatsService = new WorkspaceStatsService(
+        this.currentWorkspaceFolder.uri.fsPath
       );
     }
 
@@ -524,6 +530,20 @@ export class WorkflowOrchestrator {
   public async refreshHarnessUsage(): Promise<void> {
     if (!ConfigurationUtils.shouldRefreshHarnessUsage()) return;
     await this.harnessUsageService?.refreshAllHarnessUsage();
+  }
+
+  public getWorkspaceStatsService(): WorkspaceStatsService | undefined {
+    return this.workspaceStatsService;
+  }
+
+  public async refreshWorkspaceStats(): Promise<
+    WorkspaceStatsSnapshot | undefined
+  > {
+    const snapshot = await this.workspaceStatsService?.refresh();
+    if (snapshot) {
+      this.dashboardBroadcastHub.updateWorkspaceStats(snapshot);
+    }
+    return snapshot;
   }
 
   /** Shared installed-version-aware capability registry for dashboard consumers. */

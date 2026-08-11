@@ -81,7 +81,10 @@ import type {
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
-import type { HarnessUsageSnapshot } from "./UsageTypes";
+import type {
+  HarnessUsageSnapshot,
+  WorkspaceStatsSnapshot,
+} from "./UsageTypes";
 import type {
   AttemptCostEstimate,
   AttemptCostUnavailableReason,
@@ -781,6 +784,12 @@ export interface HarnessStatusUpdateMessage {
 export interface HarnessUsageUpdatedMessage {
   type: typeof MESSAGE_TYPES.HARNESS_USAGE_UPDATED;
   snapshots: HarnessUsageSnapshot[];
+}
+
+/** Workspace-local lifetime totals and backfill progress. */
+export interface WorkspaceStatsUpdatedMessage {
+  type: typeof MESSAGE_TYPES.WORKSPACE_STATS_UPDATED;
+  snapshot?: WorkspaceStatsSnapshot;
 }
 
 /** Installed-version-aware harness capability facts (extension -> webview). */
@@ -1987,6 +1996,7 @@ export type IncomingMessage =
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage
   | HarnessUsageUpdatedMessage
+  | WorkspaceStatsUpdatedMessage
   | HarnessCapabilitySnapshotMessage
   | AgentsUpdateMessage
   | SkillsUpdateMessage

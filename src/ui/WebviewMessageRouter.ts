@@ -1153,6 +1153,21 @@ export class WebviewMessageRouter {
       ctx.emit({ type: MESSAGE_TYPES.HARNESS_USAGE_UPDATED, snapshots });
     });
 
+    table.set(MESSAGE_TYPES.REQUEST_WORKSPACE_STATS, async (_message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      const service = orchestrator?.getWorkspaceStatsService();
+      const snapshot = await service?.getSnapshot();
+      ctx.emit({ type: MESSAGE_TYPES.WORKSPACE_STATS_UPDATED, snapshot });
+      // The launch path returns the persisted rollup first. The full backfill
+      // then runs in the background and broadcasts its completed snapshot.
+      void orchestrator?.refreshWorkspaceStats();
+    });
+
+    table.set(MESSAGE_TYPES.REFRESH_WORKSPACE_STATS, async (_message, ctx) => {
+      const snapshot = await this.getOrchestrator()?.refreshWorkspaceStats();
+      ctx.emit({ type: MESSAGE_TYPES.WORKSPACE_STATS_UPDATED, snapshot });
+    });
+
     table.set(MESSAGE_TYPES.ENABLE_SERVER, (_message, ctx) => {
       this.settingsSync.handleEnableServer(ctx.postMessage);
     });

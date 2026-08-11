@@ -8,19 +8,24 @@ import type { HarnessId } from "@root/types/DashboardConstants";
 import { HarnessIcon } from "@components/shared";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { UsageCard } from "./UsageCard";
+import { StatTileGrid } from "./StatTileGrid";
 
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
 
 interface Props {
   hideCost: boolean;
+  isNarrow?: boolean;
 }
 
-export function StatsUsageSection({ hideCost }: Props) {
+export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
   useEffect(() => {
+    sendMessage(MESSAGE_TYPES.REQUEST_WORKSPACE_STATS);
     sendMessage(MESSAGE_TYPES.REQUEST_HARNESS_USAGE);
   }, []);
 
+  const snapshot = useWorkspaceStatsStore((state) => state.snapshot);
   const snapshotsByHarness = useHarnessUsageStore(
     (state) => state.snapshotsByHarness
   );
@@ -39,11 +44,23 @@ export function StatsUsageSection({ hideCost }: Props) {
         <button
           type="button"
           className="text-xs text-link-fg hover:underline shrink-0"
-          onClick={() => sendMessage(MESSAGE_TYPES.REFRESH_HARNESS_USAGE)}
+          onClick={() => sendMessage(MESSAGE_TYPES.REFRESH_WORKSPACE_STATS)}
         >
-          Refresh harness usage
+          Refresh
         </button>
       </div>
+      {snapshot && (
+        <StatTileGrid
+          snapshot={snapshot}
+          isNarrow={isNarrow}
+          hideCost={hideCost}
+        />
+      )}
+      {!snapshot && (
+        <div className="rounded border border-panel-border bg-panel-bg p-3 text-xs text-description-fg">
+          Workspace statistics: loading…
+        </div>
+      )}
       <div className="space-y-4">
         {ALL_HARNESS_IDS.map((harnessId) => (
           <div key={harnessId} className="space-y-2">

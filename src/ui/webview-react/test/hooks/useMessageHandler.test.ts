@@ -46,6 +46,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
+import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
   MESSAGE_TYPES,
@@ -94,12 +95,42 @@ beforeEach(() => {
   });
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  useWorkspaceStatsStore.setState({ snapshot: undefined });
   handleCompletionNotificationEventMock.mockReset();
   webviewWarnMock.mockReset();
   sessionStorage.clear();
   vi.useRealTimers();
   // Reset reconnect watchdog per-page-load flag so tests are independent.
   reconnectWatchdog.clearFreshPageReadySent();
+});
+
+describe("WORKSPACE_STATS_UPDATED", () => {
+  it("stores the workspace snapshot separately from harness usage", () => {
+    const snapshot = {
+      updatedAt: 1,
+      workflowCount: 1,
+      runCount: 1,
+      outcomes: { completed: 1, stopped: 0, error: 0 },
+      totalActiveExecutionMs: 1000,
+      wallClockDurationRunCount: 0,
+      skippedRunCount: 0,
+      totals: {
+        input: 1,
+        output: 2,
+        total: 3,
+        attemptCount: 1,
+        reportedAttemptCount: 1,
+      },
+      byHarness: {},
+      backfill: { state: "complete", scanned: 1, total: 1 },
+    } as any;
+
+    createMessageHandlers(false)[MESSAGE_TYPES.WORKSPACE_STATS_UPDATED]({
+      snapshot,
+    });
+
+    expect(useWorkspaceStatsStore.getState().snapshot).toBe(snapshot);
+  });
 });
 
 // ---------------------------------------------------------------------------
