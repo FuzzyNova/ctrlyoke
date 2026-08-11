@@ -135,18 +135,64 @@ partial) plus `attemptCount` and `reportedAttemptCount`, all read straight off
 `WorkflowTokenTotals.byHarness` — no new parsing, no second pass over
 `events.jsonl`.
 
-**Idempotence and bounding.** Same `(workflowKey, runRef)` upsert semantics as
-`ObservedHarnessUsageStore`: keep the per-run ledger so a replacement can
-subtract the old contribution and add the new one. Unlike the observed store the
-ledger is never date-pruned, so bound it by count instead: past
-`LIFETIME_LEDGER_MAX_RUNS` (recommend 5000) fold the oldest entries into a
-sealed `archivedTotals` object that can no longer be revised. Terminal runs are
-not revised in practice, so sealing the tail is safe; sealing is what keeps the
-file from growing without limit in a repo with tens of thousands of runs.
+**No run is ever excluded from the totals, at any repo size.** Power users with
+the most history are exactly the users this page is for. There is no cap on runs
+counted, and no age past which a run stops contributing.
+
+**A run of any age can be revised, and the totals must follow.**
+`RunContinuationService.validateContinuationTarget`
+(`RunContinuationService.ts:38-111`) accepts any `runRef`; its gates are lock
+state, pending edits, and execution state, and there is **no age check anywhere**.
+Appending to, continuing, or editing a year-old run is supported product
+behavior. Doing so refires the terminal feed for the same
+`(workflowKey, runRef)` with a larger `tokenTotals`, so the store must be able
+to replace that run's prior contribution no matter how old it is. Any design
+that can only revise _recent_ runs is a double-counting bug, not a trade-off.
+
+What _is_ bounded is memory and the size of the always-read file — a different
+thing from capping the data, and the design has to keep them separate. Three
+rules:
+
+1. **The displayed totals never require reading a per-run ledger.** Persist
+   `.ctrlyoke/.usage/lifetime-stats.json` as a document sized by _lineage_
+   count, not run count: grand `totals`, `byHarness`, `outcomes`, and a
+   per-lineage entry holding that lineage's subtotal plus its counted interval.
+   Opening the page parses a small file whether the workspace has 100 runs or
+   10 million.
+2. **Idempotence comes from a counted-interval index, not a per-run set.** Run
+   refs are timestamp-ordered by construction (`run-<ISO>`, see
+   `WorkflowPaths.formatRunRef`), so per lineage it is enough to store one
+   contiguous interval `{ countedFrom: RunRef, countedThrough: RunRef }`. A run
+   inside its lineage's interval is already counted; a run outside it is not.
+   That is **O(lineages) state, not O(runs)**. The live feed raises
+   `countedThrough`; the backfill lowers `countedFrom`.
+3. **Revision of an already-counted run recomputes that one lineage.** When a
+   feed arrives for a run _inside_ its lineage's interval, that is a revision:
+   discard the lineage's stored subtotal and re-derive it by reading that
+   lineage's run manifests, then swap it into the grand totals. No per-run
+   contribution needs to have been retained, so **there is no age limit and no
+   count limit on what can be revised** — a run from any year re-reads the same
+   way as one from this morning. Cost is O(runs in that one lineage), paid only
+   on the rare revision path; the common path (a brand-new run finishing,
+   landing outside the interval) stays an O(1) add.
+
+**A bounded recent-contribution cache is an optimization, never the mechanism.**
+Repaired terminal transitions can refire for the newest run several times in a
+row, and each would otherwise rescan its lineage. Keep the last N runs'
+contributions (recommend ~200, workspace-wide) in memory so those hits subtract
+directly. This is a **cache whose miss path is correct** — evicting an entry
+costs one lineage rescan, never a wrong total. That distinction is the whole
+point: the earlier draft of this plan bounded a _ledger_ whose eviction silently
+destroyed the ability to revise, which would have broken year-old continuations.
+
+**Full rebuild** remains the backstop: discard the document and re-derive
+everything from manifests. Same code path as the backfill with the index
+cleared, so no drift is ever permanent.
 
 **Corruption handling** mirrors the observed store exactly: validate on read,
 quarantine to `.corrupt-<ts>.json`, return an empty store, surface a safe error
-code, never block execution.
+code, never block execution. Because a quarantined file loses the interval
+index, recovery re-triggers the backfill rather than silently reporting zero.
 
 ### Workflow count — one readdir, not the ledger
 
@@ -158,21 +204,50 @@ workflow list.
 
 ### Backfill for pre-existing runs
 
-Every run that finished before this ships is absent from the ledger. Add a
-one-time background backfill:
+Every run that finished before this ships is absent from the store. Yes — the
+backfill scrapes `.ctrlyoke/.runs`, reading each run's `manifest.json` (never its
+`events.jsonl`) and folding `tokenTotals` + lifecycle fields into the totals.
 
-- Scan `.ctrlyoke/.runs/*/run-*/manifest.json` for run refs not in the ledger.
+**What it does:**
+
+- Walk lineages; for each, list its run directories and scan only the runs
+  outside that lineage's counted interval. A fully-counted lineage costs one
+  `readdir` and zero manifest reads.
 - **Bounded concurrency** — mirror `getRunSummaries`' batch size of 32. Parse and
   discard per batch; never hold all manifests in memory. `WorkflowRunManifest`
   carries an optional `initialDefinition` snapshot, so a naive
   `Promise.all(readAll)` over a large repo is an extension-host OOM candidate
   (see the crash-investigation note in `.github/copilot-instructions.md`).
-- Triggered on first Stats page open, not on activation. Report progress to the
-  page (`backfill: { state, scanned, total }`) so a large repo shows "Building
-  history… 340/1200" rather than a wrong-looking small number.
-- Idempotent and resumable: re-running it after a partial pass converges.
-- Skip manifests that fail to read or parse; count them into a
-  `skippedRuns` figure the page discloses rather than silently under-reporting.
+- Persist the interval index periodically during the scan, not only at the end,
+  so an interrupted pass resumes instead of restarting. A long scan is
+  acceptable; **losing** a long scan is not.
+- Triggered on first Stats page open, not on activation. Report progress
+  (`backfill: { state, scanned, total }`) so a large repo shows "Building
+  history… 340/1200" rather than a wrong-looking small number, and let the page
+  render partial totals while it runs, clearly labeled as still building.
+- Skip manifests that fail to read or parse; count them into a `skippedRuns`
+  figure the page discloses rather than silently under-reporting.
+
+**On the "has `.runs` changed since last scrape?" heuristic — yes, but not a
+single root mtime.** A directory's mtime changes only when _its own_ entries
+change. Creating a new lineage bumps `.runs`, but adding a run inside an
+existing lineage bumps only that lineage's directory — so a root-level
+`.runs` mtime check would miss almost every new run. Correct shape:
+
+- **Per-lineage directory mtime**, stored beside that lineage's counted
+  interval. Unchanged mtime → skip the lineage's `readdir` entirely.
+- **The counted interval is the correctness mechanism; mtime is only the
+  optimization.** If an mtime is stale, wrong, or unsupported by the filesystem,
+  the interval check still yields the right answer on the next `readdir` — it
+  just costs one extra syscall per lineage. Never let a skipped mtime comparison
+  be the only thing standing between a run and being counted.
+
+**Do not copy `HistorySearchIndexService.isManifestFresh`.** It stats _and reads
+every run manifest_ on every freshness check (`HistorySearchIndexService.ts:337-380`)
+— O(runs) I/O just to decide whether work is needed. It also writes a
+`historyRootMtimeMs` field it never reads back, which is precisely the
+root-mtime trap described above. At the scale this page must support, that
+approach is the bug.
 
 ### Execution time needs a durable source
 
@@ -180,12 +255,23 @@ one-time background backfill:
 including pauses. The pause-aware number lives in `WorkingFileRuntime`
 (`startTime` / `totalPausedDuration` / `executionEndTime`) and in `QueueState.totalExecutionTime`.
 
-**Add an optional `activeExecutionMs` to `WorkflowRunManifest`**, written by the
-existing `finalizeRun` path. It is an additive optional field, so no timeline
-schema-version bump is needed, and it avoids a second file read per run at the
-feed site. Backfilled runs fall back to `completedAt - startedAt` with
-`durationIsWallClock: true`, and the page discloses the mix ("includes N runs
-measured as wall clock") rather than blending the two silently.
+**Add an optional `activeExecutionMs` to `WorkflowRunManifest`** (decided —
+`src/types/WorkflowTimelineTypes.ts`), written by the existing `finalizeRun`
+path. It is an additive optional field, so no timeline schema-version bump is
+needed, and it avoids a second file read per run at the feed site. Backfilled
+runs fall back to `completedAt - startedAt` with `durationIsWallClock: true`,
+and the page discloses the mix ("includes N runs measured as wall clock")
+rather than blending the two silently.
+
+**No `workflow-schema.json` change is needed for this field.** `jsonValidation`
+maps only `**/*.ctrlyoke.json` to that schema (`package.json:751-757`);
+`manifest.json` is not validated by it. Keep `activeExecutionMs` on the manifest
+only — the working file's `_runtime` already carries `startTime` /
+`totalPausedDuration` / `executionEndTime`, so writing a derived duration there
+too would duplicate state. If a future change _does_ put it in the working file,
+note that `runtimeMetadata` is `additionalProperties: false`, so it must be
+declared in the schema in the same commit or every working file starts
+squiggling.
 
 ---
 
@@ -203,6 +289,13 @@ Place it immediately after `general`. It renders inside the standard scrollable
 wrapper (not the `workflow` tab's special flex path). `effectiveActiveTab`
 already falls back to `general` for unknown ids, so a persisted tab id needs no
 migration.
+
+**The drawer is the intended home, not a waypoint** (decided) — a stats page
+inside settings is a common, expected pattern, and header space is too scarce to
+spend a dedicated button on it. But `StatsUsageSection` must not assume a drawer
+parent: no reliance on drawer-owned scope/scroll/measurement context, and every
+prop it needs comes in explicitly. Relocating it later should be a change to
+where it is mounted, nothing more.
 
 The page requests data **on tab activation, not on drawer open** — the drawer
 already sends `GLOBAL_SETTINGS_LOAD_REQUEST` on open and must not get slower.
@@ -397,11 +490,15 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 
 - [ ] Add `activeExecutionMs` to `WorkflowRunManifest`, written at `finalizeRun`.
 - [ ] Add `lifetimeStatsPath` to `UsagePaths.ts`.
-- [ ] Add `LifetimeUsageStore` with upsert/idempotence/sealing/corruption
-      recovery.
+- [ ] Add `LifetimeUsageStore`: lineage-sized totals document, per-lineage
+      counted-interval index, revision-by-lineage-recompute, bounded recent
+      contribution cache, corruption recovery, full rebuild.
+- [ ] Regression test: continuing a run older than any cache horizon updates the
+      totals without double-counting.
 - [ ] Extend `OutputHistoryManager.feedObservedHarnessUsage` → `feedUsageStores`
       to feed both stores from its single manifest read.
-- [ ] Add `WorkspaceStatsService` + the bounded-concurrency backfill scanner.
+- [ ] Add `WorkspaceStatsService` + the bounded-concurrency backfill scanner
+      with per-lineage mtime gating and mid-scan checkpointing.
 - [ ] Add messages, router handlers, command registration, `workspaceStatsStore`.
 - [ ] Render the headline tile grid, including backfill progress and the
       skipped/wall-clock disclosures.
@@ -432,9 +529,21 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 - Workflow count includes draft-only lineages; run count does not.
 - Duration is pause-aware where available, and the page discloses how many runs
   fall back to wall clock rather than blending the two silently.
-- Backfill is bounded in concurrency and memory, resumable, idempotent, and
-  reports progress; unreadable manifests are counted and disclosed, never
-  silently dropped.
+- **No run is ever excluded from the totals for being old or for exceeding a
+  count threshold**, and **no run ever becomes unrevisable.** Appending to,
+  continuing, or editing a run of any age updates the totals correctly, with no
+  double-counting. Regression test: count a run, advance the clock past any
+  cache/window horizon, evict the recent-contribution cache, continue that run,
+  and assert the totals reflect the new value rather than the sum of both.
+- The always-read stats document and the per-lineage index are O(lineages), not
+  O(runs): totals for a workspace with millions of runs load without parsing a
+  per-run ledger.
+- Backfill is bounded in concurrency and memory, resumable across interruption
+  via mid-scan checkpoints, idempotent, and reports progress; unreadable
+  manifests are counted and disclosed, never silently dropped.
+- Freshness gating never determines correctness: with every directory mtime
+  stale or unavailable, the counted-interval check still counts every run.
+- A full rebuild reproduces the same totals as incremental accumulation.
 - The share bar is never the only encoding of a value; the rows carry the
   numbers as text and the bar is `aria-hidden`.
 - Zero-usage harnesses never render as an empty row or a zero-width segment.
@@ -448,16 +557,69 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 
 ---
 
+## Decisions
+
+Resolved August 11, 2026:
+
+1. **The Stats page stays in the settings drawer.** A stats page inside settings
+   is a standard pattern, and header space is too scarce to spend a dedicated
+   button on it. No move is planned — but `StatsUsageSection` stays portable
+   (no drawer-parent assumptions) so a later move is a mount-point change.
+2. **No cap on counted runs, and no limit on which runs can be revised.** Power
+   users with the largest histories are the audience for this page. Waiting for
+   a long scrape is acceptable; being silently capped is not. Continuing or
+   editing a year-old run is supported product behavior
+   (`RunContinuationService` has no age gate), so the store re-derives the
+   affected lineage rather than relying on a retained per-run record. The only
+   bounded things are the always-read document (sized by lineage count) and an
+   in-memory cache whose miss path is a correct rescan. See
+   [Lifetime totals](#lifetime-totals--new-store-required).
+3. **`activeExecutionMs` is added to `WorkflowRunManifest`.** Manifest only; no
+   `workflow-schema.json` entry needed, since that schema validates
+   `**/*.ctrlyoke.json` and not `manifest.json`.
+4. **The backfill scrapes `.ctrlyoke/.runs`, gated by per-lineage directory
+   mtime — not a single `.runs` root mtime.** A root-level check would miss runs
+   added inside existing lineages. mtime is an optimization layered over the
+   counted-interval index, which remains the correctness mechanism. See
+   [Backfill](#backfill-for-pre-existing-runs).
+
 ## Open Questions
 
-1. **Should the Stats page eventually leave the settings drawer?** It is not a
-   settings surface, and a workspace-statistics view may deserve its own panel
-   entry. Ship it in the drawer (that is what was asked for and it is where the
-   usage cards already are), but do not build anything that assumes a drawer
-   parent — keep `StatsUsageSection` self-contained so relocating it is a
-   one-line change.
-2. **Ledger cap value.** 5000 runs is a guess. Worth measuring the real file size
-   of a contribution before fixing the constant.
-3. **Should the backfill run automatically on activation** instead of first page
+1. **Recent-contribution cache size.** ~200 entries is a starting guess. Because
+   a miss only costs a lineage rescan, this is purely a performance dial and can
+   be tuned (or dropped entirely) without affecting correctness. Worth revisiting
+   if a workspace turns out to have single lineages with very large run counts,
+   since those make the miss path more expensive.
+2. **Should the backfill run automatically on activation** instead of first page
    open? Recommend no — it is a full-history scan whose only consumer is a page
-   most sessions never open.
+   most sessions never open, and on a very large workspace it is exactly the kind
+   of background I/O that should be user-initiated.
+
+---
+
+## Appendix — Working-File Schema Squiggles (fixed alongside this plan)
+
+While confirming that `activeExecutionMs` needed no schema change, a validation
+sweep of all 1,020 working files under `.ctrlyoke/.runs` found **862 of them
+already failing** `schemas/workflow-schema.json`. Fixed in the same change:
+
+| Cause                                                                                                             | Files | Fix                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------- |
+| `agent: ""` — the serialized form of the dashboard's "None" selection, rejected by the `^[a-zA-Z0-9-_]+$` pattern | 858   | Added an explicit empty-string branch to `agent`, documenting `""` = none as distinct from `null` = explicitly disabled |
+| `_runtime.tokenTotals` undeclared under `additionalProperties: false`                                             | many  | Added a `workflowTokenTotals` / `harnessTokenTotals` definition pair                                                    |
+| `_runtime.pendingRewind` undeclared                                                                               | some  | Declared                                                                                                                |
+| `_runtime.finalStep.preCondition` / `.endCondition` undeclared                                                    | 22    | Added a `conditionEvaluationSummary` definition                                                                         |
+
+Result: 862 → **30** failing files. The remaining 30 fail on genuinely wrong
+content and **should** keep squiggling:
+
+- 25 files declare `harness: "copilot-chat"` — the permanently removed harness.
+  It must never be reintroduced into the schema
+  (`.github/copilot-instructions.md`), so these correctly report as invalid.
+- A few carry `agent: "copilot-prompt.chatmode"`; no code path supports a
+  `.chatmode` agent form, so the pattern is right to reject it.
+- 3 carry a legacy `_runtime.finalStep.responseTexts` no longer on
+  `FinalStepRuntimeState`; 2 have a step `_runtime` missing `startedAt`.
+
+`schemas/workflow-schema.yaml` is generated from the JSON schema by
+`npm run generate-schema` (part of `precompile`) and was regenerated.

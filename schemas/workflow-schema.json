@@ -303,6 +303,11 @@
               "pattern": "^[a-zA-Z0-9-_]+$"
             },
             {
+              "type": "string",
+              "const": "",
+              "description": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+            },
+            {
               "type": "null"
             }
           ],
@@ -807,6 +812,26 @@
           "type": "number",
           "description": "Wall-clock timestamp when workflow execution reached a terminal state"
         },
+        "tokenTotals": {
+          "$ref": "#/definitions/workflowTokenTotals",
+          "description": "Latest run-scoped token aggregate projected from timeline history (working files only, written automatically during execution)"
+        },
+        "pendingRewind": {
+          "type": "object",
+          "description": "Durable marker for an in-place, nonzero rewind. The full pre-rewind file is kept beside the run until the continuation is committed or discarded.",
+          "properties": {
+            "fromStepIndex": {
+              "type": "number",
+              "description": "0-based index of the first rewound step"
+            },
+            "baseDefinitionRevision": {
+              "type": "number",
+              "description": "Definition revision the rewind was taken from"
+            }
+          },
+          "required": ["fromStepIndex", "baseDefinitionRevision"],
+          "additionalProperties": false
+        },
         "finalStep": {
           "type": "object",
           "description": "Runtime metadata for final step execution state (optional, added automatically during execution)",
@@ -840,6 +865,14 @@
             "completedAt": {
               "type": "number",
               "description": "Timestamp when final step execution completed"
+            },
+            "preCondition": {
+              "$ref": "#/definitions/conditionEvaluationSummary",
+              "description": "Latest pre-condition evaluation retained for the final step's automation result projection"
+            },
+            "endCondition": {
+              "$ref": "#/definitions/conditionEvaluationSummary",
+              "description": "Latest end-condition evaluation retained for the final step's automation result projection"
             }
           },
           "required": ["phase", "loopCount"],
@@ -848,6 +881,165 @@
       },
       "required": ["currentIndex", "executionState"],
       "additionalProperties": false
+    },
+    "conditionEvaluationSummary": {
+      "type": "object",
+      "description": "Latest script-condition evaluation retained for the automation result projection (written automatically during execution).",
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["continue", "stopWorkflow", "retry", "skipPrompt"],
+          "description": "Populated for pre-conditions, where it explains the gate decision."
+        },
+        "script": {
+          "type": "string"
+        },
+        "actual": {
+          "type": "string"
+        },
+        "actualSource": {
+          "type": "string",
+          "enum": ["stdout", "stderr", "exitCode"]
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "exitCode": {
+          "type": "number"
+        },
+        "durationMs": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "passed",
+        "script",
+        "actual",
+        "actualSource",
+        "stdout",
+        "stderr",
+        "durationMs"
+      ]
+    },
+    "harnessTokenTotals": {
+      "type": "object",
+      "description": "Per-harness token subtotal within a run aggregate.",
+      "properties": {
+        "input": {
+          "type": "number"
+        },
+        "output": {
+          "type": "number"
+        },
+        "cachedInput": {
+          "type": "number"
+        },
+        "cacheCreated": {
+          "type": "number"
+        },
+        "reasoningOutput": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "coverage": {
+          "type": "string",
+          "enum": ["complete", "partial"]
+        },
+        "reportedAttemptCount": {
+          "type": "number"
+        },
+        "attemptCount": {
+          "type": "number"
+        },
+        "costUsd": {
+          "type": "number"
+        },
+        "costPartial": {
+          "type": "boolean"
+        },
+        "costSources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["harness-reported", "price-table", "user-override"]
+          }
+        }
+      }
+    },
+    "workflowTokenTotals": {
+      "type": "object",
+      "description": "Run-scoped token aggregate projected from timeline history. Written automatically during execution; not hand-authored.",
+      "properties": {
+        "total": {
+          "type": "number",
+          "description": "Sum of every AI attempt's token total observed in this run"
+        },
+        "coverage": {
+          "type": "string",
+          "enum": ["complete", "partial"],
+          "description": "'complete' only when every executed AI attempt reported a usable total"
+        },
+        "reportedAttemptCount": {
+          "type": "number"
+        },
+        "attemptCount": {
+          "type": "number"
+        },
+        "isFinal": {
+          "type": "boolean",
+          "description": "False while the run can still add usage"
+        },
+        "costUsd": {
+          "type": "number"
+        },
+        "costPartial": {
+          "type": "boolean"
+        },
+        "costSources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["harness-reported", "price-table", "user-override"]
+          }
+        },
+        "byHarness": {
+          "type": "object",
+          "description": "Same aggregate partitioned by the harness recorded on each immutable attempt output.",
+          "propertyNames": {
+            "$ref": "#/definitions/harnessId"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/harnessTokenTotals"
+          }
+        },
+        "byLocalDay": {
+          "type": "object",
+          "description": "Same per-harness subtotals partitioned by the attempt start's local day (YYYY-MM-DD).",
+          "propertyNames": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/definitions/harnessId"
+            },
+            "additionalProperties": {
+              "$ref": "#/definitions/harnessTokenTotals"
+            }
+          }
+        }
+      }
     },
     "userHookConfig": {
       "type": "object",
