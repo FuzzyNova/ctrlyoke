@@ -22,6 +22,7 @@ import {
   type AttemptCostUnavailableReason,
   type WorkflowTokenCoverage,
 } from "./DashboardConstants";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
   HarnessId,
   HookEvent,
@@ -382,6 +383,53 @@ export interface WorkflowLineageDescriptor {
 }
 
 /**
+ * Persisted worktree lifecycle metadata for a working file.
+ *
+ * This includes managed-worktree outcomes even while those fields are not
+ * exposed by the authored workflow schema. Runtime persistence needs one
+ * stable shape before the managed lifecycle is implemented.
+ */
+export interface WorkingFileWorktreeRuntime {
+  schemaVersion: 1;
+  mode: "managed" | "named";
+  origin: "created" | "discovered" | "recovered";
+  branchName: string;
+  worktreePath: string;
+  executionRoot: string;
+  executionCheckoutRoot: string;
+  sourceCheckoutRoot: string;
+  namedWorkspaceRoots: ResolverWorkspaceFolder[];
+  baseCommit: string;
+  targetBranch?: string;
+  lifecycleOwner: "ctrlyoke" | "user";
+  lifecycleState:
+    | "provisioning"
+    | "ready"
+    | "finalizing"
+    | "settled"
+    | "blocked"
+    | "orphaned";
+  setupOutcome?: "pending" | "running" | "succeeded" | "failed";
+  landingOutcome?: "landed" | "no-changes" | "blocked";
+  mergeOutcome?:
+    | "fast-forward"
+    | "merge-commit"
+    | "conflict"
+    | "blocked"
+    | "abort-failed";
+  directoryState: "present" | "removed" | "missing" | "remove-failed";
+  branchState: "present" | "deleted" | "missing";
+  finalBranchTip?: string;
+  conflictFiles?: string[];
+  updatedAt: number;
+}
+
+/** Partial lifecycle patch applied to persisted worktree runtime metadata. */
+export type WorkingFileWorktreeRuntimePatch = Partial<
+  WorkingFileWorktreeRuntime
+>;
+
+/**
  * Runtime metadata for working files (optional, not required for user-created files)
  * Tracks workflow execution state only - does NOT include execution properties
  * (those are tracked at workflow root and per-prompt _runtime)
@@ -408,6 +456,8 @@ export interface WorkingFileRuntime {
     fromStepIndex: number;
     baseDefinitionRevision: number;
   };
+  /** Disk-authoritative lifecycle metadata for a worktree-backed run. */
+  worktree?: WorkingFileWorktreeRuntime;
 }
 
 /**

@@ -7,6 +7,7 @@ import type {
   PromptRuntimeMetadata,
   WorkingFile,
   WorkingFileRuntime,
+  WorkingFileWorktreeRuntimePatch,
   WorkflowTokenTotals,
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
@@ -1621,6 +1622,9 @@ export class WorkingFileManager {
         ...(this.queueAccess.getPendingRewind?.()
           ? { pendingRewind: this.queueAccess.getPendingRewind() }
           : {}),
+        ...(workingFile._runtime?.worktree
+          ? { worktree: workingFile._runtime.worktree }
+          : {}),
       };
 
       // Write atomically while holding lock
@@ -1648,6 +1652,51 @@ export class WorkingFileManager {
         : {}),
       ...(executionEndTime !== undefined ? { executionEndTime } : {}),
     };
+  }
+
+  /**
+   * Atomically patch the disk-authoritative worktree runtime block.
+   *
+   * Worktree lifecycle metadata is intentionally kept out of PromptQueue's
+   * state projection. This operation serializes with ordinary runtime and
+   * definition writes, preserves every queue-owned runtime field, and never
+   * changes definitionRevision.
+   */
+  public async updateWorktreeRuntime(
+    patch: WorkingFileWorktreeRuntimePatch
+  ): Promise<void> {
+    const workingFilePath = this.queueAccess.getWorkingFilePath();
+    if (!workingFilePath) {
+      return;
+    }
+
+    const operation = this.operationQueue.then(async () => {
+      await withFileLock(workingFilePath, async () => {
+        const workingFile = await this.readWorkingFile(workingFilePath);
+        const currentRuntime =
+          workingFile._runtime ?? {
+            currentIndex: this.queueAccess.getCurrentIndex(),
+            executionState: this.queueAccess.getStatus(),
+          };
+        workingFile._runtime = {
+          ...currentRuntime,
+          worktree: {
+            ...currentRuntime.worktree,
+            ...patch,
+            updatedAt: patch.updatedAt ?? Date.now(),
+          } as NonNullable<typeof currentRuntime.worktree>,
+        };
+        workingFile.lastModifiedAt = Date.now();
+        await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
+          skipLock: true,
+        });
+      });
+    });
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    await operation;
   }
 
   /**

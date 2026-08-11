@@ -1933,6 +1933,9 @@ schema.
       schema validation, typed parsing/property persistence, and definition
       revision snapshots. Settings defaults, named-worktree resolution, and the
       editor/runtime surfaces remain part of the subsequent Phase 2 work.
+    - Runtime persistence is implemented: `WorkingFileManager` owns an atomic
+      typed worktree-runtime patch seam, ordinary runtime projections preserve
+      `_runtime.worktree`, and promotion/re-run seed fresh runtime metadata.
     - Parser keeps an absent `worktree` absent rather than normalizing it to `false`.
     - Add `defaults.worktree` and user-scope-only `worktrees.root` to
       `schemas/settings-schema.json`, `CtrlYokeSettings`, the config service

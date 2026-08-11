@@ -11,6 +11,7 @@ import type {
   PromptRuntimeMetadata,
   PromptStep,
   WorkingFile,
+  WorkingFileWorktreeRuntime,
   WorkflowTokenTotals,
 } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
@@ -67,6 +68,28 @@ function makeMinimalWorkingFile(): WorkingFile {
       currentIndex: 0,
       executionState: EXECUTION_STATES.IDLE,
     },
+  };
+}
+
+function makeWorktreeRuntime(): WorkingFileWorktreeRuntime {
+  const worktreeRoot = path.join(os.tmpdir(), "named-worktree");
+  return {
+    schemaVersion: 1,
+    mode: "named",
+    origin: "discovered",
+    branchName: "feature/runtime",
+    worktreePath: worktreeRoot,
+    executionRoot: worktreeRoot,
+    executionCheckoutRoot: worktreeRoot,
+    sourceCheckoutRoot: path.join(os.tmpdir(), "source-checkout"),
+    namedWorkspaceRoots: [{ name: "root", fsPath: worktreeRoot }],
+    baseCommit: "abc123",
+    lifecycleOwner: "user",
+    lifecycleState: "ready",
+    setupOutcome: "succeeded",
+    directoryState: "present",
+    branchState: "present",
+    updatedAt: 100,
   };
 }
 
@@ -410,6 +433,78 @@ suite("WorkingFileManager", () => {
       });
     });
 
+    test("preserves the disk worktree runtime across ordinary runtime writes", async () => {
+      const workingFilePath = tempFile("worktree-preserve");
+      const worktree = makeWorktreeRuntime();
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        definitionRevision: 7,
+        _runtime: {
+          currentIndex: 2,
+          executionState: EXECUTION_STATES.RUNNING,
+          worktree,
+        },
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.getCurrentIndex = () => 3;
+      access.getStatus = () => EXECUTION_STATES.PAUSED;
+      access.getDefinitionRevision = () => 7;
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(persisted._runtime?.worktree, worktree);
+      assert.strictEqual(persisted._runtime?.currentIndex, 3);
+      assert.strictEqual(
+        persisted._runtime?.executionState,
+        EXECUTION_STATES.PAUSED
+      );
+      assert.strictEqual(persisted.definitionRevision, 7);
+    });
+
+    test("atomically patches worktree runtime without disturbing queue runtime or definition revision", async () => {
+      const workingFilePath = tempFile("worktree-patch");
+      const worktree = makeWorktreeRuntime();
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        definitionRevision: 9,
+        _runtime: {
+          currentIndex: 4,
+          executionState: EXECUTION_STATES.RUNNING,
+          startTime: 123,
+          worktree,
+        },
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.getDefinitionRevision = () => 9;
+      const manager = new WorkingFileManager(access);
+      await manager.updateWorktreeRuntime({
+        lifecycleState: "settled",
+        landingOutcome: "no-changes",
+        updatedAt: 200,
+      });
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(persisted._runtime, {
+        currentIndex: 4,
+        executionState: EXECUTION_STATES.RUNNING,
+        startTime: 123,
+        worktree: {
+          ...worktree,
+          lifecycleState: "settled",
+          landingOutcome: "no-changes",
+          updatedAt: 200,
+        },
+      });
+      assert.strictEqual(persisted.definitionRevision, 9);
+      assert.strictEqual(access.getDefinitionRevision(), 9);
+    });
+
     test("preserves an externally appended tail's disk revision during a runtime flush", async () => {
       const workingFilePath = tempFile("external-tail-revision");
       await writeTempJson(workingFilePath, {
@@ -611,6 +706,35 @@ suite("WorkingFileManager", () => {
       );
       assert.strictEqual(run.definitionRevision, 1);
     });
+
+    test("preserves the authored worktree definition but starts without old runtime metadata", async () => {
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
+      tempPaths.push(tmpWorkspace);
+
+      const creator = new WorkingFileManager(makeMockAccess());
+      const { workflowKey, workingFilePath } = await creator.createWorkingFile(
+        "worktree-promotion",
+        [{ prompt: "step" }],
+        tmpWorkspace,
+        "Worktree promotion"
+      );
+      const draftManager = new WorkingFileManager(
+        makeMockAccess(workingFilePath)
+      );
+      await draftManager.updateWorkingFileProperties({
+        worktree: "feature/runtime",
+      });
+      await draftManager.updateWorktreeRuntime(makeWorktreeRuntime());
+
+      const promoted = await new WorkingFileManager(
+        makeMockAccess(workingFilePath)
+      ).promoteToNewRun(tmpWorkspace, workflowKey as any, Date.now());
+      const run = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(run.worktree, "feature/runtime");
+      assert.strictEqual(run._runtime?.worktree, undefined);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -717,6 +841,43 @@ suite("WorkingFileManager", () => {
         EXECUTION_STATES.IDLE
       );
       assert.strictEqual((content.steps![0] as PromptStep)._runtime, undefined);
+    });
+
+    test("keeps the authored worktree definition but strips worktree runtime on re-run", async () => {
+      tmpWorkspace = await makeTmpWorkspace();
+      const { workflowKey, runRef } = await makeSourceRun(
+        tmpWorkspace,
+        [{ prompt: "step" }],
+        EXECUTION_STATES.COMPLETED
+      );
+      const sourcePath = WorkflowPaths.runFilePath(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      const source = JSON.parse(
+        await fs.readFile(sourcePath, "utf8")
+      ) as WorkingFile;
+      source.worktree = { mode: "named", branch: "feature/runtime" };
+      source._runtime = {
+        ...(source._runtime ?? {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+        }),
+        worktree: makeWorktreeRuntime(),
+      };
+      await writeTempJson(sourcePath, source);
+
+      const seeded = await WorkingFileManager.seedNewRun(
+        tmpWorkspace,
+        workflowKey as any,
+        runRef as any
+      );
+      const content = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(content.worktree, source.worktree);
+      assert.strictEqual(content._runtime?.worktree, undefined);
     });
 
     test("does not copy run token totals into a seeded run", async () => {

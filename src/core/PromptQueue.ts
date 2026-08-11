@@ -14,6 +14,7 @@ import {
   isScriptStep,
   PromptRuntimeMetadata,
   WorkflowTokenTotals,
+  type WorkingFileWorktreeRuntimePatch,
   type RunRef,
 } from "../types/CtrlYokeTypes";
 import {
@@ -1411,6 +1412,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   public async updateWorkingFile(skipMerge: boolean = false): Promise<void> {
     return this.workingFileManager.updateWorkingFile(skipMerge);
+  }
+
+  /** Persist a typed patch to the disk-authoritative worktree runtime block. */
+  public async updateWorktreeRuntime(
+    patch: WorkingFileWorktreeRuntimePatch
+  ): Promise<void> {
+    return this.workingFileManager.updateWorktreeRuntime(patch);
   }
 
   /**
