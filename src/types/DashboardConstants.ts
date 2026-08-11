@@ -626,6 +626,22 @@ export const ATTEMPT_COST_SOURCES = {
   USER_OVERRIDE: "user-override",
 } as const;
 
+// ============================================================================
+// WORKSPACE STATS - Lifetime rollup and backfill state
+// ============================================================================
+export const RUN_OUTCOME_BUCKETS = {
+  COMPLETED: "completed",
+  STOPPED: "stopped",
+  ERROR: "error",
+} as const;
+
+export const WORKSPACE_STATS_BACKFILL_STATES = {
+  IDLE: "idle",
+  RUNNING: "running",
+  COMPLETE: "complete",
+  ERROR: "error",
+} as const;
+
 export const ATTEMPT_COST_CONFIDENCE = {
   COMPLETE: "complete",
   PARTIAL: "partial",
@@ -1870,6 +1886,10 @@ export type WorkflowTokenCoverage =
   (typeof WORKFLOW_TOKEN_COVERAGE)[keyof typeof WORKFLOW_TOKEN_COVERAGE];
 export type AttemptCostSource =
   (typeof ATTEMPT_COST_SOURCES)[keyof typeof ATTEMPT_COST_SOURCES];
+export type RunOutcomeBucket =
+  (typeof RUN_OUTCOME_BUCKETS)[keyof typeof RUN_OUTCOME_BUCKETS];
+export type WorkspaceStatsBackfillState =
+  (typeof WORKSPACE_STATS_BACKFILL_STATES)[keyof typeof WORKSPACE_STATS_BACKFILL_STATES];
 export type AttemptCostConfidence =
   (typeof ATTEMPT_COST_CONFIDENCE)[keyof typeof ATTEMPT_COST_CONFIDENCE];
 export type AttemptCostNoteCode =

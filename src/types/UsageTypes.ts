@@ -1,16 +1,70 @@
 import type {
   AttemptCostSource,
+  ExecutionState,
   HarnessId,
   HarnessObservedPeriod,
   HarnessQuotaSource,
   HarnessUsageConfidence,
   HarnessUsageUnit,
   HarnessUsageWindowKind,
+  RunOutcomeBucket,
+  WorkspaceStatsBackfillState,
 } from "./DashboardConstants";
 import {
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_FRESHNESS_MS,
 } from "./DashboardConstants";
+import type { RunRef, WorkflowKey } from "./CtrlYokeTypes";
+
+export interface LifetimeHarnessContribution {
+  input: number;
+  cachedInput?: number;
+  cacheCreated?: number;
+  output: number;
+  reasoningOutput?: number;
+  total: number;
+  costUsd?: number;
+  costSources?: AttemptCostSource[];
+  costPartial?: boolean;
+  partial?: boolean;
+  attemptCount: number;
+  reportedAttemptCount: number;
+}
+
+export interface LifetimeRunContribution {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  updatedAt: number;
+  startedAt: number;
+  completedAt?: number;
+  executionState: ExecutionState;
+  stepCount: number;
+  /** Pause-aware active execution time. Absent for backfilled pre-existing runs. */
+  activeExecutionMs?: number;
+  /** True when activeExecutionMs was derived from completedAt - startedAt. */
+  durationIsWallClock?: boolean;
+  byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>>;
+}
+
+export interface WorkspaceStatsSnapshot {
+  updatedAt: number;
+  workflowCount: number;
+  runCount: number;
+  outcomes: Record<RunOutcomeBucket, number>;
+  totalActiveExecutionMs: number;
+  /** Runs whose duration is wall clock rather than pause-aware. */
+  wallClockDurationRunCount: number;
+  /** Runs the backfill could not read. Disclosed, never silently dropped. */
+  skippedRunCount: number;
+  totals: LifetimeHarnessContribution;
+  byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>>;
+  backfill: {
+    state: WorkspaceStatsBackfillState;
+    scanned: number;
+    total: number;
+  };
+  errorCode?: string;
+}
 
 export interface HarnessUsageWindow {
   /** Stable normalized key used to replace a pushed/refreshed window. */

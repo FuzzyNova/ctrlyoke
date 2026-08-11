@@ -551,10 +551,10 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 
 - [x] Add `activeExecutionMs` to `WorkflowRunManifest`, written at `finalizeRun`.
 - [x] Add `lifetimeStatsPath` to `UsagePaths.ts`.
-- [ ] Add `LifetimeUsageStore`: lineage-sized totals document, per-lineage
+- [x] Add `LifetimeUsageStore`: lineage-sized totals document, per-lineage
       counted-interval index, revision-by-lineage-recompute, bounded recent
       contribution cache, corruption recovery, full rebuild.
-- [ ] Regression test: continuing a run older than any cache horizon updates the
+- [x] Regression test: continuing a run older than any cache horizon updates the
       totals without double-counting.
 - [ ] Extend `OutputHistoryManager.feedObservedHarnessUsage` → `feedUsageStores`
       to feed both stores from its single manifest read.
