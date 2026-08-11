@@ -547,8 +547,8 @@ Provider cleanup is best-effort today (`CliIntegration.cleanupWorkflowArtifacts`
 swallows some unlink failures). Managed finalization requires a strict cleanup
 mode/result: if a generated hook, MCP config, statusline artifact, or restored
 workspace config cannot be proven cleaned, block the commit and keep the worktree.
-`CliExecutionSidecar.stop()` and all session watchers must be included in this
-barrier.
+Provider-specific sidecars (e.g. `ClaudeStatuslineSidecar.stop()`) and
+`SessionActivityWatcher` instances must be included in this barrier.
 
 ### Completion result
 

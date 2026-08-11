@@ -208,9 +208,10 @@ Do not add `STEP_TYPES.PARALLEL`.
 Group status is derived from member step/attempt state. Do not put mutable status in
 `ParallelGroupDefinition`; definition topology and runtime state must not be mixed.
 
-The group ID is generated during normalization, then preserved in working files and
-definition revisions. It is for stable UI keys, timeline correlation, and mutation logic;
-users do not need to author it.
+The group ID is generated during normalization with `randomUUID()`, matching the existing
+ID convention in `WorkflowInstance` and `WorkflowLineageRepository`, then preserved in
+working files and definition revisions. It is for stable UI keys, timeline correlation, and
+mutation logic; users do not need to author it.
 
 The following invariants are checked whenever a definition is loaded or mutated:
 
@@ -475,6 +476,15 @@ multiple disjoint regions, so update its model to expose first/latest activity m
 highlight the selected step filter. Do not represent one step as a single continuous span
 when its rows are interleaved with siblings.
 
+The per-step filter chip described above is not specific to parallel execution — ordinary
+sequential multi-step workflows have the same "only show me step 3" need today, and every
+output row is already step-attributed end-to-end (`OutputMessageTarget.index`,
+`StepAnchorRow.stepIndex`). See
+[`OUTPUT_STEP_FILTER_PLAN.md`](OUTPUT_STEP_FILTER_PLAN.md), a recommended precursor that
+ships sequential-only step show/hide before this stage. Building it first validates the
+filter-state and virtualization mechanics on the simpler single-writer case so Stage 5 can
+reuse the same filter primitives instead of building a second mechanism.
+
 ## Terminal Design
 
 Interactive parallel prompts are in scope. The PTY manager and terminal registry already
@@ -531,6 +541,11 @@ Run before any group member launches:
 - produce one aggregated diagnostic naming every invalid member rather than failing one at
   a time after partial launch.
 
+A group whose members are all disabled (`enabled: false` or a failed `preCondition`) after
+preflight has zero members to launch. Treat this the same as a normal `skipped` group: commit
+the barrier immediately with no leaf executions, advance `currentIndex` past the group, and do
+not treat it as a failure.
+
 ## Implementation Stages
 
 ### Stage 1 — Topology, schema, and round-trip persistence
@@ -583,6 +598,10 @@ Keep real fan-out behind an internal feature gate until Stages 4–6 are complet
 7. Add group-level before/after workspace snapshots and undo/redo.
 
 ### Stage 5 — Chronological output projection
+
+Recommended precursor: ship [`OUTPUT_STEP_FILTER_PLAN.md`](OUTPUT_STEP_FILTER_PLAN.md)
+(sequential-only step show/hide) before or alongside this stage, and reuse its filter
+state/UI primitives here rather than building a second filter mechanism.
 
 1. Expose target-attributed activity entries from the append-only timeline without removing
    aggregate attempt output.
@@ -637,6 +656,8 @@ Required cases:
 - Retry counters and retry status remain isolated per target.
 - Concurrent pre/end/script processes time out and cancel independently.
 - `failFast` both true and false, including members waiting for a scheduler slot.
+- A group whose members are all disabled/preCondition-skipped commits the barrier
+  immediately with no leaf executions and is not treated as a failure.
 - Stop cancels all running targets; pause stops new launches and resumes unfinished members.
 - Crash/reload with a partially settled group.
 - Session collision detection after inherited/default property resolution.
